@@ -582,6 +582,7 @@ Start a single benchmark process, maintaining a given TPS
 * `--runtime-in-seconds <RUNTIME_IN_SECONDS>` — How long to run the benchmark for. If not provided, the benchmark will run until it is interrupted
 * `--delay-between-chains-ms <DELAY_BETWEEN_CHAINS_MS>` — The delay between chains, in milliseconds. For example, if set to 200ms, the first chain will start, then the second will start 200 ms after the first one, the third 200 ms after the second one, and so on. This is used for slowly ramping up the TPS, so we don't pound the validators with the full TPS all at once
 * `--config-path <CONFIG_PATH>` — Path to YAML file containing chain IDs to send transfers to. If not provided, only transfers between chains in the same wallet
+* `--single-destination-per-block` — Transaction distribution mode. If false (default), distributes transactions evenly across chains within each block. If true, sends all transactions in each block to a single chain, rotating through chains for subsequent blocks
 
 
 
@@ -615,6 +616,7 @@ Run multiple benchmark processes in parallel
 * `--runtime-in-seconds <RUNTIME_IN_SECONDS>` — How long to run the benchmark for. If not provided, the benchmark will run until it is interrupted
 * `--delay-between-chains-ms <DELAY_BETWEEN_CHAINS_MS>` — The delay between chains, in milliseconds. For example, if set to 200ms, the first chain will start, then the second will start 200 ms after the first one, the third 200 ms after the second one, and so on. This is used for slowly ramping up the TPS, so we don't pound the validators with the full TPS all at once
 * `--config-path <CONFIG_PATH>` — Path to YAML file containing chain IDs to send transfers to. If not provided, only transfers between chains in the same wallet
+* `--single-destination-per-block` — Transaction distribution mode. If false (default), distributes transactions evenly across chains within each block. If true, sends all transactions in each block to a single chain, rotating through chains for subsequent blocks
 * `--processes <PROCESSES>` — The number of benchmark processes to run in parallel
 
   Default value: `1`

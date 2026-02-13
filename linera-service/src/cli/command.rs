@@ -75,7 +75,7 @@ pub struct BenchmarkOptions {
     /// The application ID of a fungible token on the wallet's default chain.
     /// If none is specified, the benchmark uses the native token.
     #[arg(long)]
-    pub fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
+    pub fungible_application_id: Option<ApplicationId>,
 
     /// The fixed BPS (Blocks Per Second) rate that block proposals will be sent at.
     #[arg(long, default_value_t = DEFAULT_BPS)]
@@ -121,6 +121,12 @@ pub struct BenchmarkOptions {
     /// If not provided, only transfers between chains in the same wallet.
     #[arg(long)]
     pub config_path: Option<PathBuf>,
+
+    /// Transaction distribution mode. If false (default), distributes transactions evenly
+    /// across chains within each block. If true, sends all transactions in each block
+    /// to a single chain, rotating through chains for subsequent blocks.
+    #[arg(long)]
+    pub single_destination_per_block: bool,
 }
 
 impl Default for BenchmarkOptions {
@@ -138,6 +144,7 @@ impl Default for BenchmarkOptions {
             runtime_in_seconds: None,
             delay_between_chains_ms: None,
             config_path: None,
+            single_destination_per_block: false,
         }
     }
 }
