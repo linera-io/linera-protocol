@@ -146,7 +146,7 @@ fn json_value_expr(soltype: &str, field_access: &TokenStream2) -> TokenStream2 {
     match soltype {
         "string" => quote! { serde_json::Value::String(#field_access.clone()) },
         "uint64" => {
-            quote! { serde_json::Value::Number(serde_json::Number::from(#field_access)) }
+            quote! { serde_json::Value::String(#field_access.to_string()) }
         }
         "uint32" => {
             quote! { serde_json::Value::Number(serde_json::Number::from(#field_access)) }
@@ -166,7 +166,7 @@ fn json_value_expr(soltype: &str, field_access: &TokenStream2) -> TokenStream2 {
         "uint64[]" => {
             quote! {
                 serde_json::Value::Array(
-                    #field_access.iter().map(|v| serde_json::Value::Number(serde_json::Number::from(*v))).collect()
+                    #field_access.iter().map(|v| serde_json::Value::String(v.to_string())).collect()
                 )
             }
         }
