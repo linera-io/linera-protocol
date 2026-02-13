@@ -11,14 +11,11 @@ use std::sync::LazyLock;
 use alloy_primitives::{hex, keccak256};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, Round, TimeDelta},
+    data_types::{ApplicationPermissions, Round, TimeDelta},
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, GenericApplicationId, ModuleId},
 };
 use linera_eip712_derive::Eip712Struct;
-use linera_execution::{
-    system::{AdminOperation, OpenChainConfig},
-    Operation, SystemOperation,
-};
+use linera_execution::{system::AdminOperation, Operation, SystemOperation};
 
 use super::{MessageAction, ProposalContent, Transaction};
 
@@ -319,89 +316,11 @@ UserOp(string applicationId,bytes32 dataHash)\
 VerifyBlobOp(string blobType,bytes32 hash)\
 WeightedOwner(string owner,uint64 weight)";
 
-// Individual type strings (for type hash computation).
-const TRANSFER_OP_TYPE: &str = "TransferOp(string owner,string recipient,uint128 amount)";
-const CLAIM_OP_TYPE: &str =
-    "ClaimOp(string owner,string targetChain,string recipient,uint128 amount)";
-const RECEIVE_MSG_TYPE: &str = "ReceiveMsg(string origin,string action,uint32 messageCount)";
-const USER_OP_TYPE: &str = "UserOp(string applicationId,bytes32 dataHash)";
-const OPEN_CHAIN_OP_TYPE: &str = "\
-OpenChainOp(\
-uint128 balance,\
-string[] superOwners,WeightedOwner[] owners,\
-uint32 multiLeaderRounds,bool openMultiLeaderRounds,\
-uint64 baseTimeoutMicros,uint64 timeoutIncrementMicros,\
-uint64 fallbackDurationMicros,uint64 fastRoundDurationMicros,\
-bytes32 permissionsHash)\
-WeightedOwner(string owner,uint64 weight)";
-const CLOSE_CHAIN_OP_TYPE: &str = "CloseChainOp()";
-const CHANGE_OWNERSHIP_OP_TYPE: &str = "\
-ChangeOwnershipOp(\
-string[] superOwners,WeightedOwner[] owners,\
-uint32 multiLeaderRounds,bool openMultiLeaderRounds,\
-uint64 baseTimeoutMicros,uint64 timeoutIncrementMicros,\
-uint64 fallbackDurationMicros,uint64 fastRoundDurationMicros)\
-WeightedOwner(string owner,uint64 weight)";
-const WEIGHTED_OWNER_TYPE: &str = "WeightedOwner(string owner,uint64 weight)";
-const CHANGE_APP_PERMISSIONS_OP_TYPE: &str = "\
-ChangeAppPermissionsOp(\
-bool hasExecuteFilter,string[] executeOperations,\
-string[] mandatoryApplications,string[] closeChainApps,\
-string[] changePermissionsApps,\
-bool hasOracleFilter,string[] oracleApps,\
-bool hasHttpFilter,string[] httpApps)";
-const PUBLISH_MODULE_OP_TYPE: &str =
-    "PublishModuleOp(bytes32 contractBlobHash,bytes32 serviceBlobHash,string vmRuntime)";
-const PUBLISH_DATA_BLOB_OP_TYPE: &str = "PublishDataBlobOp(bytes32 blobHash)";
-const VERIFY_BLOB_OP_TYPE: &str = "VerifyBlobOp(string blobType,bytes32 hash)";
-const CREATE_APPLICATION_OP_TYPE: &str = "\
-CreateApplicationOp(\
-bytes32 contractBlobHash,bytes32 serviceBlobHash,string vmRuntime,\
-bytes32 parametersHash,bytes32 instantiationArgumentHash,\
-string[] requiredApplicationIds)";
-const ADMIN_OP_TYPE: &str = "AdminOp(string operation,uint64 epoch,bytes32 blobHash)";
-const PROCESS_NEW_EPOCH_OP_TYPE: &str = "ProcessNewEpochOp(uint64 epoch)";
-const PROCESS_REMOVED_EPOCH_OP_TYPE: &str = "ProcessRemovedEpochOp(uint64 epoch)";
-const UPDATE_STREAMS_OP_TYPE: &str = "UpdateStreamsOp(StreamUpdate[] updates)\
-     StreamUpdate(string chainId,string streamId,uint32 index)";
-const STREAM_UPDATE_TYPE: &str = "StreamUpdate(string chainId,string streamId,uint32 index)";
-
 // -- Precomputed type hashes --
 
 static DOMAIN_TYPE_HASH: LazyLock<[u8; 32]> = LazyLock::new(|| keccak256(EIP712_DOMAIN_TYPE).0);
 static PROPOSAL_TYPE_HASH: LazyLock<[u8; 32]> =
     LazyLock::new(|| keccak256(LINERA_BLOCK_PROPOSAL_TYPE).0);
-static TRANSFER_OP_TYPE_HASH: LazyLock<[u8; 32]> = LazyLock::new(|| keccak256(TRANSFER_OP_TYPE).0);
-static CLAIM_OP_TYPE_HASH: LazyLock<[u8; 32]> = LazyLock::new(|| keccak256(CLAIM_OP_TYPE).0);
-static RECEIVE_MSG_TYPE_HASH: LazyLock<[u8; 32]> = LazyLock::new(|| keccak256(RECEIVE_MSG_TYPE).0);
-static USER_OP_TYPE_HASH: LazyLock<[u8; 32]> = LazyLock::new(|| keccak256(USER_OP_TYPE).0);
-static OPEN_CHAIN_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(OPEN_CHAIN_OP_TYPE).0);
-static CLOSE_CHAIN_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(CLOSE_CHAIN_OP_TYPE).0);
-static CHANGE_OWNERSHIP_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(CHANGE_OWNERSHIP_OP_TYPE).0);
-static CHANGE_APP_PERMISSIONS_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(CHANGE_APP_PERMISSIONS_OP_TYPE).0);
-static PUBLISH_MODULE_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(PUBLISH_MODULE_OP_TYPE).0);
-static PUBLISH_DATA_BLOB_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(PUBLISH_DATA_BLOB_OP_TYPE).0);
-static VERIFY_BLOB_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(VERIFY_BLOB_OP_TYPE).0);
-static CREATE_APPLICATION_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(CREATE_APPLICATION_OP_TYPE).0);
-static ADMIN_OP_TYPE_HASH: LazyLock<[u8; 32]> = LazyLock::new(|| keccak256(ADMIN_OP_TYPE).0);
-static PROCESS_NEW_EPOCH_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(PROCESS_NEW_EPOCH_OP_TYPE).0);
-static PROCESS_REMOVED_EPOCH_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(PROCESS_REMOVED_EPOCH_OP_TYPE).0);
-static UPDATE_STREAMS_OP_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(UPDATE_STREAMS_OP_TYPE).0);
-static STREAM_UPDATE_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(STREAM_UPDATE_TYPE).0);
-static WEIGHTED_OWNER_TYPE_HASH: LazyLock<[u8; 32]> =
-    LazyLock::new(|| keccak256(WEIGHTED_OWNER_TYPE).0);
 
 // -- Domain separator (constant: name="Linera", version="1") --
 
@@ -530,47 +449,7 @@ fn timedelta_micros(td: &TimeDelta) -> u64 {
     td.as_micros()
 }
 
-// -- Ownership encoding helpers (shared by OpenChainOp and ChangeOwnershipOp) --
-
-/// Hashes a single `WeightedOwner(string owner, uint64 weight)` struct.
-fn hash_weighted_owner(owner: &str, weight: u64) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(3 * 32);
-    buf.extend_from_slice(&*WEIGHTED_OWNER_TYPE_HASH);
-    buf.extend_from_slice(&encode_string(owner));
-    buf.extend_from_slice(&encode_u64(weight));
-    keccak256(&buf).0
-}
-
-/// Appends the common ownership fields to an ABI buffer for struct hashing.
-fn encode_ownership_fields(
-    super_owners: &[String],
-    owners: &[(String, u64)],
-    multi_leader_rounds: u32,
-    open_multi_leader_rounds: bool,
-    timeout: &linera_base::ownership::TimeoutConfig,
-    buf: &mut Vec<u8>,
-) {
-    let so_hashes: Vec<[u8; 32]> = super_owners.iter().map(|s| encode_string(s)).collect();
-    buf.extend_from_slice(&encode_hash_array(&so_hashes));
-
-    let owner_hashes: Vec<[u8; 32]> = owners
-        .iter()
-        .map(|(o, w)| hash_weighted_owner(o, *w))
-        .collect();
-    buf.extend_from_slice(&encode_hash_array(&owner_hashes));
-
-    buf.extend_from_slice(&encode_u32(multi_leader_rounds));
-    buf.extend_from_slice(&encode_bool(open_multi_leader_rounds));
-    buf.extend_from_slice(&encode_u64(timedelta_micros(&timeout.base_timeout)));
-    buf.extend_from_slice(&encode_u64(timedelta_micros(&timeout.timeout_increment)));
-    buf.extend_from_slice(&encode_u64(timedelta_micros(&timeout.fallback_duration)));
-    buf.extend_from_slice(&encode_u64(
-        timeout
-            .fast_round_duration
-            .map(|d| timedelta_micros(&d))
-            .unwrap_or(0),
-    ));
-}
+// -- Ownership extraction helpers --
 
 /// Extracts ownership vectors from `ChangeOwnership` fields.
 fn extract_ownership_vecs(
@@ -602,278 +481,6 @@ fn extract_chain_ownership_vecs(
     (so, o)
 }
 
-// -- ApplicationPermissions encoding --
-
-fn hash_app_permissions(perms: &ApplicationPermissions) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(10 * 32);
-    buf.extend_from_slice(&*CHANGE_APP_PERMISSIONS_OP_TYPE_HASH);
-    encode_app_permissions_fields(perms, &mut buf);
-    keccak256(&buf).0
-}
-
-fn encode_app_permissions_fields(perms: &ApplicationPermissions, buf: &mut Vec<u8>) {
-    let has_execute = perms.execute_operations.is_some();
-    buf.extend_from_slice(&encode_bool(has_execute));
-    let exec_hashes: Vec<[u8; 32]> = perms
-        .execute_operations
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(|id| encode_string(&format_application_id(id)))
-        .collect();
-    buf.extend_from_slice(&encode_hash_array(&exec_hashes));
-
-    let mandatory_hashes: Vec<[u8; 32]> = perms
-        .mandatory_applications
-        .iter()
-        .map(|id| encode_string(&format_application_id(id)))
-        .collect();
-    buf.extend_from_slice(&encode_hash_array(&mandatory_hashes));
-
-    let close_hashes: Vec<[u8; 32]> = perms
-        .close_chain
-        .iter()
-        .map(|id| encode_string(&format_application_id(id)))
-        .collect();
-    buf.extend_from_slice(&encode_hash_array(&close_hashes));
-
-    let change_hashes: Vec<[u8; 32]> = perms
-        .change_application_permissions
-        .iter()
-        .map(|id| encode_string(&format_application_id(id)))
-        .collect();
-    buf.extend_from_slice(&encode_hash_array(&change_hashes));
-
-    let has_oracle = perms.call_service_as_oracle.is_some();
-    buf.extend_from_slice(&encode_bool(has_oracle));
-    let oracle_hashes: Vec<[u8; 32]> = perms
-        .call_service_as_oracle
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(|id| encode_string(&format_application_id(id)))
-        .collect();
-    buf.extend_from_slice(&encode_hash_array(&oracle_hashes));
-
-    let has_http = perms.make_http_requests.is_some();
-    buf.extend_from_slice(&encode_bool(has_http));
-    let http_hashes: Vec<[u8; 32]> = perms
-        .make_http_requests
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(|id| encode_string(&format_application_id(id)))
-        .collect();
-    buf.extend_from_slice(&encode_hash_array(&http_hashes));
-}
-
-// -- Struct hashing functions --
-
-fn hash_transfer_op(
-    owner: &AccountOwner,
-    recipient_chain: &ChainId,
-    recipient_owner: &AccountOwner,
-    amount: Amount,
-) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(5 * 32);
-    buf.extend_from_slice(&*TRANSFER_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_string(&format_account_owner(owner)));
-    buf.extend_from_slice(&encode_string(&format_account(
-        recipient_chain,
-        recipient_owner,
-    )));
-    buf.extend_from_slice(&encode_u128(amount.to_attos()));
-    keccak256(&buf).0
-}
-
-fn hash_claim_op(
-    owner: &AccountOwner,
-    target_chain: &ChainId,
-    recipient_chain: &ChainId,
-    recipient_owner: &AccountOwner,
-    amount: Amount,
-) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(6 * 32);
-    buf.extend_from_slice(&*CLAIM_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_string(&format_account_owner(owner)));
-    buf.extend_from_slice(&encode_string(&format_chain_id(target_chain)));
-    buf.extend_from_slice(&encode_string(&format_account(
-        recipient_chain,
-        recipient_owner,
-    )));
-    buf.extend_from_slice(&encode_u128(amount.to_attos()));
-    keccak256(&buf).0
-}
-
-fn hash_receive_msg(origin: &ChainId, action: &MessageAction, message_count: u32) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(4 * 32);
-    buf.extend_from_slice(&*RECEIVE_MSG_TYPE_HASH);
-    buf.extend_from_slice(&encode_string(&format_chain_id(origin)));
-    buf.extend_from_slice(&encode_string(format_message_action(action)));
-    buf.extend_from_slice(&encode_u32(message_count));
-    keccak256(&buf).0
-}
-
-fn hash_user_op(application_id: &ApplicationId, data: &[u8]) -> [u8; 32] {
-    let data_hash = keccak256(data).0;
-    let mut buf = Vec::with_capacity(3 * 32);
-    buf.extend_from_slice(&*USER_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_string(&format_application_id(application_id)));
-    buf.extend_from_slice(&encode_bytes32(data_hash));
-    keccak256(&buf).0
-}
-
-fn hash_open_chain_op(config: &OpenChainConfig) -> [u8; 32] {
-    let (so, o) = extract_chain_ownership_vecs(&config.ownership);
-    let perms_hash = hash_app_permissions(&config.application_permissions);
-
-    let mut buf = Vec::with_capacity(11 * 32);
-    buf.extend_from_slice(&*OPEN_CHAIN_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_u128(config.balance.to_attos()));
-    encode_ownership_fields(
-        &so,
-        &o,
-        config.ownership.multi_leader_rounds,
-        config.ownership.open_multi_leader_rounds,
-        &config.ownership.timeout_config,
-        &mut buf,
-    );
-    buf.extend_from_slice(&encode_bytes32(perms_hash));
-    keccak256(&buf).0
-}
-
-fn hash_close_chain_op() -> [u8; 32] {
-    let buf: Vec<u8> = CLOSE_CHAIN_OP_TYPE_HASH.to_vec();
-    keccak256(&buf).0
-}
-
-fn hash_change_ownership_op(
-    super_owners: &[AccountOwner],
-    owners: &[(AccountOwner, u64)],
-    multi_leader_rounds: u32,
-    open_multi_leader_rounds: bool,
-    timeout_config: &linera_base::ownership::TimeoutConfig,
-) -> [u8; 32] {
-    let (so, o) = extract_ownership_vecs(super_owners, owners);
-    let mut buf = Vec::with_capacity(10 * 32);
-    buf.extend_from_slice(&*CHANGE_OWNERSHIP_OP_TYPE_HASH);
-    encode_ownership_fields(
-        &so,
-        &o,
-        multi_leader_rounds,
-        open_multi_leader_rounds,
-        timeout_config,
-        &mut buf,
-    );
-    keccak256(&buf).0
-}
-
-fn hash_change_app_permissions_op(perms: &ApplicationPermissions) -> [u8; 32] {
-    hash_app_permissions(perms)
-}
-
-fn hash_publish_module_op(module_id: &ModuleId) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(4 * 32);
-    buf.extend_from_slice(&*PUBLISH_MODULE_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_bytes32(module_id.contract_blob_hash.into()));
-    buf.extend_from_slice(&encode_bytes32(module_id.service_blob_hash.into()));
-    buf.extend_from_slice(&encode_string(format_vm_runtime(module_id)));
-    keccak256(&buf).0
-}
-
-fn hash_publish_data_blob_op(blob_hash: &CryptoHash) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(2 * 32);
-    buf.extend_from_slice(&*PUBLISH_DATA_BLOB_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_bytes32((*blob_hash).into()));
-    keccak256(&buf).0
-}
-
-fn hash_verify_blob_op(blob_type: &BlobType, hash: &CryptoHash) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(3 * 32);
-    buf.extend_from_slice(&*VERIFY_BLOB_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_string(format_blob_type(blob_type)));
-    buf.extend_from_slice(&encode_bytes32((*hash).into()));
-    keccak256(&buf).0
-}
-
-fn hash_create_application_op(
-    module_id: &ModuleId,
-    parameters: &[u8],
-    instantiation_argument: &[u8],
-    required_application_ids: &[ApplicationId],
-) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(7 * 32);
-    buf.extend_from_slice(&*CREATE_APPLICATION_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_bytes32(module_id.contract_blob_hash.into()));
-    buf.extend_from_slice(&encode_bytes32(module_id.service_blob_hash.into()));
-    buf.extend_from_slice(&encode_string(format_vm_runtime(module_id)));
-    buf.extend_from_slice(&encode_bytes32(keccak256(parameters).0));
-    buf.extend_from_slice(&encode_bytes32(keccak256(instantiation_argument).0));
-    let req_hashes: Vec<[u8; 32]> = required_application_ids
-        .iter()
-        .map(|id| encode_string(&format_application_id(id)))
-        .collect();
-    buf.extend_from_slice(&encode_hash_array(&req_hashes));
-    keccak256(&buf).0
-}
-
-fn hash_admin_op(admin_op: &AdminOperation) -> [u8; 32] {
-    let (operation, epoch, blob_hash) = match admin_op {
-        AdminOperation::PublishCommitteeBlob { blob_hash } => {
-            ("PublishCommitteeBlob", 0u64, (*blob_hash).into())
-        }
-        AdminOperation::CreateCommittee { epoch, blob_hash } => {
-            ("CreateCommittee", epoch.0 as u64, (*blob_hash).into())
-        }
-        AdminOperation::RemoveCommittee { epoch } => ("RemoveCommittee", epoch.0 as u64, [0u8; 32]),
-    };
-    let mut buf = Vec::with_capacity(4 * 32);
-    buf.extend_from_slice(&*ADMIN_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_string(operation));
-    buf.extend_from_slice(&encode_u64(epoch));
-    buf.extend_from_slice(&encode_bytes32(blob_hash));
-    keccak256(&buf).0
-}
-
-fn hash_process_new_epoch_op(epoch: u64) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(2 * 32);
-    buf.extend_from_slice(&*PROCESS_NEW_EPOCH_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_u64(epoch));
-    keccak256(&buf).0
-}
-
-fn hash_process_removed_epoch_op(epoch: u64) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(2 * 32);
-    buf.extend_from_slice(&*PROCESS_REMOVED_EPOCH_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_u64(epoch));
-    keccak256(&buf).0
-}
-
-fn hash_stream_update(chain_id: &ChainId, stream_id: &str, index: u32) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(4 * 32);
-    buf.extend_from_slice(&*STREAM_UPDATE_TYPE_HASH);
-    buf.extend_from_slice(&encode_string(&format_chain_id(chain_id)));
-    buf.extend_from_slice(&encode_string(stream_id));
-    buf.extend_from_slice(&encode_u32(index));
-    keccak256(&buf).0
-}
-
-fn hash_update_streams_op(
-    updates: &[(ChainId, linera_base::identifiers::StreamId, u32)],
-) -> [u8; 32] {
-    let update_hashes: Vec<[u8; 32]> = updates
-        .iter()
-        .map(|(chain_id, stream_id, index)| {
-            let sid = format_stream_id(stream_id);
-            hash_stream_update(chain_id, &sid, *index)
-        })
-        .collect();
-    let mut buf = Vec::with_capacity(2 * 32);
-    buf.extend_from_slice(&*UPDATE_STREAMS_OP_TYPE_HASH);
-    buf.extend_from_slice(&encode_hash_array(&update_hashes));
-    keccak256(&buf).0
-}
-
 fn format_stream_id(stream_id: &linera_base::identifiers::StreamId) -> String {
     let app = format_generic_app_id(&stream_id.application_id);
     let name = hex::encode(&stream_id.stream_name.0);
@@ -882,47 +489,104 @@ fn format_stream_id(stream_id: &linera_base::identifiers::StreamId) -> String {
 
 // -- Categorized transactions --
 
+#[derive(Default)]
 struct CategorizedTransactions {
-    transfers: Vec<[u8; 32]>,
-    claims: Vec<[u8; 32]>,
-    incoming_messages: Vec<[u8; 32]>,
-    user_operations: Vec<[u8; 32]>,
-    open_chain_ops: Vec<[u8; 32]>,
-    close_chain_ops: Vec<[u8; 32]>,
-    change_ownership_ops: Vec<[u8; 32]>,
-    change_app_permissions_ops: Vec<[u8; 32]>,
-    publish_module_ops: Vec<[u8; 32]>,
-    publish_data_blob_ops: Vec<[u8; 32]>,
-    verify_blob_ops: Vec<[u8; 32]>,
-    create_application_ops: Vec<[u8; 32]>,
-    admin_ops: Vec<[u8; 32]>,
-    process_new_epoch_ops: Vec<[u8; 32]>,
-    process_removed_epoch_ops: Vec<[u8; 32]>,
-    update_streams_ops: Vec<[u8; 32]>,
+    transfers: Vec<TransferOpEip712>,
+    claims: Vec<ClaimOpEip712>,
+    incoming_messages: Vec<ReceiveMsgEip712>,
+    user_operations: Vec<UserOpEip712>,
+    open_chain_ops: Vec<OpenChainOpEip712>,
+    close_chain_ops: Vec<CloseChainOpEip712>,
+    change_ownership_ops: Vec<ChangeOwnershipOpEip712>,
+    change_app_permissions_ops: Vec<ChangeAppPermissionsOpEip712>,
+    publish_module_ops: Vec<PublishModuleOpEip712>,
+    publish_data_blob_ops: Vec<PublishDataBlobOpEip712>,
+    verify_blob_ops: Vec<VerifyBlobOpEip712>,
+    create_application_ops: Vec<CreateApplicationOpEip712>,
+    admin_ops: Vec<AdminOpEip712>,
+    process_new_epoch_ops: Vec<ProcessNewEpochOpEip712>,
+    process_removed_epoch_ops: Vec<ProcessRemovedEpochOpEip712>,
+    update_streams_ops: Vec<UpdateStreamsOpEip712>,
     other_hashes: Vec<[u8; 32]>,
 }
 
-impl Default for CategorizedTransactions {
-    fn default() -> Self {
-        Self {
-            transfers: Vec::new(),
-            claims: Vec::new(),
-            incoming_messages: Vec::new(),
-            user_operations: Vec::new(),
-            open_chain_ops: Vec::new(),
-            close_chain_ops: Vec::new(),
-            change_ownership_ops: Vec::new(),
-            change_app_permissions_ops: Vec::new(),
-            publish_module_ops: Vec::new(),
-            publish_data_blob_ops: Vec::new(),
-            verify_blob_ops: Vec::new(),
-            create_application_ops: Vec::new(),
-            admin_ops: Vec::new(),
-            process_new_epoch_ops: Vec::new(),
-            process_removed_epoch_ops: Vec::new(),
-            update_streams_ops: Vec::new(),
-            other_hashes: Vec::new(),
-        }
+fn make_ownership_eip712(
+    ownership: &linera_base::ownership::ChainOwnership,
+) -> (
+    Vec<String>,
+    Vec<WeightedOwnerEip712>,
+    u32,
+    bool,
+    u64,
+    u64,
+    u64,
+    u64,
+) {
+    let (so, o) = extract_chain_ownership_vecs(ownership);
+    let owners = o
+        .iter()
+        .map(|(owner, weight)| WeightedOwnerEip712 {
+            owner: owner.clone(),
+            weight: *weight,
+        })
+        .collect();
+    (
+        so,
+        owners,
+        ownership.multi_leader_rounds,
+        ownership.open_multi_leader_rounds,
+        timedelta_micros(&ownership.timeout_config.base_timeout),
+        timedelta_micros(&ownership.timeout_config.timeout_increment),
+        timedelta_micros(&ownership.timeout_config.fallback_duration),
+        ownership
+            .timeout_config
+            .fast_round_duration
+            .map(|d| timedelta_micros(&d))
+            .unwrap_or(0),
+    )
+}
+
+fn make_app_permissions_eip712(perms: &ApplicationPermissions) -> ChangeAppPermissionsOpEip712 {
+    ChangeAppPermissionsOpEip712 {
+        has_execute_filter: perms.execute_operations.is_some(),
+        execute_operations: perms
+            .execute_operations
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .map(|id| format_application_id(id))
+            .collect(),
+        mandatory_applications: perms
+            .mandatory_applications
+            .iter()
+            .map(format_application_id)
+            .collect(),
+        close_chain_apps: perms
+            .close_chain
+            .iter()
+            .map(format_application_id)
+            .collect(),
+        change_permissions_apps: perms
+            .change_application_permissions
+            .iter()
+            .map(format_application_id)
+            .collect(),
+        has_oracle_filter: perms.call_service_as_oracle.is_some(),
+        oracle_apps: perms
+            .call_service_as_oracle
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .map(|id| format_application_id(id))
+            .collect(),
+        has_http_filter: perms.make_http_requests.is_some(),
+        http_apps: perms
+            .make_http_requests
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .map(|id| format_application_id(id))
+            .collect(),
     }
 }
 
@@ -937,12 +601,11 @@ fn categorize_transactions(transactions: &[Transaction]) -> CategorizedTransacti
                     recipient,
                     amount,
                 } => {
-                    result.transfers.push(hash_transfer_op(
-                        owner,
-                        &recipient.chain_id,
-                        &recipient.owner,
-                        *amount,
-                    ));
+                    result.transfers.push(TransferOpEip712 {
+                        owner: format_account_owner(owner),
+                        recipient: format_account(&recipient.chain_id, &recipient.owner),
+                        amount: amount.to_attos(),
+                    });
                 }
                 SystemOperation::Claim {
                     owner,
@@ -950,19 +613,33 @@ fn categorize_transactions(transactions: &[Transaction]) -> CategorizedTransacti
                     recipient,
                     amount,
                 } => {
-                    result.claims.push(hash_claim_op(
-                        owner,
-                        target_id,
-                        &recipient.chain_id,
-                        &recipient.owner,
-                        *amount,
-                    ));
+                    result.claims.push(ClaimOpEip712 {
+                        owner: format_account_owner(owner),
+                        target_chain: format_chain_id(target_id),
+                        recipient: format_account(&recipient.chain_id, &recipient.owner),
+                        amount: amount.to_attos(),
+                    });
                 }
                 SystemOperation::OpenChain(config) => {
-                    result.open_chain_ops.push(hash_open_chain_op(config));
+                    let (so, owners, mlr, omlr, bt, ti, fd, frd) =
+                        make_ownership_eip712(&config.ownership);
+                    let perms_hash =
+                        make_app_permissions_eip712(&config.application_permissions).hash_struct();
+                    result.open_chain_ops.push(OpenChainOpEip712 {
+                        balance: config.balance.to_attos(),
+                        super_owners: so,
+                        owners,
+                        multi_leader_rounds: mlr,
+                        open_multi_leader_rounds: omlr,
+                        base_timeout_micros: bt,
+                        timeout_increment_micros: ti,
+                        fallback_duration_micros: fd,
+                        fast_round_duration_micros: frd,
+                        permissions_hash: perms_hash,
+                    });
                 }
                 SystemOperation::CloseChain => {
-                    result.close_chain_ops.push(hash_close_chain_op());
+                    result.close_chain_ops.push(CloseChainOpEip712 {});
                 }
                 SystemOperation::ChangeOwnership {
                     super_owners,
@@ -971,33 +648,54 @@ fn categorize_transactions(transactions: &[Transaction]) -> CategorizedTransacti
                     open_multi_leader_rounds,
                     timeout_config,
                 } => {
-                    result.change_ownership_ops.push(hash_change_ownership_op(
-                        super_owners,
-                        owners,
-                        *multi_leader_rounds,
-                        *open_multi_leader_rounds,
-                        timeout_config,
-                    ));
+                    let (so, o) = extract_ownership_vecs(super_owners, owners);
+                    let weighted_owners = o
+                        .iter()
+                        .map(|(owner, weight)| WeightedOwnerEip712 {
+                            owner: owner.clone(),
+                            weight: *weight,
+                        })
+                        .collect();
+                    result.change_ownership_ops.push(ChangeOwnershipOpEip712 {
+                        super_owners: so,
+                        owners: weighted_owners,
+                        multi_leader_rounds: *multi_leader_rounds,
+                        open_multi_leader_rounds: *open_multi_leader_rounds,
+                        base_timeout_micros: timedelta_micros(&timeout_config.base_timeout),
+                        timeout_increment_micros: timedelta_micros(
+                            &timeout_config.timeout_increment,
+                        ),
+                        fallback_duration_micros: timedelta_micros(
+                            &timeout_config.fallback_duration,
+                        ),
+                        fast_round_duration_micros: timeout_config
+                            .fast_round_duration
+                            .map(|d| timedelta_micros(&d))
+                            .unwrap_or(0),
+                    });
                 }
                 SystemOperation::ChangeApplicationPermissions(perms) => {
                     result
                         .change_app_permissions_ops
-                        .push(hash_change_app_permissions_op(perms));
+                        .push(make_app_permissions_eip712(perms));
                 }
                 SystemOperation::PublishModule { module_id } => {
-                    result
-                        .publish_module_ops
-                        .push(hash_publish_module_op(module_id));
+                    result.publish_module_ops.push(PublishModuleOpEip712 {
+                        contract_blob_hash: module_id.contract_blob_hash.into(),
+                        service_blob_hash: module_id.service_blob_hash.into(),
+                        vm_runtime: format_vm_runtime(module_id).to_string(),
+                    });
                 }
                 SystemOperation::PublishDataBlob { blob_hash } => {
-                    result
-                        .publish_data_blob_ops
-                        .push(hash_publish_data_blob_op(blob_hash));
+                    result.publish_data_blob_ops.push(PublishDataBlobOpEip712 {
+                        blob_hash: (*blob_hash).into(),
+                    });
                 }
                 SystemOperation::VerifyBlob { blob_id } => {
-                    result
-                        .verify_blob_ops
-                        .push(hash_verify_blob_op(&blob_id.blob_type, &blob_id.hash));
+                    result.verify_blob_ops.push(VerifyBlobOpEip712 {
+                        blob_type: format_blob_type(&blob_id.blob_type).to_string(),
+                        hash: blob_id.hash.into(),
+                    });
                 }
                 SystemOperation::CreateApplication {
                     module_id,
@@ -1007,51 +705,86 @@ fn categorize_transactions(transactions: &[Transaction]) -> CategorizedTransacti
                 } => {
                     result
                         .create_application_ops
-                        .push(hash_create_application_op(
-                            module_id,
-                            parameters,
-                            instantiation_argument,
-                            required_application_ids,
-                        ));
+                        .push(CreateApplicationOpEip712 {
+                            contract_blob_hash: module_id.contract_blob_hash.into(),
+                            service_blob_hash: module_id.service_blob_hash.into(),
+                            vm_runtime: format_vm_runtime(module_id).to_string(),
+                            parameters_hash: keccak256(parameters).0,
+                            instantiation_argument_hash: keccak256(instantiation_argument).0,
+                            required_application_ids: required_application_ids
+                                .iter()
+                                .map(format_application_id)
+                                .collect(),
+                        });
                 }
                 SystemOperation::Admin(admin_op) => {
-                    result.admin_ops.push(hash_admin_op(admin_op));
+                    let (operation, epoch, blob_hash) = match admin_op {
+                        AdminOperation::PublishCommitteeBlob { blob_hash } => {
+                            ("PublishCommitteeBlob", 0u64, (*blob_hash).into())
+                        }
+                        AdminOperation::CreateCommittee { epoch, blob_hash } => {
+                            ("CreateCommittee", epoch.0 as u64, (*blob_hash).into())
+                        }
+                        AdminOperation::RemoveCommittee { epoch } => {
+                            ("RemoveCommittee", epoch.0 as u64, [0u8; 32])
+                        }
+                    };
+                    result.admin_ops.push(AdminOpEip712 {
+                        operation: operation.to_string(),
+                        epoch,
+                        blob_hash,
+                    });
                 }
                 SystemOperation::ProcessNewEpoch(epoch) => {
-                    result
-                        .process_new_epoch_ops
-                        .push(hash_process_new_epoch_op(epoch.0 as u64));
+                    result.process_new_epoch_ops.push(ProcessNewEpochOpEip712 {
+                        epoch: epoch.0 as u64,
+                    });
                 }
                 SystemOperation::ProcessRemovedEpoch(epoch) => {
                     result
                         .process_removed_epoch_ops
-                        .push(hash_process_removed_epoch_op(epoch.0 as u64));
+                        .push(ProcessRemovedEpochOpEip712 {
+                            epoch: epoch.0 as u64,
+                        });
                 }
                 SystemOperation::UpdateStreams(updates) => {
-                    result
-                        .update_streams_ops
-                        .push(hash_update_streams_op(updates));
+                    result.update_streams_ops.push(UpdateStreamsOpEip712 {
+                        updates: updates
+                            .iter()
+                            .map(|(chain_id, stream_id, index)| StreamUpdateEip712 {
+                                chain_id: format_chain_id(chain_id),
+                                stream_id: format_stream_id(stream_id),
+                                index: *index,
+                            })
+                            .collect(),
+                    });
                 }
             },
             Transaction::ExecuteOperation(Operation::User {
                 application_id,
                 bytes,
             }) => {
-                result
-                    .user_operations
-                    .push(hash_user_op(application_id, bytes));
+                result.user_operations.push(UserOpEip712 {
+                    application_id: format_application_id(application_id),
+                    data_hash: keccak256(bytes).0,
+                });
             }
             Transaction::ReceiveMessages(bundle) => {
-                result.incoming_messages.push(hash_receive_msg(
-                    &bundle.origin,
-                    &bundle.action,
-                    bundle.bundle.messages.len() as u32,
-                ));
+                result.incoming_messages.push(ReceiveMsgEip712 {
+                    origin: format_chain_id(&bundle.origin),
+                    action: format_message_action(&bundle.action).to_string(),
+                    message_count: bundle.bundle.messages.len() as u32,
+                });
             }
         }
     }
 
     result
+}
+
+fn hash_vec<T: Eip712Struct>(items: &[T]) -> [u8; 32] {
+    let hashes: Vec<[u8; 32]> = items.iter().map(|v| v.hash_struct()).collect();
+    encode_hash_array(&hashes)
 }
 
 /// Computes the EIP-712 signing hash for a `ProposalContent`.
@@ -1071,22 +804,22 @@ pub fn eip712_signing_hash(content: &ProposalContent) -> [u8; 32] {
     buf.extend_from_slice(&encode_u64(block.timestamp.micros()));
     buf.extend_from_slice(&encode_string(&format_round(&content.round)));
     buf.extend_from_slice(&encode_bytes32(content_hash));
-    buf.extend_from_slice(&encode_hash_array(&cat.transfers));
-    buf.extend_from_slice(&encode_hash_array(&cat.claims));
-    buf.extend_from_slice(&encode_hash_array(&cat.incoming_messages));
-    buf.extend_from_slice(&encode_hash_array(&cat.user_operations));
-    buf.extend_from_slice(&encode_hash_array(&cat.open_chain_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.close_chain_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.change_ownership_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.change_app_permissions_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.publish_module_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.publish_data_blob_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.verify_blob_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.create_application_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.admin_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.process_new_epoch_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.process_removed_epoch_ops));
-    buf.extend_from_slice(&encode_hash_array(&cat.update_streams_ops));
+    buf.extend_from_slice(&hash_vec(&cat.transfers));
+    buf.extend_from_slice(&hash_vec(&cat.claims));
+    buf.extend_from_slice(&hash_vec(&cat.incoming_messages));
+    buf.extend_from_slice(&hash_vec(&cat.user_operations));
+    buf.extend_from_slice(&hash_vec(&cat.open_chain_ops));
+    buf.extend_from_slice(&hash_vec(&cat.close_chain_ops));
+    buf.extend_from_slice(&hash_vec(&cat.change_ownership_ops));
+    buf.extend_from_slice(&hash_vec(&cat.change_app_permissions_ops));
+    buf.extend_from_slice(&hash_vec(&cat.publish_module_ops));
+    buf.extend_from_slice(&hash_vec(&cat.publish_data_blob_ops));
+    buf.extend_from_slice(&hash_vec(&cat.verify_blob_ops));
+    buf.extend_from_slice(&hash_vec(&cat.create_application_ops));
+    buf.extend_from_slice(&hash_vec(&cat.admin_ops));
+    buf.extend_from_slice(&hash_vec(&cat.process_new_epoch_ops));
+    buf.extend_from_slice(&hash_vec(&cat.process_removed_epoch_ops));
+    buf.extend_from_slice(&hash_vec(&cat.update_streams_ops));
     buf.extend_from_slice(&encode_hash_array(&cat.other_hashes));
     let struct_hash = keccak256(&buf).0;
 
@@ -1099,309 +832,8 @@ pub fn eip712_signing_hash(content: &ProposalContent) -> [u8; 32] {
 
 // -- JSON typed data builder --
 
-/// Categorized transaction values for JSON serialization.
-struct CategorizedValues {
-    transfers: Vec<serde_json::Value>,
-    claims: Vec<serde_json::Value>,
-    incoming_messages: Vec<serde_json::Value>,
-    user_operations: Vec<serde_json::Value>,
-    open_chain_ops: Vec<serde_json::Value>,
-    close_chain_ops: Vec<serde_json::Value>,
-    change_ownership_ops: Vec<serde_json::Value>,
-    change_app_permissions_ops: Vec<serde_json::Value>,
-    publish_module_ops: Vec<serde_json::Value>,
-    publish_data_blob_ops: Vec<serde_json::Value>,
-    verify_blob_ops: Vec<serde_json::Value>,
-    create_application_ops: Vec<serde_json::Value>,
-    admin_ops: Vec<serde_json::Value>,
-    process_new_epoch_ops: Vec<serde_json::Value>,
-    process_removed_epoch_ops: Vec<serde_json::Value>,
-    update_streams_ops: Vec<serde_json::Value>,
-    other_hashes: Vec<serde_json::Value>,
-}
-
-impl Default for CategorizedValues {
-    fn default() -> Self {
-        Self {
-            transfers: Vec::new(),
-            claims: Vec::new(),
-            incoming_messages: Vec::new(),
-            user_operations: Vec::new(),
-            open_chain_ops: Vec::new(),
-            close_chain_ops: Vec::new(),
-            change_ownership_ops: Vec::new(),
-            change_app_permissions_ops: Vec::new(),
-            publish_module_ops: Vec::new(),
-            publish_data_blob_ops: Vec::new(),
-            verify_blob_ops: Vec::new(),
-            create_application_ops: Vec::new(),
-            admin_ops: Vec::new(),
-            process_new_epoch_ops: Vec::new(),
-            process_removed_epoch_ops: Vec::new(),
-            update_streams_ops: Vec::new(),
-            other_hashes: Vec::new(),
-        }
-    }
-}
-
-fn ownership_json(
-    super_owners: &[String],
-    owners: &[(String, u64)],
-    multi_leader_rounds: u32,
-    open_multi_leader_rounds: bool,
-    timeout: &linera_base::ownership::TimeoutConfig,
-) -> serde_json::Value {
-    let owners_json: Vec<serde_json::Value> = owners
-        .iter()
-        .map(|(o, w)| serde_json::json!({"owner": o, "weight": w}))
-        .collect();
-    serde_json::json!({
-        "superOwners": super_owners,
-        "owners": owners_json,
-        "multiLeaderRounds": multi_leader_rounds,
-        "openMultiLeaderRounds": open_multi_leader_rounds,
-        "baseTimeoutMicros": timedelta_micros(&timeout.base_timeout),
-        "timeoutIncrementMicros": timedelta_micros(&timeout.timeout_increment),
-        "fallbackDurationMicros": timedelta_micros(&timeout.fallback_duration),
-        "fastRoundDurationMicros": timeout.fast_round_duration
-            .map(|d| timedelta_micros(&d))
-            .unwrap_or(0),
-    })
-}
-
-fn app_permissions_json(perms: &ApplicationPermissions) -> serde_json::Value {
-    let exec_ops: Vec<String> = perms
-        .execute_operations
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(format_application_id)
-        .collect();
-    let mandatory: Vec<String> = perms
-        .mandatory_applications
-        .iter()
-        .map(format_application_id)
-        .collect();
-    let close: Vec<String> = perms
-        .close_chain
-        .iter()
-        .map(format_application_id)
-        .collect();
-    let change: Vec<String> = perms
-        .change_application_permissions
-        .iter()
-        .map(format_application_id)
-        .collect();
-    let oracle: Vec<String> = perms
-        .call_service_as_oracle
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(format_application_id)
-        .collect();
-    let http: Vec<String> = perms
-        .make_http_requests
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(format_application_id)
-        .collect();
-
-    serde_json::json!({
-        "hasExecuteFilter": perms.execute_operations.is_some(),
-        "executeOperations": exec_ops,
-        "mandatoryApplications": mandatory,
-        "closeChainApps": close,
-        "changePermissionsApps": change,
-        "hasOracleFilter": perms.call_service_as_oracle.is_some(),
-        "oracleApps": oracle,
-        "hasHttpFilter": perms.make_http_requests.is_some(),
-        "httpApps": http,
-    })
-}
-
-fn categorize_transactions_values(transactions: &[Transaction]) -> CategorizedValues {
-    let mut result = CategorizedValues::default();
-
-    for tx in transactions {
-        match tx {
-            Transaction::ExecuteOperation(Operation::System(sys_op)) => match sys_op.as_ref() {
-                SystemOperation::Transfer {
-                    owner,
-                    recipient,
-                    amount,
-                } => {
-                    result.transfers.push(serde_json::json!({
-                        "owner": format_account_owner(owner),
-                        "recipient": format_account(&recipient.chain_id, &recipient.owner),
-                        "amount": amount.to_attos().to_string(),
-                    }));
-                }
-                SystemOperation::Claim {
-                    owner,
-                    target_id,
-                    recipient,
-                    amount,
-                } => {
-                    result.claims.push(serde_json::json!({
-                        "owner": format_account_owner(owner),
-                        "targetChain": format_chain_id(target_id),
-                        "recipient": format_account(&recipient.chain_id, &recipient.owner),
-                        "amount": amount.to_attos().to_string(),
-                    }));
-                }
-                SystemOperation::OpenChain(config) => {
-                    let (so, o) = extract_chain_ownership_vecs(&config.ownership);
-                    let perms_hash = hash_app_permissions(&config.application_permissions);
-                    let mut val = serde_json::json!({
-                        "balance": config.balance.to_attos().to_string(),
-                        "permissionsHash": format_bytes32(perms_hash),
-                    });
-                    let ownership = ownership_json(
-                        &so,
-                        &o,
-                        config.ownership.multi_leader_rounds,
-                        config.ownership.open_multi_leader_rounds,
-                        &config.ownership.timeout_config,
-                    );
-                    // Merge ownership fields into val.
-                    if let (Some(v), Some(ow)) = (val.as_object_mut(), ownership.as_object()) {
-                        for (k, v2) in ow {
-                            v.insert(k.clone(), v2.clone());
-                        }
-                    }
-                    result.open_chain_ops.push(val);
-                }
-                SystemOperation::CloseChain => {
-                    result.close_chain_ops.push(serde_json::json!({}));
-                }
-                SystemOperation::ChangeOwnership {
-                    super_owners,
-                    owners,
-                    multi_leader_rounds,
-                    open_multi_leader_rounds,
-                    timeout_config,
-                } => {
-                    let (so, o) = extract_ownership_vecs(super_owners, owners);
-                    result.change_ownership_ops.push(ownership_json(
-                        &so,
-                        &o,
-                        *multi_leader_rounds,
-                        *open_multi_leader_rounds,
-                        timeout_config,
-                    ));
-                }
-                SystemOperation::ChangeApplicationPermissions(perms) => {
-                    result
-                        .change_app_permissions_ops
-                        .push(app_permissions_json(perms));
-                }
-                SystemOperation::PublishModule { module_id } => {
-                    result.publish_module_ops.push(serde_json::json!({
-                        "contractBlobHash": format_bytes32(module_id.contract_blob_hash.into()),
-                        "serviceBlobHash": format_bytes32(module_id.service_blob_hash.into()),
-                        "vmRuntime": format_vm_runtime(module_id),
-                    }));
-                }
-                SystemOperation::PublishDataBlob { blob_hash } => {
-                    result.publish_data_blob_ops.push(serde_json::json!({
-                        "blobHash": format_bytes32((*blob_hash).into()),
-                    }));
-                }
-                SystemOperation::VerifyBlob { blob_id } => {
-                    result.verify_blob_ops.push(serde_json::json!({
-                        "blobType": format_blob_type(&blob_id.blob_type),
-                        "hash": format_bytes32(blob_id.hash.into()),
-                    }));
-                }
-                SystemOperation::CreateApplication {
-                    module_id,
-                    parameters,
-                    instantiation_argument,
-                    required_application_ids,
-                } => {
-                    let req_ids: Vec<String> = required_application_ids
-                        .iter()
-                        .map(format_application_id)
-                        .collect();
-                    result.create_application_ops.push(serde_json::json!({
-                        "contractBlobHash": format_bytes32(module_id.contract_blob_hash.into()),
-                        "serviceBlobHash": format_bytes32(module_id.service_blob_hash.into()),
-                        "vmRuntime": format_vm_runtime(module_id),
-                        "parametersHash": format_bytes32(keccak256(parameters).0),
-                        "instantiationArgumentHash": format_bytes32(keccak256(instantiation_argument).0),
-                        "requiredApplicationIds": req_ids,
-                    }));
-                }
-                SystemOperation::Admin(admin_op) => {
-                    let (operation, epoch, blob_hash) = match admin_op {
-                        AdminOperation::PublishCommitteeBlob { blob_hash } => (
-                            "PublishCommitteeBlob",
-                            0u64,
-                            format_bytes32((*blob_hash).into()),
-                        ),
-                        AdminOperation::CreateCommittee { epoch, blob_hash } => (
-                            "CreateCommittee",
-                            epoch.0 as u64,
-                            format_bytes32((*blob_hash).into()),
-                        ),
-                        AdminOperation::RemoveCommittee { epoch } => {
-                            ("RemoveCommittee", epoch.0 as u64, format_bytes32([0u8; 32]))
-                        }
-                    };
-                    result.admin_ops.push(serde_json::json!({
-                        "operation": operation,
-                        "epoch": epoch,
-                        "blobHash": blob_hash,
-                    }));
-                }
-                SystemOperation::ProcessNewEpoch(epoch) => {
-                    result.process_new_epoch_ops.push(serde_json::json!({
-                        "epoch": epoch.0 as u64,
-                    }));
-                }
-                SystemOperation::ProcessRemovedEpoch(epoch) => {
-                    result.process_removed_epoch_ops.push(serde_json::json!({
-                        "epoch": epoch.0 as u64,
-                    }));
-                }
-                SystemOperation::UpdateStreams(updates) => {
-                    let update_vals: Vec<serde_json::Value> = updates
-                        .iter()
-                        .map(|(chain_id, stream_id, index)| {
-                            serde_json::json!({
-                                "chainId": format_chain_id(chain_id),
-                                "streamId": format_stream_id(stream_id),
-                                "index": *index,
-                            })
-                        })
-                        .collect();
-                    result.update_streams_ops.push(serde_json::json!({
-                        "updates": update_vals,
-                    }));
-                }
-            },
-            Transaction::ExecuteOperation(Operation::User {
-                application_id,
-                bytes,
-            }) => {
-                let data_hash = keccak256(bytes).0;
-                result.user_operations.push(serde_json::json!({
-                    "applicationId": format_application_id(application_id),
-                    "dataHash": format_bytes32(data_hash),
-                }));
-            }
-            Transaction::ReceiveMessages(bundle) => {
-                result.incoming_messages.push(serde_json::json!({
-                    "origin": format_chain_id(&bundle.origin),
-                    "action": format_message_action(&bundle.action),
-                    "messageCount": bundle.bundle.messages.len() as u32,
-                }));
-            }
-        }
-    }
-
-    result
+fn json_vec<T: Eip712Struct>(items: &[T]) -> Vec<serde_json::Value> {
+    items.iter().map(|v| v.to_eip712_json()).collect()
 }
 
 /// Produces the full EIP-712 typed data JSON for a `ProposalContent`.
@@ -1410,8 +842,14 @@ fn categorize_transactions_values(transactions: &[Transaction]) -> CategorizedVa
 /// generic `compute_eip712_hash` in `linera-base` to produce the signing hash.
 pub fn eip712_typed_data_json(content: &ProposalContent) -> String {
     let block = &content.block;
-    let cat = categorize_transactions_values(&block.transactions);
+    let cat = categorize_transactions(&block.transactions);
     let content_hash: [u8; 32] = CryptoHash::new(content).into();
+
+    let other_hashes_json: Vec<serde_json::Value> = cat
+        .other_hashes
+        .iter()
+        .map(|h| serde_json::Value::String(format!("0x{}", hex::encode(h))))
+        .collect();
 
     let typed_data = serde_json::json!({
         "types": {
@@ -1444,103 +882,24 @@ pub fn eip712_typed_data_json(content: &ProposalContent) -> String {
                 {"name": "updateStreamsOps", "type": "UpdateStreamsOp[]"},
                 {"name": "otherTransactionHashes", "type": "bytes32[]"}
             ],
-            "TransferOp": [
-                {"name": "owner", "type": "string"},
-                {"name": "recipient", "type": "string"},
-                {"name": "amount", "type": "uint128"}
-            ],
-            "ClaimOp": [
-                {"name": "owner", "type": "string"},
-                {"name": "targetChain", "type": "string"},
-                {"name": "recipient", "type": "string"},
-                {"name": "amount", "type": "uint128"}
-            ],
-            "ReceiveMsg": [
-                {"name": "origin", "type": "string"},
-                {"name": "action", "type": "string"},
-                {"name": "messageCount", "type": "uint32"}
-            ],
-            "UserOp": [
-                {"name": "applicationId", "type": "string"},
-                {"name": "dataHash", "type": "bytes32"}
-            ],
-            "OpenChainOp": [
-                {"name": "balance", "type": "uint128"},
-                {"name": "superOwners", "type": "string[]"},
-                {"name": "owners", "type": "WeightedOwner[]"},
-                {"name": "multiLeaderRounds", "type": "uint32"},
-                {"name": "openMultiLeaderRounds", "type": "bool"},
-                {"name": "baseTimeoutMicros", "type": "uint64"},
-                {"name": "timeoutIncrementMicros", "type": "uint64"},
-                {"name": "fallbackDurationMicros", "type": "uint64"},
-                {"name": "fastRoundDurationMicros", "type": "uint64"},
-                {"name": "permissionsHash", "type": "bytes32"}
-            ],
-            "CloseChainOp": [],
-            "ChangeOwnershipOp": [
-                {"name": "superOwners", "type": "string[]"},
-                {"name": "owners", "type": "WeightedOwner[]"},
-                {"name": "multiLeaderRounds", "type": "uint32"},
-                {"name": "openMultiLeaderRounds", "type": "bool"},
-                {"name": "baseTimeoutMicros", "type": "uint64"},
-                {"name": "timeoutIncrementMicros", "type": "uint64"},
-                {"name": "fallbackDurationMicros", "type": "uint64"},
-                {"name": "fastRoundDurationMicros", "type": "uint64"}
-            ],
-            "WeightedOwner": [
-                {"name": "owner", "type": "string"},
-                {"name": "weight", "type": "uint64"}
-            ],
-            "ChangeAppPermissionsOp": [
-                {"name": "hasExecuteFilter", "type": "bool"},
-                {"name": "executeOperations", "type": "string[]"},
-                {"name": "mandatoryApplications", "type": "string[]"},
-                {"name": "closeChainApps", "type": "string[]"},
-                {"name": "changePermissionsApps", "type": "string[]"},
-                {"name": "hasOracleFilter", "type": "bool"},
-                {"name": "oracleApps", "type": "string[]"},
-                {"name": "hasHttpFilter", "type": "bool"},
-                {"name": "httpApps", "type": "string[]"}
-            ],
-            "PublishModuleOp": [
-                {"name": "contractBlobHash", "type": "bytes32"},
-                {"name": "serviceBlobHash", "type": "bytes32"},
-                {"name": "vmRuntime", "type": "string"}
-            ],
-            "PublishDataBlobOp": [
-                {"name": "blobHash", "type": "bytes32"}
-            ],
-            "VerifyBlobOp": [
-                {"name": "blobType", "type": "string"},
-                {"name": "hash", "type": "bytes32"}
-            ],
-            "CreateApplicationOp": [
-                {"name": "contractBlobHash", "type": "bytes32"},
-                {"name": "serviceBlobHash", "type": "bytes32"},
-                {"name": "vmRuntime", "type": "string"},
-                {"name": "parametersHash", "type": "bytes32"},
-                {"name": "instantiationArgumentHash", "type": "bytes32"},
-                {"name": "requiredApplicationIds", "type": "string[]"}
-            ],
-            "AdminOp": [
-                {"name": "operation", "type": "string"},
-                {"name": "epoch", "type": "uint64"},
-                {"name": "blobHash", "type": "bytes32"}
-            ],
-            "ProcessNewEpochOp": [
-                {"name": "epoch", "type": "uint64"}
-            ],
-            "ProcessRemovedEpochOp": [
-                {"name": "epoch", "type": "uint64"}
-            ],
-            "UpdateStreamsOp": [
-                {"name": "updates", "type": "StreamUpdate[]"}
-            ],
-            "StreamUpdate": [
-                {"name": "chainId", "type": "string"},
-                {"name": "streamId", "type": "string"},
-                {"name": "index", "type": "uint32"}
-            ]
+            "TransferOp": TransferOpEip712::eip712_json_type_def(),
+            "ClaimOp": ClaimOpEip712::eip712_json_type_def(),
+            "ReceiveMsg": ReceiveMsgEip712::eip712_json_type_def(),
+            "UserOp": UserOpEip712::eip712_json_type_def(),
+            "OpenChainOp": OpenChainOpEip712::eip712_json_type_def(),
+            "CloseChainOp": CloseChainOpEip712::eip712_json_type_def(),
+            "ChangeOwnershipOp": ChangeOwnershipOpEip712::eip712_json_type_def(),
+            "WeightedOwner": WeightedOwnerEip712::eip712_json_type_def(),
+            "ChangeAppPermissionsOp": ChangeAppPermissionsOpEip712::eip712_json_type_def(),
+            "PublishModuleOp": PublishModuleOpEip712::eip712_json_type_def(),
+            "PublishDataBlobOp": PublishDataBlobOpEip712::eip712_json_type_def(),
+            "VerifyBlobOp": VerifyBlobOpEip712::eip712_json_type_def(),
+            "CreateApplicationOp": CreateApplicationOpEip712::eip712_json_type_def(),
+            "AdminOp": AdminOpEip712::eip712_json_type_def(),
+            "ProcessNewEpochOp": ProcessNewEpochOpEip712::eip712_json_type_def(),
+            "ProcessRemovedEpochOp": ProcessRemovedEpochOpEip712::eip712_json_type_def(),
+            "UpdateStreamsOp": UpdateStreamsOpEip712::eip712_json_type_def(),
+            "StreamUpdate": StreamUpdateEip712::eip712_json_type_def(),
         },
         "primaryType": "LineraBlockProposal",
         "domain": {
@@ -1554,23 +913,23 @@ pub fn eip712_typed_data_json(content: &ProposalContent) -> String {
             "timestamp": block.timestamp.micros(),
             "round": format_round(&content.round),
             "contentHash": format_bytes32(content_hash),
-            "transfers": cat.transfers,
-            "claims": cat.claims,
-            "incomingMessages": cat.incoming_messages,
-            "userOperations": cat.user_operations,
-            "openChainOps": cat.open_chain_ops,
-            "closeChainOps": cat.close_chain_ops,
-            "changeOwnershipOps": cat.change_ownership_ops,
-            "changeAppPermissionsOps": cat.change_app_permissions_ops,
-            "publishModuleOps": cat.publish_module_ops,
-            "publishDataBlobOps": cat.publish_data_blob_ops,
-            "verifyBlobOps": cat.verify_blob_ops,
-            "createApplicationOps": cat.create_application_ops,
-            "adminOps": cat.admin_ops,
-            "processNewEpochOps": cat.process_new_epoch_ops,
-            "processRemovedEpochOps": cat.process_removed_epoch_ops,
-            "updateStreamsOps": cat.update_streams_ops,
-            "otherTransactionHashes": cat.other_hashes,
+            "transfers": json_vec(&cat.transfers),
+            "claims": json_vec(&cat.claims),
+            "incomingMessages": json_vec(&cat.incoming_messages),
+            "userOperations": json_vec(&cat.user_operations),
+            "openChainOps": json_vec(&cat.open_chain_ops),
+            "closeChainOps": json_vec(&cat.close_chain_ops),
+            "changeOwnershipOps": json_vec(&cat.change_ownership_ops),
+            "changeAppPermissionsOps": json_vec(&cat.change_app_permissions_ops),
+            "publishModuleOps": json_vec(&cat.publish_module_ops),
+            "publishDataBlobOps": json_vec(&cat.publish_data_blob_ops),
+            "verifyBlobOps": json_vec(&cat.verify_blob_ops),
+            "createApplicationOps": json_vec(&cat.create_application_ops),
+            "adminOps": json_vec(&cat.admin_ops),
+            "processNewEpochOps": json_vec(&cat.process_new_epoch_ops),
+            "processRemovedEpochOps": json_vec(&cat.process_removed_epoch_ops),
+            "updateStreamsOps": json_vec(&cat.update_streams_ops),
+            "otherTransactionHashes": other_hashes_json,
         }
     });
 
@@ -1581,7 +940,7 @@ pub fn eip712_typed_data_json(content: &ProposalContent) -> String {
 mod tests {
     use linera_base::{
         crypto::{CryptoHash, TestString},
-        data_types::{BlockHeight, Epoch, Round},
+        data_types::{Amount, BlockHeight, Epoch, Round},
         identifiers::{Account, AccountOwner, ChainId},
     };
 
@@ -1662,18 +1021,27 @@ mod tests {
         let recipient_chain = test_chain_id();
         let recipient_owner = AccountOwner::Address20([0xCD; 20]);
         let amount = Amount::from_tokens(100);
-        let hash1 = hash_transfer_op(&owner, &recipient_chain, &recipient_owner, amount);
-        let hash2 = hash_transfer_op(&owner, &recipient_chain, &recipient_owner, amount);
+        let t1 = TransferOpEip712 {
+            owner: format_account_owner(&owner),
+            recipient: format_account(&recipient_chain, &recipient_owner),
+            amount: amount.to_attos(),
+        };
+        let t2 = TransferOpEip712 {
+            owner: format_account_owner(&owner),
+            recipient: format_account(&recipient_chain, &recipient_owner),
+            amount: amount.to_attos(),
+        };
+        let hash1 = t1.hash_struct();
+        let hash2 = t2.hash_struct();
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, [0u8; 32]);
 
-        let hash3 = hash_transfer_op(
-            &owner,
-            &recipient_chain,
-            &recipient_owner,
-            Amount::from_tokens(200),
-        );
-        assert_ne!(hash1, hash3);
+        let t3 = TransferOpEip712 {
+            owner: format_account_owner(&owner),
+            recipient: format_account(&recipient_chain, &recipient_owner),
+            amount: Amount::from_tokens(200).to_attos(),
+        };
+        assert_ne!(hash1, t3.hash_struct());
     }
 
     #[test]
@@ -1809,483 +1177,215 @@ mod tests {
         assert_eq!(direct_hash, json_hash);
     }
 
-    // -- Regression tests: derived structs match hand-written hash functions --
+    // -- Derive macro correctness tests --
 
     #[test]
-    fn derived_primary_def_matches_type_string() {
-        assert_eq!(TransferOpEip712::PRIMARY_DEF, TRANSFER_OP_TYPE);
-        assert_eq!(ClaimOpEip712::PRIMARY_DEF, CLAIM_OP_TYPE);
-        assert_eq!(ReceiveMsgEip712::PRIMARY_DEF, RECEIVE_MSG_TYPE);
-        assert_eq!(UserOpEip712::PRIMARY_DEF, USER_OP_TYPE);
-        assert_eq!(WeightedOwnerEip712::PRIMARY_DEF, WEIGHTED_OWNER_TYPE);
-        assert_eq!(CloseChainOpEip712::PRIMARY_DEF, CLOSE_CHAIN_OP_TYPE);
-        assert_eq!(PublishModuleOpEip712::PRIMARY_DEF, PUBLISH_MODULE_OP_TYPE);
+    fn derived_primary_def_is_valid() {
+        assert_eq!(
+            TransferOpEip712::PRIMARY_DEF,
+            "TransferOp(string owner,string recipient,uint128 amount)"
+        );
+        assert_eq!(
+            ClaimOpEip712::PRIMARY_DEF,
+            "ClaimOp(string owner,string targetChain,string recipient,uint128 amount)"
+        );
+        assert_eq!(
+            ReceiveMsgEip712::PRIMARY_DEF,
+            "ReceiveMsg(string origin,string action,uint32 messageCount)"
+        );
+        assert_eq!(
+            UserOpEip712::PRIMARY_DEF,
+            "UserOp(string applicationId,bytes32 dataHash)"
+        );
+        assert_eq!(
+            WeightedOwnerEip712::PRIMARY_DEF,
+            "WeightedOwner(string owner,uint64 weight)"
+        );
+        assert_eq!(CloseChainOpEip712::PRIMARY_DEF, "CloseChainOp()");
+        assert_eq!(
+            PublishModuleOpEip712::PRIMARY_DEF,
+            "PublishModuleOp(bytes32 contractBlobHash,bytes32 serviceBlobHash,string vmRuntime)"
+        );
         assert_eq!(
             PublishDataBlobOpEip712::PRIMARY_DEF,
-            PUBLISH_DATA_BLOB_OP_TYPE
+            "PublishDataBlobOp(bytes32 blobHash)"
         );
-        assert_eq!(VerifyBlobOpEip712::PRIMARY_DEF, VERIFY_BLOB_OP_TYPE);
-        assert_eq!(AdminOpEip712::PRIMARY_DEF, ADMIN_OP_TYPE);
+        assert_eq!(
+            VerifyBlobOpEip712::PRIMARY_DEF,
+            "VerifyBlobOp(string blobType,bytes32 hash)"
+        );
+        assert_eq!(
+            AdminOpEip712::PRIMARY_DEF,
+            "AdminOp(string operation,uint64 epoch,bytes32 blobHash)"
+        );
         assert_eq!(
             ProcessNewEpochOpEip712::PRIMARY_DEF,
-            PROCESS_NEW_EPOCH_OP_TYPE
+            "ProcessNewEpochOp(uint64 epoch)"
         );
         assert_eq!(
             ProcessRemovedEpochOpEip712::PRIMARY_DEF,
-            PROCESS_REMOVED_EPOCH_OP_TYPE
-        );
-        assert_eq!(StreamUpdateEip712::PRIMARY_DEF, STREAM_UPDATE_TYPE);
-    }
-
-    #[test]
-    fn derived_type_hash_matches_type_string_with_refs() {
-        // Types with references append referenced PRIMARY_DEFs sorted.
-        assert_eq!(OpenChainOpEip712::PRIMARY_DEF, "OpenChainOp(uint128 balance,string[] superOwners,WeightedOwner[] owners,uint32 multiLeaderRounds,bool openMultiLeaderRounds,uint64 baseTimeoutMicros,uint64 timeoutIncrementMicros,uint64 fallbackDurationMicros,uint64 fastRoundDurationMicros,bytes32 permissionsHash)");
-
-        // The full type string for OpenChainOp is PRIMARY_DEF + sorted references.
-        assert_eq!(
-            *OpenChainOpEip712::eip712_type_hash(),
-            *OPEN_CHAIN_OP_TYPE_HASH
+            "ProcessRemovedEpochOp(uint64 epoch)"
         );
         assert_eq!(
-            *ChangeOwnershipOpEip712::eip712_type_hash(),
-            *CHANGE_OWNERSHIP_OP_TYPE_HASH
-        );
-        assert_eq!(
-            *UpdateStreamsOpEip712::eip712_type_hash(),
-            *UPDATE_STREAMS_OP_TYPE_HASH
+            StreamUpdateEip712::PRIMARY_DEF,
+            "StreamUpdate(string chainId,string streamId,uint32 index)"
         );
     }
 
     #[test]
-    fn derived_type_hash_matches_precomputed() {
+    fn derived_type_hash_simple_types() {
+        // For types without references, type_hash = keccak256(PRIMARY_DEF).
         assert_eq!(
             *TransferOpEip712::eip712_type_hash(),
-            *TRANSFER_OP_TYPE_HASH
+            keccak256(TransferOpEip712::PRIMARY_DEF).0
         );
-        assert_eq!(*ClaimOpEip712::eip712_type_hash(), *CLAIM_OP_TYPE_HASH);
+        assert_eq!(
+            *ClaimOpEip712::eip712_type_hash(),
+            keccak256(ClaimOpEip712::PRIMARY_DEF).0
+        );
         assert_eq!(
             *ReceiveMsgEip712::eip712_type_hash(),
-            *RECEIVE_MSG_TYPE_HASH
+            keccak256(ReceiveMsgEip712::PRIMARY_DEF).0
         );
-        assert_eq!(*UserOpEip712::eip712_type_hash(), *USER_OP_TYPE_HASH);
+        assert_eq!(
+            *UserOpEip712::eip712_type_hash(),
+            keccak256(UserOpEip712::PRIMARY_DEF).0
+        );
         assert_eq!(
             *WeightedOwnerEip712::eip712_type_hash(),
-            *WEIGHTED_OWNER_TYPE_HASH
+            keccak256(WeightedOwnerEip712::PRIMARY_DEF).0
         );
         assert_eq!(
             *CloseChainOpEip712::eip712_type_hash(),
-            *CLOSE_CHAIN_OP_TYPE_HASH
+            keccak256(CloseChainOpEip712::PRIMARY_DEF).0
         );
         assert_eq!(
             *ChangeAppPermissionsOpEip712::eip712_type_hash(),
-            *CHANGE_APP_PERMISSIONS_OP_TYPE_HASH
+            keccak256(ChangeAppPermissionsOpEip712::PRIMARY_DEF).0
         );
         assert_eq!(
             *PublishModuleOpEip712::eip712_type_hash(),
-            *PUBLISH_MODULE_OP_TYPE_HASH
+            keccak256(PublishModuleOpEip712::PRIMARY_DEF).0
         );
         assert_eq!(
             *PublishDataBlobOpEip712::eip712_type_hash(),
-            *PUBLISH_DATA_BLOB_OP_TYPE_HASH
+            keccak256(PublishDataBlobOpEip712::PRIMARY_DEF).0
         );
         assert_eq!(
             *VerifyBlobOpEip712::eip712_type_hash(),
-            *VERIFY_BLOB_OP_TYPE_HASH
+            keccak256(VerifyBlobOpEip712::PRIMARY_DEF).0
         );
         assert_eq!(
-            *CreateApplicationOpEip712::eip712_type_hash(),
-            *CREATE_APPLICATION_OP_TYPE_HASH
+            *AdminOpEip712::eip712_type_hash(),
+            keccak256(AdminOpEip712::PRIMARY_DEF).0
         );
-        assert_eq!(*AdminOpEip712::eip712_type_hash(), *ADMIN_OP_TYPE_HASH);
         assert_eq!(
             *ProcessNewEpochOpEip712::eip712_type_hash(),
-            *PROCESS_NEW_EPOCH_OP_TYPE_HASH
+            keccak256(ProcessNewEpochOpEip712::PRIMARY_DEF).0
         );
         assert_eq!(
             *ProcessRemovedEpochOpEip712::eip712_type_hash(),
-            *PROCESS_REMOVED_EPOCH_OP_TYPE_HASH
+            keccak256(ProcessRemovedEpochOpEip712::PRIMARY_DEF).0
         );
         assert_eq!(
             *StreamUpdateEip712::eip712_type_hash(),
-            *STREAM_UPDATE_TYPE_HASH
+            keccak256(StreamUpdateEip712::PRIMARY_DEF).0
         );
     }
 
     #[test]
-    fn derived_transfer_hash_matches_old() {
-        let owner = AccountOwner::Address20([0xAB; 20]);
-        let recipient_chain = test_chain_id();
-        let recipient_owner = AccountOwner::Address20([0xCD; 20]);
-        let amount = Amount::from_tokens(100);
-
-        let old = hash_transfer_op(&owner, &recipient_chain, &recipient_owner, amount);
-        let derived = TransferOpEip712 {
-            owner: format_account_owner(&owner),
-            recipient: format_account(&recipient_chain, &recipient_owner),
-            amount: amount.to_attos(),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
-    }
-
-    #[test]
-    fn derived_claim_hash_matches_old() {
-        let owner = AccountOwner::Address20([0xAB; 20]);
-        let target_chain = test_chain_id();
-        let recipient_chain = test_chain_id();
-        let recipient_owner = AccountOwner::Address20([0xCD; 20]);
-        let amount = Amount::from_tokens(50);
-
-        let old = hash_claim_op(
-            &owner,
-            &target_chain,
-            &recipient_chain,
-            &recipient_owner,
-            amount,
+    fn derived_type_hash_with_references() {
+        // Types with references: type hash = keccak256(PRIMARY_DEF + sorted referenced PRIMARY_DEFs).
+        let mut open_chain_full = OpenChainOpEip712::PRIMARY_DEF.to_string();
+        open_chain_full.push_str(WeightedOwnerEip712::PRIMARY_DEF);
+        assert_eq!(
+            *OpenChainOpEip712::eip712_type_hash(),
+            keccak256(open_chain_full.as_bytes()).0
         );
-        let derived = ClaimOpEip712 {
-            owner: format_account_owner(&owner),
-            target_chain: format_chain_id(&target_chain),
-            recipient: format_account(&recipient_chain, &recipient_owner),
-            amount: amount.to_attos(),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
-    }
 
-    #[test]
-    fn derived_receive_msg_hash_matches_old() {
-        let origin = test_chain_id();
-        let action = MessageAction::Accept;
-        let count = 5u32;
-
-        let old = hash_receive_msg(&origin, &action, count);
-        let derived = ReceiveMsgEip712 {
-            origin: format_chain_id(&origin),
-            action: format_message_action(&action).to_string(),
-            message_count: count,
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
-    }
-
-    #[test]
-    fn derived_user_op_hash_matches_old() {
-        let app_id = ApplicationId::default();
-        let bytes = b"user op data";
-
-        let old = hash_user_op(&app_id, bytes);
-        let derived = UserOpEip712 {
-            application_id: format_application_id(&app_id),
-            data_hash: keccak256(bytes).0,
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
-    }
-
-    #[test]
-    fn derived_close_chain_hash_matches_old() {
-        let old = hash_close_chain_op();
-        let derived = CloseChainOpEip712 {}.hash_struct();
-        assert_eq!(old, derived);
-    }
-
-    #[test]
-    fn derived_publish_data_blob_hash_matches_old() {
-        let blob_hash = CryptoHash::new(&TestString::new("blob"));
-        let old = hash_publish_data_blob_op(&blob_hash);
-        let derived = PublishDataBlobOpEip712 {
-            blob_hash: blob_hash.into(),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
-    }
-
-    #[test]
-    fn derived_admin_op_hash_matches_old() {
-        use linera_base::data_types::Epoch;
-        use linera_execution::system::AdminOperation;
-
-        let admin_op = AdminOperation::CreateCommittee {
-            epoch: Epoch(42),
-            blob_hash: CryptoHash::new(&TestString::new("committee")),
-        };
-        let old = hash_admin_op(&admin_op);
-        let derived = AdminOpEip712 {
-            operation: "CreateCommittee".to_string(),
-            epoch: 42u64,
-            blob_hash: CryptoHash::new(&TestString::new("committee")).into(),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
-    }
-
-    #[test]
-    fn derived_process_epoch_hashes_match_old() {
-        let old_new = hash_process_new_epoch_op(7);
-        let derived_new = ProcessNewEpochOpEip712 { epoch: 7 }.hash_struct();
-        assert_eq!(old_new, derived_new);
-
-        let old_removed = hash_process_removed_epoch_op(3);
-        let derived_removed = ProcessRemovedEpochOpEip712 { epoch: 3 }.hash_struct();
-        assert_eq!(old_removed, derived_removed);
-    }
-
-    #[test]
-    fn derived_weighted_owner_hash_matches_old() {
-        let owner_str = "0xabababababababababababababababababababab";
-        let weight = 100u64;
-        let old = hash_weighted_owner(owner_str, weight);
-        let derived = WeightedOwnerEip712 {
-            owner: owner_str.to_string(),
-            weight,
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
-    }
-
-    #[test]
-    fn derived_publish_module_hash_matches_old() {
-        let module_id = ModuleId::new(
-            CryptoHash::new(&TestString::new("contract")),
-            CryptoHash::new(&TestString::new("service")),
-            linera_base::vm::VmRuntime::Wasm,
+        let mut change_own_full = ChangeOwnershipOpEip712::PRIMARY_DEF.to_string();
+        change_own_full.push_str(WeightedOwnerEip712::PRIMARY_DEF);
+        assert_eq!(
+            *ChangeOwnershipOpEip712::eip712_type_hash(),
+            keccak256(change_own_full.as_bytes()).0
         );
-        let old = hash_publish_module_op(&module_id);
-        let derived = PublishModuleOpEip712 {
-            contract_blob_hash: module_id.contract_blob_hash.into(),
-            service_blob_hash: module_id.service_blob_hash.into(),
-            vm_runtime: format_vm_runtime(&module_id).to_string(),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
-    }
 
-    #[test]
-    fn derived_verify_blob_hash_matches_old() {
-        let blob_type = BlobType::Data;
-        let hash = CryptoHash::new(&TestString::new("blob"));
-        let old = hash_verify_blob_op(&blob_type, &hash);
-        let derived = VerifyBlobOpEip712 {
-            blob_type: format_blob_type(&blob_type).to_string(),
-            hash: hash.into(),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
-    }
-
-    #[test]
-    fn derived_create_application_hash_matches_old() {
-        let module_id = ModuleId::new(
-            CryptoHash::new(&TestString::new("contract")),
-            CryptoHash::new(&TestString::new("service")),
-            linera_base::vm::VmRuntime::Wasm,
+        let mut update_streams_full = UpdateStreamsOpEip712::PRIMARY_DEF.to_string();
+        update_streams_full.push_str(StreamUpdateEip712::PRIMARY_DEF);
+        assert_eq!(
+            *UpdateStreamsOpEip712::eip712_type_hash(),
+            keccak256(update_streams_full.as_bytes()).0
         );
-        let parameters = b"params";
-        let instantiation_argument = b"init_arg";
-        let req_ids = vec![];
-
-        let old =
-            hash_create_application_op(&module_id, parameters, instantiation_argument, &req_ids);
-        let derived = CreateApplicationOpEip712 {
-            contract_blob_hash: module_id.contract_blob_hash.into(),
-            service_blob_hash: module_id.service_blob_hash.into(),
-            vm_runtime: format_vm_runtime(&module_id).to_string(),
-            parameters_hash: keccak256(parameters).0,
-            instantiation_argument_hash: keccak256(instantiation_argument).0,
-            required_application_ids: req_ids.iter().map(format_application_id).collect(),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
     }
 
     #[test]
-    fn derived_stream_update_hash_matches_old() {
-        let chain_id = test_chain_id();
-        let stream_id = linera_base::identifiers::StreamId {
-            application_id: GenericApplicationId::System,
-            stream_name: linera_base::identifiers::StreamName(vec![0x01, 0x02]),
+    fn derived_hash_struct_deterministic() {
+        let t = TransferOpEip712 {
+            owner: "owner1".to_string(),
+            recipient: "recipient1".to_string(),
+            amount: 1000,
         };
-        let index = 10u32;
+        let h1 = t.hash_struct();
+        let h2 = t.hash_struct();
+        assert_eq!(h1, h2);
+        assert_ne!(h1, [0u8; 32]);
 
-        let sid = format_stream_id(&stream_id);
-        let old = hash_stream_update(&chain_id, &sid, index);
-        let derived = StreamUpdateEip712 {
-            chain_id: format_chain_id(&chain_id),
-            stream_id: sid,
-            index,
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
+        let t2 = TransferOpEip712 {
+            owner: "owner2".to_string(),
+            recipient: "recipient1".to_string(),
+            amount: 1000,
+        };
+        assert_ne!(h1, t2.hash_struct());
     }
 
     #[test]
-    fn derived_update_streams_hash_matches_old() {
-        let chain_id = test_chain_id();
-        let stream_id = linera_base::identifiers::StreamId {
-            application_id: GenericApplicationId::System,
-            stream_name: linera_base::identifiers::StreamName(vec![0x01, 0x02]),
-        };
-        let updates = vec![(chain_id, stream_id.clone(), 10u32)];
-
-        let old = hash_update_streams_op(&updates);
-        let derived = UpdateStreamsOpEip712 {
-            updates: updates
-                .iter()
-                .map(|(cid, sid, idx)| StreamUpdateEip712 {
-                    chain_id: format_chain_id(cid),
-                    stream_id: format_stream_id(sid),
-                    index: *idx,
-                })
-                .collect(),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
+    fn derived_close_chain_hash_deterministic() {
+        let h1 = CloseChainOpEip712 {}.hash_struct();
+        let h2 = CloseChainOpEip712 {}.hash_struct();
+        assert_eq!(h1, h2);
+        assert_ne!(h1, [0u8; 32]);
     }
 
     #[test]
-    fn derived_change_ownership_hash_matches_old() {
-        let owner1 = AccountOwner::Address20([0xAA; 20]);
-        let owner2 = AccountOwner::Address20([0xBB; 20]);
-        let timeout = linera_base::ownership::TimeoutConfig {
-            base_timeout: TimeDelta::from_micros(1000),
-            timeout_increment: TimeDelta::from_micros(500),
-            fallback_duration: TimeDelta::from_micros(2000),
-            fast_round_duration: Some(TimeDelta::from_micros(100)),
+    fn derived_struct_with_references_hash() {
+        let update = StreamUpdateEip712 {
+            chain_id: "chain1".to_string(),
+            stream_id: "stream1".to_string(),
+            index: 5,
         };
+        let op = UpdateStreamsOpEip712 {
+            updates: vec![update],
+        };
+        let h = op.hash_struct();
+        assert_ne!(h, [0u8; 32]);
 
-        let old = hash_change_ownership_op(&[owner1], &[(owner2, 50)], 3, true, &timeout);
-
-        let (so, o) = extract_ownership_vecs(&[owner1], &[(owner2, 50)]);
-        let derived = ChangeOwnershipOpEip712 {
-            super_owners: so,
-            owners: o
-                .iter()
-                .map(|(owner, weight)| WeightedOwnerEip712 {
-                    owner: owner.clone(),
-                    weight: *weight,
-                })
-                .collect(),
-            multi_leader_rounds: 3,
-            open_multi_leader_rounds: true,
-            base_timeout_micros: timedelta_micros(&timeout.base_timeout),
-            timeout_increment_micros: timedelta_micros(&timeout.timeout_increment),
-            fallback_duration_micros: timedelta_micros(&timeout.fallback_duration),
-            fast_round_duration_micros: timeout
-                .fast_round_duration
-                .map(|d| timedelta_micros(&d))
-                .unwrap_or(0),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
+        let op_empty = UpdateStreamsOpEip712 { updates: vec![] };
+        assert_ne!(h, op_empty.hash_struct());
     }
 
     #[test]
-    fn derived_change_app_permissions_hash_matches_old() {
-        let perms = ApplicationPermissions {
-            execute_operations: Some(vec![]),
-            mandatory_applications: vec![],
-            close_chain: vec![],
-            change_application_permissions: vec![],
-            call_service_as_oracle: None,
-            make_http_requests: None,
-        };
-
-        let old = hash_change_app_permissions_op(&perms);
-        let derived = ChangeAppPermissionsOpEip712 {
-            has_execute_filter: perms.execute_operations.is_some(),
-            execute_operations: perms
-                .execute_operations
-                .as_deref()
-                .unwrap_or(&[])
-                .iter()
-                .map(|id| format_application_id(id))
-                .collect(),
-            mandatory_applications: perms
-                .mandatory_applications
-                .iter()
-                .map(format_application_id)
-                .collect(),
-            close_chain_apps: perms
-                .close_chain
-                .iter()
-                .map(format_application_id)
-                .collect(),
-            change_permissions_apps: perms
-                .change_application_permissions
-                .iter()
-                .map(format_application_id)
-                .collect(),
-            has_oracle_filter: perms.call_service_as_oracle.is_some(),
-            oracle_apps: perms
-                .call_service_as_oracle
-                .as_deref()
-                .unwrap_or(&[])
-                .iter()
-                .map(|id| format_application_id(id))
-                .collect(),
-            has_http_filter: perms.make_http_requests.is_some(),
-            http_apps: perms
-                .make_http_requests
-                .as_deref()
-                .unwrap_or(&[])
-                .iter()
-                .map(|id| format_application_id(id))
-                .collect(),
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
+    fn derived_json_type_def_correct() {
+        let def = TransferOpEip712::eip712_json_type_def();
+        let arr = def.as_array().unwrap();
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[0]["name"], "owner");
+        assert_eq!(arr[0]["type"], "string");
+        assert_eq!(arr[1]["name"], "recipient");
+        assert_eq!(arr[1]["type"], "string");
+        assert_eq!(arr[2]["name"], "amount");
+        assert_eq!(arr[2]["type"], "uint128");
     }
 
     #[test]
-    fn derived_open_chain_hash_matches_old() {
-        let ownership = linera_base::ownership::ChainOwnership {
-            super_owners: Default::default(),
-            owners: Default::default(),
-            multi_leader_rounds: 0,
-            open_multi_leader_rounds: false,
-            timeout_config: linera_base::ownership::TimeoutConfig {
-                base_timeout: TimeDelta::from_micros(10000),
-                timeout_increment: TimeDelta::from_micros(1000),
-                fallback_duration: TimeDelta::from_micros(5000),
-                fast_round_duration: None,
-            },
+    fn derived_to_eip712_json_correct() {
+        let t = TransferOpEip712 {
+            owner: "alice".to_string(),
+            recipient: "bob".to_string(),
+            amount: 500,
         };
-        let perms = ApplicationPermissions::default();
-        let config = OpenChainConfig {
-            ownership: ownership.clone(),
-            balance: Amount::from_tokens(10),
-            application_permissions: perms.clone(),
-        };
-
-        let old = hash_open_chain_op(&config);
-
-        let (so, o) = extract_chain_ownership_vecs(&ownership);
-        let perms_hash = hash_app_permissions(&perms);
-        let derived = OpenChainOpEip712 {
-            balance: config.balance.to_attos(),
-            super_owners: so,
-            owners: o
-                .iter()
-                .map(|(owner, weight)| WeightedOwnerEip712 {
-                    owner: owner.clone(),
-                    weight: *weight,
-                })
-                .collect(),
-            multi_leader_rounds: ownership.multi_leader_rounds,
-            open_multi_leader_rounds: ownership.open_multi_leader_rounds,
-            base_timeout_micros: timedelta_micros(&ownership.timeout_config.base_timeout),
-            timeout_increment_micros: timedelta_micros(&ownership.timeout_config.timeout_increment),
-            fallback_duration_micros: timedelta_micros(&ownership.timeout_config.fallback_duration),
-            fast_round_duration_micros: ownership
-                .timeout_config
-                .fast_round_duration
-                .map(|d| timedelta_micros(&d))
-                .unwrap_or(0),
-            permissions_hash: perms_hash,
-        }
-        .hash_struct();
-        assert_eq!(old, derived);
+        let json = t.to_eip712_json();
+        assert_eq!(json["owner"], "alice");
+        assert_eq!(json["recipient"], "bob");
+        assert_eq!(json["amount"], "500");
     }
 }
