@@ -98,6 +98,44 @@ sequenceDiagram
     W2->>W2: Add to local_services
 ```
 
+### Service Handoff (Reassignment)
+
+When a service is moved from one worker to another, all three chain types
+participate in a two-phase handoff protocol. The new worker's owners are added
+to the service chain first, then the old worker's owners are removed, ensuring
+there is no gap in ownership.
+
+```mermaid
+sequenceDiagram
+    participant A as Admin
+    participant C as Controller Chain
+    participant WA as Old Worker Chain
+    participant S as Service Chain
+    participant WB as New Worker Chain
+
+    A->>C: ExecuteControllerCommand<br/>{UpdateService{service, [WB]}}
+    C->>C: Record pending handoff
+    C->>WA: Stop{service, new_owners: [WB]}
+
+    note over WA,S: Phase 1: Add new owners
+    WA->>S: AddOwners{service, [WB]}
+    S->>S: Add WB as chain owner
+    S->>WA: OwnersAdded{service, block_height}
+
+    WA->>WA: Remove from local_services
+    WA->>C: HandoffStarted{service, block_height}
+
+    C->>C: Resolve pending handoff
+    C->>WB: Start{service,<br/>owners_to_remove: [WA],<br/>start_height: block_height}
+    WB->>WB: Add to local_pending_services
+
+    note over WB,S: Phase 2: Remove old owners
+    WB->>WB: StartLocalService at start_height
+    WB->>S: RemoveOwners{[WA]}
+    S->>S: Remove WA as chain owner
+    WB->>WB: Move to local_services
+```
+
 ### Service Removal
 
 ```mermaid
