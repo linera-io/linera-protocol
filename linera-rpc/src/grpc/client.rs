@@ -43,8 +43,8 @@ use super::{
 #[cfg(feature = "opentelemetry")]
 use crate::propagation::{get_context_with_traffic_type, inject_context};
 use crate::{
-    grpc::api::RawCertificate, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
-    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
+    full_jitter_delay, grpc::api::RawCertificate, HandleConfirmedCertificateRequest,
+    HandleLiteCertRequest, HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
 #[derive(Clone)]
@@ -137,7 +137,7 @@ impl GrpcClient {
             inject_context(&get_context_with_traffic_type(), request.metadata_mut());
             match f(self.client.clone(), request).await {
                 Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
-                    let delay = self.retry_delay.saturating_mul(retry_count);
+                    let delay = full_jitter_delay(self.retry_delay, retry_count);
                     retry_count += 1;
                     linera_base::time::timer::sleep(delay).await;
                     continue;
@@ -362,7 +362,7 @@ impl ValidatorNode for GrpcClient {
                 {
                     return future::Either::Left(future::ready(false));
                 }
-                let delay = retry_delay.saturating_mul(current_retry_count);
+                let delay = full_jitter_delay(retry_delay, current_retry_count);
                 retry_count.fetch_add(1, Ordering::Relaxed);
                 future::Either::Right(async move {
                     linera_base::time::timer::sleep(delay).await;
