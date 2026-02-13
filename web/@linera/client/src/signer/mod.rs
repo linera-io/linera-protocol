@@ -22,6 +22,7 @@ pub enum Error {
     JsConversion = 3,
     UnexpectedSignatureFormat = 4,
     InvalidAccountOwnerType = 5,
+    UnknownScheme = 6,
     Unknown = 9,
 }
 
@@ -41,6 +42,7 @@ impl Display for Error {
                     "Invalid account owner type provided. Expected AccountOwner::Address20"
                 )
             }
+            Error::UnknownScheme => write!(f, "Unknown signature scheme returned from JS"),
             Error::Unknown => write!(f, "An unknown error occurred"),
         }
     }
@@ -55,6 +57,7 @@ impl From<JsValue> for Error {
             Some(3) => Error::JsConversion,
             Some(4) => Error::UnexpectedSignatureFormat,
             Some(5) => Error::InvalidAccountOwnerType,
+            Some(6) => Error::UnknownScheme,
             _ => Error::Unknown,
         }
     }
@@ -79,6 +82,16 @@ extern "C" {
 
     #[wasm_bindgen(catch, method, js_name = "containsKey")]
     async fn contains_key(this: &Signer, owner: AccountOwner) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(catch, method)]
+    async fn scheme(this: &Signer, owner: AccountOwner) -> Result<js_sys::JsString, JsValue>;
+
+    #[wasm_bindgen(catch, method, js_name = "signTypedData")]
+    async fn sign_typed_data(
+        this: &Signer,
+        owner: AccountOwner,
+        typed_data: js_sys::JsString,
+    ) -> Result<js_sys::JsString, JsValue>;
 }
 
 impl linera_base::crypto::Signer for Signer {
@@ -88,9 +101,13 @@ impl linera_base::crypto::Signer for Signer {
         Ok(self.contains_key(*owner).await?.is_truthy())
     }
 
-    async fn scheme(&self, _owner: &AccountOwner) -> Result<SignatureScheme, Self::Error> {
-        // Web currently only uses EIP-191. EIP-712 web support is a follow-up.
-        Ok(SignatureScheme::EvmSecp256k1)
+    async fn scheme(&self, owner: &AccountOwner) -> Result<SignatureScheme, Self::Error> {
+        let scheme_str = String::from(self.scheme(*owner).await?);
+        match scheme_str.as_str() {
+            "EvmSecp256k1" => Ok(SignatureScheme::EvmSecp256k1),
+            "Eip712Secp256k1" => Ok(SignatureScheme::Eip712Secp256k1),
+            _ => Err(Error::UnknownScheme),
+        }
     }
 
     async fn sign(
@@ -108,6 +125,23 @@ impl linera_base::crypto::Signer for Signer {
             )
             .parse()
             .map_err(|_| Error::UnexpectedSignatureFormat)?,
+            address: if let AccountOwner::Address20(address) = owner {
+                *address
+            } else {
+                return Err(Error::InvalidAccountOwnerType);
+            },
+        })
+    }
+
+    async fn sign_typed_data(
+        &self,
+        owner: &AccountOwner,
+        typed_data: &str,
+    ) -> Result<AccountSignature, Self::Error> {
+        Ok(AccountSignature::Eip712Secp256k1 {
+            signature: String::from(self.sign_typed_data(*owner, typed_data.into()).await?)
+                .parse()
+                .map_err(|_| Error::UnexpectedSignatureFormat)?,
             address: if let AccountOwner::Address20(address) = owner {
                 *address
             } else {

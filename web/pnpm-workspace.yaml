@@ -1,4 +1,5 @@
 packages:
 - '@linera/client'
 - '@linera/metamask'
+- '@linera/metamask-eip712'
 publishBranch: testnet_conway

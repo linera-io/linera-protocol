@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2020", "WebWorker", "DOM"],
+    "baseUrl": "./node_modules",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "sourceMap": true,
+    "outDir": "dist",
+  },
+  "include": ["src", "tests"]
+}
