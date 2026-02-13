@@ -5265,6 +5265,7 @@ name = "linera-chain"
 version = "0.16.0"
 dependencies = [
  "allocative",
+ "alloy-primitives",
  "anyhow",
  "assert_matches",
  "async-graphql",

@@ -10,8 +10,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{
-        AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash, Signer,
-        ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
+        AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash, SignatureScheme,
+        Signer, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{
         Amount, Blob, BlockHeight, Epoch, Event, MessagePolicy, OracleResponse, Round, Timestamp,
@@ -32,6 +32,7 @@ use crate::{
     ChainError,
 };
 
+pub mod eip712;
 pub mod metadata;
 
 pub use metadata::*;
@@ -651,7 +652,13 @@ impl BlockProposal {
             block,
             outcome: None,
         };
-        let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
+        let hash = match signer.scheme(&owner).await? {
+            SignatureScheme::Eip712Secp256k1 => {
+                CryptoHash::from(eip712::eip712_signing_hash(&content))
+            }
+            _ => CryptoHash::new(&content),
+        };
+        let signature = signer.sign(&owner, &hash).await?;
 
         Ok(Self {
             content,
@@ -671,7 +678,13 @@ impl BlockProposal {
             block: old_proposal.content.block,
             outcome: None,
         };
-        let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
+        let hash = match signer.scheme(&owner).await? {
+            SignatureScheme::Eip712Secp256k1 => {
+                CryptoHash::from(eip712::eip712_signing_hash(&content))
+            }
+            _ => CryptoHash::new(&content),
+        };
+        let signature = signer.sign(&owner, &hash).await?;
 
         Ok(Self {
             content,
@@ -694,7 +707,13 @@ impl BlockProposal {
             round,
             outcome: Some(outcome),
         };
-        let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
+        let hash = match signer.scheme(&owner).await? {
+            SignatureScheme::Eip712Secp256k1 => {
+                CryptoHash::from(eip712::eip712_signing_hash(&content))
+            }
+            _ => CryptoHash::new(&content),
+        };
+        let signature = signer.sign(&owner, &hash).await?;
 
         Ok(Self {
             content,
@@ -705,15 +724,24 @@ impl BlockProposal {
 
     /// Returns the `AccountOwner` that proposed the block.
     pub fn owner(&self) -> AccountOwner {
-        match self.signature {
-            AccountSignature::Ed25519 { public_key, .. } => public_key.into(),
-            AccountSignature::Secp256k1 { public_key, .. } => public_key.into(),
-            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(address),
-        }
+        self.signature.owner()
     }
 
     pub fn check_signature(&self) -> Result<(), CryptoError> {
-        self.signature.verify(&self.content)
+        match &self.signature {
+            AccountSignature::Eip712Secp256k1 { signature, address } => {
+                let hash = eip712::eip712_signing_hash(&self.content);
+                let recovered = signature.recover_address_from_raw_prehash(hash)?;
+                if recovered != *address {
+                    return Err(CryptoError::InvalidSignature {
+                        error: "Recovered address does not match signer address".to_string(),
+                        type_name: "ProposalContent".to_string(),
+                    });
+                }
+                Ok(())
+            }
+            _ => self.signature.verify(&self.content),
+        }
     }
 
     pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
@@ -892,7 +920,7 @@ mod signing {
     use linera_base::{
         crypto::{AccountSecretKey, AccountSignature, CryptoHash, EvmSignature, TestString},
         data_types::{BlockHeight, Epoch, Round},
-        identifiers::ChainId,
+        identifiers::{AccountOwner, ChainId},
     };
 
     use crate::data_types::{BlockProposal, ProposalContent, ProposedBlock};
@@ -950,5 +978,130 @@ mod signing {
             original_proposal: None,
         };
         assert_eq!(block_proposal.owner(), public_key.into(),);
+    }
+
+    #[tokio::test]
+    async fn test_eip712_proposal_sign_verify_roundtrip() {
+        use linera_base::crypto::{EvmSecretKey, InMemorySigner};
+
+        let secret_key = EvmSecretKey::generate();
+        let address: [u8; 20] = secret_key.address().into();
+        let owner = AccountOwner::Address20(address);
+
+        let eip712_secret = AccountSecretKey::Eip712Secp256k1(secret_key);
+        let signer: InMemorySigner = [(owner, eip712_secret)].into_iter().collect();
+
+        let block = ProposedBlock {
+            chain_id: ChainId(CryptoHash::new(&TestString::new("ChainId"))),
+            epoch: Epoch(1),
+            transactions: vec![],
+            height: BlockHeight(0),
+            timestamp: 1000u64.into(),
+            authenticated_signer: None,
+            previous_block_hash: None,
+        };
+
+        let proposal = BlockProposal::new_initial(owner, Round::Fast, block, &signer)
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            proposal.signature,
+            AccountSignature::Eip712Secp256k1 { .. }
+        ));
+        proposal.check_signature().unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_eip712_tampered_content_fails() {
+        use linera_base::crypto::{EvmSecretKey, InMemorySigner};
+
+        let secret_key = EvmSecretKey::generate();
+        let address: [u8; 20] = secret_key.address().into();
+        let owner = AccountOwner::Address20(address);
+
+        let eip712_secret = AccountSecretKey::Eip712Secp256k1(secret_key);
+        let signer: InMemorySigner = [(owner, eip712_secret)].into_iter().collect();
+
+        let block = ProposedBlock {
+            chain_id: ChainId(CryptoHash::new(&TestString::new("ChainId"))),
+            epoch: Epoch(1),
+            transactions: vec![],
+            height: BlockHeight(0),
+            timestamp: 1000u64.into(),
+            authenticated_signer: None,
+            previous_block_hash: None,
+        };
+
+        let mut proposal = BlockProposal::new_initial(owner, Round::Fast, block, &signer)
+            .await
+            .unwrap();
+
+        // Tamper with the content
+        proposal.content.block.height = BlockHeight(999);
+        assert!(proposal.check_signature().is_err());
+    }
+
+    #[tokio::test]
+    async fn test_eip712_wrong_signer_fails() {
+        use linera_base::crypto::{EvmSecretKey, InMemorySigner};
+
+        let secret_key = EvmSecretKey::generate();
+        let address: [u8; 20] = secret_key.address().into();
+        let owner = AccountOwner::Address20(address);
+
+        let eip712_secret = AccountSecretKey::Eip712Secp256k1(secret_key);
+        let signer: InMemorySigner = [(owner, eip712_secret)].into_iter().collect();
+
+        let block = ProposedBlock {
+            chain_id: ChainId(CryptoHash::new(&TestString::new("ChainId"))),
+            epoch: Epoch(1),
+            transactions: vec![],
+            height: BlockHeight(0),
+            timestamp: 1000u64.into(),
+            authenticated_signer: None,
+            previous_block_hash: None,
+        };
+
+        let mut proposal = BlockProposal::new_initial(owner, Round::Fast, block, &signer)
+            .await
+            .unwrap();
+
+        // Swap the address to a different one
+        if let AccountSignature::Eip712Secp256k1 {
+            ref mut address, ..
+        } = proposal.signature
+        {
+            *address = [0xFFu8; 20];
+        }
+        assert!(proposal.check_signature().is_err());
+    }
+
+    #[tokio::test]
+    async fn test_eip712_proposal_owner_matches() {
+        use linera_base::crypto::{EvmSecretKey, InMemorySigner};
+
+        let secret_key = EvmSecretKey::generate();
+        let address: [u8; 20] = secret_key.address().into();
+        let owner = AccountOwner::Address20(address);
+
+        let eip712_secret = AccountSecretKey::Eip712Secp256k1(secret_key);
+        let signer: InMemorySigner = [(owner, eip712_secret)].into_iter().collect();
+
+        let block = ProposedBlock {
+            chain_id: ChainId(CryptoHash::new(&TestString::new("ChainId"))),
+            epoch: Epoch(1),
+            transactions: vec![],
+            height: BlockHeight(0),
+            timestamp: 1000u64.into(),
+            authenticated_signer: None,
+            previous_block_hash: None,
+        };
+
+        let proposal = BlockProposal::new_initial(owner, Round::Fast, block, &signer)
+            .await
+            .unwrap();
+
+        assert_eq!(proposal.owner(), owner);
     }
 }

@@ -5,7 +5,7 @@
 use std::fmt::Display;
 
 use linera_base::{
-    crypto::{AccountSignature, CryptoHash},
+    crypto::{AccountSignature, CryptoHash, SignatureScheme},
     identifiers::AccountOwner,
 };
 use wasm_bindgen::prelude::*;
@@ -86,6 +86,11 @@ impl linera_base::crypto::Signer for Signer {
 
     async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Self::Error> {
         Ok(self.contains_key(*owner).await?.is_truthy())
+    }
+
+    async fn scheme(&self, _owner: &AccountOwner) -> Result<SignatureScheme, Self::Error> {
+        // Web currently only uses EIP-191. EIP-712 web support is a follow-up.
+        Ok(SignatureScheme::EvmSecp256k1)
     }
 
     async fn sign(
