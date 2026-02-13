@@ -45,6 +45,8 @@ pub enum SignatureScheme {
     Secp256k1,
     /// EVM secp256k1
     EvmSecp256k1,
+    /// EIP-712 secp256k1 (structured typed data signing)
+    Eip712Secp256k1,
 }
 
 /// The public key of a chain owner.
@@ -73,6 +75,8 @@ pub enum AccountPublicKey {
     Secp256k1(#[allocative(visit = visit_allocative_simple)] secp256k1::Secp256k1PublicKey),
     /// EVM secp256k1 public key.
     EvmSecp256k1(#[allocative(visit = visit_allocative_simple)] secp256k1::evm::EvmPublicKey),
+    /// EIP-712 secp256k1 public key.
+    Eip712Secp256k1(#[allocative(visit = visit_allocative_simple)] secp256k1::evm::EvmPublicKey),
 }
 
 /// The private key of a chain owner.
@@ -84,6 +88,8 @@ pub enum AccountSecretKey {
     Secp256k1(secp256k1::Secp256k1SecretKey),
     /// EVM secp256k1 secret key.
     EvmSecp256k1(secp256k1::evm::EvmSecretKey),
+    /// EIP-712 secp256k1 secret key.
+    Eip712Secp256k1(secp256k1::evm::EvmSecretKey),
 }
 
 /// The signature of a chain owner.
@@ -117,6 +123,16 @@ pub enum AccountSignature {
         #[allocative(visit = visit_allocative_simple)]
         address: [u8; 20],
     },
+    /// EIP-712 secp256k1 signature (structured typed data signing).
+    Eip712Secp256k1 {
+        /// Signature of the value.
+        #[allocative(visit = visit_allocative_simple)]
+        signature: secp256k1::evm::EvmSignature,
+        /// EVM address of the signer.
+        #[debug(with = "hex_debug")]
+        #[allocative(visit = visit_allocative_simple)]
+        address: [u8; 20],
+    },
 }
 
 impl AccountSecretKey {
@@ -128,6 +144,9 @@ impl AccountSecretKey {
             AccountSecretKey::EvmSecp256k1(secret) => {
                 AccountPublicKey::EvmSecp256k1(secret.public())
             }
+            AccountSecretKey::Eip712Secp256k1(secret) => {
+                AccountPublicKey::Eip712Secp256k1(secret.public())
+            }
         }
     }
 
@@ -137,10 +156,18 @@ impl AccountSecretKey {
             AccountSecretKey::Ed25519(secret) => AccountSecretKey::Ed25519(secret.copy()),
             AccountSecretKey::Secp256k1(secret) => AccountSecretKey::Secp256k1(secret.copy()),
             AccountSecretKey::EvmSecp256k1(secret) => AccountSecretKey::EvmSecp256k1(secret.copy()),
+            AccountSecretKey::Eip712Secp256k1(secret) => {
+                AccountSecretKey::Eip712Secp256k1(secret.copy())
+            }
         }
     }
 
     /// Creates a signature for the `value` using provided `secret`.
+    ///
+    /// # Panics
+    ///
+    /// Panics for `Eip712Secp256k1` keys. EIP-712 signing must go through
+    /// `sign_prehash` with a pre-computed EIP-712 hash.
     pub fn sign<'de, T>(&self, value: &T) -> AccountSignature
     where
         T: BcsSignable<'de>,
@@ -166,6 +193,11 @@ impl AccountSecretKey {
                 let signature = secp256k1::evm::EvmSignature::new(CryptoHash::new(value), secret);
                 let address: [u8; 20] = secret.address().into();
                 AccountSignature::EvmSecp256k1 { signature, address }
+            }
+            AccountSecretKey::Eip712Secp256k1(_) => {
+                panic!(
+                    "Eip712Secp256k1 keys must use sign_prehash with a pre-computed EIP-712 hash"
+                )
             }
         }
     }
@@ -193,6 +225,12 @@ impl AccountSecretKey {
                 let signature = secp256k1::evm::EvmSignature::sign_prehash(secret, value);
                 let address: [u8; 20] = secret.address().into();
                 AccountSignature::EvmSecp256k1 { signature, address }
+            }
+            AccountSecretKey::Eip712Secp256k1(secret) => {
+                let signature =
+                    secp256k1::evm::EvmSignature::sign_raw_prehash(secret, value.as_bytes().0);
+                let address: [u8; 20] = secret.address().into();
+                AccountSignature::Eip712Secp256k1 { signature, address }
             }
         }
     }
@@ -223,6 +261,7 @@ impl AccountPublicKey {
             AccountPublicKey::Ed25519(_) => SignatureScheme::Ed25519,
             AccountPublicKey::Secp256k1(_) => SignatureScheme::Secp256k1,
             AccountPublicKey::EvmSecp256k1(_) => SignatureScheme::EvmSecp256k1,
+            AccountPublicKey::Eip712Secp256k1(_) => SignatureScheme::Eip712Secp256k1,
         }
     }
 
@@ -247,6 +286,9 @@ impl AccountPublicKey {
 
 impl AccountSignature {
     /// Verifies the signature for the `value` using the provided `public_key`.
+    ///
+    /// Note: Returns an error for `Eip712Secp256k1` signatures, which require
+    /// EIP-712 hash verification at the `BlockProposal` level.
     pub fn verify<'de, T>(&self, value: &T) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + std::fmt::Debug,
@@ -267,6 +309,12 @@ impl AccountSignature {
                 signature.check_with_recover(value, *sender_address)?;
                 Ok(())
             }
+            AccountSignature::Eip712Secp256k1 { .. } => Err(CryptoError::InvalidSignature {
+                error: "Eip712Secp256k1 signatures cannot be verified generically; \
+                        use BlockProposal::check_signature instead"
+                    .to_string(),
+                type_name: std::any::type_name::<T>().to_string(),
+            }),
         }
     }
 
@@ -285,7 +333,10 @@ impl AccountSignature {
         match self {
             AccountSignature::Ed25519 { public_key, .. } => AccountOwner::from(*public_key),
             AccountSignature::Secp256k1 { public_key, .. } => AccountOwner::from(*public_key),
-            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(*address),
+            AccountSignature::EvmSecp256k1 { address, .. }
+            | AccountSignature::Eip712Secp256k1 { address, .. } => {
+                AccountOwner::Address20(*address)
+            }
         }
     }
 }
