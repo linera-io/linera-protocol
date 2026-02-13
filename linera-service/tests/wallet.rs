@@ -38,6 +38,7 @@ pub async fn new_test_client_context(
         recv_timeout: send_recv_timeout,
         retry_delay,
         max_retries,
+        ..Default::default()
     };
     let chain_ids: Vec<_> = wallet.chain_ids();
     let chain_modes = chain_ids.iter().map(|id| (*id, ListeningMode::FullChain));
@@ -77,6 +78,7 @@ pub async fn new_test_client_context(
         recv_timeout: send_recv_timeout,
         retry_delay,
         max_retries,
+        max_backoff: linera_rpc::node_provider::DEFAULT_MAX_BACKOFF,
         chain_listeners: JoinSet::default(),
         client_metrics: None,
     })

@@ -43,8 +43,8 @@ use super::{
 #[cfg(feature = "opentelemetry")]
 use crate::propagation::{get_context_with_traffic_type, inject_context};
 use crate::{
-    grpc::api::RawCertificate, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
-    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
+    full_jitter_delay, grpc::api::RawCertificate, HandleConfirmedCertificateRequest,
+    HandleLiteCertRequest, HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
 #[derive(Clone)]
@@ -53,6 +53,7 @@ pub struct GrpcClient {
     client: ValidatorNodeClient<transport::Channel>,
     retry_delay: Duration,
     max_retries: u32,
+    max_backoff: Duration,
 }
 
 impl GrpcClient {
@@ -61,6 +62,7 @@ impl GrpcClient {
         channel: transport::Channel,
         retry_delay: Duration,
         max_retries: u32,
+        max_backoff: Duration,
     ) -> Self {
         let client = ValidatorNodeClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
@@ -70,6 +72,7 @@ impl GrpcClient {
             client,
             retry_delay,
             max_retries,
+            max_backoff,
         }
     }
 
@@ -137,7 +140,7 @@ impl GrpcClient {
             inject_context(&get_context_with_traffic_type(), request.metadata_mut());
             match f(self.client.clone(), request).await {
                 Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
-                    let delay = self.retry_delay.saturating_mul(retry_count);
+                    let delay = full_jitter_delay(self.retry_delay, retry_count, self.max_backoff);
                     retry_count += 1;
                     linera_base::time::timer::sleep(delay).await;
                     continue;
@@ -295,6 +298,7 @@ impl ValidatorNode for GrpcClient {
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError> {
         let retry_delay = self.retry_delay;
         let max_retries = self.max_retries;
+        let max_backoff = self.max_backoff;
         // Use shared atomic counter so unfold can reset it on successful reconnection.
         let retry_count = Arc::new(AtomicU32::new(0));
         let subscription_request = SubscriptionRequest {
@@ -362,7 +366,7 @@ impl ValidatorNode for GrpcClient {
                 {
                     return future::Either::Left(future::ready(false));
                 }
-                let delay = retry_delay.saturating_mul(current_retry_count);
+                let delay = full_jitter_delay(retry_delay, current_retry_count, max_backoff);
                 retry_count.fetch_add(1, Ordering::Relaxed);
                 future::Either::Right(async move {
                     linera_base::time::timer::sleep(delay).await;
