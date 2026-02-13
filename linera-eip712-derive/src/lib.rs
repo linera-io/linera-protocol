@@ -135,6 +135,10 @@ fn hash_encode_expr(soltype: &str, field_access: &TokenStream2) -> TokenStream2 
                 encode_hash_array(&__hashes)
             }}
         }
+        other if other.starts_with(|c: char| c.is_ascii_uppercase()) => {
+            // Non-array struct field: per EIP-712 spec, encoded as hashStruct(value).
+            quote! { #field_access.hash_struct() }
+        }
         _ => {
             panic!("unsupported soltype for hash encoding: `{soltype}`");
         }
@@ -177,6 +181,10 @@ fn json_value_expr(soltype: &str, field_access: &TokenStream2) -> TokenStream2 {
                     #field_access.iter().map(|v| v.to_eip712_json()).collect()
                 )
             }
+        }
+        other if other.starts_with(|c: char| c.is_ascii_uppercase()) => {
+            // Non-array struct field: JSON representation of nested struct.
+            quote! { #field_access.to_eip712_json() }
         }
         _ => {
             panic!("unsupported soltype for JSON encoding: `{soltype}`");
