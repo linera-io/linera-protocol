@@ -162,7 +162,7 @@ pub enum Message {
         admin: AccountOwner,
         command: ControllerCommand,
     },
-    // -- Messages sent to the workers from the controller chain --
+    // -- Messages sent to the workers' control chains from the controller chain --
     Reset,
     Start {
         service_id: ManagedServiceId,
@@ -179,7 +179,7 @@ pub enum Message {
     ForgetChain {
         chain_id: ChainId,
     },
-    // -- Messages sent from the worker to a service chain --
+    // -- Messages sent from the worker's control chain to a service chain --
     AddOwners {
         service_id: ManagedServiceId,
         new_owners: HashSet<AccountOwner>,
@@ -187,12 +187,12 @@ pub enum Message {
     RemoveOwners {
         owners_to_remove: HashSet<AccountOwner>,
     },
-    // -- Messages sent from a service chain to the worker --
+    // -- Messages sent from a service chain to the worker's control chain --
     OwnersAdded {
         service_id: ManagedServiceId,
         added_at: BlockHeight,
     },
-    // -- Messages sent from the workers to the controller chain --
+    // -- Messages sent from the workers' control chains to the controller chain --
     HandoffStarted {
         service_id: ManagedServiceId,
         target_block_height: BlockHeight,
