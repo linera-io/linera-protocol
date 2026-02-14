@@ -21,6 +21,7 @@ use linera_base::{
         CompressedBytecode, Epoch,
     },
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
+    util::wasm::optimize_wasm_files_in,
     vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainExecutionContext};
@@ -443,6 +444,11 @@ impl ActiveChain {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
+
+        let output_directory = Self::find_output_directory_of_sync(repository)
+            .expect("Failed to look for output binaries");
+        optimize_wasm_files_in(&output_directory)
+            .expect("Failed to optimize Wasm binaries with wasm-opt");
     }
 
     /// Searches the Cargo manifest of the crate calling this method for binaries to use as the
@@ -513,6 +519,25 @@ impl ActiveChain {
         let mut output_path = current_directory.join(output_sub_directory);
 
         while !fs::try_exists(&output_path).await? {
+            current_directory = current_directory.parent().unwrap_or_else(|| {
+                panic!(
+                    "Failed to find Wasm binary output directory in {}",
+                    repository.display()
+                )
+            });
+
+            output_path = current_directory.join(output_sub_directory);
+        }
+
+        Ok(output_path)
+    }
+
+    fn find_output_directory_of_sync(repository: &Path) -> Result<PathBuf, io::Error> {
+        let output_sub_directory = Path::new("target/wasm32-unknown-unknown/release");
+        let mut current_directory = repository;
+        let mut output_path = current_directory.join(output_sub_directory);
+
+        while std::fs::metadata(&output_path).is_err() {
             current_directory = current_directory.parent().unwrap_or_else(|| {
                 panic!(
                     "Failed to find Wasm binary output directory in {}",
