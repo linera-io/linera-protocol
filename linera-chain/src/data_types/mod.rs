@@ -1003,7 +1003,7 @@ mod signing {
             transactions: vec![],
             height: BlockHeight(0),
             timestamp: 1000u64.into(),
-            authenticated_signer: None,
+            authenticated_owner: None,
             previous_block_hash: None,
         };
 
@@ -1035,7 +1035,7 @@ mod signing {
             transactions: vec![],
             height: BlockHeight(0),
             timestamp: 1000u64.into(),
-            authenticated_signer: None,
+            authenticated_owner: None,
             previous_block_hash: None,
         };
 
@@ -1065,7 +1065,7 @@ mod signing {
             transactions: vec![],
             height: BlockHeight(0),
             timestamp: 1000u64.into(),
-            authenticated_signer: None,
+            authenticated_owner: None,
             previous_block_hash: None,
         };
 
@@ -1100,7 +1100,7 @@ mod signing {
             transactions: vec![],
             height: BlockHeight(0),
             timestamp: 1000u64.into(),
-            authenticated_signer: None,
+            authenticated_owner: None,
             previous_block_hash: None,
         };
 

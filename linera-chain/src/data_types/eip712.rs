@@ -144,9 +144,7 @@ struct ChangeAppPermissionsOpEip712 {
     #[eip712(soltype = "string[]")]
     mandatory_applications: Vec<String>,
     #[eip712(soltype = "string[]")]
-    close_chain_apps: Vec<String>,
-    #[eip712(soltype = "string[]")]
-    change_permissions_apps: Vec<String>,
+    manage_chain_apps: Vec<String>,
     #[eip712(soltype = "bool")]
     has_oracle_filter: bool,
     #[eip712(soltype = "string[]")]
@@ -282,8 +280,7 @@ bytes32[] otherTransactionHashes\
 AdminOp(string operation,uint64 epoch,bytes32 blobHash)\
 ChangeAppPermissionsOp(\
 bool hasExecuteFilter,string[] executeOperations,\
-string[] mandatoryApplications,string[] closeChainApps,\
-string[] changePermissionsApps,\
+string[] mandatoryApplications,string[] manageChainApps,\
 bool hasOracleFilter,string[] oracleApps,\
 bool hasHttpFilter,string[] httpApps)\
 ChangeOwnershipOp(\
@@ -561,13 +558,8 @@ fn make_app_permissions_eip712(perms: &ApplicationPermissions) -> ChangeAppPermi
             .iter()
             .map(format_application_id)
             .collect(),
-        close_chain_apps: perms
-            .close_chain
-            .iter()
-            .map(format_application_id)
-            .collect(),
-        change_permissions_apps: perms
-            .change_application_permissions
+        manage_chain_apps: perms
+            .manage_chain
             .iter()
             .map(format_application_id)
             .collect(),
@@ -644,6 +636,7 @@ fn categorize_transactions(transactions: &[Transaction]) -> CategorizedTransacti
                 SystemOperation::ChangeOwnership {
                     super_owners,
                     owners,
+                    first_leader: _,
                     multi_leader_rounds,
                     open_multi_leader_rounds,
                     timeout_config,
@@ -959,7 +952,7 @@ mod tests {
                 transactions: vec![],
                 height: BlockHeight(11),
                 timestamp: 190000000u64.into(),
-                authenticated_signer: None,
+                authenticated_owner: None,
                 previous_block_hash: None,
             },
             round: Round::SingleLeader(11),
@@ -1069,7 +1062,7 @@ mod tests {
                 transactions: vec![transfer],
                 height: BlockHeight(0),
                 timestamp: 1000u64.into(),
-                authenticated_signer: None,
+                authenticated_owner: None,
                 previous_block_hash: None,
             },
             round: Round::Fast,
@@ -1115,7 +1108,7 @@ mod tests {
                 transactions: vec![transfer],
                 height: BlockHeight(0),
                 timestamp: 1000u64.into(),
-                authenticated_signer: None,
+                authenticated_owner: None,
                 previous_block_hash: None,
             },
             round: Round::Fast,
@@ -1139,7 +1132,7 @@ mod tests {
                 )))],
                 height: BlockHeight(0),
                 timestamp: 1000u64.into(),
-                authenticated_signer: None,
+                authenticated_owner: None,
                 previous_block_hash: None,
             },
             round: Round::Fast,
@@ -1164,7 +1157,7 @@ mod tests {
                 )))],
                 height: BlockHeight(0),
                 timestamp: 1000u64.into(),
-                authenticated_signer: None,
+                authenticated_owner: None,
                 previous_block_hash: None,
             },
             round: Round::Fast,
@@ -1507,7 +1500,7 @@ mod tests {
                 transactions: vec![],
                 height: BlockHeight(u64::MAX),
                 timestamp: 190000000u64.into(),
-                authenticated_signer: None,
+                authenticated_owner: None,
                 previous_block_hash: None,
             },
             round: Round::SingleLeader(11),
