@@ -243,7 +243,7 @@ mod test {
             queue_front: rx,
         };
         let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
-        let (block_processor_storage, mut exporter_storage) =
+        let (block_processor_storage, exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
@@ -374,7 +374,7 @@ mod test {
             queue_front: rx,
         };
         let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
-        let (block_processor_storage, mut exporter_storage) =
+        let (block_processor_storage, exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
@@ -495,7 +495,7 @@ mod test {
             queue_front: rx,
         };
         let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
-        let (block_processor_storage, mut exporter_storage) =
+        let (block_processor_storage, exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
@@ -583,7 +583,7 @@ mod test {
             queue_front: rx,
         };
         let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
-        let (block_processor_storage, mut exporter_storage) =
+        let (block_processor_storage, exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
@@ -693,7 +693,7 @@ mod test {
             queue_front: rx,
         };
         let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
-        let (block_processor_storage, mut exporter_storage) =
+        let (block_processor_storage, exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
@@ -783,7 +783,7 @@ mod test {
         // Store the committee blob
         storage.write_blobs(&[committee_blob]).await?;
 
-        let (block_processor_storage, mut exporter_storage) =
+        let (block_processor_storage, exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();

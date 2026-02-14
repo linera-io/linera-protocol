@@ -51,7 +51,7 @@ impl Exporter {
     pub(crate) async fn run_with_shutdown<S, F: IntoFuture<Output = ()>>(
         self,
         shutdown_signal: F,
-        mut storage: ExporterStorage<S>,
+        storage: ExporterStorage<S>,
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
