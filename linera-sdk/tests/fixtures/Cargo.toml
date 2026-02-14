@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "contract-call",
+    "cost-tracking",
     "create-and-call",
     "meta-counter",
     "publish-read-data-blob",
@@ -17,6 +18,7 @@ serde = { version = "1.0.152", features = ["derive"] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
 contract-call = { path = "./create-and-call" }
+cost-tracking = { path = "./cost-tracking" }
 counter = { path = "../../../examples/counter" }
 counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
 create-and-call = { path = "./create-and-call" }
