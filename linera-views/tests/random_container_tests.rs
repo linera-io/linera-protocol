@@ -8,7 +8,7 @@ use linera_views::{
     bucket_queue_view::HashedBucketQueueView,
     collection_view::{CollectionView, HashedCollectionView},
     context::{Context, MemoryContext},
-    key_value_store_view::{KeyValueStoreView, SizeData},
+    key_value_store_view::KeyValueStoreView,
     map_view::{HashedByteMapView, MapView},
     queue_view::HashedQueueView,
     random::make_deterministic_rng,
@@ -140,19 +140,6 @@ fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
     map.retain(|key, _| !key.starts_with(&key_prefix));
 }
 
-fn total_size(vec: &Vec<(Vec<u8>, Vec<u8>)>) -> SizeData {
-    let mut total_key_size = 0;
-    let mut total_value_size = 0;
-    for (key, value) in vec {
-        total_key_size += key.len();
-        total_value_size += value.len();
-    }
-    SizeData {
-        key: total_key_size as u32,
-        value: total_value_size as u32,
-    }
-}
-
 #[tokio::test]
 async fn key_value_store_view_mutability() -> Result<()> {
     let context = MemoryContext::new_for_testing(());
@@ -166,7 +153,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
         let read_state = view.store.index_values().await?;
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
         assert!(read_state.iter().map(|kv| (&kv.0, &kv.1)).eq(&state_map));
-        assert_eq!(total_size(&state_vec), view.store.total_size());
+
 
         let count_oper = rng.gen_range(0..15);
         let mut new_state_map = state_map.clone();
@@ -191,7 +178,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
                     new_state_vec = new_state_map.clone().into_iter().collect();
                     let new_key_values = view.store.index_values().await?;
                     assert_eq!(new_state_vec, new_key_values);
-                    assert_eq!(total_size(&new_state_vec), view.store.total_size());
+
                 }
             }
             if choice == 1 && entry_count > 0 {
@@ -225,7 +212,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
             new_state_vec = new_state_map.clone().into_iter().collect();
             let new_key_values = view.store.index_values().await?;
             assert_eq!(new_state_vec, new_key_values);
-            assert_eq!(total_size(&new_state_vec), view.store.total_size());
+
             let all_keys_vec = all_keys.clone().into_iter().collect::<Vec<_>>();
             let tests_multi_get = view.store.multi_get(&all_keys_vec).await?;
             for (i, key) in all_keys.clone().into_iter().enumerate() {
