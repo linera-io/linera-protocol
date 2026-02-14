@@ -136,3 +136,47 @@ async fn test_bouncing_tokens() {
         Some(initial_amount),
     );
 }
+
+/// Test transferring tokens to a new account on the same chain.
+///
+/// This should create a new account entry and increase the stored bytes.
+#[tokio::test]
+async fn test_same_chain_transfer_creates_account() {
+    let initial_amount = Amount::from_tokens(10);
+    let transfer_amount = Amount::from_tokens(3);
+
+    let (validator, module_id) =
+        TestValidator::with_current_module::<FungibleTokenAbi, Parameters, InitialState>().await;
+    let mut chain = validator.new_chain().await;
+    let sender_account = AccountOwner::from(chain.public_key());
+    let receiver_account = AccountOwner::from(validator.new_chain().await.public_key());
+
+    let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
+    let params = Parameters::new("LOC");
+    let application_id = chain
+        .create_application(module_id, params, initial_state.build(), vec![])
+        .await;
+
+    let (_, resources) = chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                FungibleOperation::Transfer {
+                    owner: sender_account,
+                    amount: transfer_amount,
+                    target_account: Account {
+                        chain_id: chain.id(),
+                        owner: receiver_account,
+                    },
+                },
+            );
+        })
+        .await;
+    println!("Same-chain transfer block: {resources}");
+    assert!(resources.bytes_stored > 0);
+
+    assert_eq!(
+        fungible::query_account(application_id, &chain, receiver_account).await,
+        Some(transfer_amount),
+    );
+}
