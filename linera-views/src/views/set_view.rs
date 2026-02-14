@@ -182,9 +182,7 @@ impl<C: Context> ByteSetView<C> {
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
-}
 
-impl<C: Context> ByteSetView<C> {
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -211,9 +209,42 @@ impl<C: Context> ByteSetView<C> {
         let key = self.context.base_key().base_index(short_key);
         Ok(self.context.store().contains_key(&key).await?)
     }
-}
 
-impl<C: Context> ByteSetView<C> {
+    /// Returns true if the given index exists in the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{context::MemoryContext, set_view::ByteSetView};
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut set = ByteSetView::load(context).await.unwrap();
+    /// set.insert(vec![3]);
+    /// assert_eq!(set.remove_if_present(&[3]).await.unwrap(), true);
+    /// assert_eq!(set.remove_if_present(&[3]).await.unwrap(), false);
+    /// assert_eq!(set.remove_if_present(&[4]).await.unwrap(), false);
+    /// # })
+    /// ```
+    pub async fn remove_if_present(&mut self, short_key: &[u8]) -> Result<bool, ViewError> {
+        if let Some(update) = self.updates.get(short_key) {
+            let value = match update {
+                Update::Removed => false,
+                Update::Set(()) => true,
+            };
+            if value {
+                self.updates.insert(short_key.to_vec(), Update::Removed);
+            }
+            return Ok(value);
+        }
+        if self.delete_storage_first {
+            return Ok(false);
+        }
+        let key = self.context.base_key().base_index(short_key);
+        let value = self.context.store().contains_key(&key).await?;
+        if value {
+            self.updates.insert(short_key.to_vec(), Update::Removed);
+        }
+        Ok(value)
+    }
+
     /// Returns the list of keys in the set. The order is lexicographic.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -404,7 +435,7 @@ impl<C: Context, I: Send + Sync + Serialize, C2: Context> ReplaceContext<C2> for
     }
 }
 
-impl<C: Context, I: Send + Sync + Serialize> View for SetView<C, I> {
+impl<C: Context, I: Send + Sync> View for SetView<C, I> {
     const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
 
     type Context = C;
@@ -446,11 +477,7 @@ impl<C: Context, I: Send + Sync + Serialize> View for SetView<C, I> {
     }
 }
 
-impl<C, I> ClonableView for SetView<C, I>
-where
-    C: Context,
-    I: Send + Sync + Serialize,
-{
+impl<C: Context, I: Send + Sync> ClonableView for SetView<C, I> {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(SetView {
             set: self.set.clone_unchecked()?,
@@ -503,13 +530,33 @@ impl<C: Context, I: Serialize> SetView<C, I> {
         Ok(())
     }
 
+    /// Removes a value. If absent then nothing is done.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{context::MemoryContext, set_view::SetView};
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut set = SetView::<_, u32>::load(context).await.unwrap();
+    /// set.insert(&(34 as u32));
+    /// assert_eq!(set.remove_if_present(&(34 as u32)).await.unwrap(), true);
+    /// assert_eq!(set.remove_if_present(&(34 as u32)).await.unwrap(), false);
+    /// assert_eq!(set.remove_if_present(&(4 as u32)).await.unwrap(), false);
+    /// # })
+    /// ```
+    pub async fn remove_if_present<Q>(&mut self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.set.remove_if_present(&short_key).await
+    }
+
     /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.set.extra()
     }
-}
 
-impl<C: Context, I: Serialize> SetView<C, I> {
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -532,7 +579,7 @@ impl<C: Context, I: Serialize> SetView<C, I> {
     }
 }
 
-impl<C: Context, I: Serialize + DeserializeOwned + Send> SetView<C, I> {
+impl<C: Context, I: DeserializeOwned + Send> SetView<C, I> {
     /// Returns the list of indices in the set. The order is determined by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -669,11 +716,7 @@ pub struct CustomSetView<C, I> {
     _phantom: PhantomData<I>,
 }
 
-impl<C, I> View for CustomSetView<C, I>
-where
-    C: Context,
-    I: Send + Sync + CustomSerialize,
-{
+impl<C: Context, I: Send + Sync> View for CustomSetView<C, I> {
     const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
 
     type Context = C;
@@ -715,11 +758,7 @@ where
     }
 }
 
-impl<C, I> ClonableView for CustomSetView<C, I>
-where
-    C: Context,
-    I: Send + Sync + CustomSerialize,
-{
+impl<C: Context, I: Send + Sync> ClonableView for CustomSetView<C, I> {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(CustomSetView {
             set: self.set.clone_unchecked()?,
@@ -773,17 +812,34 @@ impl<C: Context, I: CustomSerialize> CustomSetView<C, I> {
         Ok(())
     }
 
+    /// Removes a value. If absent then nothing is done.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::set_view::CustomSetView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut set = CustomSetView::<_, u128>::load(context).await.unwrap();
+    /// set.insert(&(34 as u128));
+    /// assert_eq!(set.remove_if_present(&(34 as u128)).await.unwrap(), true);
+    /// assert_eq!(set.remove_if_present(&(34 as u128)).await.unwrap(), false);
+    /// assert_eq!(set.remove_if_present(&(4 as u128)).await.unwrap(), false);
+    /// # })
+    /// ```
+    pub async fn remove_if_present<Q>(&mut self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.set.remove_if_present(&short_key).await
+    }
+
     /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.set.extra()
     }
-}
 
-impl<C, I> CustomSetView<C, I>
-where
-    C: Context,
-    I: CustomSerialize,
-{
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
