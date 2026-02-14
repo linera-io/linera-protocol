@@ -1,0 +1,1 @@
+searchState.loadedDescShard("enum_iterator", 0, "Overview\nTrait to iterate over the variants of a field-less enum.\nDerives <code>IntoEnumIterator</code> for field-less enums.\nType of the iterator over the variants.\nNumber of variants.\nReturns an iterator over the variants.")

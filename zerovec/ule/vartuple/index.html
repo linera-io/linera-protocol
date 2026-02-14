@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Types to help compose fixed-size `ULE` and variable-size `VarULE` primitives."><title>zerovec::ule::vartuple - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="zerovec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../zerovec/index.html">zerovec</a><span class="version">0.11.4</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module vartuple</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In zerovec::<wbr>ule</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">zerovec</a>::<wbr><a href="../index.html">ule</a></div><h1>Module <span>vartuple</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/zerovec/ule/vartuple.rs.html#5-312">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Types to help compose fixed-size <a href="../trait.ULE.html" title="trait zerovec::ule::ULE"><code>ULE</code></a> and variable-size <a href="../trait.VarULE.html" title="trait zerovec::ule::VarULE"><code>VarULE</code></a> primitives.</p>
+<p>This module exports <a href="struct.VarTuple.html" title="struct zerovec::ule::vartuple::VarTuple"><code>VarTuple</code></a> and <a href="struct.VarTupleULE.html" title="struct zerovec::ule::vartuple::VarTupleULE"><code>VarTupleULE</code></a>, which allow a single sized type and
+a single unsized type to be stored together as a <a href="../trait.VarULE.html" title="trait zerovec::ule::VarULE"><code>VarULE</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerovec::ule::vartuple::{VarTuple, VarTupleULE};
+<span class="kw">use </span>zerovec::VarZeroVec;
+
+<span class="kw">struct </span>Employee&lt;<span class="lifetime">'a</span>&gt; {
+    id: u32,
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+};
+
+<span class="kw">let </span>employees = [
+    Employee {
+        id: <span class="number">12345</span>,
+        name: <span class="string">"Jane Doe"</span>,
+    },
+    Employee {
+        id: <span class="number">67890</span>,
+        name: <span class="string">"John Doe"</span>,
+    },
+];
+
+<span class="kw">let </span>employees_as_var_tuples = employees
+    .into_iter()
+    .map(|x| VarTuple {
+        sized: x.id,
+        variable: x.name,
+    })
+    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+<span class="kw">let </span>employees_vzv: VarZeroVec&lt;VarTupleULE&lt;u32, str&gt;&gt; =
+    employees_as_var_tuples.as_slice().into();
+
+<span class="macro">assert_eq!</span>(employees_vzv.len(), <span class="number">2</span>);
+
+<span class="macro">assert_eq!</span>(employees_vzv.get(<span class="number">0</span>).unwrap().sized.as_unsigned_int(), <span class="number">12345</span>);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>employees_vzv.get(<span class="number">0</span>).unwrap().variable, <span class="string">"Jane Doe"</span>);
+
+<span class="macro">assert_eq!</span>(employees_vzv.get(<span class="number">1</span>).unwrap().sized.as_unsigned_int(), <span class="number">67890</span>);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>employees_vzv.get(<span class="number">1</span>).unwrap().variable, <span class="string">"John Doe"</span>);</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.VarTuple.html" title="struct zerovec::ule::vartuple::VarTuple">VarTuple</a></dt><dd>A sized type that can be converted to a <a href="struct.VarTupleULE.html" title="struct zerovec::ule::vartuple::VarTupleULE"><code>VarTupleULE</code></a>.</dd><dt><a class="struct" href="struct.VarTupleULE.html" title="struct zerovec::ule::vartuple::VarTupleULE">VarTupleULE</a></dt><dd>A dynamically-sized type combining a sized and an unsized type.</dd></dl></section></div></main></body></html>

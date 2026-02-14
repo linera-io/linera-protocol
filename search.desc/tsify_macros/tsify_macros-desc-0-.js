@@ -1,0 +1,1 @@
+searchState.loadedDescShard("tsify_macros", 0, "The <code>Tsify</code> derive macro, used in <code>#[derive(Tsify, ...)]</code> …\nThe <code>declare</code> macro, used in <code>#[declare]</code> annotations.")

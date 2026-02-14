@@ -1,0 +1,95 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Writes the contents of a `Writeable` to a string, returning a reference to a slice if it matches the provided reference bytes, and allocating a String otherwise."><title>to_string_or_borrow in writeable - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="writeable" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../writeable/index.html">writeable</a><span class="version">0.6.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">to_<wbr>string_<wbr>or_<wbr>borrow</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate writeable</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">writeable</a></div><h1>Function <span class="fn">to_string_or_borrow</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/writeable/to_string_or_borrow.rs.html#203-210">Source</a> </span></div><pre class="rust item-decl"><code>pub fn to_string_or_borrow&lt;'a&gt;(
+    writeable: &amp;impl <a class="trait" href="trait.Writeable.html" title="trait writeable::Writeable">Writeable</a>,
+    reference_bytes: &amp;'a [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>],
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'a, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Writes the contents of a <code>Writeable</code> to a string, returning a reference
+to a slice if it matches the provided reference bytes, and allocating a
+String otherwise.</p>
+<p>This function is useful if you have borrowed bytes which you expect
+to be equal to a writeable a high percentage of the time.</p>
+<p>You can also use this function to make a more efficient implementation of
+<a href="trait.Writeable.html#method.write_to_string" title="method writeable::Writeable::write_to_string"><code>Writeable::write_to_string</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic usage and behavior:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt;
+<span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>writeable::Writeable;
+
+<span class="kw">struct </span>WelcomeMessage&lt;<span class="lifetime">'s</span>&gt; {
+    <span class="kw">pub </span>name: <span class="kw-2">&amp;</span><span class="lifetime">'s </span>str,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'s</span>&gt; Writeable <span class="kw">for </span>WelcomeMessage&lt;<span class="lifetime">'s</span>&gt; {
+    <span class="comment">// see impl in Writeable docs
+</span>}
+
+<span class="kw">let </span>message = WelcomeMessage { name: <span class="string">"Alice" </span>};
+
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    writeable::to_string_or_borrow(<span class="kw-2">&amp;</span>message, <span class="string">b""</span>),
+    Cow::Owned(s) <span class="kw">if </span>s == <span class="string">"Hello, Alice!"
+</span>));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    writeable::to_string_or_borrow(<span class="kw-2">&amp;</span>message, <span class="string">b"Hello"</span>),
+    Cow::Owned(s) <span class="kw">if </span>s == <span class="string">"Hello, Alice!"
+</span>));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    writeable::to_string_or_borrow(<span class="kw-2">&amp;</span>message, <span class="string">b"Hello, Bob!"</span>),
+    Cow::Owned(s) <span class="kw">if </span>s == <span class="string">"Hello, Alice!"
+</span>));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    writeable::to_string_or_borrow(<span class="kw-2">&amp;</span>message, <span class="string">b"Hello, Alice!"</span>),
+    Cow::Borrowed(<span class="string">"Hello, Alice!"</span>)
+));
+
+<span class="comment">// Borrowing can use a prefix:
+</span><span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    writeable::to_string_or_borrow(<span class="kw-2">&amp;</span>message, <span class="string">b"Hello, Alice!..\xFF\x00\xFF"</span>),
+    Cow::Borrowed(<span class="string">"Hello, Alice!"</span>)
+));</code></pre></div>
+<p>Example use case: a function that transforms a string to lowercase.
+We are also able to write a more efficient implementation of
+<a href="trait.Writeable.html#method.write_to_string" title="method writeable::Writeable::write_to_string"><code>Writeable::write_to_string</code></a> in this situation.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt;
+<span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>writeable::Writeable;
+
+<span class="kw">struct </span>MakeAsciiLower&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str);
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Writeable <span class="kw">for </span>MakeAsciiLower&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>write_to&lt;W: fmt::Write + <span class="question-mark">?</span>Sized&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, sink: <span class="kw-2">&amp;mut </span>W) -&gt; fmt::Result {
+        <span class="kw">for </span>c <span class="kw">in </span><span class="self">self</span>.<span class="number">0</span>.chars() {
+            sink.write_char(c.to_ascii_lowercase())<span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>write_to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Cow&lt;str&gt; {
+        writeable::to_string_or_borrow(<span class="self">self</span>, <span class="self">self</span>.<span class="number">0</span>.as_bytes())
+    }
+}
+
+<span class="kw">fn </span>make_lowercase(input: <span class="kw-2">&amp;</span>str) -&gt; Cow&lt;str&gt; {
+    <span class="kw">let </span>writeable = MakeAsciiLower(input);
+    writeable::to_string_or_borrow(<span class="kw-2">&amp;</span>writeable, input.as_bytes())
+}
+
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    make_lowercase(<span class="string">"this is lowercase"</span>),
+    Cow::Borrowed(<span class="string">"this is lowercase"</span>)
+));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    make_lowercase(<span class="string">"this is UPPERCASE"</span>),
+    Cow::Owned(s) <span class="kw">if </span>s == <span class="string">"this is uppercase"
+</span>));
+
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    MakeAsciiLower(<span class="string">"this is lowercase"</span>).write_to_string(),
+    Cow::Borrowed(<span class="string">"this is lowercase"</span>)
+));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    MakeAsciiLower(<span class="string">"this is UPPERCASE"</span>).write_to_string(),
+    Cow::Owned(s) <span class="kw">if </span>s == <span class="string">"this is uppercase"
+</span>));</code></pre></div>
+</div></details></section></div></main></body></html>

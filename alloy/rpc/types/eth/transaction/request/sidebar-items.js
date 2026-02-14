@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TransactionInputKind"],"struct":["BuildTransactionErr","TransactionInput","TransactionInputError","TransactionRequest"]};

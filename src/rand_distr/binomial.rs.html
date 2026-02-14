@@ -1,0 +1,350 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_distr-0.4.3/src/binomial.rs`."><title>binomial.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rand_distr" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">rand_distr/</div>binomial.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright 2018 Developers of the Rand project.
+<a href=#2 id=2 data-nosnippet>2</a>// Copyright 2016-2017 The Rust Project Developers.
+<a href=#3 id=3 data-nosnippet>3</a>//
+<a href=#4 id=4 data-nosnippet>4</a>// Licensed under the Apache License, Version 2.0 &lt;LICENSE-APACHE or
+<a href=#5 id=5 data-nosnippet>5</a>// https://www.apache.org/licenses/LICENSE-2.0&gt; or the MIT license
+<a href=#6 id=6 data-nosnippet>6</a>// &lt;LICENSE-MIT or https://opensource.org/licenses/MIT&gt;, at your
+<a href=#7 id=7 data-nosnippet>7</a>// option. This file may not be copied, modified, or distributed
+<a href=#8 id=8 data-nosnippet>8</a>// except according to those terms.
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="doccomment">//! The binomial distribution.
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a></span><span class="kw">use crate</span>::{Distribution, Uniform};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>rand::Rng;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>core::fmt;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>core::cmp::Ordering;
+<a href=#16 id=16 data-nosnippet>16</a><span class="attr">#[allow(unused_imports)]
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">use </span>num_traits::Float;
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="doccomment">/// The binomial distribution `Binomial(n, p)`.
+<a href=#20 id=20 data-nosnippet>20</a>///
+<a href=#21 id=21 data-nosnippet>21</a>/// This distribution has density function:
+<a href=#22 id=22 data-nosnippet>22</a>/// `f(k) = n!/(k! (n-k)!) p^k (1-p)^(n-k)` for `k &gt;= 0`.
+<a href=#23 id=23 data-nosnippet>23</a>///
+<a href=#24 id=24 data-nosnippet>24</a>/// # Example
+<a href=#25 id=25 data-nosnippet>25</a>///
+<a href=#26 id=26 data-nosnippet>26</a>/// ```
+<a href=#27 id=27 data-nosnippet>27</a>/// use rand_distr::{Binomial, Distribution};
+<a href=#28 id=28 data-nosnippet>28</a>///
+<a href=#29 id=29 data-nosnippet>29</a>/// let bin = Binomial::new(20, 0.3).unwrap();
+<a href=#30 id=30 data-nosnippet>30</a>/// let v = bin.sample(&amp;mut rand::thread_rng());
+<a href=#31 id=31 data-nosnippet>31</a>/// println!("{} is from a binomial distribution", v);
+<a href=#32 id=32 data-nosnippet>32</a>/// ```
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="attr">#[derive(Clone, Copy, Debug)]
+<a href=#34 id=34 data-nosnippet>34</a>#[cfg_attr(feature = <span class="string">"serde1"</span>, derive(serde::Serialize, serde::Deserialize))]
+<a href=#35 id=35 data-nosnippet>35</a></span><span class="kw">pub struct </span>Binomial {
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="doccomment">/// Number of trials.
+<a href=#37 id=37 data-nosnippet>37</a>    </span>n: u64,
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="doccomment">/// Probability of success.
+<a href=#39 id=39 data-nosnippet>39</a>    </span>p: f64,
+<a href=#40 id=40 data-nosnippet>40</a>}
+<a href=#41 id=41 data-nosnippet>41</a>
+<a href=#42 id=42 data-nosnippet>42</a><span class="doccomment">/// Error type returned from `Binomial::new`.
+<a href=#43 id=43 data-nosnippet>43</a></span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+<a href=#44 id=44 data-nosnippet>44</a></span><span class="kw">pub enum </span>Error {
+<a href=#45 id=45 data-nosnippet>45</a>    <span class="doccomment">/// `p &lt; 0` or `nan`.
+<a href=#46 id=46 data-nosnippet>46</a>    </span>ProbabilityTooSmall,
+<a href=#47 id=47 data-nosnippet>47</a>    <span class="doccomment">/// `p &gt; 1`.
+<a href=#48 id=48 data-nosnippet>48</a>    </span>ProbabilityTooLarge,
+<a href=#49 id=49 data-nosnippet>49</a>}
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>Error {
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#53 id=53 data-nosnippet>53</a>        f.write_str(<span class="kw">match </span><span class="self">self </span>{
+<a href=#54 id=54 data-nosnippet>54</a>            Error::ProbabilityTooSmall =&gt; <span class="string">"p &lt; 0 or is NaN in binomial distribution"</span>,
+<a href=#55 id=55 data-nosnippet>55</a>            Error::ProbabilityTooLarge =&gt; <span class="string">"p &gt; 1 in binomial distribution"</span>,
+<a href=#56 id=56 data-nosnippet>56</a>        })
+<a href=#57 id=57 data-nosnippet>57</a>    }
+<a href=#58 id=58 data-nosnippet>58</a>}
+<a href=#59 id=59 data-nosnippet>59</a>
+<a href=#60 id=60 data-nosnippet>60</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#61 id=61 data-nosnippet>61</a>#[cfg_attr(doc_cfg, doc(cfg(feature = <span class="string">"std"</span>)))]
+<a href=#62 id=62 data-nosnippet>62</a></span><span class="kw">impl </span>std::error::Error <span class="kw">for </span>Error {}
+<a href=#63 id=63 data-nosnippet>63</a>
+<a href=#64 id=64 data-nosnippet>64</a><span class="kw">impl </span>Binomial {
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="doccomment">/// Construct a new `Binomial` with the given shape parameters `n` (number
+<a href=#66 id=66 data-nosnippet>66</a>    /// of trials) and `p` (probability of success).
+<a href=#67 id=67 data-nosnippet>67</a>    </span><span class="kw">pub fn </span>new(n: u64, p: f64) -&gt; <span class="prelude-ty">Result</span>&lt;Binomial, Error&gt; {
+<a href=#68 id=68 data-nosnippet>68</a>        <span class="kw">if </span>!(p &gt;= <span class="number">0.0</span>) {
+<a href=#69 id=69 data-nosnippet>69</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::ProbabilityTooSmall);
+<a href=#70 id=70 data-nosnippet>70</a>        }
+<a href=#71 id=71 data-nosnippet>71</a>        <span class="kw">if </span>!(p &lt;= <span class="number">1.0</span>) {
+<a href=#72 id=72 data-nosnippet>72</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::ProbabilityTooLarge);
+<a href=#73 id=73 data-nosnippet>73</a>        }
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="prelude-val">Ok</span>(Binomial { n, p })
+<a href=#75 id=75 data-nosnippet>75</a>    }
+<a href=#76 id=76 data-nosnippet>76</a>}
+<a href=#77 id=77 data-nosnippet>77</a>
+<a href=#78 id=78 data-nosnippet>78</a><span class="doccomment">/// Convert a `f64` to an `i64`, panicking on overflow.
+<a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">fn </span>f64_to_i64(x: f64) -&gt; i64 {
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="macro">assert!</span>(x &lt; (core::i64::MAX <span class="kw">as </span>f64));
+<a href=#81 id=81 data-nosnippet>81</a>    x <span class="kw">as </span>i64
+<a href=#82 id=82 data-nosnippet>82</a>}
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a><span class="kw">impl </span>Distribution&lt;u64&gt; <span class="kw">for </span>Binomial {
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="attr">#[allow(clippy::many_single_char_names)] </span><span class="comment">// Same names as in the reference.
+<a href=#86 id=86 data-nosnippet>86</a>    </span><span class="kw">fn </span>sample&lt;R: Rng + <span class="question-mark">?</span>Sized&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: <span class="kw-2">&amp;mut </span>R) -&gt; u64 {
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="comment">// Handle these values directly.
+<a href=#88 id=88 data-nosnippet>88</a>        </span><span class="kw">if </span><span class="self">self</span>.p == <span class="number">0.0 </span>{
+<a href=#89 id=89 data-nosnippet>89</a>            <span class="kw">return </span><span class="number">0</span>;
+<a href=#90 id=90 data-nosnippet>90</a>        } <span class="kw">else if </span><span class="self">self</span>.p == <span class="number">1.0 </span>{
+<a href=#91 id=91 data-nosnippet>91</a>            <span class="kw">return </span><span class="self">self</span>.n;
+<a href=#92 id=92 data-nosnippet>92</a>        }
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a>        <span class="comment">// The binomial distribution is symmetrical with respect to p -&gt; 1-p,
+<a href=#95 id=95 data-nosnippet>95</a>        // k -&gt; n-k switch p so that it is less than 0.5 - this allows for lower
+<a href=#96 id=96 data-nosnippet>96</a>        // expected values we will just invert the result at the end
+<a href=#97 id=97 data-nosnippet>97</a>        </span><span class="kw">let </span>p = <span class="kw">if </span><span class="self">self</span>.p &lt;= <span class="number">0.5 </span>{ <span class="self">self</span>.p } <span class="kw">else </span>{ <span class="number">1.0 </span>- <span class="self">self</span>.p };
+<a href=#98 id=98 data-nosnippet>98</a>
+<a href=#99 id=99 data-nosnippet>99</a>        <span class="kw">let </span>result;
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">let </span>q = <span class="number">1. </span>- p;
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="comment">// For small n * min(p, 1 - p), the BINV algorithm based on the inverse
+<a href=#103 id=103 data-nosnippet>103</a>        // transformation of the binomial distribution is efficient. Otherwise,
+<a href=#104 id=104 data-nosnippet>104</a>        // the BTPE algorithm is used.
+<a href=#105 id=105 data-nosnippet>105</a>        //
+<a href=#106 id=106 data-nosnippet>106</a>        // Voratas Kachitvichyanukul and Bruce W. Schmeiser. 1988. Binomial
+<a href=#107 id=107 data-nosnippet>107</a>        // random variate generation. Commun. ACM 31, 2 (February 1988),
+<a href=#108 id=108 data-nosnippet>108</a>        // 216-222. http://dx.doi.org/10.1145/42372.42381
+<a href=#109 id=109 data-nosnippet>109</a>
+<a href=#110 id=110 data-nosnippet>110</a>        // Threshold for preferring the BINV algorithm. The paper suggests 10,
+<a href=#111 id=111 data-nosnippet>111</a>        // Ranlib uses 30, and GSL uses 14.
+<a href=#112 id=112 data-nosnippet>112</a>        </span><span class="kw">const </span>BINV_THRESHOLD: f64 = <span class="number">10.</span>;
+<a href=#113 id=113 data-nosnippet>113</a>
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">if </span>(<span class="self">self</span>.n <span class="kw">as </span>f64) * p &lt; BINV_THRESHOLD &amp;&amp; <span class="self">self</span>.n &lt;= (core::i32::MAX <span class="kw">as </span>u64) {
+<a href=#115 id=115 data-nosnippet>115</a>            <span class="comment">// Use the BINV algorithm.
+<a href=#116 id=116 data-nosnippet>116</a>            </span><span class="kw">let </span>s = p / q;
+<a href=#117 id=117 data-nosnippet>117</a>            <span class="kw">let </span>a = ((<span class="self">self</span>.n + <span class="number">1</span>) <span class="kw">as </span>f64) * s;
+<a href=#118 id=118 data-nosnippet>118</a>            <span class="kw">let </span><span class="kw-2">mut </span>r = q.powi(<span class="self">self</span>.n <span class="kw">as </span>i32);
+<a href=#119 id=119 data-nosnippet>119</a>            <span class="kw">let </span><span class="kw-2">mut </span>u: f64 = rng.gen();
+<a href=#120 id=120 data-nosnippet>120</a>            <span class="kw">let </span><span class="kw-2">mut </span>x = <span class="number">0</span>;
+<a href=#121 id=121 data-nosnippet>121</a>            <span class="kw">while </span>u &gt; r <span class="kw">as </span>f64 {
+<a href=#122 id=122 data-nosnippet>122</a>                u -= r;
+<a href=#123 id=123 data-nosnippet>123</a>                x += <span class="number">1</span>;
+<a href=#124 id=124 data-nosnippet>124</a>                r <span class="kw-2">*</span>= a / (x <span class="kw">as </span>f64) - s;
+<a href=#125 id=125 data-nosnippet>125</a>            }
+<a href=#126 id=126 data-nosnippet>126</a>            result = x;
+<a href=#127 id=127 data-nosnippet>127</a>        } <span class="kw">else </span>{
+<a href=#128 id=128 data-nosnippet>128</a>            <span class="comment">// Use the BTPE algorithm.
+<a href=#129 id=129 data-nosnippet>129</a>
+<a href=#130 id=130 data-nosnippet>130</a>            // Threshold for using the squeeze algorithm. This can be freely
+<a href=#131 id=131 data-nosnippet>131</a>            // chosen based on performance. Ranlib and GSL use 20.
+<a href=#132 id=132 data-nosnippet>132</a>            </span><span class="kw">const </span>SQUEEZE_THRESHOLD: i64 = <span class="number">20</span>;
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a>            <span class="comment">// Step 0: Calculate constants as functions of `n` and `p`.
+<a href=#135 id=135 data-nosnippet>135</a>            </span><span class="kw">let </span>n = <span class="self">self</span>.n <span class="kw">as </span>f64;
+<a href=#136 id=136 data-nosnippet>136</a>            <span class="kw">let </span>np = n * p;
+<a href=#137 id=137 data-nosnippet>137</a>            <span class="kw">let </span>npq = np * q;
+<a href=#138 id=138 data-nosnippet>138</a>            <span class="kw">let </span>f_m = np + p;
+<a href=#139 id=139 data-nosnippet>139</a>            <span class="kw">let </span>m = f64_to_i64(f_m);
+<a href=#140 id=140 data-nosnippet>140</a>            <span class="comment">// radius of triangle region, since height=1 also area of region
+<a href=#141 id=141 data-nosnippet>141</a>            </span><span class="kw">let </span>p1 = (<span class="number">2.195 </span>* npq.sqrt() - <span class="number">4.6 </span>* q).floor() + <span class="number">0.5</span>;
+<a href=#142 id=142 data-nosnippet>142</a>            <span class="comment">// tip of triangle
+<a href=#143 id=143 data-nosnippet>143</a>            </span><span class="kw">let </span>x_m = (m <span class="kw">as </span>f64) + <span class="number">0.5</span>;
+<a href=#144 id=144 data-nosnippet>144</a>            <span class="comment">// left edge of triangle
+<a href=#145 id=145 data-nosnippet>145</a>            </span><span class="kw">let </span>x_l = x_m - p1;
+<a href=#146 id=146 data-nosnippet>146</a>            <span class="comment">// right edge of triangle
+<a href=#147 id=147 data-nosnippet>147</a>            </span><span class="kw">let </span>x_r = x_m + p1;
+<a href=#148 id=148 data-nosnippet>148</a>            <span class="kw">let </span>c = <span class="number">0.134 </span>+ <span class="number">20.5 </span>/ (<span class="number">15.3 </span>+ (m <span class="kw">as </span>f64));
+<a href=#149 id=149 data-nosnippet>149</a>            <span class="comment">// p1 + area of parallelogram region
+<a href=#150 id=150 data-nosnippet>150</a>            </span><span class="kw">let </span>p2 = p1 * (<span class="number">1. </span>+ <span class="number">2. </span>* c);
+<a href=#151 id=151 data-nosnippet>151</a>
+<a href=#152 id=152 data-nosnippet>152</a>            <span class="kw">fn </span>lambda(a: f64) -&gt; f64 {
+<a href=#153 id=153 data-nosnippet>153</a>                a * (<span class="number">1. </span>+ <span class="number">0.5 </span>* a)
+<a href=#154 id=154 data-nosnippet>154</a>            }
+<a href=#155 id=155 data-nosnippet>155</a>
+<a href=#156 id=156 data-nosnippet>156</a>            <span class="kw">let </span>lambda_l = lambda((f_m - x_l) / (f_m - x_l * p));
+<a href=#157 id=157 data-nosnippet>157</a>            <span class="kw">let </span>lambda_r = lambda((x_r - f_m) / (x_r * q));
+<a href=#158 id=158 data-nosnippet>158</a>            <span class="comment">// p1 + area of left tail
+<a href=#159 id=159 data-nosnippet>159</a>            </span><span class="kw">let </span>p3 = p2 + c / lambda_l;
+<a href=#160 id=160 data-nosnippet>160</a>            <span class="comment">// p1 + area of right tail
+<a href=#161 id=161 data-nosnippet>161</a>            </span><span class="kw">let </span>p4 = p3 + c / lambda_r;
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a>            <span class="comment">// return value
+<a href=#164 id=164 data-nosnippet>164</a>            </span><span class="kw">let </span><span class="kw-2">mut </span>y: i64;
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a>            <span class="kw">let </span>gen_u = Uniform::new(<span class="number">0.</span>, p4);
+<a href=#167 id=167 data-nosnippet>167</a>            <span class="kw">let </span>gen_v = Uniform::new(<span class="number">0.</span>, <span class="number">1.</span>);
+<a href=#168 id=168 data-nosnippet>168</a>
+<a href=#169 id=169 data-nosnippet>169</a>            <span class="kw">loop </span>{
+<a href=#170 id=170 data-nosnippet>170</a>                <span class="comment">// Step 1: Generate `u` for selecting the region. If region 1 is
+<a href=#171 id=171 data-nosnippet>171</a>                // selected, generate a triangularly distributed variate.
+<a href=#172 id=172 data-nosnippet>172</a>                </span><span class="kw">let </span>u = gen_u.sample(rng);
+<a href=#173 id=173 data-nosnippet>173</a>                <span class="kw">let </span><span class="kw-2">mut </span>v = gen_v.sample(rng);
+<a href=#174 id=174 data-nosnippet>174</a>                <span class="kw">if </span>!(u &gt; p1) {
+<a href=#175 id=175 data-nosnippet>175</a>                    y = f64_to_i64(x_m - p1 * v + u);
+<a href=#176 id=176 data-nosnippet>176</a>                    <span class="kw">break</span>;
+<a href=#177 id=177 data-nosnippet>177</a>                }
+<a href=#178 id=178 data-nosnippet>178</a>
+<a href=#179 id=179 data-nosnippet>179</a>                <span class="kw">if </span>!(u &gt; p2) {
+<a href=#180 id=180 data-nosnippet>180</a>                    <span class="comment">// Step 2: Region 2, parallelograms. Check if region 2 is
+<a href=#181 id=181 data-nosnippet>181</a>                    // used. If so, generate `y`.
+<a href=#182 id=182 data-nosnippet>182</a>                    </span><span class="kw">let </span>x = x_l + (u - p1) / c;
+<a href=#183 id=183 data-nosnippet>183</a>                    v = v * c + <span class="number">1.0 </span>- (x - x_m).abs() / p1;
+<a href=#184 id=184 data-nosnippet>184</a>                    <span class="kw">if </span>v &gt; <span class="number">1. </span>{
+<a href=#185 id=185 data-nosnippet>185</a>                        <span class="kw">continue</span>;
+<a href=#186 id=186 data-nosnippet>186</a>                    } <span class="kw">else </span>{
+<a href=#187 id=187 data-nosnippet>187</a>                        y = f64_to_i64(x);
+<a href=#188 id=188 data-nosnippet>188</a>                    }
+<a href=#189 id=189 data-nosnippet>189</a>                } <span class="kw">else if </span>!(u &gt; p3) {
+<a href=#190 id=190 data-nosnippet>190</a>                    <span class="comment">// Step 3: Region 3, left exponential tail.
+<a href=#191 id=191 data-nosnippet>191</a>                    </span>y = f64_to_i64(x_l + v.ln() / lambda_l);
+<a href=#192 id=192 data-nosnippet>192</a>                    <span class="kw">if </span>y &lt; <span class="number">0 </span>{
+<a href=#193 id=193 data-nosnippet>193</a>                        <span class="kw">continue</span>;
+<a href=#194 id=194 data-nosnippet>194</a>                    } <span class="kw">else </span>{
+<a href=#195 id=195 data-nosnippet>195</a>                        v <span class="kw-2">*</span>= (u - p2) * lambda_l;
+<a href=#196 id=196 data-nosnippet>196</a>                    }
+<a href=#197 id=197 data-nosnippet>197</a>                } <span class="kw">else </span>{
+<a href=#198 id=198 data-nosnippet>198</a>                    <span class="comment">// Step 4: Region 4, right exponential tail.
+<a href=#199 id=199 data-nosnippet>199</a>                    </span>y = f64_to_i64(x_r - v.ln() / lambda_r);
+<a href=#200 id=200 data-nosnippet>200</a>                    <span class="kw">if </span>y &gt; <span class="number">0 </span>&amp;&amp; (y <span class="kw">as </span>u64) &gt; <span class="self">self</span>.n {
+<a href=#201 id=201 data-nosnippet>201</a>                        <span class="kw">continue</span>;
+<a href=#202 id=202 data-nosnippet>202</a>                    } <span class="kw">else </span>{
+<a href=#203 id=203 data-nosnippet>203</a>                        v <span class="kw-2">*</span>= (u - p3) * lambda_r;
+<a href=#204 id=204 data-nosnippet>204</a>                    }
+<a href=#205 id=205 data-nosnippet>205</a>                }
+<a href=#206 id=206 data-nosnippet>206</a>
+<a href=#207 id=207 data-nosnippet>207</a>                <span class="comment">// Step 5: Acceptance/rejection comparison.
+<a href=#208 id=208 data-nosnippet>208</a>
+<a href=#209 id=209 data-nosnippet>209</a>                // Step 5.0: Test for appropriate method of evaluating f(y).
+<a href=#210 id=210 data-nosnippet>210</a>                </span><span class="kw">let </span>k = (y - m).abs();
+<a href=#211 id=211 data-nosnippet>211</a>                <span class="kw">if </span>!(k &gt; SQUEEZE_THRESHOLD &amp;&amp; (k <span class="kw">as </span>f64) &lt; <span class="number">0.5 </span>* npq - <span class="number">1.</span>) {
+<a href=#212 id=212 data-nosnippet>212</a>                    <span class="comment">// Step 5.1: Evaluate f(y) via the recursive relationship. Start the
+<a href=#213 id=213 data-nosnippet>213</a>                    // search from the mode.
+<a href=#214 id=214 data-nosnippet>214</a>                    </span><span class="kw">let </span>s = p / q;
+<a href=#215 id=215 data-nosnippet>215</a>                    <span class="kw">let </span>a = s * (n + <span class="number">1.</span>);
+<a href=#216 id=216 data-nosnippet>216</a>                    <span class="kw">let </span><span class="kw-2">mut </span>f = <span class="number">1.0</span>;
+<a href=#217 id=217 data-nosnippet>217</a>                    <span class="kw">match </span>m.cmp(<span class="kw-2">&amp;</span>y) {
+<a href=#218 id=218 data-nosnippet>218</a>                        Ordering::Less =&gt; {
+<a href=#219 id=219 data-nosnippet>219</a>                            <span class="kw">let </span><span class="kw-2">mut </span>i = m;
+<a href=#220 id=220 data-nosnippet>220</a>                            <span class="kw">loop </span>{
+<a href=#221 id=221 data-nosnippet>221</a>                                i += <span class="number">1</span>;
+<a href=#222 id=222 data-nosnippet>222</a>                                f <span class="kw-2">*</span>= a / (i <span class="kw">as </span>f64) - s;
+<a href=#223 id=223 data-nosnippet>223</a>                                <span class="kw">if </span>i == y {
+<a href=#224 id=224 data-nosnippet>224</a>                                    <span class="kw">break</span>;
+<a href=#225 id=225 data-nosnippet>225</a>                                }
+<a href=#226 id=226 data-nosnippet>226</a>                            }
+<a href=#227 id=227 data-nosnippet>227</a>                        },
+<a href=#228 id=228 data-nosnippet>228</a>                        Ordering::Greater =&gt; {
+<a href=#229 id=229 data-nosnippet>229</a>                            <span class="kw">let </span><span class="kw-2">mut </span>i = y;
+<a href=#230 id=230 data-nosnippet>230</a>                            <span class="kw">loop </span>{
+<a href=#231 id=231 data-nosnippet>231</a>                                i += <span class="number">1</span>;
+<a href=#232 id=232 data-nosnippet>232</a>                                f /= a / (i <span class="kw">as </span>f64) - s;
+<a href=#233 id=233 data-nosnippet>233</a>                                <span class="kw">if </span>i == m {
+<a href=#234 id=234 data-nosnippet>234</a>                                    <span class="kw">break</span>;
+<a href=#235 id=235 data-nosnippet>235</a>                                }
+<a href=#236 id=236 data-nosnippet>236</a>                            }
+<a href=#237 id=237 data-nosnippet>237</a>                        },
+<a href=#238 id=238 data-nosnippet>238</a>                        Ordering::Equal =&gt; {},
+<a href=#239 id=239 data-nosnippet>239</a>                    }
+<a href=#240 id=240 data-nosnippet>240</a>                    <span class="kw">if </span>v &gt; f {
+<a href=#241 id=241 data-nosnippet>241</a>                        <span class="kw">continue</span>;
+<a href=#242 id=242 data-nosnippet>242</a>                    } <span class="kw">else </span>{
+<a href=#243 id=243 data-nosnippet>243</a>                        <span class="kw">break</span>;
+<a href=#244 id=244 data-nosnippet>244</a>                    }
+<a href=#245 id=245 data-nosnippet>245</a>                }
+<a href=#246 id=246 data-nosnippet>246</a>
+<a href=#247 id=247 data-nosnippet>247</a>                <span class="comment">// Step 5.2: Squeezing. Check the value of ln(v) against upper and
+<a href=#248 id=248 data-nosnippet>248</a>                // lower bound of ln(f(y)).
+<a href=#249 id=249 data-nosnippet>249</a>                </span><span class="kw">let </span>k = k <span class="kw">as </span>f64;
+<a href=#250 id=250 data-nosnippet>250</a>                <span class="kw">let </span>rho = (k / npq) * ((k * (k / <span class="number">3. </span>+ <span class="number">0.625</span>) + <span class="number">1. </span>/ <span class="number">6.</span>) / npq + <span class="number">0.5</span>);
+<a href=#251 id=251 data-nosnippet>251</a>                <span class="kw">let </span>t = -<span class="number">0.5 </span>* k * k / npq;
+<a href=#252 id=252 data-nosnippet>252</a>                <span class="kw">let </span>alpha = v.ln();
+<a href=#253 id=253 data-nosnippet>253</a>                <span class="kw">if </span>alpha &lt; t - rho {
+<a href=#254 id=254 data-nosnippet>254</a>                    <span class="kw">break</span>;
+<a href=#255 id=255 data-nosnippet>255</a>                }
+<a href=#256 id=256 data-nosnippet>256</a>                <span class="kw">if </span>alpha &gt; t + rho {
+<a href=#257 id=257 data-nosnippet>257</a>                    <span class="kw">continue</span>;
+<a href=#258 id=258 data-nosnippet>258</a>                }
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>                <span class="comment">// Step 5.3: Final acceptance/rejection test.
+<a href=#261 id=261 data-nosnippet>261</a>                </span><span class="kw">let </span>x1 = (y + <span class="number">1</span>) <span class="kw">as </span>f64;
+<a href=#262 id=262 data-nosnippet>262</a>                <span class="kw">let </span>f1 = (m + <span class="number">1</span>) <span class="kw">as </span>f64;
+<a href=#263 id=263 data-nosnippet>263</a>                <span class="kw">let </span>z = (f64_to_i64(n) + <span class="number">1 </span>- m) <span class="kw">as </span>f64;
+<a href=#264 id=264 data-nosnippet>264</a>                <span class="kw">let </span>w = (f64_to_i64(n) - y + <span class="number">1</span>) <span class="kw">as </span>f64;
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a>                <span class="kw">fn </span>stirling(a: f64) -&gt; f64 {
+<a href=#267 id=267 data-nosnippet>267</a>                    <span class="kw">let </span>a2 = a * a;
+<a href=#268 id=268 data-nosnippet>268</a>                    (<span class="number">13860. </span>- (<span class="number">462. </span>- (<span class="number">132. </span>- (<span class="number">99. </span>- <span class="number">140. </span>/ a2) / a2) / a2) / a2) / a / <span class="number">166320.
+<a href=#269 id=269 data-nosnippet>269</a>                </span>}
+<a href=#270 id=270 data-nosnippet>270</a>
+<a href=#271 id=271 data-nosnippet>271</a>                <span class="kw">if </span>alpha
+<a href=#272 id=272 data-nosnippet>272</a>                    &gt; x_m * (f1 / x1).ln()
+<a href=#273 id=273 data-nosnippet>273</a>                        + (n - (m <span class="kw">as </span>f64) + <span class="number">0.5</span>) * (z / w).ln()
+<a href=#274 id=274 data-nosnippet>274</a>                        + ((y - m) <span class="kw">as </span>f64) * (w * p / (x1 * q)).ln()
+<a href=#275 id=275 data-nosnippet>275</a>                        <span class="comment">// We use the signs from the GSL implementation, which are
+<a href=#276 id=276 data-nosnippet>276</a>                        // different than the ones in the reference. According to
+<a href=#277 id=277 data-nosnippet>277</a>                        // the GSL authors, the new signs were verified to be
+<a href=#278 id=278 data-nosnippet>278</a>                        // correct by one of the original designers of the
+<a href=#279 id=279 data-nosnippet>279</a>                        // algorithm.
+<a href=#280 id=280 data-nosnippet>280</a>                        </span>+ stirling(f1)
+<a href=#281 id=281 data-nosnippet>281</a>                        + stirling(z)
+<a href=#282 id=282 data-nosnippet>282</a>                        - stirling(x1)
+<a href=#283 id=283 data-nosnippet>283</a>                        - stirling(w)
+<a href=#284 id=284 data-nosnippet>284</a>                {
+<a href=#285 id=285 data-nosnippet>285</a>                    <span class="kw">continue</span>;
+<a href=#286 id=286 data-nosnippet>286</a>                }
+<a href=#287 id=287 data-nosnippet>287</a>
+<a href=#288 id=288 data-nosnippet>288</a>                <span class="kw">break</span>;
+<a href=#289 id=289 data-nosnippet>289</a>            }
+<a href=#290 id=290 data-nosnippet>290</a>            <span class="macro">assert!</span>(y &gt;= <span class="number">0</span>);
+<a href=#291 id=291 data-nosnippet>291</a>            result = y <span class="kw">as </span>u64;
+<a href=#292 id=292 data-nosnippet>292</a>        }
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>        <span class="comment">// Invert the result for p &lt; 0.5.
+<a href=#295 id=295 data-nosnippet>295</a>        </span><span class="kw">if </span>p != <span class="self">self</span>.p {
+<a href=#296 id=296 data-nosnippet>296</a>            <span class="self">self</span>.n - result
+<a href=#297 id=297 data-nosnippet>297</a>        } <span class="kw">else </span>{
+<a href=#298 id=298 data-nosnippet>298</a>            result
+<a href=#299 id=299 data-nosnippet>299</a>        }
+<a href=#300 id=300 data-nosnippet>300</a>    }
+<a href=#301 id=301 data-nosnippet>301</a>}
+<a href=#302 id=302 data-nosnippet>302</a>
+<a href=#303 id=303 data-nosnippet>303</a><span class="attr">#[cfg(test)]
+<a href=#304 id=304 data-nosnippet>304</a></span><span class="kw">mod </span>test {
+<a href=#305 id=305 data-nosnippet>305</a>    <span class="kw">use </span><span class="kw">super</span>::Binomial;
+<a href=#306 id=306 data-nosnippet>306</a>    <span class="kw">use </span><span class="kw">crate</span>::Distribution;
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="kw">use </span>rand::Rng;
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">fn </span>test_binomial_mean_and_variance&lt;R: Rng&gt;(n: u64, p: f64, rng: <span class="kw-2">&amp;mut </span>R) {
+<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw">let </span>binomial = Binomial::new(n, p).unwrap();
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>        <span class="kw">let </span>expected_mean = n <span class="kw">as </span>f64 * p;
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="kw">let </span>expected_variance = n <span class="kw">as </span>f64 * p * (<span class="number">1.0 </span>- p);
+<a href=#314 id=314 data-nosnippet>314</a>
+<a href=#315 id=315 data-nosnippet>315</a>        <span class="kw">let </span><span class="kw-2">mut </span>results = [<span class="number">0.0</span>; <span class="number">1000</span>];
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="kw">for </span>i <span class="kw">in </span>results.iter_mut() {
+<a href=#317 id=317 data-nosnippet>317</a>            <span class="kw-2">*</span>i = binomial.sample(rng) <span class="kw">as </span>f64;
+<a href=#318 id=318 data-nosnippet>318</a>        }
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a>        <span class="kw">let </span>mean = results.iter().sum::&lt;f64&gt;() / results.len() <span class="kw">as </span>f64;
+<a href=#321 id=321 data-nosnippet>321</a>        <span class="macro">assert!</span>((mean <span class="kw">as </span>f64 - expected_mean).abs() &lt; expected_mean / <span class="number">50.0</span>);
+<a href=#322 id=322 data-nosnippet>322</a>
+<a href=#323 id=323 data-nosnippet>323</a>        <span class="kw">let </span>variance =
+<a href=#324 id=324 data-nosnippet>324</a>            results.iter().map(|x| (x - mean) * (x - mean)).sum::&lt;f64&gt;() / results.len() <span class="kw">as </span>f64;
+<a href=#325 id=325 data-nosnippet>325</a>        <span class="macro">assert!</span>((variance - expected_variance).abs() &lt; expected_variance / <span class="number">10.0</span>);
+<a href=#326 id=326 data-nosnippet>326</a>    }
+<a href=#327 id=327 data-nosnippet>327</a>
+<a href=#328 id=328 data-nosnippet>328</a>    <span class="attr">#[test]
+<a href=#329 id=329 data-nosnippet>329</a>    </span><span class="kw">fn </span>test_binomial() {
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = <span class="kw">crate</span>::test::rng(<span class="number">351</span>);
+<a href=#331 id=331 data-nosnippet>331</a>        test_binomial_mean_and_variance(<span class="number">150</span>, <span class="number">0.1</span>, <span class="kw-2">&amp;mut </span>rng);
+<a href=#332 id=332 data-nosnippet>332</a>        test_binomial_mean_and_variance(<span class="number">70</span>, <span class="number">0.6</span>, <span class="kw-2">&amp;mut </span>rng);
+<a href=#333 id=333 data-nosnippet>333</a>        test_binomial_mean_and_variance(<span class="number">40</span>, <span class="number">0.5</span>, <span class="kw-2">&amp;mut </span>rng);
+<a href=#334 id=334 data-nosnippet>334</a>        test_binomial_mean_and_variance(<span class="number">20</span>, <span class="number">0.7</span>, <span class="kw-2">&amp;mut </span>rng);
+<a href=#335 id=335 data-nosnippet>335</a>        test_binomial_mean_and_variance(<span class="number">20</span>, <span class="number">0.5</span>, <span class="kw-2">&amp;mut </span>rng);
+<a href=#336 id=336 data-nosnippet>336</a>    }
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="attr">#[test]
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">fn </span>test_binomial_end_points() {
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = <span class="kw">crate</span>::test::rng(<span class="number">352</span>);
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="macro">assert_eq!</span>(rng.sample(Binomial::new(<span class="number">20</span>, <span class="number">0.0</span>).unwrap()), <span class="number">0</span>);
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="macro">assert_eq!</span>(rng.sample(Binomial::new(<span class="number">20</span>, <span class="number">1.0</span>).unwrap()), <span class="number">20</span>);
+<a href=#343 id=343 data-nosnippet>343</a>    }
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a>    <span class="attr">#[test]
+<a href=#346 id=346 data-nosnippet>346</a>    #[should_panic]
+<a href=#347 id=347 data-nosnippet>347</a>    </span><span class="kw">fn </span>test_binomial_invalid_lambda_neg() {
+<a href=#348 id=348 data-nosnippet>348</a>        Binomial::new(<span class="number">20</span>, -<span class="number">10.0</span>).unwrap();
+<a href=#349 id=349 data-nosnippet>349</a>    }
+<a href=#350 id=350 data-nosnippet>350</a>}</code></pre></div></section></main></body></html>

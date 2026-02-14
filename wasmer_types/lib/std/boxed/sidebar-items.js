@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["box_new"],"struct":["Box","ThinBox"]};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("ptr_meta_derive", 0, "Generates an implementation of <code>Pointee</code> for structs with a …\nGenerates an implementation of <code>Pointee</code> for trait objects.")

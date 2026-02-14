@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Endianness"],"struct":["BigEndian","I16Bytes","I32Bytes","I64Bytes","LittleEndian","U16Bytes","U32Bytes","U64Bytes"],"trait":["Endian"],"type":["I16","I32","I64","NativeEndian","U16","U32","U64"]};

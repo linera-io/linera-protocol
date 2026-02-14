@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["EnumSetType"],"macro":["enum_set","enum_set_complement","enum_set_difference","enum_set_intersection","enum_set_symmetric_difference","enum_set_union"],"struct":["EnumSet","EnumSetIter"],"trait":["EnumSetType","EnumSetTypeWithRepr"]};

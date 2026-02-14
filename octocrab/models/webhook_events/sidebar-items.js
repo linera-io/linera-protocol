@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EventInstallation","WebhookEventType"],"mod":["payload"],"struct":["EventInstallationId","InstallationEventRepository","WebhookEvent"]};

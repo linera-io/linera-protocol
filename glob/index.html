@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Support for matching file paths against Unix shell style patterns."><title>glob - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="glob" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../glob/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../glob/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt="logo"></a><h2><a href="../glob/index.html">glob</a><span class="version">0.3.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>glob</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/glob/lib.rs.html#11-1511">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Support for matching file paths against Unix shell style patterns.</p>
+<p>The <code>glob</code> and <code>glob_with</code> functions allow querying the filesystem for all
+files that match a particular pattern (similar to the libc <code>glob</code> function).
+The methods on the <code>Pattern</code> type provide functionality for checking if
+individual paths match a particular pattern (similar to the libc <code>fnmatch</code>
+function).</p>
+<p>For consistency across platforms, and for Windows support, this module
+is implemented entirely in Rust rather than deferring to the libc
+<code>glob</code>/<code>fnmatch</code> functions.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>To print all jpg files in <code>/media/</code> and all of its subdirectories.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>glob::glob;
+
+<span class="kw">for </span>entry <span class="kw">in </span>glob(<span class="string">"/media/**/*.jpg"</span>).expect(<span class="string">"Failed to read glob pattern"</span>) {
+    <span class="kw">match </span>entry {
+        <span class="prelude-val">Ok</span>(path) =&gt; <span class="macro">println!</span>(<span class="string">"{:?}"</span>, path.display()),
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">println!</span>(<span class="string">"{:?}"</span>, e),
+    }
+}</code></pre></div>
+<p>To print all files containing the letter “a”, case insensitive, in a <code>local</code>
+directory relative to the current working directory. This ignores errors
+instead of printing them.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>glob::glob_with;
+<span class="kw">use </span>glob::MatchOptions;
+
+<span class="kw">let </span>options = MatchOptions {
+    case_sensitive: <span class="bool-val">false</span>,
+    require_literal_separator: <span class="bool-val">false</span>,
+    require_literal_leading_dot: <span class="bool-val">false</span>,
+};
+<span class="kw">for </span>entry <span class="kw">in </span>glob_with(<span class="string">"local/*a*"</span>, options).unwrap() {
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = entry {
+        <span class="macro">println!</span>(<span class="string">"{:?}"</span>, path.display())
+    }
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.GlobError.html" title="struct glob::GlobError">Glob<wbr>Error</a></dt><dd>A glob iteration error.</dd><dt><a class="struct" href="struct.MatchOptions.html" title="struct glob::MatchOptions">Match<wbr>Options</a></dt><dd>Configuration options to modify the behaviour of <code>Pattern::matches_with(..)</code>.</dd><dt><a class="struct" href="struct.Paths.html" title="struct glob::Paths">Paths</a></dt><dd>An iterator that yields <code>Path</code>s from the filesystem that match a particular
+pattern.</dd><dt><a class="struct" href="struct.Pattern.html" title="struct glob::Pattern">Pattern</a></dt><dd>A compiled Unix shell style pattern.</dd><dt><a class="struct" href="struct.PatternError.html" title="struct glob::PatternError">Pattern<wbr>Error</a></dt><dd>A pattern parsing error.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.glob.html" title="fn glob::glob">glob</a></dt><dd>Return an iterator that produces all the <code>Path</code>s that match the given
+pattern using default match options, which may be absolute or relative to
+the current working directory.</dd><dt><a class="fn" href="fn.glob_with.html" title="fn glob::glob_with">glob_<wbr>with</a></dt><dd>Return an iterator that produces all the <code>Path</code>s that match the given
+pattern using the specified match options, which may be absolute or relative
+to the current working directory.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.GlobResult.html" title="type glob::GlobResult">Glob<wbr>Result</a></dt><dd>An alias for a glob iteration result.</dd></dl></section></div></main></body></html>

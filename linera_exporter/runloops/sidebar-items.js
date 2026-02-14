@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["load_committee_from_blob","load_persisted_committee_destinations","start_block_processor","start_block_processor_task"],"mod":["block_processor","indexer","logging_exporter","task_manager","validator_exporter"],"struct":["NewBlockQueue"]};

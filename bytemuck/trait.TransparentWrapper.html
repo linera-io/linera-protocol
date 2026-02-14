@@ -1,0 +1,149 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A trait which indicates that a type is a `#[repr(transparent)]` wrapper around the `Inner` value."><title>TransparentWrapper in bytemuck - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bytemuck" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bytemuck/index.html">bytemuck</a><span class="version">1.23.2</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Transparent<wbr>Wrapper</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#safety" title="Safety">Safety</a><ul><li><a href="#caveats" title="Caveats">Caveats</a></li></ul></li><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#basic" title="Basic">Basic</a></li><li><a href="#use-with-dynamically-sized-types" title="Use with dynamically sized types">Use with dynamically sized types</a></li><li><a href="#deriving" title="Deriving">Deriving</a></li></ul></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.peel" title="peel">peel</a></li><li><a href="#method.peel_mut" title="peel_mut">peel_mut</a></li><li><a href="#method.peel_ref" title="peel_ref">peel_ref</a></li><li><a href="#method.peel_slice" title="peel_slice">peel_slice</a></li><li><a href="#method.peel_slice_mut" title="peel_slice_mut">peel_slice_mut</a></li><li><a href="#method.wrap" title="wrap">wrap</a></li><li><a href="#method.wrap_mut" title="wrap_mut">wrap_mut</a></li><li><a href="#method.wrap_ref" title="wrap_ref">wrap_ref</a></li><li><a href="#method.wrap_slice" title="wrap_slice">wrap_slice</a></li><li><a href="#method.wrap_slice_mut" title="wrap_slice_mut">wrap_slice_mut</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-TransparentWrapper%3CT%3E-for-Wrapping%3CT%3E" title="Wrapping&#60;T&#62;">Wrapping&#60;T&#62;</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate bytemuck</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">bytemuck</a></div><h1>Trait <span class="trait">TransparentWrapper</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/bytemuck/transparent.rs.html#124-303">Source</a> </span></div><pre class="rust item-decl"><code>pub unsafe trait TransparentWrapper&lt;Inner: ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; {
+    // Provided methods
+    fn <a href="#method.wrap" class="fn">wrap</a>(s: Inner) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.wrap_ref" class="fn">wrap_ref</a>(s: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.reference.html">&amp;Inner</a>) -&gt; &amp;Self { ... }
+<span class="item-spacer"></span>    fn <a href="#method.wrap_mut" class="fn">wrap_mut</a>(s: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.reference.html">&amp;mut Inner</a>) -&gt; &amp;mut Self { ... }
+<span class="item-spacer"></span>    fn <a href="#method.wrap_slice" class="fn">wrap_slice</a>(s: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.slice.html">[Inner]</a>) -&gt; &amp;[Self]
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.wrap_slice_mut" class="fn">wrap_slice_mut</a>(s: &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.slice.html">[Inner]</a>) -&gt; &amp;mut [Self]
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.peel" class="fn">peel</a>(s: Self) -&gt; Inner
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.peel_ref" class="fn">peel_ref</a>(s: &amp;Self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.reference.html">&amp;Inner</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.peel_mut" class="fn">peel_mut</a>(s: &amp;mut Self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.reference.html">&amp;mut Inner</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.peel_slice" class="fn">peel_slice</a>(s: &amp;[Self]) -&gt; &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.slice.html">[Inner]</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.peel_slice_mut" class="fn">peel_slice_mut</a>(s: &amp;mut [Self]) -&gt; &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.slice.html">[Inner]</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A trait which indicates that a type is a <code>#[repr(transparent)]</code> wrapper
+around the <code>Inner</code> value.</p>
+<p>This allows safely copy transmuting between the <code>Inner</code> type and the
+<code>TransparentWrapper</code> type. Functions like <code>wrap_{}</code> convert from the inner
+type to the wrapper type and <code>peel_{}</code> functions do the inverse conversion
+from the wrapper type to the inner type. We deliberately do not call the
+wrapper-removing methods “unwrap” because at this point that word is too
+strongly tied to the Option/ Result methods.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>The safety contract of <code>TransparentWrapper</code> is relatively simple:</p>
+<p>For a given <code>Wrapper</code> which implements <code>TransparentWrapper&lt;Inner&gt;</code>:</p>
+<ol>
+<li>
+<p><code>Wrapper</code> must be a wrapper around <code>Inner</code> with an identical data
+representations. This    either means that it must be a
+<code>#[repr(transparent)]</code> struct which    contains a either a field of type
+<code>Inner</code> (or a field of some other    transparent wrapper for <code>Inner</code>) as
+the only non-ZST field.</p>
+</li>
+<li>
+<p>Any fields <em>other</em> than the <code>Inner</code> field must be trivially constructable
+ZSTs, for example <code>PhantomData</code>, <code>PhantomPinned</code>, etc. (When deriving
+<code>TransparentWrapper</code> on a type with ZST fields, the ZST fields must be
+<a href="trait.Zeroable.html" title="trait bytemuck::Zeroable"><code>Zeroable</code></a>).</p>
+</li>
+<li>
+<p>The <code>Wrapper</code> may not impose additional alignment requirements over
+<code>Inner</code>.</p>
+<ul>
+<li>Note: this is currently guaranteed by <code>repr(transparent)</code>, but there
+have been discussions of lifting it, so it’s stated here explicitly.</li>
+</ul>
+</li>
+<li>
+<p>All functions on <code>TransparentWrapper</code> <strong>may not</strong> be overridden.</p>
+</li>
+</ol>
+<h3 id="caveats"><a class="doc-anchor" href="#caveats">§</a>Caveats</h3>
+<p>If the wrapper imposes additional constraints upon the inner type which are
+required for safety, it’s responsible for ensuring those still hold – this
+generally requires preventing access to instances of the inner type, as
+implementing <code>TransparentWrapper&lt;U&gt; for T</code> means anybody can call
+<code>T::cast_ref(any_instance_of_u)</code>.</p>
+<p>For example, it would be invalid to implement TransparentWrapper for <code>str</code>
+to implement <code>TransparentWrapper</code> around <code>[u8]</code> because of this.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="basic"><a class="doc-anchor" href="#basic">§</a>Basic</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bytemuck::TransparentWrapper;
+
+<span class="attr">#[repr(transparent)]
+</span><span class="kw">struct </span>MyWrapper(SomeStruct);
+
+<span class="kw">unsafe impl </span>TransparentWrapper&lt;SomeStruct&gt; <span class="kw">for </span>MyWrapper {}
+
+<span class="comment">// interpret a reference to &amp;SomeStruct as a &amp;MyWrapper
+</span><span class="kw">let </span>thing = SomeStruct::default();
+<span class="kw">let </span>inner_ref: <span class="kw-2">&amp;</span>MyWrapper = MyWrapper::wrap_ref(<span class="kw-2">&amp;</span>thing);
+
+<span class="comment">// Works with &amp;mut too.
+</span><span class="kw">let </span><span class="kw-2">mut </span>mut_thing = SomeStruct::default();
+<span class="kw">let </span>inner_mut: <span class="kw-2">&amp;mut </span>MyWrapper = MyWrapper::wrap_mut(<span class="kw-2">&amp;mut </span>mut_thing);
+</code></pre></div>
+<h3 id="use-with-dynamically-sized-types"><a class="doc-anchor" href="#use-with-dynamically-sized-types">§</a>Use with dynamically sized types</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bytemuck::TransparentWrapper;
+
+<span class="attr">#[repr(transparent)]
+</span><span class="kw">struct </span>Slice&lt;T&gt;([T]);
+
+<span class="kw">unsafe impl</span>&lt;T&gt; TransparentWrapper&lt;[T]&gt; <span class="kw">for </span>Slice&lt;T&gt; {}
+
+<span class="kw">let </span>s = Slice::wrap_ref(<span class="kw-2">&amp;</span>[<span class="number">1u32</span>, <span class="number">2</span>, <span class="number">3</span>]);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>s.<span class="number">0</span>, <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3u8</span>];
+<span class="kw">let </span>sm = Slice::wrap_mut(<span class="kw-2">&amp;mut </span>buf);</code></pre></div>
+<h3 id="deriving"><a class="doc-anchor" href="#deriving">§</a>Deriving</h3>
+<p>When deriving, the non-wrapped fields must uphold all the normal
+requirements, and must also be <code>Zeroable</code>.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// This example requires the `derive` feature.
+</span><span class="kw">use </span>bytemuck::TransparentWrapper;
+<span class="kw">use </span>std::marker::PhantomData;
+
+<span class="attr">#[derive(TransparentWrapper)]
+#[repr(transparent)]
+#[transparent(usize)]
+</span><span class="kw">struct </span>Wrapper&lt;T: <span class="question-mark">?</span>Sized&gt;(usize, PhantomData&lt;T&gt;); <span class="comment">// PhantomData&lt;T&gt; implements Zeroable for all T</span></code></pre></div>
+<p>Here, an error will occur, because <code>MyZst</code> does not implement <code>Zeroable</code>.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// This example requires the `derive` feature.
+</span><span class="kw">use </span>bytemuck::TransparentWrapper;
+<span class="kw">struct </span>MyZst;
+
+<span class="attr">#[derive(TransparentWrapper)]
+#[repr(transparent)]
+#[transparent(usize)]
+</span><span class="kw">struct </span>Wrapper(usize, MyZst); <span class="comment">// MyZst does not implement Zeroable</span></code></pre></div>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.wrap" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#127-137">Source</a><h4 class="code-header">fn <a href="#method.wrap" class="fn">wrap</a>(s: Inner) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Convert the inner type into the wrapper type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wrap_ref" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#142-160">Source</a><h4 class="code-header">fn <a href="#method.wrap_ref" class="fn">wrap_ref</a>(s: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.reference.html">&amp;Inner</a>) -&gt; &amp;Self</h4></section></summary><div class="docblock"><p>Convert a reference to the inner type into a reference to the wrapper
+type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wrap_mut" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#165-182">Source</a><h4 class="code-header">fn <a href="#method.wrap_mut" class="fn">wrap_mut</a>(s: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.reference.html">&amp;mut Inner</a>) -&gt; &amp;mut Self</h4></section></summary><div class="docblock"><p>Convert a mutable reference to the inner type into a mutable reference to
+the wrapper type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wrap_slice" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#186-196">Source</a><h4 class="code-header">fn <a href="#method.wrap_slice" class="fn">wrap_slice</a>(s: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.slice.html">[Inner]</a>) -&gt; &amp;[Self]<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Convert a slice to the inner type into a slice to the wrapper type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wrap_slice_mut" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#201-213">Source</a><h4 class="code-header">fn <a href="#method.wrap_slice_mut" class="fn">wrap_slice_mut</a>(s: &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.slice.html">[Inner]</a>) -&gt; &amp;mut [Self]<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Convert a mutable slice to the inner type into a mutable slice to the
+wrapper type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.peel" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#217-227">Source</a><h4 class="code-header">fn <a href="#method.peel" class="fn">peel</a>(s: Self) -&gt; Inner<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Convert the wrapper type into the inner type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.peel_ref" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#232-249">Source</a><h4 class="code-header">fn <a href="#method.peel_ref" class="fn">peel_ref</a>(s: &amp;Self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.reference.html">&amp;Inner</a></h4></section></summary><div class="docblock"><p>Convert a reference to the wrapper type into a reference to the inner
+type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.peel_mut" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#254-271">Source</a><h4 class="code-header">fn <a href="#method.peel_mut" class="fn">peel_mut</a>(s: &amp;mut Self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.reference.html">&amp;mut Inner</a></h4></section></summary><div class="docblock"><p>Convert a mutable reference to the wrapper type into a mutable reference
+to the inner type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.peel_slice" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#275-285">Source</a><h4 class="code-header">fn <a href="#method.peel_slice" class="fn">peel_slice</a>(s: &amp;[Self]) -&gt; &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.slice.html">[Inner]</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Convert a slice to the wrapped type into a slice to the inner type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.peel_slice_mut" class="method"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#290-302">Source</a><h4 class="code-header">fn <a href="#method.peel_slice_mut" class="fn">peel_slice_mut</a>(s: &amp;mut [Self]) -&gt; &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.slice.html">[Inner]</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Inner: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Convert a mutable slice to the wrapped type into a mutable slice to the
+inner type.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><section id="impl-TransparentWrapper%3CT%3E-for-Wrapping%3CT%3E" class="impl"><a class="src rightside" href="../src/bytemuck/transparent.rs.html#305">Source</a><a href="#impl-TransparentWrapper%3CT%3E-for-Wrapping%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.TransparentWrapper.html" title="trait bytemuck::TransparentWrapper">TransparentWrapper</a>&lt;T&gt; for <a class="struct" href="https://doc.rust-lang.org/1.86.0/core/num/wrapping/struct.Wrapping.html" title="struct core::num::wrapping::Wrapping">Wrapping</a>&lt;T&gt;</h3></section><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/bytemuck/transparent/trait.TransparentWrapper.js" data-ignore-extern-crates="core" async></script></section></div></main></body></html>
