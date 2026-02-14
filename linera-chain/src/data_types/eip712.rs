@@ -538,8 +538,7 @@ fn make_ownership_eip712(
         ownership
             .timeout_config
             .fast_round_duration
-            .map(|d| timedelta_micros(&d))
-            .unwrap_or(0),
+            .map_or(0, |d| timedelta_micros(&d)),
     )
 }
 
@@ -551,7 +550,7 @@ fn make_app_permissions_eip712(perms: &ApplicationPermissions) -> ChangeAppPermi
             .as_deref()
             .unwrap_or(&[])
             .iter()
-            .map(|id| format_application_id(id))
+            .map(format_application_id)
             .collect(),
         mandatory_applications: perms
             .mandatory_applications
@@ -569,7 +568,7 @@ fn make_app_permissions_eip712(perms: &ApplicationPermissions) -> ChangeAppPermi
             .as_deref()
             .unwrap_or(&[])
             .iter()
-            .map(|id| format_application_id(id))
+            .map(format_application_id)
             .collect(),
         has_http_filter: perms.make_http_requests.is_some(),
         http_apps: perms
@@ -577,7 +576,7 @@ fn make_app_permissions_eip712(perms: &ApplicationPermissions) -> ChangeAppPermi
             .as_deref()
             .unwrap_or(&[])
             .iter()
-            .map(|id| format_application_id(id))
+            .map(format_application_id)
             .collect(),
     }
 }
@@ -663,8 +662,7 @@ fn categorize_transactions(transactions: &[Transaction]) -> CategorizedTransacti
                         ),
                         fast_round_duration_micros: timeout_config
                             .fast_round_duration
-                            .map(|d| timedelta_micros(&d))
-                            .unwrap_or(0),
+                            .map_or(0, |d| timedelta_micros(&d)),
                     });
                 }
                 SystemOperation::ChangeApplicationPermissions(perms) => {

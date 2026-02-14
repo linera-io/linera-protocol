@@ -218,17 +218,14 @@ fn encode_atomic(type_name: &str, value: &serde_json::Value) -> [u8; 32] {
         }
         "uint256" => {
             // Accept decimal string or JSON number.
-            let s = value
-                .as_str()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| value.as_u64().expect("expected uint256 value").to_string());
-            let n: [u8; 32] = {
-                let bytes = s
-                    .parse::<alloy_primitives::U256>()
-                    .expect("invalid uint256")
-                    .to_be_bytes::<32>();
-                bytes
-            };
+            let s = value.as_str().map_or_else(
+                || value.as_u64().expect("expected uint256 value").to_string(),
+                |s| s.to_string(),
+            );
+            let n: [u8; 32] = s
+                .parse::<alloy_primitives::U256>()
+                .expect("invalid uint256")
+                .to_be_bytes::<32>();
             n
         }
         _ => panic!("unsupported EIP-712 atomic type: {type_name}"),
