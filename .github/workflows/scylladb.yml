@@ -61,3 +61,6 @@ jobs:
     - name: Run ScyllaDB tests
       run: |
         RUST_LOG=linera=info cargo test --locked --features scylladb -- scylla --nocapture
+    - name: Run ScyllaDB opentelemetry tests
+      run: |
+        RUST_LOG=linera=info cargo test test_end_to_end_benchmark::scylladb_ --features scylladb,opentelemetry

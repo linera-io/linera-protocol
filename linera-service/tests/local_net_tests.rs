@@ -16,11 +16,12 @@ use std::{env, path::PathBuf, time::Duration};
 use anyhow::Result;
 use assert_matches::assert_matches;
 use guard::INTEGRATION_TEST_GUARD;
+#[cfg(any(feature = "opentelemetry", feature = "ethereum"))]
+use linera_base::vm::VmRuntime;
 use linera_base::{
     crypto::Secp256k1SecretKey,
     data_types::{Amount, BlockHeight, Epoch},
     identifiers::{Account, AccountOwner},
-    vm::VmRuntime,
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_execution::FLAG_ZERO_HASH;
@@ -41,6 +42,7 @@ use {
     linera_base::port::get_free_port, linera_service::cli_wrappers::Faucet, std::process::Command,
 };
 
+#[cfg(feature = "opentelemetry")]
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
@@ -827,12 +829,31 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     return Ok(());
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(
+    all(feature = "storage-service", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc")
+)]
+#[cfg_attr(
+    all(feature = "storage-service", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp")
+)]
+#[cfg_attr(
+    all(feature = "scylladb", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc")
+)]
+#[cfg_attr(
+    all(feature = "dynamodb", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc")
+)]
+#[cfg_attr(
+    all(feature = "scylladb", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp")
+)]
+#[cfg_attr(
+    all(feature = "dynamodb", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp")
+)]
+#[cfg(feature = "opentelemetry")]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
