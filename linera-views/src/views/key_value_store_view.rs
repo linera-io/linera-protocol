@@ -24,8 +24,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        from_bytes_option, get_key_range_for_prefix, get_upper_bound,
-        DeletionSet, HasherOutput, SuffixClosedSetIterator, Update,
+        from_bytes_option, get_key_range_for_prefix, get_upper_bound, DeletionSet, HasherOutput,
+        SuffixClosedSetIterator, Update,
     },
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,

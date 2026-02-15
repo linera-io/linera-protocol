@@ -154,7 +154,6 @@ async fn key_value_store_view_mutability() -> Result<()> {
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
         assert!(read_state.iter().map(|kv| (&kv.0, &kv.1)).eq(&state_map));
 
-
         let count_oper = rng.gen_range(0..15);
         let mut new_state_map = state_map.clone();
         let mut new_state_vec = state_vec.clone();
@@ -178,7 +177,6 @@ async fn key_value_store_view_mutability() -> Result<()> {
                     new_state_vec = new_state_map.clone().into_iter().collect();
                     let new_key_values = view.store.index_values().await?;
                     assert_eq!(new_state_vec, new_key_values);
-
                 }
             }
             if choice == 1 && entry_count > 0 {
