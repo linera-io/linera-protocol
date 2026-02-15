@@ -137,16 +137,11 @@ use {
 };
 
 #[repr(u8)]
-#[allow(dead_code)]
 enum KeyTag {
     /// Prefix for the indices of the view.
     Index = MIN_VIEW_TAG,
-    /// The total stored size
-    TotalSize,
-    /// The prefix where the sizes are being stored
-    Sizes,
-    /// Prefix for the hash.
-    Hash,
+    /// Prefix for the hash. We fix the index for compatibility with existing contracts.
+    Hash = MIN_VIEW_TAG + 3,
 }
 
 /// A pair containing the key and value size.
