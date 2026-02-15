@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        from_bytes_option, from_bytes_option_or_default, get_key_range_for_prefix, get_upper_bound,
+        from_bytes_option, get_key_range_for_prefix, get_upper_bound,
         DeletionSet, HasherOutput, SuffixClosedSetIterator, Update,
     },
     context::Context,
@@ -138,6 +138,7 @@ use {
 };
 
 #[repr(u8)]
+#[allow(dead_code)]
 enum KeyTag {
     /// Prefix for the indices of the view.
     Index = MIN_VIEW_TAG,
@@ -247,7 +248,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for KeyValueStoreView<C> {
 }
 
 impl<C: Context> View for KeyValueStoreView<C> {
-    const NUM_INIT_KEYS: usize = 2 + ByteMapView::<C, u32>::NUM_INIT_KEYS;
+    const NUM_INIT_KEYS: usize = 1;
 
     type Context = C;
 
@@ -257,24 +258,16 @@ impl<C: Context> View for KeyValueStoreView<C> {
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
         let key_hash = context.base_key().base_tag(KeyTag::Hash as u8);
-        let key_total_size = context.base_key().base_tag(KeyTag::TotalSize as u8);
-        let mut v = vec![key_hash, key_total_size];
-        let base_key = context.base_key().base_tag(KeyTag::Sizes as u8);
-        let context_sizes = context.clone_with_base_key(base_key);
-        v.extend(ByteMapView::<C, u32>::pre_load(&context_sizes)?);
+        let v = vec![key_hash];
         Ok(v)
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
-        let total_size =
-            from_bytes_option_or_default(values.get(1).ok_or(ViewError::PostLoadValuesError)?)?;
+        let total_size = SizeData::default();
         let base_key = context.base_key().base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
-        let sizes = ByteMapView::post_load(
-            context_sizes,
-            values.get(2..).ok_or(ViewError::PostLoadValuesError)?,
-        )?;
+        let sizes = ByteMapView::post_load(context_sizes, &[])?;
         Ok(Self {
             context,
             deletion_set: DeletionSet::new(),
