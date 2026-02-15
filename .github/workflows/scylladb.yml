@@ -39,7 +39,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest-8-cores
-    timeout-minutes: 50
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v4
@@ -61,3 +61,6 @@ jobs:
     - name: Run ScyllaDB tests
       run: |
         RUST_LOG=linera=info cargo test --locked --features scylladb -- scylla --nocapture
+    - name: Run ScyllaDB opentelemetry tests
+      run: |
+        RUST_LOG=linera=info cargo test test_end_to_end_benchmark::scylladb_ --features scylladb,opentelemetry
