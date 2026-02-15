@@ -30,7 +30,6 @@ use crate::{
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
-    map_view::ByteMapView,
     store::ReadableKeyValueStore,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
@@ -212,12 +211,6 @@ pub struct KeyValueStoreView<C> {
     deletion_set: DeletionSet,
     /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
-    /// The total size of keys and values persisted in storage.
-    stored_total_size: SizeData,
-    /// The total size of keys and values including pending changes.
-    total_size: SizeData,
-    /// Map of key to value size for tracking storage usage.
-    sizes: ByteMapView<C, u32>,
     /// The hash persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<HasherOutput>,
@@ -238,9 +231,6 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for KeyValueStoreView<C> {
             context: ctx.clone()(self.context()),
             deletion_set: self.deletion_set.clone(),
             updates: self.updates.clone(),
-            stored_total_size: self.stored_total_size,
-            total_size: self.total_size,
-            sizes: self.sizes.with_context(ctx.clone()).await,
             stored_hash: self.stored_hash,
             hash: Mutex::new(hash),
         }
@@ -264,17 +254,10 @@ impl<C: Context> View for KeyValueStoreView<C> {
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
-        let total_size = SizeData::default();
-        let base_key = context.base_key().base_tag(KeyTag::Sizes as u8);
-        let context_sizes = context.clone_with_base_key(base_key);
-        let sizes = ByteMapView::post_load(context_sizes, &[])?;
         Ok(Self {
             context,
             deletion_set: DeletionSet::new(),
             updates: BTreeMap::new(),
-            stored_total_size: total_size,
-            total_size,
-            sizes,
             stored_hash: hash,
             hash: Mutex::new(hash),
         })
@@ -363,9 +346,6 @@ impl<C: Context> ClonableView for KeyValueStoreView<C> {
             context: self.context.clone(),
             deletion_set: self.deletion_set.clone(),
             updates: self.updates.clone(),
-            stored_total_size: self.stored_total_size,
-            total_size: self.total_size,
-            sizes: self.sizes.clone_unchecked()?,
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut().unwrap()),
         })
@@ -376,22 +356,6 @@ impl<C: Context> KeyValueStoreView<C> {
     fn max_key_size(&self) -> usize {
         let prefix_len = self.context.base_key().bytes.len();
         <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE - 1 - prefix_len
-    }
-
-    /// Getting the total sizes that will be used for keys and values when stored
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::{KeyValueStoreView, SizeData};
-    /// # use linera_views::views::View;
-    /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// let total_size = view.total_size();
-    /// assert_eq!(total_size, SizeData::default());
-    /// # })
-    /// ```
-    pub fn total_size(&self) -> SizeData {
-        self.total_size
     }
 
     /// Applies the function f over all indices. If the function f returns
