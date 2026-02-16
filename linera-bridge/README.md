@@ -4,13 +4,15 @@ An EVM light client that tracks Linera validator committees and verifies `Confir
 
 ## Architecture
 
-The bridge has two main layers:
+The bridge has three layers:
 
 1. **Code generation (build-time)**: Rust types from `linera-base`, `linera-chain`, and `linera-execution` are traced via `serde-reflection` to produce a YAML schema. The `build.rs` feeds this schema into `serde-generate` to emit `BridgeTypes.sol` — a Solidity library with BCS serializers and deserializers for every type in the `ConfirmedBlockCertificate` type graph.
 
-2. **LightClient.sol** — an admin contract that tracks committee epochs and verifies certificate signatures. It exposes `verifyBlock(bytes)` for other contracts to call, returning the deserialized `Block` on success. It does not store blocks.
+2. **Solidity contracts** (`src/solidity/`):
+   - **LightClient.sol** — an admin contract that tracks committee epochs and verifies certificate signatures. It exposes `verifyBlock(bytes)` for other contracts to call, returning the deserialized `Block` on success. It does not store blocks.
+   - **Microchain.sol** — an abstract contract that tracks blocks for a single Linera microchain. It delegates certificate verification to a `LightClient` instance and enforces chain ID matching and sequential block heights. Concrete subcontracts implement `_onBlock()` to define application-specific logic (e.g., tracking token transfers).
 
-3. **Microchain.sol** — an abstract contract that tracks blocks for a single Linera microchain. It delegates certificate verification to a `LightClient` instance and enforces chain ID matching and sequential block heights. Concrete subcontracts implement `_onBlock()` to define application-specific logic (e.g., tracking token transfers).
+3. **Rust ABI layer** (`src/light_client.rs`, `src/microchain.rs`): Typed bindings for calling the Solidity contracts from Rust. Uses `alloy-sol-types`'s `sol!` macro to generate `*Call` structs (e.g., `addCommitteeCall`, `addBlockCall`) with `abi_encode()` / `abi_decode_returns()` methods. This lets Rust code construct contract calls without hand-encoding ABI bytes.
 
 ```
                   ┌──────────────┐
@@ -34,7 +36,7 @@ Rust types (linera-base, linera-chain, linera-execution)
 YAML snapshot (tests/snapshots/format__format.yaml.snap)
     │
     ▼  serde-generate via build.rs
-BridgeTypes.sol (src/BridgeTypes.sol)
+BridgeTypes.sol (src/solidity/BridgeTypes.sol)
 ```
 
 The snapshot is checked in and tested via `insta`. This means the generated Solidity stays in sync with the Rust types — if a struct field is added or an enum variant reordered, the snapshot test fails and the developer must update it explicitly.
@@ -89,6 +91,30 @@ Verifies a certificate via `lightClient.verifyBlock(data)`, then enforces:
 - **Sequential heights**: the block's height must be exactly `latestHeight + 1`.
 
 On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
+
+## Rust API
+
+The crate exposes typed bindings for each contract, plus the generated Solidity source as a constant:
+
+```rust
+use linera_bridge::{light_client, microchain, BRIDGE_TYPES_SOURCE};
+
+// Encode a contract call
+let call = light_client::addCommitteeCall {
+    data: bcs_bytes.into(),
+    committeeBlob: committee_bytes.into(),
+    validators: vec![address],
+    weights: vec![1],
+};
+let calldata: Vec<u8> = call.abi_encode();
+
+// Available call types:
+// light_client: addCommitteeCall, verifyBlockCall, currentEpochCall
+// microchain:   addBlockCall, latestHeightCall, lightClientCall, chainIdCall
+
+// Solidity sources (for compilation or deployment tooling):
+// BRIDGE_TYPES_SOURCE, light_client::SOURCE, microchain::SOURCE
+```
 
 ## Committee management
 
