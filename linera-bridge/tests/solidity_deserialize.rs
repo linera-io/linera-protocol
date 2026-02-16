@@ -251,6 +251,67 @@ fn test_light_client_add_committee_rejects_wrong_blob() {
 }
 
 #[test]
+fn test_light_client_add_committee_rejects_non_sequential_epoch() {
+    let secret = ValidatorSecretKey::generate();
+    let public = secret.public();
+    let address = validator_evm_address(&public);
+
+    let new_secret = ValidatorSecretKey::generate();
+    let new_public = new_secret.public();
+    let new_address = validator_evm_address(&new_public);
+
+    let new_committee = linera_execution::Committee::new(
+        BTreeMap::from([(
+            new_public,
+            ValidatorState {
+                network_address: "127.0.0.1:8080".to_string(),
+                votes: 1,
+                account_public_key: AccountPublicKey::Secp256k1(new_public),
+            },
+        )]),
+        ResourceControlPolicy::default(),
+    );
+    let committee_bytes = bcs::to_bytes(&new_committee).expect("committee serialization failed");
+    let blob_content = BlobContent::new_committee(committee_bytes.clone());
+    let blob_hash = CryptoHash::new(&blob_content);
+
+    // Create a block with CreateCommittee for epoch 5 (skipping epochs 1-4)
+    let transactions = vec![Transaction::ExecuteOperation(Operation::System(Box::new(
+        SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch: Epoch(5),
+            blob_hash,
+        }),
+    )))];
+    let block = create_test_block(
+        CryptoHash::new(&TestString::new("test_chain")),
+        Epoch::ZERO,
+        BlockHeight(1),
+        transactions,
+    );
+    let confirmed = ConfirmedBlock::new(block);
+    let vote = Vote::new(confirmed.clone(), Round::Fast, &secret);
+    let certificate =
+        ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(public, vote.signature)]);
+    let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+
+    let deployer = Address::ZERO;
+    let mut db = CacheDB::<EmptyDB>::default();
+    let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
+
+    let calldata = addCommitteeCall {
+        data: bcs_bytes.into(),
+        committeeBlob: committee_bytes.into(),
+        validators: vec![new_address],
+        weights: vec![1],
+    }
+    .abi_encode();
+    assert!(
+        try_call_contract(&mut db, deployer, contract, calldata).is_err(),
+        "should reject non-sequential epoch"
+    );
+}
+
+#[test]
 fn test_light_client_add_block() {
     let secret = ValidatorSecretKey::generate();
     let public = secret.public();

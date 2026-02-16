@@ -64,7 +64,6 @@ contract LightClient {
 
         // Store the new committee
         _setCommittee(newEpoch, validators, weights);
-        currentEpoch = newEpoch;
     }
 
     function addBlock(bytes calldata data) external {
@@ -138,9 +137,9 @@ contract LightClient {
     }
 
     function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights) internal {
+        require(epoch == currentEpoch + 1 || (epoch == 0 && currentEpoch == 0), "epoch must be sequential");
         require(validators.length == weights.length, "length mismatch");
         EpochCommittee storage committee = committees[epoch];
-        require(committee.quorumThreshold == 0, "epoch committee already exists");
         uint64 total = 0;
         for (uint256 i = 0; i < validators.length; i++) {
             require(committee.weights[validators[i]] == 0, "duplicate validator");
@@ -149,6 +148,7 @@ contract LightClient {
         }
         committee.totalWeight = total;
         committee.quorumThreshold = 2 * total / 3 + 1;
+        currentEpoch = epoch;
     }
 
     /// Copies a slice of memory bytes into a new bytes array.
