@@ -66,9 +66,8 @@ contract LightClient {
         _setCommittee(newEpoch, validators, weights);
     }
 
-    function addBlock(bytes calldata data) external {
-        verifyCertificate(data);
-        // TODO: store block data
+    function verifyBlock(bytes calldata data) external view returns (BridgeTypes.Block memory) {
+        return verifyCertificate(data);
     }
 
     function verifyCertificate(bytes calldata data) internal view returns (BridgeTypes.Block memory) {

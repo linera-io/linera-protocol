@@ -1,6 +1,6 @@
 # linera-bridge
 
-An EVM light client that verifies Linera `ConfirmedBlockCertificate`s on-chain. A bridge relayer submits BCS-encoded certificates to a Solidity contract, which deserializes them, verifies validator signatures against a tracked committee, and can follow committee transitions across epochs.
+An EVM light client that tracks Linera validator committees and verifies `ConfirmedBlockCertificate`s on-chain. The `LightClient` contract is an admin contract — it manages committee transitions and exposes block verification as a service that other contracts can call, but does not store block data itself.
 
 ## Architecture
 
@@ -8,7 +8,7 @@ The bridge has two main layers:
 
 1. **Code generation (build-time)**: Rust types from `linera-base`, `linera-chain`, and `linera-execution` are traced via `serde-reflection` to produce a YAML schema. The `build.rs` feeds this schema into `serde-generate` to emit `BridgeTypes.sol` — a Solidity library with BCS serializers and deserializers for every type in the `ConfirmedBlockCertificate` type graph.
 
-2. **LightClient.sol (runtime)**: A Solidity contract that uses `BridgeTypes.sol` to deserialize certificates and verify their validity against a stored committee.
+2. **LightClient.sol (runtime)**: An admin contract that tracks committee epochs and verifies certificate signatures. It exposes `verifyBlock(bytes)` for other contracts to call, returning the deserialized `Block` on success. It does not store blocks — downstream contracts are responsible for interpreting and storing the verified data.
 
 ### Type tracing pipeline
 
@@ -42,19 +42,15 @@ The snapshot is checked in and tested via `insta`. This means the generated Soli
 
 Linera validators use secp256k1 keys (the same curve as Ethereum). The contract stores committee members as Ethereum addresses, derived off-chain as `keccak256(uncompressed_pubkey[1:])[12:]`. This lets us use Solidity's native `ecrecover` precompile rather than implementing signature verification from scratch.
 
-## Committee management
+## Contract API
 
-Committees are stored per-epoch and must advance monotonically (epoch N can only be followed by epoch N+1).
+### `verifyBlock(bytes calldata data) → BridgeTypes.Block`
 
-### Initialization
+Verifies a BCS-encoded `ConfirmedBlockCertificate` against the current committee and returns the deserialized `Block`. This is a `view` function — it does not modify state. Other contracts call this to get verified block data without the LightClient needing to know what they do with it.
 
-The constructor takes `(address[], uint64[])` — the genesis committee's validator Ethereum addresses and their voting weights. This is stored as epoch 0.
+### `addCommittee(bytes calldata data, bytes calldata committeeBlob, address[] calldata validators, uint64[] calldata weights)`
 
-### Epoch transitions via `addCommittee`
-
-```
-addCommittee(certBytes, committeeBlob, newValidators, newWeights)
-```
+Advances the committee to the next epoch. This is the only state-modifying operation (besides construction).
 
 1. Verify the certificate against the current committee (signature check).
 2. Scan the block's transactions for an `AdminOperation::CreateCommittee { epoch, blob_hash }`.
@@ -62,6 +58,14 @@ addCommittee(certBytes, committeeBlob, newValidators, newWeights)
 4. Store `newValidators` and `newWeights` as the committee for the new epoch.
 
 The `committeeBlob` is the BCS-serialized `Committee` from Linera. The contract does not deserialize it — Solidity cannot natively decompress secp256k1 public keys to derive Ethereum addresses, so the caller provides the parsed committee data (addresses + weights) alongside the blob for hash verification. The authenticity chain is: validator signatures → certified block → `CreateCommittee` operation → `blob_hash` → `committeeBlob`.
+
+## Committee management
+
+Committees are stored per-epoch and must advance monotonically (epoch N can only be followed by epoch N+1).
+
+### Initialization
+
+The constructor takes `(address[], uint64[])` — the genesis committee's validator Ethereum addresses and their voting weights. This is stored as epoch 0.
 
 ### Quorum threshold
 
@@ -84,8 +88,8 @@ The `committeeBlob` is the BCS-serialized `Committee` from Linera. The contract 
 Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the Solidity contracts in-process, with `solc` for compilation. No external EVM node is required. The test suite covers:
 
 - Full `ConfirmedBlockCertificate` deserialization and field extraction
-- Certificate signature verification (valid and invalid signatures)
-- Committee transitions with `CreateCommittee` verification
+- Block verification via `verifyBlock` (valid and invalid signatures)
+- Committee transitions via `addCommittee` with `CreateCommittee` verification
 - Blob hash mismatch rejection
 - Non-sequential epoch rejection
 

@@ -55,7 +55,7 @@ sol! {
         address[] calldata validators,
         uint64[] calldata weights
     ) external;
-    function addBlock(bytes calldata data) external;
+    function verifyBlock(bytes calldata data) external view;
 }
 
 #[test]
@@ -312,7 +312,7 @@ fn test_light_client_add_committee_rejects_non_sequential_epoch() {
 }
 
 #[test]
-fn test_light_client_add_block() {
+fn test_light_client_verify_block() {
     let secret = ValidatorSecretKey::generate();
     let public = secret.public();
     let address = validator_evm_address(&public);
@@ -324,7 +324,7 @@ fn test_light_client_add_block() {
     let mut db = CacheDB::<EmptyDB>::default();
     let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
-    let calldata = addBlockCall {
+    let calldata = verifyBlockCall {
         data: bcs_bytes.into(),
     }
     .abi_encode();
@@ -347,7 +347,7 @@ fn test_light_client_rejects_invalid_signature() {
     let mut db = CacheDB::<EmptyDB>::default();
     let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
-    let calldata = addBlockCall {
+    let calldata = verifyBlockCall {
         data: bcs_bytes.into(),
     }
     .abi_encode();
