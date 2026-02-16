@@ -4,29 +4,67 @@ pragma solidity ^0.8.0;
 import "BridgeTypes.sol";
 
 contract LightClient {
-    // Committee: validator Ethereum address => voting weight
-    mapping(address => uint64) public committeeWeights;
-    address[] public committeeMembers;
-    uint64 public totalWeight;
-    uint64 public quorumThreshold;
-
+    // Per-epoch committee storage
+    struct EpochCommittee {
+        mapping(address => uint64) weights;
+        uint64 totalWeight;
+        uint64 quorumThreshold;
+    }
+    mapping(uint32 => EpochCommittee) private committees;
+    uint32 public currentEpoch;
 
     constructor(address[] memory validators, uint64[] memory weights) {
-        require(validators.length == weights.length, "length mismatch");
-        uint64 total = 0;
-        for (uint256 i = 0; i < validators.length; i++) {
-            require(committeeWeights[validators[i]] == 0, "duplicate validator");
-            committeeWeights[validators[i]] = weights[i];
-            committeeMembers.push(validators[i]);
-            total += weights[i];
-        }
-        totalWeight = total;
-        quorumThreshold = 2 * total / 3 + 1;
+        _setCommittee(0, validators, weights);
+        currentEpoch = 0;
     }
 
-    function addCommittee(bytes calldata data) external {
-        verifyCertificate(data);
-        // TODO: update committee from certificate content
+    function addCommittee(
+        bytes calldata data,
+        bytes calldata committeeBlob,
+        address[] calldata validators,
+        uint64[] calldata weights
+    ) external {
+        BridgeTypes.Block memory blockValue = verifyCertificate(data);
+
+        // Find CreateCommittee in block operations
+        bool found = false;
+        uint32 newEpoch;
+        bytes32 expectedBlobHash;
+        for (uint256 i = 0; i < blockValue.body.transactions.length; i++) {
+            BridgeTypes.Transaction memory txn = blockValue.body.transactions[i];
+            // choice=1 is ExecuteOperation
+            if (txn.choice != 1) continue;
+            BridgeTypes.Operation memory op = txn.execute_operation;
+            // choice=0 is System
+            if (op.choice != 0) continue;
+            BridgeTypes.SystemOperation memory sysOp = op.system;
+            // choice=10 is Admin
+            if (sysOp.choice != 10) continue;
+            BridgeTypes.AdminOperation memory adminOp = sysOp.admin;
+            // choice=1 is CreateCommittee
+            if (adminOp.choice != 1) continue;
+
+            newEpoch = adminOp.create_committee.epoch.value;
+            expectedBlobHash = adminOp.create_committee.blob_hash.value;
+            found = true;
+            break;
+        }
+        require(found, "no CreateCommittee operation found");
+
+        // Verify committeeBlob hash matches the blob_hash from CreateCommittee
+        BridgeTypes.BlobContent memory blobContent = BridgeTypes.BlobContent(
+            BridgeTypes.BlobType.Committee,
+            committeeBlob
+        );
+        bytes32 computedHash = keccak256(abi.encodePacked(
+            "BlobContent::",
+            BridgeTypes.bcs_serialize_BlobContent(blobContent)
+        ));
+        require(computedHash == expectedBlobHash, "committee blob hash mismatch");
+
+        // Store the new committee
+        _setCommittee(newEpoch, validators, weights);
+        currentEpoch = newEpoch;
     }
 
     function addBlock(bytes calldata data) external {
@@ -34,7 +72,7 @@ contract LightClient {
         // TODO: store block data
     }
 
-    function verifyCertificate(bytes calldata data) internal view {
+    function verifyCertificate(bytes calldata data) internal view returns (BridgeTypes.Block memory) {
         // Copy calldata to memory for the BCS deserializer
         bytes memory mdata = data;
 
@@ -67,7 +105,8 @@ contract LightClient {
             BridgeTypes.bcs_serialize_VoteValue(voteValue)
         ));
 
-        // Step 5: Verify signatures against committee using ecrecover
+        // Step 5: Verify signatures against current committee using ecrecover
+        EpochCommittee storage committee = committees[currentEpoch];
         uint64 weight = 0;
         for (uint256 i = 0; i < signatures.length; i++) {
             // Pack uint8[] back into contiguous bytes, then extract r and s
@@ -85,15 +124,31 @@ contract LightClient {
 
             // Try v=27 and v=28 since we don't have the recovery ID
             address recovered = ecrecover(signedHash, 27, r, s);
-            if (recovered == address(0) || committeeWeights[recovered] == 0) {
+            if (recovered == address(0) || committee.weights[recovered] == 0) {
                 recovered = ecrecover(signedHash, 28, r, s);
             }
             require(recovered != address(0), "signature recovery failed");
-            uint64 w = committeeWeights[recovered];
+            uint64 w = committee.weights[recovered];
             require(w > 0, "unknown validator");
             weight += w;
         }
-        require(weight >= quorumThreshold, "insufficient quorum");
+        require(weight >= committee.quorumThreshold, "insufficient quorum");
+
+        return blockValue;
+    }
+
+    function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights) internal {
+        require(validators.length == weights.length, "length mismatch");
+        EpochCommittee storage committee = committees[epoch];
+        require(committee.quorumThreshold == 0, "epoch committee already exists");
+        uint64 total = 0;
+        for (uint256 i = 0; i < validators.length; i++) {
+            require(committee.weights[validators[i]] == 0, "duplicate validator");
+            committee.weights[validators[i]] = weights[i];
+            total += weights[i];
+        }
+        committee.totalWeight = total;
+        committee.quorumThreshold = 2 * total / 3 + 1;
     }
 
     /// Copies a slice of memory bytes into a new bytes array.
