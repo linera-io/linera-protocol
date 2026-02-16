@@ -24,7 +24,7 @@ use linera_execution::{system::SystemOperation, Operation};
 use linera_sdk::abis::fungible::{self, FungibleOperation};
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{rngs::SmallRng, seq::SliceRandom, thread_rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{mpsc, Barrier, Notify},
@@ -34,6 +34,162 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 
 use crate::chain_listener::{ChainListener, ClientContext};
+
+/// Trait for generating benchmark operations.
+///
+/// Implement this trait to create custom operation generators for different
+/// application benchmarks (e.g., prediction markets, custom tokens, etc.).
+///
+/// Each benchmark chain gets its own generator instance. The generator is responsible
+/// for producing operations to include in blocks, including any destination chain
+/// selection logic.
+pub trait OperationGenerator: Send + 'static {
+    /// Generate a batch of operations for a single block.
+    fn generate_operations(&mut self, owner: AccountOwner, count: usize) -> Vec<Operation>;
+}
+
+/// Generates native fungible token transfer operations between chains.
+pub struct NativeFungibleTransferGenerator {
+    source_chain_id: ChainId,
+    destination_chains: Vec<ChainId>,
+    destination_index: usize,
+    rng: SmallRng,
+    single_destination_per_block: bool,
+}
+
+impl NativeFungibleTransferGenerator {
+    pub fn new(
+        source_chain_id: ChainId,
+        mut destination_chains: Vec<ChainId>,
+        single_destination_per_block: bool,
+    ) -> Result<Self, BenchmarkError> {
+        // With a single chain, send to self.
+        if destination_chains.is_empty() {
+            destination_chains.push(source_chain_id);
+        }
+        let mut rng = SmallRng::from_rng(thread_rng())?;
+        destination_chains.shuffle(&mut rng);
+        Ok(Self {
+            source_chain_id,
+            destination_chains,
+            destination_index: 0,
+            rng,
+            single_destination_per_block,
+        })
+    }
+
+    fn next_destination(&mut self) -> ChainId {
+        if self.destination_index >= self.destination_chains.len() {
+            self.destination_chains.shuffle(&mut self.rng);
+            self.destination_index = 0;
+        }
+        let destination_chain_id = self.destination_chains[self.destination_index];
+        self.destination_index += 1;
+        // Skip self when there are other destinations available.
+        if destination_chain_id == self.source_chain_id && self.destination_chains.len() > 1 {
+            self.next_destination()
+        } else {
+            destination_chain_id
+        }
+    }
+}
+
+impl OperationGenerator for NativeFungibleTransferGenerator {
+    fn generate_operations(&mut self, _owner: AccountOwner, count: usize) -> Vec<Operation> {
+        let amount = Amount::from_attos(1);
+        if self.single_destination_per_block {
+            let recipient = self.next_destination();
+            (0..count)
+                .map(|_| {
+                    Operation::system(SystemOperation::Transfer {
+                        owner: AccountOwner::CHAIN,
+                        recipient: Account::chain(recipient),
+                        amount,
+                    })
+                })
+                .collect()
+        } else {
+            (0..count)
+                .map(|_| {
+                    let recipient = self.next_destination();
+                    Operation::system(SystemOperation::Transfer {
+                        owner: AccountOwner::CHAIN,
+                        recipient: Account::chain(recipient),
+                        amount,
+                    })
+                })
+                .collect()
+        }
+    }
+}
+
+/// Generates fungible token transfer operations between chains.
+pub struct FungibleTransferGenerator {
+    application_id: ApplicationId,
+    source_chain_id: ChainId,
+    destination_chains: Vec<ChainId>,
+    destination_index: usize,
+    rng: SmallRng,
+    single_destination_per_block: bool,
+}
+
+impl FungibleTransferGenerator {
+    pub fn new(
+        application_id: ApplicationId,
+        source_chain_id: ChainId,
+        mut destination_chains: Vec<ChainId>,
+        single_destination_per_block: bool,
+    ) -> Result<Self, BenchmarkError> {
+        // With a single chain, send to self (matching old behavior).
+        if destination_chains.is_empty() {
+            destination_chains.push(source_chain_id);
+        }
+        let mut rng = SmallRng::from_rng(thread_rng())?;
+        destination_chains.shuffle(&mut rng);
+        Ok(Self {
+            application_id,
+            source_chain_id,
+            destination_chains,
+            destination_index: 0,
+            rng,
+            single_destination_per_block,
+        })
+    }
+
+    fn next_destination(&mut self) -> ChainId {
+        if self.destination_index >= self.destination_chains.len() {
+            self.destination_chains.shuffle(&mut self.rng);
+            self.destination_index = 0;
+        }
+        let destination_chain_id = self.destination_chains[self.destination_index];
+        self.destination_index += 1;
+        // Skip self when there are other destinations available.
+        if destination_chain_id == self.source_chain_id && self.destination_chains.len() > 1 {
+            self.next_destination()
+        } else {
+            destination_chain_id
+        }
+    }
+}
+
+impl OperationGenerator for FungibleTransferGenerator {
+    fn generate_operations(&mut self, owner: AccountOwner, count: usize) -> Vec<Operation> {
+        let amount = Amount::from_attos(1);
+        if self.single_destination_per_block {
+            let recipient = self.next_destination();
+            (0..count)
+                .map(|_| fungible_transfer(self.application_id, recipient, owner, owner, amount))
+                .collect()
+        } else {
+            (0..count)
+                .map(|_| {
+                    let recipient = self.next_destination();
+                    fungible_transfer(self.application_id, recipient, owner, owner, amount)
+                })
+                .collect()
+        }
+    }
+}
 
 const PROXY_LATENCY_P99_THRESHOLD: f64 = 400.0;
 const LATENCY_METRIC_PREFIX: &str = "linera_proxy_request_latency";
@@ -74,6 +230,8 @@ pub enum BenchmarkError {
     ConfigLoadError(#[from] anyhow::Error),
     #[error("Could not find enough chains in wallet alone: needed {0}, but only found {1}")]
     NotEnoughChainsInWallet(usize, usize),
+    #[error("Random number generator error: {0}")]
+    RandError(#[from] rand::Error),
 }
 
 #[derive(Debug)]
@@ -108,19 +266,28 @@ pub struct Benchmark<Env: Environment> {
 }
 
 impl<Env: Environment> Benchmark<Env> {
+    /// Runs a benchmark with the given chain clients and operation generators.
+    ///
+    /// Each chain client is paired with an operation generator (one per chain).
+    /// The generators produce the operations to include in each block.
     #[expect(clippy::too_many_arguments)]
     pub async fn run_benchmark<C: ClientContext<Environment = Env> + 'static>(
-        num_chains: usize,
-        transactions_per_block: usize,
         bps: usize,
         chain_clients: Vec<ChainClient<Env>>,
-        blocks_infos: Vec<Vec<Operation>>,
+        generators: Vec<Box<dyn OperationGenerator>>,
+        transactions_per_block: usize,
         health_check_endpoints: Option<String>,
         runtime_in_seconds: Option<u64>,
         delay_between_chains_ms: Option<u64>,
         chain_listener: ChainListener<C>,
         shutdown_notifier: &CancellationToken,
     ) -> Result<(), BenchmarkError> {
+        assert_eq!(
+            chain_clients.len(),
+            generators.len(),
+            "Must have one generator per chain client"
+        );
+        let num_chains = chain_clients.len();
         let bps_counts = (0..num_chains)
             .map(|_| Arc::new(AtomicUsize::new(0)))
             .collect::<Vec<_>>();
@@ -147,10 +314,8 @@ impl<Env: Environment> Benchmark<Env> {
         let bps_initial_share = bps / num_chains;
         let mut bps_remainder = bps % num_chains;
         let mut join_set = task::JoinSet::<Result<(), BenchmarkError>>::new();
-        for (chain_idx, (block_info, chain_client)) in blocks_infos
-            .into_iter()
-            .zip(chain_clients.into_iter())
-            .enumerate()
+        for (chain_idx, (chain_client, generator)) in
+            chain_clients.into_iter().zip(generators).enumerate()
         {
             let shutdown_notifier_clone = shutdown_notifier.clone();
             let barrier_clone = barrier.clone();
@@ -170,8 +335,9 @@ impl<Env: Environment> Benchmark<Env> {
                         chain_idx,
                         chain_id,
                         bps_share,
-                        block_info,
                         chain_client,
+                        generator,
+                        transactions_per_block,
                         shutdown_notifier_clone,
                         bps_count_clone,
                         barrier_clone,
@@ -554,8 +720,9 @@ impl<Env: Environment> Benchmark<Env> {
         chain_idx: usize,
         chain_id: ChainId,
         bps: usize,
-        operations: Vec<Operation>,
         chain_client: ChainClient<Env>,
+        mut generator: Box<dyn OperationGenerator>,
+        transactions_per_block: usize,
         shutdown_notifier: CancellationToken,
         bps_count: Arc<AtomicUsize>,
         barrier: Arc<Barrier>,
@@ -576,6 +743,11 @@ impl<Env: Environment> Benchmark<Env> {
             runtime_control_sender.send(()).await?;
         }
 
+        let owner = chain_client
+            .identity()
+            .await
+            .map_err(BenchmarkError::ChainClient)?;
+
         loop {
             tokio::select! {
                 biased;
@@ -584,7 +756,10 @@ impl<Env: Environment> Benchmark<Env> {
                     info!("Shutdown signal received, stopping benchmark");
                     break;
                 }
-                result = chain_client.execute_operations(operations.clone(), vec![]) => {
+                result = chain_client.execute_operations(
+                    generator.generate_operations(owner, transactions_per_block),
+                    vec![]
+                ) => {
                     result
                         .map_err(BenchmarkError::ChainClient)?
                         .expect("should execute block with operations");
@@ -661,98 +836,28 @@ impl<Env: Environment> Benchmark<Env> {
 
         Ok(all_chains)
     }
+}
 
-    pub fn make_benchmark_block_info(
-        benchmark_chains: Vec<(ChainId, AccountOwner)>,
-        transactions_per_block: usize,
-        fungible_application_id: Option<ApplicationId>,
-        all_chains: Vec<ChainId>,
-    ) -> Result<Vec<Vec<Operation>>, BenchmarkError> {
-        let mut blocks_infos = Vec::new();
-        let amount = Amount::from_attos(1);
-
-        for (current_chain_id, owner) in benchmark_chains.iter() {
-            let mut operations = Vec::new();
-
-            let mut other_chains: Vec<_> = if all_chains.len() == 1 {
-                // If there's only one chain, just have it send to itself.
-                all_chains.clone()
-            } else {
-                // If there's more than one chain, have it send to all other chains, and don't
-                // send to self.
-                all_chains
-                    .iter()
-                    .filter(|chain_id| **chain_id != *current_chain_id)
-                    .copied()
-                    .collect()
-            };
-
-            other_chains.shuffle(&mut thread_rng());
-
-            // Calculate adjusted transactions_per_block to ensure even distribution
-            let num_destinations = other_chains.len();
-            let adjusted_transactions_per_block = if transactions_per_block % num_destinations != 0
-            {
-                let adjusted = transactions_per_block.div_ceil(num_destinations) * num_destinations;
-                warn!(
-                    "Requested transactions_per_block ({}) is not evenly divisible by number of destination chains ({}). \
-                    Adjusting to {} transactions per block to ensure transfers cancel each other out.",
-                    transactions_per_block, num_destinations, adjusted
-                );
-                adjusted
-            } else {
-                transactions_per_block
-            };
-
-            for recipient_chain_id in other_chains {
-                let operation = match fungible_application_id {
-                    Some(application_id) => Self::fungible_transfer(
-                        application_id,
-                        recipient_chain_id,
-                        *owner,
-                        *owner,
-                        amount,
-                    ),
-                    None => Operation::system(SystemOperation::Transfer {
-                        owner: AccountOwner::CHAIN,
-                        recipient: Account::chain(recipient_chain_id),
-                        amount,
-                    }),
-                };
-                operations.push(operation);
-            }
-
-            let operations = operations
-                .into_iter()
-                .cycle()
-                .take(adjusted_transactions_per_block)
-                .collect();
-            blocks_infos.push(operations);
-        }
-        Ok(blocks_infos)
-    }
-
-    /// Creates a fungible token transfer operation.
-    pub fn fungible_transfer(
-        application_id: ApplicationId,
-        chain_id: ChainId,
-        sender: AccountOwner,
-        receiver: AccountOwner,
-        amount: Amount,
-    ) -> Operation {
-        let target_account = fungible::Account {
-            chain_id,
-            owner: receiver,
-        };
-        let bytes = bcs::to_bytes(&FungibleOperation::Transfer {
-            owner: sender,
-            amount,
-            target_account,
-        })
-        .expect("should serialize fungible token operation");
-        Operation::User {
-            application_id,
-            bytes,
-        }
+/// Creates a fungible token transfer operation.
+pub fn fungible_transfer(
+    application_id: ApplicationId,
+    chain_id: ChainId,
+    sender: AccountOwner,
+    receiver: AccountOwner,
+    amount: Amount,
+) -> Operation {
+    let target_account = fungible::Account {
+        chain_id,
+        owner: receiver,
+    };
+    let bytes = bcs::to_bytes(&FungibleOperation::Transfer {
+        owner: sender,
+        amount,
+        target_account,
+    })
+    .expect("should serialize fungible token operation");
+    Operation::User {
+        application_id,
+        bytes,
     }
 }
