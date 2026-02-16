@@ -21,8 +21,15 @@ serde-reflection = { workspace = true }
 serde_yaml = "0.8.26"
 
 [dev-dependencies]
+alloy-sol-types.workspace = true
+bcs.workspace = true
+hex.workspace = true
 insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-execution.workspace = true
+revm = { workspace = true, default-features = false, features = ["std", "kzg-rs", "secp256k1", "portable"] }
+revm-context.workspace = true
 serde-reflection.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true

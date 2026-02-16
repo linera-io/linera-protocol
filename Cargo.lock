@@ -5322,13 +5322,20 @@ dependencies = [
 name = "linera-bridge"
 version = "0.15.12"
 dependencies = [
+ "alloy-sol-types",
+ "bcs",
+ "hex",
  "insta",
  "linera-base",
  "linera-chain",
  "linera-execution",
+ "revm",
+ "revm-context",
  "serde-generate",
  "serde-reflection",
+ "serde_json",
  "serde_yaml 0.8.26",
+ "tempfile",
 ]
 
 [[package]]

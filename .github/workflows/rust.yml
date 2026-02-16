@@ -113,12 +113,30 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Check bridge format snapshots
+    - name: Ensure Solc Directory Exists
+      run: mkdir -p /home/runner/.solc
+    - name: Cache Solc
+      id: cache-solc
+      uses: actions/cache@v4
+      with:
+        path: /home/runner/.solc
+        key: solc-v0.8.25
+        restore-keys: solc-
+    - name: Get Solc
+      if: ${{ steps.cache-solc.outputs.cache-hit != 'true' }}
+      uses: ./.github/actions/get-solc
+      with:
+        version: v0.8.25
+    - name: Add Solc to PATH
+      run: |
+        ln -sf /home/runner/.solc/v0.8.25/solc-static-linux /home/runner/.solc/solc
+        echo "/home/runner/.solc" >> $GITHUB_PATH
+    - name: Run bridge tests
       run: |
         cargo test --locked -p linera-bridge
 
