@@ -25,7 +25,7 @@ mod tests {
     };
     use revm::{database::CacheDB, primitives::Address};
 
-    use super::{addBlockCall, latestHeightCall};
+    use super::{addBlockCall, chainIdCall, latestHeightCall, lightClientCall};
     use crate::test_helpers::*;
 
     sol! {
@@ -44,6 +44,19 @@ mod tests {
         let mut db = CacheDB::default();
         let light_client = deploy_light_client(&mut db, deployer, &[address], &[1]);
         let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+
+        let light_client_address = call_contract(&mut db, deployer, microchain, lightClientCall {});
+        assert_eq!(
+            light_client_address, light_client,
+            "light client address should match"
+        );
+
+        let chain_id_bytes = call_contract(&mut db, deployer, microchain, chainIdCall {});
+        assert_eq!(
+            &chain_id_bytes,
+            chain_id.as_bytes(),
+            "chain ID should match"
+        );
 
         // Add block at height 1
         let cert1 = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));

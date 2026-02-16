@@ -38,7 +38,7 @@ mod tests {
     };
     use revm::{database::CacheDB, primitives::Address};
 
-    use super::{addCommitteeCall, verifyBlockCall};
+    use super::{addCommitteeCall, currentEpochCall, verifyBlockCall};
     use crate::test_helpers::*;
 
     #[test]
@@ -105,6 +105,9 @@ mod tests {
                 weights: vec![1],
             },
         );
+
+        let current_epoch = call_contract(&mut db, deployer, contract, currentEpochCall {});
+        assert_eq!(current_epoch, new_epoch.0);
     }
 
     #[test]
