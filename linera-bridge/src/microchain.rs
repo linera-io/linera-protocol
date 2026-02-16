@@ -18,7 +18,7 @@ sol! {
 
 #[cfg(test)]
 mod tests {
-    use alloy_sol_types::{sol, SolCall, SolValue};
+    use alloy_sol_types::sol;
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
         data_types::BlockHeight,
@@ -48,26 +48,18 @@ mod tests {
         // Add block at height 1
         let cert1 = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
         let bcs1 = bcs::to_bytes(&cert1).expect("BCS serialization failed");
-        let calldata = addBlockCall { data: bcs1.into() }.abi_encode();
-        call_contract(&mut db, deployer, microchain, calldata);
+        call_contract(
+            &mut db,
+            deployer,
+            microchain,
+            addBlockCall { data: bcs1.into() },
+        );
 
         // Verify state
-        let output = call_contract(
-            &mut db,
-            deployer,
-            microchain,
-            blockCountCall {}.abi_encode(),
-        );
-        let count = u64::abi_decode(&output).expect("decode blockCount");
+        let count = call_contract(&mut db, deployer, microchain, blockCountCall {});
         assert_eq!(count, 1, "block count should be 1");
 
-        let output = call_contract(
-            &mut db,
-            deployer,
-            microchain,
-            latestHeightCall {}.abi_encode(),
-        );
-        let height = u64::abi_decode(&output).expect("decode latestHeight");
+        let height = call_contract(&mut db, deployer, microchain, latestHeightCall {});
         assert_eq!(height, 1, "latest height should be 1");
     }
 
@@ -89,12 +81,16 @@ mod tests {
         let cert =
             create_signed_certificate_for_chain(&secret, &public, wrong_chain_id, BlockHeight(1));
         let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
-        let calldata = addBlockCall {
-            data: bcs_bytes.into(),
-        }
-        .abi_encode();
         assert!(
-            try_call_contract(&mut db, deployer, microchain, calldata).is_err(),
+            try_call_contract(
+                &mut db,
+                deployer,
+                microchain,
+                addBlockCall {
+                    data: bcs_bytes.into(),
+                },
+            )
+            .is_err(),
             "should reject block from wrong chain"
         );
     }
@@ -115,12 +111,16 @@ mod tests {
         // Try to add block at height 5 (skipping 1-4)
         let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(5));
         let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
-        let calldata = addBlockCall {
-            data: bcs_bytes.into(),
-        }
-        .abi_encode();
         assert!(
-            try_call_contract(&mut db, deployer, microchain, calldata).is_err(),
+            try_call_contract(
+                &mut db,
+                deployer,
+                microchain,
+                addBlockCall {
+                    data: bcs_bytes.into(),
+                },
+            )
+            .is_err(),
             "should reject non-sequential block height"
         );
     }

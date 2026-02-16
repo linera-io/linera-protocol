@@ -23,7 +23,6 @@ sol! {
 mod tests {
     use std::collections::BTreeMap;
 
-    use alloy_sol_types::SolCall;
     use linera_base::{
         crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorSecretKey},
         data_types::{BlobContent, BlockHeight, Epoch, Round},
@@ -95,14 +94,17 @@ mod tests {
         let mut db = CacheDB::default();
         let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
-        let calldata = addCommitteeCall {
-            data: bcs_bytes.into(),
-            committeeBlob: committee_bytes.into(),
-            validators: vec![new_address],
-            weights: vec![1],
-        }
-        .abi_encode();
-        call_contract(&mut db, deployer, contract, calldata);
+        call_contract(
+            &mut db,
+            deployer,
+            contract,
+            addCommitteeCall {
+                data: bcs_bytes.into(),
+                committeeBlob: committee_bytes.into(),
+                validators: vec![new_address],
+                weights: vec![1],
+            },
+        );
     }
 
     #[test]
@@ -158,15 +160,19 @@ mod tests {
 
         // Pass a different (wrong) committee blob
         let wrong_blob = vec![0x01, 0x02, 0x03];
-        let calldata = addCommitteeCall {
-            data: bcs_bytes.into(),
-            committeeBlob: wrong_blob.into(),
-            validators: vec![new_address],
-            weights: vec![1],
-        }
-        .abi_encode();
         assert!(
-            try_call_contract(&mut db, deployer, contract, calldata).is_err(),
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                addCommitteeCall {
+                    data: bcs_bytes.into(),
+                    committeeBlob: wrong_blob.into(),
+                    validators: vec![new_address],
+                    weights: vec![1],
+                },
+            )
+            .is_err(),
             "should reject mismatched committee blob"
         );
     }
@@ -220,15 +226,19 @@ mod tests {
         let mut db = CacheDB::default();
         let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
-        let calldata = addCommitteeCall {
-            data: bcs_bytes.into(),
-            committeeBlob: committee_bytes.into(),
-            validators: vec![new_address],
-            weights: vec![1],
-        }
-        .abi_encode();
         assert!(
-            try_call_contract(&mut db, deployer, contract, calldata).is_err(),
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                addCommitteeCall {
+                    data: bcs_bytes.into(),
+                    committeeBlob: committee_bytes.into(),
+                    validators: vec![new_address],
+                    weights: vec![1],
+                },
+            )
+            .is_err(),
             "should reject non-sequential epoch"
         );
     }
@@ -246,11 +256,14 @@ mod tests {
         let mut db = CacheDB::default();
         let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
-        let calldata = verifyBlockCall {
-            data: bcs_bytes.into(),
-        }
-        .abi_encode();
-        call_contract(&mut db, deployer, contract, calldata);
+        call_contract(
+            &mut db,
+            deployer,
+            contract,
+            verifyBlockCall {
+                data: bcs_bytes.into(),
+            },
+        );
     }
 
     #[test]
@@ -269,12 +282,16 @@ mod tests {
         let mut db = CacheDB::default();
         let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
-        let calldata = verifyBlockCall {
-            data: bcs_bytes.into(),
-        }
-        .abi_encode();
         assert!(
-            try_call_contract(&mut db, deployer, contract, calldata).is_err(),
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                verifyBlockCall {
+                    data: bcs_bytes.into(),
+                },
+            )
+            .is_err(),
             "should reject certificate signed by unknown validator"
         );
     }

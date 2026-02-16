@@ -11,7 +11,7 @@ use std::{
 };
 
 use alloy_primitives::keccak256;
-use alloy_sol_types::SolValue;
+use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{BlockHeight, Epoch, Round, Timestamp},
@@ -146,26 +146,27 @@ pub fn deploy_contract(db: &mut CacheDB<EmptyDB>, deployer: Address, bytecode: V
     }
 }
 
-/// Calls a deployed contract and returns the raw output bytes.
-pub fn call_contract(
+/// Calls a deployed contract and decodes the return value.
+pub fn call_contract<C: SolCall>(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     contract: Address,
-    calldata: Vec<u8>,
-) -> Bytes {
-    match try_call_contract(db, deployer, contract, calldata) {
-        Ok(bytes) => bytes,
+    call: C,
+) -> C::Return {
+    match try_call_contract(db, deployer, contract, call) {
+        Ok(ret) => ret,
         Err(msg) => panic!("{}", msg),
     }
 }
 
-/// Calls a deployed contract, returning Ok(output) on success or Err(message) on revert/halt.
-pub fn try_call_contract(
+/// Calls a deployed contract, returning the decoded return value on success
+/// or an error message on revert/halt/decode failure.
+pub fn try_call_contract<C: SolCall>(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     contract: Address,
-    calldata: Vec<u8>,
-) -> Result<Bytes, String> {
+    call: C,
+) -> Result<C::Return, String> {
     let nonce = db
         .cache
         .accounts
@@ -177,7 +178,7 @@ pub fn try_call_contract(
             tx.caller = deployer;
             tx.nonce = nonce;
             tx.kind = TxKind::Call(contract);
-            tx.data = Bytes::from(calldata);
+            tx.data = Bytes::from(call.abi_encode());
             tx.gas_limit = GAS_LIMIT;
             tx.value = U256::ZERO;
         })
@@ -187,7 +188,8 @@ pub fn try_call_contract(
 
     match result {
         ExecutionResult::Success { output, .. } => match output {
-            Output::Call(bytes) => Ok(bytes),
+            Output::Call(bytes) => C::abi_decode_returns(&bytes)
+                .map_err(|e| format!("failed to decode return value: {e}")),
             other => Err(format!("expected Call output, got: {:?}", other)),
         },
         ExecutionResult::Revert { output, .. } => {
