@@ -58,7 +58,7 @@ enum TaskMessage {
 pub struct TaskProcessor<Env: linera_core::Environment> {
     chain_id: ChainId,
     application_ids: Vec<ApplicationId>,
-    last_requested_callbacks: BTreeMap<ApplicationId, Timestamp>,
+    cursors: BTreeMap<ApplicationId, Vec<u8>>,
     chain_client: ChainClient<Env>,
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
@@ -86,7 +86,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         Self {
             chain_id,
             application_ids,
-            last_requested_callbacks: BTreeMap::new(),
+            cursors: BTreeMap::new(),
             chain_client,
             cancellation_token,
             notifications,
@@ -158,7 +158,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         let old_app_set: BTreeSet<_> = self.application_ids.iter().cloned().collect();
 
         // Retain only last_requested_callbacks and in_flight_apps for applications that are still active
-        self.last_requested_callbacks
+        self.cursors
             .retain(|app_id, _| new_app_set.contains(app_id));
         self.in_flight_apps
             .retain(|app_id| new_app_set.contains(app_id));
@@ -203,12 +203,8 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             }
             debug!("Processing actions for {application_id}");
             let now = Timestamp::now();
-            let last_requested_callback =
-                self.last_requested_callbacks.get(&application_id).cloned();
-            let actions = match self
-                .query_actions(application_id, last_requested_callback, now)
-                .await
-            {
+            let app_cursor = self.cursors.get(&application_id).cloned();
+            let actions = match self.query_actions(application_id, app_cursor, now).await {
                 Ok(actions) => actions,
                 Err(error) => {
                     error!("Error reading application actions: {error}");
@@ -221,9 +217,11 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 }
             };
             if let Some(timestamp) = actions.request_callback {
-                self.last_requested_callbacks.insert(application_id, now);
                 self.deadlines
                     .push(Reverse((timestamp, Some(application_id))));
+            }
+            if let Some(cursor) = actions.set_cursor {
+                self.cursors.insert(application_id, cursor);
             }
             if !actions.execute_tasks.is_empty() {
                 self.in_flight_apps.insert(application_id);
@@ -318,12 +316,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     async fn query_actions(
         &mut self,
         application_id: ApplicationId,
-        last_requested_callback: Option<Timestamp>,
+        cursor: Option<Vec<u8>>,
         now: Timestamp,
     ) -> Result<ProcessorActions, anyhow::Error> {
         let query = format!(
-            "query {{ nextActions(lastRequestedCallback: {}, now: {}) }}",
-            last_requested_callback.to_value(),
+            "query {{ nextActions(cursor: {}, now: {}) }}",
+            cursor.to_value(),
             now.to_value(),
         );
         let bytes = serde_json::to_vec(&json!({"query": query}))?;
