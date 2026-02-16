@@ -29,7 +29,12 @@ insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-execution.workspace = true
-revm = { workspace = true, default-features = false, features = ["std", "kzg-rs", "secp256k1", "portable"] }
+revm = { workspace = true, default-features = false, features = [
+    "std",
+    "kzg-rs",
+    "secp256k1",
+    "portable",
+] }
 revm-context.workspace = true
 serde-reflection.workspace = true
 serde_json.workspace = true
