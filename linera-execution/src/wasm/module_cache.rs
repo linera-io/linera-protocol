@@ -32,6 +32,17 @@ impl<Module> Default for ModuleCache<Module> {
     }
 }
 
+impl<Module> ModuleCache<Module> {
+    #[cfg(test)]
+    fn with_max_size(max_size: u64) -> Self {
+        ModuleCache {
+            modules: LruCache::unbounded(),
+            total_size: 0,
+            max_size,
+        }
+    }
+}
+
 impl<Module: Clone> ModuleCache<Module> {
     /// Returns a `Module` for the requested `bytecode`, creating it with `module_builder` and
     /// adding it to the cache if it doesn't already exist in the cache.
@@ -58,11 +69,20 @@ impl<Module: Clone> ModuleCache<Module> {
     pub fn insert(&mut self, bytecode: Bytecode, module: Module) {
         let bytecode_size = bytecode.as_ref().len() as u64;
 
+        if bytecode_size > self.max_size {
+            return;
+        }
+
+        if self.modules.promote(&bytecode) {
+            return;
+        }
+
         if self.total_size + bytecode_size > self.max_size {
             self.reduce_size_to(self.max_size - bytecode_size);
         }
 
         self.modules.put(bytecode, module);
+        self.total_size += bytecode_size;
     }
 
     /// Evicts entries from the cache so that the total size of cached bytecode files is less than
@@ -77,5 +97,73 @@ impl<Module: Clone> ModuleCache<Module> {
 
             self.total_size -= bytecode_size;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bytecode(size: usize) -> Bytecode {
+        Bytecode::new(vec![0u8; size])
+    }
+
+    fn distinct_bytecode(size: usize, discriminant: u8) -> Bytecode {
+        let mut bytes = vec![0u8; size];
+        bytes[0] = discriminant;
+        Bytecode::new(bytes)
+    }
+
+    #[test]
+    fn total_size_tracks_insertions() {
+        let mut cache = ModuleCache::<u32>::with_max_size(1000);
+        cache.insert(bytecode(100), 1);
+        assert_eq!(cache.total_size, 100);
+        cache.insert(distinct_bytecode(200, 1), 2);
+        assert_eq!(cache.total_size, 300);
+    }
+
+    #[test]
+    fn eviction_triggers_when_full() {
+        let mut cache = ModuleCache::<u32>::with_max_size(250);
+        cache.insert(bytecode(100), 1);
+        cache.insert(distinct_bytecode(100, 1), 2);
+        assert_eq!(cache.total_size, 200);
+        assert_eq!(cache.modules.len(), 2);
+
+        cache.insert(distinct_bytecode(100, 2), 3);
+        assert_eq!(cache.modules.len(), 2);
+        assert!(cache.total_size <= 250);
+    }
+
+    #[test]
+    fn oversized_bytecode_is_rejected() {
+        let mut cache = ModuleCache::<u32>::with_max_size(50);
+        cache.insert(bytecode(100), 1);
+        assert_eq!(cache.total_size, 0);
+        assert_eq!(cache.modules.len(), 0);
+    }
+
+    #[test]
+    fn reinserting_same_key_does_not_double_count() {
+        let mut cache = ModuleCache::<u32>::with_max_size(1000);
+        let bc = bytecode(100);
+        cache.insert(bc.clone(), 1);
+        assert_eq!(cache.total_size, 100);
+        cache.insert(bc, 2);
+        assert_eq!(cache.total_size, 100);
+        assert_eq!(cache.modules.len(), 1);
+    }
+
+    #[test]
+    fn reinserting_existing_key_does_not_evict() {
+        let mut cache = ModuleCache::<u32>::with_max_size(200);
+        cache.insert(bytecode(100), 1);
+        cache.insert(distinct_bytecode(100, 1), 2);
+        assert_eq!(cache.modules.len(), 2);
+
+        cache.insert(bytecode(100), 3);
+        assert_eq!(cache.modules.len(), 2);
+        assert_eq!(cache.total_size, 200);
     }
 }
