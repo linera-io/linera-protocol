@@ -131,6 +131,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        cache-workspaces: |
+          examples -> target
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
@@ -149,6 +152,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        cache-workspaces: |
+          linera-sdk/tests/fixtures -> target
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
