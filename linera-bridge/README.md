@@ -120,7 +120,6 @@ The constructor takes `(address[], uint64[])` — the genesis committee's valida
 
 Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the Solidity contracts in-process, with `solc` for compilation. No external EVM node is required. The test suite covers:
 
-- Full `ConfirmedBlockCertificate` deserialization and field extraction
 - Block verification via `verifyBlock` (valid and invalid signatures)
 - Committee transitions via `addCommittee` with `CreateCommittee` verification
 - Blob hash mismatch rejection
