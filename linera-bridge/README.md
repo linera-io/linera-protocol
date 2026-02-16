@@ -22,8 +22,8 @@ The bridge has three layers:
           ┌──────────────┼──────────────┐
           │              │              │
    ┌──────▼──────┐ ┌─────▼──────┐ ┌────▼───────┐
-   │ Microchain  │ │ Microchain │ │ Microchain │  one per chain,
-   │  (USDC)     │ │  (NFT)     │ │  (DEX)     │  enforces chain_id + height
+   │ Fungible-   │ │ Microchain │ │ Microchain │  one per chain,
+   │  Bridge     │ │  (NFT)     │ │  (DEX)     │  enforces chain_id + height
    └─────────────┘ └────────────┘ └────────────┘
 ```
 
@@ -39,7 +39,22 @@ YAML snapshot (tests/snapshots/format__format.yaml.snap)
 BridgeTypes.sol (src/solidity/BridgeTypes.sol)
 ```
 
-The snapshot is checked in and tested via `insta`. This means the generated Solidity stays in sync with the Rust types — if a struct field is added or an enum variant reordered, the snapshot test fails and the developer must update it explicitly.
+Application-specific types follow the same pipeline. For example, `FungibleOperation` from the fungible token application:
+
+```
+Rust types (linera-sdk::abis::fungible)
+    │
+    ▼  serde-reflection (tests/format_fungible.rs)
+YAML snapshot (tests/snapshots/format_fungible__format_fungible.yaml.snap)
+    │
+    ▼  serde-generate + post-processing via build.rs
+FungibleTypes.sol (src/solidity/FungibleTypes.sol)
+    imports BridgeTypes.sol for shared types
+```
+
+`FungibleTypes.sol` only contains types and deserializers unique to the fungible application (`FungibleOperation` and its variants). Shared types like `Account`, `AccountOwner`, and `Amount` are reused from `BridgeTypes.sol` via import — the `build.rs` post-processing step strips duplicate definitions and qualifies references with `BridgeTypes.`.
+
+All snapshots are checked in and tested via `insta`. This means the generated Solidity stays in sync with the Rust types — if a struct field is added or an enum variant reordered, the snapshot test fails and the developer must update it explicitly.
 
 ## Certificate verification
 
@@ -96,6 +111,18 @@ Verifies a certificate via `lightClient.verifyBlock(data)`, then enforces:
 
 On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
 
+### FungibleBridge (concrete Microchain)
+
+A `Microchain` subcontract that processes fungible token operations from verified blocks.
+
+#### `constructor(address _lightClient, bytes32 _chainId, bytes32 _applicationId)`
+
+Binds to a specific `LightClient`, chain, and Linera application ID. Only operations targeting this `applicationId` are processed.
+
+#### `_onBlock(BridgeTypes.Block)`
+
+Scans the block's transactions for `Operation::User` entries matching `applicationId`. For each match, the opaque `bytes` payload is deserialized as a `FungibleOperation` using the generated `FungibleTypes` library. Currently increments an `operationCount` counter — concrete business logic (e.g., minting ERC-20 tokens on transfer) can be added by extending this contract.
+
 ## Rust API
 
 The crate exposes typed bindings for each contract, plus the generated Solidity source as a constant:
@@ -116,7 +143,8 @@ let calldata: Vec<u8> = call.abi_encode();
 // microchain:   addBlockCall, latestHeightCall, lightClientCall, chainIdCall
 
 // Solidity sources (for compilation or deployment tooling):
-// BRIDGE_TYPES_SOURCE, light_client::SOURCE, microchain::SOURCE
+// BRIDGE_TYPES_SOURCE, FUNGIBLE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE
+// light_client::SOURCE, microchain::SOURCE
 ```
 
 ## Committee management
@@ -147,6 +175,8 @@ The constructor takes `(address[], uint64[], bytes32)` — the genesis committee
 
 - **No `previous_block_hash` chain-linking in Microchain**: The `Microchain` contract enforces chain ID and sequential heights but does not verify `previous_block_hash` to link blocks into a hash chain. This is safe because a `ConfirmedBlockCertificate` implies BFT-finalized canonicality — a quorum of validators signed this specific block at this height, so no conflicting block can exist for the same chain and height. The contract relies on this protocol-layer guarantee rather than redundantly re-checking hash linking. If the finality semantics of `ConfirmedBlockCertificate` ever change (e.g., to allow rollbacks or forks), a `previous_block_hash` check should be added.
 
+- **Application-specific type generation with shared type reuse**: `FungibleTypes.sol` is generated from a separate serde-reflection snapshot of `FungibleOperation`. Since `FungibleOperation` references types already in `BridgeTypes.sol` (e.g., `Account`, `AccountOwner`, `Amount`), the `build.rs` post-processing strips duplicate definitions and replaces references with `BridgeTypes.`-qualified calls. This ensures type compatibility — a `BridgeTypes.Account` from block deserialization can be directly compared with an `Account` from a deserialized `FungibleOperation`.
+
 ## Testing
 
 Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the Solidity contracts in-process, with `solc` for compilation. No external EVM node is required. The test suite covers:
@@ -163,6 +193,8 @@ Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the So
 - Epoch-bound committee verification (block verified against its declared epoch)
 - Microchain block tracking with chain ID enforcement
 - Microchain rejection of wrong chain ID and non-sequential heights
+- FungibleBridge operation extraction and deserialization
+- FungibleBridge filtering by application ID
 
 ### Prerequisites
 

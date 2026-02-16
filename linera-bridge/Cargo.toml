@@ -29,6 +29,7 @@ insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-execution.workspace = true
+linera-sdk.workspace = true
 revm = { workspace = true, default-features = false, features = [
     "std",
     "kzg-rs",

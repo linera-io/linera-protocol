@@ -1,0 +1,83 @@
+---
+source: linera-bridge/tests/format_fungible.rs
+assertion_line: 22
+expression: registry
+---
+Account:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - owner:
+        TYPENAME: AccountOwner
+AccountOwner:
+  ENUM:
+    0:
+      Reserved:
+        NEWTYPE: U8
+    1:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    2:
+      Address20:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 20
+Amount:
+  NEWTYPESTRUCT: U128
+ChainId:
+  NEWTYPESTRUCT:
+    TYPENAME: CryptoHash
+CryptoHash:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+FungibleOperation:
+  ENUM:
+    0:
+      Balance:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+    1:
+      TickerSymbol: UNIT
+    2:
+      Approve:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - spender:
+              TYPENAME: AccountOwner
+          - allowance:
+              TYPENAME: Amount
+    3:
+      Transfer:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount:
+              TYPENAME: Amount
+          - target_account:
+              TYPENAME: Account
+    4:
+      TransferFrom:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - spender:
+              TYPENAME: AccountOwner
+          - amount:
+              TYPENAME: Amount
+          - target_account:
+              TYPENAME: Account
+    5:
+      Claim:
+        STRUCT:
+          - source_account:
+              TYPENAME: Account
+          - amount:
+              TYPENAME: Amount
+          - target_account:
+              TYPENAME: Account

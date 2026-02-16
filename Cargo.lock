@@ -5330,6 +5330,7 @@ dependencies = [
  "linera-base",
  "linera-chain",
  "linera-execution",
+ "linera-sdk",
  "revm",
  "revm-context",
  "serde-generate",
