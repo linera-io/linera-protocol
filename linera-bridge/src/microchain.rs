@@ -1,0 +1,127 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use alloy_sol_types::sol;
+
+/// Solidity source for the Microchain abstract contract.
+pub const SOURCE: &str = include_str!("solidity/Microchain.sol");
+
+sol! {
+    function addBlock(bytes calldata data) external;
+
+    function latestHeight() external view returns (uint64);
+
+    function lightClient() external view returns (address);
+
+    function chainId() external view returns (bytes32);
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy_sol_types::{sol, SolCall, SolValue};
+    use linera_base::{
+        crypto::{CryptoHash, TestString, ValidatorSecretKey},
+        data_types::BlockHeight,
+    };
+    use revm::{database::CacheDB, primitives::Address};
+
+    use super::{addBlockCall, latestHeightCall};
+    use crate::test_helpers::*;
+
+    sol! {
+        function blockCount() external view returns (uint64);
+    }
+
+    #[test]
+    fn test_microchain_add_block() {
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let address = validator_evm_address(&public);
+
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let light_client = deploy_light_client(&mut db, deployer, &[address], &[1]);
+        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+
+        // Add block at height 1
+        let cert1 = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
+        let bcs1 = bcs::to_bytes(&cert1).expect("BCS serialization failed");
+        let calldata = addBlockCall { data: bcs1.into() }.abi_encode();
+        call_contract(&mut db, deployer, microchain, calldata);
+
+        // Verify state
+        let output = call_contract(
+            &mut db,
+            deployer,
+            microchain,
+            blockCountCall {}.abi_encode(),
+        );
+        let count = u64::abi_decode(&output).expect("decode blockCount");
+        assert_eq!(count, 1, "block count should be 1");
+
+        let output = call_contract(
+            &mut db,
+            deployer,
+            microchain,
+            latestHeightCall {}.abi_encode(),
+        );
+        let height = u64::abi_decode(&output).expect("decode latestHeight");
+        assert_eq!(height, 1, "latest height should be 1");
+    }
+
+    #[test]
+    fn test_microchain_rejects_wrong_chain_id() {
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let address = validator_evm_address(&public);
+
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+        let wrong_chain_id = CryptoHash::new(&TestString::new("wrong_chain"));
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let light_client = deploy_light_client(&mut db, deployer, &[address], &[1]);
+        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+
+        // Try to add a block from a different chain
+        let cert =
+            create_signed_certificate_for_chain(&secret, &public, wrong_chain_id, BlockHeight(1));
+        let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+        let calldata = addBlockCall {
+            data: bcs_bytes.into(),
+        }
+        .abi_encode();
+        assert!(
+            try_call_contract(&mut db, deployer, microchain, calldata).is_err(),
+            "should reject block from wrong chain"
+        );
+    }
+
+    #[test]
+    fn test_microchain_rejects_non_sequential_height() {
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let address = validator_evm_address(&public);
+
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let light_client = deploy_light_client(&mut db, deployer, &[address], &[1]);
+        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+
+        // Try to add block at height 5 (skipping 1-4)
+        let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(5));
+        let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+        let calldata = addBlockCall {
+            data: bcs_bytes.into(),
+        }
+        .abi_encode();
+        assert!(
+            try_call_contract(&mut db, deployer, microchain, calldata).is_err(),
+            "should reject non-sequential block height"
+        );
+    }
+}

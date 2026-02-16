@@ -25,7 +25,7 @@ fn main() {
     let registry: Registry =
         serde_yaml::from_str(yaml).expect("failed to parse YAML registry from snapshot");
 
-    let out_dir = PathBuf::from("src");
+    let out_dir = PathBuf::from("src/solidity");
     let installer = solidity::Installer::new(out_dir);
     let config = CodeGeneratorConfig::new("BridgeTypes".to_string());
     installer

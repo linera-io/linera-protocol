@@ -11,7 +11,7 @@ use std::{
 };
 
 use alloy_primitives::keccak256;
-use alloy_sol_types::{sol, SolValue};
+use alloy_sol_types::SolValue;
 use linera_base::{
     crypto::{CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{BlockHeight, Epoch, Round, Timestamp},
@@ -30,24 +30,12 @@ use revm::{
 };
 use revm_context::result::{ExecutionResult, Output};
 
-pub const BRIDGE_TYPES_SOL: &str = include_str!("../../src/BridgeTypes.sol");
-pub const LIGHT_CLIENT_SOL: &str = include_str!("../../src/LightClient.sol");
-pub const MICROCHAIN_SOL: &str = include_str!("../../src/Microchain.sol");
+use crate::{light_client, microchain, BRIDGE_TYPES_SOURCE};
+
+const BRIDGE_TYPES_SOL: &str = BRIDGE_TYPES_SOURCE;
+const LIGHT_CLIENT_SOL: &str = light_client::SOURCE;
+const MICROCHAIN_SOL: &str = microchain::SOURCE;
 pub const GAS_LIMIT: u64 = 500_000_000;
-
-sol! {
-    function addCommittee(
-        bytes calldata data,
-        bytes calldata committeeBlob,
-        address[] calldata validators,
-        uint64[] calldata weights
-    ) external;
-    function verifyBlock(bytes calldata data) external view;
-
-    function addBlock(bytes calldata data) external;
-    function blockCount() external view returns (uint64);
-    function latestHeight() external view returns (uint64);
-}
 
 /// Derives the Ethereum address from a secp256k1 validator public key.
 pub fn validator_evm_address(public: &ValidatorPublicKey) -> Address {

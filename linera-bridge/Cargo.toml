@@ -14,6 +14,8 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
 
 [build-dependencies]
 serde-generate = "0.32.0"
@@ -21,8 +23,6 @@ serde-reflection = { workspace = true }
 serde_yaml = "0.8.26"
 
 [dev-dependencies]
-alloy-primitives.workspace = true
-alloy-sol-types.workspace = true
 bcs.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["yaml"] }
