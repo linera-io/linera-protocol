@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     marker::PhantomData,
     sync::{atomic::AtomicU64, Arc},
 };
@@ -21,10 +21,10 @@ use linera_service::config::{DestinationId, LimitsConfig};
 use linera_storage::Storage;
 use linera_views::{
     batch::Batch, context::Context, log_view::LogView, store::WritableKeyValueStore as _,
-    views::ClonableView,
 };
 use mini_moka::unsync::Cache as LfuCache;
 use quick_cache::{sync::Cache as FifoCache, Weighter};
+use tokio::sync::RwLock;
 
 #[cfg(with_metrics)]
 use crate::metrics;
@@ -32,8 +32,6 @@ use crate::{
     common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
     state::{BlockExporterStateView, DestinationStates},
 };
-
-const NUM_OF_BLOBS: usize = 20;
 
 pub(super) struct ExporterStorage<S>
 where
@@ -78,8 +76,7 @@ where
         destination_states: DestinationStates,
         limits: LimitsConfig,
     ) -> Self {
-        let shared_canonical_state =
-            CanonicalState::new((limits.auxiliary_cache_size_mb / 3).into(), state_context);
+        let shared_canonical_state = CanonicalState::new(state_context);
         let blobs_cache = Arc::new(FifoCache::with_weighter(
             limits.blob_cache_items_capacity as usize,
             (limits.blob_cache_weight_mb as u64) * 1024 * 1024,
@@ -138,16 +135,18 @@ where
         Ok(results)
     }
 
-    fn push_block(&mut self, block: CanonicalBlock) {
-        self.shared_canonical_state.push(block);
+    /// Enqueues a block into the in-memory buffer.
+    /// Only acquires the buffer lock; no I/O is performed.
+    async fn push_block(&self, block: CanonicalBlock) {
+        let _count = self.shared_canonical_state.push(block).await;
         #[cfg(with_metrics)]
-        metrics::CANONICAL_STATE_HEIGHT.set(self.shared_canonical_state.latest_index() as i64);
+        metrics::CANONICAL_STATE_HEIGHT.set(_count as i64);
     }
 
-    fn clone(&mut self) -> Result<Self, ExporterError> {
+    fn clone(&self) -> Result<Self, ExporterError> {
         Ok(Self {
             storage: self.storage.clone(),
-            shared_canonical_state: self.shared_canonical_state.clone()?,
+            shared_canonical_state: self.shared_canonical_state.clone(),
             blobs_cache: self.blobs_cache.clone(),
             blocks_cache: self.blocks_cache.clone(),
             destination_states: self.destination_states.clone(),
@@ -204,12 +203,15 @@ where
         self.shared_storage.destination_states.load_state(id)
     }
 
-    pub(crate) fn clone(&mut self) -> Result<Self, ExporterError> {
+    pub(crate) fn clone(&self) -> Result<Self, ExporterError> {
         Ok(ExporterStorage::new(self.shared_storage.clone()?))
     }
 
-    pub(crate) fn get_latest_index(&self) -> usize {
-        self.shared_storage.shared_canonical_state.latest_index()
+    pub(crate) async fn get_latest_index(&self) -> usize {
+        self.shared_storage
+            .shared_canonical_state
+            .latest_index()
+            .await
     }
 }
 
@@ -240,7 +242,7 @@ where
             .max_capacity(blob_state_cache_capacity)
             .build();
 
-        let mut shared_storage =
+        let shared_storage =
             SharedStorage::new(storage, canonical_state, destination_states, limits);
         let exporter_storage = ExporterStorage::new(shared_storage.clone()?);
 
@@ -327,8 +329,10 @@ where
         Ok(())
     }
 
-    pub(super) fn push_block(&mut self, block: CanonicalBlock) {
-        self.shared_storage.push_block(block)
+    /// Enqueues a block into the shared canonical state buffer.
+    /// Only acquires the buffer lock; no I/O is performed.
+    pub(super) async fn push_block(&mut self, block: CanonicalBlock) {
+        self.shared_storage.push_block(block).await
     }
 
     pub(super) fn new_committee(&mut self, committee_destinations: HashSet<DestinationId>) {
@@ -363,7 +367,8 @@ where
 
         self.shared_storage
             .shared_canonical_state
-            .flush(&mut batch)?;
+            .flush(&mut batch)
+            .await?;
 
         self.exporter_state_view
             .set_destination_states(self.shared_storage.destination_states.clone());
@@ -382,126 +387,107 @@ where
         };
         self.exporter_state_view.post_save();
 
-        // clear the shared state only after persisting it
-        // only matters for the shared updates buffer
-        self.shared_storage.shared_canonical_state.clear();
-
         Ok(())
     }
 }
 
-/// A view of the canonical state that is used to store blocks in the exporter.
-struct CanonicalState<C> {
-    /// The number of blocks in the canonical state.
+/// In-memory buffer of canonical blocks awaiting flush to the LogView.
+struct CanonicalBuffer {
+    /// Total count of canonical blocks (persisted + buffered).
     count: usize,
-    /// The (persistent) storage view that is used to access the canonical state.
-    state_context: LogView<C, CanonicalBlock>,
-    /// A cache that stores the canonical blocks.
-    /// This cache is used to speed up access to the canonical state.
-    /// It uses a FIFO eviction policy and is limited by the size of the cache.
-    /// The cache is used to avoid reading the canonical state from the persistent storage
-    /// for every request.
-    state_cache: Arc<FifoCache<usize, CanonicalBlock, CanonicalStateCacheWeighter>>,
-    /// A buffer that stores the updates to the canonical state.
-    ///
-    /// This buffer is used to temporarily hold updates to the canonical state before they are
-    /// flushed to the persistent storage.
-    state_updates_buffer: Arc<papaya::HashMap<usize, CanonicalBlock>>,
+    /// Blocks not yet flushed to the LogView.
+    items: Vec<CanonicalBlock>,
+}
+
+/// Canonical state split into a fast in-memory buffer and a persistent log.
+///
+/// The buffer and log use separate locks so that `push` (buffer-only) is never
+/// blocked by slow persistent reads, and readers checking the buffer don't hold
+/// a lock across I/O.
+struct CanonicalState<C> {
+    buffer: Arc<RwLock<CanonicalBuffer>>,
+    log: Arc<RwLock<LogView<C, CanonicalBlock>>>,
+}
+
+impl<C> Clone for CanonicalState<C> {
+    fn clone(&self) -> Self {
+        Self {
+            buffer: self.buffer.clone(),
+            log: self.log.clone(),
+        }
+    }
 }
 
 impl<C> CanonicalState<C>
 where
     C: Context + Send + Sync + 'static,
 {
-    fn new(cache_size: usize, state_context: LogView<C, CanonicalBlock>) -> Self {
-        let cache_size = cache_size * 1024 * 1024;
-        let items_capacity = cache_size
-            / (size_of::<usize>()
-                + size_of::<CanonicalBlock>()
-                + NUM_OF_BLOBS * size_of::<BlobId>());
-
+    fn new(state_context: LogView<C, CanonicalBlock>) -> Self {
+        let count = state_context.count();
         Self {
-            count: state_context.count(),
-            state_cache: Arc::new(FifoCache::with_weighter(
-                items_capacity,
-                cache_size as u64,
-                CacheWeighter::default(),
-            )),
-            state_updates_buffer: Arc::new(papaya::HashMap::new()),
-            state_context,
+            buffer: Arc::new(RwLock::new(CanonicalBuffer {
+                count,
+                items: Vec::new(),
+            })),
+            log: Arc::new(RwLock::new(state_context)),
         }
     }
 
-    fn clone(&mut self) -> Result<Self, ExporterError> {
-        Ok(Self {
-            count: self.count,
-            state_cache: self.state_cache.clone(),
-            state_updates_buffer: self.state_updates_buffer.clone(),
-            state_context: self.state_context.clone_unchecked()?,
-        })
+    /// Returns the total number of canonical blocks (persisted + buffered).
+    async fn latest_index(&self) -> usize {
+        self.buffer.read().await.count
     }
 
-    /// Returns the latest index of the canonical state.
-    fn latest_index(&self) -> usize {
-        self.count
-    }
-
+    /// Retrieves a canonical block by index.
+    ///
+    /// Checks the in-memory buffer first (fast, no I/O). On a buffer miss,
+    /// reads from the persistent LogView under a separate lock,
+    /// avoiding holding any lock across I/O on the hot path for `push`.
     async fn get(&self, index: usize) -> Result<CanonicalBlock, ExporterError> {
-        match self.state_cache.get_value_or_guard_async(&index).await {
-            Ok(value) => Ok(value),
-            Err(guard) => {
-                let block = if let Some(entry) = {
-                    let pinned = self.state_updates_buffer.pin();
-                    pinned.get(&index).cloned()
-                } {
-                    entry
-                } else {
-                    #[cfg(with_metrics)]
-                    metrics::GET_CANONICAL_BLOCK_HISTOGRAM.measure_latency();
-                    self.state_context
-                        .get(index)
-                        .await?
-                        .ok_or(ExporterError::UnprocessedBlock)?
-                };
-
-                guard.insert(block.clone()).ok();
-                Ok(block)
+        {
+            let buf = self.buffer.read().await;
+            let buffer_start = buf.count - buf.items.len();
+            if index >= buffer_start {
+                return buf
+                    .items
+                    .get(index - buffer_start)
+                    .cloned()
+                    .ok_or(ExporterError::UnprocessedBlock);
             }
         }
+
+        #[cfg(with_metrics)]
+        metrics::GET_CANONICAL_BLOCK_HISTOGRAM.measure_latency();
+        let log = self.log.read().await;
+        log.get(index).await?.ok_or(ExporterError::UnprocessedBlock)
     }
 
-    fn push(&mut self, value: CanonicalBlock) {
-        let index = self.next_index();
-        self.state_updates_buffer.pin().insert(index, value.clone());
-        self.state_cache.insert(index, value);
+    /// Enqueues a block into the buffer. Returns the new total count.
+    /// Only acquires the buffer lock; no I/O is performed.
+    async fn push(&self, value: CanonicalBlock) -> usize {
+        let mut buf = self.buffer.write().await;
+        buf.items.push(value);
+        buf.count += 1;
+        buf.count
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ExporterError> {
-        for (_, value) in self
-            .state_updates_buffer
-            .pin()
-            .iter()
-            .map(|(key, value)| (*key, value.clone()))
-            .collect::<BTreeMap<_, _>>()
-        {
-            self.state_context.push(value);
+    /// Drains the buffer into the LogView and serializes changes into `batch`.
+    ///
+    /// Both locks are held during the drain-and-push sequence to prevent
+    /// readers from seeing a gap where a block is neither in the buffer
+    /// nor yet in the log.
+    async fn flush(&self, batch: &mut Batch) -> Result<(), ExporterError> {
+        let mut buf = self.buffer.write().await;
+        let mut log = self.log.write().await;
+
+        for value in buf.items.drain(..) {
+            log.push(value);
         }
 
-        self.state_context.pre_save(batch)?;
-        self.state_context.post_save();
+        log.pre_save(batch)?;
+        log.post_save();
 
         Ok(())
-    }
-
-    fn clear(&mut self) {
-        self.state_updates_buffer.pin().clear();
-        self.state_context.rollback();
-    }
-
-    fn next_index(&mut self) -> usize {
-        let next = self.count;
-        self.count += 1;
-        next
     }
 }
 
@@ -530,13 +516,6 @@ impl Weighter<CryptoHash, Arc<ConfirmedBlockCertificate>> for BlockCacheWeighter
     }
 }
 
-impl Weighter<usize, CanonicalBlock> for CanonicalStateCacheWeighter {
-    fn weight(&self, _key: &usize, _val: &CanonicalBlock) -> u64 {
-        (size_of::<usize>() + size_of::<CanonicalBlock>() + NUM_OF_BLOBS * size_of::<BlobId>())
-            as u64
-    }
-}
-
 impl<Q, V> Default for CacheWeighter<Q, V> {
     fn default() -> Self {
         Self {
@@ -548,4 +527,3 @@ impl<Q, V> Default for CacheWeighter<Q, V> {
 
 type BlobCacheWeighter = CacheWeighter<BlobId, Arc<Blob>>;
 type BlockCacheWeighter = CacheWeighter<CryptoHash, Arc<ConfirmedBlockCertificate>>;
-type CanonicalStateCacheWeighter = CacheWeighter<usize, CanonicalBlock>;

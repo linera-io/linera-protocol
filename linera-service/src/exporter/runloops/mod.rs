@@ -262,7 +262,7 @@ where
     use linera_base::identifiers::BlobType;
     use linera_execution::{system::AdminOperation, Operation, SystemOperation};
 
-    let latest_index = exporter_storage.get_latest_index();
+    let latest_index = exporter_storage.get_latest_index().await;
     if latest_index == 0 {
         tracing::info!("No blocks in canonical state to scan");
         return None;
@@ -915,11 +915,13 @@ mod test {
 
             block_processor_storage.index_block(&block1_id).await?;
             block_processor_storage
-                .push_block(crate::common::CanonicalBlock::new(block1_id.hash, &[]));
+                .push_block(crate::common::CanonicalBlock::new(block1_id.hash, &[]))
+                .await;
 
             block_processor_storage.index_block(&block2_id).await?;
             block_processor_storage
-                .push_block(crate::common::CanonicalBlock::new(block2_id.hash, &[]));
+                .push_block(crate::common::CanonicalBlock::new(block2_id.hash, &[]))
+                .await;
 
             // Save but don't persist the committee blob ID
             block_processor_storage.save().await?;
@@ -981,6 +983,76 @@ mod test {
                 "Returned blob ID should match persisted blob ID"
             );
         }
+        Ok(())
+    }
+
+    /// Regression test: after the block processor flushes (saves) blocks,
+    /// the exporter storage must see the updated state (latest_index and
+    /// block contents). Under the old `clone_unchecked()` sharing model,
+    /// the exporter held a diverged copy whose `stored_count` would not
+    /// reflect the flush, causing stale reads.
+    #[test_log::test(tokio::test)]
+    async fn test_shared_state_consistent_after_flush() -> anyhow::Result<()> {
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
+        let chain_id = linera_base::identifiers::ChainId(
+            linera_base::crypto::CryptoHash::test_hash("shared_state_test"),
+        );
+
+        // Create two blocks and persist them to storage.
+        let block1 =
+            ConfirmedBlock::new(BlockExecutionOutcome::default().with(make_first_block(chain_id)));
+        let cert1 = ConfirmedBlockCertificate::new(block1.clone(), Round::Fast, vec![]);
+        storage.write_blobs_and_certificate(&[], &cert1).await?;
+
+        let block2 =
+            ConfirmedBlock::new(BlockExecutionOutcome::default().with(make_child_block(&block1)));
+        let cert2 = ConfirmedBlockCertificate::new(block2.clone(), Round::Fast, vec![]);
+        storage.write_blobs_and_certificate(&[], &cert2).await?;
+
+        let (mut block_processor_storage, exporter_storage) =
+            crate::storage::BlockProcessorStorage::load(
+                storage.clone(),
+                0,
+                vec![],
+                LimitsConfig::default(),
+            )
+            .await?;
+
+        // Initially, no blocks in canonical state.
+        assert_eq!(exporter_storage.get_latest_index().await, 0);
+
+        // Index and push two blocks via the block processor.
+        let block1_id = crate::common::BlockId::from_confirmed_block(&block1);
+        let block2_id = crate::common::BlockId::from_confirmed_block(&block2);
+
+        block_processor_storage.index_block(&block1_id).await?;
+        block_processor_storage
+            .push_block(CanonicalBlock::new(block1_id.hash, &[]))
+            .await;
+
+        block_processor_storage.index_block(&block2_id).await?;
+        block_processor_storage
+            .push_block(CanonicalBlock::new(block2_id.hash, &[]))
+            .await;
+
+        // Under the old `clone_unchecked()` model, `count` was a plain usize
+        // copied at clone time. `push()` only incremented the block processor's
+        // copy, so the exporter's `get_latest_index()` would still return 0 here.
+        assert_eq!(exporter_storage.get_latest_index().await, 2);
+
+        // Flush (save) persists the blocks.
+        block_processor_storage.save().await?;
+
+        // After flush, the exporter must still see the correct count
+        // and be able to retrieve the blocks by index.
+        assert_eq!(exporter_storage.get_latest_index().await, 2);
+
+        let (retrieved_cert, _blob_ids) = exporter_storage.get_block_with_blob_ids(0).await?;
+        assert_eq!(retrieved_cert.hash(), cert1.hash());
+
+        let (retrieved_cert, _blob_ids) = exporter_storage.get_block_with_blob_ids(1).await?;
+        assert_eq!(retrieved_cert.hash(), cert2.hash());
+
         Ok(())
     }
 }
