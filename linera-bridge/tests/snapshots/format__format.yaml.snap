@@ -164,6 +164,14 @@ BlockHeader:
           TYPENAME: AccountOwner
 BlockHeight:
   NEWTYPESTRUCT: U64
+CertificateKind:
+  ENUM:
+    0:
+      Timeout: UNIT
+    1:
+      Validated: UNIT
+    2:
+      Confirmed: UNIT
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
@@ -552,3 +560,8 @@ VmRuntime:
       Wasm: UNIT
     1:
       Evm: UNIT
+VoteValue:
+  TUPLESTRUCT:
+    - TYPENAME: CryptoHash
+    - TYPENAME: Round
+    - TYPENAME: CertificateKind

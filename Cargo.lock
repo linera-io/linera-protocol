@@ -5322,6 +5322,7 @@ dependencies = [
 name = "linera-bridge"
 version = "0.15.12"
 dependencies = [
+ "alloy-primitives",
  "alloy-sol-types",
  "bcs",
  "hex",

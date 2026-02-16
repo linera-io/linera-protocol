@@ -490,8 +490,9 @@ impl LiteValue {
     }
 }
 
+//(deuszx): pub is temp.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-struct VoteValue(CryptoHash, Round, CertificateKind);
+pub struct VoteValue(CryptoHash, Round, CertificateKind);
 
 /// A vote on a statement from a validator.
 #[derive(Allocative, Clone, Debug, Serialize, Deserialize)]

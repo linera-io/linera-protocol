@@ -8,15 +8,16 @@ use std::{
     process::{Command, Stdio},
 };
 
-use alloy_sol_types::{sol, SolCall};
+use alloy_primitives::keccak256;
+use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
-    crypto::{CryptoHash, TestString},
+    crypto::{CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{BlockHeight, Epoch, Round, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
     block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
-    data_types::Transaction,
+    data_types::{Transaction, Vote},
     types::ConfirmedBlockCertificate,
 };
 use linera_execution::Operation;
@@ -115,12 +116,16 @@ fn test_deserialize_confirmed_block_certificate() {
 
 #[test]
 fn test_light_client_add_committee() {
-    let certificate = create_test_certificate();
-    let mut bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+    let secret = ValidatorSecretKey::generate();
+    let public = secret.public();
+    let address = validator_evm_address(&public);
+
+    let certificate = create_signed_certificate(&secret, &public);
+    let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
 
     let deployer = Address::ZERO;
     let mut db = CacheDB::<EmptyDB>::default();
-    let contract = deploy_light_client(&mut db, deployer);
+    let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
     let calldata = addCommitteeCall {
         data: bcs_bytes.into(),
@@ -131,12 +136,16 @@ fn test_light_client_add_committee() {
 
 #[test]
 fn test_light_client_add_block() {
-    let certificate = create_test_certificate();
+    let secret = ValidatorSecretKey::generate();
+    let public = secret.public();
+    let address = validator_evm_address(&public);
+
+    let certificate = create_signed_certificate(&secret, &public);
     let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
 
     let deployer = Address::ZERO;
     let mut db = CacheDB::<EmptyDB>::default();
-    let contract = deploy_light_client(&mut db, deployer);
+    let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
     let calldata = addBlockCall {
         data: bcs_bytes.into(),
@@ -145,12 +154,44 @@ fn test_light_client_add_block() {
     call_contract(&mut db, deployer, contract, calldata);
 }
 
-fn deploy_light_client(db: &mut CacheDB<EmptyDB>, deployer: Address) -> Address {
-    let bytecode = compile_contract(LIGHT_CLIENT_SOL, "LightClient.sol", "LightClient");
-    deploy_contract(db, deployer, bytecode)
+#[test]
+fn test_light_client_rejects_invalid_signature() {
+    let secret = ValidatorSecretKey::generate();
+    let public = secret.public();
+    let address = validator_evm_address(&public);
+
+    // Sign with a different key than the one in the committee
+    let wrong_secret = ValidatorSecretKey::generate();
+    let wrong_public = wrong_secret.public();
+    let certificate = create_signed_certificate(&wrong_secret, &wrong_public);
+    let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+
+    let deployer = Address::ZERO;
+    let mut db = CacheDB::<EmptyDB>::default();
+    let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
+
+    let calldata = addBlockCall {
+        data: bcs_bytes.into(),
+    }
+    .abi_encode();
+    assert!(
+        try_call_contract(&mut db, deployer, contract, calldata).is_err(),
+        "should reject certificate signed by unknown validator"
+    );
 }
 
-fn create_test_certificate() -> ConfirmedBlockCertificate {
+/// Derives the Ethereum address from a secp256k1 validator public key.
+fn validator_evm_address(public: &ValidatorPublicKey) -> Address {
+    let uncompressed = public.0.to_encoded_point(false);
+    let hash = keccak256(&uncompressed.as_bytes()[1..]); // skip 0x04 prefix
+    Address::from_slice(&hash[12..])
+}
+
+/// Creates a certificate with a real signature from the given key pair.
+fn create_signed_certificate(
+    secret: &ValidatorSecretKey,
+    public: &ValidatorPublicKey,
+) -> ConfirmedBlockCertificate {
     let chain_id = CryptoHash::new(&TestString::new("test_chain"));
     let transactions = vec![Transaction::ExecuteOperation(Operation::User {
         application_id: ApplicationId::new(CryptoHash::new(&TestString::new("test_app"))),
@@ -158,7 +199,21 @@ fn create_test_certificate() -> ConfirmedBlockCertificate {
     })];
     let block = create_test_block(chain_id, Epoch::ZERO, BlockHeight(1), transactions);
     let confirmed = ConfirmedBlock::new(block);
-    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![])
+    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
+    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
+}
+
+fn deploy_light_client(
+    db: &mut CacheDB<EmptyDB>,
+    deployer: Address,
+    validators: &[Address],
+    weights: &[u64],
+) -> Address {
+    let bytecode = compile_contract(LIGHT_CLIENT_SOL, "LightClient.sol", "LightClient");
+    let constructor_args = (validators.to_vec(), weights.to_vec()).abi_encode_params();
+    let mut deploy_data = bytecode;
+    deploy_data.extend_from_slice(&constructor_args);
+    deploy_contract(db, deployer, deploy_data)
 }
 
 /// Deploys a compiled contract and returns its address.
@@ -201,6 +256,19 @@ fn call_contract(
     contract: Address,
     calldata: Vec<u8>,
 ) -> Bytes {
+    match try_call_contract(db, deployer, contract, calldata) {
+        Ok(bytes) => bytes,
+        Err(msg) => panic!("{}", msg),
+    }
+}
+
+/// Calls a deployed contract, returning Ok(output) on success or Err(message) on revert/halt.
+fn try_call_contract(
+    db: &mut CacheDB<EmptyDB>,
+    deployer: Address,
+    contract: Address,
+    calldata: Vec<u8>,
+) -> Result<Bytes, String> {
     let result = Context::mainnet()
         .with_db(db)
         .modify_tx_chained(|tx| {
@@ -217,15 +285,13 @@ fn call_contract(
 
     match result.result {
         ExecutionResult::Success { output, .. } => match output {
-            Output::Call(bytes) => bytes,
-            other => panic!("expected Call output, got: {:?}", other),
+            Output::Call(bytes) => Ok(bytes),
+            other => Err(format!("expected Call output, got: {:?}", other)),
         },
         ExecutionResult::Revert { output, .. } => {
-            panic!("call reverted: {}", hex::encode(&output));
+            Err(format!("call reverted: {}", hex::encode(&output)))
         }
-        ExecutionResult::Halt { reason, .. } => {
-            panic!("call halted: {:?}", reason);
-        }
+        ExecutionResult::Halt { reason, .. } => Err(format!("call halted: {:?}", reason)),
     }
 }
 

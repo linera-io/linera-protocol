@@ -844,6 +844,50 @@ library BridgeTypes {
         return value;
     }
 
+    enum CertificateKind { Timeout, Validated, Confirmed }
+
+    function bcs_serialize_CertificateKind(CertificateKind input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodePacked(input);
+    }
+
+    function bcs_deserialize_offset_CertificateKind(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, CertificateKind)
+    {
+        uint8 choice = uint8(input[pos]);
+
+        if (choice == 0) {
+            return (pos + 1, CertificateKind.Timeout);
+        }
+
+        if (choice == 1) {
+            return (pos + 1, CertificateKind.Validated);
+        }
+
+        if (choice == 2) {
+            return (pos + 1, CertificateKind.Confirmed);
+        }
+
+        require(choice < 3);
+    }
+
+    function bcs_deserialize_CertificateKind(bytes memory input)
+        internal
+        pure
+        returns (CertificateKind)
+    {
+        uint256 new_pos;
+        CertificateKind value;
+        (new_pos, value) = bcs_deserialize_offset_CertificateKind(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct ChainId {
         CryptoHash value;
     }
@@ -3561,6 +3605,49 @@ library BridgeTypes {
         uint256 new_pos;
         VmRuntime value;
         (new_pos, value) = bcs_deserialize_offset_VmRuntime(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct VoteValue {
+        CryptoHash entry0;
+        Round entry1;
+        CertificateKind entry2;
+    }
+
+    function bcs_serialize_VoteValue(VoteValue memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_CryptoHash(input.entry0);
+        result = abi.encodePacked(result, bcs_serialize_Round(input.entry1));
+        return abi.encodePacked(result, bcs_serialize_CertificateKind(input.entry2));
+    }
+
+    function bcs_deserialize_offset_VoteValue(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, VoteValue memory)
+    {
+        uint256 new_pos;
+        CryptoHash memory entry0;
+        (new_pos, entry0) = bcs_deserialize_offset_CryptoHash(pos, input);
+        Round memory entry1;
+        (new_pos, entry1) = bcs_deserialize_offset_Round(new_pos, input);
+        CertificateKind entry2;
+        (new_pos, entry2) = bcs_deserialize_offset_CertificateKind(new_pos, input);
+        return (new_pos, VoteValue(entry0, entry1, entry2));
+    }
+
+    function bcs_deserialize_VoteValue(bytes memory input)
+        internal
+        pure
+        returns (VoteValue memory)
+    {
+        uint256 new_pos;
+        VoteValue memory value;
+        (new_pos, value) = bcs_deserialize_offset_VoteValue(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

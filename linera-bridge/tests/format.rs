@@ -8,8 +8,8 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_chain::{
-    data_types::{MessageAction, Transaction},
-    types::ConfirmedBlockCertificate,
+    data_types::{MessageAction, Transaction, VoteValue},
+    types::{CertificateKind, ConfirmedBlockCertificate},
 };
 use linera_execution::{
     system::AdminOperation, Message, MessageKind, Operation, SystemMessage, SystemOperation,
@@ -56,7 +56,9 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<SystemOperation>(&samples)?;
     tracer.trace_type::<AdminOperation>(&samples)?;
     tracer.trace_type::<VmRuntime>(&samples)?;
+    tracer.trace_type::<CertificateKind>(&samples)?;
     tracer.trace_type::<Transaction>(&samples)?;
+    tracer.trace_type::<VoteValue>(&samples)?;
     tracer.trace_type::<ConfirmedBlockCertificate>(&samples)?;
     tracer.registry()
 }

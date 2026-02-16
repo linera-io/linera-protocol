@@ -21,6 +21,7 @@ serde-reflection = { workspace = true }
 serde_yaml = "0.8.26"
 
 [dev-dependencies]
+alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 bcs.workspace = true
 hex.workspace = true
