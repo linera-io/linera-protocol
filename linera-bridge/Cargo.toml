@@ -1,0 +1,23 @@
+[package]
+name = "linera-bridge"
+description = "Bridge between Linera and EVM chains."
+readme = "README.md"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+insta = { workspace = true, features = ["yaml"] }
+linera-base = { workspace = true, features = ["test"] }
+linera-chain.workspace = true
+linera-execution.workspace = true
+serde-reflection.workspace = true

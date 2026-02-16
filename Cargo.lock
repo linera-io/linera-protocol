@@ -5286,6 +5286,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-bridge"
+version = "0.15.12"
+dependencies = [
+ "insta",
+ "linera-base",
+ "linera-chain",
+ "linera-execution",
+ "serde-reflection",
+]
+
+[[package]]
 name = "linera-chain"
 version = "0.15.12"
 dependencies = [

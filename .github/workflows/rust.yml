@@ -109,6 +109,19 @@ jobs:
       run: |
         cargo test --locked -p linera-execution --features wasmtime
 
+  bridge-format-test:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Check bridge format snapshots
+      run: |
+        cargo test --locked -p linera-bridge
+
   metrics-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
