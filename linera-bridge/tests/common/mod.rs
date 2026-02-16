@@ -125,8 +125,7 @@ pub fn deploy_contract(db: &mut CacheDB<EmptyDB>, deployer: Address, bytecode: V
         .cache
         .accounts
         .get(&deployer)
-        .map(|info| info.info.nonce)
-        .unwrap_or(0);
+        .map_or(0, |info| info.info.nonce);
     let result = Context::mainnet()
         .with_db(db)
         .modify_cfg_chained(|cfg| {
@@ -183,8 +182,7 @@ pub fn try_call_contract(
         .cache
         .accounts
         .get(&deployer)
-        .map(|info| info.info.nonce)
-        .unwrap_or(0);
+        .map_or(0, |info| info.info.nonce);
     let result = Context::mainnet()
         .with_db(db)
         .modify_tx_chained(|tx| {
