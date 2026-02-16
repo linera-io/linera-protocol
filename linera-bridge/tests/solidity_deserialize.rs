@@ -12,12 +12,14 @@ use alloy_sol_types::{sol, SolCall};
 use linera_base::{
     crypto::{CryptoHash, TestString},
     data_types::{BlockHeight, Epoch, Round, Timestamp},
-    identifiers::ChainId,
+    identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
     block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
+    data_types::Transaction,
     types::ConfirmedBlockCertificate,
 };
+use linera_execution::Operation;
 use revm::{
     database::{CacheDB, EmptyDB},
     primitives::{Address, Bytes, TxKind, U256},
@@ -32,7 +34,14 @@ sol! {
     function deserialize(bytes calldata data)
         external
         pure
-        returns (bytes32 chainId, uint32 epoch, uint64 height);
+        returns (
+            bytes32 chainId,
+            uint32 epoch,
+            uint64 height,
+            uint64 txCount,
+            bytes32 firstTxAppId,
+            bytes memory firstTxBytes
+        );
 }
 
 #[test]
@@ -40,7 +49,26 @@ fn test_deserialize_confirmed_block_certificate() {
     let expected_chain_id = CryptoHash::new(&TestString::new("test_chain"));
     let expected_epoch = Epoch::ZERO;
     let expected_height = BlockHeight(1);
-    let block = create_test_block(expected_chain_id, expected_epoch, expected_height);
+    let expected_app_id = ApplicationId::new(CryptoHash::new(&TestString::new("test_app")));
+    let expected_user_bytes: Vec<u8> = vec![0xDE, 0xAD, 0xBE, 0xEF];
+
+    let transactions = vec![
+        Transaction::ExecuteOperation(Operation::User {
+            application_id: expected_app_id,
+            bytes: expected_user_bytes.clone(),
+        }),
+        Transaction::ExecuteOperation(Operation::User {
+            application_id: expected_app_id,
+            bytes: vec![0x01, 0x02, 0x03],
+        }),
+    ];
+
+    let block = create_test_block(
+        expected_chain_id,
+        expected_epoch,
+        expected_height,
+        transactions,
+    );
     let confirmed = ConfirmedBlock::new(block);
     let certificate = ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![]);
     let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
@@ -68,6 +96,17 @@ fn test_deserialize_confirmed_block_certificate() {
     );
     assert_eq!(decoded.epoch, expected_epoch.0, "epoch mismatch");
     assert_eq!(decoded.height, expected_height.0, "block height mismatch");
+    assert_eq!(decoded.txCount, 2, "transaction count mismatch");
+    assert_eq!(
+        decoded.firstTxAppId.0,
+        *expected_app_id.application_description_hash.as_bytes(),
+        "first transaction app_id mismatch"
+    );
+    assert_eq!(
+        decoded.firstTxBytes.as_ref(),
+        expected_user_bytes.as_slice(),
+        "first transaction bytes mismatch"
+    );
 }
 
 /// Deploys a compiled contract and returns its address.
@@ -138,7 +177,12 @@ fn call_contract(
     }
 }
 
-fn create_test_block(chain_id: CryptoHash, epoch: Epoch, height: BlockHeight) -> Block {
+fn create_test_block(
+    chain_id: CryptoHash,
+    epoch: Epoch,
+    height: BlockHeight,
+    transactions: Vec<Transaction>,
+) -> Block {
     Block {
         header: BlockHeader {
             chain_id: ChainId(chain_id),
@@ -158,7 +202,7 @@ fn create_test_block(chain_id: CryptoHash, epoch: Epoch, height: BlockHeight) ->
             operation_results_hash: CryptoHash::new(&TestString::new("op_results")),
         },
         body: BlockBody {
-            transactions: vec![],
+            transactions,
             messages: vec![],
             previous_message_blocks: Default::default(),
             previous_event_blocks: Default::default(),
