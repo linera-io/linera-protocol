@@ -28,6 +28,7 @@ use revm::{
 use revm_context::result::{ExecutionResult, Output};
 
 const BRIDGE_TYPES_SOL: &str = include_str!("../src/BridgeTypes.sol");
+const LIGHT_CLIENT_SOL: &str = include_str!("../src/LightClient.sol");
 const GAS_LIMIT: u64 = 500_000_000;
 
 sol! {
@@ -42,6 +43,9 @@ sol! {
             bytes32 firstTxAppId,
             bytes memory firstTxBytes
         );
+
+    function addCommittee(bytes calldata data) external;
+    function addBlock(bytes calldata data) external;
 }
 
 #[test]
@@ -75,7 +79,7 @@ fn test_deserialize_confirmed_block_certificate() {
 
     let test_source =
         std::fs::read_to_string("tests/solidity/BridgeTest.sol").expect("BridgeTest.sol not found");
-    let bytecode = compile_bridge_test(&test_source);
+    let bytecode = compile_contract(&test_source, "BridgeTest.sol", "BridgeTest");
 
     let deployer = Address::ZERO;
     let mut db = CacheDB::<EmptyDB>::default();
@@ -107,6 +111,54 @@ fn test_deserialize_confirmed_block_certificate() {
         expected_user_bytes.as_slice(),
         "first transaction bytes mismatch"
     );
+}
+
+#[test]
+fn test_light_client_add_committee() {
+    let certificate = create_test_certificate();
+    let mut bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+
+    let deployer = Address::ZERO;
+    let mut db = CacheDB::<EmptyDB>::default();
+    let contract = deploy_light_client(&mut db, deployer);
+
+    let calldata = addCommitteeCall {
+        data: bcs_bytes.into(),
+    }
+    .abi_encode();
+    call_contract(&mut db, deployer, contract, calldata);
+}
+
+#[test]
+fn test_light_client_add_block() {
+    let certificate = create_test_certificate();
+    let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+
+    let deployer = Address::ZERO;
+    let mut db = CacheDB::<EmptyDB>::default();
+    let contract = deploy_light_client(&mut db, deployer);
+
+    let calldata = addBlockCall {
+        data: bcs_bytes.into(),
+    }
+    .abi_encode();
+    call_contract(&mut db, deployer, contract, calldata);
+}
+
+fn deploy_light_client(db: &mut CacheDB<EmptyDB>, deployer: Address) -> Address {
+    let bytecode = compile_contract(LIGHT_CLIENT_SOL, "LightClient.sol", "LightClient");
+    deploy_contract(db, deployer, bytecode)
+}
+
+fn create_test_certificate() -> ConfirmedBlockCertificate {
+    let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+    let transactions = vec![Transaction::ExecuteOperation(Operation::User {
+        application_id: ApplicationId::new(CryptoHash::new(&TestString::new("test_app"))),
+        bytes: vec![0xDE, 0xAD, 0xBE, 0xEF],
+    })];
+    let block = create_test_block(chain_id, Epoch::ZERO, BlockHeight(1), transactions);
+    let confirmed = ConfirmedBlock::new(block);
+    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![])
 }
 
 /// Deploys a compiled contract and returns its address.
@@ -214,7 +266,7 @@ fn create_test_block(
     }
 }
 
-fn compile_bridge_test(source_code: &str) -> Vec<u8> {
+fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
@@ -223,8 +275,7 @@ fn compile_bridge_test(source_code: &str) -> Vec<u8> {
     let mut types_file = File::create(&types_path).unwrap();
     writeln!(types_file, "{}", BRIDGE_TYPES_SOL).unwrap();
 
-    // Write the test contract
-    let file_name = "BridgeTest.sol";
+    // Write the contract
     let test_path = path.join(file_name);
     let mut test_file = File::create(&test_path).unwrap();
     writeln!(test_file, "{}", source_code).unwrap();
@@ -261,7 +312,8 @@ fn compile_bridge_test(source_code: &str) -> Vec<u8> {
         }
     }
 
-    let bytecode_hex = json_data["contracts"][file_name]["BridgeTest"]["evm"]["bytecode"]["object"]
+    let bytecode_hex = json_data["contracts"][file_name][contract_name]["evm"]["bytecode"]
+        ["object"]
         .as_str()
         .expect("failed to extract bytecode from solc output");
     hex::decode(bytecode_hex).unwrap()
