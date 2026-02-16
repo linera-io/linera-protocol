@@ -34,6 +34,7 @@ use revm_context::result::{ExecutionResult, Output};
 
 const BRIDGE_TYPES_SOL: &str = include_str!("../src/BridgeTypes.sol");
 const LIGHT_CLIENT_SOL: &str = include_str!("../src/LightClient.sol");
+const MICROCHAIN_SOL: &str = include_str!("../src/Microchain.sol");
 const GAS_LIMIT: u64 = 500_000_000;
 
 sol! {
@@ -56,6 +57,10 @@ sol! {
         uint64[] calldata weights
     ) external;
     function verifyBlock(bytes calldata data) external view;
+
+    function addBlock(bytes calldata data) external;
+    function blockCount() external view returns (uint64);
+    function latestHeight() external view returns (uint64);
 }
 
 #[test]
@@ -357,6 +362,99 @@ fn test_light_client_rejects_invalid_signature() {
     );
 }
 
+#[test]
+fn test_microchain_add_block() {
+    let secret = ValidatorSecretKey::generate();
+    let public = secret.public();
+    let address = validator_evm_address(&public);
+
+    let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+
+    let deployer = Address::ZERO;
+    let mut db = CacheDB::<EmptyDB>::default();
+    let light_client = deploy_light_client(&mut db, deployer, &[address], &[1]);
+    let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+
+    // Add block at height 1
+    let cert1 = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
+    let bcs1 = bcs::to_bytes(&cert1).expect("BCS serialization failed");
+    let calldata = addBlockCall { data: bcs1.into() }.abi_encode();
+    call_contract(&mut db, deployer, microchain, calldata);
+
+    // Verify state
+    let output = call_contract(
+        &mut db,
+        deployer,
+        microchain,
+        blockCountCall {}.abi_encode(),
+    );
+    let count = u64::abi_decode(&output).expect("decode blockCount");
+    assert_eq!(count, 1, "block count should be 1");
+
+    let output = call_contract(
+        &mut db,
+        deployer,
+        microchain,
+        latestHeightCall {}.abi_encode(),
+    );
+    let height = u64::abi_decode(&output).expect("decode latestHeight");
+    assert_eq!(height, 1, "latest height should be 1");
+}
+
+#[test]
+fn test_microchain_rejects_wrong_chain_id() {
+    let secret = ValidatorSecretKey::generate();
+    let public = secret.public();
+    let address = validator_evm_address(&public);
+
+    let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+    let wrong_chain_id = CryptoHash::new(&TestString::new("wrong_chain"));
+
+    let deployer = Address::ZERO;
+    let mut db = CacheDB::<EmptyDB>::default();
+    let light_client = deploy_light_client(&mut db, deployer, &[address], &[1]);
+    let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+
+    // Try to add a block from a different chain
+    let cert =
+        create_signed_certificate_for_chain(&secret, &public, wrong_chain_id, BlockHeight(1));
+    let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+    let calldata = addBlockCall {
+        data: bcs_bytes.into(),
+    }
+    .abi_encode();
+    assert!(
+        try_call_contract(&mut db, deployer, microchain, calldata).is_err(),
+        "should reject block from wrong chain"
+    );
+}
+
+#[test]
+fn test_microchain_rejects_non_sequential_height() {
+    let secret = ValidatorSecretKey::generate();
+    let public = secret.public();
+    let address = validator_evm_address(&public);
+
+    let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+
+    let deployer = Address::ZERO;
+    let mut db = CacheDB::<EmptyDB>::default();
+    let light_client = deploy_light_client(&mut db, deployer, &[address], &[1]);
+    let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+
+    // Try to add block at height 5 (skipping 1-4)
+    let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(5));
+    let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+    let calldata = addBlockCall {
+        data: bcs_bytes.into(),
+    }
+    .abi_encode();
+    assert!(
+        try_call_contract(&mut db, deployer, microchain, calldata).is_err(),
+        "should reject non-sequential block height"
+    );
+}
+
 /// Derives the Ethereum address from a secp256k1 validator public key.
 fn validator_evm_address(public: &ValidatorPublicKey) -> Address {
     let uncompressed = public.0.to_encoded_point(false);
@@ -380,6 +478,39 @@ fn create_signed_certificate(
     ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
 }
 
+/// Creates a certificate for a specific chain and height.
+fn create_signed_certificate_for_chain(
+    secret: &ValidatorSecretKey,
+    public: &ValidatorPublicKey,
+    chain_id: CryptoHash,
+    height: BlockHeight,
+) -> ConfirmedBlockCertificate {
+    let transactions = vec![Transaction::ExecuteOperation(Operation::User {
+        application_id: ApplicationId::new(CryptoHash::new(&TestString::new("test_app"))),
+        bytes: vec![0xDE, 0xAD, 0xBE, 0xEF],
+    })];
+    let block = create_test_block(chain_id, Epoch::ZERO, height, transactions);
+    let confirmed = ConfirmedBlock::new(block);
+    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
+    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
+}
+
+fn deploy_microchain(
+    db: &mut CacheDB<EmptyDB>,
+    deployer: Address,
+    light_client: Address,
+    chain_id: CryptoHash,
+) -> Address {
+    let test_source = std::fs::read_to_string("tests/solidity/MicrochainTest.sol")
+        .expect("MicrochainTest.sol not found");
+    let bytecode = compile_contract(&test_source, "MicrochainTest.sol", "MicrochainTest");
+    let constructor_args =
+        (light_client, <[u8; 32]>::from(*chain_id.as_bytes())).abi_encode_params();
+    let mut deploy_data = bytecode;
+    deploy_data.extend_from_slice(&constructor_args);
+    deploy_contract(db, deployer, deploy_data)
+}
+
 fn deploy_light_client(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
@@ -395,6 +526,13 @@ fn deploy_light_client(
 
 /// Deploys a compiled contract and returns its address.
 fn deploy_contract(db: &mut CacheDB<EmptyDB>, deployer: Address, bytecode: Vec<u8>) -> Address {
+    // Look up account nonce from the DB so multiple deployments work
+    let nonce = db
+        .cache
+        .accounts
+        .get(&deployer)
+        .map(|info| info.info.nonce)
+        .unwrap_or(0);
     let result = Context::mainnet()
         .with_db(db)
         .modify_cfg_chained(|cfg| {
@@ -403,6 +541,7 @@ fn deploy_contract(db: &mut CacheDB<EmptyDB>, deployer: Address, bytecode: Vec<u
         })
         .modify_tx_chained(|tx| {
             tx.caller = deployer;
+            tx.nonce = nonce;
             tx.kind = TxKind::Create;
             tx.data = Bytes::from(bytecode);
             tx.gas_limit = GAS_LIMIT;
@@ -446,21 +585,27 @@ fn try_call_contract(
     contract: Address,
     calldata: Vec<u8>,
 ) -> Result<Bytes, String> {
+    let nonce = db
+        .cache
+        .accounts
+        .get(&deployer)
+        .map(|info| info.info.nonce)
+        .unwrap_or(0);
     let result = Context::mainnet()
         .with_db(db)
         .modify_tx_chained(|tx| {
             tx.caller = deployer;
-            tx.nonce = 1;
+            tx.nonce = nonce;
             tx.kind = TxKind::Call(contract);
             tx.data = Bytes::from(calldata);
             tx.gas_limit = GAS_LIMIT;
             tx.value = U256::ZERO;
         })
         .build_mainnet()
-        .replay()
+        .replay_commit()
         .expect("call transaction failed");
 
-    match result.result {
+    match result {
         ExecutionResult::Success { output, .. } => match output {
             Output::Call(bytes) => Ok(bytes),
             other => Err(format!("expected Call output, got: {:?}", other)),
@@ -513,12 +658,17 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
-    // Write BridgeTypes.sol
-    let types_path = path.join("BridgeTypes.sol");
-    let mut types_file = File::create(&types_path).unwrap();
-    writeln!(types_file, "{}", BRIDGE_TYPES_SOL).unwrap();
+    // Write shared source files so imports resolve
+    for (name, content) in [
+        ("BridgeTypes.sol", BRIDGE_TYPES_SOL),
+        ("LightClient.sol", LIGHT_CLIENT_SOL),
+        ("Microchain.sol", MICROCHAIN_SOL),
+    ] {
+        let mut f = File::create(path.join(name)).unwrap();
+        writeln!(f, "{}", content).unwrap();
+    }
 
-    // Write the contract
+    // Write the contract under test
     let test_path = path.join(file_name);
     let mut test_file = File::create(&test_path).unwrap();
     writeln!(test_file, "{}", source_code).unwrap();

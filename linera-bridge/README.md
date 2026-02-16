@@ -8,7 +8,22 @@ The bridge has two main layers:
 
 1. **Code generation (build-time)**: Rust types from `linera-base`, `linera-chain`, and `linera-execution` are traced via `serde-reflection` to produce a YAML schema. The `build.rs` feeds this schema into `serde-generate` to emit `BridgeTypes.sol` — a Solidity library with BCS serializers and deserializers for every type in the `ConfirmedBlockCertificate` type graph.
 
-2. **LightClient.sol (runtime)**: An admin contract that tracks committee epochs and verifies certificate signatures. It exposes `verifyBlock(bytes)` for other contracts to call, returning the deserialized `Block` on success. It does not store blocks — downstream contracts are responsible for interpreting and storing the verified data.
+2. **LightClient.sol** — an admin contract that tracks committee epochs and verifies certificate signatures. It exposes `verifyBlock(bytes)` for other contracts to call, returning the deserialized `Block` on success. It does not store blocks.
+
+3. **Microchain.sol** — an abstract contract that tracks blocks for a single Linera microchain. It delegates certificate verification to a `LightClient` instance and enforces chain ID matching and sequential block heights. Concrete subcontracts implement `_onBlock()` to define application-specific logic (e.g., tracking token transfers).
+
+```
+                  ┌──────────────┐
+                  │ LightClient  │  tracks committees, verifies certificates
+                  └──────┬───────┘
+                         │ verifyBlock()
+          ┌──────────────┼──────────────┐
+          │              │              │
+   ┌──────▼──────┐ ┌─────▼──────┐ ┌────▼───────┐
+   │ Microchain  │ │ Microchain │ │ Microchain │  one per chain,
+   │  (USDC)     │ │  (NFT)     │ │  (DEX)     │  enforces chain_id + height
+   └─────────────┘ └────────────┘ └────────────┘
+```
 
 ### Type tracing pipeline
 
@@ -44,11 +59,13 @@ Linera validators use secp256k1 keys (the same curve as Ethereum). The contract 
 
 ## Contract API
 
-### `verifyBlock(bytes calldata data) → BridgeTypes.Block`
+### LightClient
 
-Verifies a BCS-encoded `ConfirmedBlockCertificate` against the current committee and returns the deserialized `Block`. This is a `view` function — it does not modify state. Other contracts call this to get verified block data without the LightClient needing to know what they do with it.
+#### `verifyBlock(bytes calldata data) → BridgeTypes.Block`
 
-### `addCommittee(bytes calldata data, bytes calldata committeeBlob, address[] calldata validators, uint64[] calldata weights)`
+Verifies a BCS-encoded `ConfirmedBlockCertificate` against the current committee and returns the deserialized `Block`. This is a `view` function — it does not modify state. Other contracts (like `Microchain`) call this to get verified block data.
+
+#### `addCommittee(bytes calldata data, bytes calldata committeeBlob, address[] calldata validators, uint64[] calldata weights)`
 
 Advances the committee to the next epoch. This is the only state-modifying operation (besides construction).
 
@@ -58,6 +75,20 @@ Advances the committee to the next epoch. This is the only state-modifying opera
 4. Store `newValidators` and `newWeights` as the committee for the new epoch.
 
 The `committeeBlob` is the BCS-serialized `Committee` from Linera. The contract does not deserialize it — Solidity cannot natively decompress secp256k1 public keys to derive Ethereum addresses, so the caller provides the parsed committee data (addresses + weights) alongside the blob for hash verification. The authenticity chain is: validator signatures → certified block → `CreateCommittee` operation → `blob_hash` → `committeeBlob`.
+
+### Microchain (abstract)
+
+#### `constructor(address _lightClient, bytes32 _chainId)`
+
+Binds the contract to a specific `LightClient` instance and a Linera chain ID (a 32-byte `CryptoHash`).
+
+#### `addBlock(bytes calldata data)`
+
+Verifies a certificate via `lightClient.verifyBlock(data)`, then enforces:
+- **Chain ID match**: the block's `header.chain_id` must equal this contract's `chainId`.
+- **Sequential heights**: the block's height must be exactly `latestHeight + 1`.
+
+On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
 
 ## Committee management
 
@@ -83,6 +114,8 @@ The constructor takes `(address[], uint64[])` — the genesis committee's valida
 
 - **No committee blob deserialization on-chain**: The `Committee` type has complex nested structures (`BTreeMap`, `ResourceControlPolicy`, custom serde impls). Deserializing it in Solidity would be extremely expensive and require secp256k1 point decompression. Instead, the caller provides pre-parsed data and the contract only verifies the blob hash.
 
+- **Separation of concerns between LightClient and Microchain**: The `LightClient` is a singleton that only manages committees and certificate verification. It has no knowledge of individual chains or their blocks. Each `Microchain` instance tracks a single chain's block sequence and delegates verification to the `LightClient`. This means one `LightClient` deployment can serve any number of `Microchain` contracts, each following a different Linera microchain.
+
 ## Testing
 
 Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the Solidity contracts in-process, with `solc` for compilation. No external EVM node is required. The test suite covers:
@@ -92,6 +125,8 @@ Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the So
 - Committee transitions via `addCommittee` with `CreateCommittee` verification
 - Blob hash mismatch rejection
 - Non-sequential epoch rejection
+- Microchain block tracking with chain ID enforcement
+- Microchain rejection of wrong chain ID and non-sequential heights
 
 ### Prerequisites
 
