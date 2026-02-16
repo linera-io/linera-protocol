@@ -10,8 +10,7 @@ sol! {
     function addCommittee(
         bytes calldata data,
         bytes calldata committeeBlob,
-        address[] calldata validators,
-        uint64[] calldata weights
+        bytes[] calldata validators
     ) external;
 
     function verifyBlock(bytes calldata data) external view;
@@ -51,7 +50,6 @@ mod tests {
         // New validator (epoch 1)
         let new_secret = ValidatorSecretKey::generate();
         let new_public = new_secret.public();
-        let new_address = validator_evm_address(&new_public);
 
         // Create a committee blob for the new epoch
         let new_committee = linera_execution::Committee::new(
@@ -94,6 +92,8 @@ mod tests {
         let mut db = CacheDB::default();
         let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
+        let new_uncompressed = validator_uncompressed_key(&new_public);
+
         call_contract(
             &mut db,
             deployer,
@@ -101,8 +101,7 @@ mod tests {
             addCommitteeCall {
                 data: bcs_bytes.into(),
                 committeeBlob: committee_bytes.into(),
-                validators: vec![new_address],
-                weights: vec![1],
+                validators: vec![new_uncompressed.into()],
             },
         );
 
@@ -120,7 +119,6 @@ mod tests {
         // Create a committee blob and compute its hash
         let new_secret = ValidatorSecretKey::generate();
         let new_public = new_secret.public();
-        let new_address = validator_evm_address(&new_public);
 
         let new_committee = linera_execution::Committee::new(
             BTreeMap::from([(
@@ -162,6 +160,7 @@ mod tests {
         let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
         // Pass a different (wrong) committee blob
+        let new_uncompressed = validator_uncompressed_key(&new_public);
         let wrong_blob = vec![0x01, 0x02, 0x03];
         assert!(
             try_call_contract(
@@ -171,8 +170,7 @@ mod tests {
                 addCommitteeCall {
                     data: bcs_bytes.into(),
                     committeeBlob: wrong_blob.into(),
-                    validators: vec![new_address],
-                    weights: vec![1],
+                    validators: vec![new_uncompressed.into()],
                 },
             )
             .is_err(),
@@ -188,7 +186,6 @@ mod tests {
 
         let new_secret = ValidatorSecretKey::generate();
         let new_public = new_secret.public();
-        let new_address = validator_evm_address(&new_public);
 
         let new_committee = linera_execution::Committee::new(
             BTreeMap::from([(
@@ -229,6 +226,7 @@ mod tests {
         let mut db = CacheDB::default();
         let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
 
+        let new_uncompressed = validator_uncompressed_key(&new_public);
         assert!(
             try_call_contract(
                 &mut db,
@@ -237,12 +235,84 @@ mod tests {
                 addCommitteeCall {
                     data: bcs_bytes.into(),
                     committeeBlob: committee_bytes.into(),
-                    validators: vec![new_address],
-                    weights: vec![1],
+                    validators: vec![new_uncompressed.into()],
                 },
             )
             .is_err(),
             "should reject non-sequential epoch"
+        );
+    }
+
+    #[test]
+    fn test_light_client_add_committee_rejects_substituted_keys() {
+        // Current validator (epoch 0)
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let address = validator_evm_address(&public);
+
+        // Real validator for the new committee
+        let real_secret = ValidatorSecretKey::generate();
+        let real_public = real_secret.public();
+
+        // Attacker's key — different from the one in the blob
+        let attacker_secret = ValidatorSecretKey::generate();
+        let attacker_public = attacker_secret.public();
+        let attacker_uncompressed = validator_uncompressed_key(&attacker_public);
+
+        // Create a legitimate committee blob with the real validator
+        let new_committee = linera_execution::Committee::new(
+            BTreeMap::from([(
+                real_public,
+                ValidatorState {
+                    network_address: "127.0.0.1:8080".to_string(),
+                    votes: 1,
+                    account_public_key: AccountPublicKey::Secp256k1(real_public),
+                },
+            )]),
+            ResourceControlPolicy::default(),
+        );
+        let committee_bytes =
+            bcs::to_bytes(&new_committee).expect("committee serialization failed");
+        let blob_content = BlobContent::new_committee(committee_bytes.clone());
+        let blob_hash = CryptoHash::new(&blob_content);
+
+        // Create a valid certified block with CreateCommittee
+        let transactions = vec![Transaction::ExecuteOperation(Operation::System(Box::new(
+            SystemOperation::Admin(AdminOperation::CreateCommittee {
+                epoch: Epoch(1),
+                blob_hash,
+            }),
+        )))];
+        let block = create_test_block(
+            CryptoHash::new(&TestString::new("test_chain")),
+            Epoch::ZERO,
+            BlockHeight(1),
+            transactions,
+        );
+        let confirmed = ConfirmedBlock::new(block);
+        let vote = Vote::new(confirmed.clone(), Round::Fast, &secret);
+        let certificate =
+            ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(public, vote.signature)]);
+        let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
+
+        // Attack: pass a valid cert + blob but substitute the attacker's key
+        assert!(
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                addCommitteeCall {
+                    data: bcs_bytes.into(),
+                    committeeBlob: committee_bytes.into(),
+                    validators: vec![attacker_uncompressed.into()],
+                },
+            )
+            .is_err(),
+            "should reject substituted keys that don't match the blob"
         );
     }
 

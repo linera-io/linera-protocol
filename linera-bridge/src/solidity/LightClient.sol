@@ -21,8 +21,7 @@ contract LightClient {
     function addCommittee(
         bytes calldata data,
         bytes calldata committeeBlob,
-        address[] calldata validators,
-        uint64[] calldata weights
+        bytes[] calldata validators
     ) external {
         BridgeTypes.Block memory blockValue = verifyCertificate(data);
 
@@ -62,8 +61,11 @@ contract LightClient {
         ));
         require(computedHash == expectedBlobHash, "committee blob hash mismatch");
 
+        // Parse blob to extract addresses and weights, verified against caller's keys
+        (address[] memory addrs, uint64[] memory weights) = _parseCommitteeBlob(committeeBlob, validators);
+
         // Store the new committee
-        _setCommittee(newEpoch, validators, weights);
+        _setCommittee(newEpoch, addrs, weights);
     }
 
     function verifyBlock(bytes calldata data) external view returns (BridgeTypes.Block memory) {
@@ -148,6 +150,83 @@ contract LightClient {
         committee.totalWeight = total;
         committee.quorumThreshold = 2 * total / 3 + 1;
         currentEpoch = epoch;
+    }
+
+    /// Parses a BCS-serialized CommitteeMinimal blob, verifying each compressed key
+    /// against the caller-provided uncompressed keys and deriving Ethereum addresses.
+    /// Returns (addresses, weights) extracted from the blob.
+    function _parseCommitteeBlob(
+        bytes memory blob,
+        bytes[] calldata uncompressedKeys
+    ) internal pure returns (address[] memory, uint64[] memory) {
+        uint256 pos;
+        uint256 count;
+        (pos, count) = BridgeTypes.bcs_deserialize_offset_len(0, blob);
+        require(count == uncompressedKeys.length, "validator count mismatch");
+
+        address[] memory addrs = new address[](count);
+        uint64[] memory weights = new uint64[](count);
+
+        for (uint256 i = 0; i < count; i++) {
+            // Read 33-byte compressed key and verify against caller's uncompressed key
+            require(uncompressedKeys[i].length == 64, "uncompressed key must be 64 bytes");
+            _verifyKeyCompression(uncompressedKeys[i], blob, pos);
+
+            // Derive Ethereum address from uncompressed key
+            addrs[i] = address(uint160(uint256(keccak256(uncompressedKeys[i]))));
+
+            pos += 33; // skip compressed key
+
+            // Skip network_address (ULEB128 length-prefixed string)
+            uint256 strLen;
+            (pos, strLen) = BridgeTypes.bcs_deserialize_offset_len(pos, blob);
+            pos += strLen;
+
+            // Read votes (u64 LE)
+            weights[i] = _readU64LE(blob, pos);
+            pos += 8;
+
+            // Skip account_public_key (enum: 1-byte tag + payload)
+            uint8 tag = uint8(blob[pos]);
+            pos += 1;
+            if (tag == 0) {
+                pos += 32; // Ed25519: 32 bytes
+            } else {
+                pos += 33; // Secp256k1 or EvmSecp256k1: 33 bytes
+            }
+        }
+
+        return (addrs, weights);
+    }
+
+    /// Verifies that a caller-provided 64-byte uncompressed key matches
+    /// the 33-byte compressed key in the blob at the given position.
+    function _verifyKeyCompression(
+        bytes calldata uncompressed,
+        bytes memory blob,
+        uint256 keyPos
+    ) internal pure {
+        // Compressed key format: prefix (0x02 if y is even, 0x03 if odd) + 32-byte x
+        // Uncompressed key: 32-byte x + 32-byte y (no 0x04 prefix)
+
+        // Check x-coordinate matches (bytes 1..33 of compressed == bytes 0..32 of uncompressed)
+        for (uint256 i = 0; i < 32; i++) {
+            require(blob[keyPos + 1 + i] == uncompressed[i], "key x-coordinate mismatch");
+        }
+
+        // Check y-parity: last byte of y determines even/odd
+        uint8 yLastByte = uint8(uncompressed[63]);
+        uint8 expectedPrefix = (yLastByte % 2 == 0) ? 0x02 : 0x03;
+        require(uint8(blob[keyPos]) == expectedPrefix, "key y-parity mismatch");
+    }
+
+    /// Reads 8 bytes from data at pos as a little-endian uint64.
+    function _readU64LE(bytes memory data, uint256 pos) internal pure returns (uint64) {
+        uint64 result = 0;
+        for (uint256 i = 0; i < 8; i++) {
+            result |= uint64(uint8(data[pos + i])) << uint64(i * 8);
+        }
+        return result;
     }
 
     /// Copies a slice of memory bytes into a new bytes array.

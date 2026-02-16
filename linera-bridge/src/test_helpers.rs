@@ -44,6 +44,12 @@ pub fn validator_evm_address(public: &ValidatorPublicKey) -> Address {
     Address::from_slice(&hash[12..])
 }
 
+/// Returns the 64-byte uncompressed public key (without the 0x04 prefix).
+pub fn validator_uncompressed_key(public: &ValidatorPublicKey) -> Vec<u8> {
+    let uncompressed = public.0.to_encoded_point(false);
+    uncompressed.as_bytes()[1..].to_vec() // skip 0x04 prefix, 64 bytes
+}
+
 /// Creates a certificate with a real signature from the given key pair.
 pub fn create_signed_certificate(
     secret: &ValidatorSecretKey,
