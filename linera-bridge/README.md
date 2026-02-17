@@ -53,7 +53,7 @@ The snapshot is checked in and tested via `insta`. This means the generated Soli
 
 4. **VoteValue hash**: Validators sign `CryptoHash::new(&VoteValue(value_hash, round, CertificateKind::Confirmed))`, which expands to `keccak256("VoteValue::" || BCS(VoteValue))`. The contract reconstructs this using the generated `bcs_serialize_VoteValue`.
 
-5. **Signature verification via `ecrecover`**: Each signature's `(r, s)` values are extracted and passed to `ecrecover`. Since Linera signatures don't include the recovery ID (`v`), the contract tries both `v=27` and `v=28`. Recovered addresses are checked against the current committee's weight mapping, and the total weight must meet the quorum threshold.
+5. **Signature verification via `ecrecover`**: Each signature's `(r, s)` values are extracted and passed to `ecrecover`. Since Linera signatures don't include the recovery ID (`v`), the contract tries both `v=27` and `v=28`. Recovered addresses are checked against the block's epoch committee's weight mapping. Each signer is counted at most once (duplicate signers are rejected). The total weight must meet the quorum threshold.
 
 ### Why `ecrecover` works
 
@@ -65,21 +65,22 @@ Linera validators use secp256k1 keys (the same curve as Ethereum). The contract 
 
 #### `verifyBlock(bytes calldata data) → BridgeTypes.Block`
 
-Verifies a BCS-encoded `ConfirmedBlockCertificate` against the current committee and returns the deserialized `Block`. This is a `view` function — it does not modify state. Other contracts (like `Microchain`) call this to get verified block data.
+Verifies a BCS-encoded `ConfirmedBlockCertificate` against the committee for the block's declared epoch and returns the deserialized `Block`. This is a `view` function — it does not modify state. Other contracts (like `Microchain`) call this to get verified block data.
 
 #### `addCommittee(bytes calldata data, bytes calldata committeeBlob, bytes[] calldata validators)`
 
 Advances the committee to the next epoch. This is the only state-modifying operation (besides construction).
 
-1. Verify the certificate against the current committee (signature check).
-2. Scan the block's transactions for an `AdminOperation::CreateCommittee { epoch, blob_hash }`.
-3. Verify that `keccak256("BlobContent::" || BCS(BlobContent { Committee, committeeBlob }))` matches `blob_hash`. This proves the caller's `committeeBlob` is the one referenced by the certified block.
-4. Parse the committee blob on-chain. For each validator, verify the caller's uncompressed public key matches the blob's compressed key (x-coordinate and y-parity check), then derive the Ethereum address via `keccak256(uncompressed_key)`.
-5. Store derived addresses and blob-extracted weights as the committee for the new epoch.
+1. Verify the certificate against the block's epoch committee (signature check).
+2. Require the block is from the admin chain and the current epoch.
+3. Scan the block's transactions for an `AdminOperation::CreateCommittee { epoch, blob_hash }`.
+4. Verify that `keccak256("BlobContent::" || BCS(BlobContent { Committee, committeeBlob }))` matches `blob_hash`. This proves the caller's `committeeBlob` is the one referenced by the certified block.
+5. Parse the committee blob on-chain. For each validator, verify the caller's uncompressed public key matches the blob's compressed key (x-coordinate, y-parity, and secp256k1 curve membership), then derive the Ethereum address via `keccak256(uncompressed_key)`.
+6. Store derived addresses and blob-extracted weights as the committee for the new epoch.
 
-The `committeeBlob` is the BCS-serialized `Committee` from Linera. The `validators` parameter is an array of 64-byte uncompressed secp256k1 public keys (without the `0x04` prefix). The caller must provide these separately because the blob only contains compressed keys (33 bytes: x-coordinate + y-parity prefix), and Ethereum addresses are derived from the uncompressed form (`keccak256(x || y)[12:]`). Decompressing a key on-chain would require computing a modular square root on the secp256k1 field — expensive in the EVM. Instead, the caller provides the uncompressed keys and the contract verifies them against the blob's compressed keys, which is cheap: just compare the x-coordinate and check y-parity. Addresses and weights are then extracted from the blob rather than caller-provided, preventing substitution attacks. The authenticity chain is: validator signatures → certified block → `CreateCommittee` operation → `blob_hash` → `committeeBlob` → parsed validators/weights.
+The `committeeBlob` is the BCS-serialized `Committee` from Linera. The `validators` parameter is an array of 64-byte uncompressed secp256k1 public keys (without the `0x04` prefix). The caller must provide these separately because the blob only contains compressed keys (33 bytes: x-coordinate + y-parity prefix), and Ethereum addresses are derived from the uncompressed form (`keccak256(x || y)[12:]`). Decompressing a key on-chain would require computing a modular square root on the secp256k1 field — expensive in the EVM. Instead, the caller provides the uncompressed keys and the contract verifies them against the blob's compressed keys: it checks that the x-coordinate matches, the y-parity matches, and the point satisfies y² ≡ x³ + 7 (mod p). This curve membership check uses Solidity's `mulmod`/`addmod` builtins and is cheap. Addresses and weights are extracted from the blob rather than caller-provided, preventing substitution attacks. The authenticity chain is: validator signatures → certified block → `CreateCommittee` operation → `blob_hash` → `committeeBlob` → parsed validators/weights.
 
-The constructor still takes `(address[], uint64[])` — the deployer is trusted at genesis and no blob exists.
+The constructor takes `(address[], uint64[], bytes32)` — the genesis committee's validator addresses, weights, and the admin chain ID. The deployer is trusted at genesis (no blob exists).
 
 ### Microchain (abstract)
 
@@ -124,7 +125,7 @@ Committees are stored per-epoch and must advance monotonically (epoch N can only
 
 ### Initialization
 
-The constructor takes `(address[], uint64[])` — the genesis committee's validator Ethereum addresses and their voting weights. This is stored as epoch 0.
+The constructor takes `(address[], uint64[], bytes32)` — the genesis committee's validator Ethereum addresses, their voting weights, and the admin chain ID. The committee is stored as epoch 0. Only blocks from the admin chain can drive committee transitions via `addCommittee`.
 
 ### Quorum threshold
 
@@ -140,7 +141,7 @@ The constructor takes `(address[], uint64[])` — the genesis committee's valida
 
 - **Generated BCS code via serde-generate**: Rather than hand-writing Solidity deserializers, we auto-generate them from the same Rust type definitions that produce the data. This eliminates an entire class of serialization bugs.
 
-- **Partial committee blob parsing on-chain**: The contract parses just enough of the BCS-serialized committee blob to extract compressed public keys and voting weights. It skips fields it doesn't need (network addresses, account public keys, resource control policy). The caller provides uncompressed public keys, which the contract verifies against the blob's compressed keys (cheap: just compare the x-coordinate and y-parity byte). This eliminates the need to trust caller-provided addresses and weights.
+- **Partial committee blob parsing on-chain**: The contract parses just enough of the BCS-serialized committee blob to extract compressed public keys and voting weights. It skips fields it doesn't need (network addresses, account public keys, resource control policy). The caller provides uncompressed public keys, which the contract verifies against the blob's compressed keys (x-coordinate match, y-parity match, and secp256k1 curve membership via y² ≡ x³ + 7). This eliminates the need to trust caller-provided addresses and weights, while avoiding the cost of on-chain modular square root for full decompression.
 
 - **Separation of concerns between LightClient and Microchain**: The `LightClient` is a singleton that only manages committees and certificate verification. It has no knowledge of individual chains or their blocks. Each `Microchain` instance tracks a single chain's block sequence and delegates verification to the `LightClient`. This means one `LightClient` deployment can serve any number of `Microchain` contracts, each following a different Linera microchain.
 
@@ -152,7 +153,12 @@ Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the So
 - Committee transitions via `addCommittee` with `CreateCommittee` verification
 - Blob hash mismatch rejection
 - Non-sequential epoch rejection
-- Substituted public key rejection (attack vector test)
+- Substituted public key rejection (key doesn't match blob)
+- Off-curve public key rejection (fake y-coordinate)
+- Non-admin chain rejection
+- Wrong block epoch rejection (stale epoch block replayed for transition)
+- Duplicate signer rejection (same validator signature repeated)
+- Epoch-bound committee verification (block verified against its declared epoch)
 - Microchain block tracking with chain ID enforcement
 - Microchain rejection of wrong chain ID and non-sequential heights
 
