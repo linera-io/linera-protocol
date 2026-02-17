@@ -34,7 +34,7 @@ members = [
 ]
 default-members = [
     "linera-base",
-    "linera-bridge",
+    # "linera-bridge", # tested separately in CI (requires solc)
     "linera-chain",
     "linera-client",
     "linera-core",
