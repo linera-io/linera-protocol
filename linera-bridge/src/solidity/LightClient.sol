@@ -217,6 +217,10 @@ contract LightClient {
 
     /// Verifies that a caller-provided 64-byte uncompressed key matches
     /// the 33-byte compressed key in the blob at the given position.
+    // secp256k1 field prime
+    uint256 private constant SECP256K1_P =
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
+
     function _verifyKeyCompression(
         bytes calldata uncompressed,
         bytes memory blob,
@@ -234,6 +238,18 @@ contract LightClient {
         uint8 yLastByte = uint8(uncompressed[63]);
         uint8 expectedPrefix = (yLastByte % 2 == 0) ? 0x02 : 0x03;
         require(uint8(blob[keyPos]) == expectedPrefix, "key y-parity mismatch");
+
+        // Verify (x, y) is on secp256k1: y^2 = x^3 + 7 (mod p)
+        uint256 x;
+        uint256 y;
+        assembly {
+            x := calldataload(uncompressed.offset)
+            y := calldataload(add(uncompressed.offset, 32))
+        }
+        uint256 lhs = mulmod(y, y, SECP256K1_P);
+        uint256 x2 = mulmod(x, x, SECP256K1_P);
+        uint256 rhs = addmod(mulmod(x2, x, SECP256K1_P), 7, SECP256K1_P);
+        require(lhs == rhs, "key not on secp256k1 curve");
     }
 
     /// Reads 8 bytes from data at pos as a little-endian uint64.

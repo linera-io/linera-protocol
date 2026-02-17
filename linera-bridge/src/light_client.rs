@@ -321,6 +321,76 @@ mod tests {
     }
 
     #[test]
+    fn test_light_client_add_committee_rejects_off_curve_key() {
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let address = validator_evm_address(&public);
+
+        let new_secret = ValidatorSecretKey::generate();
+        let new_public = new_secret.public();
+
+        let new_committee = linera_execution::Committee::new(
+            BTreeMap::from([(
+                new_public,
+                ValidatorState {
+                    network_address: "127.0.0.1:8080".to_string(),
+                    votes: 1,
+                    account_public_key: AccountPublicKey::Secp256k1(new_public),
+                },
+            )]),
+            ResourceControlPolicy::default(),
+        );
+        let committee_bytes =
+            bcs::to_bytes(&new_committee).expect("committee serialization failed");
+        let blob_content = BlobContent::new_committee(committee_bytes.clone());
+        let blob_hash = CryptoHash::new(&blob_content);
+
+        let transactions = vec![Transaction::ExecuteOperation(Operation::System(Box::new(
+            SystemOperation::Admin(AdminOperation::CreateCommittee {
+                epoch: Epoch(1),
+                blob_hash,
+            }),
+        )))];
+        let block = create_test_block(
+            test_admin_chain_id(),
+            Epoch::ZERO,
+            BlockHeight(1),
+            transactions,
+        );
+        let confirmed = ConfirmedBlock::new(block);
+        let vote = Vote::new(confirmed.clone(), Round::Fast, &secret);
+        let certificate =
+            ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(public, vote.signature)]);
+        let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+
+        // Construct a fake uncompressed key: correct x and y-parity, but y is
+        // not the actual square root — the point is not on secp256k1.
+        let mut fake_key = validator_uncompressed_key(&new_public);
+        // Corrupt y-coordinate while preserving parity (flip a non-last byte)
+        fake_key[32] ^= 0xFF;
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let contract =
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
+
+        assert!(
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                addCommitteeCall {
+                    data: bcs_bytes.into(),
+                    committeeBlob: committee_bytes.into(),
+                    validators: vec![fake_key.into()],
+                },
+            )
+            .is_err(),
+            "should reject uncompressed key that is not on the secp256k1 curve"
+        );
+    }
+
+    #[test]
     fn test_light_client_add_committee_rejects_wrong_block_epoch() {
         // Epoch 0 validator
         let secret_0 = ValidatorSecretKey::generate();
