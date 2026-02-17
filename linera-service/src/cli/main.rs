@@ -798,12 +798,13 @@ impl Runnable for Job {
 
                         let shared_context =
                             std::sync::Arc::new(futures::lock::Mutex::new(context));
+                        let (command_sender, command_receiver) = mpsc::unbounded_channel();
                         let chain_listener = ChainListener::new(
                             listener_config,
                             shared_context.clone(),
                             storage.clone(),
                             shutdown_notifier.clone(),
-                            mpsc::unbounded_channel().1,
+                            command_receiver,
                             true, // Enabling background sync for benchmarks
                         );
                         let all_chain_ids: Vec<ChainId> =
@@ -843,6 +844,7 @@ impl Runnable for Job {
                             runtime_in_seconds,
                             delay_between_chains_ms,
                             chain_listener,
+                            command_sender,
                             &shutdown_notifier,
                         )
                         .await?;

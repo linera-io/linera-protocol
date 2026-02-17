@@ -949,6 +949,7 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<(), Error> {
         if close_chains {
             info!("Closing chains...");
+            let chain_ids: Vec<_> = chain_clients.iter().map(|c| c.chain_id()).collect();
             let stream = stream::iter(chain_clients)
                 .map(|chain_client| async move {
                     Benchmark::<Env>::close_benchmark_chain(&chain_client).await?;
@@ -957,6 +958,10 @@ impl<Env: Environment> ClientContext<Env> {
                 })
                 .buffer_unordered(wrap_up_max_in_flight);
             stream.try_collect::<Vec<_>>().await?;
+            // Remove closed chains from wallet (the chain listener may have added them).
+            for chain_id in chain_ids {
+                let _ = self.wallet().remove(chain_id).await;
+            }
         } else {
             info!("Processing inbox for all chains...");
             let stream = stream::iter(chain_clients.clone())
