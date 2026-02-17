@@ -236,6 +236,17 @@ impl<Env> ValidatorUpdater<Env>
 where
     Env: Environment + 'static,
 {
+    /// Logs a warning if the error is not an expected part of the protocol flow.
+    fn warn_if_unexpected(&self, err: &NodeError) {
+        if !err.is_expected() {
+            tracing::warn!(
+                remote_node = self.remote_node.address(),
+                %err,
+                "unexpected error from validator",
+            );
+        }
+    }
+
     #[instrument(
         level = "trace", skip_all, err(level = Level::DEBUG),
         fields(chain_id = %certificate.block().header.chain_id)
@@ -282,13 +293,7 @@ where
                 }
                 result => {
                     if let Err(err) = &result {
-                        if !err.is_expected() {
-                            tracing::warn!(
-                                remote_node = self.remote_node.address(),
-                                %err,
-                                "unexpected error from validator",
-                            );
-                        }
+                        self.warn_if_unexpected(err);
                     }
                     return Ok(result?);
                 }
@@ -341,13 +346,7 @@ where
             .handle_validated_certificate(certificate)
             .await;
         if let Err(err) = &result {
-            if !err.is_expected() {
-                tracing::warn!(
-                    remote_node = self.remote_node.address(),
-                    %err,
-                    "unexpected error from validator",
-                );
-            }
+            self.warn_if_unexpected(err);
         }
         Ok(result?)
     }
@@ -369,14 +368,7 @@ where
             .await;
         if let Err(err) = &result {
             self.sync_if_needed(chain_id, round, height, err).await?;
-            if !err.is_expected() {
-                tracing::warn!(
-                    remote_node = self.remote_node.address(),
-                    %chain_id,
-                    %err,
-                    "unexpected error from validator",
-                );
-            }
+            self.warn_if_unexpected(err);
         }
         Ok(result?)
     }
@@ -636,14 +628,7 @@ where
                 }
                 // Fail immediately on other errors.
                 Err(err) => {
-                    if !err.is_expected() {
-                        tracing::warn!(
-                            remote_node = self.remote_node.address(),
-                            %chain_id,
-                            %err,
-                            "unexpected error from validator",
-                        );
-                    }
+                    self.warn_if_unexpected(&err);
                     return Err(err.into());
                 }
             }
