@@ -40,6 +40,11 @@ mod tests {
     use super::{addCommitteeCall, currentEpochCall, verifyBlockCall};
     use crate::test_helpers::*;
 
+    /// The admin chain ID used in tests.
+    fn test_admin_chain_id() -> CryptoHash {
+        CryptoHash::new(&TestString::new("admin_chain"))
+    }
+
     #[test]
     fn test_light_client_add_committee() {
         // Current validator (epoch 0)
@@ -77,7 +82,7 @@ mod tests {
             }),
         )))];
         let block = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
+            test_admin_chain_id(),
             Epoch::ZERO,
             BlockHeight(1),
             transactions,
@@ -90,7 +95,8 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
+        let contract =
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
 
         let new_uncompressed = validator_uncompressed_key(&new_public);
 
@@ -144,7 +150,7 @@ mod tests {
             }),
         )))];
         let block = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
+            test_admin_chain_id(),
             Epoch::ZERO,
             BlockHeight(1),
             transactions,
@@ -157,7 +163,8 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
+        let contract =
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
 
         // Pass a different (wrong) committee blob
         let new_uncompressed = validator_uncompressed_key(&new_public);
@@ -211,7 +218,7 @@ mod tests {
             }),
         )))];
         let block = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
+            test_admin_chain_id(),
             Epoch::ZERO,
             BlockHeight(1),
             transactions,
@@ -224,7 +231,8 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
+        let contract =
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
 
         let new_uncompressed = validator_uncompressed_key(&new_public);
         assert!(
@@ -244,6 +252,75 @@ mod tests {
     }
 
     #[test]
+    fn test_light_client_add_committee_rejects_wrong_chain() {
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let address = validator_evm_address(&public);
+
+        let admin_chain_id = CryptoHash::new(&TestString::new("admin_chain"));
+        let wrong_chain_id = CryptoHash::new(&TestString::new("other_chain"));
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let contract = deploy_light_client(&mut db, deployer, &[address], &[1], admin_chain_id);
+
+        // New validator for epoch 1
+        let new_secret = ValidatorSecretKey::generate();
+        let new_public = new_secret.public();
+
+        let new_committee = linera_execution::Committee::new(
+            BTreeMap::from([(
+                new_public,
+                ValidatorState {
+                    network_address: "127.0.0.1:8080".to_string(),
+                    votes: 1,
+                    account_public_key: AccountPublicKey::Secp256k1(new_public),
+                },
+            )]),
+            ResourceControlPolicy::default(),
+        );
+        let committee_bytes =
+            bcs::to_bytes(&new_committee).expect("committee serialization failed");
+        let blob_content = BlobContent::new_committee(committee_bytes.clone());
+        let blob_hash = CryptoHash::new(&blob_content);
+
+        // Create a valid CreateCommittee block but from the wrong chain
+        let transactions = vec![Transaction::ExecuteOperation(Operation::System(Box::new(
+            SystemOperation::Admin(AdminOperation::CreateCommittee {
+                epoch: Epoch(1),
+                blob_hash,
+            }),
+        )))];
+        let block = create_test_block(
+            wrong_chain_id, // not the admin chain
+            Epoch::ZERO,
+            BlockHeight(1),
+            transactions,
+        );
+        let confirmed = ConfirmedBlock::new(block);
+        let vote = Vote::new(confirmed.clone(), Round::Fast, &secret);
+        let certificate =
+            ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(public, vote.signature)]);
+        let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+        let new_uncompressed = validator_uncompressed_key(&new_public);
+
+        assert!(
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                addCommitteeCall {
+                    data: bcs_bytes.into(),
+                    committeeBlob: committee_bytes.into(),
+                    validators: vec![new_uncompressed.into()],
+                },
+            )
+            .is_err(),
+            "should reject CreateCommittee from non-admin chain"
+        );
+    }
+
+    #[test]
     fn test_light_client_add_committee_rejects_wrong_block_epoch() {
         // Epoch 0 validator
         let secret_0 = ValidatorSecretKey::generate();
@@ -256,7 +333,8 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract = deploy_light_client(&mut db, deployer, &[addr_0], &[1]);
+        let contract =
+            deploy_light_client(&mut db, deployer, &[addr_0], &[1], test_admin_chain_id());
 
         // Transition to epoch 1 with validator 1
         let committee_1 = linera_execution::Committee::new(
@@ -281,12 +359,7 @@ mod tests {
                 blob_hash: blob_hash_1,
             }),
         )))];
-        let block = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
-            Epoch::ZERO,
-            BlockHeight(1),
-            txns,
-        );
+        let block = create_test_block(test_admin_chain_id(), Epoch::ZERO, BlockHeight(1), txns);
         let confirmed = ConfirmedBlock::new(block);
         let vote = Vote::new(confirmed.clone(), Round::Fast, &secret_0);
         let cert = ConfirmedBlockCertificate::new(
@@ -340,7 +413,7 @@ mod tests {
             }),
         )))];
         let stale_block = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
+            test_admin_chain_id(),
             Epoch::ZERO, // wrong: should be Epoch(1)
             BlockHeight(2),
             txns_2,
@@ -412,7 +485,7 @@ mod tests {
             }),
         )))];
         let block = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
+            test_admin_chain_id(),
             Epoch::ZERO,
             BlockHeight(1),
             transactions,
@@ -425,7 +498,8 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
+        let contract =
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
 
         // Attack: pass a valid cert + blob but substitute the attacker's key
         assert!(
@@ -455,7 +529,8 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
+        let contract =
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
 
         call_contract(
             &mut db,
@@ -480,7 +555,13 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract = deploy_light_client(&mut db, deployer, &[addr_a, addr_b], &[1, 1]);
+        let contract = deploy_light_client(
+            &mut db,
+            deployer,
+            &[addr_a, addr_b],
+            &[1, 1],
+            test_admin_chain_id(),
+        );
 
         // Only validator A signs, but duplicates the signature to try to reach quorum
         let chain_id = CryptoHash::new(&TestString::new("test_chain"));
@@ -521,7 +602,8 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract = deploy_light_client(&mut db, deployer, &[addr_0], &[1]);
+        let contract =
+            deploy_light_client(&mut db, deployer, &[addr_0], &[1], test_admin_chain_id());
 
         // Transition to epoch 1
         let new_committee = linera_execution::Committee::new(
@@ -547,7 +629,7 @@ mod tests {
             }),
         )))];
         let block = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
+            test_admin_chain_id(),
             Epoch::ZERO,
             BlockHeight(1),
             transactions,
@@ -620,7 +702,8 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract = deploy_light_client(&mut db, deployer, &[address], &[1]);
+        let contract =
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
 
         assert!(
             try_call_contract(

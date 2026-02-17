@@ -12,10 +12,12 @@ contract LightClient {
     }
     mapping(uint32 => EpochCommittee) private committees;
     uint32 public currentEpoch;
+    bytes32 public adminChainId;
 
-    constructor(address[] memory validators, uint64[] memory weights) {
+    constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId) {
         _setCommittee(0, validators, weights);
         currentEpoch = 0;
+        adminChainId = _adminChainId;
     }
 
     function addCommittee(
@@ -25,7 +27,8 @@ contract LightClient {
     ) external {
         BridgeTypes.Block memory blockValue = verifyCertificate(data);
 
-        // The block authorizing the transition must be from the current epoch
+        // The block must be from the admin chain and the current epoch
+        require(blockValue.header.chain_id.value.value == adminChainId, "block must be from admin chain");
         require(blockValue.header.epoch.value == currentEpoch, "block epoch must match current epoch");
 
         // Find CreateCommittee in block operations

@@ -104,9 +104,12 @@ pub fn deploy_light_client(
     deployer: Address,
     validators: &[Address],
     weights: &[u64],
+    admin_chain_id: CryptoHash,
 ) -> Address {
     let bytecode = compile_contract(LIGHT_CLIENT_SOL, "LightClient.sol", "LightClient");
-    let constructor_args = (validators.to_vec(), weights.to_vec()).abi_encode_params();
+    let chain_id_bytes = <[u8; 32]>::from(*admin_chain_id.as_bytes());
+    let constructor_args =
+        (validators.to_vec(), weights.to_vec(), chain_id_bytes).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
