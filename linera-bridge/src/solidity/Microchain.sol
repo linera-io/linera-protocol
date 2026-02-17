@@ -14,6 +14,15 @@ abstract contract Microchain {
         chainId = _chainId;
     }
 
+    /// Verifies a certificate and accepts the block if it matches this chain and
+    /// the next expected height.
+    ///
+    /// Note: this contract does NOT check `previous_block_hash` to link blocks
+    /// into a hash chain. This is safe because `ConfirmedBlockCertificate`
+    /// implies BFT-finalized canonicality — a quorum of validators signed this
+    /// specific block at this height, so no conflicting block can exist.
+    /// If this assumption ever changes at the protocol layer, a
+    /// `previous_block_hash` check should be added here.
     function addBlock(bytes calldata data) external {
         BridgeTypes.Block memory blockValue = lightClient.verifyBlock(data);
 
