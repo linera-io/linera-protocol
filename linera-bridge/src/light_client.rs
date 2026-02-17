@@ -22,8 +22,11 @@ sol! {
 mod tests {
     use std::collections::BTreeMap;
 
+    use alloy_primitives::U256;
     use linera_base::{
-        crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorSecretKey},
+        crypto::{
+            AccountPublicKey, CryptoHash, TestString, ValidatorSecretKey, ValidatorSignature,
+        },
         data_types::{BlobContent, BlockHeight, Epoch, Round},
     };
     use linera_chain::{
@@ -786,6 +789,54 @@ mod tests {
             )
             .is_err(),
             "should reject certificate signed by unknown validator"
+        );
+    }
+
+    #[test]
+    fn test_light_client_rejects_malleable_signature() {
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let address = validator_evm_address(&public);
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let contract =
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
+
+        // Create a valid certificate
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+        let block = create_test_block(chain_id, Epoch::ZERO, BlockHeight(1), vec![]);
+        let confirmed = ConfirmedBlock::new(block);
+        let vote = Vote::new(confirmed.clone(), Round::Fast, &secret);
+
+        // Compute high-s malleable variant: s' = n - s
+        let secp256k1_n = U256::from_be_slice(
+            &hex::decode("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")
+                .unwrap(),
+        );
+        let sig_bytes = vote.signature.as_bytes();
+        let s = U256::from_be_slice(&sig_bytes[32..64]);
+        let high_s = secp256k1_n - s;
+        let mut malleable_bytes = sig_bytes;
+        malleable_bytes[32..64].copy_from_slice(&high_s.to_be_bytes::<32>());
+        let malleable_sig = ValidatorSignature::from_slice(malleable_bytes)
+            .expect("malleable signature construction failed");
+
+        let certificate =
+            ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(public, malleable_sig)]);
+        let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+
+        assert!(
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                verifyBlockCall {
+                    data: bcs_bytes.into(),
+                },
+            )
+            .is_err(),
+            "should reject high-s malleable signature"
         );
     }
 }

@@ -133,6 +133,10 @@ contract LightClient {
                 s := mload(add(sigBytes, 64))
             }
 
+            // Reject zero r/s and enforce low-s canonical form (EIP-2 style)
+            require(uint256(r) != 0 && uint256(s) != 0, "invalid signature component");
+            require(uint256(s) <= SECP256K1_N / 2, "non-canonical high-s signature");
+
             // Try v=27 and v=28 since we don't have the recovery ID
             address recovered = ecrecover(signedHash, 27, r, s);
             if (recovered == address(0) || committee.weights[recovered] == 0) {
@@ -223,6 +227,9 @@ contract LightClient {
     // secp256k1 field prime
     uint256 private constant SECP256K1_P =
         0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
+    // secp256k1 curve order
+    uint256 private constant SECP256K1_N =
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
 
     function _verifyKeyCompression(
         bytes calldata uncompressed,
