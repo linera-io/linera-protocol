@@ -216,6 +216,47 @@ pub fn call_contract<C: SolCall>(
     }
 }
 
+/// Calls a deployed contract, returning output bytes and gas used.
+pub fn call_contract_with_gas(
+    db: &mut CacheDB<EmptyDB>,
+    deployer: Address,
+    contract: Address,
+    calldata: Vec<u8>,
+) -> (Bytes, u64) {
+    let nonce = db
+        .cache
+        .accounts
+        .get(&deployer)
+        .map_or(0, |info| info.info.nonce);
+    let result = Context::mainnet()
+        .with_db(db)
+        .modify_tx_chained(|tx| {
+            tx.caller = deployer;
+            tx.nonce = nonce;
+            tx.kind = TxKind::Call(contract);
+            tx.data = Bytes::from(calldata);
+            tx.gas_limit = GAS_LIMIT;
+            tx.value = U256::ZERO;
+        })
+        .build_mainnet()
+        .replay_commit()
+        .expect("call transaction failed");
+
+    let gas_used = result.gas_used();
+    match result {
+        ExecutionResult::Success { output, .. } => match output {
+            Output::Call(bytes) => (bytes, gas_used),
+            other => panic!("expected Call output, got: {:?}", other),
+        },
+        ExecutionResult::Revert { output, .. } => {
+            panic!("call reverted: {}", hex::encode(&output));
+        }
+        ExecutionResult::Halt { reason, .. } => {
+            panic!("call halted: {:?}", reason);
+        }
+    }
+}
+
 /// Calls a deployed contract, returning the decoded return value on success
 /// or an error message on revert/halt/decode failure.
 pub fn try_call_contract<C: SolCall>(
