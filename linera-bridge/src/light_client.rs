@@ -483,4 +483,48 @@ mod tests {
             "should reject high-s malleable signature"
         );
     }
+
+    #[test]
+    fn test_light_client_rejects_out_of_range_r() {
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let contract = deploy_single_validator_light_client(&mut db, deployer, &public);
+
+        // Create a valid certificate, serialize it, then patch the signature's r value
+        // directly in the BCS bytes to set r = N (out of range).
+        // We can't do this through Rust's typed API since k256 validates the range.
+        let certificate = create_signed_certificate(&secret, &public);
+        let sig_bytes = certificate.signatures().first().unwrap().1.as_bytes();
+        let original_r = &sig_bytes[..32];
+
+        let mut bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+
+        // Find the original r bytes in the serialized certificate
+        let r_pos = bcs_bytes
+            .windows(32)
+            .position(|w| w == original_r)
+            .expect("could not find signature r in BCS bytes");
+
+        // Replace r with N (>= curve order, out of valid range)
+        let secp256k1_n =
+            hex::decode("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")
+                .unwrap();
+        bcs_bytes[r_pos..r_pos + 32].copy_from_slice(&secp256k1_n);
+
+        assert!(
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                verifyBlockCall {
+                    data: bcs_bytes.into(),
+                },
+            )
+            .is_err(),
+            "should reject signature with r >= N"
+        );
+    }
 }
