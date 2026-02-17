@@ -7,6 +7,8 @@ contract LightClient {
     // Per-epoch committee storage
     struct EpochCommittee {
         mapping(address => uint64) weights;
+        mapping(address => uint256) indices; // 1-indexed; 0 means not a member
+        uint256 validatorCount;
         uint64 totalWeight;
         uint64 quorumThreshold;
     }
@@ -116,7 +118,7 @@ contract LightClient {
         EpochCommittee storage committee = committees[epoch];
         require(committee.totalWeight > 0, "unknown epoch");
         uint64 weight = 0;
-        address[] memory seen = new address[](signatures.length);
+        bool[] memory seen = new bool[](committee.validatorCount);
         for (uint256 i = 0; i < signatures.length; i++) {
             // Pack uint8[] back into contiguous bytes, then extract r and s
             uint8[] memory sigValues = signatures[i].entry1.value.values;
@@ -140,11 +142,10 @@ contract LightClient {
             uint64 w = committee.weights[recovered];
             require(w > 0, "unknown validator");
 
-            // Prevent duplicate signer weight counting
-            for (uint256 j = 0; j < i; j++) {
-                require(seen[j] != recovered, "duplicate signer");
-            }
-            seen[i] = recovered;
+            // O(1) duplicate signer check via index lookup
+            uint256 idx = committee.indices[recovered];
+            require(!seen[idx - 1], "duplicate signer");
+            seen[idx - 1] = true;
 
             weight += w;
         }
@@ -161,8 +162,10 @@ contract LightClient {
         for (uint256 i = 0; i < validators.length; i++) {
             require(committee.weights[validators[i]] == 0, "duplicate validator");
             committee.weights[validators[i]] = weights[i];
+            committee.indices[validators[i]] = i + 1; // 1-indexed
             total += weights[i];
         }
+        committee.validatorCount = validators.length;
         committee.totalWeight = total;
         committee.quorumThreshold = 2 * total / 3 + 1;
         currentEpoch = epoch;
