@@ -225,7 +225,7 @@ jobs:
     - name: Run all tests using the default features (except storage-service)
       run: |
         # TODO(#2764): Actually link this to the default features
-        cargo test --no-default-features --features fs,macros,wasmer,rocksdb --locked
+        cargo test --workspace --no-default-features --features fs,macros,wasmer,rocksdb --locked --exclude linera-bridge
     - name: Run Witty integration tests
       run: |
         cargo test -p linera-witty --features wasmer,wasmtime
