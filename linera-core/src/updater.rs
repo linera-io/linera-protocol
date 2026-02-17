@@ -253,8 +253,19 @@ impl<Env> ValidatorUpdater<Env>
 where
     Env: Environment + 'static,
 {
+    /// Logs a warning if the error is not an expected part of the protocol flow.
+    fn warn_if_unexpected(&self, err: &NodeError) {
+        if !err.is_expected() {
+            tracing::warn!(
+                remote_node = self.remote_node.address(),
+                %err,
+                "unexpected error from validator",
+            );
+        }
+    }
+
     #[instrument(
-        level = "trace", skip_all, err(level = Level::WARN),
+        level = "trace", skip_all, err(level = Level::DEBUG),
         fields(chain_id = %certificate.block().header.chain_id)
     )]
     async fn send_confirmed_certificate(
@@ -297,7 +308,12 @@ where
                     self.remote_node.node.upload_blobs(blobs).await?;
                     sent_blobs = true;
                 }
-                result => return Ok(result?),
+                result => {
+                    if let Err(err) = &result {
+                        self.warn_if_unexpected(err);
+                    }
+                    return Ok(result?);
+                }
             }
             result = self
                 .remote_node
@@ -342,10 +358,14 @@ where
             }
             _ => return Ok(result?),
         }
-        Ok(self
+        let result = self
             .remote_node
             .handle_validated_certificate(certificate)
-            .await?)
+            .await;
+        if let Err(err) = &result {
+            self.warn_if_unexpected(err);
+        }
+        Ok(result?)
     }
 
     /// Requests a vote for a timeout certificate for the given round from the remote node.
@@ -365,6 +385,7 @@ where
             .await;
         if let Err(err) = &result {
             self.sync_if_needed(chain_id, round, height, err).await?;
+            self.warn_if_unexpected(err);
         }
         Ok(result?)
     }
@@ -617,7 +638,10 @@ where
                     .await?;
                 }
                 // Fail immediately on other errors.
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    self.warn_if_unexpected(&err);
+                    return Err(err.into());
+                }
             }
         }
     }
