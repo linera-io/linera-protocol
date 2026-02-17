@@ -25,6 +25,9 @@ contract LightClient {
     ) external {
         BridgeTypes.Block memory blockValue = verifyCertificate(data);
 
+        // The block authorizing the transition must be from the current epoch
+        require(blockValue.header.epoch.value == currentEpoch, "block epoch must match current epoch");
+
         // Find CreateCommittee in block operations
         bool found = false;
         uint32 newEpoch;
