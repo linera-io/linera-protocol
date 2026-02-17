@@ -209,6 +209,7 @@ pub struct ClientContext<Env: Environment> {
     pub recv_timeout: Duration,
     pub retry_delay: Duration,
     pub max_retries: u32,
+    pub max_backoff: Duration,
     pub chain_listeners: JoinSet,
     // TODO(#5082): move this into the upstream UI layers (maybe just the CLI)
     pub default_chain: Option<ChainId>,
@@ -284,6 +285,7 @@ where
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
+            max_backoff: options.max_backoff,
         });
         let chain_modes: Vec<_> = wallet
             .items()
@@ -342,6 +344,7 @@ where
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
+            max_backoff: options.max_backoff,
             chain_listeners: JoinSet::default(),
             #[cfg(not(web))]
             client_metrics,
@@ -397,6 +400,7 @@ impl<Env: Environment> ClientContext<Env> {
             recv_timeout: self.recv_timeout,
             retry_delay: self.retry_delay,
             max_retries: self.max_retries,
+            max_backoff: self.max_backoff,
         }
     }
 

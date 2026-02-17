@@ -850,6 +850,7 @@ impl LocalNet {
             recv_timeout: Duration::from_secs(5),
             retry_delay: Duration::from_secs(1),
             max_retries: 1,
+            ..Default::default()
         };
         let provider = linera_rpc::simple::SimpleNodeProvider::new(options);
         let address = format!("{protocol}:127.0.0.1:{port}");
@@ -989,6 +990,7 @@ impl LocalNet {
             recv_timeout: Duration::from_secs(1),
             retry_delay: Duration::ZERO,
             max_retries: 0,
+            ..Default::default()
         });
 
         Ok(node_provider.make_node(&self.validator_address(validator))?)

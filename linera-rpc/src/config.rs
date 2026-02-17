@@ -25,6 +25,10 @@ pub struct CrossChainConfig {
     #[arg(long = "cross-chain-retry-delay-ms", default_value = "2000")]
     pub(crate) retry_delay_ms: u64,
 
+    /// Maximum backoff delay for cross-chain message retries.
+    #[arg(long = "cross-chain-max-backoff-ms", default_value = "30000")]
+    pub(crate) max_backoff_ms: u64,
+
     /// Introduce a delay before sending every cross-chain message (e.g. for testing purpose).
     #[arg(long = "cross-chain-sender-delay-ms", default_value = "0")]
     pub(crate) sender_delay_ms: u64,
@@ -49,6 +53,8 @@ impl CrossChainConfig {
             self.max_retries.to_string(),
             "--cross-chain-retry-delay-ms".to_string(),
             self.retry_delay_ms.to_string(),
+            "--cross-chain-max-backoff-ms".to_string(),
+            self.max_backoff_ms.to_string(),
             "--cross-chain-sender-delay-ms".to_string(),
             self.sender_delay_ms.to_string(),
             "--cross-chain-sender-failure-rate".to_string(),
