@@ -105,8 +105,10 @@ contract LightClient {
             BridgeTypes.bcs_serialize_VoteValue(voteValue)
         ));
 
-        // Step 5: Verify signatures against current committee using ecrecover
-        EpochCommittee storage committee = committees[currentEpoch];
+        // Step 5: Verify signatures against the block's epoch committee
+        uint32 epoch = blockValue.header.epoch.value;
+        EpochCommittee storage committee = committees[epoch];
+        require(committee.totalWeight > 0, "unknown epoch");
         uint64 weight = 0;
         address[] memory seen = new address[](signatures.length);
         for (uint256 i = 0; i < signatures.length; i++) {

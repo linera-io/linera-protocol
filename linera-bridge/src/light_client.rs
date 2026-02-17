@@ -381,6 +381,104 @@ mod tests {
     }
 
     #[test]
+    fn test_light_client_rejects_wrong_epoch_committee() {
+        // Epoch 0 validator
+        let secret_0 = ValidatorSecretKey::generate();
+        let public_0 = secret_0.public();
+        let addr_0 = validator_evm_address(&public_0);
+
+        // Epoch 1 validator
+        let secret_1 = ValidatorSecretKey::generate();
+        let public_1 = secret_1.public();
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let contract = deploy_light_client(&mut db, deployer, &[addr_0], &[1]);
+
+        // Transition to epoch 1
+        let new_committee = linera_execution::Committee::new(
+            BTreeMap::from([(
+                public_1,
+                ValidatorState {
+                    network_address: "127.0.0.1:8080".to_string(),
+                    votes: 1,
+                    account_public_key: AccountPublicKey::Secp256k1(public_1),
+                },
+            )]),
+            ResourceControlPolicy::default(),
+        );
+        let committee_bytes =
+            bcs::to_bytes(&new_committee).expect("committee serialization failed");
+        let blob_content = BlobContent::new_committee(committee_bytes.clone());
+        let blob_hash = CryptoHash::new(&blob_content);
+
+        let transactions = vec![Transaction::ExecuteOperation(Operation::System(Box::new(
+            SystemOperation::Admin(AdminOperation::CreateCommittee {
+                epoch: Epoch(1),
+                blob_hash,
+            }),
+        )))];
+        let block = create_test_block(
+            CryptoHash::new(&TestString::new("test_chain")),
+            Epoch::ZERO,
+            BlockHeight(1),
+            transactions,
+        );
+        let confirmed = ConfirmedBlock::new(block);
+        let vote = Vote::new(confirmed.clone(), Round::Fast, &secret_0);
+        let cert = ConfirmedBlockCertificate::new(
+            confirmed,
+            Round::Fast,
+            vec![(public_0, vote.signature)],
+        );
+        let cert_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+        let uncompressed_1 = validator_uncompressed_key(&public_1);
+
+        call_contract(
+            &mut db,
+            deployer,
+            contract,
+            addCommitteeCall {
+                data: cert_bytes.into(),
+                committeeBlob: committee_bytes.into(),
+                validators: vec![uncompressed_1.into()],
+            },
+        );
+
+        // Now currentEpoch is 1.
+        // Create a block claiming epoch 0 but signed by epoch 1's validator.
+        // This should FAIL: the block says epoch 0 so it should be verified
+        // against epoch 0's committee, where validator 1 is not a member.
+        let bad_block = create_test_block(
+            CryptoHash::new(&TestString::new("test_chain")),
+            Epoch::ZERO, // claims epoch 0
+            BlockHeight(2),
+            vec![],
+        );
+        let bad_confirmed = ConfirmedBlock::new(bad_block);
+        let bad_vote = Vote::new(bad_confirmed.clone(), Round::Fast, &secret_1);
+        let bad_cert = ConfirmedBlockCertificate::new(
+            bad_confirmed,
+            Round::Fast,
+            vec![(public_1, bad_vote.signature)],
+        );
+        let bad_bytes = bcs::to_bytes(&bad_cert).expect("BCS serialization failed");
+
+        assert!(
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                verifyBlockCall {
+                    data: bad_bytes.into(),
+                },
+            )
+            .is_err(),
+            "should reject block verified against wrong epoch's committee"
+        );
+    }
+
+    #[test]
     fn test_light_client_rejects_invalid_signature() {
         let secret = ValidatorSecretKey::generate();
         let public = secret.public();
