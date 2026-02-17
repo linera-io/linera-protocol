@@ -97,6 +97,14 @@ pub struct Options {
     #[arg(long, default_value = "10")]
     pub max_retries: u32,
 
+    /// Maximum backoff delay for retrying to connect to a validator.
+    #[arg(
+        long = "max-backoff-ms",
+        default_value = "30000",
+        value_parser = util::parse_millis
+    )]
+    pub max_backoff: Duration,
+
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
     #[arg(long)]

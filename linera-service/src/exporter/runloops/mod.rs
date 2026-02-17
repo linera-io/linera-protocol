@@ -396,6 +396,7 @@ mod test {
                 recv_timeout: Duration::from_millis(4000),
                 retry_delay: Duration::from_millis(1000),
                 max_retries: 10,
+                ..Default::default()
             },
             0,
             DestinationConfig {
@@ -452,6 +453,7 @@ mod test {
                 recv_timeout: Duration::from_millis(4000),
                 retry_delay: Duration::from_millis(1000),
                 max_retries: 10,
+                ..Default::default()
             },
             0,
             DestinationConfig {
@@ -507,6 +509,7 @@ mod test {
                 recv_timeout: Duration::from_millis(4000),
                 retry_delay: Duration::from_millis(1000),
                 max_retries: 10,
+                ..Default::default()
             },
             0,
             DestinationConfig {
@@ -567,6 +570,7 @@ mod test {
                 recv_timeout: Duration::from_millis(4000),
                 retry_delay: Duration::from_millis(1000),
                 max_retries: 10,
+                ..Default::default()
             },
             0,
             DestinationConfig {
