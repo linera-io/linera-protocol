@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     path::Path,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -33,7 +33,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 
-use crate::chain_listener::{ChainListener, ClientContext};
+use crate::chain_listener::{ChainListener, ClientContext, ListenerCommand};
 
 /// Trait for generating benchmark operations.
 ///
@@ -280,6 +280,7 @@ impl<Env: Environment> Benchmark<Env> {
         runtime_in_seconds: Option<u64>,
         delay_between_chains_ms: Option<u64>,
         chain_listener: ChainListener<C>,
+        command_sender: mpsc::UnboundedSender<ListenerCommand>,
         shutdown_notifier: &CancellationToken,
     ) -> Result<(), BenchmarkError> {
         assert_eq!(
@@ -298,6 +299,16 @@ impl<Env: Environment> Benchmark<Env> {
 
         let chain_listener_handle =
             tokio::spawn(async move { chain_listener_result?.await }.in_current_span());
+
+        // Register benchmark chains with the ChainListener so it sets up
+        // validator notification listeners for incoming cross-chain messages.
+        let chain_map: BTreeMap<_, _> = chain_clients
+            .iter()
+            .map(|c| (c.chain_id(), c.preferred_owner()))
+            .collect();
+        if let Err(e) = command_sender.send(ListenerCommand::Listen(chain_map)) {
+            warn!("Failed to register benchmark chains with listener: {e}");
+        }
 
         let bps_control_task = Self::bps_control_task(
             &barrier,
