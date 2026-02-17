@@ -51,8 +51,8 @@ pub struct TaskProcessor<Env: linera_core::Environment> {
     chain_client: ChainClient<Env>,
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
-    outcome_sender: mpsc::UnboundedSender<(ApplicationId, TaskOutcome)>,
-    outcome_receiver: mpsc::UnboundedReceiver<(ApplicationId, TaskOutcome)>,
+    retry_sender: mpsc::UnboundedSender<ApplicationId>,
+    retry_receiver: mpsc::UnboundedReceiver<ApplicationId>,
     update_receiver: mpsc::UnboundedReceiver<Update>,
     deadlines: BinaryHeap<Deadline>,
     operators: OperatorMap,
@@ -70,7 +70,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         update_receiver: Option<mpsc::UnboundedReceiver<Update>>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
-        let (outcome_sender, outcome_receiver) = mpsc::unbounded_channel();
+        let (retry_sender, retry_receiver) = mpsc::unbounded_channel();
         let update_receiver = update_receiver.unwrap_or_else(|| mpsc::unbounded_channel().1);
         Self {
             chain_id,
@@ -79,8 +79,8 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             chain_client,
             cancellation_token,
             notifications,
-            outcome_sender,
-            outcome_receiver,
+            retry_sender,
+            retry_receiver,
             update_receiver,
             deadlines: BinaryHeap::new(),
             operators,
@@ -105,10 +105,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     let application_ids = self.process_events();
                     self.process_actions(application_ids).await;
                 }
-                Some((application_id, outcome)) = self.outcome_receiver.recv() => {
-                    if let Err(e) = self.submit_task_outcome(application_id, &outcome).await {
-                        error!("Error while processing task outcome {outcome:?}: {e}");
-                    }
+                Some(application_id) = self.retry_receiver.recv() => {
+                    // A batch had a task failure; schedule a retry.
+                    self.deadlines.push(Reverse((
+                        Timestamp::now().saturating_add(TimeDelta::from_secs(5)),
+                        Some(application_id),
+                    )));
                 }
                 Some(update) = self.update_receiver.recv() => {
                     self.apply_update(update).await;
@@ -176,6 +178,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
     async fn process_actions(&mut self, application_ids: Vec<ApplicationId>) {
         for application_id in application_ids {
+            // Skip if there's an in-flight batch for this application.
+            if let Some(handle) = self.last_task_handles.get(&application_id) {
+                if !handle.is_finished() {
+                    continue;
+                }
+            }
             debug!("Processing actions for {application_id}");
             let now = Timestamp::now();
             let app_cursor = self.cursors.get(&application_id).cloned();
@@ -199,7 +207,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 self.cursors.insert(application_id, cursor);
             }
             if !actions.execute_tasks.is_empty() {
-                let sender = self.outcome_sender.clone();
+                let chain_client = self.chain_client.clone();
+                let cancellation_token = self.cancellation_token.clone();
+                let retry_sender = self.retry_sender.clone();
                 let operators = self.operators.clone();
                 let previous = self.last_task_handles.remove(&application_id);
                 let handle = tokio::spawn(async move {
@@ -218,28 +228,58 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                         })
                         .collect();
                     let results = future::join_all(handles).await;
-                    // Wait for the previous batch to finish sending outcomes first.
+                    // Wait for the previous batch to finish first.
                     if let Some(previous) = previous {
                         if let Err(error) = previous.await {
-                            error!(%application_id, %error, "Task panicked");
+                            error!(%application_id, %error, "Previous batch panicked");
                         }
                     }
-                    // Submit outcomes in the original order.
+                    // Submit outcomes in the original order. Stop on any failure to
+                    // preserve ordering: the on-chain queue is FIFO, so skipping a
+                    // failed task and submitting a later one would pop the wrong entry.
+                    let mut had_failure = false;
                     for result in results {
                         match result {
                             Ok(Ok(outcome)) => {
-                                if sender.send((application_id, outcome)).is_err() {
-                                    error!("Outcome receiver dropped for {application_id}");
-                                    break;
+                                // Retry submission until it succeeds or we're cancelled.
+                                loop {
+                                    match Self::submit_task_outcome(
+                                        &chain_client,
+                                        application_id,
+                                        &outcome,
+                                    )
+                                    .await
+                                    {
+                                        Ok(()) => break,
+                                        Err(error) => {
+                                            error!(
+                                                %application_id, %error,
+                                                "Error submitting task outcome, retrying",
+                                            );
+                                            select! {
+                                                _ = tokio::time::sleep(
+                                                    tokio::time::Duration::from_secs(5),
+                                                ) => {}
+                                                _ = cancellation_token.cancelled() => return,
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             Ok(Err(error)) => {
                                 error!(%application_id, %error, "Error executing task");
+                                had_failure = true;
+                                break;
                             }
                             Err(error) => {
                                 error!(%application_id, %error, "Task panicked");
+                                had_failure = true;
+                                break;
                             }
                         }
+                    }
+                    if had_failure {
+                        let _ = retry_sender.send(application_id);
                     }
                 });
                 self.last_task_handles.insert(application_id, handle);
@@ -311,7 +351,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     }
 
     async fn submit_task_outcome(
-        &mut self,
+        chain_client: &ChainClient<Env>,
         application_id: ApplicationId,
         task_outcome: &TaskOutcome,
     ) -> Result<(), anyhow::Error> {
@@ -329,15 +369,26 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         let linera_execution::QueryOutcome {
             response: _,
             operations,
-        } = self.chain_client.query_application(query, None).await?;
+        } = chain_client.query_application(query, None).await?;
         if !operations.is_empty() {
-            if let Err(e) = self
-                .chain_client
+            match chain_client
                 .execute_operations(operations, vec![])
-                .await
+                .await?
             {
-                // TODO: handle leader timeouts.
-                error!("Failed to execute on-chain operations for {application_id}: {e}");
+                linera_core::data_types::ClientOutcome::Committed(_) => {}
+                linera_core::data_types::ClientOutcome::WaitForTimeout(timeout) => {
+                    anyhow::bail!(
+                        "Not the round leader for {application_id}; \
+                         retry after {:?}",
+                        timeout.timestamp,
+                    );
+                }
+                linera_core::data_types::ClientOutcome::Conflict(_) => {
+                    anyhow::bail!(
+                        "Block conflict for {application_id}; \
+                         another block was committed at the same height",
+                    );
+                }
             }
         }
         Ok(())
