@@ -19,7 +19,7 @@ use linera_core::data_types::CrossChainRequest;
 use rand::Rng as _;
 use tracing::{trace, warn};
 
-use crate::config::ShardId;
+use crate::{config::ShardId, full_jitter_delay};
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -51,6 +51,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
     nickname: String,
     cross_chain_max_retries: u32,
     cross_chain_retry_delay: Duration,
+    cross_chain_max_backoff: Duration,
     cross_chain_sender_delay: Duration,
     cross_chain_sender_failure_rate: f32,
     this_shard: ShardId,
@@ -104,7 +105,12 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                 }
 
                 Action::Retry => {
-                    linera_base::time::timer::sleep(cross_chain_retry_delay * state.retries).await;
+                    let delay = full_jitter_delay(
+                        cross_chain_retry_delay,
+                        state.retries,
+                        cross_chain_max_backoff,
+                    );
+                    linera_base::time::timer::sleep(delay).await;
                     Action::Proceed { id: state.id }
                 }
             },

@@ -151,6 +151,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-retries <MAX_RETRIES>` — Number of times to retry connecting to a validator
 
   Default value: `10`
+* `--max-backoff-ms <MAX_BACKOFF>` — Maximum backoff delay for retrying to connect to a validator
+
+  Default value: `30000`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--allow-fast-blocks` — Whether to allow creating blocks in the fast round. Fast blocks have lower latency but must be used carefully so that there are never any conflicting fast block proposals
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
@@ -1203,6 +1206,9 @@ Start a Local Linera Network
 * `--cross-chain-retry-delay-ms <RETRY_DELAY_MS>` — Delay before retrying of cross-chain message
 
   Default value: `2000`
+* `--cross-chain-max-backoff-ms <MAX_BACKOFF_MS>` — Maximum backoff delay for cross-chain message retries
+
+  Default value: `30000`
 * `--cross-chain-sender-delay-ms <SENDER_DELAY_MS>` — Introduce a delay before sending every cross-chain message (e.g. for testing purpose)
 
   Default value: `0`

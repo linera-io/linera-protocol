@@ -23,7 +23,7 @@ pub mod grpc;
 
 pub use client::Client;
 pub use message::RpcMessage;
-pub use node_provider::{NodeOptions, NodeProvider};
+pub use node_provider::{NodeOptions, NodeProvider, DEFAULT_MAX_BACKOFF};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
@@ -57,3 +57,21 @@ pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("file
 pub const CERT_PEM: &str = include_str!(concat!(env!("OUT_DIR"), "/self_signed_cert.pem"));
 #[cfg(not(target_arch = "wasm32"))]
 pub const KEY_PEM: &str = include_str!(concat!(env!("OUT_DIR"), "/private_key.pem"));
+
+/// Computes a Full Jitter delay for exponential backoff.
+///
+/// Uses the AWS-recommended formula: `sleep = random(0, min(cap, base * 2^attempt))`.
+/// Reference: <https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/>
+pub(crate) fn full_jitter_delay(
+    base_delay: std::time::Duration,
+    attempt: u32,
+    max_backoff: std::time::Duration,
+) -> std::time::Duration {
+    use rand::Rng as _;
+    let exponential_delay =
+        base_delay.saturating_mul(1u32.checked_shl(attempt).unwrap_or(u32::MAX));
+    let capped_delay = exponential_delay.min(max_backoff);
+    std::time::Duration::from_millis(
+        rand::thread_rng().gen_range(0..=capped_delay.as_millis() as u64),
+    )
+}
