@@ -280,7 +280,18 @@ where
                     self.remote_node.node.upload_blobs(blobs).await?;
                     sent_blobs = true;
                 }
-                result => return Ok(result?),
+                result => {
+                    if let Err(err) = &result {
+                        if !err.is_expected() {
+                            tracing::warn!(
+                                remote_node = self.remote_node.address(),
+                                %err,
+                                "unexpected error from validator",
+                            );
+                        }
+                    }
+                    return Ok(result?);
+                }
             }
             result = self
                 .remote_node
@@ -325,10 +336,20 @@ where
             }
             _ => return Ok(result?),
         }
-        Ok(self
+        let result = self
             .remote_node
             .handle_validated_certificate(certificate)
-            .await?)
+            .await;
+        if let Err(err) = &result {
+            if !err.is_expected() {
+                tracing::warn!(
+                    remote_node = self.remote_node.address(),
+                    %err,
+                    "unexpected error from validator",
+                );
+            }
+        }
+        Ok(result?)
     }
 
     /// Requests a vote for a timeout certificate for the given round from the remote node.
@@ -348,6 +369,14 @@ where
             .await;
         if let Err(err) = &result {
             self.sync_if_needed(chain_id, round, height, err).await?;
+            if !err.is_expected() {
+                tracing::warn!(
+                    remote_node = self.remote_node.address(),
+                    %chain_id,
+                    %err,
+                    "unexpected error from validator",
+                );
+            }
         }
         Ok(result?)
     }
@@ -606,7 +635,17 @@ where
                         .await;
                 }
                 // Fail immediately on other errors.
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    if !err.is_expected() {
+                        tracing::warn!(
+                            remote_node = self.remote_node.address(),
+                            %chain_id,
+                            %err,
+                            "unexpected error from validator",
+                        );
+                    }
+                    return Err(err.into());
+                }
             }
         }
     }

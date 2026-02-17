@@ -340,6 +340,28 @@ pub enum NodeError {
     },
 }
 
+impl NodeError {
+    /// Returns whether this error is an expected part of the protocol flow.
+    ///
+    /// Expected errors are those that validators return during normal operation and that
+    /// the client handles automatically (e.g. by supplying missing data and retrying).
+    /// Unexpected errors indicate genuine network issues, validator misbehavior, or
+    /// internal problems.
+    pub fn is_expected(&self) -> bool {
+        matches!(
+            self,
+            NodeError::BlobsNotFound(_)
+                | NodeError::EventsNotFound(_)
+                | NodeError::MissingCrossChainUpdate { .. }
+                | NodeError::WrongRound(_)
+                | NodeError::UnexpectedBlockHeight { .. }
+                | NodeError::InactiveChain(_)
+                | NodeError::InvalidTimestamp { .. }
+                | NodeError::MissingCertificateValue
+        )
+    }
+}
+
 impl From<tonic::Status> for NodeError {
     fn from(status: tonic::Status) -> Self {
         Self::GrpcError {
