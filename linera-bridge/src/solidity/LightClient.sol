@@ -108,6 +108,7 @@ contract LightClient {
         // Step 5: Verify signatures against current committee using ecrecover
         EpochCommittee storage committee = committees[currentEpoch];
         uint64 weight = 0;
+        address[] memory seen = new address[](signatures.length);
         for (uint256 i = 0; i < signatures.length; i++) {
             // Pack uint8[] back into contiguous bytes, then extract r and s
             uint8[] memory sigValues = signatures[i].entry1.value.values;
@@ -130,6 +131,13 @@ contract LightClient {
             require(recovered != address(0), "signature recovery failed");
             uint64 w = committee.weights[recovered];
             require(w > 0, "unknown validator");
+
+            // Prevent duplicate signer weight counting
+            for (uint256 j = 0; j < i; j++) {
+                require(seen[j] != recovered, "duplicate signer");
+            }
+            seen[i] = recovered;
+
             weight += w;
         }
         require(weight >= committee.quorumThreshold, "insufficient quorum");

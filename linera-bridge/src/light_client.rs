@@ -340,6 +340,47 @@ mod tests {
     }
 
     #[test]
+    fn test_light_client_rejects_duplicate_signer() {
+        // Two validators, each with weight=1. Quorum = 2*2/3+1 = 2, so both must sign.
+        let secret_a = ValidatorSecretKey::generate();
+        let public_a = secret_a.public();
+        let addr_a = validator_evm_address(&public_a);
+
+        let secret_b = ValidatorSecretKey::generate();
+        let public_b = secret_b.public();
+        let addr_b = validator_evm_address(&public_b);
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let contract = deploy_light_client(&mut db, deployer, &[addr_a, addr_b], &[1, 1]);
+
+        // Only validator A signs, but duplicates the signature to try to reach quorum
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+        let block = create_test_block(chain_id, Epoch::ZERO, BlockHeight(1), vec![]);
+        let confirmed = ConfirmedBlock::new(block);
+        let vote = Vote::new(confirmed.clone(), Round::Fast, &secret_a);
+        let certificate = ConfirmedBlockCertificate::new(
+            confirmed,
+            Round::Fast,
+            vec![(public_a, vote.signature), (public_a, vote.signature)],
+        );
+        let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+
+        assert!(
+            try_call_contract(
+                &mut db,
+                deployer,
+                contract,
+                verifyBlockCall {
+                    data: bcs_bytes.into(),
+                },
+            )
+            .is_err(),
+            "should reject duplicate signer"
+        );
+    }
+
+    #[test]
     fn test_light_client_rejects_invalid_signature() {
         let secret = ValidatorSecretKey::generate();
         let public = secret.public();
