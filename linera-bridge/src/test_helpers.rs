@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 use std::{
+    collections::BTreeMap,
     fs::File,
     io::Write,
     path::Path,
@@ -13,8 +14,8 @@ use std::{
 use alloy_primitives::keccak256;
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
-    crypto::{CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{BlockHeight, Epoch, Round, Timestamp},
+    crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
+    data_types::{BlobContent, BlockHeight, Epoch, Round, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
@@ -22,7 +23,10 @@ use linera_chain::{
     data_types::{Transaction, Vote},
     types::ConfirmedBlockCertificate,
 };
-use linera_execution::Operation;
+use linera_execution::{
+    committee::ValidatorState, system::AdminOperation, Operation, ResourceControlPolicy,
+    SystemOperation,
+};
 use revm::{
     database::{CacheDB, EmptyDB},
     primitives::{Address, Bytes, TxKind, U256},
@@ -48,6 +52,50 @@ pub fn validator_evm_address(public: &ValidatorPublicKey) -> Address {
 pub fn validator_uncompressed_key(public: &ValidatorPublicKey) -> Vec<u8> {
     let uncompressed = public.0.to_encoded_point(false);
     uncompressed.as_bytes()[1..].to_vec() // skip 0x04 prefix, 64 bytes
+}
+
+/// The admin chain ID used in tests.
+pub fn test_admin_chain_id() -> CryptoHash {
+    CryptoHash::new(&TestString::new("admin_chain"))
+}
+
+/// Creates a single-validator committee blob and returns `(committee_bytes, blob_hash)`.
+pub fn create_committee_blob(public: &ValidatorPublicKey) -> (Vec<u8>, CryptoHash) {
+    let committee = linera_execution::Committee::new(
+        BTreeMap::from([(
+            *public,
+            ValidatorState {
+                network_address: "127.0.0.1:8080".to_string(),
+                votes: 1,
+                account_public_key: AccountPublicKey::Secp256k1(*public),
+            },
+        )]),
+        ResourceControlPolicy::default(),
+    );
+    let bytes = bcs::to_bytes(&committee).expect("committee serialization failed");
+    let blob_content = BlobContent::new_committee(bytes.clone());
+    let blob_hash = CryptoHash::new(&blob_content);
+    (bytes, blob_hash)
+}
+
+/// Creates a `CreateCommittee` transaction list for the given epoch and blob hash.
+pub fn create_committee_transaction(epoch: Epoch, blob_hash: CryptoHash) -> Vec<Transaction> {
+    vec![Transaction::ExecuteOperation(Operation::System(Box::new(
+        SystemOperation::Admin(AdminOperation::CreateCommittee { epoch, blob_hash }),
+    )))]
+}
+
+/// Signs a block and returns the BCS-serialized `ConfirmedBlockCertificate`.
+pub fn sign_and_serialize(
+    secret: &ValidatorSecretKey,
+    public: &ValidatorPublicKey,
+    block: Block,
+) -> Vec<u8> {
+    let confirmed = ConfirmedBlock::new(block);
+    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
+    let certificate =
+        ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)]);
+    bcs::to_bytes(&certificate).expect("BCS serialization failed")
 }
 
 /// Creates a certificate with a real signature from the given key pair.

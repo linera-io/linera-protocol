@@ -32,11 +32,6 @@ mod tests {
         function blockCount() external view returns (uint64);
     }
 
-    /// The admin chain ID used in tests.
-    fn admin_chain_id() -> CryptoHash {
-        CryptoHash::new(&TestString::new("admin_chain"))
-    }
-
     #[test]
     fn test_microchain_add_block() {
         let secret = ValidatorSecretKey::generate();
@@ -48,7 +43,7 @@ mod tests {
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
         let light_client =
-            deploy_light_client(&mut db, deployer, &[address], &[1], admin_chain_id());
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
         let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
 
         let light_client_address = call_contract(&mut db, deployer, microchain, lightClientCall {});
@@ -94,7 +89,7 @@ mod tests {
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
         let light_client =
-            deploy_light_client(&mut db, deployer, &[address], &[1], admin_chain_id());
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
         let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
 
         // Try to add a block from a different chain
@@ -126,7 +121,7 @@ mod tests {
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
         let light_client =
-            deploy_light_client(&mut db, deployer, &[address], &[1], admin_chain_id());
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
         let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
 
         // Try to add block at height 5 (skipping 1-4)
