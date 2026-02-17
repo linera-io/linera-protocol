@@ -237,7 +237,7 @@ where
     Env: Environment + 'static,
 {
     #[instrument(
-        level = "trace", skip_all, err(level = Level::WARN),
+        level = "trace", skip_all, err(level = Level::DEBUG),
         fields(chain_id = %certificate.block().header.chain_id)
     )]
     async fn send_confirmed_certificate(

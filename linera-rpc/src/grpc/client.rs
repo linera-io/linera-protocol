@@ -217,7 +217,7 @@ impl ValidatorNode for GrpcClient {
         self.address.clone()
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_block_proposal(
         &self,
         proposal: data_types::BlockProposal,
@@ -239,7 +239,7 @@ impl ValidatorNode for GrpcClient {
         GrpcClient::try_into_chain_info(client_delegate!(self, handle_lite_certificate, request)?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
@@ -257,7 +257,7 @@ impl ValidatorNode for GrpcClient {
         )?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_validated_certificate(
         &self,
         certificate: GenericCertificate<ValidatedBlock>,
@@ -270,7 +270,7 @@ impl ValidatorNode for GrpcClient {
         )?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_timeout_certificate(
         &self,
         certificate: GenericCertificate<Timeout>,
@@ -283,7 +283,7 @@ impl ValidatorNode for GrpcClient {
         )?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_chain_info_query(
         &self,
         query: linera_core::data_types::ChainInfoQuery,
