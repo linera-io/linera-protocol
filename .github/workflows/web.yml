@@ -105,6 +105,9 @@ jobs:
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- storage initialize --genesis /tmp/local-linera-net/genesis.json
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 1000
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
+    - name: Deploy the counter application
+      run: |
+        echo LINERA_COUNTER_APPLICATION_ID=$(linera project publish-and-create examples/counter --json-argument 0) >> "$GITHUB_ENV"
 
     # Run tests
     - name: Test the npm packages
@@ -117,3 +120,7 @@ jobs:
       run: |
         cd linera-views
         WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
+    - name: Test the `counter` example
+        cd examples/counter
+        pnpm install --frozen-lockfile
+        LINERA_APPLICATION_ID=$LINERA_COUNTER_APPLICATION_ID pnpm test
