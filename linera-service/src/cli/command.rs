@@ -75,7 +75,7 @@ pub struct BenchmarkOptions {
     /// The application ID of a fungible token on the wallet's default chain.
     /// If none is specified, the benchmark uses the native token.
     #[arg(long)]
-    pub fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
+    pub fungible_application_id: Option<ApplicationId>,
 
     /// The fixed BPS (Blocks Per Second) rate that block proposals will be sent at.
     #[arg(long, default_value_t = DEFAULT_BPS)]
@@ -501,6 +501,10 @@ pub enum ClientCommand {
         /// Set the list of hosts that contracts and services can send HTTP requests to.
         #[arg(long, value_delimiter = ',')]
         http_request_allow_list: Option<Vec<String>>,
+
+        /// Set the list of application IDs for which message- and event-related fees are waived.
+        #[arg(long, value_delimiter = ',')]
+        free_application_ids: Option<Vec<String>>,
     },
 
     /// Run benchmarks to test network performance.
@@ -689,6 +693,10 @@ pub enum ClientCommand {
         /// Set the list of hosts that contracts and services can send HTTP requests to.
         #[arg(long, value_delimiter = ',')]
         http_request_allow_list: Option<Vec<String>>,
+
+        /// Set the list of application IDs for which message- and event-related fees are waived.
+        #[arg(long, value_delimiter = ',')]
+        free_application_ids: Option<Vec<String>>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.

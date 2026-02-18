@@ -5284,6 +5284,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "strum 0.26.3",
  "test-case",
  "thiserror 1.0.69",
  "tokio",
@@ -5379,7 +5380,7 @@ dependencies = [
  "linera-storage-service",
  "linera-version",
  "linera-views",
- "lru 0.12.5",
+ "lru 0.15.0",
  "meta-counter",
  "papaya",
  "prometheus",
@@ -5456,7 +5457,7 @@ dependencies = [
  "linera-wasmer",
  "linera-wasmer-compiler-singlepass",
  "linera-witty",
- "lru 0.12.5",
+ "lru 0.15.0",
  "oneshot",
  "papaya",
  "prometheus",
@@ -5473,6 +5474,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "strum 0.26.3",
  "tempfile",
  "test-case",
  "test-log",
@@ -5483,7 +5485,6 @@ dependencies = [
  "tracing-subscriber 0.3.19",
  "url",
  "wasmtime",
- "web-sys",
  "web-thread-pool",
  "web-thread-select",
 ]
@@ -5883,6 +5884,7 @@ dependencies = [
  "serde_json",
  "social",
  "stdext",
+ "task-processor",
  "tempfile",
  "test-case",
  "test-log",
@@ -6243,6 +6245,7 @@ dependencies = [
  "num-traits",
  "serde",
  "serde-wasm-bindgen 0.6.5",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-util",
  "tracing",
@@ -6335,18 +6338,18 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "lru"
-version = "0.12.5"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "234cf4f4a04dc1f57e24b96cc0cd600cf2af460d4161ac5ecdd0af8e1f3b2a38"
+checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
 dependencies = [
  "hashbrown 0.15.5",
 ]
 
 [[package]]
 name = "lru"
-version = "0.13.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
+checksum = "0281c2e25e62316a5c9d98f2d2e9e95a37841afdaf4383c177dbb5c1dfab0568"
 dependencies = [
  "hashbrown 0.15.5",
 ]
@@ -9969,6 +9972,15 @@ name = "target-lexicon"
 version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
+
+[[package]]
+name = "task-processor"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "linera-sdk",
+ "serde",
+]
 
 [[package]]
 name = "tempfile"

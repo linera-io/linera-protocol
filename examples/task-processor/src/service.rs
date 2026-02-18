@@ -70,12 +70,18 @@ impl QueryRoot {
         *self.state.task_count.get()
     }
 
+    /// Returns the stored results in order.
+    async fn results(&self) -> Vec<String> {
+        let count = self.state.results.count();
+        self.state
+            .results
+            .read_front(count)
+            .await
+            .unwrap_or_default()
+    }
+
     /// Returns the pending tasks and callback requests for the task processor.
-    async fn next_actions(
-        &self,
-        _last_requested_callback: Option<Timestamp>,
-        _now: Timestamp,
-    ) -> ProcessorActions {
+    async fn next_actions(&self, _cursor: Option<Vec<u8>>, _now: Timestamp) -> ProcessorActions {
         let mut actions = ProcessorActions::default();
 
         // Get all pending tasks from the queue.

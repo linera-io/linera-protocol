@@ -26,8 +26,8 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    Message, MessageKind, Operation, ResourceControlPolicy, ServiceRuntime, SystemOperation,
-    TestExecutionRuntimeContext,
+    Message, MessageKind, Operation, ResourceControlPolicy, ResourceTracker, ServiceRuntime,
+    SystemOperation, TestExecutionRuntimeContext,
 };
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},
@@ -39,8 +39,8 @@ use test_case::test_case;
 use crate::{
     block::{Block, ConfirmedBlock},
     data_types::{
-        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, PostedMessage,
-        ProposedBlock,
+        BlockExecutionOutcome, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
+        PostedMessage, ProposedBlock,
     },
     test::{make_child_block, make_first_block, BlockTestExt, HttpServer},
     ChainError, ChainExecutionContext, ChainStateView,
@@ -54,6 +54,26 @@ impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
         Self::load(context)
             .await
             .expect("Loading from memory should work")
+    }
+
+    /// Test helper that calls `execute_block` with default test parameters:
+    /// `round = None`, `replayed_oracle_responses = None`, `policy = Abort`.
+    #[cfg(with_testing)]
+    pub async fn execute_test_block_simple(
+        &mut self,
+        block: ProposedBlock,
+        local_time: Timestamp,
+        published_blobs: &[Blob],
+    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
+        self.execute_block(
+            block,
+            local_time,
+            None,
+            published_blobs,
+            None,
+            BundleExecutionPolicy::Abort,
+        )
+        .await
     }
 }
 
@@ -218,7 +238,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
         });
 
     let result = chain
-        .execute_block(&invalid_block, time, None, &[], None)
+        .execute_test_block_simple(invalid_block, time, &[])
         .await;
     assert_matches!(
         result,
@@ -229,8 +249,8 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
     );
 
     // The valid block is accepted...
-    let (outcome, _) = chain
-        .execute_block(&valid_block, time, None, &[], None)
+    let (valid_block, outcome, _) = chain
+        .execute_test_block_simple(valid_block, time, &[])
         .await
         .unwrap();
     let block = Block::new(valid_block, outcome);
@@ -306,7 +326,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     // An operation that doesn't belong to the app isn't allowed.
     let invalid_block = make_first_block(chain_id).with_simple_transfer(chain_id, Amount::ONE);
     let result = chain
-        .execute_block(&invalid_block, time, None, &[], None)
+        .execute_test_block_simple(invalid_block, time, &[])
         .await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
         if app_ids == vec![application_id, another_app_id]
@@ -330,8 +350,8 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .with_operation(app_operation.clone())
         .with_operation(another_app_operation.clone());
 
-    let (outcome, _) = chain
-        .execute_block(&valid_block, time, None, &[], None)
+    let (valid_block, outcome, _) = chain
+        .execute_test_block_simple(valid_block, time, &[])
         .await?;
 
     let value = ConfirmedBlock::new(outcome.with(valid_block));
@@ -342,7 +362,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_operation(app_operation.clone());
     let result = chain
-        .execute_block(&invalid_block, time, None, &[], None)
+        .execute_test_block_simple(invalid_block, time, &[])
         .await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
         if app_ids == vec![application_id, another_app_id]
@@ -350,7 +370,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     // Also, blocks without all authorized applications operation, or incoming message, are forbidden.
     let invalid_block = make_child_block(&value).with_operation(another_app_operation.clone());
     let result = chain
-        .execute_block(&invalid_block, time, None, &[], None)
+        .execute_test_block_simple(invalid_block, time, &[])
         .await;
     assert_matches!(result, Err(ChainError::MissingMandatoryApplications(app_ids))
         if app_ids == vec![application_id]
@@ -363,8 +383,8 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let valid_block = make_child_block(&value)
         .with_operation(app_operation.clone())
         .with_operation(another_app_operation.clone());
-    let (outcome, _) = chain
-        .execute_block(&valid_block, time, None, &[], None)
+    let (valid_block, outcome, _) = chain
+        .execute_test_block_simple(valid_block, time, &[])
         .await?;
     let value = ConfirmedBlock::new(outcome.with(valid_block));
     chain.apply_confirmed_block(&value, time).await?;
@@ -446,7 +466,7 @@ async fn test_mandatory_applications_with_messages() -> anyhow::Result<()> {
     };
     let block_with_rejected = make_first_block(chain_id).with_incoming_bundle(rejected_bundle);
     let result = chain
-        .execute_block(&block_with_rejected, time, None, &[], None)
+        .execute_test_block_simple(block_with_rejected, time, &[])
         .await;
     assert_matches!(result, Err(ChainError::MissingMandatoryApplications(app_ids))
         if app_ids == vec![application_id]
@@ -461,8 +481,8 @@ async fn test_mandatory_applications_with_messages() -> anyhow::Result<()> {
         action: MessageAction::Accept,
     };
     let block_with_accepted = make_first_block(chain_id).with_incoming_bundle(accepted_bundle);
-    let (outcome, _) = chain
-        .execute_block(&block_with_accepted, time, None, &[], None)
+    let (block_with_accepted, outcome, _) = chain
+        .execute_test_block_simple(block_with_accepted, time, &[])
         .await?;
     let value = ConfirmedBlock::new(outcome.with(block_with_accepted));
     chain.apply_confirmed_block(&value, time).await?;
@@ -507,7 +527,7 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    chain.execute_block(&block, time, None, &[], None).await?;
+    chain.execute_test_block_simple(block, time, &[]).await?;
 
     Ok(())
 }
@@ -552,7 +572,7 @@ async fn test_service_as_oracle_exceeding_time_limit(
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    let result = chain.execute_block(&block, time, None, &[], None).await;
+    let result = chain.execute_test_block_simple(block, time, &[]).await;
 
     let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
         result
@@ -617,7 +637,7 @@ async fn test_service_as_oracle_timeout_early_stop(
     application.expect_call(ExpectedCall::default_finalize());
 
     let execution_start = Instant::now();
-    let result = chain.execute_block(&block, time, None, &[], None).await;
+    let result = chain.execute_test_block_simple(block, time, &[]).await;
     let execution_time = execution_start.elapsed();
 
     let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
@@ -669,9 +689,9 @@ async fn test_service_as_oracle_response_size_limit(
     application.expect_call(ExpectedCall::default_finalize());
 
     chain
-        .execute_block(&block, time, None, &[], None)
+        .execute_test_block_simple(block, time, &[])
         .await
-        .map(|(outcome, _)| outcome)
+        .map(|(_, outcome, _)| outcome)
 }
 
 /// Tests contract HTTP response size limit.
@@ -728,9 +748,9 @@ async fn test_contract_http_response_size_limit(
     application.expect_call(ExpectedCall::default_finalize());
 
     chain
-        .execute_block(&block, time, None, &[], None)
+        .execute_test_block_simple(block, time, &[])
         .await
-        .map(|(outcome, _)| outcome)
+        .map(|(_, outcome, _)| outcome)
 }
 
 /// Tests service HTTP response size limit.
@@ -787,9 +807,9 @@ async fn test_service_http_response_size_limit(
     application.expect_call(ExpectedCall::default_finalize());
 
     chain
-        .execute_block(&block, time, None, &[], None)
+        .execute_test_block_simple(block, time, &[])
         .await
-        .map(|(outcome, _)| outcome)
+        .map(|(_, outcome, _)| outcome)
 }
 
 /// Sets up a test with a dummy [`MockApplication`].

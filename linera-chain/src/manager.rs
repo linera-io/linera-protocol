@@ -653,7 +653,7 @@ where
         }
         match round {
             Round::Fast => false,
-            Round::MultiLeader(_) => ownership.is_multi_leader_owner(owner),
+            Round::MultiLeader(_) => ownership.can_propose_in_multi_leader_round(owner),
             Round::SingleLeader(_) | Round::Validator(_) => self.round_leader(round) == Some(owner),
         }
     }
@@ -877,7 +877,7 @@ impl ChainManagerInfo {
     ) -> bool {
         match round {
             Round::Fast => self.ownership.super_owners.contains(identity),
-            Round::MultiLeader(_) => self.ownership.is_multi_leader_owner(identity),
+            Round::MultiLeader(_) => self.ownership.can_propose_in_multi_leader_round(identity),
             Round::SingleLeader(_) | Round::Validator(_) => {
                 let distribution = calculate_distribution(self.ownership.owners.iter());
                 let fallback_distribution = calculate_distribution(current_committee.iter());

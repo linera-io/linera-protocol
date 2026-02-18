@@ -35,7 +35,10 @@ use linera_base::{
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
-    data_types::{BlockProposal, ChainAndHeight, IncomingBundle, ProposedBlock, Transaction},
+    data_types::{
+        BlockProposal, BundleExecutionPolicy, ChainAndHeight, IncomingBundle, ProposedBlock,
+        Transaction,
+    },
     manager::LockingBlock,
     types::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, Timeout, TimeoutCertificate,
@@ -83,6 +86,11 @@ use crate::{
 pub struct Options {
     /// Maximum number of pending message bundles processed at a time in a block.
     pub max_pending_message_bundles: usize,
+    /// Maximum number of message bundles to discard from a block proposal due to block limit
+    /// errors before discarding all remaining bundles.
+    ///
+    /// Discarded bundles can be retried in the next block.
+    pub max_block_limit_errors: u32,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
@@ -117,6 +125,7 @@ impl Options {
 
         Options {
             max_pending_message_bundles: 10,
+            max_block_limit_errors: 3,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
@@ -650,8 +659,9 @@ impl<Env: Environment> ChainClient<Env> {
             BTreeSet::new()
         };
 
-        let is_owner = manager.ownership.open_multi_leader_rounds
-            || manager.ownership.is_owner(&preferred_owner)
+        let is_owner = manager
+            .ownership
+            .can_propose_in_multi_leader_round(&preferred_owner)
             || fallback_owners.contains(&preferred_owner);
 
         if !is_owner {
@@ -686,6 +696,10 @@ impl<Env: Environment> ChainClient<Env> {
     /// an owner, or because `open_multi_leader_rounds` is enabled).
     #[instrument(level = "trace")]
     pub async fn prepare_for_owner(&self, owner: AccountOwner) -> Result<Box<ChainInfo>, Error> {
+        ensure!(
+            self.has_key_for(&owner).await?,
+            Error::CannotFindKeyForChain(self.chain_id)
+        );
         // Ensure we have the chain description blob.
         self.client
             .get_chain_description_blob(self.chain_id)
@@ -696,8 +710,9 @@ impl<Env: Environment> ChainClient<Env> {
 
         // Validate that the owner can propose on this chain.
         ensure!(
-            info.manager.ownership.is_owner(&owner)
-                || info.manager.ownership.open_multi_leader_rounds,
+            info.manager
+                .ownership
+                .can_propose_in_multi_leader_round(&owner),
             Error::NotAnOwner(self.chain_id)
         );
 
@@ -1389,10 +1404,13 @@ impl<Env: Environment> ChainClient<Env> {
         // Also, compute the final certified hash while we're at it.
         let (block, _) = self
             .client
-            .stage_block_execution_and_discard_failing_messages(
+            .stage_block_execution_with_policy(
                 proposed_block,
                 round,
                 blobs.clone(),
+                BundleExecutionPolicy::AutoRetry {
+                    max_failures: self.options.max_block_limit_errors,
+                },
             )
             .await?;
         let (proposed_block, _) = block.clone().into_proposal();
@@ -1557,7 +1575,14 @@ impl<Env: Environment> ChainClient<Env> {
         };
         match self
             .client
-            .stage_block_execution_and_discard_failing_messages(block, None, Vec::new())
+            .stage_block_execution_with_policy(
+                block,
+                None,
+                Vec::new(),
+                BundleExecutionPolicy::AutoRetry {
+                    max_failures: self.options.max_block_limit_errors,
+                },
+            )
             .await
         {
             Ok((_, response)) => Ok((

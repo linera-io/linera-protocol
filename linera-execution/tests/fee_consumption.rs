@@ -7,9 +7,9 @@ use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{
     crypto::AccountPublicKey,
-    data_types::{Amount, BlockHeight, OracleResponse},
+    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     http,
-    identifiers::{Account, AccountOwner},
+    identifiers::{Account, AccountOwner, StreamName},
     vm::VmRuntime,
 };
 use linera_execution::{
@@ -17,7 +17,7 @@ use linera_execution::{
         blob_oracle_responses, dummy_chain_description, ExpectedCall, RegisterMockApplication,
         SystemExecutionState,
     },
-    ContractRuntime, ExecutionError, ExecutionStateActor, Message, MessageContext,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionStateActor, Message, MessageContext,
     ResourceControlPolicy, ResourceController, ResourceTracker, TransactionTracker,
 };
 use test_case::test_case;
@@ -239,6 +239,7 @@ async fn test_fee_consumption(
         blob_byte_read: Amount::from_tokens(101),
         blob_byte_published: Amount::from_tokens(103),
         http_request_allow_list: BTreeSet::new(),
+        free_application_ids: BTreeSet::new(),
     };
 
     let consumed_fees = spends
@@ -282,7 +283,7 @@ async fn test_fee_consumption(
         refund_grant_to,
         height: BlockHeight(0),
         round: Some(0),
-        timestamp: Default::default(),
+        timestamp: Timestamp::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
@@ -422,4 +423,151 @@ impl FeeSpend {
             }
         }
     }
+}
+
+/// Tests that a free app has all message- and event-related fees waived when executing a message,
+/// even with all fee categories set to non-zero values.
+#[tokio::test]
+async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
+    let chain_description = dummy_chain_description(0);
+    let chain_id = chain_description.id();
+    let mut state = SystemExecutionState {
+        description: Some(chain_description.clone()),
+        ..SystemExecutionState::default()
+    };
+    let (application_id, application, blobs) = state.register_mock_application(0).await?;
+
+    let chain_balance = Amount::from_tokens(100);
+    let owner_balance = Amount::from_tokens(50);
+    let mut view = state.into_view().await;
+
+    let mut oracle_responses = blob_oracle_responses(blobs.iter());
+
+    let signer = AccountOwner::from(AccountPublicKey::test_key(0));
+    view.system.balance.set(chain_balance);
+    view.system.balances.insert(&signer, owner_balance)?;
+
+    // Use all_categories() which sets non-zero prices for all fee types, then add
+    // the application as a free app.
+    let mut policy = ResourceControlPolicy::all_categories();
+    policy.free_application_ids.insert(application_id);
+
+    let mut controller =
+        ResourceController::new(Arc::new(policy), ResourceTracker::default(), Some(signer));
+
+    // The mock application consumes fuel, does a read, queries a service oracle,
+    // and emits an event.
+    oracle_responses.push(OracleResponse::Service(vec![]));
+
+    application.expect_call(ExpectedCall::execute_message(move |runtime, _message| {
+        runtime.consume_fuel(500, VmRuntime::Wasm)?;
+        let promise = runtime.read_value_bytes_new(vec![0, 1])?;
+        let _response = runtime.read_value_bytes_wait(&promise)?;
+        let app_id = BaseRuntime::application_id(runtime)?;
+        runtime.query_service(app_id, vec![])?;
+        runtime.emit(StreamName(b"test".to_vec()), b"event data".to_vec())?;
+        Ok(())
+    }));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let refund_grant_to = Some(Account {
+        chain_id,
+        owner: signer,
+    });
+    let context = MessageContext {
+        chain_id,
+        origin: chain_id,
+        is_bouncing: false,
+        authenticated_owner: Some(signer),
+        refund_grant_to,
+        height: BlockHeight(0),
+        round: Some(0),
+        timestamp: Timestamp::default(),
+    };
+    let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_message(
+            context,
+            Message::User {
+                application_id,
+                bytes: vec![],
+            },
+            None,
+        )
+        .await?;
+
+    // Verify no fees were deducted: balances should remain exactly as set.
+    assert_eq!(*view.system.balance.get(), chain_balance);
+    assert_eq!(
+        view.system.balances.get(&signer).await?,
+        Some(owner_balance)
+    );
+
+    Ok(())
+}
+
+/// Tests that a free app is still charged fees for operations (not messages).
+#[tokio::test]
+async fn test_free_app_operation_still_charged() -> anyhow::Result<()> {
+    let chain_description = dummy_chain_description(0);
+    let chain_id = chain_description.id();
+    let mut state = SystemExecutionState {
+        description: Some(chain_description.clone()),
+        ..SystemExecutionState::default()
+    };
+    let (application_id, application, blobs) = state.register_mock_application(0).await?;
+
+    let chain_balance = Amount::from_tokens(1_000);
+    let mut view = state.into_view().await;
+
+    let oracle_responses = blob_oracle_responses(blobs.iter());
+
+    view.system.balance.set(chain_balance);
+
+    let mut policy = ResourceControlPolicy::all_categories();
+    policy.free_application_ids.insert(application_id);
+
+    let mut controller = ResourceController::new(
+        Arc::new(policy),
+        ResourceTracker::default(),
+        None::<AccountOwner>,
+    );
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _operation| {
+            runtime.consume_fuel(100, VmRuntime::Wasm)?;
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = linera_execution::OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: None,
+        timestamp: Timestamp::default(),
+    };
+    let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(
+            context,
+            linera_execution::Operation::User {
+                application_id,
+                bytes: vec![],
+            },
+        )
+        .await?;
+
+    // Verify that fees WERE deducted (operations are not free).
+    // At minimum, 100 fuel units * 1 nano per unit = 100 nanos should have been charged.
+    let min_expected_fees = Amount::from_nanos(100);
+    let final_balance = *view.system.balance.get();
+    assert!(
+        chain_balance.saturating_sub(final_balance) >= min_expected_fees,
+        "Expected at least {min_expected_fees} in fees, but balance only dropped from \
+         {chain_balance} to {final_balance}"
+    );
+
+    Ok(())
 }

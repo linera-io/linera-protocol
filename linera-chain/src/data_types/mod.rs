@@ -153,7 +153,9 @@ impl ProposedBlock {
 }
 
 /// A transaction in a block: incoming messages or an operation.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Allocative)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Allocative, strum::AsRefStr,
+)]
 pub enum Transaction {
     /// Receive a bundle of incoming messages.
     ReceiveMessages(IncomingBundle),
@@ -314,6 +316,28 @@ pub enum MessageAction {
     Accept,
     /// Do not execute the incoming message.
     Reject,
+}
+
+/// Policy for handling message bundle execution failures during block execution.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum BundleExecutionPolicy {
+    /// Abort block execution on any bundle failure. The proposal is never modified.
+    #[default]
+    Abort,
+    /// Automatically handle failing bundles with checkpointing and retry.
+    ///
+    /// This policy is intended for use by clients when preparing proposals. It modifies
+    /// the proposal by discarding or rejecting bundles that fail to execute:
+    ///
+    /// - For limit errors (block too large, fuel exceeded, etc.): discard the bundle
+    ///   so it can be retried in a later block, unless it's the first transaction
+    ///   (in which case it's inherently too large and gets rejected).
+    /// - For non-limit errors: reject the bundle (triggering bounced messages).
+    /// - After `max_failures` discarded bundles, discard all remaining message bundles.
+    AutoRetry {
+        /// Maximum number of discarded bundles before discarding all remaining message bundles.
+        max_failures: u32,
+    },
 }
 
 /// A set of messages from a single block, for a single destination.

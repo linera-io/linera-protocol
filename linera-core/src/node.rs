@@ -340,6 +340,55 @@ pub enum NodeError {
     },
 }
 
+impl NodeError {
+    /// Returns whether this error is an expected part of the protocol flow.
+    ///
+    /// Expected errors are those that validators return during normal operation and that
+    /// the client handles automatically (e.g. by supplying missing data and retrying).
+    /// Unexpected errors indicate genuine network issues, validator misbehavior, or
+    /// internal problems.
+    pub fn is_expected(&self) -> bool {
+        match self {
+            // Expected: validators return these during normal operation and the client
+            // handles them automatically by supplying missing data and retrying.
+            NodeError::BlobsNotFound(_)
+            | NodeError::EventsNotFound(_)
+            | NodeError::MissingCrossChainUpdate { .. }
+            | NodeError::WrongRound(_)
+            | NodeError::UnexpectedBlockHeight { .. }
+            | NodeError::InactiveChain(_)
+            | NodeError::InvalidTimestamp { .. }
+            | NodeError::MissingCertificateValue => true,
+
+            // Unexpected: network issues, validator misbehavior, or internal problems.
+            NodeError::CryptoError { .. }
+            | NodeError::ArithmeticError { .. }
+            | NodeError::ViewError { .. }
+            | NodeError::ChainError { .. }
+            | NodeError::WorkerError { .. }
+            | NodeError::MissingCertificates(_)
+            | NodeError::MissingVoteInValidatorResponse(_)
+            | NodeError::InvalidChainInfoResponse
+            | NodeError::UnexpectedCertificateValue
+            | NodeError::InvalidDecoding
+            | NodeError::UnexpectedMessage
+            | NodeError::GrpcError { .. }
+            | NodeError::ClientIoError { .. }
+            | NodeError::CannotResolveValidatorAddress { .. }
+            | NodeError::SubscriptionError { .. }
+            | NodeError::SubscriptionFailed { .. }
+            | NodeError::InvalidCertificateForBlob(_)
+            | NodeError::DuplicatesInBlobsNotFound
+            | NodeError::UnexpectedEntriesInBlobsNotFound
+            | NodeError::UnexpectedCertificates { .. }
+            | NodeError::EmptyBlobsNotFound
+            | NodeError::ResponseHandlingError { .. }
+            | NodeError::MissingCertificatesByHeights { .. }
+            | NodeError::TooManyCertificatesReturned { .. } => false,
+        }
+    }
+}
+
 impl From<tonic::Status> for NodeError {
     fn from(status: tonic::Status) -> Self {
         Self::GrpcError {

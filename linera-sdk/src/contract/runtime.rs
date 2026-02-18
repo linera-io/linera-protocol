@@ -176,6 +176,11 @@ where
         base_wit::assert_data_blob_exists(hash.into())
     }
 
+    /// Returns the amount of execution fuel remaining before execution is aborted.
+    pub fn remaining_fuel(&mut self) -> u64 {
+        contract_wit::remaining_fuel()
+    }
+
     /// Returns true if the corresponding contract uses a zero amount of storage.
     pub fn has_empty_storage(&mut self, application: ApplicationId) -> bool {
         contract_wit::has_empty_storage(application.into())

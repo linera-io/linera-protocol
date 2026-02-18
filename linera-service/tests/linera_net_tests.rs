@@ -32,7 +32,10 @@ use linera_base::{
 };
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
-    abis::fungible::FungibleTokenAbi,
+    abis::{
+        controller::{ControllerAbi, LocalWorkerState, ManagedService},
+        fungible::FungibleTokenAbi,
+    },
     linera_base_types::{AccountSecretKey, BlobContent, BlockHeight, DataBlobHash},
 };
 #[cfg(any(
@@ -4990,6 +4993,321 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         (block_duration / (transfer_count as u32)).as_millis(),
     );
 
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, admin_client) = config.instantiate().await?;
+
+    let admin_chain = admin_client.load_wallet()?.default_chain().unwrap();
+    let admin_owner = admin_client.get_owner().unwrap();
+
+    // The remote-net tests open two chains when instantiating the config, so this is
+    // then non-zero, and that affects all the waiting for notifications.
+    let start_h = admin_client
+        .load_wallet()?
+        .get(admin_chain)
+        .expect("should have admin_chain in the wallet")
+        .next_block_height
+        .0;
+
+    // Admin chain block start_h+0: publish module
+    // Admin chain block start_h+1: create application
+    let (contract, service) = admin_client.build_example("controller").await?;
+    let controller_id = admin_client
+        .publish_and_create::<ControllerAbi, (), ()>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            &(),
+            &(),
+            &[],
+            None,
+        )
+        .await?;
+
+    // Admin chain block start_h+2: publish module
+    // Admin chain block start_h+3: create application
+    use task_processor::TaskProcessorAbi;
+    let (task_processor_contract, task_processor_service) =
+        admin_client.build_example("task-processor").await?;
+    let task_processor_id = admin_client
+        .publish_and_create::<TaskProcessorAbi, (), ()>(
+            task_processor_contract,
+            task_processor_service,
+            VmRuntime::Wasm,
+            &(),
+            &(),
+            &[],
+            None,
+        )
+        .await?;
+
+    let operators = vec![("ls".to_string(), "/bin/ls".into())];
+
+    // Admin chain block start_h+4: open chain for worker 1
+    let worker1_client = net.make_client().await;
+    worker1_client.wallet_init(None).await?;
+    let worker1_chain = admin_client
+        .open_and_assign(&worker1_client, Amount::from_tokens(100))
+        .await?;
+
+    // Admin chain block start_h+5: open chain for worker 2
+    let worker2_client = net.make_client().await;
+    worker2_client.wallet_init(None).await?;
+    let worker2_chain = admin_client
+        .open_and_assign(&worker2_client, Amount::from_tokens(100))
+        .await?;
+
+    // Admin chain block start_h+6: open chain for the operator service
+    let service_client = net.make_client().await;
+    service_client.wallet_init(None).await?;
+    let service_owner = service_client.keygen().await?;
+    // We make it a multi-owner chain, so that worker1 can also propose.
+    let service_chain = admin_client
+        .open_multi_owner_chain(
+            admin_chain,
+            vec![
+                (service_owner, 100),
+                (
+                    worker1_client
+                        .get_owner()
+                        .expect("worker1_client should have an owner"),
+                    100,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            u32::MAX,
+            Amount::from_tokens(10),
+            1000,
+        )
+        .await?;
+    service_client.assign(service_owner, service_chain).await?;
+
+    let admin_port = get_node_port().await;
+    let mut admin_node_service = admin_client
+        .run_node_service(admin_port, ProcessInbox::Automatic)
+        .await?;
+
+    let mut admin_notifications = admin_node_service.notifications(admin_chain).await?;
+
+    let port1 = get_node_port().await;
+    worker1_client.sync(worker1_chain).await?;
+
+    let mut node_service1 = worker1_client
+        .run_node_service_with_controller(
+            port1,
+            ProcessInbox::Automatic,
+            &controller_id.forget_abi(),
+            &operators,
+        )
+        .await?;
+
+    let mut notifications1 = node_service1.notifications(worker1_chain).await?;
+
+    // Waiting for a notification about a block created right after starting the service
+    // is unreliable - wait for the block created on the controller admin chain instead.
+    // Admin chain block start_h+7: receive worker 1 registration.
+    admin_notifications
+        .wait_for_block(BlockHeight::from(start_h + 7))
+        .await
+        .unwrap_or_else(|_| panic!("should get notification about a block on chain {admin_chain}"));
+
+    let app1 = node_service1.make_application(&worker1_chain, &controller_id)?;
+    let response = app1.query("localWorkerState").await?;
+    let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+    let worker = state
+        .local_worker
+        .expect("Worker 1 should be registered after block notification");
+    assert_eq!(worker.capabilities.len(), 1);
+    assert_ne!(
+        worker1_chain, admin_chain,
+        "Worker should be on a different chain than admin"
+    );
+
+    let port2 = get_node_port().await;
+    worker2_client.sync(worker2_chain).await?;
+
+    let mut node_service2 = worker2_client
+        .run_node_service_with_controller(
+            port2,
+            ProcessInbox::Automatic,
+            &controller_id.forget_abi(),
+            &[],
+        )
+        .await?;
+
+    // Same as above: instead of waiting for the notification on worker2_chain, wait for
+    // the notification about reception of the registration on admin chain.
+    // Admin chain block start_h+8: receive worker 2 registration.
+    admin_notifications
+        .wait_for_block(BlockHeight::from(start_h + 8))
+        .await
+        .unwrap_or_else(|_| panic!("should get notification about a block on chain {admin_chain}"));
+
+    let app2 = node_service2.make_application(&worker2_chain, &controller_id)?;
+    let response = app2.query("localWorkerState").await?;
+    let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+    let worker = state
+        .local_worker
+        .expect("Worker 2 should be registered after block notification");
+    assert!(worker.capabilities.is_empty());
+    assert_ne!(
+        worker2_chain, admin_chain,
+        "Worker 2 should be on a different chain than admin"
+    );
+
+    let admin_app = admin_node_service.make_application(&admin_chain, &controller_id)?;
+    let response = admin_app.query("workers { keys }").await?;
+    let worker_keys: Vec<String> = serde_json::from_value(response["workers"]["keys"].clone())?;
+    assert_eq!(
+        worker_keys.len(),
+        2,
+        "Expected exactly 2 workers, got {}",
+        worker_keys.len()
+    );
+
+    assert_ne!(worker1_chain, admin_chain);
+    assert_ne!(worker2_chain, admin_chain);
+    assert_ne!(worker1_chain, worker2_chain);
+
+    let managed_service = ManagedService {
+        application_id: task_processor_id.forget_abi(),
+        name: "test-service".to_string(),
+        chain_id: service_chain,
+        requirements: vec![],
+    };
+    let service_bytes = bcs::to_bytes(&managed_service)?;
+    // Admin chain block start_h+9: publish data blob
+    let service_id = admin_node_service
+        .publish_data_blob(&admin_chain, service_bytes)
+        .await?;
+
+    let mutation = format!(
+        "executeControllerCommand(admin: \"{}\", command: {{SetAdmins: {{ admins: [\"{}\"] }} }})",
+        admin_owner, admin_owner
+    );
+    admin_app.mutate(&mutation).await?;
+
+    // Admin chain block start_h+10: set admins
+    admin_notifications
+        .wait_for_block(BlockHeight::from(start_h + 10))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should receive a notification about a block on chain {admin_chain}")
+        });
+
+    let mutation = format!(
+        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
+        admin_owner, service_id, worker1_chain
+    );
+    admin_app.mutate(&mutation).await?;
+
+    // Admin chain block start_h+11: assign service to worker 1
+    admin_notifications
+        .wait_for_block(BlockHeight::from(start_h + 11))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should receive a notification about a block on chain {admin_chain}")
+        });
+
+    // Worker 1 chain block 1: receive service assignment
+    notifications1
+        .wait_for_block(BlockHeight::from(1))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should get notification about a block on chain {worker1_chain}")
+        });
+
+    let response = app1.query("localWorkerState").await?;
+    let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+    assert_eq!(state.local_services.len(), 1);
+    assert_eq!(state.local_services[0].name, "test-service");
+
+    let task_app = node_service1.make_application(&service_chain, &task_processor_id)?;
+    let task_count: u64 = task_app.query_json("taskCount").await?;
+    assert_eq!(task_count, 0, "Initial task count should be 0");
+
+    // We start listening to notifications on the service chain as well.
+    let mut service_notifications = node_service1.notifications(service_chain).await?;
+
+    // We request the task using service_client - this is because worker1 will not be able
+    // to propose blocks via GraphQL, as it only uses the chain because the controller
+    // told it to, so only operations via the controller and task processor are expected
+    // to work.
+    let service_port = get_node_port().await;
+    let service_service = service_client
+        .run_node_service(service_port, ProcessInbox::Automatic)
+        .await?;
+    let service_task_app = service_service.make_application(&service_chain, &task_processor_id)?;
+    service_task_app
+        .mutate(r#"requestTask(operator: "ls", input: "")"#)
+        .await?;
+
+    service_notifications
+        .wait_for_block(BlockHeight::from(0))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should get notification about RequestTask block on chain {service_chain}")
+        });
+
+    service_notifications
+        .wait_for_block(BlockHeight::from(1))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should get notification about StoreResult block on chain {service_chain}")
+        });
+
+    let task_count: u64 = task_app.query_json("taskCount").await?;
+    assert_eq!(task_count, 1, "Task should have been processed");
+
+    let mutation = format!(
+        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [] }} }})",
+        admin_owner, service_id
+    );
+    admin_app.mutate(&mutation).await?;
+
+    // Admin chain block start_h+12: remove service from worker 1
+    admin_notifications
+        .wait_for_block(BlockHeight::from(start_h + 12))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should receive a notification about a block on chain {admin_chain}")
+        });
+
+    // Worker 1 chain block 2: receive service removal
+    notifications1
+        .wait_for_block(BlockHeight::from(2))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should get notification about a block on chain {worker1_chain}")
+        });
+
+    let response = app1.query("localWorkerState").await?;
+    let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+    assert!(
+        state.local_services.is_empty(),
+        "Service should be removed after block notification"
+    );
+
+    node_service1.ensure_is_running()?;
+    node_service1.terminate().await?;
+    node_service2.ensure_is_running()?;
+    node_service2.terminate().await?;
+    admin_node_service.ensure_is_running()?;
+    admin_node_service.terminate().await?;
     net.ensure_is_running().await?;
     net.terminate().await?;
 

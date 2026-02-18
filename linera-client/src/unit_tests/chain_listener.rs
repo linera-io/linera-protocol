@@ -68,13 +68,13 @@ impl chain_listener::ClientContext for ClientContext {
         client: &ChainClient<environment::Test>,
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
-        let client_owner = client.preferred_owner();
+        let existing_owner = self.wallet().get(info.chain_id).and_then(|c| c.owner);
         let pending_proposal = client.pending_proposal().clone();
         self.wallet().insert(
             info.chain_id,
             wallet::Chain {
                 pending_proposal,
-                owner: client_owner,
+                owner: existing_owner,
                 ..info.as_ref().into()
             },
         );
@@ -517,6 +517,184 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
 
     cancellation_token.cancel();
     handle.await;
+
+    Ok(())
+}
+
+/// Tests that user-initiated operations sign blocks with the "dynamic" owner while
+/// the chain listener signs inbox-processing blocks with the "autosigner" owner.
+///
+/// This reproduces the bug where `update_wallet` overwrites the wallet's owner with
+/// the ChainClient's `preferred_owner`, causing the listener to use the wrong signer.
+#[test_log::test(tokio::test)]
+async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result<()> {
+    let mut signer = InMemorySigner::new(Some(42));
+    let autosigner_key = signer.generate_new();
+    let autosigner_owner: AccountOwner = autosigner_key.into();
+    let dynamic_key = signer.generate_new();
+    let dynamic_owner: AccountOwner = dynamic_key.into();
+
+    let config = ChainListenerConfig::default();
+    let storage_builder = MemoryStorageBuilder::default();
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
+
+    // Chain 0: the chain under test (owned by both autosigner and dynamic).
+    let client0 = builder.add_root_chain(0, Amount::ONE).await?;
+    let chain_id0 = client0.chain_id();
+    // Chain 1: sender of incoming messages.
+    let client1 = builder.add_root_chain(1, Amount::ONE).await?;
+
+    // Transfer ownership to both the autosigner and dynamic owners.
+    // Use multi_leader_rounds > 0 so both owners can propose without waiting for leadership.
+    let timeout_config = TimeoutConfig {
+        base_timeout: TimeDelta::from_secs(1),
+        timeout_increment: TimeDelta::ZERO,
+        ..TimeoutConfig::default()
+    };
+    client0
+        .change_ownership(ChainOwnership::multiple(
+            [(autosigner_owner, 1), (dynamic_owner, 1)],
+            100,
+            timeout_config,
+        ))
+        .await?;
+
+    let genesis_config = GenesisConfig::new_testing(&builder);
+    let admin_chain_id = genesis_config.admin_chain_id();
+    let storage = builder.make_storage().await?;
+
+    let mut context = ClientContext {
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+                signer,
+                wallet: environment::TestWallet::default(),
+            },
+            admin_chain_id,
+            false,
+            [(chain_id0, ListeningMode::FullChain)],
+            format!("Client node for {:.8}", chain_id0),
+            Duration::from_secs(30),
+            Duration::from_secs(1),
+            chain_client::Options::test_default(),
+            5_000,
+            10_000,
+            linera_core::client::RequestsSchedulerConfig::default(),
+        )),
+    };
+
+    // Set wallet owner to the autosigner (as wallet.setOwner() would in the web client).
+    let chain0_info = client0.chain_info().await?;
+    context.wallet().insert(
+        chain_id0,
+        wallet::Chain {
+            owner: Some(autosigner_owner),
+            block_hash: chain0_info.block_hash,
+            next_block_height: chain0_info.next_block_height,
+            timestamp: clock.current_time(),
+            pending_proposal: None,
+            epoch: Some(chain0_info.epoch),
+        },
+    );
+    context
+        .update_wallet_for_new_chain(
+            client1.chain_id(),
+            client1.preferred_owner(),
+            clock.current_time(),
+            Epoch::ZERO,
+        )
+        .await?;
+
+    // Simulate the web client's client.chain({owner: dynamicAddress}) followed by an
+    // operation (e.g. addOwner). This calls update_wallet, which with the bug overwrites
+    // the wallet owner with the ChainClient's preferred_owner.
+    let mut chain_client = context.make_chain_client(chain_id0).await?;
+    chain_client.set_preferred_owner(dynamic_owner);
+    context.update_wallet(&chain_client).await?;
+
+    // Start the chain listener. It creates its ChainClient via make_chain_client(),
+    // reading the owner from the wallet.
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let chain_listener = ChainListener::new(
+        config,
+        context,
+        storage.clone(),
+        child_token,
+        tokio::sync::mpsc::unbounded_channel().1,
+        false,
+    )
+    .run()
+    .await
+    .unwrap();
+
+    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+
+    // Send a message from chain 1 to chain 0. The listener should process the inbox.
+    let recipient0 = Account::chain(chain_id0);
+    client1
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient0)
+        .await?;
+
+    // Wait for the listener to process the inbox (creating a block after the
+    // change_ownership block).
+    for i in 0.. {
+        client0.synchronize_from_validators().boxed().await?;
+        let balance = client0.local_balance().await?;
+        if balance == Amount::from_tokens(2) {
+            break;
+        }
+        clock.add(TimeDelta::from_secs(1));
+        if i == 30 {
+            panic!("Listener did not process inbox. Balance: {}", balance);
+        }
+    }
+
+    // Stop the listener before doing user-initiated operations.
+    cancellation_token.cancel();
+    handle.await;
+
+    // The change_ownership block is at height 0 (created by builder's original owner).
+    // The inbox-processing block is at height 1 (created by the listener).
+    // Verify the listener's block was signed by the autosigner, not the dynamic signer.
+    let certs = storage
+        .read_certificates_by_heights(chain_id0, &[BlockHeight::from(1)])
+        .await?;
+    let inbox_cert = certs[0]
+        .as_ref()
+        .expect("certificate should exist at height 1");
+    let inbox_block = inbox_cert.inner().block();
+    assert_eq!(
+        inbox_block.header.authenticated_owner,
+        Some(autosigner_owner),
+        "Listener should sign inbox blocks with the autosigner, not the dynamic signer"
+    );
+
+    // Reuse the chain_client (which has preferred_owner = dynamic_owner) for a
+    // user-initiated operation and verify the block is signed by the dynamic signer.
+    chain_client
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(client1.chain_id()),
+        )
+        .await?;
+
+    let certs = storage
+        .read_certificates_by_heights(chain_id0, &[BlockHeight::from(2)])
+        .await?;
+    let user_cert = certs[0]
+        .as_ref()
+        .expect("certificate should exist at height 2");
+    let user_block = user_cert.inner().block();
+    assert_eq!(
+        user_block.header.authenticated_owner,
+        Some(dynamic_owner),
+        "User-initiated blocks should be signed by the dynamic signer"
+    );
 
     Ok(())
 }

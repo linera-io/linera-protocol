@@ -55,6 +55,13 @@ pub struct Options {
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
 
+    /// Maximum number of message bundles to discard from a block proposal due to block limit
+    /// errors before discarding all remaining bundles.
+    ///
+    /// Discarded bundles can be retried in the next block.
+    #[arg(long, default_value = "3")]
+    pub max_block_limit_errors: u32,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     #[arg(
         long = "chain-worker-ttl-ms",
@@ -85,6 +92,14 @@ pub struct Options {
     /// Number of times to retry connecting to a validator.
     #[arg(long, default_value = "10")]
     pub max_retries: u32,
+
+    /// Maximum backoff delay for retrying to connect to a validator.
+    #[arg(
+        long = "max-backoff-ms",
+        default_value = "30000",
+        value_parser = util::parse_millis
+    )]
+    pub max_backoff: Duration,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
@@ -260,6 +275,7 @@ impl Options {
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
         chain_client::Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
+            max_block_limit_errors: self.max_block_limit_errors,
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,

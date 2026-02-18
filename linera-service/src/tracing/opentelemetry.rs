@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! OpenTelemetry integration for tracing with OTLP export and Chrome trace export.
+//! OpenTelemetry integration for tracing with OTLP export.
 
 use opentelemetry::{global, propagation::TextMapCompositePropagator, trace::TracerProvider};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
@@ -132,12 +132,12 @@ pub fn init(log_name: &str, otlp_endpoint: Option<&str>) {
         _ => match std::env::var("LINERA_OTLP_EXPORTER_ENDPOINT") {
             Ok(ep) if !ep.is_empty() => ep,
             _ => {
-                eprintln!(
+                crate::tracing::init(log_name);
+                tracing::warn!(
                     "LINERA_OTLP_EXPORTER_ENDPOINT not set and no endpoint provided. \
-                     Falling back to standard tracing without OpenTelemetry span export.\
+                     Falling back to standard tracing without OpenTelemetry span export. \
                      Baggage propagation is still enabled."
                 );
-                crate::tracing::init(log_name);
                 return;
             }
         },

@@ -164,7 +164,7 @@ impl ChainOwnership {
 
     /// Returns `true` if this owner can participate in multi-leader rounds, i.e. it
     /// is a regular owner or super owner or `open_multi_leader_rounds == true`.
-    pub fn is_multi_leader_owner(&self, owner: &AccountOwner) -> bool {
+    pub fn can_propose_in_multi_leader_round(&self, owner: &AccountOwner) -> bool {
         self.open_multi_leader_rounds
             || self.owners.contains_key(owner)
             || self.super_owners.contains(owner)

@@ -14,7 +14,7 @@ use std::{
 };
 
 use async_graphql::InputType as _;
-use futures::{stream::StreamExt, FutureExt};
+use futures::{future, stream::StreamExt, FutureExt};
 use linera_base::{
     data_types::{TimeDelta, Timestamp},
     identifiers::{ApplicationId, ChainId},
@@ -43,19 +43,31 @@ pub fn parse_operator(s: &str) -> Result<(String, PathBuf), String> {
 
 type Deadline = Reverse<(Timestamp, Option<ApplicationId>)>;
 
+/// Messages sent from background task execution to the main loop.
+enum TaskMessage {
+    /// A task outcome ready to be submitted.
+    Outcome {
+        application_id: ApplicationId,
+        outcome: TaskOutcome,
+    },
+    /// All tasks in a batch have completed and their outcomes (if any) have been sent.
+    BatchComplete { application_id: ApplicationId },
+}
+
 /// A task processor that watches applications and executes off-chain operators.
 pub struct TaskProcessor<Env: linera_core::Environment> {
     chain_id: ChainId,
     application_ids: Vec<ApplicationId>,
-    last_requested_callbacks: BTreeMap<ApplicationId, Timestamp>,
+    cursors: BTreeMap<ApplicationId, Vec<u8>>,
     chain_client: ChainClient<Env>,
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
-    outcome_sender: mpsc::UnboundedSender<(ApplicationId, TaskOutcome)>,
-    outcome_receiver: mpsc::UnboundedReceiver<(ApplicationId, TaskOutcome)>,
+    outcome_sender: mpsc::UnboundedSender<TaskMessage>,
+    outcome_receiver: mpsc::UnboundedReceiver<TaskMessage>,
     update_receiver: mpsc::UnboundedReceiver<Update>,
     deadlines: BinaryHeap<Deadline>,
     operators: OperatorMap,
+    in_flight_apps: BTreeSet<ApplicationId>,
 }
 
 impl<Env: linera_core::Environment> TaskProcessor<Env> {
@@ -74,15 +86,16 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         Self {
             chain_id,
             application_ids,
-            last_requested_callbacks: BTreeMap::new(),
+            cursors: BTreeMap::new(),
             chain_client,
             cancellation_token,
+            notifications,
             outcome_sender,
             outcome_receiver,
-            notifications,
+            update_receiver,
             deadlines: BinaryHeap::new(),
             operators,
-            update_receiver,
+            in_flight_apps: BTreeSet::new(),
         }
     }
 
@@ -103,9 +116,17 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     let application_ids = self.process_events();
                     self.process_actions(application_ids).await;
                 }
-                Some((application_id, outcome)) = self.outcome_receiver.recv() => {
-                    if let Err(e) = self.submit_task_outcome(application_id, &outcome).await {
-                        error!("Error while processing task outcome {outcome:?}: {e}");
+                Some(msg) = self.outcome_receiver.recv() => {
+                    match msg {
+                        TaskMessage::Outcome { application_id, outcome } => {
+                            if let Err(e) = self.submit_task_outcome(application_id, &outcome).await {
+                                error!("Error while processing task outcome {outcome:?}: {e}");
+                            }
+                        }
+                        TaskMessage::BatchComplete { application_id } => {
+                            self.in_flight_apps.remove(&application_id);
+                            self.process_actions(vec![application_id]).await;
+                        }
                     }
                 }
                 Some(update) = self.update_receiver.recv() => {
@@ -136,20 +157,21 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         let new_app_set: BTreeSet<_> = update.application_ids.iter().cloned().collect();
         let old_app_set: BTreeSet<_> = self.application_ids.iter().cloned().collect();
 
-        // Retain only last_requested_callbacks for applications that are still active
-        self.last_requested_callbacks
+        self.cursors
             .retain(|app_id, _| new_app_set.contains(app_id));
+        self.in_flight_apps
+            .retain(|app_id| new_app_set.contains(app_id));
 
         // Update the application_ids
         self.application_ids = update.application_ids;
 
         // Process actions for newly added applications
-        let new_apps: Vec<_> = self
+        let new_apps = self
             .application_ids
             .iter()
             .filter(|app_id| !old_app_set.contains(app_id))
             .cloned()
-            .collect();
+            .collect::<Vec<_>>();
         if !new_apps.is_empty() {
             self.process_actions(new_apps).await;
         }
@@ -174,44 +196,82 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
     async fn process_actions(&mut self, application_ids: Vec<ApplicationId>) {
         for application_id in application_ids {
+            if self.in_flight_apps.contains(&application_id) {
+                debug!("Skipping {application_id}: tasks already in flight");
+                continue;
+            }
             debug!("Processing actions for {application_id}");
             let now = Timestamp::now();
-            let last_requested_callback =
-                self.last_requested_callbacks.get(&application_id).cloned();
-            let actions = match self
-                .query_actions(application_id, last_requested_callback, now)
-                .await
-            {
+            let app_cursor = self.cursors.get(&application_id).cloned();
+            let actions = match self.query_actions(application_id, app_cursor, now).await {
                 Ok(actions) => actions,
                 Err(error) => {
                     error!("Error reading application actions: {error}");
                     // Retry in at most 1 minute.
                     self.deadlines.push(Reverse((
                         now.saturating_add(TimeDelta::from_secs(60)),
-                        None,
+                        Some(application_id),
                     )));
                     continue;
                 }
             };
             if let Some(timestamp) = actions.request_callback {
-                self.last_requested_callbacks.insert(application_id, now);
                 self.deadlines
                     .push(Reverse((timestamp, Some(application_id))));
             }
-            for task in actions.execute_tasks {
+            if let Some(cursor) = actions.set_cursor {
+                self.cursors.insert(application_id, cursor);
+            }
+            if !actions.execute_tasks.is_empty() {
+                self.in_flight_apps.insert(application_id);
                 let sender = self.outcome_sender.clone();
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = Self::execute_task(
-                        application_id,
-                        task.operator,
-                        task.input,
-                        sender,
-                        operators,
-                    )
-                    .await
+                    // Spawn all tasks concurrently and join them.
+                    let handles: Vec<_> = actions
+                        .execute_tasks
+                        .into_iter()
+                        .map(|task| {
+                            let operators = operators.clone();
+                            tokio::spawn(Self::execute_task(
+                                application_id,
+                                task.operator,
+                                task.input,
+                                operators,
+                            ))
+                        })
+                        .collect();
+                    let results = future::join_all(handles).await;
+                    // Submit outcomes in the original order.
+                    for result in results {
+                        match result {
+                            Ok(Ok(outcome)) => {
+                                if sender
+                                    .send(TaskMessage::Outcome {
+                                        application_id,
+                                        outcome,
+                                    })
+                                    .is_err()
+                                {
+                                    error!("Outcome receiver dropped for {application_id}");
+                                    break;
+                                }
+                            }
+                            Ok(Err(error)) => {
+                                error!(%application_id, %error, "Error executing task");
+                            }
+                            Err(error) => {
+                                error!(%application_id, %error, "Task panicked");
+                            }
+                        }
+                    }
+                    // Signal that this batch is done so the main loop can process
+                    // the next batch for this application.
+                    if sender
+                        .send(TaskMessage::BatchComplete { application_id })
+                        .is_err()
                     {
-                        error!("Error executing task for {application_id}: {e}");
+                        error!("Outcome receiver dropped for {application_id}");
                     }
                 });
             }
@@ -222,9 +282,8 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         application_id: ApplicationId,
         operator: String,
         input: String,
-        sender: mpsc::UnboundedSender<(ApplicationId, TaskOutcome)>,
         operators: OperatorMap,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<TaskOutcome, anyhow::Error> {
         let binary_path = operators
             .get(&operator)
             .ok_or_else(|| anyhow::anyhow!("unsupported operator: {}", operator))?;
@@ -250,19 +309,18 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             output: String::from_utf8_lossy(&output.stdout).into(),
         };
         debug!("Done executing task for {application_id}");
-        sender.send((application_id, outcome))?;
-        Ok(())
+        Ok(outcome)
     }
 
     async fn query_actions(
         &mut self,
         application_id: ApplicationId,
-        last_requested_callback: Option<Timestamp>,
+        cursor: Option<Vec<u8>>,
         now: Timestamp,
     ) -> Result<ProcessorActions, anyhow::Error> {
         let query = format!(
-            "query {{ nextActions(lastRequestedCallback: {}, now: {}) }}",
-            last_requested_callback.to_value(),
+            "query {{ nextActions(cursor: {}, now: {}) }}",
+            cursor.to_value(),
             now.to_value(),
         );
         let bytes = serde_json::to_vec(&json!({"query": query}))?;

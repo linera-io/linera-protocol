@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
+    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
     ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::Context;
@@ -58,9 +58,6 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
 
     // Blobs published in the block.
     published_blobs: BTreeMap<BlobId, &'blobs Blob>,
-
-    // We expect the number of outcomes to be equal to the number of transactions in the block.
-    expected_outcomes_count: usize,
 }
 
 impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
@@ -96,7 +93,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results: Vec::new(),
             transaction_index: 0,
             published_blobs,
-            expected_outcomes_count: proposal.transactions.len(),
         })
     }
 
@@ -104,6 +100,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id,
         block_height = %self.block_height,
+        transaction_index = %self.transaction_index,
+        transaction_type = %transaction.as_ref(),
     ))]
     pub async fn execute_transaction<C>(
         &mut self,
@@ -183,6 +181,13 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Executes a message as part of an incoming bundle in a block.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id,
+        block_height = %self.block_height,
+        origin = %incoming_bundle.origin,
+        action = ?incoming_bundle.action,
+        is_bouncing = %posted_message.is_bouncing(),
+    ))]
     async fn execute_message_in_block<C>(
         &mut self,
         chain: &mut ExecutionStateView<C>,
@@ -275,6 +280,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// so that the execution of the next transaction doesn't overwrite the previous ones.
     ///
     /// Tracks the resources used by the transaction - size of the incoming and outgoing messages, blobs, etc.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id,
+        block_height = %self.block_height,
+        transaction_index = %self.transaction_index,
+        outgoing_messages_count = %txn_outcome.outgoing_messages.len(),
+        events_count = %txn_outcome.events.len(),
+        blobs_count = %txn_outcome.blobs.len(),
+    ))]
     pub async fn process_txn_outcome<C>(
         &mut self,
         txn_outcome: TransactionOutcome,
@@ -289,6 +302,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         for message_out in &txn_outcome.outgoing_messages {
             if message_out.kind == MessageKind::Bouncing {
                 continue; // Bouncing messages are free.
+            }
+            if let Message::User { application_id, .. } = &message_out.message {
+                if resource_controller.policy().is_free_app(application_id) {
+                    continue; // Outgoing message fees are waived for free apps.
+                }
             }
             resource_controller
                 .track_message(&message_out.message)
@@ -306,6 +324,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
         // Account for blobs published by this transaction directly.
         for blob in &txn_outcome.blobs {
+            if txn_outcome.free_blob_ids.contains(&blob.id()) {
+                continue; // Blob publishing fees are waived for free apps.
+            }
             resource_controller
                 .track_blob_published(blob)
                 .with_execution_context(context)?;
@@ -367,17 +388,65 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         self.resource_controller
     }
 
+    /// Creates a checkpoint of the tracker's mutable state.
+    ///
+    /// This captures all state that could be modified during transaction execution,
+    /// allowing restoration if execution fails.
+    pub fn create_checkpoint(&self) -> TrackerCheckpoint {
+        TrackerCheckpoint {
+            resource_tracker: self.resource_controller.tracker,
+            next_application_index: self.next_application_index,
+            next_chain_index: self.next_chain_index,
+            transaction_index: self.transaction_index,
+            oracle_responses_len: self.oracle_responses.len(),
+            events_len: self.events.len(),
+            blobs_len: self.blobs.len(),
+            messages_len: self.messages.len(),
+            operation_results_len: self.operation_results.len(),
+        }
+    }
+
+    /// Restores the tracker's mutable state from a checkpoint.
+    ///
+    /// This reverts all state to what it was when the checkpoint was saved,
+    /// as if the failed transaction execution never happened.
+    pub fn restore_checkpoint(&mut self, checkpoint: TrackerCheckpoint) {
+        // Destructure to ensure all fields are handled (compiler will warn on new fields).
+        let TrackerCheckpoint {
+            resource_tracker,
+            next_application_index,
+            next_chain_index,
+            transaction_index,
+            oracle_responses_len,
+            events_len,
+            blobs_len,
+            messages_len,
+            operation_results_len,
+        } = checkpoint;
+
+        self.resource_controller.tracker = resource_tracker;
+        self.next_application_index = next_application_index;
+        self.next_chain_index = next_chain_index;
+        self.transaction_index = transaction_index;
+        self.oracle_responses.truncate(oracle_responses_len);
+        self.events.truncate(events_len);
+        self.blobs.truncate(blobs_len);
+        self.messages.truncate(messages_len);
+        self.operation_results.truncate(operation_results_len);
+    }
+
     /// Finalizes the execution and returns the collected results.
     ///
     /// This method should be called after all transactions have been processed.
+    /// The `expected_outcomes_count` should be the number of transactions in the final block.
     /// Panics if the number of lists of oracle responses, outgoing messages,
     /// events, or blobs does not match the expected counts.
-    pub fn finalize(self) -> FinalizeExecutionResult {
+    pub fn finalize(self, expected_outcomes_count: usize) -> FinalizeExecutionResult {
         // Asserts that the number of outcomes matches the expected count.
-        assert_eq!(self.oracle_responses.len(), self.expected_outcomes_count);
-        assert_eq!(self.messages.len(), self.expected_outcomes_count);
-        assert_eq!(self.events.len(), self.expected_outcomes_count);
-        assert_eq!(self.blobs.len(), self.expected_outcomes_count);
+        assert_eq!(self.oracle_responses.len(), expected_outcomes_count);
+        assert_eq!(self.messages.len(), expected_outcomes_count);
+        assert_eq!(self.events.len(), expected_outcomes_count);
+        assert_eq!(self.blobs.len(), expected_outcomes_count);
 
         #[cfg(with_metrics)]
         crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker);
@@ -415,3 +484,17 @@ pub(crate) type FinalizeExecutionResult = (
     Vec<OperationResult>,
     ResourceTracker,
 );
+
+/// Checkpoint of the tracker's mutable state for restoration on failure.
+#[derive(Clone)]
+pub struct TrackerCheckpoint {
+    pub(crate) resource_tracker: ResourceTracker,
+    pub(crate) next_application_index: u32,
+    pub(crate) next_chain_index: u32,
+    pub(crate) transaction_index: u32,
+    pub(crate) oracle_responses_len: usize,
+    pub(crate) events_len: usize,
+    pub(crate) blobs_len: usize,
+    pub(crate) messages_len: usize,
+    pub(crate) operation_results_len: usize,
+}

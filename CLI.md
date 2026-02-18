@@ -134,6 +134,11 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-pending-message-bundles <MAX_PENDING_MESSAGE_BUNDLES>` — The maximum number of incoming message bundles to include in a block proposal
 
   Default value: `10`
+* `--max-block-limit-errors <MAX_BLOCK_LIMIT_ERRORS>` — Maximum number of message bundles to discard from a block proposal due to block limit errors before discarding all remaining bundles.
+
+   Discarded bundles can be retried in the next block.
+
+  Default value: `3`
 * `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory
 
   Default value: `30000`
@@ -146,6 +151,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-retries <MAX_RETRIES>` — Number of times to retry connecting to a validator
 
   Default value: `10`
+* `--max-backoff-ms <MAX_BACKOFF>` — Maximum backoff delay for retrying to connect to a validator
+
+  Default value: `30000`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--allow-fast-blocks` — Whether to allow creating blocks in the fast round. Fast blocks have lower latency but must be used carefully so that there are never any conflicting fast block proposals
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
@@ -542,6 +550,7 @@ View or update the resource control policy
 * `--maximum-http-response-bytes <MAXIMUM_HTTP_RESPONSE_BYTES>` — Set the maximum size in bytes of a received HTTP response
 * `--http-request-timeout-ms <HTTP_REQUEST_TIMEOUT_MS>` — Set the maximum amount of time allowed to wait for an HTTP response
 * `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
+* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived
 
 
 
@@ -691,6 +700,7 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--maximum-http-response-bytes <MAXIMUM_HTTP_RESPONSE_BYTES>` — Set the maximum size in bytes of a received HTTP response
 * `--http-request-timeout-ms <HTTP_REQUEST_TIMEOUT_MS>` — Set the maximum amount of time allowed to wait for an HTTP response
 * `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
+* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--network-name <NETWORK_NAME>` — A unique name to identify this network
 
@@ -1207,6 +1217,9 @@ Start a Local Linera Network
 * `--cross-chain-retry-delay-ms <RETRY_DELAY_MS>` — Delay before retrying of cross-chain message
 
   Default value: `2000`
+* `--cross-chain-max-backoff-ms <MAX_BACKOFF_MS>` — Maximum backoff delay for cross-chain message retries
+
+  Default value: `30000`
 * `--cross-chain-sender-delay-ms <SENDER_DELAY_MS>` — Introduce a delay before sending every cross-chain message (e.g. for testing purpose)
 
   Default value: `0`

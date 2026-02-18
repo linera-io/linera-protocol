@@ -152,7 +152,7 @@ kube = "0.88.1"
 linera-kywasmtime = "0.1.0"
 linked-hash-map = "0.5.6"
 log = "0.4.21"
-lru = "0.12.3"
+lru = "0.15.0"
 mini-moka = "0.10.3"
 nonzero_lit = "0.1.2"
 num-bigint = "0.4.3"
@@ -238,6 +238,7 @@ similar-asserts = "1.5.0"
 sqlx = "0.8"
 static_assertions = "1.1.0"
 stdext = "0.3.3"
+strum = { version = "0.26", features = ["derive"] }
 syn = "2.0.52"
 sync_wrapper = { version = "1.0.1", features = ["futures"] }
 sysinfo = "0.33.1"
@@ -338,6 +339,7 @@ native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
 publish-read-data-blob = { path = "./linera-sdk/tests/fixtures/publish-read-data-blob" }
 social = { path = "./examples/social" }
+task-processor = { path = "./examples/task-processor" }
 time-expiry = { path = "./linera-sdk/tests/fixtures/time-expiry" }
 
 [workspace.dependencies.aws-config]

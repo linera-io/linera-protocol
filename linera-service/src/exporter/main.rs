@@ -139,6 +139,14 @@ struct RunOptions {
     #[arg(long, default_value = "10")]
     pub max_retries: u32,
 
+    /// Maximum backoff delay for retrying to connect to a destination.
+    #[arg(
+        long = "max-backoff-ms",
+        default_value = "30000",
+        value_parser = util::parse_millis
+    )]
+    pub max_backoff: Duration,
+
     /// Port for the metrics server.
     #[arg(long)]
     pub metrics_port: Option<u16>,
@@ -217,6 +225,7 @@ impl RunOptions {
             recv_timeout: self.recv_timeout,
             retry_delay: self.retry_delay,
             max_retries: self.max_retries,
+            max_backoff: self.max_backoff,
         };
 
         if let Some(port) = self.metrics_port {

@@ -1,7 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt, future::Future, iter};
+use std::{
+    collections::BTreeSet,
+    fmt,
+    future::Future,
+    iter,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 
 use futures::{future, stream, StreamExt};
 use linera_base::{
@@ -34,8 +43,8 @@ use super::{
 #[cfg(feature = "opentelemetry")]
 use crate::propagation::{get_context_with_traffic_type, inject_context};
 use crate::{
-    grpc::api::RawCertificate, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
-    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
+    full_jitter_delay, grpc::api::RawCertificate, HandleConfirmedCertificateRequest,
+    HandleLiteCertRequest, HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
 #[derive(Clone)]
@@ -44,6 +53,7 @@ pub struct GrpcClient {
     client: ValidatorNodeClient<transport::Channel>,
     retry_delay: Duration,
     max_retries: u32,
+    max_backoff: Duration,
 }
 
 impl GrpcClient {
@@ -52,6 +62,7 @@ impl GrpcClient {
         channel: transport::Channel,
         retry_delay: Duration,
         max_retries: u32,
+        max_backoff: Duration,
     ) -> Self {
         let client = ValidatorNodeClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
@@ -61,6 +72,7 @@ impl GrpcClient {
             client,
             retry_delay,
             max_retries,
+            max_backoff,
         }
     }
 
@@ -78,6 +90,13 @@ impl GrpcClient {
             }
             Code::Ok | Code::Cancelled | Code::ResourceExhausted => {
                 trace!("Unexpected gRPC status: {status:?}; retrying");
+                true
+            }
+            Code::Internal if status.message().contains("h2 protocol error") => {
+                // HTTP/2 connection reset errors are transient network issues, not real
+                // internal errors. This happens when the server restarts and the
+                // connection is forcibly closed.
+                trace!("gRPC connection reset: {status:?}; retrying");
                 true
             }
             Code::NotFound => false, // This code is used if e.g. the validator is missing blobs.
@@ -121,7 +140,7 @@ impl GrpcClient {
             inject_context(&get_context_with_traffic_type(), request.metadata_mut());
             match f(self.client.clone(), request).await {
                 Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
-                    let delay = self.retry_delay.saturating_mul(retry_count);
+                    let delay = full_jitter_delay(self.retry_delay, retry_count, self.max_backoff);
                     retry_count += 1;
                     linera_base::time::timer::sleep(delay).await;
                     continue;
@@ -201,7 +220,7 @@ impl ValidatorNode for GrpcClient {
         self.address.clone()
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_block_proposal(
         &self,
         proposal: data_types::BlockProposal,
@@ -223,7 +242,7 @@ impl ValidatorNode for GrpcClient {
         GrpcClient::try_into_chain_info(client_delegate!(self, handle_lite_certificate, request)?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
@@ -241,7 +260,7 @@ impl ValidatorNode for GrpcClient {
         )?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_validated_certificate(
         &self,
         certificate: GenericCertificate<ValidatedBlock>,
@@ -254,7 +273,7 @@ impl ValidatorNode for GrpcClient {
         )?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_timeout_certificate(
         &self,
         certificate: GenericCertificate<Timeout>,
@@ -267,7 +286,7 @@ impl ValidatorNode for GrpcClient {
         )?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_chain_info_query(
         &self,
         query: linera_core::data_types::ChainInfoQuery,
@@ -279,7 +298,9 @@ impl ValidatorNode for GrpcClient {
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError> {
         let retry_delay = self.retry_delay;
         let max_retries = self.max_retries;
-        let mut retry_count = 0;
+        let max_backoff = self.max_backoff;
+        // Use shared atomic counter so unfold can reset it on successful reconnection.
+        let retry_count = Arc::new(AtomicU32::new(0));
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };
@@ -298,17 +319,24 @@ impl ValidatorNode for GrpcClient {
 
         // A stream of `Result<grpc::Notification, tonic::Status>` that keeps calling
         // `client.subscribe(request)` endlessly and without delay.
+        let retry_count_for_unfold = retry_count.clone();
         let endlessly_retrying_notification_stream = stream::unfold((), move |()| {
             let mut client = client.clone();
             let subscription_request = subscription_request.clone();
             let mut stream = stream.take();
+            let retry_count = retry_count_for_unfold.clone();
             async move {
                 let stream = if let Some(stream) = stream.take() {
                     future::Either::Right(stream)
                 } else {
                     match client.subscribe(subscription_request.clone()).await {
                         Err(err) => future::Either::Left(stream::iter(iter::once(Err(err)))),
-                        Ok(response) => future::Either::Right(response.into_inner()),
+                        Ok(response) => {
+                            // Reset retry count on successful reconnection.
+                            retry_count.store(0, Ordering::Relaxed);
+                            trace!("Successfully reconnected subscription stream");
+                            future::Either::Right(response.into_inner())
+                        }
                     }
                 };
                 Some((stream, ()))
@@ -328,15 +356,18 @@ impl ValidatorNode for GrpcClient {
             })
             .take_while(move |result| {
                 let Err(status) = result else {
-                    retry_count = 0;
+                    retry_count.store(0, Ordering::Relaxed);
                     return future::Either::Left(future::ready(true));
                 };
 
-                if !span.in_scope(|| Self::is_retryable(status)) || retry_count >= max_retries {
+                let current_retry_count = retry_count.load(Ordering::Relaxed);
+                if !span.in_scope(|| Self::is_retryable(status))
+                    || current_retry_count >= max_retries
+                {
                     return future::Either::Left(future::ready(false));
                 }
-                let delay = retry_delay.saturating_mul(retry_count);
-                retry_count += 1;
+                let delay = full_jitter_delay(retry_delay, current_retry_count, max_backoff);
+                retry_count.fetch_add(1, Ordering::Relaxed);
                 future::Either::Right(async move {
                     linera_base::time::timer::sleep(delay).await;
                     true

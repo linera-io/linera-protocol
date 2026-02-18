@@ -6,21 +6,18 @@ settings:
 
 importers:
 
-  .:
-    devDependencies:
-      '@playwright/test':
-        specifier: 1.54.0
-        version: 1.54.0
-
   ../web/@linera/client:
     dependencies:
+      bowser:
+        specifier: 2.13.1
+        version: 2.13.1
       ethers:
         specifier: ^6.15.0
         version: 6.15.0
     devDependencies:
       '@vitest/browser':
         specifier: ^3.2.4
-        version: 3.2.4(playwright@1.54.0)(vite@5.4.20(@types/node@24.9.1))(vitest@3.2.4)
+        version: 3.2.4(playwright@1.54.0)(vite@7.1.7(@types/node@24.9.1)(yaml@2.8.1))(vitest@3.2.4)
       playwright:
         specifier: 1.54.0
         version: 1.54.0
@@ -41,7 +38,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.4(@types/debug@4.1.12)(@types/node@24.9.1)(@vitest/browser@3.2.4)
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@24.9.1)(@vitest/browser@3.2.4)(yaml@2.8.1)
 
   ../web/@linera/metamask:
     dependencies:
@@ -68,6 +65,9 @@ importers:
         specifier: ^6.15.0
         version: 6.15.0
     devDependencies:
+      '@playwright/test':
+        specifier: 1.54.0
+        version: 1.54.0
       '@types/node':
         specifier: 22.7.5
         version: 22.7.5
@@ -127,6 +127,19 @@ importers:
       vite-plugin-checker:
         specifier: ^0.8.0
         version: 0.8.0(eslint@9.39.2)(optionator@0.9.4)(stylelint@16.26.1(typescript@5.9.3))(typescript@5.9.3)(vite@7.1.7(@types/node@22.7.5)(yaml@2.8.1))
+
+  native-fungible/metamask:
+    dependencies:
+      '@linera/client':
+        specifier: workspace:*
+        version: link:../../../web/@linera/client
+      '@linera/metamask':
+        specifier: workspace:*
+        version: link:../../../web/@linera/metamask
+    devDependencies:
+      vite:
+        specifier: ^5.4.11
+        version: 5.4.20(@types/node@24.9.1)
 
 packages:
 
@@ -920,6 +933,9 @@ packages:
   binary-extensions@2.3.0:
     resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
     engines: {node: '>=8'}
+
+  bowser@2.13.1:
+    resolution: {integrity: sha512-OHawaAbjwx6rqICCKgSG0SAnT05bzd7ppyKLVUITZpANBaaMFBAsaNkto3LoQ31tyFP5kNujE8Cdx85G9VzOkw==}
 
   brace-expansion@1.1.12:
     resolution: {integrity: sha512-9T9UjW3r0UW5c1Q7GTwllptXwhvYmEzFhzMfZ9H7FQWt+uZePjZPjBP/W1ZEyZ1twGWom5/56TF4lPcqjnDHcg==}
@@ -2547,16 +2563,16 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
-  '@vitest/browser@3.2.4(playwright@1.54.0)(vite@5.4.20(@types/node@24.9.1))(vitest@3.2.4)':
+  '@vitest/browser@3.2.4(playwright@1.54.0)(vite@7.1.7(@types/node@24.9.1)(yaml@2.8.1))(vitest@3.2.4)':
     dependencies:
       '@testing-library/dom': 10.4.1
       '@testing-library/user-event': 14.6.1(@testing-library/dom@10.4.1)
-      '@vitest/mocker': 3.2.4(vite@5.4.20(@types/node@24.9.1))
+      '@vitest/mocker': 3.2.4(vite@7.1.7(@types/node@24.9.1)(yaml@2.8.1))
       '@vitest/utils': 3.2.4
       magic-string: 0.30.21
       sirv: 3.0.2
       tinyrainbow: 2.0.0
-      vitest: 3.2.4(@types/debug@4.1.12)(@types/node@24.9.1)(@vitest/browser@3.2.4)
+      vitest: 3.2.4(@types/debug@4.1.12)(@types/node@24.9.1)(@vitest/browser@3.2.4)(yaml@2.8.1)
       ws: 8.18.3
     optionalDependencies:
       playwright: 1.54.0
@@ -2574,13 +2590,13 @@ snapshots:
       chai: 5.3.3
       tinyrainbow: 2.0.0
 
-  '@vitest/mocker@3.2.4(vite@5.4.20(@types/node@24.9.1))':
+  '@vitest/mocker@3.2.4(vite@7.1.7(@types/node@24.9.1)(yaml@2.8.1))':
     dependencies:
       '@vitest/spy': 3.2.4
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 5.4.20(@types/node@24.9.1)
+      vite: 7.1.7(@types/node@24.9.1)(yaml@2.8.1)
 
   '@vitest/pretty-format@3.2.4':
     dependencies:
@@ -2664,6 +2680,8 @@ snapshots:
   balanced-match@2.0.0: {}
 
   binary-extensions@2.3.0: {}
+
+  bowser@2.13.1: {}
 
   brace-expansion@1.1.12:
     dependencies:
@@ -3562,15 +3580,16 @@ snapshots:
 
   uuid@9.0.1: {}
 
-  vite-node@3.2.4(@types/node@24.9.1):
+  vite-node@3.2.4(@types/node@24.9.1)(yaml@2.8.1):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 2.0.3
-      vite: 5.4.20(@types/node@24.9.1)
+      vite: 7.1.7(@types/node@24.9.1)(yaml@2.8.1)
     transitivePeerDependencies:
       - '@types/node'
+      - jiti
       - less
       - lightningcss
       - sass
@@ -3579,6 +3598,8 @@ snapshots:
       - sugarss
       - supports-color
       - terser
+      - tsx
+      - yaml
 
   vite-plugin-checker@0.8.0(eslint@9.39.2)(optionator@0.9.4)(stylelint@16.26.1(typescript@5.9.3))(typescript@5.9.3)(vite@7.1.7(@types/node@22.7.5)(yaml@2.8.1)):
     dependencies:
@@ -3625,11 +3646,24 @@ snapshots:
       fsevents: 2.3.3
       yaml: 2.8.1
 
-  vitest@3.2.4(@types/debug@4.1.12)(@types/node@24.9.1)(@vitest/browser@3.2.4):
+  vite@7.1.7(@types/node@24.9.1)(yaml@2.8.1):
+    dependencies:
+      esbuild: 0.25.11
+      fdir: 6.5.0(picomatch@4.0.3)
+      picomatch: 4.0.3
+      postcss: 8.5.6
+      rollup: 4.52.2
+      tinyglobby: 0.2.15
+    optionalDependencies:
+      '@types/node': 24.9.1
+      fsevents: 2.3.3
+      yaml: 2.8.1
+
+  vitest@3.2.4(@types/debug@4.1.12)(@types/node@24.9.1)(@vitest/browser@3.2.4)(yaml@2.8.1):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.4
-      '@vitest/mocker': 3.2.4(vite@5.4.20(@types/node@24.9.1))
+      '@vitest/mocker': 3.2.4(vite@7.1.7(@types/node@24.9.1)(yaml@2.8.1))
       '@vitest/pretty-format': 3.2.4
       '@vitest/runner': 3.2.4
       '@vitest/snapshot': 3.2.4
@@ -3647,14 +3681,15 @@ snapshots:
       tinyglobby: 0.2.15
       tinypool: 1.1.1
       tinyrainbow: 2.0.0
-      vite: 5.4.20(@types/node@24.9.1)
-      vite-node: 3.2.4(@types/node@24.9.1)
+      vite: 7.1.7(@types/node@24.9.1)(yaml@2.8.1)
+      vite-node: 3.2.4(@types/node@24.9.1)(yaml@2.8.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/debug': 4.1.12
       '@types/node': 24.9.1
-      '@vitest/browser': 3.2.4(playwright@1.54.0)(vite@5.4.20(@types/node@24.9.1))(vitest@3.2.4)
+      '@vitest/browser': 3.2.4(playwright@1.54.0)(vite@7.1.7(@types/node@24.9.1)(yaml@2.8.1))(vitest@3.2.4)
     transitivePeerDependencies:
+      - jiti
       - less
       - lightningcss
       - msw
@@ -3664,6 +3699,8 @@ snapshots:
       - sugarss
       - supports-color
       - terser
+      - tsx
+      - yaml
 
   vscode-jsonrpc@6.0.0: {}
 
