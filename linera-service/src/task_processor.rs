@@ -20,7 +20,9 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId},
     task_processor::{ProcessorActions, TaskOutcome},
 };
-use linera_core::{client::ChainClient, node::NotificationStream, worker::Reason};
+use linera_core::{
+    client::ChainClient, data_types::ClientOutcome, node::NotificationStream, worker::Reason,
+};
 use serde_json::json;
 use tokio::{io::AsyncWriteExt, process::Command, select, sync::mpsc};
 use tokio_util::sync::CancellationToken;
@@ -426,11 +428,11 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 .await
                 .map_err(SubmitError::other)?
             {
-                linera_core::data_types::ClientOutcome::Committed(_) => {}
-                linera_core::data_types::ClientOutcome::WaitForTimeout(timeout) => {
+                ClientOutcome::Committed(_) => {}
+                ClientOutcome::WaitForTimeout(timeout) => {
                     return Err(SubmitError::WaitForTimeout(timeout.timestamp));
                 }
-                linera_core::data_types::ClientOutcome::Conflict(_) => {
+                ClientOutcome::Conflict(_) => {
                     return Err(SubmitError::Conflict);
                 }
             }
