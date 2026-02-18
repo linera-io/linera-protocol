@@ -537,9 +537,10 @@ where
 
     /// Runs the worker until there are no more incoming requests.
     ///
-    /// Uses a fairness policy: after draining currently-queued reads, at least one
-    /// pending write is processed before accepting more reads. This prevents a flood
-    /// of read-only requests from starving chain-progress writes.
+    /// Prioritizes write requests (block processing, cross-chain updates, etc.) over
+    /// reads (GraphQL queries). After draining all pending writes, one read is processed
+    /// before checking for writes again. When both channels have requests ready, writes
+    /// are selected first.
     #[instrument(
         skip_all,
         fields(chain_id = format!("{:.8}", self.chain_id), long_lived_services = %self.config.long_lived_services),
@@ -555,8 +556,8 @@ where
         loop {
             // Wait for the first request from either channel.
             let first_request = futures::select! {
-                req = receivers.read_receiver.recv().fuse() => req,
                 req = receivers.write_receiver.recv().fuse() => req,
+                req = receivers.read_receiver.recv().fuse() => req,
             };
             let Some((request, span, queued_at)) = first_request else {
                 break; // Both channels closed.
@@ -597,10 +598,10 @@ where
                 .instrument(span)
                 .await;
 
-            // Inner loop: fairness scheduling.
+            // Inner loop: write-priority scheduling.
             loop {
-                // Phase 1: Drain available reads.
-                while let Ok((request, span, queued_at)) = receivers.read_receiver.try_recv() {
+                // Phase 1: Drain all pending writes.
+                while let Ok((request, span, queued_at)) = receivers.write_receiver.try_recv() {
                     if let Some((request, span, _)) =
                         self.preprocess_request(request, span, queued_at, &endpoint)
                     {
@@ -610,8 +611,8 @@ where
                     }
                 }
 
-                // Phase 2: Process one write if available.
-                if let Ok((request, span, queued_at)) = receivers.write_receiver.try_recv() {
+                // Phase 2: Process one read if available.
+                if let Ok((request, span, queued_at)) = receivers.read_receiver.try_recv() {
                     if let Some((request, span, _)) =
                         self.preprocess_request(request, span, queued_at, &endpoint)
                     {
@@ -629,7 +630,7 @@ where
                     () = self.storage.clock().sleep_until(ttl_timeout).fuse() => {
                         break; // TTL expired, unload state.
                     }
-                    maybe_request = receivers.read_receiver.recv().fuse() => {
+                    maybe_request = receivers.write_receiver.recv().fuse() => {
                         let Some((request, span, queued_at)) = maybe_request else {
                             break;
                         };
@@ -641,7 +642,7 @@ where
                                 .await;
                         }
                     }
-                    maybe_request = receivers.write_receiver.recv().fuse() => {
+                    maybe_request = receivers.read_receiver.recv().fuse() => {
                         let Some((request, span, queued_at)) = maybe_request else {
                             break;
                         };
