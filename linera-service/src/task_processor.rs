@@ -43,11 +43,27 @@ pub fn parse_operator(s: &str) -> Result<(String, PathBuf), String> {
 
 type Deadline = Reverse<(Timestamp, Option<ApplicationId>)>;
 
+/// Error from submitting a task outcome on-chain.
+enum SubmitError {
+    /// We are not the round leader; retry after the given timestamp.
+    WaitForTimeout(Timestamp),
+    /// Any other error.
+    Other(anyhow::Error),
+}
+
+impl SubmitError {
+    fn other(error: impl Into<anyhow::Error>) -> Self {
+        SubmitError::Other(error.into())
+    }
+}
+
 /// Message sent from a background batch task to the main loop on completion.
 struct BatchResult {
     application_id: ApplicationId,
-    /// Whether the batch ended early due to a task execution failure.
+    /// Whether the batch ended early due to a task or submission failure.
     had_failure: bool,
+    /// If set, the deadline at which to retry (e.g. from a `WaitForTimeout`).
+    retry_at: Option<Timestamp>,
 }
 
 /// A task processor that watches applications and executes off-chain operators.
@@ -63,6 +79,7 @@ pub struct TaskProcessor<Env: linera_core::Environment> {
     update_receiver: mpsc::UnboundedReceiver<Update>,
     deadlines: BinaryHeap<Deadline>,
     operators: OperatorMap,
+    retry_delay: TimeDelta,
     in_flight_apps: BTreeSet<ApplicationId>,
 }
 
@@ -74,6 +91,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         chain_client: ChainClient<Env>,
         cancellation_token: CancellationToken,
         operators: OperatorMap,
+        retry_delay: TimeDelta,
         update_receiver: Option<mpsc::UnboundedReceiver<Update>>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
@@ -91,6 +109,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             update_receiver,
             deadlines: BinaryHeap::new(),
             operators,
+            retry_delay,
             in_flight_apps: BTreeSet::new(),
         }
     }
@@ -115,9 +134,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 Some(result) = self.batch_receiver.recv() => {
                     self.in_flight_apps.remove(&result.application_id);
                     if result.had_failure {
-                        // Schedule a retry for the failed task.
+                        // Schedule a retry, using the timeout hint if available.
+                        let retry_at = result.retry_at.unwrap_or_else(|| {
+                            Timestamp::now().saturating_add(self.retry_delay)
+                        });
                         self.deadlines.push(Reverse((
-                            Timestamp::now().saturating_add(TimeDelta::from_secs(5)),
+                            retry_at,
                             Some(result.application_id),
                         )));
                     } else {
@@ -221,7 +243,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             if !actions.execute_tasks.is_empty() {
                 self.in_flight_apps.insert(application_id);
                 let chain_client = self.chain_client.clone();
-                let cancellation_token = self.cancellation_token.clone();
                 let batch_sender = self.batch_sender.clone();
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
@@ -243,32 +264,38 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     // Submit outcomes in the original order. Stop on any failure to
                     // preserve ordering: the on-chain queue is FIFO, so skipping a
                     // failed task and submitting a later one would pop the wrong entry.
+                    // Tasks are assumed idempotent, so on failure the whole batch is
+                    // retried from scratch.
                     let mut had_failure = false;
+                    let mut retry_at = None;
                     for result in results {
                         match result {
                             Ok(Ok(outcome)) => {
-                                // Retry submission until it succeeds or we're cancelled.
-                                loop {
-                                    match Self::submit_task_outcome(
-                                        &chain_client,
-                                        application_id,
-                                        &outcome,
-                                    )
-                                    .await
-                                    {
-                                        Ok(()) => break,
-                                        Err(error) => {
-                                            error!(
-                                                %application_id, %error,
-                                                "Error submitting task outcome, retrying",
-                                            );
-                                            select! {
-                                                _ = tokio::time::sleep(
-                                                    tokio::time::Duration::from_secs(5),
-                                                ) => {}
-                                                _ = cancellation_token.cancelled() => return,
-                                            }
-                                        }
+                                match Self::submit_task_outcome(
+                                    &chain_client,
+                                    application_id,
+                                    &outcome,
+                                )
+                                .await
+                                {
+                                    Ok(()) => {}
+                                    Err(SubmitError::WaitForTimeout(timestamp)) => {
+                                        error!(
+                                            %application_id,
+                                            "Not the round leader, retrying \
+                                             after {timestamp}",
+                                        );
+                                        retry_at = Some(timestamp);
+                                        had_failure = true;
+                                        break;
+                                    }
+                                    Err(SubmitError::Other(error)) => {
+                                        error!(
+                                            %application_id, %error,
+                                            "Error submitting task outcome",
+                                        );
+                                        had_failure = true;
+                                        break;
                                     }
                                 }
                             }
@@ -289,6 +316,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     let _ = batch_sender.send(BatchResult {
                         application_id,
                         had_failure,
+                        retry_at,
                     });
                 });
             }
@@ -362,14 +390,14 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         chain_client: &ChainClient<Env>,
         application_id: ApplicationId,
         task_outcome: &TaskOutcome,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), SubmitError> {
         info!("Submitting task outcome for {application_id}: {task_outcome:?}");
         let query = format!(
             "query {{ processTaskOutcome(outcome: {{ operator: {}, output: {} }}) }}",
             task_outcome.operator.to_value(),
             task_outcome.output.to_value(),
         );
-        let bytes = serde_json::to_vec(&json!({"query": query}))?;
+        let bytes = serde_json::to_vec(&json!({"query": query})).map_err(SubmitError::other)?;
         let query = linera_execution::Query::User {
             application_id,
             bytes,
@@ -377,25 +405,25 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         let linera_execution::QueryOutcome {
             response: _,
             operations,
-        } = chain_client.query_application(query, None).await?;
+        } = chain_client
+            .query_application(query, None)
+            .await
+            .map_err(SubmitError::other)?;
         if !operations.is_empty() {
             match chain_client
                 .execute_operations(operations, vec![])
-                .await?
+                .await
+                .map_err(SubmitError::other)?
             {
                 linera_core::data_types::ClientOutcome::Committed(_) => {}
                 linera_core::data_types::ClientOutcome::WaitForTimeout(timeout) => {
-                    anyhow::bail!(
-                        "Not the round leader for {application_id}; \
-                         retry after {:?}",
-                        timeout.timestamp,
-                    );
+                    return Err(SubmitError::WaitForTimeout(timeout.timestamp));
                 }
                 linera_core::data_types::ClientOutcome::Conflict(_) => {
-                    anyhow::bail!(
+                    return Err(SubmitError::other(anyhow::anyhow!(
                         "Block conflict for {application_id}; \
                          another block was committed at the same height",
-                    );
+                    )));
                 }
             }
         }

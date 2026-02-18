@@ -41,7 +41,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt as _};
 use linera_base::{
     crypto::Signer,
-    data_types::{ApplicationPermissions, Timestamp},
+    data_types::{ApplicationPermissions, TimeDelta, Timestamp},
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
@@ -1221,6 +1221,7 @@ impl Runnable for Job {
                 operator_application_ids,
                 operators,
                 controller_application_id,
+                task_retry_delay_secs,
                 read_only,
             } => {
                 let context = options
@@ -1246,6 +1247,8 @@ impl Runnable for Job {
                 let operators = Arc::new(operators);
 
                 // Start the task processor if operator applications are specified.
+                let retry_delay = TimeDelta::from_secs(task_retry_delay_secs);
+
                 if !operator_application_ids.is_empty() {
                     let chain_client = context.make_chain_client(chain_id).await?;
                     let processor = TaskProcessor::new(
@@ -1254,6 +1257,7 @@ impl Runnable for Job {
                         chain_client,
                         cancellation_token.clone(),
                         operators.clone(),
+                        retry_delay,
                         None,
                     );
                     tokio::spawn(processor.run());
@@ -1274,6 +1278,7 @@ impl Runnable for Job {
                         chain_client,
                         cancellation_token.clone(),
                         operators,
+                        retry_delay,
                         command_sender,
                     );
 
