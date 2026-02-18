@@ -277,10 +277,15 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                             }
                         }
                     }
-                    let _ = batch_sender.send(BatchResult {
-                        application_id,
-                        retry_at,
-                    });
+                    if batch_sender
+                        .send(BatchResult {
+                            application_id,
+                            retry_at,
+                        })
+                        .is_err()
+                    {
+                        error!("Batch receiver dropped for {application_id}");
+                    }
                 });
             }
         }
