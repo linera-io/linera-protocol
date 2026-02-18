@@ -75,7 +75,7 @@ pub struct BenchmarkOptions {
     /// The application ID of a fungible token on the wallet's default chain.
     /// If none is specified, the benchmark uses the native token.
     #[arg(long)]
-    pub fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
+    pub fungible_application_id: Option<ApplicationId>,
 
     /// The fixed BPS (Blocks Per Second) rate that block proposals will be sent at.
     #[arg(long, default_value_t = DEFAULT_BPS)]

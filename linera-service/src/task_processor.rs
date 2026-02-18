@@ -22,7 +22,7 @@ use linera_base::{
 };
 use linera_core::{client::ChainClient, node::NotificationStream, worker::Reason};
 use serde_json::json;
-use tokio::{io::AsyncWriteExt, process::Command, select, sync::mpsc, task::JoinHandle};
+use tokio::{io::AsyncWriteExt, process::Command, select, sync::mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
@@ -43,6 +43,13 @@ pub fn parse_operator(s: &str) -> Result<(String, PathBuf), String> {
 
 type Deadline = Reverse<(Timestamp, Option<ApplicationId>)>;
 
+/// Message sent from a background batch task to the main loop on completion.
+struct BatchResult {
+    application_id: ApplicationId,
+    /// Whether the batch ended early due to a task execution failure.
+    had_failure: bool,
+}
+
 /// A task processor that watches applications and executes off-chain operators.
 pub struct TaskProcessor<Env: linera_core::Environment> {
     chain_id: ChainId,
@@ -51,12 +58,12 @@ pub struct TaskProcessor<Env: linera_core::Environment> {
     chain_client: ChainClient<Env>,
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
-    retry_sender: mpsc::UnboundedSender<ApplicationId>,
-    retry_receiver: mpsc::UnboundedReceiver<ApplicationId>,
+    batch_sender: mpsc::UnboundedSender<BatchResult>,
+    batch_receiver: mpsc::UnboundedReceiver<BatchResult>,
     update_receiver: mpsc::UnboundedReceiver<Update>,
     deadlines: BinaryHeap<Deadline>,
     operators: OperatorMap,
-    last_task_handles: BTreeMap<ApplicationId, JoinHandle<()>>,
+    in_flight_apps: BTreeSet<ApplicationId>,
 }
 
 impl<Env: linera_core::Environment> TaskProcessor<Env> {
@@ -70,7 +77,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         update_receiver: Option<mpsc::UnboundedReceiver<Update>>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
-        let (retry_sender, retry_receiver) = mpsc::unbounded_channel();
+        let (batch_sender, batch_receiver) = mpsc::unbounded_channel();
         let update_receiver = update_receiver.unwrap_or_else(|| mpsc::unbounded_channel().1);
         Self {
             chain_id,
@@ -79,12 +86,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             chain_client,
             cancellation_token,
             notifications,
-            retry_sender,
-            retry_receiver,
+            batch_sender,
+            batch_receiver,
             update_receiver,
             deadlines: BinaryHeap::new(),
             operators,
-            last_task_handles: BTreeMap::new(),
+            in_flight_apps: BTreeSet::new(),
         }
     }
 
@@ -105,12 +112,18 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     let application_ids = self.process_events();
                     self.process_actions(application_ids).await;
                 }
-                Some(application_id) = self.retry_receiver.recv() => {
-                    // A batch had a task failure; schedule a retry.
-                    self.deadlines.push(Reverse((
-                        Timestamp::now().saturating_add(TimeDelta::from_secs(5)),
-                        Some(application_id),
-                    )));
+                Some(result) = self.batch_receiver.recv() => {
+                    self.in_flight_apps.remove(&result.application_id);
+                    if result.had_failure {
+                        // Schedule a retry for the failed task.
+                        self.deadlines.push(Reverse((
+                            Timestamp::now().saturating_add(TimeDelta::from_secs(5)),
+                            Some(result.application_id),
+                        )));
+                    } else {
+                        // Re-process immediately to pick up new tasks.
+                        self.process_actions(vec![result.application_id]).await;
+                    }
                 }
                 Some(update) = self.update_receiver.recv() => {
                     self.apply_update(update).await;
@@ -140,9 +153,10 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         let new_app_set: BTreeSet<_> = update.application_ids.iter().cloned().collect();
         let old_app_set: BTreeSet<_> = self.application_ids.iter().cloned().collect();
 
-        // Retain only last_requested_callbacks for applications that are still active
         self.cursors
             .retain(|app_id, _| new_app_set.contains(app_id));
+        self.in_flight_apps
+            .retain(|app_id| new_app_set.contains(app_id));
 
         // Update the application_ids
         self.application_ids = update.application_ids;
@@ -178,11 +192,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
     async fn process_actions(&mut self, application_ids: Vec<ApplicationId>) {
         for application_id in application_ids {
-            // Skip if there's an in-flight batch for this application.
-            if let Some(handle) = self.last_task_handles.get(&application_id) {
-                if !handle.is_finished() {
-                    continue;
-                }
+            if self.in_flight_apps.contains(&application_id) {
+                debug!("Skipping {application_id}: tasks already in flight");
+                continue;
             }
             debug!("Processing actions for {application_id}");
             let now = Timestamp::now();
@@ -207,12 +219,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 self.cursors.insert(application_id, cursor);
             }
             if !actions.execute_tasks.is_empty() {
+                self.in_flight_apps.insert(application_id);
                 let chain_client = self.chain_client.clone();
                 let cancellation_token = self.cancellation_token.clone();
-                let retry_sender = self.retry_sender.clone();
+                let batch_sender = self.batch_sender.clone();
                 let operators = self.operators.clone();
-                let previous = self.last_task_handles.remove(&application_id);
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     // Spawn all tasks concurrently and join them.
                     let handles: Vec<_> = actions
                         .execute_tasks
@@ -228,12 +240,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                         })
                         .collect();
                     let results = future::join_all(handles).await;
-                    // Wait for the previous batch to finish first.
-                    if let Some(previous) = previous {
-                        if let Err(error) = previous.await {
-                            error!(%application_id, %error, "Previous batch panicked");
-                        }
-                    }
                     // Submit outcomes in the original order. Stop on any failure to
                     // preserve ordering: the on-chain queue is FIFO, so skipping a
                     // failed task and submitting a later one would pop the wrong entry.
@@ -278,11 +284,13 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                             }
                         }
                     }
-                    if had_failure {
-                        let _ = retry_sender.send(application_id);
-                    }
+                    // Signal that this batch is done so the main loop can
+                    // clear in_flight_apps and handle retries or re-processing.
+                    let _ = batch_sender.send(BatchResult {
+                        application_id,
+                        had_failure,
+                    });
                 });
-                self.last_task_handles.insert(application_id, handle);
             }
         }
     }
