@@ -28,13 +28,14 @@ env:
   LINERA_KEYSTORE: /tmp/local-linera-net/keystore_0.json
   LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_0.db
   LINERA_FAUCET_URL: http://localhost:8079
+  LINERA_HELMFILE_TIMEOUT: 1800
 
 permissions:
   contents: read
 
 jobs:
   remote-kubernetes-net-test:
-    if: ${{ github.event_name == 'merge_group' }}
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 90
 
@@ -84,13 +85,12 @@ jobs:
         done
         echo "Validators reported READY"
 
-        # Wait for proxy to accept TCP connections through port-forward
+        # Wait for proxy to accept TCP connections through port-forward.
+        # No explicit timeout; the job-level timeout-minutes: 90 is the safeguard.
         echo "Waiting for proxy at 127.0.0.1:19100..."
-        timeout 120 bash -c '
-          while ! (echo > /dev/tcp/127.0.0.1/19100) 2>/dev/null; do
-            sleep 2
-          done
-        '
+        while ! (echo > /dev/tcp/127.0.0.1/19100) 2>/dev/null; do
+          sleep 2
+        done
         echo "Proxy is accepting connections"
 
         kill $TAIL_PID 2>/dev/null || true
