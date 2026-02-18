@@ -18,8 +18,8 @@ alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 
 [build-dependencies]
-serde-generate = "0.32.0"
-serde-reflection = { workspace = true }
+serde-generate = { git = "https://github.com/deuszx/serde-reflection", branch = "solidity-external-definitions" }
+serde-reflection = { git = "https://github.com/deuszx/serde-reflection", branch = "solidity-external-definitions" }
 serde_yaml = "0.8.26"
 
 [dev-dependencies]
@@ -37,6 +37,6 @@ revm = { workspace = true, default-features = false, features = [
     "portable",
 ] }
 revm-context.workspace = true
-serde-reflection.workspace = true
+serde-reflection = { git = "https://github.com/deuszx/serde-reflection", branch = "solidity-external-definitions" }
 serde_json.workspace = true
 tempfile.workspace = true

@@ -1,6 +1,5 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
-
 import "BridgeTypes.sol";
 
 library FungibleTypes {
@@ -123,7 +122,7 @@ library FungibleTypes {
     {
         uint256 new_pos;
         uint8 choice;
-        (new_pos, choice) = BridgeTypes.bcs_deserialize_offset_uint8(pos, input);
+        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
         FungibleOperation_Balance memory balance_;
         if (choice == 0) {
             (new_pos, balance_) = bcs_deserialize_offset_FungibleOperation_Balance(new_pos, input);
@@ -367,6 +366,35 @@ library FungibleTypes {
         uint256 new_pos;
         FungibleOperation_TransferFrom memory value;
         (new_pos, value) = bcs_deserialize_offset_FungibleOperation_TransferFrom(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_uint8(uint8 input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+      return abi.encodePacked(input);
+    }
+
+    function bcs_deserialize_offset_uint8(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, uint8)
+    {
+        uint8 value = uint8(input[pos]);
+        return (pos + 1, value);
+    }
+
+    function bcs_deserialize_uint8(bytes memory input)
+        internal
+        pure
+        returns (uint8)
+    {
+        uint256 new_pos;
+        uint8 value;
+        (new_pos, value) = bcs_deserialize_offset_uint8(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

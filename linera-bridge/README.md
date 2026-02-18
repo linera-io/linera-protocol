@@ -47,12 +47,12 @@ Rust types (linera-sdk::abis::fungible)
     ▼  serde-reflection (tests/format_fungible.rs)
 YAML snapshot (tests/snapshots/format_fungible__format_fungible.yaml.snap)
     │
-    ▼  serde-generate + post-processing via build.rs
+    ▼  serde-generate via build.rs (shared types declared as external_definitions)
 FungibleTypes.sol (src/solidity/FungibleTypes.sol)
     imports BridgeTypes.sol for shared types
 ```
 
-`FungibleTypes.sol` only contains types and deserializers unique to the fungible application (`FungibleOperation` and its variants). Shared types like `Account`, `AccountOwner`, and `Amount` are reused from `BridgeTypes.sol` via import — the `build.rs` post-processing step strips duplicate definitions and qualifies references with `BridgeTypes.`.
+`FungibleTypes.sol` only contains types and deserializers unique to the fungible application (`FungibleOperation` and its variants). Shared types like `Account`, `AccountOwner`, and `Amount` are reused from `BridgeTypes.sol` via import — `build.rs` passes them as `external_definitions` to `serde-generate`, which emits qualified `BridgeTypes.` references and `import` statements instead of duplicate definitions.
 
 All snapshots are checked in and tested via `insta`. This means the generated Solidity stays in sync with the Rust types — if a struct field is added or an enum variant reordered, the snapshot test fails and the developer must update it explicitly.
 
@@ -175,7 +175,7 @@ The constructor takes `(address[], uint64[], bytes32)` — the genesis committee
 
 - **No `previous_block_hash` chain-linking in Microchain**: The `Microchain` contract enforces chain ID and sequential heights but does not verify `previous_block_hash` to link blocks into a hash chain. This is safe because a `ConfirmedBlockCertificate` implies BFT-finalized canonicality — a quorum of validators signed this specific block at this height, so no conflicting block can exist for the same chain and height. The contract relies on this protocol-layer guarantee rather than redundantly re-checking hash linking. If the finality semantics of `ConfirmedBlockCertificate` ever change (e.g., to allow rollbacks or forks), a `previous_block_hash` check should be added.
 
-- **Application-specific type generation with shared type reuse**: `FungibleTypes.sol` is generated from a separate serde-reflection snapshot of `FungibleOperation`. Since `FungibleOperation` references types already in `BridgeTypes.sol` (e.g., `Account`, `AccountOwner`, `Amount`), the `build.rs` post-processing strips duplicate definitions and replaces references with `BridgeTypes.`-qualified calls. This ensures type compatibility — a `BridgeTypes.Account` from block deserialization can be directly compared with an `Account` from a deserialized `FungibleOperation`.
+- **Application-specific type generation with shared type reuse**: `FungibleTypes.sol` is generated from a separate serde-reflection snapshot of `FungibleOperation`. Since `FungibleOperation` references types already in `BridgeTypes.sol` (e.g., `Account`, `AccountOwner`, `Amount`), `build.rs` declares them as `external_definitions` so `serde-generate` emits qualified `BridgeTypes.` references and import statements instead of duplicate definitions. This ensures type compatibility — a `BridgeTypes.Account` from block deserialization can be directly compared with an `Account` from a deserialized `FungibleOperation`.
 
 ## Testing
 
