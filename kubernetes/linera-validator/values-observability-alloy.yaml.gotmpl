@@ -259,6 +259,103 @@ alloy:
         password = env("TEMPO_OTLP_PASS")
       }
       {{- end }}
+
+      {{- if eq (env "LINERA_HELMFILE_SET_PYROSCOPE_PUSH_ENABLED" | default "false") "true" }}
+      // ==================== Pyroscope Profile Forwarding ====================
+      // Scrapes pprof memory profiles from validator pods and forwards to central Pyroscope
+
+      // Relabel pods for pprof scraping (shards and proxies expose pprof on port 21100)
+      discovery.relabel "pprof_targets" {
+        targets = discovery.kubernetes.pods.targets
+
+        // Keep pods with a port named "metrics" (shards 21100, proxy 21100)
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_port_name"]
+          regex         = "metrics"
+          action        = "keep"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_ip", "__meta_kubernetes_pod_container_port_number"]
+          separator     = ":"
+          target_label  = "__address__"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "service_name"
+          replacement   = "memory/default/${1}"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "instance"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          target_label  = "cluster"
+          replacement   = env("CLUSTER_NAME")
+        }
+
+        rule {
+          target_label  = "validator"
+          replacement   = env("VALIDATOR_NAME")
+        }
+      }
+
+      // Scrape pprof memory profiles from validator pods
+      pyroscope.scrape "memory" {
+        targets    = discovery.relabel.pprof_targets.output
+        forward_to = [pyroscope.write.central.receiver]
+
+        profiling_config {
+          profile.memory {
+            enabled = true
+            path    = "/debug/pprof/allocs"
+          }
+          profile.process_cpu {
+            enabled = false
+          }
+          profile.goroutine {
+            enabled = false
+          }
+          profile.block {
+            enabled = false
+          }
+          profile.mutex {
+            enabled = false
+          }
+          profile.fgprof {
+            enabled = false
+          }
+        }
+
+        scrape_interval = "30s"
+        scrape_timeout  = "45s"
+      }
+
+      // Write profiles to central Pyroscope
+      pyroscope.write "central" {
+        endpoint {
+          url = env("PYROSCOPE_PUSH_URL")
+
+          basic_auth {
+            username = env("PYROSCOPE_PUSH_USER")
+            password = env("PYROSCOPE_PUSH_PASS")
+          }
+        }
+
+        external_labels = {
+          cluster   = env("CLUSTER_NAME"),
+          validator = env("VALIDATOR_NAME"),
+        }
+      }
+      {{- end }}
   extraEnv:
     - name: CLUSTER_NAME
       value: {{ env "LINERA_HELMFILE_SET_NETWORK_NAME" | default "" | quote }}
@@ -288,3 +385,11 @@ alloy:
       value: {{ env "LINERA_HELMFILE_SET_TEMPO_OTLP_USER" | default "" | quote }}
     - name: TEMPO_OTLP_PASS
       value: {{ env "LINERA_HELMFILE_SET_TEMPO_OTLP_PASS" | default "" | quote }}
+    - name: PYROSCOPE_PUSH_ENABLED
+      value: {{ env "LINERA_HELMFILE_SET_PYROSCOPE_PUSH_ENABLED" | default "false" | quote }}
+    - name: PYROSCOPE_PUSH_URL
+      value: {{ env "LINERA_HELMFILE_SET_PYROSCOPE_PUSH_URL" | default "" | quote }}
+    - name: PYROSCOPE_PUSH_USER
+      value: {{ env "LINERA_HELMFILE_SET_PYROSCOPE_PUSH_USER" | default "" | quote }}
+    - name: PYROSCOPE_PUSH_PASS
+      value: {{ env "LINERA_HELMFILE_SET_PYROSCOPE_PUSH_PASS" | default "" | quote }}
