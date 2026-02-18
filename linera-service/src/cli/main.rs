@@ -901,6 +901,7 @@ impl Runnable for Job {
                                         "50".to_string(),
                                         "--timings".to_string(),
                                     ],
+                                    None,
                                 )))
                             })
                             .collect::<Result<Vec<_>, anyhow::Error>>()?;

@@ -110,6 +110,7 @@ impl ClientWrapper {
             id,
             on_drop,
             vec!["--wait-for-outgoing-messages".to_string()],
+            None,
         )
     }
 
@@ -120,6 +121,7 @@ impl ClientWrapper {
         id: usize,
         on_drop: OnClientDrop,
         extra_args: Vec<String>,
+        binary_dir: Option<PathBuf>,
     ) -> Self {
         let storage = format!(
             "rocksdb:{}/client_{}.db",
@@ -128,8 +130,9 @@ impl ClientWrapper {
         );
         let wallet = format!("wallet_{}.json", id);
         let keystore = format!("keystore_{}.json", id);
+        let binary_path = binary_dir.map(|dir| dir.join("linera"));
         Self {
-            binary_path: sync::Mutex::new(None),
+            binary_path: sync::Mutex::new(binary_path),
             testing_prng_seed,
             storage,
             wallet,
