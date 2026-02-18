@@ -267,14 +267,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                             }
                             Ok(Err(error)) => {
                                 error!(%application_id, %error, "Error executing task");
-                                retry_at =
-                                    Some(Timestamp::now().saturating_add(retry_delay));
+                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
                                 break;
                             }
                             Err(error) => {
                                 error!(%application_id, %error, "Task panicked");
-                                retry_at =
-                                    Some(Timestamp::now().saturating_add(retry_delay));
+                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
                                 break;
                             }
                         }
