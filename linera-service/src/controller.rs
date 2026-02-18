@@ -7,7 +7,10 @@ use std::{
 };
 
 use futures::{lock::Mutex, stream::StreamExt, FutureExt};
-use linera_base::identifiers::{ApplicationId, ChainId};
+use linera_base::{
+    data_types::TimeDelta,
+    identifiers::{ApplicationId, ChainId},
+};
 use linera_client::chain_listener::{ClientContext, ListenerCommand};
 use linera_core::{client::ChainClient, node::NotificationStream, worker::Reason};
 use linera_sdk::abis::controller::{LocalWorkerState, Operation, WorkerCommand};
@@ -39,6 +42,7 @@ pub struct Controller<Ctx: ClientContext> {
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
     operators: OperatorMap,
+    retry_delay: TimeDelta,
     processors: BTreeMap<ChainId, ProcessorHandle>,
     listened_local_chains: BTreeSet<ChainId>,
     command_sender: UnboundedSender<ListenerCommand>,
@@ -50,6 +54,7 @@ where
     Ctx::Environment: 'static,
     <Ctx::Environment as linera_core::Environment>::Storage: Clone,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: ChainId,
         controller_id: ApplicationId,
@@ -57,6 +62,7 @@ where
         chain_client: ChainClient<Ctx::Environment>,
         cancellation_token: CancellationToken,
         operators: OperatorMap,
+        retry_delay: TimeDelta,
         command_sender: UnboundedSender<ListenerCommand>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
@@ -68,6 +74,7 @@ where
             cancellation_token,
             notifications,
             operators,
+            retry_delay,
             processors: BTreeMap::new(),
             listened_local_chains: BTreeSet::new(),
             command_sender,
@@ -285,6 +292,7 @@ where
             chain_client,
             self.cancellation_token.child_token(),
             self.operators.clone(),
+            self.retry_delay,
             Some(update_receiver),
         );
 
