@@ -57,15 +57,53 @@ jobs:
         which helmfile && helmfile --version
     - name: Build binaries
       run: |
-        cargo build --features storage-service,opentelemetry --bin linera-server --bin linera-proxy --bin linera
-    - name: Run the validators with Kubernetes and wait for faucet
+        cargo build --features kubernetes,storage-service,opentelemetry --bin linera-server --bin linera-proxy --bin linera
+    - name: Start validators with Kubernetes
       run: |
         mkdir /tmp/local-linera-net
-        FAUCET_PORT=$(echo "$LINERA_FAUCET_URL" | cut -d: -f3)
         LOG_FILE="/tmp/linera-net-up-kubernetes.log"
-        cargo run --bin linera --features kubernetes,opentelemetry -- net up --kubernetes --policy-config testnet --path /tmp/local-linera-net --validators 1 --shards 2 --with-faucet --faucet-port $FAUCET_PORT --faucet-amount 1000 > "$LOG_FILE" 2>&1 &
+        cargo run --bin linera --features kubernetes,storage-service,opentelemetry -- net up --kubernetes \
+          --policy-config testnet --path /tmp/local-linera-net --validators 1 --shards 2 \
+          > "$LOG_FILE" 2>&1 &
         NETWORK_PID=$!
-        bash scripts/wait-for-kubernetes-service.sh "$LINERA_FAUCET_URL" "$NETWORK_PID" "$LOG_FILE"
+
+        # Stream logs in background so they appear in CI output
+        tail -f "$LOG_FILE" 2>/dev/null &
+        TAIL_PID=$!
+
+        # Wait for "READY!" message (includes Docker image build + helm sync + port-forwards).
+        # No explicit timeout here; the job-level timeout-minutes: 90 is the safeguard.
+        echo "Waiting for validators to deploy (PID: $NETWORK_PID)..."
+        while ! grep -q "READY!" "$LOG_FILE" 2>/dev/null; do
+          if ! kill -0 "$NETWORK_PID" 2>/dev/null; then
+            echo "ERROR: Network process (PID: $NETWORK_PID) died"
+            cat "$LOG_FILE"
+            exit 1
+          fi
+          sleep 2
+        done
+        echo "Validators reported READY"
+
+        # Wait for proxy to accept TCP connections through port-forward
+        echo "Waiting for proxy at 127.0.0.1:19100..."
+        timeout 120 bash -c '
+          while ! (echo > /dev/tcp/127.0.0.1/19100) 2>/dev/null; do
+            sleep 2
+          done
+        '
+        echo "Proxy is accepting connections"
+
+        kill $TAIL_PID 2>/dev/null || true
+    - name: Start faucet and wait for it
+      run: |
+        FAUCET_PORT=$(echo "$LINERA_FAUCET_URL" | cut -d: -f3)
+        FAUCET_LOG="/tmp/linera-faucet.log"
+        cargo run --bin linera --features kubernetes,storage-service,opentelemetry -- faucet \
+          --port "$FAUCET_PORT" --amount 1000 --storage-path /tmp/faucet.sqlite \
+          > "$FAUCET_LOG" 2>&1 &
+        FAUCET_PID=$!
+        echo "Started faucet (PID: $FAUCET_PID)"
+        bash scripts/wait-for-kubernetes-service.sh "$LINERA_FAUCET_URL" "$FAUCET_PID" "$FAUCET_LOG"
     - name: Run the Kubernetes tests
       run: |
         cargo test -p linera-service remote_net_grpc --features remote-net,opentelemetry
