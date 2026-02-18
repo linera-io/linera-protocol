@@ -170,7 +170,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_write_batch_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -181,7 +181,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_write_batch_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -192,7 +192,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_write_batch_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -337,7 +337,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_value_bytes_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -348,7 +348,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_value_bytes_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -359,7 +359,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_value_bytes_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -504,7 +504,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_contains_key_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -515,7 +515,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_contains_key_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -526,7 +526,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_contains_key_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -671,7 +671,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -682,7 +682,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -693,7 +693,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -838,7 +838,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_write_batch_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -849,7 +849,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_write_batch_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -860,7 +860,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_write_batch_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1005,7 +1005,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_value_key_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1016,7 +1016,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_value_key_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1027,7 +1027,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_value_key_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1172,7 +1172,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_value_value_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1183,7 +1183,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_value_value_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1194,7 +1194,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_value_value_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1339,7 +1339,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_contains_keys_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1350,7 +1350,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_contains_keys_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1361,7 +1361,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_contains_keys_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1505,7 +1505,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_multi_value_bytes_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1516,7 +1516,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_multi_value_bytes_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1527,7 +1527,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_multi_value_bytes_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1671,7 +1671,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_multi_values_num_entries_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1682,7 +1682,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_multi_values_num_entries_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1693,7 +1693,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_multi_values_num_entries_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1837,7 +1837,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_key_values_by_prefix_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1848,7 +1848,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_key_values_by_prefix_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1859,7 +1859,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_key_values_by_prefix_latency_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2003,7 +2003,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_keys_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2014,7 +2014,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_keys_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2025,7 +2025,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_keys_size_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2169,7 +2169,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_num_keys_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2180,7 +2180,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_num_keys_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2191,7 +2191,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_num_keys_bucket{job=~\"$job\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2289,7 +2289,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_rocksdb_internal_read_value_none_cases{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_rocksdb_internal_read_value_none_cases{job=~\"$job\"}[1m]))",
           "legendFormat": "rate",
           "range": true,
           "refId": "A"
@@ -2320,15 +2320,15 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(linera_load_view_latency_bucket, validator)",
+        "definition": "label_values(linera_rocksdb_internal_connect_latency_count, job)",
         "hide": 0,
         "includeAll": true,
-        "label": "Validator",
+        "label": "Job",
         "multi": false,
-        "name": "validator",
+        "name": "job",
         "options": [],
         "query": {
-          "query": "label_values(linera_load_view_latency_bucket, validator)",
+          "query": "label_values(linera_rocksdb_internal_connect_latency_count, job)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
