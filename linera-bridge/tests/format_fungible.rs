@@ -1,8 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fungible::{FungibleOperation, Message};
 use linera_base::identifiers::AccountOwner;
-use linera_sdk::abis::fungible::FungibleOperation;
 use serde_reflection::{Samples, Tracer, TracerConfig};
 
 #[test]
@@ -16,6 +16,7 @@ fn test_format_fungible() {
     // Trace AccountOwner explicitly so all variants get proper indices.
     tracer.trace_type::<AccountOwner>(&samples).unwrap();
     tracer.trace_type::<FungibleOperation>(&samples).unwrap();
+    tracer.trace_type::<Message>(&samples).unwrap();
     let registry = tracer.registry_unchecked();
     insta::assert_yaml_snapshot!("format_fungible.yaml", registry);
 }

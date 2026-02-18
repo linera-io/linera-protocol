@@ -46,13 +46,14 @@ mod tests {
             deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
         let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
 
-        let light_client_address = call_contract(&mut db, deployer, microchain, lightClientCall {});
+        let (light_client_address, _, _) =
+            call_contract(&mut db, deployer, microchain, lightClientCall {});
         assert_eq!(
             light_client_address, light_client,
             "light client address should match"
         );
 
-        let chain_id_bytes = call_contract(&mut db, deployer, microchain, chainIdCall {});
+        let (chain_id_bytes, _, _) = call_contract(&mut db, deployer, microchain, chainIdCall {});
         assert_eq!(
             &chain_id_bytes,
             chain_id.as_bytes(),
@@ -70,10 +71,10 @@ mod tests {
         );
 
         // Verify state
-        let count = call_contract(&mut db, deployer, microchain, blockCountCall {});
+        let (count, _, _) = call_contract(&mut db, deployer, microchain, blockCountCall {});
         assert_eq!(count, 1, "block count should be 1");
 
-        let height = call_contract(&mut db, deployer, microchain, latestHeightCall {});
+        let (height, _, _) = call_contract(&mut db, deployer, microchain, latestHeightCall {});
         assert_eq!(height, 1, "latest height should be 1");
     }
 

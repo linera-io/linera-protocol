@@ -88,7 +88,7 @@ mod tests {
         );
         call_contract(&mut db, deployer, contract, call);
 
-        let current_epoch = call_contract(&mut db, deployer, contract, currentEpochCall {});
+        let (current_epoch, _, _) = call_contract(&mut db, deployer, contract, currentEpochCall {});
         assert_eq!(current_epoch, 1);
     }
 

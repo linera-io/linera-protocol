@@ -30,7 +30,7 @@ use linera_execution::{
 };
 use revm::{
     database::{CacheDB, EmptyDB},
-    primitives::{Address, Bytes, TxKind, U256},
+    primitives::{Address, Bytes, Log, TxKind, U256},
     Context, ExecuteCommitEvm, MainBuilder, MainContext,
 };
 use revm_context::result::{ExecutionResult, Output};
@@ -276,26 +276,13 @@ pub fn deploy_contract(db: &mut CacheDB<EmptyDB>, deployer: Address, bytecode: V
     }
 }
 
-/// Calls a deployed contract and decodes the return value.
+/// Calls a deployed contract, returning the decoded return value, emitted logs, and gas used.
 pub fn call_contract<C: SolCall>(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     contract: Address,
     call: C,
-) -> C::Return {
-    match try_call_contract(db, deployer, contract, call) {
-        Ok(ret) => ret,
-        Err(msg) => panic!("{}", msg),
-    }
-}
-
-/// Calls a deployed contract, returning output bytes and gas used.
-pub fn call_contract_with_gas(
-    db: &mut CacheDB<EmptyDB>,
-    deployer: Address,
-    contract: Address,
-    calldata: Vec<u8>,
-) -> (Bytes, u64) {
+) -> (C::Return, Vec<Log>, u64) {
     let nonce = db
         .cache
         .accounts
@@ -307,7 +294,7 @@ pub fn call_contract_with_gas(
             tx.caller = deployer;
             tx.nonce = nonce;
             tx.kind = TxKind::Call(contract);
-            tx.data = Bytes::from(calldata);
+            tx.data = Bytes::from(call.abi_encode());
             tx.gas_limit = GAS_LIMIT;
             tx.value = U256::ZERO;
         })
@@ -317,8 +304,12 @@ pub fn call_contract_with_gas(
 
     let gas_used = result.gas_used();
     match result {
-        ExecutionResult::Success { output, .. } => match output {
-            Output::Call(bytes) => (bytes, gas_used),
+        ExecutionResult::Success { output, logs, .. } => match output {
+            Output::Call(bytes) => {
+                let ret = C::abi_decode_returns(&bytes)
+                    .unwrap_or_else(|e| panic!("failed to decode return value: {e}"));
+                (ret, logs, gas_used)
+            }
             other => panic!("expected Call output, got: {:?}", other),
         },
         ExecutionResult::Revert { output, .. } => {

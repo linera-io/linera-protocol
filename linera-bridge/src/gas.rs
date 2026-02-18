@@ -5,7 +5,6 @@
 
 #[cfg(test)]
 mod tests {
-    use alloy_sol_types::SolCall;
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
         data_types::{BlockHeight, Epoch},
@@ -39,13 +38,16 @@ mod tests {
         let bcs_bytes = sign_and_serialize(&secret, &public, block);
         let new_uncompressed = validator_uncompressed_key(&new_public);
 
-        let calldata = addCommitteeCall {
-            data: bcs_bytes.into(),
-            committeeBlob: committee_bytes.into(),
-            validators: vec![new_uncompressed.into()],
-        }
-        .abi_encode();
-        let (_, gas_used) = call_contract_with_gas(&mut db, deployer, contract, calldata);
+        let (_, _, gas_used) = call_contract(
+            &mut db,
+            deployer,
+            contract,
+            addCommitteeCall {
+                data: bcs_bytes.into(),
+                committeeBlob: committee_bytes.into(),
+                validators: vec![new_uncompressed.into()],
+            },
+        );
 
         println!("LightClient.addCommittee gas used: {gas_used}");
     }
@@ -66,11 +68,14 @@ mod tests {
 
         let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
         let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
-        let calldata = addBlockCall {
-            data: bcs_bytes.into(),
-        }
-        .abi_encode();
-        let (_, gas_used) = call_contract_with_gas(&mut db, deployer, microchain, calldata);
+        let (_, _, gas_used) = call_contract(
+            &mut db,
+            deployer,
+            microchain,
+            addBlockCall {
+                data: bcs_bytes.into(),
+            },
+        );
 
         println!("Microchain.addBlock gas used: {gas_used}");
     }

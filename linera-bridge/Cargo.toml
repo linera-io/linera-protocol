@@ -37,6 +37,7 @@ revm = { workspace = true, default-features = false, features = [
     "portable",
 ] }
 revm-context.workspace = true
+fungible.workspace = true
 serde-reflection = { git = "https://github.com/deuszx/serde-reflection", branch = "solidity-external-definitions" }
 serde_json.workspace = true
 tempfile.workspace = true

@@ -5382,6 +5382,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
  "bcs",
+ "fungible",
  "hex",
  "insta",
  "linera-base",

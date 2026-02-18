@@ -27,7 +27,7 @@ fn generate_bridge_types() {
 }
 
 /// Generates FungibleTypes.sol from the fungible snapshot.
-/// Types shared with BridgeTypes are declared as external so the generated
+/// Primitive types shared with BridgeTypes are declared as external so the generated
 /// code imports them from BridgeTypes.sol instead of redefining them.
 fn generate_fungible_types() {
     let bridge_snap = PathBuf::from("tests/snapshots/format__format.yaml.snap");
@@ -40,12 +40,7 @@ fn generate_fungible_types() {
         return;
     };
 
-    // Types that exist in both registries are external (from BridgeTypes).
-    let shared_types: Vec<String> = fungible_registry
-        .keys()
-        .filter(|name| bridge_registry.contains_key(*name))
-        .cloned()
-        .collect();
+    let shared_types = bridge_type_names(&fungible_registry, &bridge_registry);
 
     let out_dir = PathBuf::from("src/solidity");
     let installer = solidity::Installer::new(out_dir);
@@ -54,6 +49,26 @@ fn generate_fungible_types() {
     installer
         .install_module(&config, &fungible_registry)
         .expect("failed to generate FungibleTypes Solidity code");
+}
+
+/// Returns the names from `fungible_registry` that are primitive/structural types also
+/// present in `bridge_registry`. These are declared as external imports from BridgeTypes.sol.
+///
+/// We can't simply use all names that appear in both registries because serde-reflection
+/// uses short type names (no module path), so unrelated types with the same name (e.g.
+/// `linera_execution::Message` vs `fungible::Message`) would collide.
+fn bridge_type_names(fungible_registry: &Registry, bridge_registry: &Registry) -> Vec<String> {
+    // Primitive/structural types shared by both registries. These are the leaf types that
+    // the fungible application's Operation and Message types are built from.
+    const SHARED: &[&str] = &["Account", "AccountOwner", "Amount", "ChainId", "CryptoHash"];
+
+    SHARED
+        .iter()
+        .filter(|name| {
+            fungible_registry.contains_key(**name) && bridge_registry.contains_key(**name)
+        })
+        .map(|name| name.to_string())
+        .collect()
 }
 
 /// Reads an insta snapshot file and extracts the YAML registry from it.

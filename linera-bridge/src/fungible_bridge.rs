@@ -5,25 +5,47 @@
 
 #[cfg(test)]
 mod tests {
-    use alloy_sol_types::{sol, SolCall};
+    use alloy_sol_types::SolEvent;
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
-        data_types::{Amount, BlockHeight, Epoch, Round},
+        data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
         identifiers::{AccountOwner, ApplicationId, ChainId},
     };
     use linera_chain::{
         block::ConfirmedBlock,
-        data_types::{Transaction, Vote},
+        data_types::{
+            IncomingBundle, MessageAction, MessageBundle, PostedMessage, Transaction, Vote,
+        },
         types::ConfirmedBlockCertificate,
     };
-    use linera_execution::Operation;
-    use linera_sdk::abis::fungible;
+    use linera_execution::{Message, MessageKind};
     use revm::database::{CacheDB, EmptyDB};
 
     use crate::{microchain::addBlockCall, test_helpers::*};
 
-    sol! {
-        function operationCount() external view returns (uint64);
+    mod fungible_events {
+        use alloy_sol_types::sol;
+
+        sol! {
+            struct CryptoHash {
+                bytes32 value;
+            }
+
+            // Mirrors the AccountOwner struct from BridgeTypes.sol.
+            struct AccountOwner {
+                uint8 choice;
+                uint8 reserved;
+                CryptoHash address32;
+                bytes20 address20;
+            }
+
+            // Mirrors the Credit event from FungibleBridge.sol.
+            event Credit(
+                AccountOwner target,
+                uint128 amount,
+                AccountOwner source
+            );
+        }
     }
 
     /// Creates a certificate containing a specific set of transactions.
@@ -40,19 +62,37 @@ mod tests {
         ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
     }
 
-    /// Creates a Transaction::ExecuteOperation containing a FungibleOperation as a user operation.
-    fn fungible_operation_transaction(
+    /// Creates a Transaction::ReceiveMessages containing a fungible Message as a user message.
+    fn fungible_message_transaction(
+        origin: ChainId,
         application_id: CryptoHash,
-        operation: &fungible::FungibleOperation,
+        message: &fungible::Message,
     ) -> Transaction {
-        Transaction::ExecuteOperation(Operation::User {
-            application_id: ApplicationId::new(application_id),
-            bytes: bcs::to_bytes(operation).unwrap(),
+        Transaction::ReceiveMessages(IncomingBundle {
+            origin,
+            bundle: MessageBundle {
+                height: BlockHeight(0),
+                timestamp: Timestamp::from(0),
+                certificate_hash: CryptoHash::new(&TestString::new("cert")),
+                transaction_index: 0,
+                messages: vec![PostedMessage {
+                    authenticated_signer: None,
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Simple,
+                    index: 0,
+                    message: Message::User {
+                        application_id: ApplicationId::new(application_id),
+                        bytes: bcs::to_bytes(message).unwrap(),
+                    },
+                }],
+            },
+            action: MessageAction::Accept,
         })
     }
 
     #[test]
-    fn test_fungible_bridge_processes_transfer() {
+    fn test_fungible_bridge_processes_credit() {
         let mut db = CacheDB::new(EmptyDB::default());
         let deployer = revm::primitives::Address::ZERO;
 
@@ -67,17 +107,16 @@ mod tests {
         let app_id = CryptoHash::new(&TestString::new("fungible_app"));
         let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id);
 
-        // Create a FungibleOperation::Transfer
-        let transfer_op = fungible::FungibleOperation::Transfer {
-            owner: AccountOwner::Address32(CryptoHash::new(&TestString::new("owner"))),
+        let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
+        let target = AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner")));
+        let source = AccountOwner::Address32(CryptoHash::new(&TestString::new("source_owner")));
+        let credit_msg = fungible::Message::Credit {
+            target,
             amount: Amount::from_tokens(100),
-            target_account: fungible::Account {
-                chain_id: ChainId(CryptoHash::new(&TestString::new("target_chain"))),
-                owner: AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner"))),
-            },
+            source,
         };
 
-        let transactions = vec![fungible_operation_transaction(app_id, &transfer_op)];
+        let transactions = vec![fungible_message_transaction(origin, app_id, &credit_msg)];
         let cert = create_certificate_with_transactions(
             &secret,
             &public,
@@ -87,7 +126,7 @@ mod tests {
         );
 
         let cert_bytes = bcs::to_bytes(&cert).unwrap();
-        call_contract(
+        let (_, logs, _) = call_contract(
             &mut db,
             deployer,
             bridge,
@@ -96,9 +135,17 @@ mod tests {
             },
         );
 
-        // Verify the operation was counted
-        let count: u64 = call_contract(&mut db, deployer, bridge, operationCountCall {});
-        assert_eq!(count, 1, "should have processed one fungible operation");
+        assert_eq!(logs.len(), 1, "expected exactly one Credit event");
+        let credit =
+            fungible_events::Credit::decode_log(&logs[0]).expect("failed to decode Credit event");
+        let target_hash = *CryptoHash::new(&TestString::new("target_owner")).as_bytes();
+        let source_hash = *CryptoHash::new(&TestString::new("source_owner")).as_bytes();
+        // AccountOwner::Address32 is choice==1
+        assert_eq!(credit.target.choice, 1);
+        assert_eq!(credit.target.address32.value, target_hash);
+        assert_eq!(credit.amount, 100_000_000_000_000_000_000u128);
+        assert_eq!(credit.source.choice, 1);
+        assert_eq!(credit.source.address32.value, source_hash);
     }
 
     #[test]
@@ -118,17 +165,19 @@ mod tests {
         let other_app_id = CryptoHash::new(&TestString::new("other_app"));
         let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id);
 
-        // Create an operation from a different application
-        let transfer_op = fungible::FungibleOperation::Transfer {
-            owner: AccountOwner::Address32(CryptoHash::new(&TestString::new("owner"))),
+        let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
+        let credit_msg = fungible::Message::Credit {
+            target: AccountOwner::Address32(CryptoHash::new(&TestString::new("target"))),
             amount: Amount::from_tokens(50),
-            target_account: fungible::Account {
-                chain_id: ChainId(CryptoHash::new(&TestString::new("target_chain"))),
-                owner: AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner"))),
-            },
+            source: AccountOwner::Address32(CryptoHash::new(&TestString::new("source"))),
         };
 
-        let transactions = vec![fungible_operation_transaction(other_app_id, &transfer_op)];
+        // Send message from a different application
+        let transactions = vec![fungible_message_transaction(
+            origin,
+            other_app_id,
+            &credit_msg,
+        )];
         let cert = create_certificate_with_transactions(
             &secret,
             &public,
@@ -138,7 +187,7 @@ mod tests {
         );
 
         let cert_bytes = bcs::to_bytes(&cert).unwrap();
-        call_contract(
+        let (_, logs, _) = call_contract(
             &mut db,
             deployer,
             bridge,
@@ -147,11 +196,9 @@ mod tests {
             },
         );
 
-        // Verify no operations were counted (wrong application_id)
-        let count: u64 = call_contract(&mut db, deployer, bridge, operationCountCall {});
-        assert_eq!(
-            count, 0,
-            "should not have processed operations from other app"
+        assert!(
+            logs.is_empty(),
+            "should not emit events for other applications"
         );
     }
 
@@ -171,16 +218,14 @@ mod tests {
         let app_id = CryptoHash::new(&TestString::new("fungible_app"));
         let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id);
 
-        let transfer_op = fungible::FungibleOperation::Transfer {
-            owner: AccountOwner::Address32(CryptoHash::new(&TestString::new("owner"))),
+        let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
+        let credit_msg = fungible::Message::Credit {
+            target: AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner"))),
             amount: Amount::from_tokens(100),
-            target_account: fungible::Account {
-                chain_id: ChainId(CryptoHash::new(&TestString::new("target_chain"))),
-                owner: AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner"))),
-            },
+            source: AccountOwner::Address32(CryptoHash::new(&TestString::new("source_owner"))),
         };
 
-        let transactions = vec![fungible_operation_transaction(app_id, &transfer_op)];
+        let transactions = vec![fungible_message_transaction(origin, app_id, &credit_msg)];
         let cert = create_certificate_with_transactions(
             &secret,
             &public,
@@ -190,12 +235,15 @@ mod tests {
         );
 
         let cert_bytes = bcs::to_bytes(&cert).unwrap();
-        let calldata = addBlockCall {
-            data: cert_bytes.into(),
-        }
-        .abi_encode();
-        let (_, gas_used) = call_contract_with_gas(&mut db, deployer, bridge, calldata);
+        let (_, _, gas_used) = call_contract(
+            &mut db,
+            deployer,
+            bridge,
+            addBlockCall {
+                data: cert_bytes.into(),
+            },
+        );
 
-        println!("Gas used for fungible bridge addBlock with Transfer: {gas_used}");
+        println!("Gas used for fungible bridge addBlock with Credit message: {gas_used}");
     }
 }

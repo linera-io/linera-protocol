@@ -370,6 +370,164 @@ library FungibleTypes {
         return value;
     }
 
+    struct Message {
+        uint8 choice;
+        // choice=0 corresponds to Credit
+        Message_Credit credit;
+        // choice=1 corresponds to Withdraw
+        Message_Withdraw withdraw;
+    }
+
+    function Message_case_credit(Message_Credit memory credit)
+        internal
+        pure
+        returns (Message memory)
+    {
+        Message_Withdraw memory withdraw;
+        return Message(uint8(0), credit, withdraw);
+    }
+
+    function Message_case_withdraw(Message_Withdraw memory withdraw)
+        internal
+        pure
+        returns (Message memory)
+    {
+        Message_Credit memory credit;
+        return Message(uint8(1), credit, withdraw);
+    }
+
+    function bcs_serialize_Message(Message memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input.choice == 0) {
+            return abi.encodePacked(input.choice, bcs_serialize_Message_Credit(input.credit));
+        }
+        if (input.choice == 1) {
+            return abi.encodePacked(input.choice, bcs_serialize_Message_Withdraw(input.withdraw));
+        }
+        return abi.encodePacked(input.choice);
+    }
+
+    function bcs_deserialize_offset_Message(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, Message memory)
+    {
+        uint256 new_pos;
+        uint8 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        Message_Credit memory credit;
+        if (choice == 0) {
+            (new_pos, credit) = bcs_deserialize_offset_Message_Credit(new_pos, input);
+        }
+        Message_Withdraw memory withdraw;
+        if (choice == 1) {
+            (new_pos, withdraw) = bcs_deserialize_offset_Message_Withdraw(new_pos, input);
+        }
+        require(choice < 2);
+        return (new_pos, Message(choice, credit, withdraw));
+    }
+
+    function bcs_deserialize_Message(bytes memory input)
+        internal
+        pure
+        returns (Message memory)
+    {
+        uint256 new_pos;
+        Message memory value;
+        (new_pos, value) = bcs_deserialize_offset_Message(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct Message_Credit {
+        BridgeTypes.AccountOwner target;
+        BridgeTypes.Amount amount;
+        BridgeTypes.AccountOwner source;
+    }
+
+    function bcs_serialize_Message_Credit(Message_Credit memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.target);
+        result = abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
+        return abi.encodePacked(result, BridgeTypes.bcs_serialize_AccountOwner(input.source));
+    }
+
+    function bcs_deserialize_offset_Message_Credit(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, Message_Credit memory)
+    {
+        uint256 new_pos;
+        BridgeTypes.AccountOwner memory target;
+        (new_pos, target) = BridgeTypes.bcs_deserialize_offset_AccountOwner(pos, input);
+        BridgeTypes.Amount memory amount;
+        (new_pos, amount) = BridgeTypes.bcs_deserialize_offset_Amount(new_pos, input);
+        BridgeTypes.AccountOwner memory source;
+        (new_pos, source) = BridgeTypes.bcs_deserialize_offset_AccountOwner(new_pos, input);
+        return (new_pos, Message_Credit(target, amount, source));
+    }
+
+    function bcs_deserialize_Message_Credit(bytes memory input)
+        internal
+        pure
+        returns (Message_Credit memory)
+    {
+        uint256 new_pos;
+        Message_Credit memory value;
+        (new_pos, value) = bcs_deserialize_offset_Message_Credit(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct Message_Withdraw {
+        BridgeTypes.AccountOwner owner;
+        BridgeTypes.Amount amount;
+        BridgeTypes.Account target_account;
+    }
+
+    function bcs_serialize_Message_Withdraw(Message_Withdraw memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.owner);
+        result = abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
+        return abi.encodePacked(result, BridgeTypes.bcs_serialize_Account(input.target_account));
+    }
+
+    function bcs_deserialize_offset_Message_Withdraw(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, Message_Withdraw memory)
+    {
+        uint256 new_pos;
+        BridgeTypes.AccountOwner memory owner;
+        (new_pos, owner) = BridgeTypes.bcs_deserialize_offset_AccountOwner(pos, input);
+        BridgeTypes.Amount memory amount;
+        (new_pos, amount) = BridgeTypes.bcs_deserialize_offset_Amount(new_pos, input);
+        BridgeTypes.Account memory target_account;
+        (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(new_pos, input);
+        return (new_pos, Message_Withdraw(owner, amount, target_account));
+    }
+
+    function bcs_deserialize_Message_Withdraw(bytes memory input)
+        internal
+        pure
+        returns (Message_Withdraw memory)
+    {
+        uint256 new_pos;
+        Message_Withdraw memory value;
+        (new_pos, value) = bcs_deserialize_offset_Message_Withdraw(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     function bcs_serialize_uint8(uint8 input)
         internal
         pure
