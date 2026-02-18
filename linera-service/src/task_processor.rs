@@ -56,7 +56,7 @@ struct BatchResult {
 pub struct TaskProcessor<Env: linera_core::Environment> {
     chain_id: ChainId,
     application_ids: Vec<ApplicationId>,
-    cursors: BTreeMap<ApplicationId, Vec<u8>>,
+    cursors: BTreeMap<ApplicationId, String>,
     chain_client: ChainClient<Env>,
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
@@ -328,7 +328,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     async fn query_actions(
         &mut self,
         application_id: ApplicationId,
-        cursor: Option<Vec<u8>>,
+        cursor: Option<String>,
         now: Timestamp,
     ) -> Result<ProcessorActions, anyhow::Error> {
         let query = format!(
