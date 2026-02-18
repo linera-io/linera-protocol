@@ -13,3 +13,5 @@ data:
   linera_storage_rocksdb.json: {{ .Files.Get "grafana-dashboards/linera/storage/rocksdb.json" | quote | indent 4 }}
   linera_storage_scylladb.json: {{ .Files.Get "grafana-dashboards/linera/storage/scylladb.json" | quote | indent 4 }}
   linera_views.json: {{ .Files.Get "grafana-dashboards/linera/views.json" | quote | indent 4 }}
+  linera_logs.json: {{ .Files.Get "grafana-dashboards/linera/logs.json" | quote | indent 4 }}
+  linera_traces.json: {{ .Files.Get "grafana-dashboards/linera/traces.json" | quote | indent 4 }}
