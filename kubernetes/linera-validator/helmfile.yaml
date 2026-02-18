@@ -75,7 +75,7 @@ releases:
   - name: linera-core
     namespace: default
     chart: .
-    timeout: 900
+    timeout: {{ env "LINERA_HELMFILE_TIMEOUT" | default "900" }}
     needs:
       - scylla/scylla
     values:
@@ -92,7 +92,7 @@ releases:
     version: v1.16.0
     namespace: scylla
     chart: scylla/scylla
-    timeout: 900
+    timeout: {{ env "LINERA_HELMFILE_TIMEOUT" | default "900" }}
     needs:
       - scylla-manager/scylla-manager
       - scylla-operator/scylla-operator
@@ -155,7 +155,7 @@ releases:
     version: v1.16.0
     namespace: scylla-manager
     chart: scylla/scylla-manager
-    timeout: 900
+    timeout: {{ env "LINERA_HELMFILE_TIMEOUT" | default "900" }}
     needs:
       - scylla-operator/scylla-operator
     values:
@@ -164,7 +164,7 @@ releases:
     version: v1.16.0
     namespace: scylla-operator
     chart: scylla/scylla-operator
-    timeout: 900
+    timeout: {{ env "LINERA_HELMFILE_TIMEOUT" | default "900" }}
     needs:
       - cert-manager/cert-manager
     values:
@@ -173,7 +173,7 @@ releases:
     version: v1.17.0
     namespace: cert-manager
     chart: jetstack/cert-manager
-    timeout: 900
+    timeout: {{ env "LINERA_HELMFILE_TIMEOUT" | default "900" }}
     set:
       - name: crds.enabled
         value: "true"
@@ -181,7 +181,7 @@ releases:
     version: 1.3.1
     namespace: monitoring
     chart: grafana/alloy
-    timeout: 900
+    timeout: {{ env "LINERA_HELMFILE_TIMEOUT" | default "900" }}
     installed: {{ eq (env "LINERA_HELMFILE_SET_ENABLE_OBSERVABILITY_ALLOY" | default "false") "true" }}
     values:
       - {{ env "LINERA_HELMFILE_VALUES_OBSERVABILITY_ALLOY" | default "values-observability-alloy.yaml.gotmpl" }}
