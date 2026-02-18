@@ -47,6 +47,8 @@ type Deadline = Reverse<(Timestamp, Option<ApplicationId>)>;
 enum SubmitError {
     /// We are not the round leader; retry after the given timestamp.
     WaitForTimeout(Timestamp),
+    /// Another block was committed at the same height; can retry immediately.
+    Conflict,
     /// Any other error.
     Other(anyhow::Error),
 }
@@ -289,6 +291,15 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                                         had_failure = true;
                                         break;
                                     }
+                                    Err(SubmitError::Conflict) => {
+                                        debug!(
+                                            %application_id,
+                                            "Block conflict, retrying immediately",
+                                        );
+                                        retry_at = Some(Timestamp::now());
+                                        had_failure = true;
+                                        break;
+                                    }
                                     Err(SubmitError::Other(error)) => {
                                         error!(
                                             %application_id, %error,
@@ -420,10 +431,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     return Err(SubmitError::WaitForTimeout(timeout.timestamp));
                 }
                 linera_core::data_types::ClientOutcome::Conflict(_) => {
-                    return Err(SubmitError::other(anyhow::anyhow!(
-                        "Block conflict for {application_id}; \
-                         another block was committed at the same height",
-                    )));
+                    return Err(SubmitError::Conflict);
                 }
             }
         }
