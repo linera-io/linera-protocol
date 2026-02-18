@@ -138,7 +138,6 @@ where
         request: ChainWorkerRequest<StorageClient::Context>,
     ) {
         tracing::trace!("Handling chain worker request: {request:?}");
-        // TODO(#2237): Spawn concurrent tasks for read-only operations
         let responded = match request {
             #[cfg(with_testing)]
             ChainWorkerRequest::ReadCertificate { height, callback } => {
@@ -293,6 +292,71 @@ where
         // to handle the request, the chain state might contain unsaved and potentially invalid
         // changes. The next request needs to be applied to the chain state as it is in storage.
         self.chain.rollback();
+    }
+
+    /// Handles a concurrent-safe read-only request.
+    ///
+    /// Only dispatches the 11 simple getter variants that take `&self` and only read from
+    /// the `ChainStateView`. No rollback is needed since these methods don't mutate state.
+    #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
+    pub(super) async fn handle_read_request(
+        &self,
+        request: ChainWorkerRequest<StorageClient::Context>,
+    ) {
+        tracing::trace!("Handling concurrent read request: {request:?}");
+        let responded = match request {
+            ChainWorkerRequest::DownloadPendingBlob { blob_id, callback } => callback
+                .send(self.download_pending_blob(blob_id).await)
+                .is_ok(),
+            ChainWorkerRequest::GetPreprocessedBlockHashes {
+                start,
+                end,
+                callback,
+            } => callback
+                .send(self.get_preprocessed_block_hashes(start, end).await)
+                .is_ok(),
+            ChainWorkerRequest::GetInboxNextHeight { origin, callback } => callback
+                .send(self.get_inbox_next_height(origin).await)
+                .is_ok(),
+            ChainWorkerRequest::GetLockingBlobs { blob_ids, callback } => callback
+                .send(self.get_locking_blobs(blob_ids).await)
+                .is_ok(),
+            ChainWorkerRequest::GetBlockHashes { heights, callback } => {
+                callback.send(self.get_block_hashes(heights).await).is_ok()
+            }
+            ChainWorkerRequest::GetProposedBlobs { blob_ids, callback } => callback
+                .send(self.get_proposed_blobs(blob_ids).await)
+                .is_ok(),
+            ChainWorkerRequest::GetEventSubscriptions { callback } => {
+                callback.send(self.get_event_subscriptions().await).is_ok()
+            }
+            ChainWorkerRequest::GetNextExpectedEvent {
+                stream_id,
+                callback,
+            } => callback
+                .send(self.get_next_expected_event(stream_id).await)
+                .is_ok(),
+            ChainWorkerRequest::GetReceivedCertificateTrackers { callback } => callback
+                .send(self.get_received_certificate_trackers().await)
+                .is_ok(),
+            ChainWorkerRequest::GetTipStateAndOutboxInfo {
+                receiver_id,
+                callback,
+            } => callback
+                .send(self.get_tip_state_and_outbox_info(receiver_id).await)
+                .is_ok(),
+            ChainWorkerRequest::GetNextHeightToPreprocess { callback } => callback
+                .send(self.get_next_height_to_preprocess().await)
+                .is_ok(),
+            _ => {
+                tracing::error!("Non-concurrent request dispatched to handle_read_request");
+                return;
+            }
+        };
+
+        if !responded {
+            debug!("Callback for `ChainWorkerActor` was dropped before a response was sent");
+        }
     }
 
     /// Returns a read-only view of the [`ChainStateView`].

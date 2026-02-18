@@ -6,11 +6,16 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt,
+    future::Future,
+    pin::Pin,
     sync::{self, Arc, RwLock},
 };
 
 use custom_debug_derive::Debug;
-use futures::FutureExt;
+use futures::{
+    stream::{FuturesUnordered, StreamExt as _},
+    FutureExt,
+};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
@@ -339,15 +344,12 @@ where
 }
 
 impl<Ctx: Context + Clone + 'static> ChainWorkerRequest<Ctx> {
-    /// Whether this request is read-only (doesn't mutate or save chain state).
+    /// Whether this request is a concurrent-safe read (takes `&self` on the worker state
+    /// and only reads from the `ChainStateView`). These requests can run concurrently
+    /// via `FuturesUnordered`.
     fn is_read_only(&self) -> bool {
         match self {
-            #[cfg(with_testing)]
-            ChainWorkerRequest::ReadCertificate { .. } => true,
-            ChainWorkerRequest::GetChainStateView { .. }
-            | ChainWorkerRequest::QueryApplication { .. }
-            | ChainWorkerRequest::DescribeApplication { .. }
-            | ChainWorkerRequest::DownloadPendingBlob { .. }
+            ChainWorkerRequest::DownloadPendingBlob { .. }
             | ChainWorkerRequest::GetPreprocessedBlockHashes { .. }
             | ChainWorkerRequest::GetInboxNextHeight { .. }
             | ChainWorkerRequest::GetLockingBlobs { .. }
@@ -358,8 +360,14 @@ impl<Ctx: Context + Clone + 'static> ChainWorkerRequest<Ctx> {
             | ChainWorkerRequest::GetReceivedCertificateTrackers { .. }
             | ChainWorkerRequest::GetTipStateAndOutboxInfo { .. }
             | ChainWorkerRequest::GetNextHeightToPreprocess { .. } => true,
-            // All remaining variants mutate and/or save chain state.
-            ChainWorkerRequest::StageBlockExecution { .. }
+            // All remaining variants require `&mut self` due to mutation, lazy
+            // initialization, service runtime endpoints, or blob tracking.
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadCertificate { .. } => false,
+            ChainWorkerRequest::GetChainStateView { .. }
+            | ChainWorkerRequest::QueryApplication { .. }
+            | ChainWorkerRequest::DescribeApplication { .. }
+            | ChainWorkerRequest::StageBlockExecution { .. }
             | ChainWorkerRequest::StageBlockExecutionWithPolicy { .. }
             | ChainWorkerRequest::ProcessTimeout { .. }
             | ChainWorkerRequest::HandleBlockProposal { .. }
@@ -538,9 +546,10 @@ where
     /// Runs the worker until there are no more incoming requests.
     ///
     /// Prioritizes write requests (block processing, cross-chain updates, etc.) over
-    /// reads (GraphQL queries). After draining all pending writes, one read is processed
-    /// before checking for writes again. When both channels have requests ready, writes
-    /// are selected first.
+    /// concurrent-safe reads (simple getters on chain state). After draining all pending
+    /// writes, all pending reads are collected and executed concurrently via
+    /// `FuturesUnordered`, overlapping their storage I/O. When both channels have
+    /// requests ready, writes are selected first.
     #[instrument(
         skip_all,
         fields(chain_id = format!("{:.8}", self.chain_id), long_lived_services = %self.config.long_lived_services),
@@ -611,16 +620,24 @@ where
                     }
                 }
 
-                // Phase 2: Process one read if available.
-                if let Ok((request, span, queued_at)) = receivers.read_receiver.try_recv() {
-                    if let Some((request, span, _)) =
-                        self.preprocess_request(request, span, queued_at, &endpoint)
-                    {
-                        Box::pin(worker.handle_request(request))
-                            .instrument(span)
-                            .await;
+                // Phase 2: Collect and process all pending reads concurrently.
+                {
+                    let mut read_futures: FuturesUnordered<
+                        Pin<Box<dyn Future<Output = ()> + Send + '_>>,
+                    > = FuturesUnordered::new();
+                    while let Ok((request, span, queued_at)) = receivers.read_receiver.try_recv() {
+                        if let Some((request, span, _)) =
+                            self.preprocess_request(request, span, queued_at, &endpoint)
+                        {
+                            read_futures.push(Box::pin(
+                                worker.handle_read_request(request).instrument(span),
+                            ));
+                        }
                     }
-                    continue; // Go back to phase 1.
+                    if !read_futures.is_empty() {
+                        while read_futures.next().await.is_some() {}
+                        continue; // Back to phase 1 to check for writes.
+                    }
                 }
 
                 // Phase 3: Nothing available — block on either channel or TTL.
@@ -649,7 +666,7 @@ where
                         if let Some((request, span, _)) =
                             self.preprocess_request(request, span, queued_at, &endpoint)
                         {
-                            Box::pin(worker.handle_request(request))
+                            worker.handle_read_request(request)
                                 .instrument(span)
                                 .await;
                         }
