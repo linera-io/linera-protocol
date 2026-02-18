@@ -45,28 +45,10 @@ pub fn parse_operator(s: &str) -> Result<(String, PathBuf), String> {
 
 type Deadline = Reverse<(Timestamp, Option<ApplicationId>)>;
 
-/// Error from submitting a task outcome on-chain.
-enum SubmitError {
-    /// We are not the round leader; retry after the given timestamp.
-    WaitForTimeout(Timestamp),
-    /// Another block was committed at the same height; can retry immediately.
-    Conflict,
-    /// Any other error.
-    Other(anyhow::Error),
-}
-
-impl SubmitError {
-    fn other(error: impl Into<anyhow::Error>) -> Self {
-        SubmitError::Other(error.into())
-    }
-}
-
 /// Message sent from a background batch task to the main loop on completion.
 struct BatchResult {
     application_id: ApplicationId,
-    /// Whether the batch ended early due to a task or submission failure.
-    had_failure: bool,
-    /// If set, the deadline at which to retry (e.g. from a `WaitForTimeout`).
+    /// If set, the batch failed and should be retried at this timestamp.
     retry_at: Option<Timestamp>,
 }
 
@@ -137,11 +119,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 }
                 Some(result) = self.batch_receiver.recv() => {
                     self.in_flight_apps.remove(&result.application_id);
-                    if result.had_failure {
-                        // Schedule a retry, using the timeout hint if available.
-                        let retry_at = result.retry_at.unwrap_or_else(|| {
-                            Timestamp::now().saturating_add(self.retry_delay)
-                        });
+                    if let Some(retry_at) = result.retry_at {
                         self.deadlines.push(Reverse((
                             retry_at,
                             Some(result.application_id),
@@ -248,6 +226,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 self.in_flight_apps.insert(application_id);
                 let chain_client = self.chain_client.clone();
                 let batch_sender = self.batch_sender.clone();
+                let retry_delay = self.retry_delay;
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
                     // Spawn all tasks concurrently and join them.
@@ -270,65 +249,38 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     // failed task and submitting a later one would pop the wrong entry.
                     // Tasks are assumed idempotent, so on failure the whole batch is
                     // retried from scratch.
-                    let mut had_failure = false;
                     let mut retry_at = None;
                     for result in results {
                         match result {
                             Ok(Ok(outcome)) => {
-                                match Self::submit_task_outcome(
+                                if let Err(timestamp) = Self::submit_task_outcome(
                                     &chain_client,
                                     application_id,
                                     &outcome,
+                                    retry_delay,
                                 )
                                 .await
                                 {
-                                    Ok(()) => {}
-                                    Err(SubmitError::WaitForTimeout(timestamp)) => {
-                                        error!(
-                                            %application_id,
-                                            "Not the round leader, retrying \
-                                             after {timestamp}",
-                                        );
-                                        retry_at = Some(timestamp);
-                                        had_failure = true;
-                                        break;
-                                    }
-                                    Err(SubmitError::Conflict) => {
-                                        debug!(
-                                            %application_id,
-                                            "Block conflict, retrying immediately",
-                                        );
-                                        retry_at = Some(Timestamp::now());
-                                        had_failure = true;
-                                        break;
-                                    }
-                                    Err(SubmitError::Other(error)) => {
-                                        error!(
-                                            %application_id, %error,
-                                            "Error submitting task outcome",
-                                        );
-                                        had_failure = true;
-                                        break;
-                                    }
+                                    retry_at = Some(timestamp);
+                                    break;
                                 }
                             }
                             Ok(Err(error)) => {
                                 error!(%application_id, %error, "Error executing task");
-                                had_failure = true;
+                                retry_at =
+                                    Some(Timestamp::now().saturating_add(retry_delay));
                                 break;
                             }
                             Err(error) => {
                                 error!(%application_id, %error, "Task panicked");
-                                had_failure = true;
+                                retry_at =
+                                    Some(Timestamp::now().saturating_add(retry_delay));
                                 break;
                             }
                         }
                     }
-                    // Signal that this batch is done so the main loop can
-                    // clear in_flight_apps and handle retries or re-processing.
                     let _ = batch_sender.send(BatchResult {
                         application_id,
-                        had_failure,
                         retry_at,
                     });
                 });
@@ -399,18 +351,25 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         Ok(actions)
     }
 
+    /// Submits a task outcome on-chain. On success returns `Ok(())`. On failure, logs the
+    /// error and returns `Err(retry_at)` with the timestamp at which to retry.
     async fn submit_task_outcome(
         chain_client: &ChainClient<Env>,
         application_id: ApplicationId,
         task_outcome: &TaskOutcome,
-    ) -> Result<(), SubmitError> {
+        retry_delay: TimeDelta,
+    ) -> Result<(), Timestamp> {
         info!("Submitting task outcome for {application_id}: {task_outcome:?}");
+        let retry_with_delay = || Timestamp::now().saturating_add(retry_delay);
         let query = format!(
             "query {{ processTaskOutcome(outcome: {{ operator: {}, output: {} }}) }}",
             task_outcome.operator.to_value(),
             task_outcome.output.to_value(),
         );
-        let bytes = serde_json::to_vec(&json!({"query": query})).map_err(SubmitError::other)?;
+        let bytes = serde_json::to_vec(&json!({"query": query})).map_err(|error| {
+            error!(%application_id, %error, "Error serializing task outcome query");
+            retry_with_delay()
+        })?;
         let query = linera_execution::Query::User {
             application_id,
             bytes,
@@ -421,19 +380,26 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         } = chain_client
             .query_application(query, None)
             .await
-            .map_err(SubmitError::other)?;
+            .map_err(|error| {
+                error!(%application_id, %error, "Error querying application");
+                retry_with_delay()
+            })?;
         if !operations.is_empty() {
             match chain_client
                 .execute_operations(operations, vec![])
                 .await
-                .map_err(SubmitError::other)?
-            {
+                .map_err(|error| {
+                    error!(%application_id, %error, "Error executing operations");
+                    retry_with_delay()
+                })? {
                 ClientOutcome::Committed(_) => {}
                 ClientOutcome::WaitForTimeout(timeout) => {
-                    return Err(SubmitError::WaitForTimeout(timeout.timestamp));
+                    error!(%application_id, "Not the round leader, retrying after {}", timeout.timestamp);
+                    return Err(timeout.timestamp);
                 }
                 ClientOutcome::Conflict(_) => {
-                    return Err(SubmitError::Conflict);
+                    debug!(%application_id, "Block conflict, retrying immediately");
+                    return Err(Timestamp::now());
                 }
             }
         }
