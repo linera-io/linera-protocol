@@ -8,8 +8,8 @@ use std::{
 
 use futures::{lock::Mutex, stream::StreamExt, FutureExt};
 use linera_base::{
-    data_types::TimeDelta,
-    identifiers::{ApplicationId, ChainId},
+    data_types::{MessagePolicy, TimeDelta},
+    identifiers::{ApplicationId, ChainId, GenericApplicationId},
 };
 use linera_client::chain_listener::{ClientContext, ListenerCommand};
 use linera_core::{client::ChainClient, node::NotificationStream, worker::Reason};
@@ -45,6 +45,7 @@ pub struct Controller<Ctx: ClientContext> {
     retry_delay: TimeDelta,
     processors: BTreeMap<ChainId, ProcessorHandle>,
     listened_local_chains: BTreeSet<ChainId>,
+    current_message_policies: BTreeMap<ChainId, MessagePolicy>,
     command_sender: UnboundedSender<ListenerCommand>,
 }
 
@@ -77,6 +78,7 @@ where
             retry_delay,
             processors: BTreeMap::new(),
             listened_local_chains: BTreeSet::new(),
+            current_message_policies: BTreeMap::new(),
             command_sender,
         }
     }
@@ -132,6 +134,33 @@ where
                 .or_default()
                 .push(service.application_id);
         }
+
+        // The service chains should reject bundles that contain no messages sent by relevant apps
+        // and no system messages.
+        let mut message_policies: BTreeMap<_, _> = chain_apps
+            .iter()
+            .map(|(chain_id, apps)| {
+                let message_policy = MessagePolicy {
+                    reject_message_bundles_without_application_ids: Some(
+                        apps.iter()
+                            .map(|app_id| GenericApplicationId::User(*app_id))
+                            .chain(std::iter::once(GenericApplicationId::System))
+                            .collect(),
+                    ),
+                    ..Default::default()
+                };
+                (*chain_id, message_policy)
+            })
+            .collect();
+        message_policies.extend(state.local_message_policy);
+
+        let message_policies_to_update: BTreeMap<_, _> = message_policies
+            .iter()
+            .filter(|(chain_id, message_policy)| {
+                self.current_message_policies.get(chain_id) != Some(*message_policy)
+            })
+            .map(|(chain_id, message_policy)| (*chain_id, message_policy.clone()))
+            .collect();
 
         let old_chains: BTreeSet<_> = self.processors.keys().cloned().collect();
 
@@ -197,11 +226,6 @@ where
         // These are local_chains that don't have services (not in active_chains)
         self.listened_local_chains = local_chains.difference(&active_chains).cloned().collect();
 
-        if let Err(error) = self.command_sender.send(ListenerCommand::SetMessagePolicy(
-            state.local_message_policy,
-        )) {
-            error!(%error, "error sending a command to chain listener");
-        }
         if let Err(error) = self
             .command_sender
             .send(ListenerCommand::Listen(new_chains))
@@ -214,6 +238,14 @@ where
         {
             error!(%error, "error sending a command to chain listener");
         }
+        // This may affect chains we are just starting to listen to, so this command has to be sent
+        // last.
+        if let Err(error) = self.command_sender.send(ListenerCommand::SetMessagePolicy(
+            message_policies_to_update,
+        )) {
+            error!(%error, "error sending a command to chain listener");
+        }
+        self.current_message_policies = message_policies;
     }
 
     async fn register_worker(&mut self) {
