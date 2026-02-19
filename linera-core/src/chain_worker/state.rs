@@ -6,6 +6,8 @@
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap},
+    future::Future,
+    pin::Pin,
     sync::{self, Arc},
 };
 
@@ -296,8 +298,15 @@ where
 
     /// Handles a concurrent-safe read-only request.
     ///
-    /// Only dispatches the 11 simple getter variants that take `&self` and only read from
-    /// the `ChainStateView`. No rollback is needed since these methods don't mutate state.
+    /// Dispatches the simple getter variants plus `GetChainStateView`,
+    /// `ReadCertificate`, and `DescribeApplication`. All take `&self` because:
+    /// - The chain is eagerly initialized by the actor after loading.
+    /// - `shared_chain_view` is pre-initialized before each read batch.
+    /// - `DescribeApplication` reads the blob directly from storage.
+    ///
+    /// `QueryApplication` is NOT handled here — it goes through
+    /// [`prepare_query_application`](Self::prepare_query_application) instead.
+    /// No rollback is needed since these methods don't mutate state.
     #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
     pub(super) async fn handle_read_request(
         &self,
@@ -348,6 +357,26 @@ where
             ChainWorkerRequest::GetNextHeightToPreprocess { callback } => callback
                 .send(self.get_next_height_to_preprocess().await)
                 .is_ok(),
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadCertificate { height, callback } => {
+                callback.send(self.read_certificate(height).await).is_ok()
+            }
+            ChainWorkerRequest::GetChainStateView { callback } => {
+                let result = self
+                    .shared_chain_view
+                    .as_ref()
+                    .expect("shared_chain_view should be initialized before read batch")
+                    .clone()
+                    .read_owned()
+                    .await;
+                callback.send(Ok(result)).is_ok()
+            }
+            ChainWorkerRequest::DescribeApplication {
+                application_id,
+                callback,
+            } => callback
+                .send(self.describe_application_readonly(application_id).await)
+                .is_ok(),
             _ => {
                 tracing::error!("Non-concurrent request dispatched to handle_read_request");
                 return;
@@ -377,6 +406,18 @@ where
             .clone()
             .read_owned()
             .await)
+    }
+
+    /// Ensures the shared chain view is initialized.
+    ///
+    /// Creates a clone of the chain state if not already present. Must be called
+    /// before processing a batch of concurrent reads that may include
+    /// `GetChainStateView`.
+    pub(super) fn ensure_shared_chain_view_initialized(&mut self) -> Result<(), WorkerError> {
+        if self.shared_chain_view.is_none() {
+            self.shared_chain_view = Some(Arc::new(RwLock::new(self.chain.clone_unchecked()?)));
+        }
+        Ok(())
     }
 
     /// Clears the shared chain view, and acquires and drops its write lock.
@@ -1442,16 +1483,18 @@ where
     }
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
+    ///
+    /// Does not need `&mut self` because the chain is eagerly initialized by the actor
+    /// after loading.
     #[cfg(with_testing)]
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         height = %height
     ))]
     async fn read_certificate(
-        &mut self,
+        &self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        self.initialize_and_save_if_needed().await?;
         let certificate_hash = match self.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -1523,6 +1566,84 @@ where
         }
     }
 
+    /// Prepares a concurrent query by cloning the chain state and returning an owned future.
+    ///
+    /// The clone receives all mutations (blob tracking, etc.) that occur during query
+    /// execution, and is dropped afterwards. The service runtime endpoint is `None`,
+    /// so an ephemeral runtime is created per query — this is correct because the
+    /// long-lived service is a performance optimization, not a correctness requirement.
+    pub(super) fn prepare_query_application(
+        &mut self,
+        query: Query,
+        block_hash: Option<CryptoHash>,
+        callback: oneshot::Sender<Result<QueryOutcome, WorkerError>>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        // Safety of `clone_unchecked`: the clone shares the underlying storage context
+        // with `self.chain`, but has its own in-memory state. Mutations during the query
+        // (e.g. `blob_used`) only affect the clone's in-memory buffers. The clone is
+        // never saved — it is dropped when the `FuturesUnordered` in Phase 2 Step B is
+        // drained, which happens before the scheduling loop returns to Phase 1 where
+        // writes are processed. This guarantees no concurrent write can modify the
+        // underlying storage while the clone exists.
+        let mut chain_clone = match self.chain.clone_unchecked() {
+            Ok(clone) => clone,
+            Err(err) => {
+                return Box::pin(async move {
+                    callback.send(Err(err.into())).ok();
+                });
+            }
+        };
+        let local_time = self.storage.clock().current_time();
+        let execution_state_cache = self.execution_state_cache.clone();
+        let chain_id = self.chain_id();
+        let next_block_height = self.chain.tip_state.get().next_block_height;
+
+        Box::pin(async move {
+            let result: Result<QueryOutcome, WorkerError> = async {
+                if let Some(requested_block) = block_hash {
+                    if let Some(mut state) = execution_state_cache.remove(&requested_block) {
+                        let next_block_height = next_block_height
+                            .try_add_one()
+                            .expect("block height to not overflow");
+                        let context = QueryContext {
+                            chain_id,
+                            next_block_height,
+                            local_time,
+                        };
+                        let outcome = state
+                            .with_context(|ctx| {
+                                chain_clone
+                                    .execution_state
+                                    .context()
+                                    .clone_with_base_key(ctx.base_key().bytes.clone())
+                            })
+                            .await
+                            .query_application(context, query, None)
+                            .await
+                            .with_execution_context(ChainExecutionContext::Query)?;
+                        execution_state_cache.insert_owned(&requested_block, state);
+                        Ok(outcome)
+                    } else {
+                        tracing::debug!(
+                            requested_block = %requested_block,
+                            "requested block hash not found in cache, \
+                             querying committed state"
+                        );
+                        Ok(chain_clone
+                            .query_application(local_time, query, None)
+                            .await?)
+                    }
+                } else {
+                    Ok(chain_clone
+                        .query_application(local_time, query, None)
+                        .await?)
+                }
+            }
+            .await;
+            callback.send(result).ok();
+        })
+    }
+
     /// Returns an application's description.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
@@ -1535,6 +1656,29 @@ where
         self.initialize_and_save_if_needed().await?;
         let response = self.chain.describe_application(application_id).await?;
         Ok(response)
+    }
+
+    /// Returns an application's description by reading the blob directly from storage.
+    ///
+    /// Unlike [`describe_application`](Self::describe_application), this does not track
+    /// blob usage (which requires `&mut self`), making it safe for concurrent reads.
+    /// Blob tracking is only relevant during block execution and is always rolled back
+    /// for read-only queries.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id(),
+        application_id = %application_id
+    ))]
+    async fn describe_application_readonly(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, WorkerError> {
+        let blob_id = application_id.description_blob_id();
+        let blob = self
+            .storage
+            .read_blob(blob_id)
+            .await?
+            .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))?;
+        Ok(bcs::from_bytes(blob.bytes())?)
     }
 
     /// Executes a block without persisting any changes to the state.
@@ -1877,7 +2021,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
-    async fn initialize_and_save_if_needed(&mut self) -> Result<(), WorkerError> {
+    pub(super) async fn initialize_and_save_if_needed(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
             let local_time = self.storage.clock().current_time();
             self.chain.initialize_if_needed(local_time).await?;

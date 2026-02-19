@@ -344,11 +344,12 @@ where
 }
 
 impl<Ctx: Context + Clone + 'static> ChainWorkerRequest<Ctx> {
-    /// Whether this request is a concurrent-safe read (takes `&self` on the worker state
-    /// and only reads from the `ChainStateView`). These requests can run concurrently
-    /// via `FuturesUnordered`.
+    /// Whether this request is a concurrent-safe read that can run concurrently
+    /// via `FuturesUnordered`. Read-only requests are routed to the read channel
+    /// for concurrent execution.
     fn is_read_only(&self) -> bool {
         match self {
+            // Simple getters: take `&self`, only read from ChainStateView.
             ChainWorkerRequest::DownloadPendingBlob { .. }
             | ChainWorkerRequest::GetPreprocessedBlockHashes { .. }
             | ChainWorkerRequest::GetInboxNextHeight { .. }
@@ -360,14 +361,21 @@ impl<Ctx: Context + Clone + 'static> ChainWorkerRequest<Ctx> {
             | ChainWorkerRequest::GetReceivedCertificateTrackers { .. }
             | ChainWorkerRequest::GetTipStateAndOutboxInfo { .. }
             | ChainWorkerRequest::GetNextHeightToPreprocess { .. } => true,
-            // All remaining variants require `&mut self` due to mutation, lazy
-            // initialization, service runtime endpoints, or blob tracking.
+            // ReadCertificate: chain is eagerly initialized, so only needs &self.
             #[cfg(with_testing)]
-            ChainWorkerRequest::ReadCertificate { .. } => false,
-            ChainWorkerRequest::GetChainStateView { .. }
-            | ChainWorkerRequest::QueryApplication { .. }
-            | ChainWorkerRequest::DescribeApplication { .. }
-            | ChainWorkerRequest::StageBlockExecution { .. }
+            ChainWorkerRequest::ReadCertificate { .. } => true,
+            // GetChainStateView: shared_chain_view is pre-initialized before
+            // each read batch.
+            ChainWorkerRequest::GetChainStateView { .. } => true,
+            // DescribeApplication: reads the blob directly from storage,
+            // skipping blob tracking (which is always rolled back for reads).
+            ChainWorkerRequest::DescribeApplication { .. } => true,
+            // QueryApplication: clones chain state for concurrent execution.
+            // Requires preparation (&mut self for clone_unchecked), but the
+            // resulting owned future runs concurrently.
+            ChainWorkerRequest::QueryApplication { .. } => true,
+            // All remaining variants mutate chain state.
+            ChainWorkerRequest::StageBlockExecution { .. }
             | ChainWorkerRequest::StageBlockExecutionWithPolicy { .. }
             | ChainWorkerRequest::ProcessTimeout { .. }
             | ChainWorkerRequest::HandleBlockProposal { .. }
@@ -379,6 +387,13 @@ impl<Ctx: Context + Clone + 'static> ChainWorkerRequest<Ctx> {
             | ChainWorkerRequest::UpdateReceivedCertificateTrackers { .. }
             | ChainWorkerRequest::HandlePendingBlob { .. } => false,
         }
+    }
+
+    /// Whether this read-only request requires a preparation step with `&mut self`
+    /// before it can run concurrently. Currently only `QueryApplication` needs this
+    /// (to clone the chain state via `clone_unchecked`).
+    fn needs_preparation(&self) -> bool {
+        matches!(self, ChainWorkerRequest::QueryApplication { .. })
     }
 }
 
@@ -602,6 +617,15 @@ where
             #[cfg(with_metrics)]
             metrics::CHAIN_WORKER_STATES_LOADED.inc();
 
+            // Eagerly initialize the chain so that read-only methods
+            // (ReadCertificate, QueryApplication, etc.) don't need &mut self
+            // for initialization. For inactive chains (not yet opened via
+            // cross-chain messages), this may fail, which is fine — the chain
+            // will be initialized when the activating request arrives.
+            if let Err(err) = worker.initialize_and_save_if_needed().await {
+                trace!("Eager initialization skipped for {}: {err}", self.chain_id);
+            }
+
             // Process the first request.
             Box::pin(worker.handle_request(request))
                 .instrument(span)
@@ -621,20 +645,57 @@ where
                 }
 
                 // Phase 2: Collect and process all pending reads concurrently.
+                // Two-step approach: first prepare (needs &mut worker for
+                // QueryApplication clone and shared_chain_view init), then
+                // execute all futures concurrently.
                 {
-                    let mut read_futures: FuturesUnordered<
-                        Pin<Box<dyn Future<Output = ()> + Send + '_>>,
-                    > = FuturesUnordered::new();
-                    while let Ok((request, span, queued_at)) = receivers.read_receiver.try_recv() {
-                        if let Some((request, span, _)) =
-                            self.preprocess_request(request, span, queued_at, &endpoint)
-                        {
+                    let mut pending_reads = Vec::new();
+                    while let Ok(item) = receivers.read_receiver.try_recv() {
+                        pending_reads.push(item);
+                    }
+                    if !pending_reads.is_empty() {
+                        // Step A: Prepare (needs &mut worker).
+                        worker.ensure_shared_chain_view_initialized()?;
+
+                        let mut owned_futures = Vec::new();
+                        let mut simple_items = Vec::new();
+                        for (request, span, queued_at) in pending_reads {
+                            if let Some((request, span, _)) =
+                                self.preprocess_request(request, span, queued_at, &endpoint)
+                            {
+                                if request.needs_preparation() {
+                                    if let ChainWorkerRequest::QueryApplication {
+                                        query,
+                                        block_hash,
+                                        callback,
+                                    } = request
+                                    {
+                                        owned_futures.push((
+                                            worker.prepare_query_application(
+                                                query, block_hash, callback,
+                                            ),
+                                            span,
+                                        ));
+                                    }
+                                } else {
+                                    simple_items.push((request, span));
+                                }
+                            }
+                        }
+                        // &mut worker borrow ends here.
+
+                        // Step B: Execute all concurrently.
+                        let mut read_futures: FuturesUnordered<
+                            Pin<Box<dyn Future<Output = ()> + Send + '_>>,
+                        > = FuturesUnordered::new();
+                        for (request, span) in simple_items {
                             read_futures.push(Box::pin(
                                 worker.handle_read_request(request).instrument(span),
                             ));
                         }
-                    }
-                    if !read_futures.is_empty() {
+                        for (fut, span) in owned_futures {
+                            read_futures.push(Box::pin(fut.instrument(span)));
+                        }
                         while read_futures.next().await.is_some() {}
                         continue; // Back to phase 1 to check for writes.
                     }
@@ -666,9 +727,30 @@ where
                         if let Some((request, span, _)) =
                             self.preprocess_request(request, span, queued_at, &endpoint)
                         {
-                            worker.handle_read_request(request)
-                                .instrument(span)
-                                .await;
+                            if request.needs_preparation() {
+                                if let ChainWorkerRequest::QueryApplication {
+                                    query,
+                                    block_hash,
+                                    callback,
+                                } = request
+                                {
+                                    let fut = worker.prepare_query_application(
+                                        query, block_hash, callback,
+                                    );
+                                    fut.instrument(span).await;
+                                }
+                            } else {
+                                if matches!(
+                                    request,
+                                    ChainWorkerRequest::GetChainStateView { .. }
+                                ) {
+                                    worker.ensure_shared_chain_view_initialized()?;
+                                }
+                                worker
+                                    .handle_read_request(request)
+                                    .instrument(span)
+                                    .await;
+                            }
                         }
                     }
                 }
