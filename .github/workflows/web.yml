@@ -122,6 +122,7 @@ jobs:
         cd linera-views
         WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
     - name: Test the `counter` example
+      run: |
         cd examples/counter
         pnpm install --frozen-lockfile
         LINERA_APPLICATION_ID=$LINERA_COUNTER_APPLICATION_ID pnpm test
