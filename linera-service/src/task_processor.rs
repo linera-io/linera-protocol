@@ -57,7 +57,6 @@ struct BatchResult {
 pub struct TaskProcessor<Env: linera_core::Environment> {
     chain_id: ChainId,
     application_ids: Vec<ApplicationId>,
-    cursors: BTreeMap<ApplicationId, String>,
     chain_client: ChainClient<Env>,
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
@@ -87,7 +86,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         Self {
             chain_id,
             application_ids,
-            cursors: BTreeMap::new(),
             chain_client,
             cancellation_token,
             notifications,
@@ -161,8 +159,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         let new_app_set: BTreeSet<_> = update.application_ids.iter().cloned().collect();
         let old_app_set: BTreeSet<_> = self.application_ids.iter().cloned().collect();
 
-        self.cursors
-            .retain(|app_id, _| new_app_set.contains(app_id));
         self.in_flight_apps
             .retain(|app_id| new_app_set.contains(app_id));
 
@@ -206,8 +202,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             }
             debug!("Processing actions for {application_id}");
             let now = self.current_time();
-            let app_cursor = self.cursors.get(&application_id).cloned();
-            let actions = match self.query_actions(application_id, app_cursor, now).await {
+            let actions = match self.query_actions(application_id, now).await {
                 Ok(actions) => actions,
                 Err(error) => {
                     error!("Error reading application actions: {error}");
@@ -222,9 +217,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             if let Some(timestamp) = actions.request_callback {
                 self.deadlines
                     .push(Reverse((timestamp, Some(application_id))));
-            }
-            if let Some(cursor) = actions.set_cursor {
-                self.cursors.insert(application_id, cursor);
             }
             if !actions.execute_tasks.is_empty() {
                 self.in_flight_apps.insert(application_id);
@@ -334,14 +326,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     async fn query_actions(
         &mut self,
         application_id: ApplicationId,
-        cursor: Option<String>,
         now: Timestamp,
     ) -> Result<ProcessorActions, anyhow::Error> {
-        let query = format!(
-            "query {{ nextActions(cursor: {}, now: {}) }}",
-            cursor.to_value(),
-            now.to_value(),
-        );
+        let query = format!("query {{ nextActions(now: {}) }}", now.to_value(),);
         let bytes = serde_json::to_vec(&json!({"query": query}))?;
         let query = linera_execution::Query::User {
             application_id,
@@ -436,12 +423,9 @@ mod tests {
 
     use super::*;
 
-    /// Regression test: demonstrates that the cursor-based task processor fails to
-    /// retry tasks after the first attempt fails. The app sets cursor=N after
-    /// returning N tasks, so on retry the cursor causes all tasks to be skipped.
-    ///
-    /// This test should pass (task_count == 0) while the cursor bug exists.
-    /// Once cursor support is removed, the retry will succeed and task_count will be 1.
+    /// Regression test: verifies that the task processor correctly retries tasks
+    /// after the first attempt fails. With cursor support removed, the retry
+    /// re-queries all pending tasks from on-chain state and succeeds.
     #[cfg(feature = "wasmer")]
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn test_task_processor_retry_with_cursor() {
@@ -538,11 +522,10 @@ mod tests {
         let task_count = outcome.response.data.into_json().unwrap();
         let task_count = task_count["taskCount"].as_u64().unwrap();
 
-        // With the cursor bug, the retry query returns no tasks (cursor=1 skips the
-        // only pending task), so task_count remains 0.
+        // Without cursors, the retry re-queries all pending tasks and succeeds.
         assert_eq!(
-            task_count, 0,
-            "Expected task_count to be 0 due to cursor bug causing retry to skip tasks"
+            task_count, 1,
+            "Expected task_count to be 1 after successful retry"
         );
 
         cancellation_token.cancel();
