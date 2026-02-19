@@ -9,7 +9,7 @@ use linera_client::chain_listener::{ChainListener, ClientContext as _};
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use crate::{chain::Chain, signer::Signer, storage, wallet::Wallet, Environment, JsResult};
+use crate::{chain::Chain, signer::Signer, storage, wallet::Wallet, Environment, Result};
 
 /// The full client API, exposed to the wallet implementation. Calls
 /// to this API can be trusted to have originated from the user's
@@ -46,7 +46,7 @@ impl Client {
         mut wallet: Wallet,
         signer: Signer,
         options: Option<linera_client::Options>,
-    ) -> Result<Client, JsError> {
+    ) -> Result<Client> {
         let options = options.unwrap_or_default();
 
         wallet.lock().await?;
@@ -104,7 +104,7 @@ impl Client {
     ///
     /// If the wallet could not be read or chain synchronization fails.
     #[wasm_bindgen]
-    pub async fn chain(&self, chain: ChainId, options: Option<ChainOptions>) -> JsResult<Chain> {
+    pub async fn chain(&self, chain: ChainId, options: Option<ChainOptions>) -> Result<Chain> {
         let options = options.unwrap_or_default();
         let mut chain_client = self
             .client_context
