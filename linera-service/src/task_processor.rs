@@ -411,7 +411,7 @@ mod tests {
     use async_graphql::Request;
     use linera_base::{
         crypto::InMemorySigner,
-        data_types::{Amount, Bytecode, TimeDelta, Timestamp},
+        data_types::{Amount, Bytecode, TimeDelta},
         vm::VmRuntime,
     };
     use linera_core::test_utils::{
@@ -502,28 +502,28 @@ mod tests {
 
         let processor_handle = tokio::spawn(processor.run());
 
-        // Wait for the initial attempt to fail and the batch result to be processed.
-        // The task processor runs in the background; give it time to execute the
-        // operator (which fails on the first attempt) and schedule a retry.
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        // Poll until the retry succeeds. Each iteration advances the TestClock by
+        // the retry delay so we eventually pass the processor's retry deadline.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+        let task_count = loop {
+            clock.add(retry_delay);
+            let query = Request::new("{ taskCount }");
+            let outcome = chain_client
+                .query_user_application(app_id, &query)
+                .await
+                .unwrap();
+            let data = outcome.response.data.into_json().unwrap();
+            let count = data["taskCount"].as_u64().unwrap();
+            if count > 0 {
+                break count;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "Timed out waiting for retry to complete"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        };
 
-        // Advance the TestClock past the retry deadline so the retry fires.
-        clock.set(Timestamp::from(retry_delay.as_micros() + 1_000_000));
-
-        // Wait for the retry to complete.
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-        // Query the app to see if the task was completed.
-        let query = Request::new("{ taskCount }");
-        let outcome = chain_client
-            .query_user_application(app_id, &query)
-            .await
-            .unwrap();
-
-        let task_count = outcome.response.data.into_json().unwrap();
-        let task_count = task_count["taskCount"].as_u64().unwrap();
-
-        // The retry re-queries all pending tasks and succeeds.
         assert_eq!(
             task_count, 1,
             "Expected task_count to be 1 after successful retry"
