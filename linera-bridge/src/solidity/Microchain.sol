@@ -10,9 +10,10 @@ abstract contract Microchain {
     uint64 public latestHeight;
     mapping(bytes32 => bool) public verifiedBlocks;
 
-    constructor(address _lightClient, bytes32 _chainId) {
+    constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight) {
         lightClient = LightClient(_lightClient);
         chainId = _chainId;
+        latestHeight = _latestHeight;
     }
 
     /// Verifies a certificate and accepts the block if it matches this chain and

@@ -276,6 +276,7 @@ mod tests {
             &[addr_a, addr_b],
             &[1, 1],
             test_admin_chain_id(),
+            0,
         );
 
         // Only validator A signs, but duplicates the signature to try to reach quorum
@@ -439,8 +440,14 @@ mod tests {
             let secret = ValidatorSecretKey::generate();
             let public = secret.public();
             let address = validator_evm_address(&public);
-            let contract =
-                deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
+            let contract = deploy_light_client(
+                &mut db,
+                deployer,
+                &[address],
+                &[1],
+                test_admin_chain_id(),
+                0,
+            );
 
             Self {
                 db,

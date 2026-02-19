@@ -24,8 +24,14 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract =
-            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
+        let contract = deploy_light_client(
+            &mut db,
+            deployer,
+            &[address],
+            &[1],
+            test_admin_chain_id(),
+            0,
+        );
 
         let (committee_bytes, blob_hash) = create_committee_blob(&new_public);
         let transactions = create_committee_transaction(Epoch(1), blob_hash);
@@ -62,9 +68,15 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let light_client =
-            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
-        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+        let light_client = deploy_light_client(
+            &mut db,
+            deployer,
+            &[address],
+            &[1],
+            test_admin_chain_id(),
+            0,
+        );
+        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id, 0);
 
         let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
         let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");

@@ -60,8 +60,14 @@ mod tests {
             let public = secret.public();
             let validator_addr = validator_evm_address(&public);
             let admin_chain_id = test_admin_chain_id();
-            let light_client =
-                deploy_light_client(&mut db, deployer, &[validator_addr], &[1], admin_chain_id);
+            let light_client = deploy_light_client(
+                &mut db,
+                deployer,
+                &[validator_addr],
+                &[1],
+                admin_chain_id,
+                0,
+            );
 
             let token = deploy_mock_erc20(
                 &mut db,
@@ -72,7 +78,7 @@ mod tests {
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let app_id = CryptoHash::new(&TestString::new("fungible_app"));
             let bridge =
-                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id, token);
+                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, 0, app_id, token);
             let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
 
             // Fund the bridge with the full token supply

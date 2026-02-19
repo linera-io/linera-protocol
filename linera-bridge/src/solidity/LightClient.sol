@@ -16,9 +16,8 @@ contract LightClient {
     uint32 public currentEpoch;
     bytes32 public adminChainId;
 
-    constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId) {
-        _setCommittee(0, validators, weights);
-        currentEpoch = 0;
+    constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
+        _setCommittee(_epoch, validators, weights);
         adminChainId = _adminChainId;
     }
 
@@ -159,7 +158,7 @@ contract LightClient {
     }
 
     function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights) internal {
-        require(epoch == currentEpoch + 1 || (epoch == 0 && currentEpoch == 0), "epoch must be sequential");
+        require(epoch == currentEpoch + 1 || (committees[currentEpoch].totalWeight == 0 && currentEpoch == 0), "epoch must be sequential");
         require(validators.length == weights.length, "length mismatch");
         EpochCommittee storage committee = committees[epoch];
         uint64 total = 0;
