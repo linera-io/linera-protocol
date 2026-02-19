@@ -8,6 +8,7 @@ abstract contract Microchain {
     LightClient public immutable lightClient;
     bytes32 public immutable chainId;
     uint64 public latestHeight;
+    mapping(bytes32 => bool) public verifiedBlocks;
 
     constructor(address _lightClient, bytes32 _chainId) {
         lightClient = LightClient(_lightClient);
@@ -24,12 +25,14 @@ abstract contract Microchain {
     /// If this assumption ever changes at the protocol layer, a
     /// `previous_block_hash` check should be added here.
     function addBlock(bytes calldata data) external {
-        BridgeTypes.Block memory blockValue = lightClient.verifyBlock(data);
+        (BridgeTypes.Block memory blockValue, bytes32 signedHash) = lightClient.verifyBlock(data);
 
+        require(!verifiedBlocks[signedHash], "block already verified");
         require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
         require(blockValue.header.height.value == latestHeight + 1, "block height must be sequential");
 
         latestHeight = blockValue.header.height.value;
+        verifiedBlocks[signedHash] = true;
         _onBlock(blockValue);
     }
 

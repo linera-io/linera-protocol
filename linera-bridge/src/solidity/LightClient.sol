@@ -27,7 +27,7 @@ contract LightClient {
         bytes calldata committeeBlob,
         bytes[] calldata validators
     ) external {
-        BridgeTypes.Block memory blockValue = verifyCertificate(data);
+        (BridgeTypes.Block memory blockValue,) = verifyCertificate(data);
 
         // The block must be from the admin chain and the current epoch
         require(blockValue.header.chain_id.value.value == adminChainId, "block must be from admin chain");
@@ -76,11 +76,11 @@ contract LightClient {
         _setCommittee(newEpoch, addrs, weights);
     }
 
-    function verifyBlock(bytes calldata data) external view returns (BridgeTypes.Block memory) {
+    function verifyBlock(bytes calldata data) external view returns (BridgeTypes.Block memory, bytes32) {
         return verifyCertificate(data);
     }
 
-    function verifyCertificate(bytes calldata data) internal view returns (BridgeTypes.Block memory) {
+    function verifyCertificate(bytes calldata data) internal view returns (BridgeTypes.Block memory, bytes32) {
         // Copy calldata to memory for the BCS deserializer
         bytes memory mdata = data;
 
@@ -155,7 +155,7 @@ contract LightClient {
         }
         require(weight >= committee.quorumThreshold, "insufficient quorum");
 
-        return blockValue;
+        return (blockValue, signedHash);
     }
 
     function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights) internal {

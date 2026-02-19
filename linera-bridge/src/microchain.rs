@@ -79,6 +79,47 @@ mod tests {
     }
 
     #[test]
+    fn test_microchain_rejects_duplicate_block() {
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let address = validator_evm_address(&public);
+
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+
+        let deployer = Address::ZERO;
+        let mut db = CacheDB::default();
+        let light_client =
+            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
+        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+
+        // Add block at height 1
+        let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
+        let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+        call_contract(
+            &mut db,
+            deployer,
+            microchain,
+            addBlockCall {
+                data: bcs_bytes.clone().into(),
+            },
+        );
+
+        // Submit the same block again
+        assert!(
+            try_call_contract(
+                &mut db,
+                deployer,
+                microchain,
+                addBlockCall {
+                    data: bcs_bytes.into(),
+                },
+            )
+            .is_err(),
+            "should reject duplicate block"
+        );
+    }
+
+    #[test]
     fn test_microchain_rejects_wrong_chain_id() {
         let secret = ValidatorSecretKey::generate();
         let public = secret.public();
