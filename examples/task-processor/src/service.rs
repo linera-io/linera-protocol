@@ -81,19 +81,25 @@ impl QueryRoot {
     }
 
     /// Returns the pending tasks and callback requests for the task processor.
-    async fn next_actions(&self, _cursor: Option<String>, _now: Timestamp) -> ProcessorActions {
+    async fn next_actions(&self, cursor: Option<String>, _now: Timestamp) -> ProcessorActions {
         let mut actions = ProcessorActions::default();
 
+        // Parse cursor as the number of tasks already dispatched (default 0).
+        let already_dispatched: usize = cursor.as_deref().and_then(|s| s.parse().ok()).unwrap_or(0);
+
         // Get all pending tasks from the queue.
-        let count = self.state.pending_tasks.count();
-        if let Ok(pending_tasks) = self.state.pending_tasks.read_front(count).await {
-            for pending in pending_tasks {
+        let total_count = self.state.pending_tasks.count();
+        if let Ok(pending_tasks) = self.state.pending_tasks.read_front(total_count).await {
+            for pending in pending_tasks.into_iter().skip(already_dispatched) {
                 actions.execute_tasks.push(Task {
                     operator: pending.operator,
                     input: pending.input,
                 });
             }
         }
+
+        // Always advance the cursor to the total pending count.
+        actions.set_cursor = Some(total_count.to_string());
 
         actions
     }
