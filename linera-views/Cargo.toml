@@ -81,6 +81,9 @@ rand.workspace = true
 test-case.workspace = true
 tokio-test.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+gungraun.workspace = true
+
 [build-dependencies]
 cfg_aliases.workspace = true
 
@@ -94,4 +97,8 @@ harness = false
 
 [[bench]]
 name = "queue_view"
+harness = false
+
+[[bench]]
+name = "gungraun_views"
 harness = false

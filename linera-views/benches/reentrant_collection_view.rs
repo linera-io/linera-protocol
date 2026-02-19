@@ -11,8 +11,9 @@ use linera_views::{
     store::WritableKeyValueStore as _,
     views::View,
 };
-use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
+
+mod common;
 
 /// Benchmarks the [`ReentrantCollectionView::try_load_all_entries`] against the manual
 /// pattern, when the collection has all of its entries staged in memory.
@@ -137,14 +138,7 @@ fn bench_load_all_entries_from_storage(criterion: &mut Criterion) {
     });
 }
 
-/// A helper type that simulates an index type that has a non-trivial cost to
-/// serialize/deserialize.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-enum ComplexIndex {
-    UselessVariant,
-    NestedVariant(Box<ComplexIndex>),
-    Leaf(String),
-}
+use common::ComplexIndex;
 
 /// Creates a populated [`ReentrantCollectionView`] with its contents still staged in memory.
 async fn create_populated_reentrant_collection_view(
