@@ -5,7 +5,6 @@
 
 #[cfg(test)]
 mod tests {
-    use alloy_sol_types::SolEvent;
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
         data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
@@ -26,116 +25,13 @@ mod tests {
 
     use crate::{microchain::addBlockCall, test_helpers::*};
 
-    mod fungible_events {
+    mod erc20 {
         use alloy_sol_types::sol;
 
         sol! {
-            struct CryptoHash {
-                bytes32 value;
-            }
-
-            // Mirrors the AccountOwner struct from BridgeTypes.sol.
-            struct AccountOwner {
-                uint8 choice;
-                uint8 reserved;
-                CryptoHash address32;
-                bytes20 address20;
-            }
-
-            // Mirrors the Credit event from FungibleBridge.sol.
-            event Credit(
-                AccountOwner target,
-                uint128 amount,
-                AccountOwner source
-            );
+            function balanceOf(address account) external view returns (uint256);
+            function transfer(address to, uint256 amount) external returns (bool);
         }
-    }
-
-    mod fungible_queries {
-        use alloy_sol_types::sol;
-
-        sol! {
-            function balances(address account) external view returns (uint256);
-        }
-    }
-
-    #[test]
-    fn test_fungible_bridge_processes_credit() {
-        let mut t = TestBridge::new();
-
-        let (logs, _) = t.submit_credit(test_target(), Amount::from_tokens(100), test_source());
-
-        assert_eq!(logs.len(), 1, "expected exactly one Credit event");
-        let credit =
-            fungible_events::Credit::decode_log(&logs[0]).expect("failed to decode Credit event");
-        let source_hash = *CryptoHash::new(&TestString::new(TEST_SOURCE_NAME)).as_bytes();
-        assert_eq!(credit.target.choice, 2);
-        assert_eq!(&credit.target.address20[..], &TEST_TARGET[..]);
-        assert_eq!(credit.amount, 100_000_000_000_000_000_000u128);
-        assert_eq!(credit.source.choice, 1);
-        assert_eq!(credit.source.address32.value, source_hash);
-    }
-
-    #[test]
-    fn test_fungible_bridge_accumulates_balances() {
-        let mut t = TestBridge::new();
-        let target = test_target();
-        let source = test_source();
-
-        t.submit_credit(target, Amount::from_tokens(100), source);
-        assert_eq!(
-            t.query_balance(test_target_evm_address()),
-            alloy_primitives::U256::from(100_000_000_000_000_000_000u128),
-            "balance should be 100 tokens after first credit"
-        );
-
-        t.submit_credit(target, Amount::from_tokens(50), source);
-        assert_eq!(
-            t.query_balance(test_target_evm_address()),
-            alloy_primitives::U256::from(150_000_000_000_000_000_000u128),
-            "balance should be 150 tokens after two credits"
-        );
-    }
-
-    #[test]
-    fn test_fungible_bridge_skips_non_evm_targets() {
-        let mut t = TestBridge::new();
-        let target = AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner")));
-
-        let (logs, _) = t.submit_credit(target, Amount::from_tokens(100), test_source());
-
-        assert!(
-            logs.is_empty(),
-            "should not emit events for non-EVM address targets"
-        );
-    }
-
-    #[test]
-    fn test_fungible_bridge_ignores_other_applications() {
-        let mut t = TestBridge::new();
-        let other_app_id = CryptoHash::new(&TestString::new("other_app"));
-
-        let msg = fungible::Message::Credit {
-            target: test_target(),
-            amount: Amount::from_tokens(50),
-            source: test_source(),
-        };
-        let txn = fungible_message_transaction(t.origin, other_app_id, &msg);
-        let (logs, _) = t.submit_block(vec![txn]);
-
-        assert!(
-            logs.is_empty(),
-            "should not emit events for other applications"
-        );
-    }
-
-    #[test]
-    fn test_fungible_bridge_gas_measurement() {
-        let mut t = TestBridge::new();
-
-        let (_, gas_used) = t.submit_credit(test_target(), Amount::from_tokens(100), test_source());
-
-        println!("Gas used for fungible bridge addBlock with Credit message: {gas_used}");
     }
 
     /// Common test state for FungibleBridge tests.
@@ -147,9 +43,13 @@ mod tests {
         chain_id: CryptoHash,
         app_id: CryptoHash,
         bridge: Address,
+        token: Address,
         origin: ChainId,
         next_height: u64,
     }
+
+    /// Initial token supply for tests (1 million tokens with 18 decimals).
+    const INITIAL_SUPPLY: u128 = 1_000_000_000_000_000_000_000_000;
 
     impl TestBridge {
         fn new() -> Self {
@@ -163,10 +63,28 @@ mod tests {
             let light_client =
                 deploy_light_client(&mut db, deployer, &[validator_addr], &[1], admin_chain_id);
 
+            let token = deploy_mock_erc20(
+                &mut db,
+                deployer,
+                alloy_primitives::U256::from(INITIAL_SUPPLY),
+            );
+
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-            let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id);
+            let bridge =
+                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id, token);
             let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
+
+            // Fund the bridge with the full token supply
+            call_contract(
+                &mut db,
+                deployer,
+                token,
+                erc20::transferCall {
+                    to: bridge,
+                    amount: alloy_primitives::U256::from(INITIAL_SUPPLY),
+                },
+            );
 
             Self {
                 db,
@@ -176,6 +94,7 @@ mod tests {
                 chain_id,
                 app_id,
                 bridge,
+                token,
                 origin,
                 next_height: 1,
             }
@@ -222,13 +141,13 @@ mod tests {
             (logs, gas)
         }
 
-        /// Queries the balance of an EVM address.
-        fn query_balance(&mut self, account: Address) -> alloy_primitives::U256 {
+        /// Queries the token balance of an address on the mock ERC20.
+        fn query_token_balance(&mut self, account: Address) -> alloy_primitives::U256 {
             let (balance, _, _) = call_contract(
                 &mut self.db,
                 self.deployer,
-                self.bridge,
-                fungible_queries::balancesCall { account },
+                self.token,
+                erc20::balanceOfCall { account },
             );
             balance
         }
@@ -290,5 +209,96 @@ mod tests {
 
     fn test_target_evm_address() -> Address {
         Address::from_slice(&TEST_TARGET)
+    }
+
+    #[test]
+    fn test_fungible_bridge_transfers_on_credit() {
+        let mut t = TestBridge::new();
+
+        assert_eq!(
+            t.query_token_balance(test_target_evm_address()),
+            alloy_primitives::U256::ZERO,
+            "target should start with zero balance"
+        );
+
+        t.submit_credit(test_target(), Amount::from_tokens(100), test_source());
+
+        assert_eq!(
+            t.query_token_balance(test_target_evm_address()),
+            alloy_primitives::U256::from(100_000_000_000_000_000_000u128),
+            "target should have 100 tokens"
+        );
+    }
+
+    #[test]
+    fn test_fungible_bridge_accumulates_transfers() {
+        let mut t = TestBridge::new();
+        let target = test_target();
+        let source = test_source();
+
+        t.submit_credit(target, Amount::from_tokens(100), source);
+        assert_eq!(
+            t.query_token_balance(test_target_evm_address()),
+            alloy_primitives::U256::from(100_000_000_000_000_000_000u128),
+            "balance should be 100 tokens after first credit"
+        );
+
+        t.submit_credit(target, Amount::from_tokens(50), source);
+        assert_eq!(
+            t.query_token_balance(test_target_evm_address()),
+            alloy_primitives::U256::from(150_000_000_000_000_000_000u128),
+            "balance should be 150 tokens after two credits"
+        );
+
+        // Bridge balance should have decreased accordingly
+        assert_eq!(
+            t.query_token_balance(t.bridge),
+            alloy_primitives::U256::from(INITIAL_SUPPLY - 150_000_000_000_000_000_000u128),
+            "bridge balance should decrease"
+        );
+    }
+
+    #[test]
+    fn test_fungible_bridge_skips_non_evm_targets() {
+        let mut t = TestBridge::new();
+        let target = AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner")));
+
+        t.submit_credit(target, Amount::from_tokens(100), test_source());
+
+        // Bridge balance should be unchanged
+        assert_eq!(
+            t.query_token_balance(t.bridge),
+            alloy_primitives::U256::from(INITIAL_SUPPLY),
+            "bridge balance should be unchanged for non-EVM targets"
+        );
+    }
+
+    #[test]
+    fn test_fungible_bridge_ignores_other_applications() {
+        let mut t = TestBridge::new();
+        let other_app_id = CryptoHash::new(&TestString::new("other_app"));
+
+        let msg = fungible::Message::Credit {
+            target: test_target(),
+            amount: Amount::from_tokens(50),
+            source: test_source(),
+        };
+        let txn = fungible_message_transaction(t.origin, other_app_id, &msg);
+        t.submit_block(vec![txn]);
+
+        assert_eq!(
+            t.query_token_balance(test_target_evm_address()),
+            alloy_primitives::U256::ZERO,
+            "should not transfer for other applications"
+        );
+    }
+
+    #[test]
+    fn test_fungible_bridge_gas_measurement() {
+        let mut t = TestBridge::new();
+
+        let (_, gas_used) = t.submit_credit(test_target(), Amount::from_tokens(100), test_source());
+
+        println!("Gas used for fungible bridge addBlock with Credit message: {gas_used}");
     }
 }

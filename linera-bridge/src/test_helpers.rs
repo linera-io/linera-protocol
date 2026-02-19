@@ -207,14 +207,50 @@ pub fn deploy_fungible_bridge(
     light_client: Address,
     chain_id: CryptoHash,
     application_id: CryptoHash,
+    token: Address,
 ) -> Address {
     let bytecode = compile_contract(FUNGIBLE_BRIDGE_SOL, "FungibleBridge.sol", "FungibleBridge");
     let constructor_args = (
         light_client,
         <[u8; 32]>::from(*chain_id.as_bytes()),
         <[u8; 32]>::from(*application_id.as_bytes()),
+        token,
     )
         .abi_encode_params();
+    let mut deploy_data = bytecode;
+    deploy_data.extend_from_slice(&constructor_args);
+    deploy_contract(db, deployer, deploy_data)
+}
+
+const MOCK_ERC20_SOL: &str = r#"
+// SPDX-License-Identifier: Apache-2.0
+pragma solidity ^0.8.0;
+
+contract MockERC20 {
+    mapping(address => uint256) public balanceOf;
+    uint256 public totalSupply;
+
+    constructor(uint256 initialSupply) {
+        balanceOf[msg.sender] = initialSupply;
+        totalSupply = initialSupply;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        require(balanceOf[msg.sender] >= amount, "insufficient balance");
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+}
+"#;
+
+pub fn deploy_mock_erc20(
+    db: &mut CacheDB<EmptyDB>,
+    deployer: Address,
+    initial_supply: alloy_primitives::U256,
+) -> Address {
+    let bytecode = compile_contract(MOCK_ERC20_SOL, "MockERC20.sol", "MockERC20");
+    let constructor_args = (initial_supply,).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)

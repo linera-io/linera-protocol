@@ -5,21 +5,27 @@ import "BridgeTypes.sol";
 import "FungibleTypes.sol";
 import "Microchain.sol";
 
-/// Tracks fungible token messages from verified blocks on a Linera microchain.
+interface IERC20 {
+    function transfer(address to, uint256 amount) external returns (bool);
+}
+
+/// Bridges ERC20 tokens from a Linera microchain to Ethereum.
+/// When a Credit message is received targeting an Ethereum address,
+/// the contract transfers tokens from its own balance to the recipient.
 contract FungibleBridge is Microchain {
     bytes32 public immutable applicationId;
-    mapping(address => uint256) public balances;
+    IERC20 public immutable token;
 
-    event Credit(
-        BridgeTypes.AccountOwner target,
-        uint128 amount,
-        BridgeTypes.AccountOwner source
-    );
-
-    constructor(address _lightClient, bytes32 _chainId, bytes32 _applicationId)
+    constructor(
+        address _lightClient,
+        bytes32 _chainId,
+        bytes32 _applicationId,
+        address _token
+    )
         Microchain(_lightClient, _chainId)
     {
         applicationId = _applicationId;
+        token = IERC20(_token);
     }
 
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
@@ -45,8 +51,7 @@ contract FungibleBridge is Microchain {
                 // choice==2 is Address20 (Ethereum address)
                 if (credit.target.choice != 2) continue;
                 address target = address(credit.target.address20);
-                balances[target] += credit.amount.value;
-                emit Credit(credit.target, credit.amount.value, credit.source);
+                require(token.transfer(target, credit.amount.value), "token transfer failed");
             }
         }
     }
