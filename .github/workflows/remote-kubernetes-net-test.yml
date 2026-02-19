@@ -72,18 +72,102 @@ jobs:
         tail -f "$LOG_FILE" 2>/dev/null &
         TAIL_PID=$!
 
+        # Background diagnostics: periodically dump pod status once a Kind cluster exists.
+        (
+          KIND_CTX=""
+          while [ -z "$KIND_CTX" ]; do
+            KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+            sleep 5
+          done
+          echo "=== DIAGNOSTICS: Found Kind context: $KIND_CTX ==="
+          while kill -0 "$NETWORK_PID" 2>/dev/null && ! grep -q "READY!" "$LOG_FILE" 2>/dev/null; do
+            echo "=== DIAGNOSTICS $(date -u +%H:%M:%S): Pod status ==="
+            kubectl --context "$KIND_CTX" get pods --all-namespaces -o wide 2>&1 || true
+            echo "=== DIAGNOSTICS $(date -u +%H:%M:%S): Events (warnings) ==="
+            kubectl --context "$KIND_CTX" get events --all-namespaces --field-selector type=Warning --sort-by='.lastTimestamp' 2>&1 | tail -20 || true
+            echo "=== END DIAGNOSTICS ==="
+            sleep 30
+          done
+        ) &
+        DIAG_PID=$!
+
         # Wait for "READY!" message (includes Docker image build + helm sync + port-forwards).
         # No explicit timeout here; the job-level timeout-minutes: 90 is the safeguard.
         echo "Waiting for validators to deploy (PID: $NETWORK_PID)..."
         while ! grep -q "READY!" "$LOG_FILE" 2>/dev/null; do
           if ! kill -0 "$NETWORK_PID" 2>/dev/null; then
             echo "ERROR: Network process (PID: $NETWORK_PID) died"
+            echo "=== FINAL DIAGNOSTICS: Pod status at failure ==="
+            KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+            if [ -n "$KIND_CTX" ]; then
+              kubectl --context "$KIND_CTX" get pods --all-namespaces -o wide 2>&1 || true
+
+              echo "=== Container status for non-fully-Ready pods ==="
+              kubectl --context "$KIND_CTX" get pods --all-namespaces -o json 2>/dev/null \
+                | python3 -c "
+        import json, sys
+        data = json.load(sys.stdin)
+        for item in data.get('items', []):
+            name = item['metadata']['name']
+            ns = item['metadata']['namespace']
+            all_statuses = item.get('status', {}).get('containerStatuses', []) + item.get('status', {}).get('initContainerStatuses', [])
+            not_ready = [cs for cs in all_statuses if not cs.get('ready', False)]
+            if not_ready:
+                print(f'--- {ns}/{name} ---')
+                for cs in all_statuses:
+                    state = cs.get('state', {})
+                    ready = cs.get('ready', False)
+                    restarts = cs.get('restartCount', 0)
+                    marker = ' (NOT READY)' if not ready else ''
+                    for k, v in state.items():
+                        print(f'  {cs[\"name\"]}: {k} restarts={restarts}{marker} - {v}')
+        " 2>&1 || true
+
+              echo "=== ScyllaDB pod logs (scylla container) ==="
+              SCYLLA_POD=$(kubectl --context "$KIND_CTX" -n scylla get pods -l "app.kubernetes.io/name=scylla" -o name 2>/dev/null | head -1)
+              if [ -n "$SCYLLA_POD" ]; then
+                echo "--- scylla container (last 80 lines) ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c scylla --tail=80 2>&1 || true
+                echo "--- sysctl-buddy init container ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c sysctl-buddy 2>&1 || true
+                echo "--- scylladb-api-status-probe sidecar (last 40 lines) ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c scylladb-api-status-probe --tail=40 2>&1 || true
+                echo "--- scylladb-ignition sidecar (last 40 lines) ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c scylladb-ignition --tail=40 2>&1 || true
+                echo "--- scylla-manager-agent sidecar (last 40 lines) ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c scylla-manager-agent --tail=40 2>&1 || true
+                echo "--- scylla pod describe (conditions + events) ---"
+                kubectl --context "$KIND_CTX" -n scylla describe "$SCYLLA_POD" 2>&1 | grep -A 100 "^Conditions:" || true
+              fi
+
+              echo "=== Promtail logs (last 40 lines) ==="
+              PROMTAIL_POD=$(kubectl --context "$KIND_CTX" -n default get pods -l "app.kubernetes.io/name=promtail" -o name 2>/dev/null | head -1)
+              if [ -n "$PROMTAIL_POD" ]; then
+                kubectl --context "$KIND_CTX" -n default logs "$PROMTAIL_POD" --tail=40 2>&1 || true
+              fi
+
+              echo "=== Proxy init container logs ==="
+              kubectl --context "$KIND_CTX" -n default logs proxy-0 -c linera-proxy-initializer --tail=20 2>&1 || true
+
+              echo "=== Node resources ==="
+              kubectl --context "$KIND_CTX" top nodes 2>&1 || true
+              kubectl --context "$KIND_CTX" describe nodes 2>&1 | grep -A 20 "Allocated resources:" || true
+
+              echo "=== Host kernel params (aio-max-nr) ==="
+              kubectl --context "$KIND_CTX" -n scylla exec "$SCYLLA_POD" -c scylla -- cat /proc/sys/fs/aio-max-nr 2>&1 || true
+              kubectl --context "$KIND_CTX" -n scylla exec "$SCYLLA_POD" -c scylla -- cat /proc/sys/fs/aio-nr 2>&1 || true
+
+              echo "=== Recent events ==="
+              kubectl --context "$KIND_CTX" get events --all-namespaces --sort-by='.lastTimestamp' 2>&1 | tail -40 || true
+            fi
             cat "$LOG_FILE"
             exit 1
           fi
           sleep 2
         done
         echo "Validators reported READY"
+
+        kill $DIAG_PID 2>/dev/null || true
 
         # Wait for proxy to accept TCP connections through port-forward.
         # No explicit timeout; the job-level timeout-minutes: 90 is the safeguard.
