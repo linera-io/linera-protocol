@@ -1572,7 +1572,13 @@ impl BcsHashable<'_> for Event {}
 
 /// Policies for automatically handling incoming messages.
 #[derive(
-    Clone, Debug, Default, serde::Serialize, serde::Deserialize, async_graphql::SimpleObject,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    async_graphql::SimpleObject,
 )]
 pub struct MessagePolicy {
     /// The blanket policy applied to all messages.
