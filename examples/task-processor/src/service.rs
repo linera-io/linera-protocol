@@ -85,8 +85,8 @@ impl QueryRoot {
         let mut actions = ProcessorActions::default();
 
         // Get all pending tasks from the queue.
-        let total_count = self.state.pending_tasks.count();
-        if let Ok(pending_tasks) = self.state.pending_tasks.read_front(total_count).await {
+        let count = self.state.pending_tasks.count();
+        if let Ok(pending_tasks) = self.state.pending_tasks.read_front(count).await {
             for pending in pending_tasks {
                 actions.execute_tasks.push(Task {
                     operator: pending.operator,

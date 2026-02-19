@@ -406,7 +406,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, fs};
 
     use async_graphql::Request;
     use linera_base::{
@@ -423,12 +423,11 @@ mod tests {
 
     use super::*;
 
-    /// Regression test: verifies that the task processor correctly retries tasks
-    /// after the first attempt fails. With cursor support removed, the retry
-    /// re-queries all pending tasks from on-chain state and succeeds.
+    /// Verifies that the task processor correctly retries tasks after the first attempt fails.
+    /// The retry re-queries all pending tasks from on-chain state and succeeds.
     #[cfg(feature = "wasmer")]
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
-    async fn test_task_processor_retry_with_cursor() {
+    async fn test_task_processor_retry() {
         let storage_builder = MemoryStorageBuilder::with_wasm_runtime(WasmRuntime::default());
         let clock = storage_builder.clock().clone();
         let keys = InMemorySigner::new(None);
@@ -473,14 +472,16 @@ mod tests {
         let script_path = tmp_dir.path().join("echo");
         let flag_path = tmp_dir.path().join(".has_run");
         let script_content = format!(
-            "#!/bin/sh\nFLAG=\"{}\"\nif [ -f \"$FLAG\" ]; then cat; else touch \"$FLAG\"; exit 1; fi\n",
+            "#!/bin/sh\n\
+            FLAG=\"{}\"\n\
+            if [ -f \"$FLAG\" ]; then cat; else touch \"$FLAG\"; exit 1; fi\n",
             flag_path.display()
         );
-        std::fs::write(&script_path, script_content).unwrap();
+        fs::write(&script_path, script_content).unwrap();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755)).unwrap();
         }
 
         let mut operators = BTreeMap::new();
@@ -522,7 +523,7 @@ mod tests {
         let task_count = outcome.response.data.into_json().unwrap();
         let task_count = task_count["taskCount"].as_u64().unwrap();
 
-        // Without cursors, the retry re-queries all pending tasks and succeeds.
+        // The retry re-queries all pending tasks and succeeds.
         assert_eq!(
             task_count, 1,
             "Expected task_count to be 1 after successful retry"
