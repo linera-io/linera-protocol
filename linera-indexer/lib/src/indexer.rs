@@ -161,12 +161,13 @@ where
 
     /// Produces the GraphQL schema for the indexer or for a certain plugin
     pub fn sdl(&self, plugin: Option<String>) -> Result<String, IndexerError> {
-        match plugin {
-            None => Ok(self.state.clone().schema().sdl()),
-            Some(plugin) => match self.plugins.get(&plugin) {
-                Some(plugin) => Ok(plugin.sdl()),
-                None => Err(IndexerError::UnknownPlugin(plugin.to_string())),
-            },
+        if let Some(plugin_name) = plugin {
+            self.plugins
+                .get(&plugin_name)
+                .map(|plugin| plugin.sdl())
+                .ok_or(IndexerError::UnknownPlugin(plugin_name))
+        } else {
+            Ok(self.state.clone().schema().sdl())
         }
     }
 
@@ -176,11 +177,12 @@ where
         plugin: impl Plugin<D> + 'static,
     ) -> Result<(), IndexerError> {
         let name = plugin.name();
-        self.plugins
-            .insert(name.clone(), Box::new(plugin))
-            .map_or_else(|| Ok(()), |_| Err(IndexerError::PluginAlreadyRegistered))?;
+        if self.plugins.insert(name.clone(), Box::new(plugin)).is_some() {
+            return Err(IndexerError::PluginAlreadyRegistered);
+        }
         let mut state = self.state.0.lock().await;
-        Ok(state.plugins.insert(&name)?)
+        state.plugins.insert(&name)?;
+        Ok(())
     }
 
     /// Handles queries made to the root of the indexer
