@@ -8,6 +8,7 @@ import "Microchain.sol";
 /// Tracks fungible token messages from verified blocks on a Linera microchain.
 contract FungibleBridge is Microchain {
     bytes32 public immutable applicationId;
+    mapping(address => uint256) public balances;
 
     event Credit(
         BridgeTypes.AccountOwner target,
@@ -41,6 +42,10 @@ contract FungibleBridge is Microchain {
                 if (msg_.choice != 0) continue;
 
                 FungibleTypes.Message_Credit memory credit = msg_.credit;
+                // choice==2 is Address20 (Ethereum address)
+                if (credit.target.choice != 2) continue;
+                address target = address(credit.target.address20);
+                balances[target] += credit.amount.value;
                 emit Credit(credit.target, credit.amount.value, credit.source);
             }
         }

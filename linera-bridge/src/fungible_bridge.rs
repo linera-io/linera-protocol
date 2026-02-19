@@ -108,7 +108,8 @@ mod tests {
         let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id);
 
         let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
-        let target = AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner")));
+        let target_address: [u8; 20] = [0xCD; 20];
+        let target = AccountOwner::Address20(target_address);
         let source = AccountOwner::Address32(CryptoHash::new(&TestString::new("source_owner")));
         let credit_msg = fungible::Message::Credit {
             target,
@@ -138,14 +139,166 @@ mod tests {
         assert_eq!(logs.len(), 1, "expected exactly one Credit event");
         let credit =
             fungible_events::Credit::decode_log(&logs[0]).expect("failed to decode Credit event");
-        let target_hash = *CryptoHash::new(&TestString::new("target_owner")).as_bytes();
         let source_hash = *CryptoHash::new(&TestString::new("source_owner")).as_bytes();
-        // AccountOwner::Address32 is choice==1
-        assert_eq!(credit.target.choice, 1);
-        assert_eq!(credit.target.address32.value, target_hash);
+        // AccountOwner::Address20 is choice==2
+        assert_eq!(credit.target.choice, 2);
+        assert_eq!(&credit.target.address20[..], &target_address[..]);
         assert_eq!(credit.amount, 100_000_000_000_000_000_000u128);
         assert_eq!(credit.source.choice, 1);
         assert_eq!(credit.source.address32.value, source_hash);
+    }
+
+    mod fungible_queries {
+        use alloy_sol_types::sol;
+
+        sol! {
+            function balances(address account) external view returns (uint256);
+        }
+    }
+
+    #[test]
+    fn test_fungible_bridge_accumulates_balances() {
+        let mut db = CacheDB::new(EmptyDB::default());
+        let deployer = revm::primitives::Address::ZERO;
+
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let validator_addr = validator_evm_address(&public);
+        let admin_chain_id = test_admin_chain_id();
+        let light_client =
+            deploy_light_client(&mut db, deployer, &[validator_addr], &[1], admin_chain_id);
+
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+        let app_id = CryptoHash::new(&TestString::new("fungible_app"));
+        let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id);
+
+        let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
+        let target_address: [u8; 20] = [0xAB; 20];
+        let target = AccountOwner::Address20(target_address);
+        let source = AccountOwner::Address32(CryptoHash::new(&TestString::new("source_owner")));
+
+        // First credit: 100 tokens
+        let credit1 = fungible::Message::Credit {
+            target,
+            amount: Amount::from_tokens(100),
+            source,
+        };
+        let cert1 = create_certificate_with_transactions(
+            &secret,
+            &public,
+            chain_id,
+            BlockHeight(1),
+            vec![fungible_message_transaction(origin, app_id, &credit1)],
+        );
+        call_contract(
+            &mut db,
+            deployer,
+            bridge,
+            addBlockCall {
+                data: bcs::to_bytes(&cert1).unwrap().into(),
+            },
+        );
+
+        // Check balance after first credit
+        let evm_target = revm::primitives::Address::from_slice(&target_address);
+        let (balance, _, _) = call_contract(
+            &mut db,
+            deployer,
+            bridge,
+            fungible_queries::balancesCall {
+                account: evm_target,
+            },
+        );
+        assert_eq!(
+            balance,
+            alloy_primitives::U256::from(100_000_000_000_000_000_000u128),
+            "balance should be 100 tokens after first credit"
+        );
+
+        // Second credit: 50 tokens
+        let credit2 = fungible::Message::Credit {
+            target,
+            amount: Amount::from_tokens(50),
+            source,
+        };
+        let cert2 = create_certificate_with_transactions(
+            &secret,
+            &public,
+            chain_id,
+            BlockHeight(2),
+            vec![fungible_message_transaction(origin, app_id, &credit2)],
+        );
+        call_contract(
+            &mut db,
+            deployer,
+            bridge,
+            addBlockCall {
+                data: bcs::to_bytes(&cert2).unwrap().into(),
+            },
+        );
+
+        // Check accumulated balance
+        let (balance, _, _) = call_contract(
+            &mut db,
+            deployer,
+            bridge,
+            fungible_queries::balancesCall {
+                account: evm_target,
+            },
+        );
+        assert_eq!(
+            balance,
+            alloy_primitives::U256::from(150_000_000_000_000_000_000u128),
+            "balance should be 150 tokens after two credits"
+        );
+    }
+
+    #[test]
+    fn test_fungible_bridge_skips_non_evm_targets() {
+        let mut db = CacheDB::new(EmptyDB::default());
+        let deployer = revm::primitives::Address::ZERO;
+
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let validator_addr = validator_evm_address(&public);
+        let admin_chain_id = test_admin_chain_id();
+        let light_client =
+            deploy_light_client(&mut db, deployer, &[validator_addr], &[1], admin_chain_id);
+
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+        let app_id = CryptoHash::new(&TestString::new("fungible_app"));
+        let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id);
+
+        let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
+        // Address32 target should be skipped
+        let target = AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner")));
+        let source = AccountOwner::Address32(CryptoHash::new(&TestString::new("source_owner")));
+
+        let credit_msg = fungible::Message::Credit {
+            target,
+            amount: Amount::from_tokens(100),
+            source,
+        };
+        let cert = create_certificate_with_transactions(
+            &secret,
+            &public,
+            chain_id,
+            BlockHeight(1),
+            vec![fungible_message_transaction(origin, app_id, &credit_msg)],
+        );
+        let (_, logs, _) = call_contract(
+            &mut db,
+            deployer,
+            bridge,
+            addBlockCall {
+                data: bcs::to_bytes(&cert).unwrap().into(),
+            },
+        );
+
+        assert!(
+            logs.is_empty(),
+            "should not emit events for non-EVM address targets"
+        );
     }
 
     #[test]
@@ -220,7 +373,7 @@ mod tests {
 
         let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
         let credit_msg = fungible::Message::Credit {
-            target: AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner"))),
+            target: AccountOwner::Address20([0xAB; 20]),
             amount: Amount::from_tokens(100),
             source: AccountOwner::Address32(CryptoHash::new(&TestString::new("source_owner"))),
         };
