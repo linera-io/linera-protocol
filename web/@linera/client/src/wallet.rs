@@ -34,9 +34,7 @@ impl Wallet {
         let owner = serde_wasm_bindgen::from_value(owner)?;
         self.chains
             .mutate(chain_id, |chain| chain.owner = Some(owner))
-            .ok_or(Error::new(&format!(
-                "chain {chain_id} doesn't exist in wallet"
-            )).into())
+            .ok_or(Error::new(&format!("chain {chain_id} doesn't exist in wallet")).into())
     }
 
     #[must_use]

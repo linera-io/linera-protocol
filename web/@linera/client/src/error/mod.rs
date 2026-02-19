@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::lock;
-
 use wasm_bindgen::{prelude::wasm_bindgen, JsError, JsValue};
+
+use crate::lock;
 
 #[wasm_bindgen(module = "/src/error/index.ts")]
 extern "C" {

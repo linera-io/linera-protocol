@@ -19,10 +19,10 @@
 //!
 //! [Web Locks API]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
 
+use std::fmt;
+
 use wasm_bindgen::{JsCast as _, JsValue, UnwrapThrowExt as _};
 use wasm_bindgen_futures::JsFuture;
-
-use std::fmt;
 
 /// Errors that can occur when acquiring a lock.
 #[derive(Debug)]
