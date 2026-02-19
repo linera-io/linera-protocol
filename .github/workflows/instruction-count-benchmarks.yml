@@ -1,0 +1,303 @@
+name: Instruction Count Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches:
+      - "**"
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  save-baseline:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: linera-io-self-hosted-ci
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install Valgrind
+      run: sudo apt-get update && sudo apt-get install -y valgrind
+    - name: Install gungraun-runner
+      run: cargo install gungraun-runner --version 0.17.2
+    - name: Build benchmarks
+      run: cargo bench -p linera-views --bench gungraun_views --no-run
+    - name: Run benchmarks and save baseline
+      run: cargo bench -p linera-views --bench gungraun_views -- --save-baseline=main
+    - name: Upload baseline artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gungraun-baseline
+        path: target/gungraun
+        retention-days: 90
+
+  compare:
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
+    runs-on: linera-io-self-hosted-ci
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install Valgrind
+      run: sudo apt-get update && sudo apt-get install -y valgrind
+    - name: Install gungraun-runner
+      run: cargo install gungraun-runner --version 0.17.2
+    - name: Build benchmarks
+      run: cargo bench -p linera-views --bench gungraun_views --no-run
+    - name: Download baseline artifact
+      id: download-baseline
+      run: |
+        ARTIFACT_URL=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=gungraun-baseline&per_page=1" \
+          --jq '.artifacts[0].archive_download_url // empty')
+        if [ -n "$ARTIFACT_URL" ]; then
+          gh api "$ARTIFACT_URL" > /tmp/baseline.zip
+          mkdir -p target/gungraun
+          unzip -o /tmp/baseline.zip -d target/gungraun
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "Baseline restored successfully"
+        else
+          echo "found=false" >> "$GITHUB_OUTPUT"
+          echo "No baseline artifact found"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run benchmarks and compare
+      id: bench
+      run: |
+        if [ "${{ steps.download-baseline.outputs.found }}" = "true" ]; then
+          cargo bench -p linera-views --bench gungraun_views -- --baseline=main \
+            2>&1 | tee /tmp/bench-output.txt
+        else
+          echo "No baseline found, running without comparison"
+          cargo bench -p linera-views --bench gungraun_views -- --save-baseline=main \
+            2>&1 | tee /tmp/bench-output.txt
+        fi
+    - name: Format benchmark results
+      if: github.event_name == 'pull_request' && always()
+      run: |
+        python3 << 'PYEOF' > /tmp/bench-comment.md
+        import re, sys
+
+        try:
+            raw = open("/tmp/bench-output.txt").read()
+        except FileNotFoundError:
+            print("*Benchmark output not available.*")
+            sys.exit(0)
+
+        # Strip ANSI escape codes
+        raw = re.sub(r"\x1b\[[0-9;]*m", "", raw)
+        lines = raw.splitlines()
+
+        # Filter out cargo build noise
+        lines = [l for l in lines if not re.match(
+            r"^\s*(Compiling|Downloading|Downloaded|Updating|Finished|Running|warning:)", l
+        )]
+
+        METRICS = [
+            ("Instructions", "instr"),
+            ("L1 Hits", "l1"),
+            ("LL Hits", "ll"),
+            ("RAM Hits", "ram"),
+            ("Total read+write", "total_rw"),
+            ("Estimated Cycles", "cycles"),
+        ]
+
+        benchmarks = []
+        current = {}
+        for line in lines:
+            # Benchmark header line: gungraun_views::group::bench_name short_name:setup()
+            if line.startswith("gungraun_views::"):
+                if current and "name" in current:
+                    benchmarks.append(current)
+                # Extract the short name (second token, e.g. "insert_100")
+                tokens = line.split()
+                short = tokens[1].split(":")[0] if len(tokens) > 1 else tokens[0].split("::")[-1]
+                # Extract group from full path
+                parts = tokens[0].split("::")
+                group = parts[1] if len(parts) > 2 else ""
+                current = {"name": short, "group": group}
+            else:
+                for label, key in METRICS:
+                    if re.match(rf"\s+{re.escape(label)}:", line):
+                        # Format: "  Label:  <spaces>  new|old  <spaces>  (change)"
+                        m = re.search(
+                            rf"{re.escape(label)}:\s+(\S+)\|(\S+)\s+\(([^)]+)\)",
+                            line,
+                        )
+                        if m:
+                            current[key] = m.group(1)
+                            current[f"{key}_old"] = m.group(2)
+                            current[f"{key}_chg"] = m.group(3)
+                        break
+
+        if current and "name" in current:
+            benchmarks.append(current)
+
+        if not benchmarks:
+            print("*Could not parse benchmark results.*\n")
+            print("```")
+            for line in lines[:80]:
+                print(line)
+            print("```")
+            sys.exit(0)
+
+        def fmt(s):
+            try:
+                return f"{int(s):,}"
+            except (ValueError, TypeError):
+                return str(s) if s else "?"
+
+        def has_comparison(benchmarks):
+            """Check if any benchmark has real comparison data."""
+            for b in benchmarks:
+                chg = b.get("instr_chg", "")
+                if chg and chg != "*********":
+                    return True
+            return False
+
+        REGRESSION_THRESHOLD = 1.0
+
+        def fmt_change(chg_str):
+            """Format a change string with color for regressions/improvements."""
+            if not chg_str or chg_str == "*********":
+                return ""
+            chg_str = chg_str.strip()
+            if chg_str == "No change":
+                return chg_str
+            try:
+                val = float(chg_str.replace("%", "").replace("+", ""))
+                latex_chg = chg_str.replace("%", r"\%")
+                if val > REGRESSION_THRESHOLD:
+                    return r"${\color{red}\textbf{" + latex_chg + r"}}$"
+                elif val < -REGRESSION_THRESHOLD:
+                    return r"${\color{green}\textbf{" + latex_chg + r"}}$"
+                else:
+                    return chg_str
+            except ValueError:
+                return chg_str
+
+        has_cmp = has_comparison(benchmarks)
+
+        # Group benchmarks by view type
+        groups = {}
+        for b in benchmarks:
+            g = b.get("group", "other")
+            groups.setdefault(g, []).append(b)
+
+        GROUP_NAMES = {
+            "map_view_group": "MapView",
+            "queue_view_group": "QueueView",
+            "bucket_queue_view_group": "BucketQueueView",
+            "register_view_group": "RegisterView",
+            "collection_view_group": "CollectionView",
+            "cold_load_group": "Cold Load",
+        }
+
+        print("## Instruction Count Benchmark Results\n")
+
+        if not has_cmp:
+            print("> No baseline available for comparison. "
+                  "Showing absolute counts only. Baseline will be set when this is merged to main.\n")
+
+        def print_table(columns, title):
+            """Print a grouped benchmark table inside a collapsible."""
+            print("<details>")
+            print(f"<summary>{title} ({len(benchmarks)} benchmarks)</summary>\n")
+
+            header = "| Benchmark |"
+            sep = "|:---|"
+            for col_name, _ in columns:
+                header += f" {col_name} |"
+                sep += "---:|"
+            print(header)
+            print(sep)
+
+            for group_key, group_benchmarks in groups.items():
+                group_name = GROUP_NAMES.get(group_key, group_key)
+                empty_cols = " |" * len(columns)
+                print(f"| **{group_name}** |{empty_cols}")
+
+                for b in group_benchmarks:
+                    name = b.get("name", "?")
+                    row = f"| `{name}` |"
+                    for _, key in columns:
+                        val = fmt(b.get(key, "?"))
+                        chg = fmt_change(b.get(f"{key}_chg", ""))
+                        if chg:
+                            row += f" {val} ({chg}) |"
+                        else:
+                            row += f" {val} |"
+                    print(row)
+
+            print("\n</details>\n")
+
+        # Deterministic metrics: code-path determined, not cache-dependent
+        DETERMINISTIC_COLS = [
+            ("Instructions", "instr"),
+            ("Total R+W", "total_rw"),
+        ]
+        print_table(DETERMINISTIC_COLS,
+            "Deterministic metrics — reproducible across runs")
+
+        print(f"> Regression threshold: **{REGRESSION_THRESHOLD:.0f}%** — "
+              r"${\color{red}\textbf{red}}$"
+              " = regression, "
+              r"${\color{green}\textbf{green}}$"
+              " = improvement.\n")
+
+        # Cache-dependent metrics: affected by ASLR and memory layout
+        CACHE_COLS = [
+            ("L1 Hits", "l1"),
+            ("LL Hits", "ll"),
+            ("RAM Hits", "ram"),
+            ("Est. Cycles", "cycles"),
+        ]
+        print_table(CACHE_COLS,
+            "Cache-dependent metrics — expect fluctuations between runs")
+        print("> Cache metrics fluctuate because anything that changes the virtual memory layout")
+        print("> shifts which data lands on which cache lines, changing the L1/LL/RAM distribution.")
+        print("> Probable causes: ASLR (even across identical binaries), executable binary size changes,")
+        print("> shared library size changes, and even filename length differences.")
+        PYEOF
+    - name: Post PR comment
+      if: github.event_name == 'pull_request' && always()
+      run: |
+        COMMENT=$(cat /tmp/bench-comment.md)
+
+        PR=${{ github.event.pull_request.number }}
+        EXISTING=$(gh api "repos/${{ github.repository }}/issues/${PR}/comments" \
+          --jq '[.[] | select(.body | startswith("## Instruction Count Benchmark Results")) | .id] | last // empty')
+
+        if [ -n "$EXISTING" ]; then
+          gh api "repos/${{ github.repository }}/issues/comments/${EXISTING}" \
+            -X PATCH -f body="${COMMENT}"
+        else
+          gh pr comment "${PR}" --body "${COMMENT}"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
