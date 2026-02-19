@@ -61,6 +61,7 @@ memory-profiling = [
 ]
 opentelemetry = ["linera-base/opentelemetry", "linera-rpc/opentelemetry"]
 storage-service = ["linera-storage-service"]
+bridge = ["dep:linera-bridge"]
 
 [dependencies]
 alloy-primitives.workspace = true
@@ -95,6 +96,7 @@ http.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
+linera-bridge = { workspace = true, optional = true }
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
 linera-core.workspace = true

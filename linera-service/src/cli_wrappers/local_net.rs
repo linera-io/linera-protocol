@@ -690,6 +690,21 @@ impl LocalNet {
                         "#
                     )
                 }
+                Destination::EvmChain {
+                    endpoint,
+                    light_client_address,
+                    private_key,
+                } => {
+                    format!(
+                        r#"
+                        [[destination_config.destinations]]
+                        endpoint = "{endpoint}"
+                        light_client_address = "{light_client_address}"
+                        private_key = "{private_key}"
+                        kind = "EvmChain"
+                        "#
+                    )
+                }
             };
 
             config.push_str(&destination_string_to_push);

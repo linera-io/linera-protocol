@@ -14,8 +14,23 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+alloy = { workspace = true, default-features = false, features = [
+    "rpc-types-eth",
+    "json-rpc",
+    "signer-local",
+    "contract",
+    "reqwest",
+] }
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
+anyhow.workspace = true
+bcs.workspace = true
+k256.workspace = true
+linera-base.workspace = true
+linera-execution.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+url.workspace = true
 
 [build-dependencies]
 serde-generate = { version = "0.33", features = ["solidity"] }

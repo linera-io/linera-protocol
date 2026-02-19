@@ -76,12 +76,12 @@ edition = "2021"
 
 [workspace.dependencies]
 allocative = "0.3.4"
-alloy = { version = "1.0.5", default-features = false }
-alloy-primitives = { version = "1.1.0", default-features = false, features = [
+alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-features = false }
+alloy-primitives = { version = "1.4.1", default-features = false, features = [
     "serde",
     "k256",
 ] }
-alloy-sol-types = "1.1.2"
+alloy-sol-types = "1.4.1"
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
 async-graphql = "=7.0.17"
@@ -303,6 +303,7 @@ wit-bindgen = "0.24.0"
 zstd = "0.13.2"
 
 linera-base = { version = "0.15.13", path = "./linera-base" }
+linera-bridge = { version = "0.15.13", path = "./linera-bridge" }
 linera-chain = { version = "0.15.13", path = "./linera-chain" }
 linera-client = { version = "0.15.13", path = "./linera-client", default-features = false }
 linera-core = { version = "0.15.13", path = "./linera-core", default-features = false }
