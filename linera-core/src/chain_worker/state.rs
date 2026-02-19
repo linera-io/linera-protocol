@@ -935,7 +935,7 @@ where
                         None,
                         &published_blobs,
                         oracle_responses,
-                        BundleExecutionPolicy::Abort,
+                        BundleExecutionPolicy::committed(),
                     )
                     .await?;
                 verified
@@ -1433,7 +1433,7 @@ where
                 block,
                 round,
                 published_blobs,
-                BundleExecutionPolicy::Abort,
+                BundleExecutionPolicy::committed(),
             )
             .await?;
         Ok((executed_block, response, resource_tracker))
@@ -1603,7 +1603,7 @@ where
                 local_time,
                 round.multi_leader(),
                 &published_blobs,
-                BundleExecutionPolicy::Abort,
+                BundleExecutionPolicy::committed(),
             ))
             .await?;
             executed_block

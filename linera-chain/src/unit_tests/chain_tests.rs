@@ -57,7 +57,7 @@ impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
     }
 
     /// Test helper that calls `execute_block` with default test parameters:
-    /// `round = None`, `replayed_oracle_responses = None`, `policy = Abort`.
+    /// `round = None`, `replayed_oracle_responses = None`, `on_failure = Abort`.
     #[cfg(with_testing)]
     pub async fn execute_test_block_simple(
         &mut self,
@@ -71,7 +71,7 @@ impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
             None,
             published_blobs,
             None,
-            BundleExecutionPolicy::Abort,
+            BundleExecutionPolicy::committed(),
         )
         .await
     }
