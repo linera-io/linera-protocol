@@ -10,6 +10,9 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[features]
+codegen = ["dep:serde-generate", "dep:serde-reflection", "dep:serde_yaml"]
+
 [lints]
 workspace = true
 
@@ -33,9 +36,9 @@ tracing.workspace = true
 url.workspace = true
 
 [build-dependencies]
-serde-generate = { version = "0.33", features = ["solidity"] }
-serde-reflection.workspace = true
-serde_yaml = "0.8.26"
+serde-generate = { version = "0.33", features = ["solidity"], optional = true }
+serde-reflection = { workspace = true, optional = true }
+serde_yaml = { version = "0.8.26", optional = true }
 
 [dev-dependencies]
 bcs.workspace = true
