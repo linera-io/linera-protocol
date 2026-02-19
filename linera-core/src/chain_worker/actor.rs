@@ -6,8 +6,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt,
-    future::Future,
-    pin::Pin,
     sync::{self, Arc, RwLock},
 };
 
@@ -38,7 +36,7 @@ use linera_views::context::{Context, InactiveContext};
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, Instrument as _};
 
-use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
+use super::{config::ChainWorkerConfig, state::ChainWorkerState, BoxedFuture, DeliveryNotifier};
 use crate::{
     chain_worker::BlockOutcome,
     client::ListeningMode,
@@ -685,9 +683,8 @@ where
                         // &mut worker borrow ends here.
 
                         // Step B: Execute all concurrently.
-                        let mut read_futures: FuturesUnordered<
-                            Pin<Box<dyn Future<Output = ()> + Send + '_>>,
-                        > = FuturesUnordered::new();
+                        let mut read_futures: FuturesUnordered<BoxedFuture<'_>> =
+                            FuturesUnordered::new();
                         for (request, span) in simple_items {
                             read_futures.push(Box::pin(
                                 worker.handle_read_request(request).instrument(span),

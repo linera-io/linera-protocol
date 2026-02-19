@@ -6,8 +6,6 @@
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap},
-    future::Future,
-    pin::Pin,
     sync::{self, Arc},
 };
 
@@ -45,7 +43,9 @@ use linera_views::{
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{debug, instrument, trace, warn};
 
-use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult};
+use super::{
+    BoxedFuture, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult,
+};
 use crate::{
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -1577,7 +1577,7 @@ where
         query: Query,
         block_hash: Option<CryptoHash>,
         callback: oneshot::Sender<Result<QueryOutcome, WorkerError>>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    ) -> BoxedFuture<'static> {
         // Safety of `clone_unchecked`: the clone shares the underlying storage context
         // with `self.chain`, but has its own in-memory state. Mutations during the query
         // (e.g. `blob_used`) only affect the clone's in-memory buffers. The clone is
