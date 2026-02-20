@@ -63,19 +63,22 @@ impl EvmLightClient {
 
     /// Calls `LightClient.addCommittee()` on the EVM chain.
     ///
+    /// Extracts uncompressed validator keys from the committee blob internally,
+    /// then submits the transaction to the LightClient contract.
+    ///
     /// - `certificate_bytes`: BCS-serialized `ConfirmedBlockCertificate`
     /// - `committee_blob`: raw committee blob bytes (BCS-serialized `Committee`)
-    /// - `validators`: 64-byte uncompressed public keys (no 0x04 prefix)
     pub async fn add_committee(
         &self,
         certificate_bytes: &[u8],
         committee_blob: &[u8],
-        validators: Vec<Vec<u8>>,
     ) -> anyhow::Result<TxHash> {
+        let validator_keys = extract_validator_keys(committee_blob)?;
+
         let call = addCommitteeCall {
             data: Bytes::copy_from_slice(certificate_bytes),
             committeeBlob: Bytes::copy_from_slice(committee_blob),
-            validators: validators.into_iter().map(Bytes::from).collect(),
+            validators: validator_keys.into_iter().map(Bytes::from).collect(),
         };
 
         let tx = TransactionRequest::default()
@@ -101,7 +104,7 @@ pub fn extract_validator_keys(committee_blob: &[u8]) -> anyhow::Result<Vec<Vec<u
     let keys: Vec<Vec<u8>> = committee
         .validators()
         .keys()
-        .map(|public_key| uncompressed_key(public_key))
+        .map(uncompressed_key)
         .collect();
     Ok(keys)
 }
