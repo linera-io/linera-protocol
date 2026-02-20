@@ -17,6 +17,7 @@ contract LightClient {
     bytes32 public adminChainId;
 
     constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
+        require(validators.length == weights.length, "length mismatch");
         _setCommittee(_epoch, validators, weights);
         adminChainId = _adminChainId;
     }

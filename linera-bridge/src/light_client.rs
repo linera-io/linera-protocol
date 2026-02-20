@@ -439,15 +439,9 @@ mod tests {
             let deployer = Address::ZERO;
             let secret = ValidatorSecretKey::generate();
             let public = secret.public();
-            let address = validator_evm_address(&public);
-            let contract = deploy_light_client(
-                &mut db,
-                deployer,
-                &[address],
-                &[1],
-                test_admin_chain_id(),
-                0,
-            );
+            let addr = validator_evm_address(&public);
+            let contract =
+                deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
 
             Self {
                 db,

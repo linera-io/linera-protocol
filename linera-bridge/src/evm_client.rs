@@ -5,7 +5,7 @@
 
 use alloy::{
     network::{Ethereum, EthereumWallet},
-    primitives::{Address, Bytes, TxHash},
+    primitives::{keccak256, Address, Bytes, TxHash},
     providers::{
         fillers::{
             BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
@@ -17,7 +17,6 @@ use alloy::{
     signers::local::PrivateKeySigner,
 };
 use alloy_sol_types::SolCall;
-use k256::elliptic_curve::sec1::ToEncodedPoint;
 use linera_base::crypto::ValidatorPublicKey;
 use linera_execution::committee::Committee;
 use url::Url;
@@ -105,6 +104,13 @@ pub fn extract_validator_keys(committee_blob: &[u8]) -> anyhow::Result<Vec<Vec<u
         .map(|public_key| uncompressed_key(public_key))
         .collect();
     Ok(keys)
+}
+
+/// Derives the Ethereum address from a secp256k1 validator public key.
+pub fn validator_evm_address(public: &ValidatorPublicKey) -> Address {
+    let uncompressed = public.0.to_encoded_point(false);
+    let hash = keccak256(&uncompressed.as_bytes()[1..]); // skip 0x04 prefix
+    Address::from_slice(&hash[12..])
 }
 
 /// Returns the 64-byte uncompressed public key (without the 0x04 prefix).

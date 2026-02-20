@@ -1,0 +1,267 @@
+services:
+  # 0. Anvil - local EVM node for LightClient contract
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:stable
+    container_name: anvil
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--code-size-limit", "300000", "-vvvv"]
+    ports:
+      - "${ANVIL_PORT:-8545}:8545"
+    healthcheck:
+      test: ["CMD-SHELL", "cast chain-id --rpc-url http://localhost:8545 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - linera-network
+
+  # 1. ScyllaDB - storage backend for linera network and exporter
+  scylla-setup:
+    image: ubuntu:24.04
+    container_name: scylla-setup
+    privileged: true
+    volumes:
+      - /proc:/host/proc
+      - /sys:/host/sys
+      - /etc/sysctl.d:/host/sysctl.d
+      - ./compose-scylla-setup.sh:/setup.sh:ro
+    command: ["/bin/bash", "/setup.sh", "--persist"]
+    restart: "no"
+
+  scylla:
+    image: scylladb/scylla:6.2.3
+    container_name: scylla
+    volumes:
+      - scylla-data:/var/lib/scylla
+    environment:
+      SCYLLA_AUTO_CONF: 1
+    command:
+      - "--developer-mode"
+      - "1"
+      - "--overprovisioned"
+      - "1"
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'SELECT now() FROM system.local' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    depends_on:
+      scylla-setup:
+        condition: service_completed_successfully
+    networks:
+      - linera-network
+
+  # 2. Network (Validator + Faucet) - initializes storage
+  linera-network:
+    image: "${LINERA_NETWORK_IMAGE:-linera-test}"
+    container_name: linera-network
+    ports:
+      - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
+      - "13001:13001"
+    command: >
+      sh -c "./linera net
+      --storage scylladb:tcp:scylla:9042:table_default
+      up
+      --with-faucet
+      --faucet-port ${FAUCET_PORT:-8080}
+      --with-block-exporter
+      --exporter-address linera-block-exporter
+      --exporter-port ${BLOCK_EXPORTER_PORT:-8882}"
+    environment:
+      - RUST_LOG=linera=info
+      - FAUCET_PORT=${FAUCET_PORT:-8080}
+      - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/'${FAUCET_PORT:-8080}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    volumes:
+      - network-data:/data
+    depends_on:
+      scylla:
+        condition: service_healthy
+    networks:
+      - linera-network
+
+  # 3. Storage init - waits for network to initialize storage
+  storage-init:
+    image: "${LINERA_NETWORK_IMAGE:-linera-test}"
+    container_name: storage-init
+    command:
+      - sh
+      - -c
+      - |
+        echo "Waiting for storage namespace to be initialized..."
+        while true; do
+          ./linera storage check-existence --storage scylladb:tcp:scylla:9042:table_default_server_0_db
+          status=$$?
+          if [ $$status -eq 0 ]; then
+            echo "Storage namespace exists, exporter can start."
+            exit 0
+          else
+            echo "Storage not ready (status: $$status), retrying in 5 seconds..."
+            sleep 5
+          fi
+        done
+    depends_on:
+      linera-network:
+        condition: service_started
+      scylla:
+        condition: service_healthy
+    networks:
+      - linera-network
+
+  # 4a. Bridge args init - queries faucet for committee data and outputs constructor args
+  bridge-args-init:
+    image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
+    container_name: bridge-args-init
+    command:
+      - sh
+      - -c
+      - |
+        echo "Querying committee data from faucet..."
+        exec linera-bridge init-light-client \
+          --faucet-url http://linera-network:${FAUCET_PORT:-8080} \
+          --output /shared/light-client-args.json
+    volumes:
+      - bridge-shared:/shared
+    depends_on:
+      linera-network:
+        condition: service_healthy
+    networks:
+      - linera-network
+
+  # 4b. Bridge init - deploys LightClient contract to Anvil using constructor args
+  bridge-init:
+    image: "${FOUNDRY_IMAGE:-foundry-jq}"
+    container_name: bridge-init
+    user: root
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        echo "Waiting for Anvil to be ready..."
+        until cast chain-id --rpc-url http://anvil:8545 2>/dev/null; do
+          sleep 1
+        done
+
+        echo "Waiting for constructor args..."
+        while [ ! -f /shared/light-client-args.json ]; do
+          sleep 1
+        done
+
+        # Parse constructor args from JSON
+        VALIDATORS=$$(jq -r '[.validators[]] | join(",")' /shared/light-client-args.json)
+        WEIGHTS=$$(jq -r '[.weights[]] | join(",")' /shared/light-client-args.json)
+        ADMIN_CHAIN_ID=$$(jq -r '.admin_chain_id' /shared/light-client-args.json)
+        EPOCH=$$(jq -r '.epoch' /shared/light-client-args.json)
+
+        echo "Deploying LightClient contract..."
+        echo "  Validators: [$$VALIDATORS]"
+        echo "  Weights: [$$WEIGHTS]"
+        echo "  Admin Chain ID: $$ADMIN_CHAIN_ID"
+        echo "  Epoch: $$EPOCH"
+
+        # Deploy using Anvil's default account (account 0)
+        # Constructor: (bytes[] uncompressedKeys, uint64[] weights, bytes32 adminChainId, uint32 epoch)
+        forge create \
+          /contracts/LightClient.sol:LightClient \
+          --root /contracts \
+          --via-ir \
+          --optimize \
+          --optimizer-runs 1 \
+          --ignored-error-codes 6321 \
+          --out /tmp/forge-out \
+          --cache-path /tmp/forge-cache \
+          --rpc-url http://anvil:8545 \
+          --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+          --broadcast \
+          --constructor-args "[$$VALIDATORS]" "[$$WEIGHTS]" "$$ADMIN_CHAIN_ID" "$$EPOCH" \
+          2>&1 | tee /tmp/deploy-output.txt || {
+          echo "Deploy failed" >&2
+          exit 1
+        }
+
+        CONTRACT_ADDRESS=$$(grep 'Deployed to:' /tmp/deploy-output.txt | sed 's/.*Deployed to: //')
+        echo "LightClient deployed at: $$CONTRACT_ADDRESS"
+        echo "$$CONTRACT_ADDRESS" > /shared/light-client-address
+    volumes:
+      - bridge-shared:/shared
+      - ../linera-bridge/src/solidity:/contracts:ro
+    depends_on:
+      anvil:
+        condition: service_healthy
+      bridge-args-init:
+        condition: service_completed_successfully
+    networks:
+      - linera-network
+
+  # 5. Block Exporter - starts after storage is initialized and LightClient is deployed
+  linera-block-exporter:
+    image: "${LINERA_EXPORTER_IMAGE:-linera-exporter}"
+    container_name: linera-block-exporter
+    ports:
+      - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
+    command:
+      - sh
+      - -c
+      - |
+        echo "Waiting for LightClient contract address..."
+        while [ ! -f /shared/light-client-address ]; do
+          sleep 1
+        done
+        LIGHT_CLIENT_ADDRESS=$$(cat /shared/light-client-address)
+        echo "Using LightClient at: $$LIGHT_CLIENT_ADDRESS"
+
+        # Generate exporter config with EVM destination
+        cat > /tmp/exporter-config.toml << TOML
+        id = 1
+        metrics_port = 9091
+
+        [service_config]
+        host = "0.0.0.0"
+        port = ${BLOCK_EXPORTER_PORT:-8882}
+
+        [[destination_config.destinations]]
+        kind = "EvmChain"
+        endpoint = "http://anvil:8545"
+        light_client_address = "$$LIGHT_CLIENT_ADDRESS"
+        private_key = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+        TOML
+
+        exec ./linera-exporter run \
+          --storage scylladb:tcp:scylla:9042:table_default_server_0_db \
+          --config-path /tmp/exporter-config.toml
+    environment:
+      - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
+    volumes:
+      - bridge-shared:/shared:ro
+      - ./exporter-data:/data
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+      bridge-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost ${BLOCK_EXPORTER_PORT:-8882}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    networks:
+      - linera-network
+
+volumes:
+  scylla-data:
+    driver: local
+  network-data:
+    driver: local
+  bridge-shared:
+    driver: local
+
+networks:
+  linera-network:
+    driver: bridge

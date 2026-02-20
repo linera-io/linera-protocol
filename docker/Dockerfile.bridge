@@ -1,0 +1,170 @@
+ARG git_commit
+ARG build_date
+ARG build_flag
+ARG build_folder=debug
+ARG rustflags="-C force-frame-pointers=yes"
+
+FROM rust:1.86-slim-bookworm AS builder
+ARG git_commit
+ARG build_flag
+ARG build_folder
+ARG rustflags
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    protobuf-compiler \
+    clang
+
+# Workspace root
+COPY Cargo.toml Cargo.lock rust-toolchain* ./
+COPY scripts scripts
+
+# examples/ is a separate workspace. fungible is a dev-dep of linera-bridge,
+# but Cargo still resolves its manifest. Copy the workspace root + stub all members.
+COPY examples/Cargo.toml examples/Cargo.toml
+COPY examples/fungible examples/fungible
+COPY examples/amm/Cargo.toml examples/amm/Cargo.toml
+COPY examples/call-evm-counter/Cargo.toml examples/call-evm-counter/Cargo.toml
+COPY examples/controller/Cargo.toml examples/controller/Cargo.toml
+COPY examples/counter/Cargo.toml examples/counter/Cargo.toml
+COPY examples/counter-no-graphql/Cargo.toml examples/counter-no-graphql/Cargo.toml
+COPY examples/crowd-funding/Cargo.toml examples/crowd-funding/Cargo.toml
+COPY examples/ethereum-tracker/Cargo.toml examples/ethereum-tracker/Cargo.toml
+COPY examples/game-of-life-challenge/Cargo.toml examples/game-of-life-challenge/Cargo.toml
+COPY examples/gen-nft/Cargo.toml examples/gen-nft/Cargo.toml
+COPY examples/hex-game/Cargo.toml examples/hex-game/Cargo.toml
+COPY examples/how-to/perform-http-requests/Cargo.toml examples/how-to/perform-http-requests/Cargo.toml
+COPY examples/llm/Cargo.toml examples/llm/Cargo.toml
+COPY examples/matching-engine/Cargo.toml examples/matching-engine/Cargo.toml
+COPY examples/native-fungible/Cargo.toml examples/native-fungible/Cargo.toml
+COPY examples/non-fungible/Cargo.toml examples/non-fungible/Cargo.toml
+COPY examples/rfq/Cargo.toml examples/rfq/Cargo.toml
+COPY examples/social/Cargo.toml examples/social/Cargo.toml
+COPY examples/task-processor/Cargo.toml examples/task-processor/Cargo.toml
+COPY examples/time-expiry/Cargo.toml examples/time-expiry/Cargo.toml
+RUN for dir in \
+    examples/amm \
+    examples/call-evm-counter \
+    examples/controller \
+    examples/counter \
+    examples/counter-no-graphql \
+    examples/crowd-funding \
+    examples/ethereum-tracker \
+    examples/game-of-life-challenge \
+    examples/gen-nft \
+    examples/hex-game \
+    examples/how-to/perform-http-requests \
+    examples/llm \
+    examples/matching-engine \
+    examples/native-fungible \
+    examples/non-fungible \
+    examples/rfq \
+    examples/social \
+    examples/task-processor \
+    examples/time-expiry; \
+  do mkdir -p "$dir/src" && \
+     echo "" > "$dir/src/lib.rs" && \
+     echo "fn main(){}" > "$dir/src/contract.rs" && \
+     echo "fn main(){}" > "$dir/src/service.rs"; done
+# perform-http-requests has a third binary
+RUN echo "fn main(){}" > examples/how-to/perform-http-requests/src/test_http_server.rs
+COPY linera-base linera-base
+COPY linera-bridge linera-bridge
+COPY linera-chain linera-chain
+COPY linera-core linera-core
+COPY linera-execution linera-execution
+COPY linera-sdk linera-sdk
+COPY linera-sdk-derive linera-sdk-derive
+COPY linera-storage linera-storage
+COPY linera-version linera-version
+COPY linera-views linera-views
+COPY linera-views-derive linera-views-derive
+COPY linera-witty linera-witty
+COPY linera-witty-macros linera-witty-macros
+
+# Stub workspace members: Cargo.toml + empty sources.
+# Cargo needs all workspace members to exist, but only linera-bridge deps need real source.
+RUN for dir in \
+    linera-client \
+    linera-ethereum \
+    linera-explorer \
+    linera-faucet/client \
+    linera-faucet/server \
+    linera-indexer/graphql-client \
+    linera-indexer/lib \
+    linera-indexer/plugins \
+    linera-metrics \
+    linera-persistent \
+    linera-rpc \
+    linera-service-graphql-client \
+    "web/@linera/client"; \
+  do mkdir -p "$dir/src" && echo "" > "$dir/src/lib.rs"; done
+
+# Stubs for crates with [[bin]] targets (need main.rs too)
+RUN mkdir -p linera-service/src/cli linera-service/src/proxy linera-service/src/exporter && \
+    echo "" > linera-service/src/lib.rs && \
+    echo "fn main(){}" > linera-service/src/cli/main.rs && \
+    echo "fn main(){}" > linera-service/src/server.rs && \
+    echo "fn main(){}" > linera-service/src/proxy/main.rs && \
+    echo "fn main(){}" > linera-service/src/schema_export.rs && \
+    echo "fn main(){}" > linera-service/src/benchmark.rs && \
+    echo "fn main(){}" > linera-service/src/exporter/main.rs && \
+    mkdir -p linera-service/benches && \
+    echo "fn main(){}" > linera-service/benches/transfers.rs
+
+RUN mkdir -p linera-indexer/example/src && \
+    echo "" > linera-indexer/example/src/lib.rs && \
+    echo "fn main(){}" > linera-indexer/example/src/main.rs && \
+    echo "fn main(){}" > linera-indexer/example/src/grpc_main.rs
+
+RUN mkdir -p linera-storage-service/src linera-storage-service/benches && \
+    echo "" > linera-storage-service/src/lib.rs && \
+    echo "fn main(){}" > linera-storage-service/src/server.rs && \
+    echo "fn main(){}" > linera-storage-service/benches/store.rs
+
+RUN mkdir -p linera-summary/src && \
+    echo "fn main(){}" > linera-summary/src/main.rs
+
+COPY linera-client/Cargo.toml linera-client/Cargo.toml
+COPY linera-ethereum/Cargo.toml linera-ethereum/Cargo.toml
+COPY linera-explorer/Cargo.toml linera-explorer/Cargo.toml
+COPY linera-faucet/client/Cargo.toml linera-faucet/client/Cargo.toml
+COPY linera-faucet/server/Cargo.toml linera-faucet/server/Cargo.toml
+COPY linera-indexer/example/Cargo.toml linera-indexer/example/Cargo.toml
+COPY linera-indexer/graphql-client/Cargo.toml linera-indexer/graphql-client/Cargo.toml
+COPY linera-indexer/lib/Cargo.toml linera-indexer/lib/Cargo.toml
+COPY linera-indexer/plugins/Cargo.toml linera-indexer/plugins/Cargo.toml
+COPY linera-metrics/Cargo.toml linera-metrics/Cargo.toml
+COPY linera-persistent/Cargo.toml linera-persistent/Cargo.toml
+COPY linera-rpc/Cargo.toml linera-rpc/Cargo.toml
+COPY linera-service/Cargo.toml linera-service/Cargo.toml
+COPY linera-service-graphql-client/Cargo.toml linera-service-graphql-client/Cargo.toml
+COPY linera-storage-service/Cargo.toml linera-storage-service/Cargo.toml
+COPY linera-summary/Cargo.toml linera-summary/Cargo.toml
+COPY web/@linera/client/Cargo.toml web/@linera/client/Cargo.toml
+
+ENV GIT_COMMIT=${git_commit}
+ENV RUSTFLAGS=${rustflags}
+
+RUN cargo build ${build_flag:+"$build_flag"} \
+    --bin linera-bridge \
+    -p linera-bridge \
+    --features cli
+
+RUN cp target/"$build_folder"/linera-bridge /usr/local/bin/linera-bridge
+
+FROM debian:bookworm-slim
+
+ARG git_commit
+LABEL git_commit=$git_commit
+
+ARG build_date
+LABEL build_date=$build_date
+
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    ca-certificates \
+    openssl \
+    netcat-openbsd
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/bin/linera-bridge /usr/local/bin/linera-bridge
