@@ -4,7 +4,7 @@
 use std::{future::IntoFuture, sync::atomic::Ordering};
 
 use linera_base::identifiers::BlobType;
-use linera_bridge::evm_client::{self, EvmLightClient};
+use linera_bridge::evm_client::EvmLightClient;
 use linera_execution::{system::AdminOperation, Operation, SystemOperation};
 use linera_service::config::{Destination, DestinationId};
 use tokio::select;
@@ -98,55 +98,50 @@ impl EvmChainExporter {
                     let blob_id =
                         linera_base::identifiers::BlobId::new(blob_hash, BlobType::Committee);
 
-                    // Find the committee blob in this block's blobs
-                    let committee_blob = blobs.iter().find(|b| b.id() == blob_id);
+                    // Find the committee blob — it may be in this block's blobs
+                    // (if PublishCommitteeBlob and CreateCommittee are in the same block)
+                    // or it may have been published in an earlier block.
+                    let committee_blob = match blobs.iter().find(|b| b.id() == blob_id) {
+                        Some(blob) => Some(blob.clone()),
+                        None => match storage.get_blob(blob_id).await {
+                            Ok(blob) => Some(blob),
+                            Err(e) => {
+                                tracing::error!(
+                                    height = destination_height,
+                                    ?blob_id,
+                                    error = ?e,
+                                    "CreateCommittee blob not found in block or storage"
+                                );
+                                None
+                            }
+                        },
+                    };
 
                     if let Some(blob) = committee_blob {
                         let committee_bytes = blob.bytes();
                         let certificate_bytes =
                             bcs::to_bytes(&*block_cert).expect("BCS serialization failed");
 
-                        match evm_client::extract_validator_keys(committee_bytes) {
-                            Ok(validator_keys) => {
-                                match self
-                                    .evm_client
-                                    .add_committee(
-                                        &certificate_bytes,
-                                        committee_bytes,
-                                        validator_keys,
-                                    )
-                                    .await
-                                {
-                                    Ok(tx_hash) => {
-                                        tracing::info!(
-                                            %tx_hash,
-                                            height = destination_height,
-                                            "successfully relayed committee to EVM"
-                                        );
-                                    }
-                                    Err(e) => {
-                                        tracing::error!(
-                                            height = destination_height,
-                                            error = ?e,
-                                            "failed to relay committee to EVM"
-                                        );
-                                    }
-                                }
+                        match self
+                            .evm_client
+                            .add_committee(&certificate_bytes, committee_bytes)
+                            .await
+                        {
+                            Ok(tx_hash) => {
+                                tracing::info!(
+                                    %tx_hash,
+                                    height = destination_height,
+                                    "successfully relayed committee to EVM"
+                                );
                             }
                             Err(e) => {
                                 tracing::error!(
                                     height = destination_height,
                                     error = ?e,
-                                    "failed to extract validator keys from committee blob"
+                                    "failed to relay committee to EVM"
                                 );
                             }
                         }
-                    } else {
-                        tracing::warn!(
-                            height = destination_height,
-                            ?blob_id,
-                            "CreateCommittee blob not found in block's blobs"
-                        );
                     }
                 }
 
