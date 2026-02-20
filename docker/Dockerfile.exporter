@@ -23,8 +23,8 @@ ARG build_date
 ARG target=x86_64-unknown-linux-gnu
 ARG binaries=
 ARG copy=${binaries:+_copy}
-# ARG build_flag=--release
-ARG build_folder=debug
+ARG build_flag=--release
+ARG build_folder=release
 ARG build_features=scylladb,metrics,bridge
 ARG rustflags="-C force-frame-pointers=yes"
 

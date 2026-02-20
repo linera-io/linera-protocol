@@ -1,7 +1,7 @@
 ARG git_commit
 ARG build_date
-ARG build_flag
-ARG build_folder=debug
+ARG build_flag=--release
+ARG build_folder=release
 ARG rustflags="-C force-frame-pointers=yes"
 
 FROM rust:1.86-slim-bookworm AS builder
