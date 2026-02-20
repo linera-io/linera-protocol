@@ -5320,7 +5320,7 @@ dependencies = [
 
 [[package]]
 name = "linera-bridge"
-version = "0.15.12"
+version = "0.15.13"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
