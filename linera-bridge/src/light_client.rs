@@ -524,4 +524,170 @@ mod tests {
             validators: vec![new_uncompressed.into()],
         }
     }
+
+    #[test]
+    fn test_light_client_add_committee_two_validators() {
+        let mut light_client = TestLightClient::new();
+        let new_secret1 = ValidatorSecretKey::generate();
+        let new_public1 = new_secret1.public();
+        let new_secret2 = ValidatorSecretKey::generate();
+        let new_public2 = new_secret2.public();
+
+        let call = create_add_committee_call_multi(
+            &light_client.secret,
+            &light_client.public,
+            &[new_public1, new_public2],
+            Epoch(1),
+            Epoch::ZERO,
+            BlockHeight(1),
+            test_admin_chain_id(),
+        );
+        call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            call,
+        );
+
+        assert_eq!(light_client.query_current_epoch(), 1);
+    }
+
+    #[test]
+    fn test_light_client_add_committee_mixed_account_keys() {
+        use std::collections::BTreeMap;
+
+        use linera_base::{crypto::AccountPublicKey, data_types::BlobContent};
+        use linera_execution::{committee::ValidatorState, ResourceControlPolicy};
+
+        let mut light_client = TestLightClient::new();
+        let new_secret1 = ValidatorSecretKey::generate();
+        let new_public1 = new_secret1.public();
+        let new_secret2 = ValidatorSecretKey::generate();
+        let new_public2 = new_secret2.public();
+
+        // Create a committee with mixed account key types:
+        // validator 1 gets Secp256k1 account key, validator 2 gets Ed25519 account key
+        let validators: BTreeMap<_, _> = [
+            (
+                new_public1,
+                ValidatorState {
+                    network_address: "127.0.0.1:8080".to_string(),
+                    votes: 1,
+                    account_public_key: AccountPublicKey::Secp256k1(new_public1),
+                },
+            ),
+            (
+                new_public2,
+                ValidatorState {
+                    network_address: "127.0.0.1:8081".to_string(),
+                    votes: 1,
+                    account_public_key: AccountPublicKey::Ed25519(
+                        linera_base::crypto::Ed25519PublicKey::test_key(1),
+                    ),
+                },
+            ),
+        ]
+        .into_iter()
+        .collect();
+        let committee =
+            linera_execution::Committee::new(validators, ResourceControlPolicy::default());
+        let committee_bytes = bcs::to_bytes(&committee).expect("committee serialization failed");
+        let blob_content = BlobContent::new_committee(committee_bytes.clone());
+        let blob_hash = CryptoHash::new(&blob_content);
+
+        let transactions = create_committee_transaction(Epoch(1), blob_hash);
+        let block = create_test_block(
+            test_admin_chain_id(),
+            Epoch::ZERO,
+            BlockHeight(1),
+            transactions,
+        );
+        let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
+
+        // Extract uncompressed keys in BTreeMap order
+        let deserialized: linera_execution::Committee =
+            bcs::from_bytes(&committee_bytes).expect("committee deserialization failed");
+        let uncompressed_keys: Vec<alloy_primitives::Bytes> = deserialized
+            .validators()
+            .keys()
+            .map(|pk| validator_uncompressed_key(pk).into())
+            .collect();
+
+        let call = addCommitteeCall {
+            data: bcs_bytes.into(),
+            committeeBlob: committee_bytes.into(),
+            validators: uncompressed_keys,
+        };
+        call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            call,
+        );
+
+        assert_eq!(light_client.query_current_epoch(), 1);
+    }
+
+    /// Creates a committee blob with multiple validators and returns `(committee_bytes, blob_hash)`.
+    fn create_multi_committee_blob(
+        publics: &[linera_base::crypto::ValidatorPublicKey],
+    ) -> (Vec<u8>, CryptoHash) {
+        use std::collections::BTreeMap;
+
+        use linera_base::{crypto::AccountPublicKey, data_types::BlobContent};
+        use linera_execution::{committee::ValidatorState, ResourceControlPolicy};
+
+        let validators: BTreeMap<_, _> = publics
+            .iter()
+            .enumerate()
+            .map(|(i, public)| {
+                (
+                    *public,
+                    ValidatorState {
+                        network_address: format!("127.0.0.1:{}", 8080 + i),
+                        votes: 1,
+                        account_public_key: AccountPublicKey::Secp256k1(*public),
+                    },
+                )
+            })
+            .collect();
+        let committee =
+            linera_execution::Committee::new(validators, ResourceControlPolicy::default());
+        let bytes = bcs::to_bytes(&committee).expect("committee serialization failed");
+        let blob_content = BlobContent::new_committee(bytes.clone());
+        let blob_hash = CryptoHash::new(&blob_content);
+        (bytes, blob_hash)
+    }
+
+    /// Creates a signed `addCommitteeCall` for transitioning to a new epoch with multiple
+    /// validators. The block is signed by `signer_secret`/`signer_public`.
+    fn create_add_committee_call_multi(
+        signer_secret: &ValidatorSecretKey,
+        signer_public: &linera_base::crypto::ValidatorPublicKey,
+        new_publics: &[linera_base::crypto::ValidatorPublicKey],
+        new_epoch: Epoch,
+        block_epoch: Epoch,
+        height: BlockHeight,
+        chain_id: CryptoHash,
+    ) -> addCommitteeCall {
+        let (committee_bytes, blob_hash) = create_multi_committee_blob(new_publics);
+        let transactions = create_committee_transaction(new_epoch, blob_hash);
+        let block = create_test_block(chain_id, block_epoch, height, transactions);
+        let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
+
+        // Extract uncompressed keys in BTreeMap order (must match BCS blob order)
+        let committee: linera_execution::Committee =
+            bcs::from_bytes(&committee_bytes).expect("committee deserialization failed");
+        let uncompressed_keys: Vec<alloy_primitives::Bytes> = committee
+            .validators()
+            .keys()
+            .map(|pk| validator_uncompressed_key(pk).into())
+            .collect();
+
+        addCommitteeCall {
+            data: bcs_bytes.into(),
+            committeeBlob: committee_bytes.into(),
+            validators: uncompressed_keys,
+        }
+    }
 }
