@@ -19,6 +19,8 @@ otlpExporterEndpoint: {{ $explicitEndpoint | default "" }}
 {{- end }}
 proxyPort: 19100
 metricsPort: 21100
+proxySendTimeout: {{ env "LINERA_HELMFILE_SET_PROXY_SEND_TIMEOUT" | default "" }}
+proxyRecvTimeout: {{ env "LINERA_HELMFILE_SET_PROXY_RECV_TIMEOUT" | default "" }}
 numShards: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
 numProxies: {{ env "LINERA_HELMFILE_SET_NUM_PROXIES" | default 1 }}
 serverTokioThreads: {{ env "LINERA_HELMFILE_SET_SERVER_TOKIO_THREADS" | default "" }}
@@ -71,9 +73,9 @@ alloy:
 
 # Loki
 loki-stack:
-  enabled: true
+  enabled: {{ env "LINERA_HELMFILE_SET_LOKI_ENABLED" | default "true" }}
   loki:
-    enabled: true
+    enabled: {{ env "LINERA_HELMFILE_SET_LOKI_ENABLED" | default "true" }}
     isDefault: false
     persistence:
       enabled: true
@@ -82,14 +84,14 @@ loki-stack:
       limits_config:
         reject_old_samples_max_age: 24h
   promtail:
-    enabled: true
+    enabled: {{ env "LINERA_HELMFILE_SET_LOKI_ENABLED" | default "true" }}
     config:
       clients:
         - url: http://linera-core-loki:3100/loki/api/v1/push
 
 # Prometheus/Grafana
 kube-prometheus-stack:
-  enabled: true
+  enabled: {{ env "LINERA_HELMFILE_SET_KUBE_PROMETHEUS_ENABLED" | default "true" }}
   grafana:
     sidecar:
       dashboards:

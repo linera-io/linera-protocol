@@ -10,10 +10,10 @@ racks:
       capacity: 2Gi
     resources:
       limits:
-        cpu: 1
-        memory: 2Gi
+        cpu: {{ env "LINERA_HELMFILE_SET_SCYLLA_CPU" | default 1 }}
+        memory: {{ env "LINERA_HELMFILE_SET_SCYLLA_MEMORY" | default "2Gi" }}
       requests:
-        cpu: 1
-        memory: 2Gi
+        cpu: {{ env "LINERA_HELMFILE_SET_SCYLLA_CPU" | default 1 }}
+        memory: {{ env "LINERA_HELMFILE_SET_SCYLLA_MEMORY" | default "2Gi" }}
 serviceMonitor:
   create: true

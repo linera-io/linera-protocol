@@ -29,6 +29,13 @@ env:
   LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_0.db
   LINERA_FAUCET_URL: http://localhost:8079
   LINERA_HELMFILE_TIMEOUT: 1800
+  LINERA_HELMFILE_SET_PROXY_SEND_TIMEOUT: 120000
+  LINERA_HELMFILE_SET_PROXY_RECV_TIMEOUT: 120000
+  LINERA_HELMFILE_SET_SCYLLA_CPU: 1
+  LINERA_HELMFILE_SET_SCYLLA_MEMORY: 2Gi
+  LINERA_HELMFILE_SET_LOKI_ENABLED: "false"
+  LINERA_HELMFILE_SET_KUBE_PROMETHEUS_ENABLED: "false"
+  KUBECONFIG: /tmp/kind-kubeconfig
 
 permissions:
   contents: read
@@ -72,6 +79,21 @@ jobs:
         tail -f "$LOG_FILE" 2>/dev/null &
         TAIL_PID=$!
 
+        # Fix Kind context namespace: the ARC runner pod's in-cluster namespace
+        # is "arc-runners", which kubectl uses as default when the context doesn't
+        # specify one. Set it to "default" as soon as the Kind context appears.
+        (
+          while true; do
+            KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+            if [ -n "$KIND_CTX" ]; then
+              kubectl config set-context "$KIND_CTX" --namespace=default
+              echo "Fixed namespace for context $KIND_CTX to 'default'"
+              break
+            fi
+            sleep 1
+          done
+        ) &
+
         # Background diagnostics: periodically dump pod status once a Kind cluster exists.
         (
           KIND_CTX=""
@@ -91,10 +113,10 @@ jobs:
         ) &
         DIAG_PID=$!
 
-        # Wait for "READY!" message (includes Docker image build + helm sync + port-forwards).
+        # Wait for the exact READY message from `linera net up`.
         # No explicit timeout here; the job-level timeout-minutes: 90 is the safeguard.
         echo "Waiting for validators to deploy (PID: $NETWORK_PID)..."
-        while ! grep -q "READY!" "$LOG_FILE" 2>/dev/null; do
+        while ! grep -qF "READY!" "$LOG_FILE" 2>/dev/null; do
           if ! kill -0 "$NETWORK_PID" 2>/dev/null; then
             echo "ERROR: Network process (PID: $NETWORK_PID) died"
             echo "=== FINAL DIAGNOSTICS: Pod status at failure ==="
@@ -168,16 +190,31 @@ jobs:
         echo "Validators reported READY"
 
         kill $DIAG_PID 2>/dev/null || true
-
-        # Wait for proxy to accept TCP connections through port-forward.
-        # No explicit timeout; the job-level timeout-minutes: 90 is the safeguard.
-        echo "Waiting for proxy at 127.0.0.1:19100..."
-        while ! (echo > /dev/tcp/127.0.0.1/19100) 2>/dev/null; do
-          sleep 2
-        done
-        echo "Proxy is accepting connections"
-
         kill $TAIL_PID 2>/dev/null || true
+
+        # Verify that proxy and shard pods are actually Running (not stuck in Init).
+        KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+        echo "=== Post-READY pod status ==="
+        kubectl --context "$KIND_CTX" get pods -o wide
+        NOT_READY=$(kubectl --context "$KIND_CTX" get pods --no-headers 2>/dev/null \
+          | grep -cEv 'Running|Completed' || true)
+        if [ "$NOT_READY" -gt 0 ]; then
+          echo "WARNING: $NOT_READY pod(s) not Running after READY. Waiting up to 120s..."
+          kubectl --context "$KIND_CTX" wait --for=condition=Ready pod --all --timeout=120s || {
+            echo "ERROR: pods did not become Ready"
+            kubectl --context "$KIND_CTX" get pods -o wide
+            kubectl --context "$KIND_CTX" describe pods | grep -A 5 "State:\|Reason:" || true
+            exit 1
+          }
+          echo "All pods now Ready"
+          kubectl --context "$KIND_CTX" get pods -o wide
+        fi
+
+        echo "=== Proxy pod command and env (diagnostic) ==="
+        kubectl --context "$KIND_CTX" get pod proxy-0 -o jsonpath='{.spec.containers[?(@.name=="linera-proxy")].command}' 2>&1 || true
+        echo ""
+        kubectl --context "$KIND_CTX" get pod proxy-0 -o jsonpath='{.spec.containers[?(@.name=="linera-proxy")].env}' 2>&1 || true
+        echo ""
     - name: Start faucet and wait for it
       run: |
         FAUCET_PORT=$(echo "$LINERA_FAUCET_URL" | cut -d: -f3)
@@ -191,3 +228,46 @@ jobs:
     - name: Run the Kubernetes tests
       run: |
         cargo test -p linera-service remote_net_grpc --features remote-net,opentelemetry
+    - name: Post-test diagnostics
+      if: always()
+      run: |
+        KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+        if [ -n "$KIND_CTX" ]; then
+          echo "=== Pod status (restart counts) ==="
+          kubectl --context "$KIND_CTX" get pods --all-namespaces -o wide
+          echo "=== OOMKilled / CrashLoopBackOff events ==="
+          kubectl --context "$KIND_CTX" get events --all-namespaces --field-selector reason=OOMKilling --sort-by='.lastTimestamp' 2>&1 || true
+          kubectl --context "$KIND_CTX" get events --all-namespaces --field-selector reason=OOMKilled --sort-by='.lastTimestamp' 2>&1 || true
+          echo "=== Container last state (shows OOM exits) ==="
+          kubectl --context "$KIND_CTX" get pods -o json 2>/dev/null \
+            | python3 -c "
+        import json, sys
+        data = json.load(sys.stdin)
+        for item in data.get('items', []):
+            name = item['metadata']['name']
+            for cs in item.get('status', {}).get('containerStatuses', []):
+                restarts = cs.get('restartCount', 0)
+                last = cs.get('lastState', {})
+                if restarts > 0 or last:
+                    print(f'{name}/{cs[\"name\"]}: restarts={restarts} lastState={last}')
+        " 2>&1 || true
+          echo "=== Recent warning/error events ==="
+          kubectl --context "$KIND_CTX" get events --all-namespaces --sort-by='.lastTimestamp' 2>&1 | tail -30 || true
+          echo "=== Node memory pressure ==="
+          kubectl --context "$KIND_CTX" describe nodes 2>&1 | grep -A 5 "MemoryPressure\|Allocatable:" || true
+
+          echo "=== Proxy logs (errors/panics/timeouts) ==="
+          kubectl --context "$KIND_CTX" logs proxy-0 -c linera-proxy 2>&1 | grep -iE "error|panic|timeout|cancel|reset|CANCEL|pending_blob" | tail -80 || true
+          echo "=== Proxy logs (last 50 lines) ==="
+          kubectl --context "$KIND_CTX" logs proxy-0 -c linera-proxy --tail=50 2>&1 || true
+
+          echo "=== Shard-0 logs (errors/panics/timeouts) ==="
+          kubectl --context "$KIND_CTX" logs shards-0 -c linera-server 2>&1 | grep -iE "error|panic|timeout|cancel|reset|pending_blob" | tail -80 || true
+          echo "=== Shard-0 logs (last 50 lines) ==="
+          kubectl --context "$KIND_CTX" logs shards-0 -c linera-server --tail=50 2>&1 || true
+
+          echo "=== Shard-1 logs (errors/panics/timeouts) ==="
+          kubectl --context "$KIND_CTX" logs shards-1 -c linera-server 2>&1 | grep -iE "error|panic|timeout|cancel|reset|pending_blob" | tail -80 || true
+          echo "=== Shard-1 logs (last 50 lines) ==="
+          kubectl --context "$KIND_CTX" logs shards-1 -c linera-server --tail=50 2>&1 || true
+        fi

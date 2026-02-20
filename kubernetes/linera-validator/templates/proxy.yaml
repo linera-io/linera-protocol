@@ -129,6 +129,12 @@ spec:
               exec ./linera-proxy \
                 --storage scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042 \
                 --storage-replication-factor {{ .Values.storageReplicationFactor | quote }} \
+                {{- if .Values.proxySendTimeout }}
+                --send-timeout-ms {{ .Values.proxySendTimeout }} \
+                {{- end }}
+                {{- if .Values.proxyRecvTimeout }}
+                --recv-timeout-ms {{ .Values.proxyRecvTimeout }} \
+                {{- end }}
                 --id "$ORDINAL" \
                 /config/server.json
           env:

@@ -50,6 +50,11 @@ proxyResources: {}
 #     cpu: "2"
 #     memory: "8Gi"
 
+# Proxy timeout configuration (milliseconds)
+# Set to empty string to use the binary default (4000ms)
+proxySendTimeout: ""
+proxyRecvTimeout: ""
+
 # Performance tuning
 # Set to empty string to use default Tokio thread count
 serverTokioThreads: ""
