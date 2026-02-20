@@ -17,7 +17,7 @@ use linera_views::{
     register_view::RegisterView,
     set_view::SetView,
     store::{KeyValueDatabase, KeyValueStore},
-    views::{RootView, View},
+    views::RootView,
 };
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
@@ -25,7 +25,7 @@ use tracing::info;
 
 use crate::{
     common::{graphiql, IndexerError},
-    plugin::Plugin,
+    plugin::{self, Plugin},
     service::Listener,
 };
 
@@ -69,14 +69,10 @@ where
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
     pub async fn load(database: D) -> Result<Self, IndexerError> {
-        let root_key = "indexer".as_bytes().to_vec();
-        let store = database
-            .open_exclusive(&root_key)
-            .map_err(|_e| IndexerError::OpenExclusiveError)?;
-        let context = ViewContext::create_root_context(store, ())
-            .await
-            .map_err(|e| IndexerError::ViewError(e.into()))?;
-        let state = State(Arc::new(Mutex::new(StateView::load(context).await?)));
+        let state = State(plugin::load::<D, StateView<ViewContext<(), D::Store>>>(
+            database, "indexer",
+        )
+        .await?);
         Ok(Indexer {
             state,
             plugins: BTreeMap::new(),
@@ -165,12 +161,13 @@ where
 
     /// Produces the GraphQL schema for the indexer or for a certain plugin
     pub fn sdl(&self, plugin: Option<String>) -> Result<String, IndexerError> {
-        match plugin {
-            None => Ok(self.state.clone().schema().sdl()),
-            Some(plugin) => match self.plugins.get(&plugin) {
-                Some(plugin) => Ok(plugin.sdl()),
-                None => Err(IndexerError::UnknownPlugin(plugin.to_string())),
-            },
+        if let Some(plugin_name) = plugin {
+            self.plugins
+                .get(&plugin_name)
+                .map(|plugin| plugin.sdl())
+                .ok_or(IndexerError::UnknownPlugin(plugin_name))
+        } else {
+            Ok(self.state.clone().schema().sdl())
         }
     }
 
@@ -180,11 +177,12 @@ where
         plugin: impl Plugin<D> + 'static,
     ) -> Result<(), IndexerError> {
         let name = plugin.name();
-        self.plugins
-            .insert(name.clone(), Box::new(plugin))
-            .map_or_else(|| Ok(()), |_| Err(IndexerError::PluginAlreadyRegistered))?;
+        if self.plugins.insert(name.clone(), Box::new(plugin)).is_some() {
+            return Err(IndexerError::PluginAlreadyRegistered);
+        }
         let mut state = self.state.0.lock().await;
-        Ok(state.plugins.insert(&name)?)
+        state.plugins.insert(&name)?;
+        Ok(())
     }
 
     /// Handles queries made to the root of the indexer

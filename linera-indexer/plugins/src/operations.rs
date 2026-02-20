@@ -100,7 +100,8 @@ where
                 );
                 self.operations.insert(&key, operation.clone())?;
                 self.count.insert(&key.chain_id, index + 1)?;
-                Ok(self.last.insert(&key.chain_id, key.clone())?)
+                let chain_id = key.chain_id;
+                Ok(self.last.insert(&chain_id, key)?)
             }
         }
     }
@@ -141,13 +142,9 @@ where
                     height: value.height(),
                     index: transaction_index,
                 };
-                match plugin
+                plugin
                     .register_operation(key, value.hash(), operation.clone())
-                    .await
-                {
-                    Err(e) => return Err(e),
-                    Ok(()) => continue,
-                }
+                    .await?;
             }
         }
         Ok(plugin.save().await?)
@@ -217,11 +214,7 @@ where
     /// Gets the number of operations registered for a chain
     pub async fn count(&self, chain_id: ChainId) -> Result<u64, IndexerError> {
         let plugin = self.0.lock().await;
-        Ok(plugin
-            .count
-            .get(&chain_id)
-            .await
-            .map(|opt| opt.unwrap_or(0))?)
+        Ok(plugin.count.get(&chain_id).await?.unwrap_or(0))
     }
 
     /// Gets the hash of the last operation registered for a chain

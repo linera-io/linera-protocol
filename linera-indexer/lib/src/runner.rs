@@ -91,8 +91,8 @@ where
 
     /// Runs a server and the chains listener
     pub async fn run(&mut self) -> Result<(), IndexerError> {
-        let config = self.config.clone();
-        match config.clone().command {
+        let command = self.config.command.clone();
+        match command {
             IndexerCommand::Schema { plugin } => {
                 println!("{}", self.indexer.sdl(plugin)?);
                 Ok(())
@@ -104,7 +104,7 @@ where
                 port,
             } => {
                 warn!("Running in legacy GraphQL mode. Consider migrating to RunGrpc.");
-                info!("config: {:?}", config);
+                info!("config: {:?}", self.config);
                 let chains = if chains.is_empty() {
                     listener.service.get_chains().await?
                 } else {
