@@ -1,0 +1,41 @@
+[package]
+name = "linera-bridge"
+description = "Bridge between Linera and EVM chains."
+readme = "README.md"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
+
+[build-dependencies]
+serde-generate = "0.32.0"
+serde-reflection = { workspace = true }
+serde_yaml = "0.8.26"
+
+[dev-dependencies]
+bcs.workspace = true
+hex.workspace = true
+insta = { workspace = true, features = ["yaml"] }
+linera-base = { workspace = true, features = ["test"] }
+linera-chain.workspace = true
+linera-execution.workspace = true
+revm = { workspace = true, default-features = false, features = [
+    "std",
+    "kzg-rs",
+    "secp256k1",
+    "portable",
+] }
+revm-context.workspace = true
+serde-reflection.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true

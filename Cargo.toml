@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "linera-base",
+    "linera-bridge",
     "linera-chain",
     "linera-client",
     "linera-core",
@@ -33,6 +34,7 @@ members = [
 ]
 default-members = [
     "linera-base",
+    # "linera-bridge", # tested separately in CI (requires solc)
     "linera-chain",
     "linera-client",
     "linera-core",
