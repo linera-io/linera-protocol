@@ -2,8 +2,7 @@ services:
   # 0. Anvil - local EVM node for LightClient contract
   anvil:
     image: ghcr.io/foundry-rs/foundry:stable
-    container_name: anvil
-    entrypoint: ["anvil", "--host", "0.0.0.0", "--code-size-limit", "300000", "-vvvv"]
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--code-size-limit", "300000"]
     ports:
       - "${ANVIL_PORT:-8545}:8545"
     healthcheck:
@@ -18,7 +17,6 @@ services:
   # 1. ScyllaDB - storage backend for linera network and exporter
   scylla-setup:
     image: ubuntu:24.04
-    container_name: scylla-setup
     privileged: true
     volumes:
       - /proc:/host/proc
@@ -30,7 +28,6 @@ services:
 
   scylla:
     image: scylladb/scylla:6.2.3
-    container_name: scylla
     volumes:
       - scylla-data:/var/lib/scylla
     environment:
@@ -55,14 +52,15 @@ services:
   # 2. Network (Validator + Faucet) - initializes storage
   linera-network:
     image: "${LINERA_NETWORK_IMAGE:-linera-test}"
-    container_name: linera-network
     ports:
       - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
       - "13001:13001"
     command: >
-      sh -c "./linera net
+      sh -c "mkdir -p ${LINERA_NET_PATH:-/tmp/wallet} &&
+      ./linera net
       --storage scylladb:tcp:scylla:9042:table_default
       up
+      --path ${LINERA_NET_PATH:-/tmp/wallet}
       --with-faucet
       --faucet-port ${FAUCET_PORT:-8080}
       --with-block-exporter
@@ -72,6 +70,7 @@ services:
       - RUST_LOG=linera=info
       - FAUCET_PORT=${FAUCET_PORT:-8080}
       - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
+      - LINERA_NET_PATH=${LINERA_NET_PATH:-/tmp/wallet}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/'${FAUCET_PORT:-8080}"]
       interval: 5s
@@ -89,7 +88,6 @@ services:
   # 3. Storage init - waits for network to initialize storage
   storage-init:
     image: "${LINERA_NETWORK_IMAGE:-linera-test}"
-    container_name: storage-init
     command:
       - sh
       - -c
@@ -117,7 +115,6 @@ services:
   # 4a. Bridge args init - queries faucet for committee data and outputs constructor args
   bridge-args-init:
     image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
-    container_name: bridge-args-init
     command:
       - sh
       - -c
@@ -137,7 +134,6 @@ services:
   # 4b. Bridge init - deploys LightClient contract to Anvil using constructor args
   bridge-init:
     image: "${FOUNDRY_IMAGE:-foundry-jq}"
-    container_name: bridge-init
     user: root
     entrypoint: ["sh", "-c"]
     command:
@@ -202,7 +198,6 @@ services:
   # 5. Block Exporter - starts after storage is initialized and LightClient is deployed
   linera-block-exporter:
     image: "${LINERA_EXPORTER_IMAGE:-linera-exporter}"
-    container_name: linera-block-exporter
     ports:
       - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
     command:

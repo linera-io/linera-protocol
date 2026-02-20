@@ -63,7 +63,7 @@ default-members = [
     "linera-witty-macros",
     "linera-witty/test-modules",
 ]
-exclude = ["examples", "scripts"]
+exclude = ["examples", "scripts", "linera-bridge/tests/e2e"]
 resolver = "2"
 
 [workspace.package]
