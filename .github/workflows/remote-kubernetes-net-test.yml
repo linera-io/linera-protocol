@@ -29,6 +29,7 @@ env:
   LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_0.db
   LINERA_FAUCET_URL: http://localhost:8079
   LINERA_HELMFILE_TIMEOUT: 1800
+  KUBECONFIG: /tmp/kind-kubeconfig
 
 permissions:
   contents: read
@@ -72,6 +73,21 @@ jobs:
         tail -f "$LOG_FILE" 2>/dev/null &
         TAIL_PID=$!
 
+        # Fix Kind context namespace: the ARC runner pod's in-cluster namespace
+        # is "arc-runners", which kubectl uses as default when the context doesn't
+        # specify one. Set it to "default" as soon as the Kind context appears.
+        (
+          while true; do
+            KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+            if [ -n "$KIND_CTX" ]; then
+              kubectl config set-context "$KIND_CTX" --namespace=default
+              echo "Fixed namespace for context $KIND_CTX to 'default'"
+              break
+            fi
+            sleep 1
+          done
+        ) &
+
         # Background diagnostics: periodically dump pod status once a Kind cluster exists.
         (
           KIND_CTX=""
@@ -91,10 +107,10 @@ jobs:
         ) &
         DIAG_PID=$!
 
-        # Wait for "READY!" message (includes Docker image build + helm sync + port-forwards).
+        # Wait for the exact READY message from `linera net up`.
         # No explicit timeout here; the job-level timeout-minutes: 90 is the safeguard.
         echo "Waiting for validators to deploy (PID: $NETWORK_PID)..."
-        while ! grep -q "READY!" "$LOG_FILE" 2>/dev/null; do
+        while ! grep -qF "READY!" "$LOG_FILE" 2>/dev/null; do
           if ! kill -0 "$NETWORK_PID" 2>/dev/null; then
             echo "ERROR: Network process (PID: $NETWORK_PID) died"
             echo "=== FINAL DIAGNOSTICS: Pod status at failure ==="
@@ -168,16 +184,54 @@ jobs:
         echo "Validators reported READY"
 
         kill $DIAG_PID 2>/dev/null || true
-
-        # Wait for proxy to accept TCP connections through port-forward.
-        # No explicit timeout; the job-level timeout-minutes: 90 is the safeguard.
-        echo "Waiting for proxy at 127.0.0.1:19100..."
-        while ! (echo > /dev/tcp/127.0.0.1/19100) 2>/dev/null; do
-          sleep 2
-        done
-        echo "Proxy is accepting connections"
-
         kill $TAIL_PID 2>/dev/null || true
+
+        # Verify that proxy and shard pods are actually Running (not stuck in Init).
+        KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+        echo "=== Post-READY pod status ==="
+        kubectl --context "$KIND_CTX" get pods -o wide
+        NOT_READY=$(kubectl --context "$KIND_CTX" get pods --no-headers 2>/dev/null \
+          | grep -cEv 'Running|Completed' || true)
+        if [ "$NOT_READY" -gt 0 ]; then
+          echo "WARNING: $NOT_READY pod(s) not Running after READY. Waiting up to 120s..."
+          kubectl --context "$KIND_CTX" wait --for=condition=Ready pod --all --timeout=120s || {
+            echo "ERROR: pods did not become Ready"
+            kubectl --context "$KIND_CTX" get pods -o wide
+            kubectl --context "$KIND_CTX" describe pods | grep -A 5 "State:\|Reason:" || true
+            exit 1
+          }
+          echo "All pods now Ready"
+          kubectl --context "$KIND_CTX" get pods -o wide
+        fi
+    - name: Port-forward proxy
+      run: |
+        KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+        echo "Kind context: $KIND_CTX"
+        kubectl --context "$KIND_CTX" get pods -o wide
+        kubectl --context "$KIND_CTX" get svc proxy -o wide
+        kubectl --context "$KIND_CTX" get endpoints proxy
+        PF_LOG="/tmp/port-forward.log"
+        kubectl --context "$KIND_CTX" port-forward svc/proxy 19100:19100 > "$PF_LOG" 2>&1 &
+        PF_PID=$!
+        echo "Started port-forward (PID: $PF_PID), waiting for it to bind..."
+        for i in $(seq 1 30); do
+          if ! kill -0 $PF_PID 2>/dev/null; then
+            echo "ERROR: port-forward died. Output:"
+            cat "$PF_LOG"
+            exit 1
+          fi
+          if grep -q "Forwarding from" "$PF_LOG" 2>/dev/null; then
+            cat "$PF_LOG"
+            echo "Port-forward is ready"
+            break
+          fi
+          sleep 1
+        done
+        if ! grep -q "Forwarding from" "$PF_LOG" 2>/dev/null; then
+          echo "ERROR: port-forward did not bind after 30s. Output:"
+          cat "$PF_LOG"
+          exit 1
+        fi
     - name: Start faucet and wait for it
       run: |
         FAUCET_PORT=$(echo "$LINERA_FAUCET_URL" | cut -d: -f3)
