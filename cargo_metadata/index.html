@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Structured access to the output of `cargo metadata` and `cargo --message-format=json`. Usually used from within a `cargo-*` executable"><title>cargo_metadata - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="cargo_metadata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../cargo_metadata/index.html">cargo_<wbr>metadata</a><span class="version">0.18.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>cargo_metadata</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/cargo_metadata/lib.rs.html#1-946">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Structured access to the output of <code>cargo metadata</code> and <code>cargo --message-format=json</code>.
+Usually used from within a <code>cargo-*</code> executable</p>
+<p>See the <a href="https://doc.rust-lang.org/cargo/index.html">cargo book</a> for
+details on cargo itself.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>args = std::env::args().skip_while(|val| !val.starts_with(<span class="string">"--manifest-path"</span>));
+
+<span class="kw">let </span><span class="kw-2">mut </span>cmd = cargo_metadata::MetadataCommand::new();
+<span class="kw">let </span>manifest_path = <span class="kw">match </span>args.next() {
+    <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>p) <span class="kw">if </span>p == <span class="string">"--manifest-path" </span>=&gt; {
+        cmd.manifest_path(args.next().unwrap());
+    }
+    <span class="prelude-val">Some</span>(p) =&gt; {
+        cmd.manifest_path(p.trim_start_matches(<span class="string">"--manifest-path="</span>));
+    }
+    <span class="prelude-val">None </span>=&gt; {}
+};
+
+<span class="kw">let </span>_metadata = cmd.exec().unwrap();</code></pre></div>
+<p>Pass features flags</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>cargo_metadata::{MetadataCommand, CargoOpt};
+
+<span class="kw">let </span>_metadata = MetadataCommand::new()
+    .manifest_path(<span class="string">"./Cargo.toml"</span>)
+    .features(CargoOpt::AllFeatures)
+    .exec()
+    .unwrap();</code></pre></div>
+<p>Parse message-format output:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::process::{Stdio, Command};
+<span class="kw">use </span>cargo_metadata::Message;
+
+<span class="kw">let </span><span class="kw-2">mut </span>command = Command::new(<span class="string">"cargo"</span>)
+    .args(<span class="kw-2">&amp;</span>[<span class="string">"build"</span>, <span class="string">"--message-format=json-render-diagnostics"</span>])
+    .stdout(Stdio::piped())
+    .spawn()
+    .unwrap();
+
+<span class="kw">let </span>reader = std::io::BufReader::new(command.stdout.take().unwrap());
+<span class="kw">for </span>message <span class="kw">in </span>cargo_metadata::Message::parse_stream(reader) {
+    <span class="kw">match </span>message.unwrap() {
+        Message::CompilerMessage(msg) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"{:?}"</span>, msg);
+        },
+        Message::CompilerArtifact(artifact) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"{:?}"</span>, artifact);
+        },
+        Message::BuildScriptExecuted(script) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"{:?}"</span>, script);
+        },
+        Message::BuildFinished(finished) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"{:?}"</span>, finished);
+        },
+        <span class="kw">_ </span>=&gt; () <span class="comment">// Unknown message
+    </span>}
+}
+
+<span class="kw">let </span>output = command.wait().expect(<span class="string">"Couldn't get cargo's exit status"</span>);</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.camino"><code>pub use <a class="mod" href="../camino/index.html" title="mod camino">camino</a>;</code></dt><dt id="reexport.semver"><code>pub use <a class="mod" href="../semver/index.html" title="mod semver">semver</a>;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="diagnostic/index.html" title="mod cargo_metadata::diagnostic">diagnostic</a></dt><dd>This module contains <code>Diagnostic</code> and the types/functions it uses for deserialization.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Artifact.html" title="struct cargo_metadata::Artifact">Artifact</a></dt><dd>A compiler-generated file.</dd><dt><a class="struct" href="struct.ArtifactProfile.html" title="struct cargo_metadata::ArtifactProfile">Artifact<wbr>Profile</a></dt><dd>Profile settings used to determine which compiler flags to use for a
+target.</dd><dt><a class="struct" href="struct.BuildFinished.html" title="struct cargo_metadata::BuildFinished">Build<wbr>Finished</a></dt><dd>Final result of a build.</dd><dt><a class="struct" href="struct.BuildScript.html" title="struct cargo_metadata::BuildScript">Build<wbr>Script</a></dt><dd>Output of a build script execution.</dd><dt><a class="struct" href="struct.CompilerMessage.html" title="struct cargo_metadata::CompilerMessage">Compiler<wbr>Message</a></dt><dd>Message left by the compiler</dd><dt><a class="struct" href="struct.DepKindInfo.html" title="struct cargo_metadata::DepKindInfo">DepKind<wbr>Info</a></dt><dd>Information about a dependency kind.</dd><dt><a class="struct" href="struct.Dependency.html" title="struct cargo_metadata::Dependency">Dependency</a></dt><dd>A dependency of the main crate</dd><dt><a class="struct" href="struct.MessageIter.html" title="struct cargo_metadata::MessageIter">Message<wbr>Iter</a></dt><dd>An iterator of Messages.</dd><dt><a class="struct" href="struct.Metadata.html" title="struct cargo_metadata::Metadata">Metadata</a></dt><dd>Starting point for metadata returned by <code>cargo metadata</code></dd><dt><a class="struct" href="struct.MetadataCommand.html" title="struct cargo_metadata::MetadataCommand">Metadata<wbr>Command</a></dt><dd>A builder for configurating <code>cargo metadata</code> invocation.</dd><dt><a class="struct" href="struct.Node.html" title="struct cargo_metadata::Node">Node</a></dt><dd>A node in a dependencies graph</dd><dt><a class="struct" href="struct.NodeDep.html" title="struct cargo_metadata::NodeDep">NodeDep</a></dt><dd>A dependency in a node</dd><dt><a class="struct" href="struct.Package.html" title="struct cargo_metadata::Package">Package</a></dt><dd>One or more crates described by a single <code>Cargo.toml</code></dd><dt><a class="struct" href="struct.PackageId.html" title="struct cargo_metadata::PackageId">Package<wbr>Id</a></dt><dd>An “opaque” identifier for a package.</dd><dt><a class="struct" href="struct.Resolve.html" title="struct cargo_metadata::Resolve">Resolve</a></dt><dd>A dependency graph</dd><dt><a class="struct" href="struct.Source.html" title="struct cargo_metadata::Source">Source</a></dt><dd>The source of a package such as crates.io.</dd><dt><a class="struct" href="struct.Target.html" title="struct cargo_metadata::Target">Target</a></dt><dd>A single target (lib, bin, example, …) provided by a crate</dd><dt><a class="struct" href="struct.WorkspaceDefaultMembers.html" title="struct cargo_metadata::WorkspaceDefaultMembers">Workspace<wbr>Default<wbr>Members</a></dt><dd>A list of default workspace members.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.ArtifactDebuginfo.html" title="enum cargo_metadata::ArtifactDebuginfo">Artifact<wbr>Debuginfo</a></dt><dd>The kind of debug information included in the artifact.</dd><dt><a class="enum" href="enum.CargoOpt.html" title="enum cargo_metadata::CargoOpt">Cargo<wbr>Opt</a></dt><dd>Cargo features flags</dd><dt><a class="enum" href="enum.DependencyKind.html" title="enum cargo_metadata::DependencyKind">Dependency<wbr>Kind</a></dt><dd>Dependencies can come in three kinds</dd><dt><a class="enum" href="enum.Edition.html" title="enum cargo_metadata::Edition">Edition</a></dt><dd>The Rust edition</dd><dt><a class="enum" href="enum.Error.html" title="enum cargo_metadata::Error">Error</a></dt><dd>Error returned when executing/parsing <code>cargo metadata</code> fails.</dd><dt><a class="enum" href="enum.Message.html" title="enum cargo_metadata::Message">Message</a></dt><dd>A cargo message</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.parse_messages.html" title="fn cargo_metadata::parse_messages">parse_<wbr>messages</a><wbr><span class="stab deprecated" title="">Deprecated</span></dt><dd>Creates an iterator of Message from a Read outputting a stream of JSON
+messages. For usage information, look at the top-level documentation.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Result.html" title="type cargo_metadata::Result">Result</a></dt><dd>Custom result type for <code>cargo_metadata::Error</code></dd></dl></section></div></main></body></html>

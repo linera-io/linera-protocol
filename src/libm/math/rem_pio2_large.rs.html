@@ -1,0 +1,468 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.15/src/math/rem_pio2_large.rs`."><title>rem_pio2_large.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="libm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">libm/math/</div>rem_pio2_large.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![allow(unused_unsafe)]
+<a href=#2 id=2 data-nosnippet>2</a></span><span class="comment">/* origin: FreeBSD /usr/src/lib/msun/src/k_rem_pio2.c */
+<a href=#3 id=3 data-nosnippet>3</a>/*
+<a href=#4 id=4 data-nosnippet>4</a> * ====================================================
+<a href=#5 id=5 data-nosnippet>5</a> * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+<a href=#6 id=6 data-nosnippet>6</a> *
+<a href=#7 id=7 data-nosnippet>7</a> * Developed at SunSoft, a Sun Microsystems, Inc. business.
+<a href=#8 id=8 data-nosnippet>8</a> * Permission to use, copy, modify, and distribute this
+<a href=#9 id=9 data-nosnippet>9</a> * software is freely granted, provided that this notice
+<a href=#10 id=10 data-nosnippet>10</a> * is preserved.
+<a href=#11 id=11 data-nosnippet>11</a> * ====================================================
+<a href=#12 id=12 data-nosnippet>12</a> */
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">use super</span>::{floor, scalbn};
+<a href=#15 id=15 data-nosnippet>15</a>
+<a href=#16 id=16 data-nosnippet>16</a><span class="comment">// initial value for jk
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">const </span>INIT_JK: [usize; <span class="number">4</span>] = [<span class="number">3</span>, <span class="number">4</span>, <span class="number">4</span>, <span class="number">6</span>];
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="comment">// Table of constants for 2/pi, 396 Hex digits (476 decimal) of 2/pi
+<a href=#20 id=20 data-nosnippet>20</a>//
+<a href=#21 id=21 data-nosnippet>21</a>//              integer array, contains the (24*i)-th to (24*i+23)-th
+<a href=#22 id=22 data-nosnippet>22</a>//              bit of 2/pi after binary point. The corresponding
+<a href=#23 id=23 data-nosnippet>23</a>//              floating value is
+<a href=#24 id=24 data-nosnippet>24</a>//
+<a href=#25 id=25 data-nosnippet>25</a>//                      ipio2[i] * 2^(-24(i+1)).
+<a href=#26 id=26 data-nosnippet>26</a>//
+<a href=#27 id=27 data-nosnippet>27</a>// NB: This table must have at least (e0-3)/24 + jk terms.
+<a href=#28 id=28 data-nosnippet>28</a>//     For quad precision (e0 &lt;= 16360, jk = 6), this is 686.
+<a href=#29 id=29 data-nosnippet>29</a></span><span class="attr">#[cfg(any(target_pointer_width = <span class="string">"32"</span>, target_pointer_width = <span class="string">"16"</span>))]
+<a href=#30 id=30 data-nosnippet>30</a></span><span class="kw">const </span>IPIO2: [i32; <span class="number">66</span>] = [
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="number">0xA2F983</span>, <span class="number">0x6E4E44</span>, <span class="number">0x1529FC</span>, <span class="number">0x2757D1</span>, <span class="number">0xF534DD</span>, <span class="number">0xC0DB62</span>, <span class="number">0x95993C</span>, <span class="number">0x439041</span>, <span class="number">0xFE5163</span>,
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="number">0xABDEBB</span>, <span class="number">0xC561B7</span>, <span class="number">0x246E3A</span>, <span class="number">0x424DD2</span>, <span class="number">0xE00649</span>, <span class="number">0x2EEA09</span>, <span class="number">0xD1921C</span>, <span class="number">0xFE1DEB</span>, <span class="number">0x1CB129</span>,
+<a href=#33 id=33 data-nosnippet>33</a>    <span class="number">0xA73EE8</span>, <span class="number">0x8235F5</span>, <span class="number">0x2EBB44</span>, <span class="number">0x84E99C</span>, <span class="number">0x7026B4</span>, <span class="number">0x5F7E41</span>, <span class="number">0x3991D6</span>, <span class="number">0x398353</span>, <span class="number">0x39F49C</span>,
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="number">0x845F8B</span>, <span class="number">0xBDF928</span>, <span class="number">0x3B1FF8</span>, <span class="number">0x97FFDE</span>, <span class="number">0x05980F</span>, <span class="number">0xEF2F11</span>, <span class="number">0x8B5A0A</span>, <span class="number">0x6D1F6D</span>, <span class="number">0x367ECF</span>,
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="number">0x27CB09</span>, <span class="number">0xB74F46</span>, <span class="number">0x3F669E</span>, <span class="number">0x5FEA2D</span>, <span class="number">0x7527BA</span>, <span class="number">0xC7EBE5</span>, <span class="number">0xF17B3D</span>, <span class="number">0x0739F7</span>, <span class="number">0x8A5292</span>,
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="number">0xEA6BFB</span>, <span class="number">0x5FB11F</span>, <span class="number">0x8D5D08</span>, <span class="number">0x560330</span>, <span class="number">0x46FC7B</span>, <span class="number">0x6BABF0</span>, <span class="number">0xCFBC20</span>, <span class="number">0x9AF436</span>, <span class="number">0x1DA9E3</span>,
+<a href=#37 id=37 data-nosnippet>37</a>    <span class="number">0x91615E</span>, <span class="number">0xE61B08</span>, <span class="number">0x659985</span>, <span class="number">0x5F14A0</span>, <span class="number">0x68408D</span>, <span class="number">0xFFD880</span>, <span class="number">0x4D7327</span>, <span class="number">0x310606</span>, <span class="number">0x1556CA</span>,
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="number">0x73A8C9</span>, <span class="number">0x60E27B</span>, <span class="number">0xC08C6B</span>,
+<a href=#39 id=39 data-nosnippet>39</a>];
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a><span class="attr">#[cfg(target_pointer_width = <span class="string">"64"</span>)]
+<a href=#42 id=42 data-nosnippet>42</a></span><span class="kw">const </span>IPIO2: [i32; <span class="number">690</span>] = [
+<a href=#43 id=43 data-nosnippet>43</a>    <span class="number">0xA2F983</span>, <span class="number">0x6E4E44</span>, <span class="number">0x1529FC</span>, <span class="number">0x2757D1</span>, <span class="number">0xF534DD</span>, <span class="number">0xC0DB62</span>, <span class="number">0x95993C</span>, <span class="number">0x439041</span>, <span class="number">0xFE5163</span>,
+<a href=#44 id=44 data-nosnippet>44</a>    <span class="number">0xABDEBB</span>, <span class="number">0xC561B7</span>, <span class="number">0x246E3A</span>, <span class="number">0x424DD2</span>, <span class="number">0xE00649</span>, <span class="number">0x2EEA09</span>, <span class="number">0xD1921C</span>, <span class="number">0xFE1DEB</span>, <span class="number">0x1CB129</span>,
+<a href=#45 id=45 data-nosnippet>45</a>    <span class="number">0xA73EE8</span>, <span class="number">0x8235F5</span>, <span class="number">0x2EBB44</span>, <span class="number">0x84E99C</span>, <span class="number">0x7026B4</span>, <span class="number">0x5F7E41</span>, <span class="number">0x3991D6</span>, <span class="number">0x398353</span>, <span class="number">0x39F49C</span>,
+<a href=#46 id=46 data-nosnippet>46</a>    <span class="number">0x845F8B</span>, <span class="number">0xBDF928</span>, <span class="number">0x3B1FF8</span>, <span class="number">0x97FFDE</span>, <span class="number">0x05980F</span>, <span class="number">0xEF2F11</span>, <span class="number">0x8B5A0A</span>, <span class="number">0x6D1F6D</span>, <span class="number">0x367ECF</span>,
+<a href=#47 id=47 data-nosnippet>47</a>    <span class="number">0x27CB09</span>, <span class="number">0xB74F46</span>, <span class="number">0x3F669E</span>, <span class="number">0x5FEA2D</span>, <span class="number">0x7527BA</span>, <span class="number">0xC7EBE5</span>, <span class="number">0xF17B3D</span>, <span class="number">0x0739F7</span>, <span class="number">0x8A5292</span>,
+<a href=#48 id=48 data-nosnippet>48</a>    <span class="number">0xEA6BFB</span>, <span class="number">0x5FB11F</span>, <span class="number">0x8D5D08</span>, <span class="number">0x560330</span>, <span class="number">0x46FC7B</span>, <span class="number">0x6BABF0</span>, <span class="number">0xCFBC20</span>, <span class="number">0x9AF436</span>, <span class="number">0x1DA9E3</span>,
+<a href=#49 id=49 data-nosnippet>49</a>    <span class="number">0x91615E</span>, <span class="number">0xE61B08</span>, <span class="number">0x659985</span>, <span class="number">0x5F14A0</span>, <span class="number">0x68408D</span>, <span class="number">0xFFD880</span>, <span class="number">0x4D7327</span>, <span class="number">0x310606</span>, <span class="number">0x1556CA</span>,
+<a href=#50 id=50 data-nosnippet>50</a>    <span class="number">0x73A8C9</span>, <span class="number">0x60E27B</span>, <span class="number">0xC08C6B</span>, <span class="number">0x47C419</span>, <span class="number">0xC367CD</span>, <span class="number">0xDCE809</span>, <span class="number">0x2A8359</span>, <span class="number">0xC4768B</span>, <span class="number">0x961CA6</span>,
+<a href=#51 id=51 data-nosnippet>51</a>    <span class="number">0xDDAF44</span>, <span class="number">0xD15719</span>, <span class="number">0x053EA5</span>, <span class="number">0xFF0705</span>, <span class="number">0x3F7E33</span>, <span class="number">0xE832C2</span>, <span class="number">0xDE4F98</span>, <span class="number">0x327DBB</span>, <span class="number">0xC33D26</span>,
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="number">0xEF6B1E</span>, <span class="number">0x5EF89F</span>, <span class="number">0x3A1F35</span>, <span class="number">0xCAF27F</span>, <span class="number">0x1D87F1</span>, <span class="number">0x21907C</span>, <span class="number">0x7C246A</span>, <span class="number">0xFA6ED5</span>, <span class="number">0x772D30</span>,
+<a href=#53 id=53 data-nosnippet>53</a>    <span class="number">0x433B15</span>, <span class="number">0xC614B5</span>, <span class="number">0x9D19C3</span>, <span class="number">0xC2C4AD</span>, <span class="number">0x414D2C</span>, <span class="number">0x5D000C</span>, <span class="number">0x467D86</span>, <span class="number">0x2D71E3</span>, <span class="number">0x9AC69B</span>,
+<a href=#54 id=54 data-nosnippet>54</a>    <span class="number">0x006233</span>, <span class="number">0x7CD2B4</span>, <span class="number">0x97A7B4</span>, <span class="number">0xD55537</span>, <span class="number">0xF63ED7</span>, <span class="number">0x1810A3</span>, <span class="number">0xFC764D</span>, <span class="number">0x2A9D64</span>, <span class="number">0xABD770</span>,
+<a href=#55 id=55 data-nosnippet>55</a>    <span class="number">0xF87C63</span>, <span class="number">0x57B07A</span>, <span class="number">0xE71517</span>, <span class="number">0x5649C0</span>, <span class="number">0xD9D63B</span>, <span class="number">0x3884A7</span>, <span class="number">0xCB2324</span>, <span class="number">0x778AD6</span>, <span class="number">0x23545A</span>,
+<a href=#56 id=56 data-nosnippet>56</a>    <span class="number">0xB91F00</span>, <span class="number">0x1B0AF1</span>, <span class="number">0xDFCE19</span>, <span class="number">0xFF319F</span>, <span class="number">0x6A1E66</span>, <span class="number">0x615799</span>, <span class="number">0x47FBAC</span>, <span class="number">0xD87F7E</span>, <span class="number">0xB76522</span>,
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="number">0x89E832</span>, <span class="number">0x60BFE6</span>, <span class="number">0xCDC4EF</span>, <span class="number">0x09366C</span>, <span class="number">0xD43F5D</span>, <span class="number">0xD7DE16</span>, <span class="number">0xDE3B58</span>, <span class="number">0x929BDE</span>, <span class="number">0x2822D2</span>,
+<a href=#58 id=58 data-nosnippet>58</a>    <span class="number">0xE88628</span>, <span class="number">0x4D58E2</span>, <span class="number">0x32CAC6</span>, <span class="number">0x16E308</span>, <span class="number">0xCB7DE0</span>, <span class="number">0x50C017</span>, <span class="number">0xA71DF3</span>, <span class="number">0x5BE018</span>, <span class="number">0x34132E</span>,
+<a href=#59 id=59 data-nosnippet>59</a>    <span class="number">0x621283</span>, <span class="number">0x014883</span>, <span class="number">0x5B8EF5</span>, <span class="number">0x7FB0AD</span>, <span class="number">0xF2E91E</span>, <span class="number">0x434A48</span>, <span class="number">0xD36710</span>, <span class="number">0xD8DDAA</span>, <span class="number">0x425FAE</span>,
+<a href=#60 id=60 data-nosnippet>60</a>    <span class="number">0xCE616A</span>, <span class="number">0xA4280A</span>, <span class="number">0xB499D3</span>, <span class="number">0xF2A606</span>, <span class="number">0x7F775C</span>, <span class="number">0x83C2A3</span>, <span class="number">0x883C61</span>, <span class="number">0x78738A</span>, <span class="number">0x5A8CAF</span>,
+<a href=#61 id=61 data-nosnippet>61</a>    <span class="number">0xBDD76F</span>, <span class="number">0x63A62D</span>, <span class="number">0xCBBFF4</span>, <span class="number">0xEF818D</span>, <span class="number">0x67C126</span>, <span class="number">0x45CA55</span>, <span class="number">0x36D9CA</span>, <span class="number">0xD2A828</span>, <span class="number">0x8D61C2</span>,
+<a href=#62 id=62 data-nosnippet>62</a>    <span class="number">0x77C912</span>, <span class="number">0x142604</span>, <span class="number">0x9B4612</span>, <span class="number">0xC459C4</span>, <span class="number">0x44C5C8</span>, <span class="number">0x91B24D</span>, <span class="number">0xF31700</span>, <span class="number">0xAD43D4</span>, <span class="number">0xE54929</span>,
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="number">0x10D5FD</span>, <span class="number">0xFCBE00</span>, <span class="number">0xCC941E</span>, <span class="number">0xEECE70</span>, <span class="number">0xF53E13</span>, <span class="number">0x80F1EC</span>, <span class="number">0xC3E7B3</span>, <span class="number">0x28F8C7</span>, <span class="number">0x940593</span>,
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="number">0x3E71C1</span>, <span class="number">0xB3092E</span>, <span class="number">0xF3450B</span>, <span class="number">0x9C1288</span>, <span class="number">0x7B20AB</span>, <span class="number">0x9FB52E</span>, <span class="number">0xC29247</span>, <span class="number">0x2F327B</span>, <span class="number">0x6D550C</span>,
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="number">0x90A772</span>, <span class="number">0x1FE76B</span>, <span class="number">0x96CB31</span>, <span class="number">0x4A1679</span>, <span class="number">0xE27941</span>, <span class="number">0x89DFF4</span>, <span class="number">0x9794E8</span>, <span class="number">0x84E6E2</span>, <span class="number">0x973199</span>,
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="number">0x6BED88</span>, <span class="number">0x365F5F</span>, <span class="number">0x0EFDBB</span>, <span class="number">0xB49A48</span>, <span class="number">0x6CA467</span>, <span class="number">0x427271</span>, <span class="number">0x325D8D</span>, <span class="number">0xB8159F</span>, <span class="number">0x09E5BC</span>,
+<a href=#67 id=67 data-nosnippet>67</a>    <span class="number">0x25318D</span>, <span class="number">0x3974F7</span>, <span class="number">0x1C0530</span>, <span class="number">0x010C0D</span>, <span class="number">0x68084B</span>, <span class="number">0x58EE2C</span>, <span class="number">0x90AA47</span>, <span class="number">0x02E774</span>, <span class="number">0x24D6BD</span>,
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="number">0xA67DF7</span>, <span class="number">0x72486E</span>, <span class="number">0xEF169F</span>, <span class="number">0xA6948E</span>, <span class="number">0xF691B4</span>, <span class="number">0x5153D1</span>, <span class="number">0xF20ACF</span>, <span class="number">0x339820</span>, <span class="number">0x7E4BF5</span>,
+<a href=#69 id=69 data-nosnippet>69</a>    <span class="number">0x6863B2</span>, <span class="number">0x5F3EDD</span>, <span class="number">0x035D40</span>, <span class="number">0x7F8985</span>, <span class="number">0x295255</span>, <span class="number">0xC06437</span>, <span class="number">0x10D86D</span>, <span class="number">0x324832</span>, <span class="number">0x754C5B</span>,
+<a href=#70 id=70 data-nosnippet>70</a>    <span class="number">0xD4714E</span>, <span class="number">0x6E5445</span>, <span class="number">0xC1090B</span>, <span class="number">0x69F52A</span>, <span class="number">0xD56614</span>, <span class="number">0x9D0727</span>, <span class="number">0x50045D</span>, <span class="number">0xDB3BB4</span>, <span class="number">0xC576EA</span>,
+<a href=#71 id=71 data-nosnippet>71</a>    <span class="number">0x17F987</span>, <span class="number">0x7D6B49</span>, <span class="number">0xBA271D</span>, <span class="number">0x296996</span>, <span class="number">0xACCCC6</span>, <span class="number">0x5414AD</span>, <span class="number">0x6AE290</span>, <span class="number">0x89D988</span>, <span class="number">0x50722C</span>,
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="number">0xBEA404</span>, <span class="number">0x940777</span>, <span class="number">0x7030F3</span>, <span class="number">0x27FC00</span>, <span class="number">0xA871EA</span>, <span class="number">0x49C266</span>, <span class="number">0x3DE064</span>, <span class="number">0x83DD97</span>, <span class="number">0x973FA3</span>,
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="number">0xFD9443</span>, <span class="number">0x8C860D</span>, <span class="number">0xDE4131</span>, <span class="number">0x9D3992</span>, <span class="number">0x8C70DD</span>, <span class="number">0xE7B717</span>, <span class="number">0x3BDF08</span>, <span class="number">0x2B3715</span>, <span class="number">0xA0805C</span>,
+<a href=#74 id=74 data-nosnippet>74</a>    <span class="number">0x93805A</span>, <span class="number">0x921110</span>, <span class="number">0xD8E80F</span>, <span class="number">0xAF806C</span>, <span class="number">0x4BFFDB</span>, <span class="number">0x0F9038</span>, <span class="number">0x761859</span>, <span class="number">0x15A562</span>, <span class="number">0xBBCB61</span>,
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="number">0xB989C7</span>, <span class="number">0xBD4010</span>, <span class="number">0x04F2D2</span>, <span class="number">0x277549</span>, <span class="number">0xF6B6EB</span>, <span class="number">0xBB22DB</span>, <span class="number">0xAA140A</span>, <span class="number">0x2F2689</span>, <span class="number">0x768364</span>,
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="number">0x333B09</span>, <span class="number">0x1A940E</span>, <span class="number">0xAA3A51</span>, <span class="number">0xC2A31D</span>, <span class="number">0xAEEDAF</span>, <span class="number">0x12265C</span>, <span class="number">0x4DC26D</span>, <span class="number">0x9C7A2D</span>, <span class="number">0x9756C0</span>,
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="number">0x833F03</span>, <span class="number">0xF6F009</span>, <span class="number">0x8C402B</span>, <span class="number">0x99316D</span>, <span class="number">0x07B439</span>, <span class="number">0x15200C</span>, <span class="number">0x5BC3D8</span>, <span class="number">0xC492F5</span>, <span class="number">0x4BADC6</span>,
+<a href=#78 id=78 data-nosnippet>78</a>    <span class="number">0xA5CA4E</span>, <span class="number">0xCD37A7</span>, <span class="number">0x36A9E6</span>, <span class="number">0x9492AB</span>, <span class="number">0x6842DD</span>, <span class="number">0xDE6319</span>, <span class="number">0xEF8C76</span>, <span class="number">0x528B68</span>, <span class="number">0x37DBFC</span>,
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="number">0xABA1AE</span>, <span class="number">0x3115DF</span>, <span class="number">0xA1AE00</span>, <span class="number">0xDAFB0C</span>, <span class="number">0x664D64</span>, <span class="number">0xB705ED</span>, <span class="number">0x306529</span>, <span class="number">0xBF5657</span>, <span class="number">0x3AFF47</span>,
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="number">0xB9F96A</span>, <span class="number">0xF3BE75</span>, <span class="number">0xDF9328</span>, <span class="number">0x3080AB</span>, <span class="number">0xF68C66</span>, <span class="number">0x15CB04</span>, <span class="number">0x0622FA</span>, <span class="number">0x1DE4D9</span>, <span class="number">0xA4B33D</span>,
+<a href=#81 id=81 data-nosnippet>81</a>    <span class="number">0x8F1B57</span>, <span class="number">0x09CD36</span>, <span class="number">0xE9424E</span>, <span class="number">0xA4BE13</span>, <span class="number">0xB52333</span>, <span class="number">0x1AAAF0</span>, <span class="number">0xA8654F</span>, <span class="number">0xA5C1D2</span>, <span class="number">0x0F3F0B</span>,
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="number">0xCD785B</span>, <span class="number">0x76F923</span>, <span class="number">0x048B7B</span>, <span class="number">0x721789</span>, <span class="number">0x53A6C6</span>, <span class="number">0xE26E6F</span>, <span class="number">0x00EBEF</span>, <span class="number">0x584A9B</span>, <span class="number">0xB7DAC4</span>,
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="number">0xBA66AA</span>, <span class="number">0xCFCF76</span>, <span class="number">0x1D02D1</span>, <span class="number">0x2DF1B1</span>, <span class="number">0xC1998C</span>, <span class="number">0x77ADC3</span>, <span class="number">0xDA4886</span>, <span class="number">0xA05DF7</span>, <span class="number">0xF480C6</span>,
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="number">0x2FF0AC</span>, <span class="number">0x9AECDD</span>, <span class="number">0xBC5C3F</span>, <span class="number">0x6DDED0</span>, <span class="number">0x1FC790</span>, <span class="number">0xB6DB2A</span>, <span class="number">0x3A25A3</span>, <span class="number">0x9AAF00</span>, <span class="number">0x9353AD</span>,
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="number">0x0457B6</span>, <span class="number">0xB42D29</span>, <span class="number">0x7E804B</span>, <span class="number">0xA707DA</span>, <span class="number">0x0EAA76</span>, <span class="number">0xA1597B</span>, <span class="number">0x2A1216</span>, <span class="number">0x2DB7DC</span>, <span class="number">0xFDE5FA</span>,
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="number">0xFEDB89</span>, <span class="number">0xFDBE89</span>, <span class="number">0x6C76E4</span>, <span class="number">0xFCA906</span>, <span class="number">0x70803E</span>, <span class="number">0x156E85</span>, <span class="number">0xFF87FD</span>, <span class="number">0x073E28</span>, <span class="number">0x336761</span>,
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="number">0x86182A</span>, <span class="number">0xEABD4D</span>, <span class="number">0xAFE7B3</span>, <span class="number">0x6E6D8F</span>, <span class="number">0x396795</span>, <span class="number">0x5BBF31</span>, <span class="number">0x48D784</span>, <span class="number">0x16DF30</span>, <span class="number">0x432DC7</span>,
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="number">0x356125</span>, <span class="number">0xCE70C9</span>, <span class="number">0xB8CB30</span>, <span class="number">0xFD6CBF</span>, <span class="number">0xA200A4</span>, <span class="number">0xE46C05</span>, <span class="number">0xA0DD5A</span>, <span class="number">0x476F21</span>, <span class="number">0xD21262</span>,
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="number">0x845CB9</span>, <span class="number">0x496170</span>, <span class="number">0xE0566B</span>, <span class="number">0x015299</span>, <span class="number">0x375550</span>, <span class="number">0xB7D51E</span>, <span class="number">0xC4F133</span>, <span class="number">0x5F6E13</span>, <span class="number">0xE4305D</span>,
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="number">0xA92E85</span>, <span class="number">0xC3B21D</span>, <span class="number">0x3632A1</span>, <span class="number">0xA4B708</span>, <span class="number">0xD4B1EA</span>, <span class="number">0x21F716</span>, <span class="number">0xE4698F</span>, <span class="number">0x77FF27</span>, <span class="number">0x80030C</span>,
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="number">0x2D408D</span>, <span class="number">0xA0CD4F</span>, <span class="number">0x99A520</span>, <span class="number">0xD3A2B3</span>, <span class="number">0x0A5D2F</span>, <span class="number">0x42F9B4</span>, <span class="number">0xCBDA11</span>, <span class="number">0xD0BE7D</span>, <span class="number">0xC1DB9B</span>,
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="number">0xBD17AB</span>, <span class="number">0x81A2CA</span>, <span class="number">0x5C6A08</span>, <span class="number">0x17552E</span>, <span class="number">0x550027</span>, <span class="number">0xF0147F</span>, <span class="number">0x8607E1</span>, <span class="number">0x640B14</span>, <span class="number">0x8D4196</span>,
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="number">0xDEBE87</span>, <span class="number">0x2AFDDA</span>, <span class="number">0xB6256B</span>, <span class="number">0x34897B</span>, <span class="number">0xFEF305</span>, <span class="number">0x9EBFB9</span>, <span class="number">0x4F6A68</span>, <span class="number">0xA82A4A</span>, <span class="number">0x5AC44F</span>,
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="number">0xBCF82D</span>, <span class="number">0x985AD7</span>, <span class="number">0x95C7F4</span>, <span class="number">0x8D4D0D</span>, <span class="number">0xA63A20</span>, <span class="number">0x5F57A4</span>, <span class="number">0xB13F14</span>, <span class="number">0x953880</span>, <span class="number">0x0120CC</span>,
+<a href=#95 id=95 data-nosnippet>95</a>    <span class="number">0x86DD71</span>, <span class="number">0xB6DEC9</span>, <span class="number">0xF560BF</span>, <span class="number">0x11654D</span>, <span class="number">0x6B0701</span>, <span class="number">0xACB08C</span>, <span class="number">0xD0C0B2</span>, <span class="number">0x485551</span>, <span class="number">0x0EFB1E</span>,
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="number">0xC37295</span>, <span class="number">0x3B06A3</span>, <span class="number">0x3540C0</span>, <span class="number">0x7BDC06</span>, <span class="number">0xCC45E0</span>, <span class="number">0xFA294E</span>, <span class="number">0xC8CAD6</span>, <span class="number">0x41F3E8</span>, <span class="number">0xDE647C</span>,
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="number">0xD8649B</span>, <span class="number">0x31BED9</span>, <span class="number">0xC397A4</span>, <span class="number">0xD45877</span>, <span class="number">0xC5E369</span>, <span class="number">0x13DAF0</span>, <span class="number">0x3C3ABA</span>, <span class="number">0x461846</span>, <span class="number">0x5F7555</span>,
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="number">0xF5BDD2</span>, <span class="number">0xC6926E</span>, <span class="number">0x5D2EAC</span>, <span class="number">0xED440E</span>, <span class="number">0x423E1C</span>, <span class="number">0x87C461</span>, <span class="number">0xE9FD29</span>, <span class="number">0xF3D6E7</span>, <span class="number">0xCA7C22</span>,
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="number">0x35916F</span>, <span class="number">0xC5E008</span>, <span class="number">0x8DD7FF</span>, <span class="number">0xE26A6E</span>, <span class="number">0xC6FDB0</span>, <span class="number">0xC10893</span>, <span class="number">0x745D7C</span>, <span class="number">0xB2AD6B</span>, <span class="number">0x9D6ECD</span>,
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="number">0x7B723E</span>, <span class="number">0x6A11C6</span>, <span class="number">0xA9CFF7</span>, <span class="number">0xDF7329</span>, <span class="number">0xBAC9B5</span>, <span class="number">0x5100B7</span>, <span class="number">0x0DB2E2</span>, <span class="number">0x24BA74</span>, <span class="number">0x607DE5</span>,
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="number">0x8AD874</span>, <span class="number">0x2C150D</span>, <span class="number">0x0C1881</span>, <span class="number">0x94667E</span>, <span class="number">0x162901</span>, <span class="number">0x767A9F</span>, <span class="number">0xBEFDFD</span>, <span class="number">0xEF4556</span>, <span class="number">0x367ED9</span>,
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="number">0x13D9EC</span>, <span class="number">0xB9BA8B</span>, <span class="number">0xFC97C4</span>, <span class="number">0x27A831</span>, <span class="number">0xC36EF1</span>, <span class="number">0x36C594</span>, <span class="number">0x56A8D8</span>, <span class="number">0xB5A8B4</span>, <span class="number">0x0ECCCF</span>,
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="number">0x2D8912</span>, <span class="number">0x34576F</span>, <span class="number">0x89562C</span>, <span class="number">0xE3CE99</span>, <span class="number">0xB920D6</span>, <span class="number">0xAA5E6B</span>, <span class="number">0x9C2A3E</span>, <span class="number">0xCC5F11</span>, <span class="number">0x4A0BFD</span>,
+<a href=#104 id=104 data-nosnippet>104</a>    <span class="number">0xFBF4E1</span>, <span class="number">0x6D3B8E</span>, <span class="number">0x2C86E2</span>, <span class="number">0x84D4E9</span>, <span class="number">0xA9B4FC</span>, <span class="number">0xD1EEEF</span>, <span class="number">0xC9352E</span>, <span class="number">0x61392F</span>, <span class="number">0x442138</span>,
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="number">0xC8D91B</span>, <span class="number">0x0AFC81</span>, <span class="number">0x6A4AFB</span>, <span class="number">0xD81C2F</span>, <span class="number">0x84B453</span>, <span class="number">0x8C994E</span>, <span class="number">0xCC2254</span>, <span class="number">0xDC552A</span>, <span class="number">0xD6C6C0</span>,
+<a href=#106 id=106 data-nosnippet>106</a>    <span class="number">0x96190B</span>, <span class="number">0xB8701A</span>, <span class="number">0x649569</span>, <span class="number">0x605A26</span>, <span class="number">0xEE523F</span>, <span class="number">0x0F117F</span>, <span class="number">0x11B5F4</span>, <span class="number">0xF5CBFC</span>, <span class="number">0x2DBC34</span>,
+<a href=#107 id=107 data-nosnippet>107</a>    <span class="number">0xEEBC34</span>, <span class="number">0xCC5DE8</span>, <span class="number">0x605EDD</span>, <span class="number">0x9B8E67</span>, <span class="number">0xEF3392</span>, <span class="number">0xB817C9</span>, <span class="number">0x9B5861</span>, <span class="number">0xBC57E1</span>, <span class="number">0xC68351</span>,
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="number">0x103ED8</span>, <span class="number">0x4871DD</span>, <span class="number">0xDD1C2D</span>, <span class="number">0xA118AF</span>, <span class="number">0x462C21</span>, <span class="number">0xD7F359</span>, <span class="number">0x987AD9</span>, <span class="number">0xC0549E</span>, <span class="number">0xFA864F</span>,
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="number">0xFC0656</span>, <span class="number">0xAE79E5</span>, <span class="number">0x362289</span>, <span class="number">0x22AD38</span>, <span class="number">0xDC9367</span>, <span class="number">0xAAE855</span>, <span class="number">0x382682</span>, <span class="number">0x9BE7CA</span>, <span class="number">0xA40D51</span>,
+<a href=#110 id=110 data-nosnippet>110</a>    <span class="number">0xB13399</span>, <span class="number">0x0ED7A9</span>, <span class="number">0x480569</span>, <span class="number">0xF0B265</span>, <span class="number">0xA7887F</span>, <span class="number">0x974C88</span>, <span class="number">0x36D1F9</span>, <span class="number">0xB39221</span>, <span class="number">0x4A827B</span>,
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="number">0x21CF98</span>, <span class="number">0xDC9F40</span>, <span class="number">0x5547DC</span>, <span class="number">0x3A74E1</span>, <span class="number">0x42EB67</span>, <span class="number">0xDF9DFE</span>, <span class="number">0x5FD45E</span>, <span class="number">0xA4677B</span>, <span class="number">0x7AACBA</span>,
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="number">0xA2F655</span>, <span class="number">0x23882B</span>, <span class="number">0x55BA41</span>, <span class="number">0x086E59</span>, <span class="number">0x862A21</span>, <span class="number">0x834739</span>, <span class="number">0xE6E389</span>, <span class="number">0xD49EE5</span>, <span class="number">0x40FB49</span>,
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="number">0xE956FF</span>, <span class="number">0xCA0F1C</span>, <span class="number">0x8A59C5</span>, <span class="number">0x2BFA94</span>, <span class="number">0xC5C1D3</span>, <span class="number">0xCFC50F</span>, <span class="number">0xAE5ADB</span>, <span class="number">0x86C547</span>, <span class="number">0x624385</span>,
+<a href=#114 id=114 data-nosnippet>114</a>    <span class="number">0x3B8621</span>, <span class="number">0x94792C</span>, <span class="number">0x876110</span>, <span class="number">0x7B4C2A</span>, <span class="number">0x1A2C80</span>, <span class="number">0x12BF43</span>, <span class="number">0x902688</span>, <span class="number">0x893C78</span>, <span class="number">0xE4C4A8</span>,
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="number">0x7BDBE5</span>, <span class="number">0xC23AC4</span>, <span class="number">0xEAF426</span>, <span class="number">0x8A67F7</span>, <span class="number">0xBF920D</span>, <span class="number">0x2BA365</span>, <span class="number">0xB1933D</span>, <span class="number">0x0B7CBD</span>, <span class="number">0xDC51A4</span>,
+<a href=#116 id=116 data-nosnippet>116</a>    <span class="number">0x63DD27</span>, <span class="number">0xDDE169</span>, <span class="number">0x19949A</span>, <span class="number">0x9529A8</span>, <span class="number">0x28CE68</span>, <span class="number">0xB4ED09</span>, <span class="number">0x209F44</span>, <span class="number">0xCA984E</span>, <span class="number">0x638270</span>,
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="number">0x237C7E</span>, <span class="number">0x32B90F</span>, <span class="number">0x8EF5A7</span>, <span class="number">0xE75614</span>, <span class="number">0x08F121</span>, <span class="number">0x2A9DB5</span>, <span class="number">0x4D7E6F</span>, <span class="number">0x5119A5</span>, <span class="number">0xABF9B5</span>,
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="number">0xD6DF82</span>, <span class="number">0x61DD96</span>, <span class="number">0x023616</span>, <span class="number">0x9F3AC4</span>, <span class="number">0xA1A283</span>, <span class="number">0x6DED72</span>, <span class="number">0x7A8D39</span>, <span class="number">0xA9B882</span>, <span class="number">0x5C326B</span>,
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="number">0x5B2746</span>, <span class="number">0xED3400</span>, <span class="number">0x7700D2</span>, <span class="number">0x55F4FC</span>, <span class="number">0x4D5901</span>, <span class="number">0x8071E0</span>,
+<a href=#120 id=120 data-nosnippet>120</a>];
+<a href=#121 id=121 data-nosnippet>121</a>
+<a href=#122 id=122 data-nosnippet>122</a><span class="kw">const </span>PIO2: [f64; <span class="number">8</span>] = [
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="number">1.57079625129699707031e+00</span>, <span class="comment">/* 0x3FF921FB, 0x40000000 */
+<a href=#124 id=124 data-nosnippet>124</a>    </span><span class="number">7.54978941586159635335e-08</span>, <span class="comment">/* 0x3E74442D, 0x00000000 */
+<a href=#125 id=125 data-nosnippet>125</a>    </span><span class="number">5.39030252995776476554e-15</span>, <span class="comment">/* 0x3CF84698, 0x80000000 */
+<a href=#126 id=126 data-nosnippet>126</a>    </span><span class="number">3.28200341580791294123e-22</span>, <span class="comment">/* 0x3B78CC51, 0x60000000 */
+<a href=#127 id=127 data-nosnippet>127</a>    </span><span class="number">1.27065575308067607349e-29</span>, <span class="comment">/* 0x39F01B83, 0x80000000 */
+<a href=#128 id=128 data-nosnippet>128</a>    </span><span class="number">1.22933308981111328932e-36</span>, <span class="comment">/* 0x387A2520, 0x40000000 */
+<a href=#129 id=129 data-nosnippet>129</a>    </span><span class="number">2.73370053816464559624e-44</span>, <span class="comment">/* 0x36E38222, 0x80000000 */
+<a href=#130 id=130 data-nosnippet>130</a>    </span><span class="number">2.16741683877804819444e-51</span>, <span class="comment">/* 0x3569F31D, 0x00000000 */
+<a href=#131 id=131 data-nosnippet>131</a></span>];
+<a href=#132 id=132 data-nosnippet>132</a>
+<a href=#133 id=133 data-nosnippet>133</a><span class="comment">// fn rem_pio2_large(x : &amp;[f64], y : &amp;mut [f64], e0 : i32, prec : usize) -&gt; i32
+<a href=#134 id=134 data-nosnippet>134</a>//
+<a href=#135 id=135 data-nosnippet>135</a>// Input parameters:
+<a href=#136 id=136 data-nosnippet>136</a>//      x[]     The input value (must be positive) is broken into nx
+<a href=#137 id=137 data-nosnippet>137</a>//              pieces of 24-bit integers in double precision format.
+<a href=#138 id=138 data-nosnippet>138</a>//              x[i] will be the i-th 24 bit of x. The scaled exponent
+<a href=#139 id=139 data-nosnippet>139</a>//              of x[0] is given in input parameter e0 (i.e., x[0]*2^e0
+<a href=#140 id=140 data-nosnippet>140</a>//              match x's up to 24 bits.
+<a href=#141 id=141 data-nosnippet>141</a>//
+<a href=#142 id=142 data-nosnippet>142</a>//              Example of breaking a double positive z into x[0]+x[1]+x[2]:
+<a href=#143 id=143 data-nosnippet>143</a>//                      e0 = ilogb(z)-23
+<a href=#144 id=144 data-nosnippet>144</a>//                      z  = scalbn(z,-e0)
+<a href=#145 id=145 data-nosnippet>145</a>//              for i = 0,1,2
+<a href=#146 id=146 data-nosnippet>146</a>//                      x[i] = floor(z)
+<a href=#147 id=147 data-nosnippet>147</a>//                      z    = (z-x[i])*2**24
+<a href=#148 id=148 data-nosnippet>148</a>//
+<a href=#149 id=149 data-nosnippet>149</a>//      y[]     ouput result in an array of double precision numbers.
+<a href=#150 id=150 data-nosnippet>150</a>//              The dimension of y[] is:
+<a href=#151 id=151 data-nosnippet>151</a>//                      24-bit  precision       1
+<a href=#152 id=152 data-nosnippet>152</a>//                      53-bit  precision       2
+<a href=#153 id=153 data-nosnippet>153</a>//                      64-bit  precision       2
+<a href=#154 id=154 data-nosnippet>154</a>//                      113-bit precision       3
+<a href=#155 id=155 data-nosnippet>155</a>//              The actual value is the sum of them. Thus for 113-bit
+<a href=#156 id=156 data-nosnippet>156</a>//              precison, one may have to do something like:
+<a href=#157 id=157 data-nosnippet>157</a>//
+<a href=#158 id=158 data-nosnippet>158</a>//              long double t,w,r_head, r_tail;
+<a href=#159 id=159 data-nosnippet>159</a>//              t = (long double)y[2] + (long double)y[1];
+<a href=#160 id=160 data-nosnippet>160</a>//              w = (long double)y[0];
+<a href=#161 id=161 data-nosnippet>161</a>//              r_head = t+w;
+<a href=#162 id=162 data-nosnippet>162</a>//              r_tail = w - (r_head - t);
+<a href=#163 id=163 data-nosnippet>163</a>//
+<a href=#164 id=164 data-nosnippet>164</a>//      e0      The exponent of x[0]. Must be &lt;= 16360 or you need to
+<a href=#165 id=165 data-nosnippet>165</a>//              expand the ipio2 table.
+<a href=#166 id=166 data-nosnippet>166</a>//
+<a href=#167 id=167 data-nosnippet>167</a>//      prec    an integer indicating the precision:
+<a href=#168 id=168 data-nosnippet>168</a>//                      0       24  bits (single)
+<a href=#169 id=169 data-nosnippet>169</a>//                      1       53  bits (double)
+<a href=#170 id=170 data-nosnippet>170</a>//                      2       64  bits (extended)
+<a href=#171 id=171 data-nosnippet>171</a>//                      3       113 bits (quad)
+<a href=#172 id=172 data-nosnippet>172</a>//
+<a href=#173 id=173 data-nosnippet>173</a>// Here is the description of some local variables:
+<a href=#174 id=174 data-nosnippet>174</a>//
+<a href=#175 id=175 data-nosnippet>175</a>//      jk      jk+1 is the initial number of terms of ipio2[] needed
+<a href=#176 id=176 data-nosnippet>176</a>//              in the computation. The minimum and recommended value
+<a href=#177 id=177 data-nosnippet>177</a>//              for jk is 3,4,4,6 for single, double, extended, and quad.
+<a href=#178 id=178 data-nosnippet>178</a>//              jk+1 must be 2 larger than you might expect so that our
+<a href=#179 id=179 data-nosnippet>179</a>//              recomputation test works. (Up to 24 bits in the integer
+<a href=#180 id=180 data-nosnippet>180</a>//              part (the 24 bits of it that we compute) and 23 bits in
+<a href=#181 id=181 data-nosnippet>181</a>//              the fraction part may be lost to cancelation before we
+<a href=#182 id=182 data-nosnippet>182</a>//              recompute.)
+<a href=#183 id=183 data-nosnippet>183</a>//
+<a href=#184 id=184 data-nosnippet>184</a>//      jz      local integer variable indicating the number of
+<a href=#185 id=185 data-nosnippet>185</a>//              terms of ipio2[] used.
+<a href=#186 id=186 data-nosnippet>186</a>//
+<a href=#187 id=187 data-nosnippet>187</a>//      jx      nx - 1
+<a href=#188 id=188 data-nosnippet>188</a>//
+<a href=#189 id=189 data-nosnippet>189</a>//      jv      index for pointing to the suitable ipio2[] for the
+<a href=#190 id=190 data-nosnippet>190</a>//              computation. In general, we want
+<a href=#191 id=191 data-nosnippet>191</a>//                      ( 2^e0*x[0] * ipio2[jv-1]*2^(-24jv) )/8
+<a href=#192 id=192 data-nosnippet>192</a>//              is an integer. Thus
+<a href=#193 id=193 data-nosnippet>193</a>//                      e0-3-24*jv &gt;= 0 or (e0-3)/24 &gt;= jv
+<a href=#194 id=194 data-nosnippet>194</a>//              Hence jv = max(0,(e0-3)/24).
+<a href=#195 id=195 data-nosnippet>195</a>//
+<a href=#196 id=196 data-nosnippet>196</a>//      jp      jp+1 is the number of terms in PIo2[] needed, jp = jk.
+<a href=#197 id=197 data-nosnippet>197</a>//
+<a href=#198 id=198 data-nosnippet>198</a>//      q[]     double array with integral value, representing the
+<a href=#199 id=199 data-nosnippet>199</a>//              24-bits chunk of the product of x and 2/pi.
+<a href=#200 id=200 data-nosnippet>200</a>//
+<a href=#201 id=201 data-nosnippet>201</a>//      q0      the corresponding exponent of q[0]. Note that the
+<a href=#202 id=202 data-nosnippet>202</a>//              exponent for q[i] would be q0-24*i.
+<a href=#203 id=203 data-nosnippet>203</a>//
+<a href=#204 id=204 data-nosnippet>204</a>//      PIo2[]  double precision array, obtained by cutting pi/2
+<a href=#205 id=205 data-nosnippet>205</a>//              into 24 bits chunks.
+<a href=#206 id=206 data-nosnippet>206</a>//
+<a href=#207 id=207 data-nosnippet>207</a>//      f[]     ipio2[] in floating point
+<a href=#208 id=208 data-nosnippet>208</a>//
+<a href=#209 id=209 data-nosnippet>209</a>//      iq[]    integer array by breaking up q[] in 24-bits chunk.
+<a href=#210 id=210 data-nosnippet>210</a>//
+<a href=#211 id=211 data-nosnippet>211</a>//      fq[]    final product of x*(2/pi) in fq[0],..,fq[jk]
+<a href=#212 id=212 data-nosnippet>212</a>//
+<a href=#213 id=213 data-nosnippet>213</a>//      ih      integer. If &gt;0 it indicates q[] is &gt;= 0.5, hence
+<a href=#214 id=214 data-nosnippet>214</a>//              it also indicates the *sign* of the result.
+<a href=#215 id=215 data-nosnippet>215</a>
+<a href=#216 id=216 data-nosnippet>216</a></span><span class="doccomment">/// Return the last three digits of N with y = x - N*pi/2
+<a href=#217 id=217 data-nosnippet>217</a>/// so that |y| &lt; pi/2.
+<a href=#218 id=218 data-nosnippet>218</a>///
+<a href=#219 id=219 data-nosnippet>219</a>/// The method is to compute the integer (mod 8) and fraction parts of
+<a href=#220 id=220 data-nosnippet>220</a>/// (2/pi)*x without doing the full multiplication. In general we
+<a href=#221 id=221 data-nosnippet>221</a>/// skip the part of the product that are known to be a huge integer (
+<a href=#222 id=222 data-nosnippet>222</a>/// more accurately, = 0 mod 8 ). Thus the number of operations are
+<a href=#223 id=223 data-nosnippet>223</a>/// independent of the exponent of the input.
+<a href=#224 id=224 data-nosnippet>224</a></span><span class="attr">#[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
+<a href=#225 id=225 data-nosnippet>225</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>rem_pio2_large(x: <span class="kw-2">&amp;</span>[f64], y: <span class="kw-2">&amp;mut </span>[f64], e0: i32, prec: usize) -&gt; i32 {
+<a href=#226 id=226 data-nosnippet>226</a>    <span class="kw">let </span>x1p24 = f64::from_bits(<span class="number">0x4170000000000000</span>); <span class="comment">// 0x1p24 === 2 ^ 24
+<a href=#227 id=227 data-nosnippet>227</a>    </span><span class="kw">let </span>x1p_24 = f64::from_bits(<span class="number">0x3e70000000000000</span>); <span class="comment">// 0x1p_24 === 2 ^ (-24)
+<a href=#228 id=228 data-nosnippet>228</a>
+<a href=#229 id=229 data-nosnippet>229</a>    </span><span class="kw">if </span><span class="macro">cfg!</span>(target_pointer_width = <span class="string">"64"</span>) {
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="macro">debug_assert!</span>(e0 &lt;= <span class="number">16360</span>);
+<a href=#231 id=231 data-nosnippet>231</a>    }
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">let </span>nx = x.len();
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="kw">let </span><span class="kw-2">mut </span>fw: f64;
+<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">let </span><span class="kw-2">mut </span>n: i32;
+<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">let </span><span class="kw-2">mut </span>ih: i32;
+<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">let </span><span class="kw-2">mut </span>z: f64;
+<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw">let </span><span class="kw-2">mut </span>f: [f64; <span class="number">20</span>] = [<span class="number">0.</span>; <span class="number">20</span>];
+<a href=#240 id=240 data-nosnippet>240</a>    <span class="kw">let </span><span class="kw-2">mut </span>fq: [f64; <span class="number">20</span>] = [<span class="number">0.</span>; <span class="number">20</span>];
+<a href=#241 id=241 data-nosnippet>241</a>    <span class="kw">let </span><span class="kw-2">mut </span>q: [f64; <span class="number">20</span>] = [<span class="number">0.</span>; <span class="number">20</span>];
+<a href=#242 id=242 data-nosnippet>242</a>    <span class="kw">let </span><span class="kw-2">mut </span>iq: [i32; <span class="number">20</span>] = [<span class="number">0</span>; <span class="number">20</span>];
+<a href=#243 id=243 data-nosnippet>243</a>
+<a href=#244 id=244 data-nosnippet>244</a>    <span class="comment">/* initialize jk*/
+<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="kw">let </span>jk = <span class="macro">i!</span>(INIT_JK, prec);
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">let </span>jp = jk;
+<a href=#247 id=247 data-nosnippet>247</a>
+<a href=#248 id=248 data-nosnippet>248</a>    <span class="comment">/* determine jx,jv,q0, note that 3&gt;q0 */
+<a href=#249 id=249 data-nosnippet>249</a>    </span><span class="kw">let </span>jx = nx - <span class="number">1</span>;
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">let </span><span class="kw-2">mut </span>jv = <span class="macro">div!</span>(e0 - <span class="number">3</span>, <span class="number">24</span>);
+<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">if </span>jv &lt; <span class="number">0 </span>{
+<a href=#252 id=252 data-nosnippet>252</a>        jv = <span class="number">0</span>;
+<a href=#253 id=253 data-nosnippet>253</a>    }
+<a href=#254 id=254 data-nosnippet>254</a>    <span class="kw">let </span><span class="kw-2">mut </span>q0 = e0 - <span class="number">24 </span>* (jv + <span class="number">1</span>);
+<a href=#255 id=255 data-nosnippet>255</a>    <span class="kw">let </span>jv = jv <span class="kw">as </span>usize;
+<a href=#256 id=256 data-nosnippet>256</a>
+<a href=#257 id=257 data-nosnippet>257</a>    <span class="comment">/* set up f[0] to f[jx+jk] where f[jx+jk] = ipio2[jv+jk] */
+<a href=#258 id=258 data-nosnippet>258</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>j = (jv <span class="kw">as </span>i32) - (jx <span class="kw">as </span>i32);
+<a href=#259 id=259 data-nosnippet>259</a>    <span class="kw">let </span>m = jx + jk;
+<a href=#260 id=260 data-nosnippet>260</a>    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..=m {
+<a href=#261 id=261 data-nosnippet>261</a>        <span class="macro">i!</span>(f, i, =, <span class="kw">if </span>j &lt; <span class="number">0 </span>{
+<a href=#262 id=262 data-nosnippet>262</a>            <span class="number">0.
+<a href=#263 id=263 data-nosnippet>263</a>        </span>} <span class="kw">else </span>{
+<a href=#264 id=264 data-nosnippet>264</a>            <span class="macro">i!</span>(IPIO2, j <span class="kw">as </span>usize) <span class="kw">as </span>f64
+<a href=#265 id=265 data-nosnippet>265</a>        });
+<a href=#266 id=266 data-nosnippet>266</a>        j += <span class="number">1</span>;
+<a href=#267 id=267 data-nosnippet>267</a>    }
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="comment">/* compute q[0],q[1],...q[jk] */
+<a href=#270 id=270 data-nosnippet>270</a>    </span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..=jk {
+<a href=#271 id=271 data-nosnippet>271</a>        fw = <span class="number">0f64</span>;
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">for </span>j <span class="kw">in </span><span class="number">0</span>..=jx {
+<a href=#273 id=273 data-nosnippet>273</a>            fw += <span class="macro">i!</span>(x, j) * <span class="macro">i!</span>(f, jx + i - j);
+<a href=#274 id=274 data-nosnippet>274</a>        }
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="macro">i!</span>(q, i, =, fw);
+<a href=#276 id=276 data-nosnippet>276</a>    }
+<a href=#277 id=277 data-nosnippet>277</a>
+<a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">let </span><span class="kw-2">mut </span>jz = jk;
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="lifetime">'recompute</span>: <span class="kw">loop </span>{
+<a href=#281 id=281 data-nosnippet>281</a>        <span class="comment">/* distill q[] into iq[] reversingly */
+<a href=#282 id=282 data-nosnippet>282</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>i = <span class="number">0i32</span>;
+<a href=#283 id=283 data-nosnippet>283</a>        z = <span class="macro">i!</span>(q, jz);
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="kw">for </span>j <span class="kw">in </span>(<span class="number">1</span>..=jz).rev() {
+<a href=#285 id=285 data-nosnippet>285</a>            fw = (x1p_24 * z) <span class="kw">as </span>i32 <span class="kw">as </span>f64;
+<a href=#286 id=286 data-nosnippet>286</a>            <span class="macro">i!</span>(iq, i <span class="kw">as </span>usize, =, (z - x1p24 * fw) <span class="kw">as </span>i32);
+<a href=#287 id=287 data-nosnippet>287</a>            z = <span class="macro">i!</span>(q, j - <span class="number">1</span>) + fw;
+<a href=#288 id=288 data-nosnippet>288</a>            i += <span class="number">1</span>;
+<a href=#289 id=289 data-nosnippet>289</a>        }
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="comment">/* compute n */
+<a href=#292 id=292 data-nosnippet>292</a>        </span>z = scalbn(z, q0); <span class="comment">/* actual value of z */
+<a href=#293 id=293 data-nosnippet>293</a>        </span>z -= <span class="number">8.0 </span>* floor(z * <span class="number">0.125</span>); <span class="comment">/* trim off integer &gt;= 8 */
+<a href=#294 id=294 data-nosnippet>294</a>        </span>n = z <span class="kw">as </span>i32;
+<a href=#295 id=295 data-nosnippet>295</a>        z -= n <span class="kw">as </span>f64;
+<a href=#296 id=296 data-nosnippet>296</a>        ih = <span class="number">0</span>;
+<a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">if </span>q0 &gt; <span class="number">0 </span>{
+<a href=#298 id=298 data-nosnippet>298</a>            <span class="comment">/* need iq[jz-1] to determine n */
+<a href=#299 id=299 data-nosnippet>299</a>            </span>i = <span class="macro">i!</span>(iq, jz - <span class="number">1</span>) &gt;&gt; (<span class="number">24 </span>- q0);
+<a href=#300 id=300 data-nosnippet>300</a>            n += i;
+<a href=#301 id=301 data-nosnippet>301</a>            <span class="macro">i!</span>(iq, jz - <span class="number">1</span>, -=, i &lt;&lt; (<span class="number">24 </span>- q0));
+<a href=#302 id=302 data-nosnippet>302</a>            ih = <span class="macro">i!</span>(iq, jz - <span class="number">1</span>) &gt;&gt; (<span class="number">23 </span>- q0);
+<a href=#303 id=303 data-nosnippet>303</a>        } <span class="kw">else if </span>q0 == <span class="number">0 </span>{
+<a href=#304 id=304 data-nosnippet>304</a>            ih = <span class="macro">i!</span>(iq, jz - <span class="number">1</span>) &gt;&gt; <span class="number">23</span>;
+<a href=#305 id=305 data-nosnippet>305</a>        } <span class="kw">else if </span>z &gt;= <span class="number">0.5 </span>{
+<a href=#306 id=306 data-nosnippet>306</a>            ih = <span class="number">2</span>;
+<a href=#307 id=307 data-nosnippet>307</a>        }
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw">if </span>ih &gt; <span class="number">0 </span>{
+<a href=#310 id=310 data-nosnippet>310</a>            <span class="comment">/* q &gt; 0.5 */
+<a href=#311 id=311 data-nosnippet>311</a>            </span>n += <span class="number">1</span>;
+<a href=#312 id=312 data-nosnippet>312</a>            <span class="kw">let </span><span class="kw-2">mut </span>carry = <span class="number">0i32</span>;
+<a href=#313 id=313 data-nosnippet>313</a>            <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..jz {
+<a href=#314 id=314 data-nosnippet>314</a>                <span class="comment">/* compute 1-q */
+<a href=#315 id=315 data-nosnippet>315</a>                </span><span class="kw">let </span>j = <span class="macro">i!</span>(iq, i);
+<a href=#316 id=316 data-nosnippet>316</a>                <span class="kw">if </span>carry == <span class="number">0 </span>{
+<a href=#317 id=317 data-nosnippet>317</a>                    <span class="kw">if </span>j != <span class="number">0 </span>{
+<a href=#318 id=318 data-nosnippet>318</a>                        carry = <span class="number">1</span>;
+<a href=#319 id=319 data-nosnippet>319</a>                        <span class="macro">i!</span>(iq, i, =, <span class="number">0x1000000 </span>- j);
+<a href=#320 id=320 data-nosnippet>320</a>                    }
+<a href=#321 id=321 data-nosnippet>321</a>                } <span class="kw">else </span>{
+<a href=#322 id=322 data-nosnippet>322</a>                    <span class="macro">i!</span>(iq, i, =, <span class="number">0xffffff </span>- j);
+<a href=#323 id=323 data-nosnippet>323</a>                }
+<a href=#324 id=324 data-nosnippet>324</a>            }
+<a href=#325 id=325 data-nosnippet>325</a>            <span class="kw">if </span>q0 &gt; <span class="number">0 </span>{
+<a href=#326 id=326 data-nosnippet>326</a>                <span class="comment">/* rare case: chance is 1 in 12 */
+<a href=#327 id=327 data-nosnippet>327</a>                </span><span class="kw">match </span>q0 {
+<a href=#328 id=328 data-nosnippet>328</a>                    <span class="number">1 </span>=&gt; {
+<a href=#329 id=329 data-nosnippet>329</a>                        <span class="macro">i!</span>(iq, jz - <span class="number">1</span>, &amp;=, <span class="number">0x7fffff</span>);
+<a href=#330 id=330 data-nosnippet>330</a>                    }
+<a href=#331 id=331 data-nosnippet>331</a>                    <span class="number">2 </span>=&gt; {
+<a href=#332 id=332 data-nosnippet>332</a>                        <span class="macro">i!</span>(iq, jz - <span class="number">1</span>, &amp;=, <span class="number">0x3fffff</span>);
+<a href=#333 id=333 data-nosnippet>333</a>                    }
+<a href=#334 id=334 data-nosnippet>334</a>                    <span class="kw">_ </span>=&gt; {}
+<a href=#335 id=335 data-nosnippet>335</a>                }
+<a href=#336 id=336 data-nosnippet>336</a>            }
+<a href=#337 id=337 data-nosnippet>337</a>            <span class="kw">if </span>ih == <span class="number">2 </span>{
+<a href=#338 id=338 data-nosnippet>338</a>                z = <span class="number">1. </span>- z;
+<a href=#339 id=339 data-nosnippet>339</a>                <span class="kw">if </span>carry != <span class="number">0 </span>{
+<a href=#340 id=340 data-nosnippet>340</a>                    z -= scalbn(<span class="number">1.</span>, q0);
+<a href=#341 id=341 data-nosnippet>341</a>                }
+<a href=#342 id=342 data-nosnippet>342</a>            }
+<a href=#343 id=343 data-nosnippet>343</a>        }
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="comment">/* check if recomputation is needed */
+<a href=#346 id=346 data-nosnippet>346</a>        </span><span class="kw">if </span>z == <span class="number">0. </span>{
+<a href=#347 id=347 data-nosnippet>347</a>            <span class="kw">let </span><span class="kw-2">mut </span>j = <span class="number">0</span>;
+<a href=#348 id=348 data-nosnippet>348</a>            <span class="kw">for </span>i <span class="kw">in </span>(jk..=jz - <span class="number">1</span>).rev() {
+<a href=#349 id=349 data-nosnippet>349</a>                j |= <span class="macro">i!</span>(iq, i);
+<a href=#350 id=350 data-nosnippet>350</a>            }
+<a href=#351 id=351 data-nosnippet>351</a>            <span class="kw">if </span>j == <span class="number">0 </span>{
+<a href=#352 id=352 data-nosnippet>352</a>                <span class="comment">/* need recomputation */
+<a href=#353 id=353 data-nosnippet>353</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>k = <span class="number">1</span>;
+<a href=#354 id=354 data-nosnippet>354</a>                <span class="kw">while </span><span class="macro">i!</span>(iq, jk - k, ==, <span class="number">0</span>) {
+<a href=#355 id=355 data-nosnippet>355</a>                    k += <span class="number">1</span>; <span class="comment">/* k = no. of terms needed */
+<a href=#356 id=356 data-nosnippet>356</a>                </span>}
+<a href=#357 id=357 data-nosnippet>357</a>
+<a href=#358 id=358 data-nosnippet>358</a>                <span class="kw">for </span>i <span class="kw">in </span>(jz + <span class="number">1</span>)..=(jz + k) {
+<a href=#359 id=359 data-nosnippet>359</a>                    <span class="comment">/* add q[jz+1] to q[jz+k] */
+<a href=#360 id=360 data-nosnippet>360</a>                    </span><span class="macro">i!</span>(f, jx + i, =, <span class="macro">i!</span>(IPIO2, jv + i) <span class="kw">as </span>f64);
+<a href=#361 id=361 data-nosnippet>361</a>                    fw = <span class="number">0f64</span>;
+<a href=#362 id=362 data-nosnippet>362</a>                    <span class="kw">for </span>j <span class="kw">in </span><span class="number">0</span>..=jx {
+<a href=#363 id=363 data-nosnippet>363</a>                        fw += <span class="macro">i!</span>(x, j) * <span class="macro">i!</span>(f, jx + i - j);
+<a href=#364 id=364 data-nosnippet>364</a>                    }
+<a href=#365 id=365 data-nosnippet>365</a>                    <span class="macro">i!</span>(q, i, =, fw);
+<a href=#366 id=366 data-nosnippet>366</a>                }
+<a href=#367 id=367 data-nosnippet>367</a>                jz += k;
+<a href=#368 id=368 data-nosnippet>368</a>                <span class="kw">continue </span><span class="lifetime">'recompute</span>;
+<a href=#369 id=369 data-nosnippet>369</a>            }
+<a href=#370 id=370 data-nosnippet>370</a>        }
+<a href=#371 id=371 data-nosnippet>371</a>
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw">break</span>;
+<a href=#373 id=373 data-nosnippet>373</a>    }
+<a href=#374 id=374 data-nosnippet>374</a>
+<a href=#375 id=375 data-nosnippet>375</a>    <span class="comment">/* chop off zero terms */
+<a href=#376 id=376 data-nosnippet>376</a>    </span><span class="kw">if </span>z == <span class="number">0. </span>{
+<a href=#377 id=377 data-nosnippet>377</a>        jz -= <span class="number">1</span>;
+<a href=#378 id=378 data-nosnippet>378</a>        q0 -= <span class="number">24</span>;
+<a href=#379 id=379 data-nosnippet>379</a>        <span class="kw">while </span><span class="macro">i!</span>(iq, jz) == <span class="number">0 </span>{
+<a href=#380 id=380 data-nosnippet>380</a>            jz -= <span class="number">1</span>;
+<a href=#381 id=381 data-nosnippet>381</a>            q0 -= <span class="number">24</span>;
+<a href=#382 id=382 data-nosnippet>382</a>        }
+<a href=#383 id=383 data-nosnippet>383</a>    } <span class="kw">else </span>{
+<a href=#384 id=384 data-nosnippet>384</a>        <span class="comment">/* break z into 24-bit if necessary */
+<a href=#385 id=385 data-nosnippet>385</a>        </span>z = scalbn(z, -q0);
+<a href=#386 id=386 data-nosnippet>386</a>        <span class="kw">if </span>z &gt;= x1p24 {
+<a href=#387 id=387 data-nosnippet>387</a>            fw = (x1p_24 * z) <span class="kw">as </span>i32 <span class="kw">as </span>f64;
+<a href=#388 id=388 data-nosnippet>388</a>            <span class="macro">i!</span>(iq, jz, =, (z - x1p24 * fw) <span class="kw">as </span>i32);
+<a href=#389 id=389 data-nosnippet>389</a>            jz += <span class="number">1</span>;
+<a href=#390 id=390 data-nosnippet>390</a>            q0 += <span class="number">24</span>;
+<a href=#391 id=391 data-nosnippet>391</a>            <span class="macro">i!</span>(iq, jz, =, fw <span class="kw">as </span>i32);
+<a href=#392 id=392 data-nosnippet>392</a>        } <span class="kw">else </span>{
+<a href=#393 id=393 data-nosnippet>393</a>            <span class="macro">i!</span>(iq, jz, =, z <span class="kw">as </span>i32);
+<a href=#394 id=394 data-nosnippet>394</a>        }
+<a href=#395 id=395 data-nosnippet>395</a>    }
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="comment">/* convert integer "bit" chunk to floating-point value */
+<a href=#398 id=398 data-nosnippet>398</a>    </span>fw = scalbn(<span class="number">1.</span>, q0);
+<a href=#399 id=399 data-nosnippet>399</a>    <span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..=jz).rev() {
+<a href=#400 id=400 data-nosnippet>400</a>        <span class="macro">i!</span>(q, i, =, fw * (<span class="macro">i!</span>(iq, i) <span class="kw">as </span>f64));
+<a href=#401 id=401 data-nosnippet>401</a>        fw <span class="kw-2">*</span>= x1p_24;
+<a href=#402 id=402 data-nosnippet>402</a>    }
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="comment">/* compute PIo2[0,...,jp]*q[jz,...,0] */
+<a href=#405 id=405 data-nosnippet>405</a>    </span><span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..=jz).rev() {
+<a href=#406 id=406 data-nosnippet>406</a>        fw = <span class="number">0f64</span>;
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">let </span><span class="kw-2">mut </span>k = <span class="number">0</span>;
+<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw">while </span>(k &lt;= jp) &amp;&amp; (k &lt;= jz - i) {
+<a href=#409 id=409 data-nosnippet>409</a>            fw += <span class="macro">i!</span>(PIO2, k) * <span class="macro">i!</span>(q, i + k);
+<a href=#410 id=410 data-nosnippet>410</a>            k += <span class="number">1</span>;
+<a href=#411 id=411 data-nosnippet>411</a>        }
+<a href=#412 id=412 data-nosnippet>412</a>        <span class="macro">i!</span>(fq, jz - i, =, fw);
+<a href=#413 id=413 data-nosnippet>413</a>    }
+<a href=#414 id=414 data-nosnippet>414</a>
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="comment">/* compress fq[] into y[] */
+<a href=#416 id=416 data-nosnippet>416</a>    </span><span class="kw">match </span>prec {
+<a href=#417 id=417 data-nosnippet>417</a>        <span class="number">0 </span>=&gt; {
+<a href=#418 id=418 data-nosnippet>418</a>            fw = <span class="number">0f64</span>;
+<a href=#419 id=419 data-nosnippet>419</a>            <span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..=jz).rev() {
+<a href=#420 id=420 data-nosnippet>420</a>                fw += <span class="macro">i!</span>(fq, i);
+<a href=#421 id=421 data-nosnippet>421</a>            }
+<a href=#422 id=422 data-nosnippet>422</a>            <span class="macro">i!</span>(y, <span class="number">0</span>, =, <span class="kw">if </span>ih == <span class="number">0 </span>{ fw } <span class="kw">else </span>{ -fw });
+<a href=#423 id=423 data-nosnippet>423</a>        }
+<a href=#424 id=424 data-nosnippet>424</a>        <span class="number">1 </span>| <span class="number">2 </span>=&gt; {
+<a href=#425 id=425 data-nosnippet>425</a>            fw = <span class="number">0f64</span>;
+<a href=#426 id=426 data-nosnippet>426</a>            <span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..=jz).rev() {
+<a href=#427 id=427 data-nosnippet>427</a>                fw += <span class="macro">i!</span>(fq, i);
+<a href=#428 id=428 data-nosnippet>428</a>            }
+<a href=#429 id=429 data-nosnippet>429</a>            <span class="macro">i!</span>(y, <span class="number">0</span>, =, <span class="kw">if </span>ih == <span class="number">0 </span>{ fw } <span class="kw">else </span>{ -fw });
+<a href=#430 id=430 data-nosnippet>430</a>            fw = <span class="macro">i!</span>(fq, <span class="number">0</span>) - fw;
+<a href=#431 id=431 data-nosnippet>431</a>            <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..=jz {
+<a href=#432 id=432 data-nosnippet>432</a>                fw += <span class="macro">i!</span>(fq, i);
+<a href=#433 id=433 data-nosnippet>433</a>            }
+<a href=#434 id=434 data-nosnippet>434</a>            <span class="macro">i!</span>(y, <span class="number">1</span>, =, <span class="kw">if </span>ih == <span class="number">0 </span>{ fw } <span class="kw">else </span>{ -fw });
+<a href=#435 id=435 data-nosnippet>435</a>        }
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="number">3 </span>=&gt; {
+<a href=#437 id=437 data-nosnippet>437</a>            <span class="comment">/* painful */
+<a href=#438 id=438 data-nosnippet>438</a>            </span><span class="kw">for </span>i <span class="kw">in </span>(<span class="number">1</span>..=jz).rev() {
+<a href=#439 id=439 data-nosnippet>439</a>                fw = <span class="macro">i!</span>(fq, i - <span class="number">1</span>) + <span class="macro">i!</span>(fq, i);
+<a href=#440 id=440 data-nosnippet>440</a>                <span class="macro">i!</span>(fq, i, +=, <span class="macro">i!</span>(fq, i - <span class="number">1</span>) - fw);
+<a href=#441 id=441 data-nosnippet>441</a>                <span class="macro">i!</span>(fq, i - <span class="number">1</span>, =, fw);
+<a href=#442 id=442 data-nosnippet>442</a>            }
+<a href=#443 id=443 data-nosnippet>443</a>            <span class="kw">for </span>i <span class="kw">in </span>(<span class="number">2</span>..=jz).rev() {
+<a href=#444 id=444 data-nosnippet>444</a>                fw = <span class="macro">i!</span>(fq, i - <span class="number">1</span>) + <span class="macro">i!</span>(fq, i);
+<a href=#445 id=445 data-nosnippet>445</a>                <span class="macro">i!</span>(fq, i, +=, <span class="macro">i!</span>(fq, i - <span class="number">1</span>) - fw);
+<a href=#446 id=446 data-nosnippet>446</a>                <span class="macro">i!</span>(fq, i - <span class="number">1</span>, =, fw);
+<a href=#447 id=447 data-nosnippet>447</a>            }
+<a href=#448 id=448 data-nosnippet>448</a>            fw = <span class="number">0f64</span>;
+<a href=#449 id=449 data-nosnippet>449</a>            <span class="kw">for </span>i <span class="kw">in </span>(<span class="number">2</span>..=jz).rev() {
+<a href=#450 id=450 data-nosnippet>450</a>                fw += <span class="macro">i!</span>(fq, i);
+<a href=#451 id=451 data-nosnippet>451</a>            }
+<a href=#452 id=452 data-nosnippet>452</a>            <span class="kw">if </span>ih == <span class="number">0 </span>{
+<a href=#453 id=453 data-nosnippet>453</a>                <span class="macro">i!</span>(y, <span class="number">0</span>, =, <span class="macro">i!</span>(fq, <span class="number">0</span>));
+<a href=#454 id=454 data-nosnippet>454</a>                <span class="macro">i!</span>(y, <span class="number">1</span>, =, <span class="macro">i!</span>(fq, <span class="number">1</span>));
+<a href=#455 id=455 data-nosnippet>455</a>                <span class="macro">i!</span>(y, <span class="number">2</span>, =, fw);
+<a href=#456 id=456 data-nosnippet>456</a>            } <span class="kw">else </span>{
+<a href=#457 id=457 data-nosnippet>457</a>                <span class="macro">i!</span>(y, <span class="number">0</span>, =, -<span class="macro">i!</span>(fq, <span class="number">0</span>));
+<a href=#458 id=458 data-nosnippet>458</a>                <span class="macro">i!</span>(y, <span class="number">1</span>, =, -<span class="macro">i!</span>(fq, <span class="number">1</span>));
+<a href=#459 id=459 data-nosnippet>459</a>                <span class="macro">i!</span>(y, <span class="number">2</span>, =, -fw);
+<a href=#460 id=460 data-nosnippet>460</a>            }
+<a href=#461 id=461 data-nosnippet>461</a>        }
+<a href=#462 id=462 data-nosnippet>462</a>        <span class="attr">#[cfg(debug_assertions)]
+<a href=#463 id=463 data-nosnippet>463</a>        </span><span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+<a href=#464 id=464 data-nosnippet>464</a>        <span class="attr">#[cfg(not(debug_assertions))]
+<a href=#465 id=465 data-nosnippet>465</a>        </span><span class="kw">_ </span>=&gt; {}
+<a href=#466 id=466 data-nosnippet>466</a>    }
+<a href=#467 id=467 data-nosnippet>467</a>    n &amp; <span class="number">7
+<a href=#468 id=468 data-nosnippet>468</a></span>}</code></pre></div></section></main></body></html>

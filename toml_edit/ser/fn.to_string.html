@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Serialize the given data structure as a String of TOML."><title>to_string in toml_edit::ser - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="toml_edit" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../toml_edit/index.html">toml_<wbr>edit</a><span class="version">0.22.27</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">to_<wbr>string</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In toml_<wbr>edit::<wbr>ser</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">toml_edit</a>::<wbr><a href="index.html">ser</a></div><h1>Function <span class="fn">to_string</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/toml_edit/ser/mod.rs.html#69-74">Source</a> </span></div><pre class="rust item-decl"><code>pub fn to_string&lt;T&gt;(value: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, <a class="enum" href="enum.Error.html" title="enum toml_edit::ser::Error">Error</a>&gt;<div class="where">where
+    T: <a class="trait" href="../../serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Serialize the given data structure as a String of TOML.</p>
+<p>Serialization can fail if <code>T</code>’s implementation of <code>Serialize</code> decides to
+fail, if <code>T</code> contains a map with non-string keys, or if <code>T</code> attempts to
+serialize an unsupported datatype such as an enum, tuple, or tuple struct.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::Serialize;
+
+<span class="attr">#[derive(Serialize)]
+</span><span class="kw">struct </span>Config {
+    database: Database,
+}
+
+<span class="attr">#[derive(Serialize)]
+</span><span class="kw">struct </span>Database {
+    ip: String,
+    port: Vec&lt;u16&gt;,
+    connection_max: u32,
+    enabled: bool,
+}
+
+<span class="kw">let </span>config = Config {
+    database: Database {
+        ip: <span class="string">"192.168.1.1"</span>.to_string(),
+        port: <span class="macro">vec!</span>[<span class="number">8001</span>, <span class="number">8002</span>, <span class="number">8003</span>],
+        connection_max: <span class="number">5000</span>,
+        enabled: <span class="bool-val">false</span>,
+    },
+};
+
+<span class="kw">let </span>toml = toml_edit::ser::to_string(<span class="kw-2">&amp;</span>config).unwrap();
+<span class="macro">println!</span>(<span class="string">"{}"</span>, toml)</code></pre></div>
+</div></details></section></div></main></body></html>

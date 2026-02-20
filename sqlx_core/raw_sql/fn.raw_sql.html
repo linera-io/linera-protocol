@@ -1,0 +1,81 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Execute one or more statements as raw SQL, separated by semicolons (`;`)."><title>raw_sql in sqlx_core::raw_sql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sqlx_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sqlx_core/index.html">sqlx_<wbr>core</a><span class="version">0.8.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">raw_sql</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#note-singular-dml-queries-prefer-query" title="Note: singular DML queries, prefer `query()`">Note: singular DML queries, prefer <code>query()</code></a><ul><li><a href="#common-table-expressions-ctes-ie-the-with-clause" title="Common Table Expressions (CTEs: i.e The `WITH` Clause)">Common Table Expressions (CTEs: i.e The <code>WITH</code> Clause)</a></li><li><a href="#unionintersectexcept" title="`UNION`/`INTERSECT`/`EXCEPT`"><code>UNION</code>/<code>INTERSECT</code>/<code>EXCEPT</code></a></li></ul></li><li><a href="#note-query-parameters-are-not-supported" title="Note: query parameters are not supported.">Note: query parameters are not supported.</a></li><li><a href="#note-multiple-statements-and-autocommit" title="Note: multiple statements and autocommit.">Note: multiple statements and autocommit.</a><ul><li><a href="#mysql-and-mariadb-ddl-implicitly-commits" title="MySQL and MariaDB: DDL implicitly commits!">MySQL and MariaDB: DDL implicitly commits!</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In sqlx_<wbr>core::<wbr>raw_<wbr>sql</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sqlx_core</a>::<wbr><a href="index.html">raw_sql</a></div><h1>Function <span class="fn">raw_sql</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sqlx_core/raw_sql.rs.html#117-119">Source</a> </span></div><pre class="rust item-decl"><code>pub fn raw_sql(sql: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>) -&gt; <a class="struct" href="struct.RawSql.html" title="struct sqlx_core::raw_sql::RawSql">RawSql</a>&lt;'_&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Execute one or more statements as raw SQL, separated by semicolons (<code>;</code>).</p>
+<p>This interface can be used to execute both DML
+(Data Manipulation Language: <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code> and variants)
+as well as DDL (Data Definition Language: <code>CREATE TABLE</code>, <code>ALTER TABLE</code>, etc).</p>
+<p>This will not create or cache any prepared statements.</p>
+<h4 id="note-singular-dml-queries-prefer-query"><a class="doc-anchor" href="#note-singular-dml-queries-prefer-query">§</a>Note: singular DML queries, prefer <code>query()</code></h4>
+<p>This API does not use prepared statements, so usage of it is missing out on their benefits.</p>
+<p>Prefer <a href="../query/fn.query.html" title="fn sqlx_core::query::query"><code>query()</code></a> instead if executing a single query.</p>
+<p>It’s also possible to combine multiple DML queries into one for use with <code>query()</code>:</p>
+<h6 id="common-table-expressions-ctes-ie-the-with-clause"><a class="doc-anchor" href="#common-table-expressions-ctes-ie-the-with-clause">§</a>Common Table Expressions (CTEs: i.e The <code>WITH</code> Clause)</h6>
+<p>Common Table Expressions effectively allow you to define aliases for queries
+that can be referenced like temporary tables:</p>
+<div class="example-wrap"><pre class="language-sql"><code>WITH inserted_foos AS (
+    -- Note that only Postgres allows data-modifying statements in CTEs
+    INSERT INTO foo (bar_id) VALUES ($1)
+    RETURNING foo_id, bar_id
+)
+SELECT foo_id, bar_id, bar
+FROM inserted_foos
+INNER JOIN bar USING (bar_id)</code></pre></div>
+<p>It’s important to note that data modifying statements (<code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>) may
+behave differently than expected. In Postgres, all data-modifying subqueries in a <code>WITH</code>
+clause execute with the same view of the data; they <em>cannot</em> see each other’s modifications.</p>
+<p>MySQL, MariaDB and SQLite appear to <em>only</em> allow <code>SELECT</code> statements in CTEs.</p>
+<p>See the appropriate entry in your database’s manual for details:</p>
+<ul>
+<li><a href="https://dev.mysql.com/doc/refman/8.0/en/with.html">MySQL</a>
+<ul>
+<li><a href="https://mariadb.com/kb/en/with/">MariaDB</a></li>
+</ul>
+</li>
+<li><a href="https://www.postgresql.org/docs/current/queries-with.html">Postgres</a></li>
+<li><a href="https://www.sqlite.org/lang_with.html">SQLite</a></li>
+</ul>
+<h6 id="unionintersectexcept"><a class="doc-anchor" href="#unionintersectexcept">§</a><code>UNION</code>/<code>INTERSECT</code>/<code>EXCEPT</code></h6>
+<p>You can also use various set-theory operations on queries,
+including <code>UNION ALL</code> which simply concatenates their results.</p>
+<p>See the appropriate entry in your database’s manual for details:</p>
+<ul>
+<li><a href="https://dev.mysql.com/doc/refman/8.0/en/set-operations.html">MySQL</a>
+<ul>
+<li><a href="https://mariadb.com/kb/en/joins-subqueries/">MariaDB</a></li>
+</ul>
+</li>
+<li><a href="https://www.postgresql.org/docs/current/queries-union.html">Postgres</a></li>
+<li><a href="https://www.sqlite.org/lang_select.html#compound_select_statements">SQLite</a></li>
+</ul>
+<h4 id="note-query-parameters-are-not-supported"><a class="doc-anchor" href="#note-query-parameters-are-not-supported">§</a>Note: query parameters are not supported.</h4>
+<p>Query parameters require the use of prepared statements which this API does support.</p>
+<p>If you require dynamic input data in your SQL, you can use <code>format!()</code> but <strong>be very careful
+doing this with user input</strong>. SQLx does <strong>not</strong> provide escaping or sanitization for inserting
+dynamic input into queries this way.</p>
+<p>See <a href="../query/fn.query.html" title="fn sqlx_core::query::query"><code>query()</code></a> for details.</p>
+<h4 id="note-multiple-statements-and-autocommit"><a class="doc-anchor" href="#note-multiple-statements-and-autocommit">§</a>Note: multiple statements and autocommit.</h4>
+<p>By default, when you use this API to execute a SQL string containing multiple statements
+separated by semicolons (<code>;</code>), the database server will treat those statements as all executing
+within the same transaction block, i.e. wrapped in <code>BEGIN</code> and <code>COMMIT</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>conn: sqlx::PgConnection = <span class="macro">todo!</span>(<span class="string">"e.g. PgConnection::connect(&lt;DATABASE URL&gt;)"</span>);
+
+sqlx::raw_sql(
+    <span class="comment">// Imagine we're moving data from one table to another:
+    // Implicit `BEGIN;`
+    </span><span class="string">"UPDATE foo SET bar = foobar.bar FROM foobar WHERE foobar.foo_id = foo.id;\
+     DELETE FROM foobar;"
+    </span><span class="comment">// Implicit `COMMIT;`
+</span>)
+   .execute(<span class="kw-2">&amp;mut </span>conn)
+   .<span class="kw">await</span><span class="question-mark">?</span>;
+</code></pre></div>
+<p>If one statement triggers an error, the whole script aborts and rolls back.
+You can include explicit <code>BEGIN</code> and <code>COMMIT</code> statements in the SQL string
+to designate units that can be committed or rolled back piecemeal.</p>
+<p>This also allows for a rudimentary form of pipelining as the whole SQL string is sent in one go.</p>
+<h6 id="mysql-and-mariadb-ddl-implicitly-commits"><a class="doc-anchor" href="#mysql-and-mariadb-ddl-implicitly-commits">§</a>MySQL and MariaDB: DDL implicitly commits!</h6>
+<p>MySQL and MariaDB do not support DDL in transactions. Instead, any active transaction is
+immediately and implicitly committed by the database server when executing a DDL statement.
+Beware of this behavior.</p>
+<p>See <a href="https://dev.mysql.com/doc/refman/8.0/en/implicit-commit.html">MySQL manual, section 13.3.3: Statements That Cause an Implicit Commit</a> for details.
+See also: <a href="https://mariadb.com/kb/en/sql-statements-that-cause-an-implicit-commit/">MariaDB manual: SQL statements That Cause an Implicit Commit</a>.</p>
+</div></details></section></div></main></body></html>

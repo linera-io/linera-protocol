@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["any_file","has_extension"],"mod":["clapers"],"struct":["CachedInput","ClioPath","Input","InputPath","Output","OutputPath"],"type":["Result"]};

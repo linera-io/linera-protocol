@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["LocalSubjectAccessReview","NonResourceAttributes","NonResourceRule","ResourceAttributes","ResourceRule","SelfSubjectAccessReview","SelfSubjectAccessReviewSpec","SelfSubjectRulesReview","SelfSubjectRulesReviewSpec","SubjectAccessReview","SubjectAccessReviewSpec","SubjectAccessReviewStatus","SubjectRulesReviewStatus"]};

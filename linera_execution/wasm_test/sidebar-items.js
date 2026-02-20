@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_example_application","get_example_bytecode_paths"]};

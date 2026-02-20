@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ServerCommand"],"fn":["generate_shard_configs","log_file_name_for","main","make_server_config","otlp_exporter_endpoint_for","run"],"static":["ALLOC","malloc_conf"],"struct":["ServerContext","ServerOptions","ValidatorOptions"]};

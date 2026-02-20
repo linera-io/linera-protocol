@@ -1,0 +1,331 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Discord"><title>jemalloc_pprof - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="jemalloc_pprof" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../jemalloc_pprof/index.html">jemalloc_<wbr>pprof</a><span class="version">0.8.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#rust-jemalloc-pprof" title="rust-jemalloc-pprof">rust-jemalloc-pprof</a><ul><li><a href="#requirements" title="Requirements">Requirements</a></li><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#use-with-polar-signals-cloud" title="Use with Polar Signals Cloud">Use with Polar Signals Cloud</a></li><li><a href="#use-from-c-or-c" title="Use from C or C++">Use from C or C++</a></li></ul></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#statics" title="Statics">Statics</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>jemalloc_pprof</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/jemalloc_pprof/lib.rs.html#16-192">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://discord.gg/Qgh4c9tRCE"><img src="https://img.shields.io/discord/813669360513056790?label=Discord" alt="Discord" /></a></p>
+<h2 id="rust-jemalloc-pprof"><a class="doc-anchor" href="#rust-jemalloc-pprof">§</a>rust-jemalloc-pprof</h2>
+<p>A rust library to collect and convert Heap profiling data from the <a href="https://jemalloc.net/">jemalloc</a> allocator and convert it to the <a href="https://github.com/google/pprof/tree/main/proto">pprof</a> format.</p>
+<p>To understand how to use this together with Polar Signals Cloud to continuously collect profiling data, refer to the <a href="#use-with-polar-signals-cloud">Use with Polar Signals Cloud</a> section.</p>
+<p>This code was originally developed as part of <a href="https://github.com/MaterializeInc/materialize">Materialize</a>, and then in a collaboration extracted into this standalone library.</p>
+<h3 id="requirements"><a class="doc-anchor" href="#requirements">§</a>Requirements</h3>
+<p>Currently, this library only supports Linux.</p>
+<p>Furthermore, you must be able to switch your allocator to <code>jemalloc</code>.
+If you need to continue using the default system allocator for any reason,
+this library will not be useful.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>Internally this library uses <a href="https://docs.rs/tikv-jemalloc-ctl/latest/tikv_jemalloc_ctl/"><code>tikv-jemalloc-ctl</code></a> to interact with jemalloc, so to use it, you must use the jemalloc allocator via the <a href="https://crates.io/crates/tikv-jemallocator"><code>tikv-jemallocator</code></a> library.</p>
+<p>When adding <code>tikv-jemallocator</code> as a dependency, make sure to enable the <code>profiling</code> feature.</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+[target.&#39;cfg(not(target_env = &quot;msvc&quot;))&#39;.dependencies]
+tikv-jemallocator = { version = &quot;0.6.0&quot;, features = [&quot;profiling&quot;, &quot;unprefixed_malloc_on_supported_platforms&quot;] }</code></pre></div>
+<blockquote>
+<p>Note: We also recommend enabling the <code>unprefixed_malloc_on_supported_platforms</code> feature, not strictly necessary, but will influence the rest of the usage.</p>
+</blockquote>
+<p>Then configure the global allocator and configure it with profiling enabled.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(not(target_env = <span class="string">"msvc"</span>))]
+#[global_allocator]
+</span><span class="kw">static </span>ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+<span class="attr">#[allow(non_upper_case_globals)]
+#[export_name = <span class="string">"malloc_conf"</span>]
+</span><span class="kw">pub static </span>malloc_conf: <span class="kw-2">&amp;</span>[u8] = <span class="string">b"prof:true,prof_active:true,lg_prof_sample:19\0"</span>;</code></pre></div>
+<blockquote>
+<p>If you do not use the <code>unprefixed_malloc_on_supported_platforms</code> feature, you have to name it <code>_rjem_malloc_conf</code> it instead of <code>malloc_conf</code>.</p>
+</blockquote>
+<p>2^19 bytes (512KiB) is the default configuration for the sampling period, but we recommend being explicit. To understand more about jemalloc sampling check out the <a href="https://github.com/jemalloc/jemalloc/blob/dev/doc_internal/PROFILING_INTERNALS.md#sampling">detailed docs</a> on it.</p>
+<p>We recommend serving the profiling data on an HTTP server such as <a href="https://github.com/tokio-rs/axum">axum</a>, that could look like this, and we’ll intentionally include a 4mb allocation to trigger sampling.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>v = <span class="macro">vec!</span>[];
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">1000000 </span>{
+        v.push(i);
+    }
+
+    <span class="kw">let </span>app = axum::Router::new()
+        .route(<span class="string">"/debug/pprof/allocs"</span>, axum::routing::get(handle_get_heap));
+
+    <span class="comment">// run our app with hyper, listening globally on port 3000
+    </span><span class="kw">let </span>listener = tokio::net::TcpListener::bind(<span class="string">"0.0.0.0:3000"</span>).<span class="kw">await</span>.unwrap();
+    axum::serve(listener, app).<span class="kw">await</span>.unwrap();
+}
+
+<span class="kw">use </span>axum::http::StatusCode;
+<span class="kw">use </span>axum::response::IntoResponse;
+
+<span class="kw">pub async fn </span>handle_get_heap() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, (StatusCode, String)&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>prof_ctl = jemalloc_pprof::PROF_CTL.as_ref().unwrap().lock().<span class="kw">await</span>;
+    require_profiling_activated(<span class="kw-2">&amp;</span>prof_ctl)<span class="question-mark">?</span>;
+    <span class="kw">let </span>pprof = prof_ctl
+        .dump_pprof()
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(pprof)
+}
+
+<span class="doccomment">/// Checks whether jemalloc profiling is activated an returns an error response if not.
+</span><span class="kw">fn </span>require_profiling_activated(prof_ctl: <span class="kw-2">&amp;</span>jemalloc_pprof::JemallocProfCtl) -&gt; <span class="prelude-ty">Result</span>&lt;(), (StatusCode, String)&gt; {
+    <span class="kw">if </span>prof_ctl.activated() {
+        <span class="prelude-val">Ok</span>(())
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Err</span>((axum::http::StatusCode::FORBIDDEN, <span class="string">"heap profiling not activated"</span>.into()))
+    }
+}</code></pre></div>
+<p>Then running the application, we can capture a profile and view it the pprof toolchain.</p>
+<div class="example-wrap"><pre class="language-shell"><code>curl localhost:3000/debug/pprof/allocs &gt; heap.pb.gz
+pprof -http=:8080 heap.pb.gz</code></pre></div>
+<blockquote>
+<p>Note: if symbolization is not enabled, either <code>addr2line</code> or <code>llvm-addr2line</code> needs to be available in the path and pprof needs to be able to discover the respective debuginfos.</p>
+</blockquote>
+<p>To generate symbolized profiles, enable the <code>symbolize</code> crate feature:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+jemalloc_pprof = { version = &quot;0.7&quot;, features = [&quot;symbolize&quot;] }</code></pre></div><h4 id="flamegraph-svgs"><a class="doc-anchor" href="#flamegraph-svgs">§</a>Flamegraph SVGs</h4>
+<p>The <code>flamegraph</code> crate feature can also be enabled to generate interactive flamegraph SVGs directly
+(implies the <code>symbolize</code> feature):</p>
+<div class="example-wrap"><pre class="language-toml"><code>jemalloc_pprof = { version = &quot;0.7&quot;, features = [&quot;flamegraph&quot;] }</code></pre></div>
+<p>We can then adjust the example above to also emit a flamegraph SVG:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>app = axum::Router::new()
+        .route(<span class="string">"/debug/pprof/allocs"</span>, axum::routing::get(handle_get_heap))
+        .route(<span class="string">"/debug/pprof/allocs/flamegraph"</span>, axum::routing::get(handle_get_heap_flamegraph));
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">pub async fn </span>handle_get_heap_flamegraph() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, (StatusCode, String)&gt; {
+    <span class="kw">use </span>axum::body::Body;
+    <span class="kw">use </span>axum::http::header::CONTENT_TYPE;
+    <span class="kw">use </span>axum::response::Response;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>prof_ctl = jemalloc_pprof::PROF_CTL.as_ref().unwrap().lock().<span class="kw">await</span>;
+    require_profiling_activated(<span class="kw-2">&amp;</span>prof_ctl)<span class="question-mark">?</span>;
+    <span class="kw">let </span>svg = prof_ctl
+        .dump_flamegraph()
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))<span class="question-mark">?</span>;
+    Response::builder()
+        .header(CONTENT_TYPE, <span class="string">"image/svg+xml"</span>)
+        .body(Body::from(svg))
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))
+}</code></pre></div>
+<h4 id="writeable-temporary-directory"><a class="doc-anchor" href="#writeable-temporary-directory">§</a>Writeable temporary directory</h4>
+<p>The way this library works is that it creates a new temporary file (in the <a href="https://docs.rs/tempfile/latest/tempfile/struct.NamedTempFile.html">platform-specific default temp dir</a>), and instructs jemalloc to dump a profile into that file. Therefore the platform respective temporary directory must be writeable by the process. After reading and converting it to pprof, the file is cleaned up via the destructor. A single profile tends to be only a few kilobytes large, so it doesn’t require a significant space, but it’s non-zero and needs to be writeable.</p>
+<h3 id="use-with-polar-signals-cloud"><a class="doc-anchor" href="#use-with-polar-signals-cloud">§</a>Use with Polar Signals Cloud</h3>
+<p>Polar Signals Cloud allows continuously collecting heap profiling data, so you always have the right profiling data available, and don’t need to search for the right data, you already have it!</p>
+<p>Polar Signals Cloud supports anything in the pprof format, so a process exposing the above explained pprof endpoint, can then be scraped as elaborated in the <a href="https://www.polarsignals.com/docs/setup-scraper">scraping docs</a>.</p>
+<h3 id="use-from-c-or-c"><a class="doc-anchor" href="#use-from-c-or-c">§</a>Use from C or C++</h3>
+<p>The functionality to dump the current jemalloc heap profile in pprof
+format is exposed to C and C++ (or any other language that can use
+jemalloc and can link against libraries via the C ABI). This
+functionality is exposed via the <code>capi</code> (C API) package.</p>
+<h4 id="building"><a class="doc-anchor" href="#building">§</a>Building</h4>
+<p>The following prerequisites are necessary to build the C API package:</p>
+<ul>
+<li>Working Rust and C toolchains. The former can be installed by
+following the instructions at <a href="https://rustup.rs">https://rustup.rs</a> . The latter can be
+installed via the distribution’s package manager. For example, on
+Ubuntu, run <code>sudo apt install build-essential</code>.</li>
+<li><code>jemalloc</code> and its development headers. For example, on Ubuntu, run
+<code>sudo apt install libjemalloc-dev</code>.</li>
+</ul>
+<p>Once the prerequisites are installed, the library can be built by
+running <code>make capi</code>. There are three files of
+interest:</p>
+<ul>
+<li>The library itself, produced at
+<code>target/release/libjemalloc_pprof.so</code></li>
+<li>A header file, at <code>capi/include/jemalloc_pprof.h</code></li>
+<li>A manual page, at <code>capi/man/jemalloc_pprof.3</code>.</li>
+</ul>
+<p>The procedure for installing and using these files depends on your
+distribution and build system.</p>
+<h4 id="use"><a class="doc-anchor" href="#use">§</a>Use</h4>
+<p>Ensure that your binaries link against both jemalloc and
+jemalloc_pprof by passing the linker flags <code>-ljemalloc -ljemalloc_pprof</code>. The procedure for ensuring that these flags are
+passed depends on your build system and is currently outside the scope
+of this document.</p>
+<p>Once that is done, profiling can be enabled either by setting the
+<code>MALLOC_CONF</code> variable or by defining a symbol called <code>malloc_conf</code> in
+the binary. For example:</p>
+<div class="example-wrap"><pre class="language-shell"><code>export MALLOC_CONF=&quot;prof:true,prof_active:true,lg_prof_sample:19&quot;</code></pre></div>
+<p>See the <code>jemalloc</code> man page for more details. When profiling is
+enabled, a profile may be dumped in pprof format via the
+<code>dump_jemalloc_pprof</code> function.</p>
+<h4 id="example"><a class="doc-anchor" href="#example">§</a>Example</h4>
+<p>This program allocates between 1 and 10 MiB every 100 milliseconds,
+and dumps a profile to the file <code>my_profile</code> every 2 seconds.</p>
+<div class="example-wrap"><pre class="language-c"><code>#include &lt;assert.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;stdio.h&gt;
+
+#include &lt;jemalloc_pprof.h&gt;
+
+void
+a()
+{
+        size_t sz = 1 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void
+b()
+{
+        size_t sz = 2 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void
+c()
+{
+        size_t sz = 3 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void
+d()
+{
+        size_t sz = 4 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void
+e()
+{
+        size_t sz = 5 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void
+f()
+{
+        size_t sz = 6 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void
+g()
+{
+        size_t sz = 7 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void
+h()
+{
+        size_t sz = 8 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void
+j()
+{
+        size_t sz = 9 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void
+k()
+{
+        size_t sz = 10 * 1024 * 1024;
+        char *x = malloc(sz);
+        for (size_t i = 0; i &lt; sz; ++i) {
+                x[i] = &#39;\0&#39;;
+        }
+}
+
+void *
+repeatedly_dump(void *ignored)
+{
+        char *buf;
+        size_t len = 0;
+        int result;
+        for (;;) {
+                sleep(2);
+                result = dump_jemalloc_pprof(&amp;buf, &amp;len);
+                if (result != JP_SUCCESS) {
+                        fprintf(stderr, &quot;errno: %d\n&quot;, errno);
+                        continue;
+                }
+                if (buf) {
+                        FILE *file = fopen(&quot;my_profile&quot;, &quot;w&quot;);
+                        assert(file);
+
+                        fwrite(buf, sizeof(char), len, file);
+                        fclose(file);
+                        printf(&quot;dumped pprof of size %lu\n&quot;, len);
+                        free(buf);
+                }
+        }
+        return NULL;
+}
+
+int
+main()
+{
+        pthread_t tid;
+        int result;
+
+        result = pthread_create(&amp;tid, NULL, repeatedly_dump, NULL);
+        assert(!result);
+        for (;;) {
+                usleep(100000);
+                switch (rand() % 10) {
+                case 0:
+                        a();
+                        break;
+                case 1:
+                        b();
+                        break;
+                case 2:
+                        c();
+                        break;
+                case 3:
+                        d();
+                        break;
+                case 4:
+                        e();
+                        break;
+                case 5:
+                        f();
+                        break;
+                case 6:
+                        g();
+                        break;
+                case 7:
+                        h();
+                        break;
+                case 8:
+                        j();
+                        break;
+                case 9:
+                        k();
+                        break;
+                }
+        }
+}</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.FlamegraphOptions.html" title="struct jemalloc_pprof::FlamegraphOptions">Flamegraph<wbr>Options</a></dt><dd>Configure the flame graph.</dd><dt><a class="struct" href="struct.JemallocProfCtl.html" title="struct jemalloc_pprof::JemallocProfCtl">Jemalloc<wbr>Prof<wbr>Ctl</a></dt><dd>A handle to control jemalloc profiling.</dd><dt><a class="struct" href="struct.JemallocProfMetadata.html" title="struct jemalloc_pprof::JemallocProfMetadata">Jemalloc<wbr>Prof<wbr>Metadata</a></dt><dd>Metadata about a jemalloc heap profiler.</dd></dl><h2 id="statics" class="section-header">Statics<a href="#statics" class="anchor">§</a></h2><dl class="item-table"><dt><a class="static" href="static.PROF_CTL.html" title="static jemalloc_pprof::PROF_CTL">PROF_<wbr>CTL</a></dt><dd>Per-process singleton for controlling jemalloc profiling.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.activate_jemalloc_profiling.html" title="fn jemalloc_pprof::activate_jemalloc_profiling">activate_<wbr>jemalloc_<wbr>profiling</a></dt><dd>Activate jemalloc profiling.</dd><dt><a class="fn" href="fn.deactivate_jemalloc_profiling.html" title="fn jemalloc_pprof::deactivate_jemalloc_profiling">deactivate_<wbr>jemalloc_<wbr>profiling</a></dt><dd>Deactivate jemalloc profiling.</dd></dl></section></div></main></body></html>

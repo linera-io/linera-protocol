@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ReadGuardedView"],"struct":["ByteCollectionView","CollectionView","CustomCollectionView"],"type":["HashedByteCollectionView","HashedCollectionView","HashedCustomCollectionView","HistoricallyHashedByteCollectionView","HistoricallyHashedCollectionView","HistoricallyHashedCustomCollectionView"]};

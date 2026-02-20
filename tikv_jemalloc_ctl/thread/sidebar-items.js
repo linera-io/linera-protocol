@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ThreadLocal","allocatedp","allocatedp_mib","deallocatedp","deallocatedp_mib"]};
