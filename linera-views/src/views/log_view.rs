@@ -58,7 +58,7 @@ pub struct LogView<C, T> {
     /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
     /// The number of entries persisted in storage.
-    stored_count: u64,
+    stored_count: u32,
     /// New values not yet persisted to storage.
     new_values: Vec<T>,
 }
@@ -120,9 +120,9 @@ where
                 batch.put_key_value(key, value)?;
                 count += 1;
             }
-            let count_u64 = self.stored_count + self.new_values.len() as u64;
+            let count_u32 = self.stored_count + self.new_values.len() as u32;
             let key = self.context.base_key().base_tag(KeyTag::Count as u8);
-            batch.put_key_value(key, &count_u64)?;
+            batch.put_key_value(key, &count_u32)?;
         }
         Ok(delete_view)
     }
@@ -131,7 +131,7 @@ where
         if self.delete_storage_first {
             self.stored_count = 0;
         }
-        self.stored_count += self.new_values.len() as u64;
+        self.stored_count += self.new_values.len() as u32;
         self.new_values.clear();
         self.delete_storage_first = false;
     }

@@ -58,9 +58,9 @@ pub struct QueueView<C, T> {
     context: C,
     /// The range of indices for entries persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
-    stored_indices: Range<u64>,
+    stored_indices: Range<u32>,
     /// The number of entries to delete from the front.
-    front_delete_count: u64,
+    front_delete_count: u32,
     /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
     /// New values added to the back, not yet persisted to storage.
@@ -162,7 +162,7 @@ where
             self.stored_indices.start += self.front_delete_count;
         }
         if !self.new_back_values.is_empty() {
-            self.stored_indices.end += self.new_back_values.len() as u64;
+            self.stored_indices.end += self.new_back_values.len() as u32;
             self.new_back_values.clear();
         }
         self.front_delete_count = 0;
@@ -192,7 +192,7 @@ where
 }
 
 impl<C, T> QueueView<C, T> {
-    fn stored_count(&self) -> u64 {
+    fn stored_count(&self) -> u32 {
         if self.delete_storage_first {
             0
         } else {
@@ -206,7 +206,7 @@ where
     C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
-    async fn get(&self, index: u64) -> Result<Option<T>, ViewError> {
+    async fn get(&self, index: u32) -> Result<Option<T>, ViewError> {
         let key = self
             .context
             .base_key()
@@ -317,7 +317,7 @@ where
         self.context.extra()
     }
 
-    async fn read_context(&self, range: Range<u64>) -> Result<Vec<T>, ViewError> {
+    async fn read_context(&self, range: Range<u32>) -> Result<Vec<T>, ViewError> {
         let count = (range.end - range.start) as usize;
         let mut keys = Vec::with_capacity(count);
         for index in range {
@@ -363,8 +363,8 @@ where
         if !self.delete_storage_first {
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
-            if count as u64 <= stored_remainder {
-                values.extend(self.read_context(start..(start + count as u64)).await?);
+            if count as u32 <= stored_remainder {
+                values.extend(self.read_context(start..(start + count as u32)).await?);
             } else {
                 values.extend(self.read_context(start..self.stored_indices.end).await?);
                 values.extend(
@@ -408,7 +408,7 @@ where
                     .cloned(),
             );
         } else {
-            let start = self.stored_indices.end + new_back_len as u64 - count as u64;
+            let start = self.stored_indices.end + new_back_len as u32 - count as u32;
             values.extend(self.read_context(start..self.stored_indices.end).await?);
             values.extend(self.new_back_values.iter().cloned());
         }
