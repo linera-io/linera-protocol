@@ -23,6 +23,7 @@ use linera_base::{
 use linera_core::{
     client::ChainClient, data_types::ClientOutcome, node::NotificationStream, worker::Reason,
 };
+use linera_storage::{Clock as _, Storage as _};
 use serde_json::json;
 use tokio::{io::AsyncWriteExt, process::Command, select, sync::mpsc};
 use tokio_util::sync::CancellationToken;
@@ -56,7 +57,6 @@ struct BatchResult {
 pub struct TaskProcessor<Env: linera_core::Environment> {
     chain_id: ChainId,
     application_ids: Vec<ApplicationId>,
-    cursors: BTreeMap<ApplicationId, String>,
     chain_client: ChainClient<Env>,
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
@@ -86,7 +86,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         Self {
             chain_id,
             application_ids,
-            cursors: BTreeMap::new(),
             chain_client,
             cancellation_token,
             notifications,
@@ -100,11 +99,17 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         }
     }
 
+    fn current_time(&self) -> Timestamp {
+        self.chain_client.storage_client().clock().current_time()
+    }
+
     /// Runs the task processor until the cancellation token is triggered.
     pub async fn run(mut self) {
         info!("Watching for notifications for chain {}", self.chain_id);
         self.process_actions(self.application_ids.clone()).await;
         loop {
+            let storage = self.chain_client.storage_client().clone();
+            let next_deadline = self.deadlines.peek().map(|Reverse((ts, _))| *ts);
             select! {
                 Some(notification) = self.notifications.next() => {
                     if let Reason::NewBlock { .. } = notification.reason {
@@ -112,7 +117,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                         self.process_actions(self.application_ids.clone()).await;
                     }
                 }
-                _ = tokio::time::sleep(Self::duration_until_next_deadline(&self.deadlines)) => {
+                _ = async {
+                    match next_deadline {
+                        Some(ts) => storage.clock().sleep_until(ts).await,
+                        None => future::pending().await,
+                    }
+                } => {
                     debug!("Processing event");
                     let application_ids = self.process_events();
                     self.process_actions(application_ids).await;
@@ -140,14 +150,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         debug!("Notification stream ended.");
     }
 
-    fn duration_until_next_deadline(deadlines: &BinaryHeap<Deadline>) -> tokio::time::Duration {
-        deadlines
-            .peek()
-            .map_or(tokio::time::Duration::MAX, |Reverse((x, _))| {
-                x.delta_since(Timestamp::now()).as_duration()
-            })
-    }
-
     async fn apply_update(&mut self, update: Update) {
         info!(
             "Applying update for chain {}: {:?}",
@@ -157,8 +159,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         let new_app_set: BTreeSet<_> = update.application_ids.iter().cloned().collect();
         let old_app_set: BTreeSet<_> = self.application_ids.iter().cloned().collect();
 
-        self.cursors
-            .retain(|app_id, _| new_app_set.contains(app_id));
         self.in_flight_apps
             .retain(|app_id| new_app_set.contains(app_id));
 
@@ -178,7 +178,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     }
 
     fn process_events(&mut self) -> Vec<ApplicationId> {
-        let now = Timestamp::now();
+        let now = self.current_time();
         let mut application_ids = Vec::new();
         while let Some(deadline) = self.deadlines.pop() {
             if let Reverse((_, Some(id))) = deadline {
@@ -201,9 +201,8 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 continue;
             }
             debug!("Processing actions for {application_id}");
-            let now = Timestamp::now();
-            let app_cursor = self.cursors.get(&application_id).cloned();
-            let actions = match self.query_actions(application_id, app_cursor, now).await {
+            let now = self.current_time();
+            let actions = match self.query_actions(application_id, now).await {
                 Ok(actions) => actions,
                 Err(error) => {
                     error!("Error reading application actions: {error}");
@@ -219,12 +218,10 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 self.deadlines
                     .push(Reverse((timestamp, Some(application_id))));
             }
-            if let Some(cursor) = actions.set_cursor {
-                self.cursors.insert(application_id, cursor);
-            }
             if !actions.execute_tasks.is_empty() {
                 self.in_flight_apps.insert(application_id);
                 let chain_client = self.chain_client.clone();
+                let clock = self.chain_client.storage_client().clock().clone();
                 let batch_sender = self.batch_sender.clone();
                 let retry_delay = self.retry_delay;
                 let operators = self.operators.clone();
@@ -258,6 +255,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                                     application_id,
                                     &outcome,
                                     retry_delay,
+                                    &clock,
                                 )
                                 .await
                                 {
@@ -267,12 +265,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                             }
                             Ok(Err(error)) => {
                                 error!(%application_id, %error, "Error executing task");
-                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
+                                retry_at = Some(clock.current_time().saturating_add(retry_delay));
                                 break;
                             }
                             Err(error) => {
                                 error!(%application_id, %error, "Task panicked");
-                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
+                                retry_at = Some(clock.current_time().saturating_add(retry_delay));
                                 break;
                             }
                         }
@@ -328,14 +326,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     async fn query_actions(
         &mut self,
         application_id: ApplicationId,
-        cursor: Option<String>,
         now: Timestamp,
     ) -> Result<ProcessorActions, anyhow::Error> {
-        let query = format!(
-            "query {{ nextActions(cursor: {}, now: {}) }}",
-            cursor.to_value(),
-            now.to_value(),
-        );
+        let query = format!("query {{ nextActions(now: {}) }}", now.to_value(),);
         let bytes = serde_json::to_vec(&json!({"query": query}))?;
         let query = linera_execution::Query::User {
             application_id,
@@ -361,9 +354,10 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         application_id: ApplicationId,
         task_outcome: &TaskOutcome,
         retry_delay: TimeDelta,
+        clock: &<Env::Storage as linera_storage::Storage>::Clock,
     ) -> Result<(), Timestamp> {
         info!("Submitting task outcome for {application_id}: {task_outcome:?}");
-        let retry_with_delay = || Timestamp::now().saturating_add(retry_delay);
+        let retry_with_delay = || clock.current_time().saturating_add(retry_delay);
         let query = format!(
             "query {{ processTaskOutcome(outcome: {{ operator: {}, output: {} }}) }}",
             task_outcome.operator.to_value(),
@@ -402,10 +396,140 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 }
                 ClientOutcome::Conflict(_) => {
                     debug!(%application_id, "Block conflict, retrying immediately");
-                    return Err(Timestamp::now());
+                    return Err(clock.current_time());
                 }
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::BTreeMap, fs};
+
+    use async_graphql::Request;
+    use linera_base::{
+        crypto::InMemorySigner,
+        data_types::{Amount, Bytecode, TimeDelta},
+        vm::VmRuntime,
+    };
+    use linera_core::test_utils::{
+        ClientOutcomeResultExt as _, MemoryStorageBuilder, StorageBuilder as _, TestBuilder,
+    };
+    use linera_execution::{wasm_test, Operation, ResourceControlPolicy, WasmRuntime};
+    use task_processor::TaskProcessorAbi;
+    use tokio_util::sync::CancellationToken;
+
+    use super::*;
+
+    /// Verifies that the task processor correctly retries tasks after the first attempt fails.
+    /// The retry re-queries all pending tasks from on-chain state and succeeds.
+    #[cfg(feature = "wasmer")]
+    #[test_log::test(tokio::test(flavor = "multi_thread"))]
+    async fn test_task_processor_retry() {
+        let storage_builder = MemoryStorageBuilder::with_wasm_runtime(WasmRuntime::default());
+        let clock = storage_builder.clock().clone();
+        let keys = InMemorySigner::new(None);
+        let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+            .await
+            .unwrap()
+            .with_policy(ResourceControlPolicy::all_categories());
+        let chain_client = builder
+            .add_root_chain(0, Amount::from_tokens(10))
+            .await
+            .unwrap();
+
+        // Publish the task-processor example bytecode.
+        let (contract_path, service_path) =
+            wasm_test::get_example_bytecode_paths("task-processor").unwrap();
+        let contract_bytecode = Bytecode::load_from_file(contract_path).await.unwrap();
+        let service_bytecode = Bytecode::load_from_file(service_path).await.unwrap();
+        let (module_id, _) = chain_client
+            .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
+            .await
+            .unwrap_ok_committed();
+        let module_id = module_id.with_abi::<TaskProcessorAbi, (), ()>();
+
+        // Create the application.
+        let (app_id, _) = chain_client
+            .create_application(module_id, &(), &(), vec![])
+            .await
+            .unwrap_ok_committed();
+
+        // Submit a task via an operation.
+        let request_op = task_processor::TaskProcessorOperation::RequestTask {
+            operator: "echo".into(),
+            input: "hello".into(),
+        };
+        chain_client
+            .execute_operation(Operation::user(app_id, &request_op).unwrap())
+            .await
+            .unwrap_ok_committed();
+
+        // Create a fail-once operator script in a temp directory.
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let script_path = tmp_dir.path().join("echo");
+        let flag_path = tmp_dir.path().join(".has_run");
+        let script_content = format!(
+            "#!/bin/sh\n\
+            FLAG=\"{}\"\n\
+            if [ -f \"$FLAG\" ]; then cat; else touch \"$FLAG\"; exit 1; fi\n",
+            flag_path.display()
+        );
+        fs::write(&script_path, script_content).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let mut operators = BTreeMap::new();
+        operators.insert("echo".to_string(), script_path);
+
+        let retry_delay = TimeDelta::from_secs(10);
+        let cancellation_token = CancellationToken::new();
+
+        let processor = TaskProcessor::new(
+            chain_client.chain_id(),
+            vec![app_id.forget_abi()],
+            chain_client.clone(),
+            cancellation_token.clone(),
+            Arc::new(operators),
+            retry_delay,
+            None,
+        );
+
+        let processor_handle = tokio::spawn(processor.run());
+
+        // Poll until the retry succeeds. Each iteration advances the TestClock by
+        // the retry delay so we eventually pass the processor's retry deadline.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+        let task_count = loop {
+            clock.add(retry_delay);
+            let query = Request::new("{ taskCount }");
+            let outcome = chain_client
+                .query_user_application(app_id, &query)
+                .await
+                .unwrap();
+            let data = outcome.response.data.into_json().unwrap();
+            let count = data["taskCount"].as_u64().unwrap();
+            if count > 0 {
+                break count;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "Timed out waiting for retry to complete"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        };
+
+        assert_eq!(
+            task_count, 1,
+            "Expected task_count to be 1 after successful retry"
+        );
+
+        cancellation_token.cancel();
+        processor_handle.await.unwrap();
     }
 }
