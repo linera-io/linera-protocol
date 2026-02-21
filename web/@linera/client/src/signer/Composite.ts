@@ -25,4 +25,20 @@ export default class Composite implements Signer {
 
     return false;
   }
+
+  async signTypedData(owner: string, typedData: string): Promise<string> {
+    for (const signer of this.signers)
+      if (await signer.containsKey(owner))
+        return await signer.signTypedData(owner, typedData);
+
+    throw new Error(`no signer found for owner ${owner}`);
+  }
+
+  async scheme(owner: string): Promise<string> {
+    for (const signer of this.signers)
+      if (await signer.containsKey(owner))
+        return await signer.scheme(owner);
+
+    throw new Error(`no signer found for owner ${owner}`);
+  }
 }
