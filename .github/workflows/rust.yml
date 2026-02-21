@@ -198,6 +198,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - uses: jetli/wasm-pack-action@v0.4.0
     - uses: foundry-rs/foundry-toolchain@v1.4.0
     - name: Ensure Solc Directory Exists
       run: mkdir -p /home/runner/.solc
