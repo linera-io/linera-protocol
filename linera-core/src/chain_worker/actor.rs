@@ -10,7 +10,10 @@ use std::{
 };
 
 use custom_debug_derive::Debug;
-use futures::FutureExt;
+use futures::{
+    stream::{FuturesUnordered, StreamExt as _},
+    FutureExt,
+};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
@@ -33,7 +36,7 @@ use linera_views::context::{Context, InactiveContext};
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, Instrument as _};
 
-use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
+use super::{config::ChainWorkerConfig, state::ChainWorkerState, BoxedFuture, DeliveryNotifier};
 use crate::{
     chain_worker::BlockOutcome,
     client::ListeningMode,
@@ -45,13 +48,63 @@ use crate::{
 /// Type alias for event subscriptions result.
 pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
 
-/// Type alias for the request channel sender.
-pub(crate) type ChainWorkerRequestSender<Ctx> =
-    mpsc::UnboundedSender<(ChainWorkerRequest<Ctx>, tracing::Span, Instant)>;
+/// A request item sent through a channel.
+type RequestItem<Ctx> = (ChainWorkerRequest<Ctx>, tracing::Span, Instant);
 
-/// Type alias for the request channel receiver.
-pub(crate) type ChainWorkerRequestReceiver<Ctx> =
-    mpsc::UnboundedReceiver<(ChainWorkerRequest<Ctx>, tracing::Span, Instant)>;
+/// The endpoint for sending requests to a [`ChainWorkerActor`].
+///
+/// Read-only requests and write requests use separate channels so that
+/// the actor can schedule them with a fairness policy.
+#[derive(Clone)]
+pub(crate) struct ChainActorEndpoint<Ctx: Context + Clone + 'static> {
+    read_sender: mpsc::UnboundedSender<RequestItem<Ctx>>,
+    write_sender: mpsc::UnboundedSender<RequestItem<Ctx>>,
+}
+
+impl<Ctx: Context + Clone + 'static> ChainActorEndpoint<Ctx> {
+    /// Creates a new endpoint from the read and write senders.
+    pub(crate) fn new(
+        read_sender: mpsc::UnboundedSender<RequestItem<Ctx>>,
+        write_sender: mpsc::UnboundedSender<RequestItem<Ctx>>,
+    ) -> Self {
+        Self {
+            read_sender,
+            write_sender,
+        }
+    }
+
+    /// Sends a request to the appropriate channel based on whether it's read-only.
+    pub(crate) fn send(
+        &self,
+        item: RequestItem<Ctx>,
+    ) -> Result<(), Box<mpsc::error::SendError<RequestItem<Ctx>>>> {
+        let result = if item.0.is_read_only() {
+            self.read_sender.send(item)
+        } else {
+            self.write_sender.send(item)
+        };
+        result.map_err(Box::new)
+    }
+}
+
+/// The receiver side of the dual-channel endpoint.
+pub(crate) struct ChainActorReceivers<Ctx: Context + Clone + 'static> {
+    read_receiver: mpsc::UnboundedReceiver<RequestItem<Ctx>>,
+    write_receiver: mpsc::UnboundedReceiver<RequestItem<Ctx>>,
+}
+
+impl<Ctx: Context + Clone + 'static> ChainActorReceivers<Ctx> {
+    /// Creates new receivers from the read and write receivers.
+    pub(crate) fn new(
+        read_receiver: mpsc::UnboundedReceiver<RequestItem<Ctx>>,
+        write_receiver: mpsc::UnboundedReceiver<RequestItem<Ctx>>,
+    ) -> Self {
+        Self {
+            read_receiver,
+            write_receiver,
+        }
+    }
+}
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -288,6 +341,60 @@ where
     },
 }
 
+impl<Ctx: Context + Clone + 'static> ChainWorkerRequest<Ctx> {
+    /// Whether this request is a concurrent-safe read that can run concurrently
+    /// via `FuturesUnordered`. Read-only requests are routed to the read channel
+    /// for concurrent execution.
+    fn is_read_only(&self) -> bool {
+        match self {
+            // Simple getters: take `&self`, only read from ChainStateView.
+            ChainWorkerRequest::DownloadPendingBlob { .. }
+            | ChainWorkerRequest::GetPreprocessedBlockHashes { .. }
+            | ChainWorkerRequest::GetInboxNextHeight { .. }
+            | ChainWorkerRequest::GetLockingBlobs { .. }
+            | ChainWorkerRequest::GetBlockHashes { .. }
+            | ChainWorkerRequest::GetProposedBlobs { .. }
+            | ChainWorkerRequest::GetEventSubscriptions { .. }
+            | ChainWorkerRequest::GetNextExpectedEvent { .. }
+            | ChainWorkerRequest::GetReceivedCertificateTrackers { .. }
+            | ChainWorkerRequest::GetTipStateAndOutboxInfo { .. }
+            | ChainWorkerRequest::GetNextHeightToPreprocess { .. } => true,
+            // ReadCertificate: chain is eagerly initialized, so only needs &self.
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadCertificate { .. } => true,
+            // GetChainStateView: shared_chain_view is pre-initialized before
+            // each read batch.
+            ChainWorkerRequest::GetChainStateView { .. } => true,
+            // DescribeApplication: reads the blob directly from storage,
+            // skipping blob tracking (which is always rolled back for reads).
+            ChainWorkerRequest::DescribeApplication { .. } => true,
+            // QueryApplication: clones chain state for concurrent execution.
+            // Requires preparation (&mut self for clone_unchecked), but the
+            // resulting owned future runs concurrently.
+            ChainWorkerRequest::QueryApplication { .. } => true,
+            // All remaining variants mutate chain state.
+            ChainWorkerRequest::StageBlockExecution { .. }
+            | ChainWorkerRequest::StageBlockExecutionWithPolicy { .. }
+            | ChainWorkerRequest::ProcessTimeout { .. }
+            | ChainWorkerRequest::HandleBlockProposal { .. }
+            | ChainWorkerRequest::ProcessValidatedBlock { .. }
+            | ChainWorkerRequest::ProcessConfirmedBlock { .. }
+            | ChainWorkerRequest::ProcessCrossChainUpdate { .. }
+            | ChainWorkerRequest::ConfirmUpdatedRecipient { .. }
+            | ChainWorkerRequest::HandleChainInfoQuery { .. }
+            | ChainWorkerRequest::UpdateReceivedCertificateTrackers { .. }
+            | ChainWorkerRequest::HandlePendingBlob { .. } => false,
+        }
+    }
+
+    /// Whether this read-only request requires a preparation step with `&mut self`
+    /// before it can run concurrently. Currently only `QueryApplication` needs this
+    /// (to clone the chain state via `clone_unchecked`).
+    fn needs_preparation(&self) -> bool {
+        matches!(self, ChainWorkerRequest::QueryApplication { .. })
+    }
+}
+
 /// The actor worker type.
 pub(crate) struct ChainWorkerActor<StorageClient>
 where
@@ -354,8 +461,8 @@ where
         chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
-        request_sender: ChainWorkerRequestSender<StorageClient::Context>,
-        request_receiver: ChainWorkerRequestReceiver<StorageClient::Context>,
+        endpoint: ChainActorEndpoint<StorageClient::Context>,
+        receivers: ChainActorReceivers<StorageClient::Context>,
         is_tracked: bool,
     ) {
         #[cfg(with_metrics)]
@@ -370,10 +477,7 @@ where
             chain_id,
             is_tracked,
         };
-        if let Err(err) = actor
-            .handle_requests(request_sender, request_receiver)
-            .await
-        {
+        if let Err(err) = actor.handle_requests(endpoint, receivers).await {
             tracing::error!("Chain actor error: {err}");
         }
         #[cfg(with_metrics)]
@@ -419,7 +523,7 @@ where
         request: ChainWorkerRequest<StorageClient::Context>,
         span: tracing::Span,
         queued_at: Instant,
-        request_sender: &ChainWorkerRequestSender<StorageClient::Context>,
+        endpoint: &ChainActorEndpoint<StorageClient::Context>,
     ) -> Option<(
         ChainWorkerRequest<StorageClient::Context>,
         tracing::Span,
@@ -429,13 +533,13 @@ where
         if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
             if let Some(delay_until) = self.delay_until(proposal) {
                 tracing::debug!(%delay_until, "delaying block proposal");
-                let sender = request_sender.clone();
+                let endpoint = endpoint.clone();
                 let clock = self.storage.clock().clone();
                 task::spawn(async move {
                     clock.sleep_until(delay_until).await;
                     // Re-insert the request into the queue. If the channel is closed,
                     // the actor is shutting down, so we can ignore the error.
-                    sender.send((request, span, queued_at)).ok();
+                    endpoint.send((request, span, queued_at)).ok();
                 })
                 .forget();
                 return None;
@@ -453,20 +557,35 @@ where
     }
 
     /// Runs the worker until there are no more incoming requests.
+    ///
+    /// Prioritizes write requests (block processing, cross-chain updates, etc.) over
+    /// concurrent-safe reads (simple getters on chain state). After draining all pending
+    /// writes, all pending reads are collected and executed concurrently via
+    /// `FuturesUnordered`, overlapping their storage I/O. When both channels have
+    /// requests ready, writes are selected first.
     #[instrument(
         skip_all,
         fields(chain_id = format!("{:.8}", self.chain_id), long_lived_services = %self.config.long_lived_services),
     )]
     async fn handle_requests(
         self,
-        request_sender: ChainWorkerRequestSender<StorageClient::Context>,
-        mut incoming_requests: ChainWorkerRequestReceiver<StorageClient::Context>,
+        endpoint: ChainActorEndpoint<StorageClient::Context>,
+        mut receivers: ChainActorReceivers<StorageClient::Context>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
-        while let Some((request, span, queued_at)) = incoming_requests.recv().await {
+        // Outer loop: wait for first request, load state, process until TTL.
+        loop {
+            // Wait for the first request from either channel.
+            let first_request = futures::select! {
+                req = receivers.write_receiver.recv().fuse() => req,
+                req = receivers.read_receiver.recv().fuse() => req,
+            };
+            let Some((request, span, queued_at)) = first_request else {
+                break; // Both channels closed.
+            };
             let Some((request, span, _)) =
-                self.preprocess_request(request, span, queued_at, &request_sender)
+                self.preprocess_request(request, span, queued_at, &endpoint)
             else {
                 continue;
             };
@@ -496,28 +615,140 @@ where
             #[cfg(with_metrics)]
             metrics::CHAIN_WORKER_STATES_LOADED.inc();
 
+            // Eagerly initialize the chain so that read-only methods
+            // (ReadCertificate, QueryApplication, etc.) don't need &mut self
+            // for initialization. For inactive chains (not yet opened via
+            // cross-chain messages), this may fail, which is fine — the chain
+            // will be initialized when the activating request arrives.
+            if let Err(err) = worker.initialize_and_save_if_needed().await {
+                trace!("Eager initialization skipped for {}: {err}", self.chain_id);
+            }
+
+            // Process the first request.
             Box::pin(worker.handle_request(request))
                 .instrument(span)
                 .await;
 
+            // Inner loop: write-priority scheduling.
             loop {
+                // Phase 1: Drain all pending writes.
+                while let Ok((request, span, queued_at)) = receivers.write_receiver.try_recv() {
+                    if let Some((request, span, _)) =
+                        self.preprocess_request(request, span, queued_at, &endpoint)
+                    {
+                        Box::pin(worker.handle_request(request))
+                            .instrument(span)
+                            .await;
+                    }
+                }
+
+                // Phase 2: Collect and process all pending reads concurrently.
+                // Two-step approach: first prepare (needs &mut worker for
+                // QueryApplication clone and shared_chain_view init), then
+                // execute all futures concurrently.
+                {
+                    let mut pending_reads = Vec::new();
+                    while let Ok(item) = receivers.read_receiver.try_recv() {
+                        pending_reads.push(item);
+                    }
+                    if !pending_reads.is_empty() {
+                        // Step A: Prepare (needs &mut worker).
+                        worker.ensure_shared_chain_view_initialized()?;
+
+                        let mut owned_futures = Vec::new();
+                        let mut simple_items = Vec::new();
+                        for (request, span, queued_at) in pending_reads {
+                            if let Some((request, span, _)) =
+                                self.preprocess_request(request, span, queued_at, &endpoint)
+                            {
+                                if request.needs_preparation() {
+                                    if let ChainWorkerRequest::QueryApplication {
+                                        query,
+                                        block_hash,
+                                        callback,
+                                    } = request
+                                    {
+                                        owned_futures.push((
+                                            worker.prepare_query_application(
+                                                query, block_hash, callback,
+                                            ),
+                                            span,
+                                        ));
+                                    }
+                                } else {
+                                    simple_items.push((request, span));
+                                }
+                            }
+                        }
+                        // &mut worker borrow ends here.
+
+                        // Step B: Execute all concurrently.
+                        let mut read_futures: FuturesUnordered<BoxedFuture<'_>> =
+                            FuturesUnordered::new();
+                        for (request, span) in simple_items {
+                            read_futures.push(Box::pin(
+                                worker.handle_read_request(request).instrument(span),
+                            ));
+                        }
+                        for (fut, span) in owned_futures {
+                            read_futures.push(Box::pin(fut.instrument(span)));
+                        }
+                        while read_futures.next().await.is_some() {}
+                        continue; // Back to phase 1 to check for writes.
+                    }
+                }
+
+                // Phase 3: Nothing available — block on either channel or TTL.
                 let ttl_timeout = self.ttl_timeout();
 
                 futures::select! {
                     () = self.storage.clock().sleep_until(ttl_timeout).fuse() => {
-                        break;
+                        break; // TTL expired, unload state.
                     }
-                    maybe_request = incoming_requests.recv().fuse() => {
+                    maybe_request = receivers.write_receiver.recv().fuse() => {
                         let Some((request, span, queued_at)) = maybe_request else {
-                            break; // Request sender was dropped.
+                            break;
                         };
-                        let Some((request, span, _)) =
-                            self.preprocess_request(request, span, queued_at, &request_sender)
-                        else {
-                            continue;
+                        if let Some((request, span, _)) =
+                            self.preprocess_request(request, span, queued_at, &endpoint)
+                        {
+                            Box::pin(worker.handle_request(request))
+                                .instrument(span)
+                                .await;
+                        }
+                    }
+                    maybe_request = receivers.read_receiver.recv().fuse() => {
+                        let Some((request, span, queued_at)) = maybe_request else {
+                            break;
                         };
-
-                        Box::pin(worker.handle_request(request)).instrument(span).await;
+                        if let Some((request, span, _)) =
+                            self.preprocess_request(request, span, queued_at, &endpoint)
+                        {
+                            if request.needs_preparation() {
+                                if let ChainWorkerRequest::QueryApplication {
+                                    query,
+                                    block_hash,
+                                    callback,
+                                } = request
+                                {
+                                    let fut = worker.prepare_query_application(
+                                        query, block_hash, callback,
+                                    );
+                                    fut.instrument(span).await;
+                                }
+                            } else {
+                                if matches!(
+                                    request,
+                                    ChainWorkerRequest::GetChainStateView { .. }
+                                ) {
+                                    worker.ensure_shared_chain_view_initialized()?;
+                                }
+                                worker
+                                    .handle_read_request(request)
+                                    .instrument(span)
+                                    .await;
+                            }
+                        }
                     }
                 }
             }
