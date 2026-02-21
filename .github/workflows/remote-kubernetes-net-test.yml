@@ -28,13 +28,15 @@ env:
   LINERA_KEYSTORE: /tmp/local-linera-net/keystore_0.json
   LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_0.db
   LINERA_FAUCET_URL: http://localhost:8079
+  LINERA_HELMFILE_TIMEOUT: 1800
+  KUBECONFIG: /tmp/kind-kubeconfig
 
 permissions:
   contents: read
 
 jobs:
   remote-kubernetes-net-test:
-    if: ${{ github.event_name == 'merge_group' }}
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 90
 
@@ -71,12 +73,109 @@ jobs:
         tail -f "$LOG_FILE" 2>/dev/null &
         TAIL_PID=$!
 
-        # Wait for "READY!" message (includes Docker image build + helm sync + port-forwards).
+        # Fix Kind context namespace: the ARC runner pod's in-cluster namespace
+        # is "arc-runners", which kubectl uses as default when the context doesn't
+        # specify one. Set it to "default" as soon as the Kind context appears.
+        (
+          while true; do
+            KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+            if [ -n "$KIND_CTX" ]; then
+              kubectl config set-context "$KIND_CTX" --namespace=default
+              echo "Fixed namespace for context $KIND_CTX to 'default'"
+              break
+            fi
+            sleep 1
+          done
+        ) &
+
+        # Background diagnostics: periodically dump pod status once a Kind cluster exists.
+        (
+          KIND_CTX=""
+          while [ -z "$KIND_CTX" ]; do
+            KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+            sleep 5
+          done
+          echo "=== DIAGNOSTICS: Found Kind context: $KIND_CTX ==="
+          while kill -0 "$NETWORK_PID" 2>/dev/null && ! grep -q "READY!" "$LOG_FILE" 2>/dev/null; do
+            echo "=== DIAGNOSTICS $(date -u +%H:%M:%S): Pod status ==="
+            kubectl --context "$KIND_CTX" get pods --all-namespaces -o wide 2>&1 || true
+            echo "=== DIAGNOSTICS $(date -u +%H:%M:%S): Events (warnings) ==="
+            kubectl --context "$KIND_CTX" get events --all-namespaces --field-selector type=Warning --sort-by='.lastTimestamp' 2>&1 | tail -20 || true
+            echo "=== END DIAGNOSTICS ==="
+            sleep 30
+          done
+        ) &
+        DIAG_PID=$!
+
+        # Wait for the exact READY message from `linera net up`.
         # No explicit timeout here; the job-level timeout-minutes: 90 is the safeguard.
         echo "Waiting for validators to deploy (PID: $NETWORK_PID)..."
-        while ! grep -q "READY!" "$LOG_FILE" 2>/dev/null; do
+        while ! grep -qF "READY!" "$LOG_FILE" 2>/dev/null; do
           if ! kill -0 "$NETWORK_PID" 2>/dev/null; then
             echo "ERROR: Network process (PID: $NETWORK_PID) died"
+            echo "=== FINAL DIAGNOSTICS: Pod status at failure ==="
+            KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+            if [ -n "$KIND_CTX" ]; then
+              kubectl --context "$KIND_CTX" get pods --all-namespaces -o wide 2>&1 || true
+
+              echo "=== Container status for non-fully-Ready pods ==="
+              kubectl --context "$KIND_CTX" get pods --all-namespaces -o json 2>/dev/null \
+                | python3 -c "
+        import json, sys
+        data = json.load(sys.stdin)
+        for item in data.get('items', []):
+            name = item['metadata']['name']
+            ns = item['metadata']['namespace']
+            all_statuses = item.get('status', {}).get('containerStatuses', []) + item.get('status', {}).get('initContainerStatuses', [])
+            not_ready = [cs for cs in all_statuses if not cs.get('ready', False)]
+            if not_ready:
+                print(f'--- {ns}/{name} ---')
+                for cs in all_statuses:
+                    state = cs.get('state', {})
+                    ready = cs.get('ready', False)
+                    restarts = cs.get('restartCount', 0)
+                    marker = ' (NOT READY)' if not ready else ''
+                    for k, v in state.items():
+                        print(f'  {cs[\"name\"]}: {k} restarts={restarts}{marker} - {v}')
+        " 2>&1 || true
+
+              echo "=== ScyllaDB pod logs (scylla container) ==="
+              SCYLLA_POD=$(kubectl --context "$KIND_CTX" -n scylla get pods -l "app.kubernetes.io/name=scylla" -o name 2>/dev/null | head -1)
+              if [ -n "$SCYLLA_POD" ]; then
+                echo "--- scylla container (last 80 lines) ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c scylla --tail=80 2>&1 || true
+                echo "--- sysctl-buddy init container ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c sysctl-buddy 2>&1 || true
+                echo "--- scylladb-api-status-probe sidecar (last 40 lines) ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c scylladb-api-status-probe --tail=40 2>&1 || true
+                echo "--- scylladb-ignition sidecar (last 40 lines) ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c scylladb-ignition --tail=40 2>&1 || true
+                echo "--- scylla-manager-agent sidecar (last 40 lines) ---"
+                kubectl --context "$KIND_CTX" -n scylla logs "$SCYLLA_POD" -c scylla-manager-agent --tail=40 2>&1 || true
+                echo "--- scylla pod describe (conditions + events) ---"
+                kubectl --context "$KIND_CTX" -n scylla describe "$SCYLLA_POD" 2>&1 | grep -A 100 "^Conditions:" || true
+              fi
+
+              echo "=== Promtail logs (last 40 lines) ==="
+              PROMTAIL_POD=$(kubectl --context "$KIND_CTX" -n default get pods -l "app.kubernetes.io/name=promtail" -o name 2>/dev/null | head -1)
+              if [ -n "$PROMTAIL_POD" ]; then
+                kubectl --context "$KIND_CTX" -n default logs "$PROMTAIL_POD" --tail=40 2>&1 || true
+              fi
+
+              echo "=== Proxy init container logs ==="
+              kubectl --context "$KIND_CTX" -n default logs proxy-0 -c linera-proxy-initializer --tail=20 2>&1 || true
+
+              echo "=== Node resources ==="
+              kubectl --context "$KIND_CTX" top nodes 2>&1 || true
+              kubectl --context "$KIND_CTX" describe nodes 2>&1 | grep -A 20 "Allocated resources:" || true
+
+              echo "=== Host kernel params (aio-max-nr) ==="
+              kubectl --context "$KIND_CTX" -n scylla exec "$SCYLLA_POD" -c scylla -- cat /proc/sys/fs/aio-max-nr 2>&1 || true
+              kubectl --context "$KIND_CTX" -n scylla exec "$SCYLLA_POD" -c scylla -- cat /proc/sys/fs/aio-nr 2>&1 || true
+
+              echo "=== Recent events ==="
+              kubectl --context "$KIND_CTX" get events --all-namespaces --sort-by='.lastTimestamp' 2>&1 | tail -40 || true
+            fi
             cat "$LOG_FILE"
             exit 1
           fi
@@ -84,16 +183,55 @@ jobs:
         done
         echo "Validators reported READY"
 
-        # Wait for proxy to accept TCP connections through port-forward
-        echo "Waiting for proxy at 127.0.0.1:19100..."
-        timeout 120 bash -c '
-          while ! (echo > /dev/tcp/127.0.0.1/19100) 2>/dev/null; do
-            sleep 2
-          done
-        '
-        echo "Proxy is accepting connections"
-
+        kill $DIAG_PID 2>/dev/null || true
         kill $TAIL_PID 2>/dev/null || true
+
+        # Verify that proxy and shard pods are actually Running (not stuck in Init).
+        KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+        echo "=== Post-READY pod status ==="
+        kubectl --context "$KIND_CTX" get pods -o wide
+        NOT_READY=$(kubectl --context "$KIND_CTX" get pods --no-headers 2>/dev/null \
+          | grep -cEv 'Running|Completed' || true)
+        if [ "$NOT_READY" -gt 0 ]; then
+          echo "WARNING: $NOT_READY pod(s) not Running after READY. Waiting up to 120s..."
+          kubectl --context "$KIND_CTX" wait --for=condition=Ready pod --all --timeout=120s || {
+            echo "ERROR: pods did not become Ready"
+            kubectl --context "$KIND_CTX" get pods -o wide
+            kubectl --context "$KIND_CTX" describe pods | grep -A 5 "State:\|Reason:" || true
+            exit 1
+          }
+          echo "All pods now Ready"
+          kubectl --context "$KIND_CTX" get pods -o wide
+        fi
+    - name: Port-forward proxy
+      run: |
+        KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+        echo "Kind context: $KIND_CTX"
+        kubectl --context "$KIND_CTX" get pods -o wide
+        kubectl --context "$KIND_CTX" get svc proxy -o wide
+        kubectl --context "$KIND_CTX" get endpoints proxy
+        PF_LOG="/tmp/port-forward.log"
+        kubectl --context "$KIND_CTX" port-forward svc/proxy 19100:19100 > "$PF_LOG" 2>&1 &
+        PF_PID=$!
+        echo "Started port-forward (PID: $PF_PID), waiting for it to bind..."
+        for i in $(seq 1 30); do
+          if ! kill -0 $PF_PID 2>/dev/null; then
+            echo "ERROR: port-forward died. Output:"
+            cat "$PF_LOG"
+            exit 1
+          fi
+          if grep -q "Forwarding from" "$PF_LOG" 2>/dev/null; then
+            cat "$PF_LOG"
+            echo "Port-forward is ready"
+            break
+          fi
+          sleep 1
+        done
+        if ! grep -q "Forwarding from" "$PF_LOG" 2>/dev/null; then
+          echo "ERROR: port-forward did not bind after 30s. Output:"
+          cat "$PF_LOG"
+          exit 1
+        fi
     - name: Start faucet and wait for it
       run: |
         FAUCET_PORT=$(echo "$LINERA_FAUCET_URL" | cut -d: -f3)
