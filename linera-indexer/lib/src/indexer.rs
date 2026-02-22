@@ -152,9 +152,8 @@ where
 
     pub async fn init(&self, listener: &Listener, chain_id: ChainId) -> Result<(), IndexerError> {
         match listener.service.get_value(chain_id, None).await {
-            Ok(value) => self.process(listener, &value).await,
             Err(IndexerError::NotFound(_)) => Ok(()),
-            Err(e) => Err(e),
+            result => self.process(listener, &result?).await,
         }
     }
 
