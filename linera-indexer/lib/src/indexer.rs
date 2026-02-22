@@ -69,10 +69,9 @@ where
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
     pub async fn load(database: D) -> Result<Self, IndexerError> {
-        let state = State(plugin::load::<D, StateView<ViewContext<(), D::Store>>>(
-            database, "indexer",
-        )
-        .await?);
+        let state = State(
+            plugin::load::<D, StateView<ViewContext<(), D::Store>>>(database, "indexer").await?,
+        );
         Ok(Indexer {
             state,
             plugins: BTreeMap::new(),
@@ -177,7 +176,11 @@ where
         plugin: impl Plugin<D> + 'static,
     ) -> Result<(), IndexerError> {
         let name = plugin.name();
-        if self.plugins.insert(name.clone(), Box::new(plugin)).is_some() {
+        if self
+            .plugins
+            .insert(name.clone(), Box::new(plugin))
+            .is_some()
+        {
             return Err(IndexerError::PluginAlreadyRegistered);
         }
         let mut state = self.state.0.lock().await;
