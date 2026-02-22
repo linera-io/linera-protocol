@@ -14,7 +14,6 @@ use linera_chain::types::{CertificateValue as _, ConfirmedBlock};
 use linera_views::{
     context::{Context, ViewContext},
     map_view::MapView,
-    register_view::RegisterView,
     set_view::SetView,
     store::{KeyValueDatabase, KeyValueStore},
     views::RootView,
@@ -34,7 +33,6 @@ use crate::{
 pub struct StateView<C> {
     chains: MapView<C, ChainId, (CryptoHash, BlockHeight)>,
     plugins: SetView<C, String>,
-    initiated: RegisterView<C, bool>,
 }
 
 #[derive(Clone)]
