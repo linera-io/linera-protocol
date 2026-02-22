@@ -101,21 +101,25 @@ where
         let chain_id = value.chain_id();
         let hash = value.hash();
         let height = value.height();
-        let mut state = self.state.0.lock().await;
         if height < listener.start {
             return Ok(());
-        };
-        let latest_block = match state.chains.get(&chain_id).await? {
-            None => LatestBlock::StartHeight(listener.start),
-            Some((last_hash, last_height)) => {
-                if last_hash == hash || last_height >= height {
-                    return Ok(());
+        }
+        // Hold the lock only long enough to read the current chain state.
+        let latest_block = {
+            let state = self.state.0.lock().await;
+            match state.chains.get(&chain_id).await? {
+                None => LatestBlock::StartHeight(listener.start),
+                Some((last_hash, last_height)) => {
+                    if last_hash == hash || last_height >= height {
+                        return Ok(());
+                    }
+                    LatestBlock::LatestHash(last_hash)
                 }
-                LatestBlock::LatestHash(last_hash)
             }
         };
         info!("process {:?}: {:?} ({})", chain_id, hash, height);
 
+        // Collect all missing blocks via network I/O without holding the lock.
         let mut values = Vec::new();
         let mut value = value.clone();
         loop {
@@ -132,6 +136,8 @@ where
             }
         }
 
+        // Re-acquire the lock only for writing.
+        let mut state = self.state.0.lock().await;
         while let Some(value) = values.pop() {
             self.process_value(&mut state, &value).await?
         }
