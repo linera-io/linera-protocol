@@ -60,7 +60,7 @@ where
 {
     /// Start the gRPC indexer server
     pub async fn serve(self, port: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let addr = format!("0.0.0.0:{}", port).parse()?;
+        let addr = format!("0.0.0.0:{port}").parse()?;
 
         info!("Starting gRPC indexer server on {}", addr);
 

@@ -82,7 +82,7 @@ where
             app = plugin.route(app);
         }
         axum::serve(
-            tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?,
+            tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await?,
             app,
         )
         .await?;
