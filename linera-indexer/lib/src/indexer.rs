@@ -94,7 +94,7 @@ where
         info!("save {:?}: {:?} ({})", chain_id, hash, height);
         state
             .chains
-            .insert(&chain_id, (value.hash(), value.height()))?;
+            .insert(&chain_id, (hash, height))?;
         state.save().await.map_err(IndexerError::ViewError)
     }
 
@@ -229,12 +229,11 @@ where
         let chains = state.chains.indices().await?;
         let mut result = Vec::new();
         for chain in chains {
-            let block = state.chains.get(&chain).await?;
-            result.push(HighestBlock {
-                chain,
-                block: block.map(|b| b.0),
-                height: block.map(|b| b.1),
-            });
+            let (block, height) = match state.chains.get(&chain).await? {
+                Some((hash, h)) => (Some(hash), Some(h)),
+                None => (None, None),
+            };
+            result.push(HighestBlock { chain, block, height });
         }
         Ok(result)
     }
