@@ -138,8 +138,9 @@ where
 
         // Re-acquire the lock only for writing.
         let mut state = self.state.0.lock().await;
-        while let Some(value) = values.pop() {
-            self.process_value(&mut state, &value).await?
+        values.reverse();
+        for value in &values {
+            self.process_value(&mut state, value).await?
         }
         Ok(())
     }
