@@ -98,7 +98,7 @@ where
                     "register operation for {:?}:\n{:?}",
                     key.chain_id, operation
                 );
-                self.operations.insert(&key, operation.clone())?;
+                self.operations.insert(&key, operation)?;
                 self.count.insert(&key.chain_id, index + 1)?;
                 let chain_id = key.chain_id;
                 Ok(self.last.insert(&chain_id, key)?)
