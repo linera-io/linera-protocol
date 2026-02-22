@@ -50,11 +50,6 @@ where
     pub plugins: BTreeMap<String, Box<dyn Plugin<D>>>,
 }
 
-pub enum IndexerCommand {
-    Run,
-    Schema,
-}
-
 #[derive(Debug)]
 enum LatestBlock {
     LatestHash(CryptoHash),
