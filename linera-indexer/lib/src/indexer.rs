@@ -3,7 +3,10 @@
 
 //! This module defines the base component of linera-indexer.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{btree_map, BTreeMap},
+    sync::Arc,
+};
 
 use allocative::Allocative;
 use async_graphql::{EmptyMutation, EmptySubscription, Schema, SimpleObject};
@@ -170,12 +173,11 @@ where
         plugin: impl Plugin<D> + 'static,
     ) -> Result<(), IndexerError> {
         let name = plugin.name();
-        if self
-            .plugins
-            .insert(name.clone(), Box::new(plugin))
-            .is_some()
-        {
-            return Err(IndexerError::PluginAlreadyRegistered);
+        match self.plugins.entry(name.clone()) {
+            btree_map::Entry::Occupied(_) => return Err(IndexerError::PluginAlreadyRegistered),
+            btree_map::Entry::Vacant(entry) => {
+                entry.insert(Box::new(plugin));
+            }
         }
         let mut state = self.state.0.lock().await;
         state.plugins.insert(&name)?;
