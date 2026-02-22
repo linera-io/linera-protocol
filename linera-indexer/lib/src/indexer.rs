@@ -85,9 +85,7 @@ where
         let hash = value.hash();
         let height = value.height();
         info!("save {:?}: {:?} ({})", chain_id, hash, height);
-        state
-            .chains
-            .insert(&chain_id, (hash, height))?;
+        state.chains.insert(&chain_id, (hash, height))?;
         state.save().await.map_err(IndexerError::ViewError)
     }
 
@@ -125,10 +123,12 @@ where
         loop {
             let header = &value.block().header;
             values.push(value.clone());
-            let next_hash = header.previous_block_hash.filter(|&hash| match &latest_block {
-                LatestBlock::LatestHash(latest_hash) => *latest_hash != hash,
-                LatestBlock::StartHeight(start) => header.height > *start,
-            });
+            let next_hash = header
+                .previous_block_hash
+                .filter(|&hash| match &latest_block {
+                    LatestBlock::LatestHash(latest_hash) => *latest_hash != hash,
+                    LatestBlock::StartHeight(start) => header.height > *start,
+                });
             if let Some(hash) = next_hash {
                 value = listener.service.get_value(chain_id, Some(hash)).await?;
             } else {
@@ -227,7 +227,11 @@ where
                 Some((hash, h)) => (Some(hash), Some(h)),
                 None => (None, None),
             };
-            result.push(HighestBlock { chain, block, height });
+            result.push(HighestBlock {
+                chain,
+                block,
+                height,
+            });
         }
         Ok(result)
     }

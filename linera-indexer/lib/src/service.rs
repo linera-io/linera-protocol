@@ -67,7 +67,10 @@ impl Service {
             Protocol::Http => ("http", ""),
             Protocol::WebSocket => ("ws", "/ws"),
         };
-        format!("{protocol}{tls}://{}:{}{suffix}", self.service_address, self.service_port)
+        format!(
+            "{protocol}{tls}://{}:{}{suffix}",
+            self.service_address, self.service_port
+        )
     }
 
     pub fn websocket(&self) -> String {
