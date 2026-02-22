@@ -128,20 +128,15 @@ where
         loop {
             let header = &value.block().header;
             values.push(value.clone());
-            if let Some(hash) = header.previous_block_hash {
-                match latest_block {
-                    LatestBlock::LatestHash(latest_hash) if latest_hash != hash => {
-                        value = listener.service.get_value(chain_id, Some(hash)).await?;
-                        continue;
-                    }
-                    LatestBlock::StartHeight(start) if header.height > start => {
-                        value = listener.service.get_value(chain_id, Some(hash)).await?;
-                        continue;
-                    }
-                    _ => break,
-                }
+            let next_hash = header.previous_block_hash.filter(|&hash| match &latest_block {
+                LatestBlock::LatestHash(latest_hash) => *latest_hash != hash,
+                LatestBlock::StartHeight(start) => header.height > *start,
+            });
+            if let Some(hash) = next_hash {
+                value = listener.service.get_value(chain_id, Some(hash)).await?;
+            } else {
+                break;
             }
-            break;
         }
 
         while let Some(value) = values.pop() {
