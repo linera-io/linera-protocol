@@ -114,11 +114,9 @@ where
                     .iter()
                     .map(|chain_id| self.indexer.init(&listener, *chain_id));
                 futures::future::try_join_all(initialize_chains).await?;
-                let connections = {
-                    chains
-                        .into_iter()
-                        .map(|chain_id| listener.listen(&self.indexer, chain_id))
-                };
+                let connections = chains
+                    .into_iter()
+                    .map(|chain_id| listener.listen(&self.indexer, chain_id));
                 select! {
                     result = Self::server(port, &self.indexer) => {
                         result.map(|()| warn!("GraphQL server stopped"))
