@@ -6,7 +6,7 @@ use std::sync::Arc;
 use futures::{Future, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Epoch, Timestamp},
+    data_types::{ChainDescription, Epoch, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -21,6 +21,7 @@ use linera_core::{
     wallet, Environment, JoinSetExt as _, Wallet as _,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
+use linera_storage::Storage as _;
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 use tracing::{debug, info, warn};
@@ -440,6 +441,34 @@ impl<Env: Environment> ClientContext<Env> {
             )
             .await
             .map_err(error::Inner::wallet)?;
+        Ok(())
+    }
+
+    /// Registers a chain from its description: initializes local storage, adds to
+    /// wallet, and starts tracking it for cross-chain message delivery.
+    pub async fn extend_with_chain(
+        &mut self,
+        description: ChainDescription,
+        owner: Option<AccountOwner>,
+    ) -> Result<(), Error> {
+        let chain_id = description.id();
+        self.client
+            .storage_client()
+            .create_chain(description.clone())
+            .await?;
+        self.wallet()
+            .try_insert(
+                chain_id,
+                linera_core::wallet::Chain::new(
+                    owner,
+                    description.config().epoch,
+                    description.timestamp(),
+                ),
+            )
+            .await
+            .map_err(error::Inner::wallet)?;
+        self.client
+            .extend_chain_mode(chain_id, ListeningMode::FullChain);
         Ok(())
     }
 
