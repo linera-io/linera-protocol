@@ -20,13 +20,11 @@ test.describe('Counter App', () => {
   });
 
   test('increments counter when button is clicked', async ({ page }) => {
-    const chainId = page.locator('#chain-id');
-    await expect(chainId).not.toHaveText('requesting chain…', { timeout: 30000 });
-
     const countSpan = page.locator('#count');
     const initialCount = await countSpan.textContent() || '0';
 
     const button = page.locator('#increment-btn');
+    await expect(button).toBeEnabled({ timeout: 30000 });
     await button.click();
 
     await expect(countSpan).not.toHaveText(initialCount!, { timeout: 10000 });
