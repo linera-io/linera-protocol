@@ -5,7 +5,6 @@
 
 #[cfg(test)]
 mod tests {
-    use alloy_sol_types::SolCall;
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
         data_types::{BlockHeight, Epoch},
@@ -25,8 +24,14 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let contract =
-            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
+        let contract = deploy_light_client(
+            &mut db,
+            deployer,
+            &[address],
+            &[1],
+            test_admin_chain_id(),
+            0,
+        );
 
         let (committee_bytes, blob_hash) = create_committee_blob(&new_public);
         let transactions = create_committee_transaction(Epoch(1), blob_hash);
@@ -39,13 +44,16 @@ mod tests {
         let bcs_bytes = sign_and_serialize(&secret, &public, block);
         let new_uncompressed = validator_uncompressed_key(&new_public);
 
-        let calldata = addCommitteeCall {
-            data: bcs_bytes.into(),
-            committeeBlob: committee_bytes.into(),
-            validators: vec![new_uncompressed.into()],
-        }
-        .abi_encode();
-        let (_, gas_used) = call_contract_with_gas(&mut db, deployer, contract, calldata);
+        let (_, _, gas_used) = call_contract(
+            &mut db,
+            deployer,
+            contract,
+            addCommitteeCall {
+                data: bcs_bytes.into(),
+                committeeBlob: committee_bytes.into(),
+                validators: vec![new_uncompressed.into()],
+            },
+        );
 
         println!("LightClient.addCommittee gas used: {gas_used}");
     }
@@ -60,17 +68,26 @@ mod tests {
 
         let deployer = Address::ZERO;
         let mut db = CacheDB::default();
-        let light_client =
-            deploy_light_client(&mut db, deployer, &[address], &[1], test_admin_chain_id());
-        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
+        let light_client = deploy_light_client(
+            &mut db,
+            deployer,
+            &[address],
+            &[1],
+            test_admin_chain_id(),
+            0,
+        );
+        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id, 0);
 
         let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
         let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
-        let calldata = addBlockCall {
-            data: bcs_bytes.into(),
-        }
-        .abi_encode();
-        let (_, gas_used) = call_contract_with_gas(&mut db, deployer, microchain, calldata);
+        let (_, _, gas_used) = call_contract(
+            &mut db,
+            deployer,
+            microchain,
+            addBlockCall {
+                data: bcs_bytes.into(),
+            },
+        );
 
         println!("Microchain.addBlock gas used: {gas_used}");
     }

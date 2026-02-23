@@ -29,7 +29,7 @@ use linera_execution::{
 };
 use revm::{
     database::{CacheDB, EmptyDB},
-    primitives::{Address, Bytes, TxKind, U256},
+    primitives::{Address, Bytes, Log, TxKind, U256},
     Context, ExecuteCommitEvm, MainBuilder, MainContext,
 };
 use revm_context::result::{ExecutionResult, Output};
@@ -136,12 +136,17 @@ pub fn deploy_microchain(
     deployer: Address,
     light_client: Address,
     chain_id: CryptoHash,
+    latest_height: u64,
 ) -> Address {
     let test_source = std::fs::read_to_string("tests/solidity/MicrochainTest.sol")
         .expect("MicrochainTest.sol not found");
     let bytecode = compile_contract(&test_source, "MicrochainTest.sol", "MicrochainTest");
-    let constructor_args =
-        (light_client, <[u8; 32]>::from(*chain_id.as_bytes())).abi_encode_params();
+    let constructor_args = (
+        light_client,
+        <[u8; 32]>::from(*chain_id.as_bytes()),
+        latest_height,
+    )
+        .abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
@@ -153,11 +158,12 @@ pub fn deploy_light_client(
     validators: &[Address],
     weights: &[u64],
     admin_chain_id: CryptoHash,
+    epoch: u32,
 ) -> Address {
     let bytecode = compile_contract(LIGHT_CLIENT_SOL, "LightClient.sol", "LightClient");
     let chain_id_bytes = <[u8; 32]>::from(*admin_chain_id.as_bytes());
     let constructor_args =
-        (validators.to_vec(), weights.to_vec(), chain_id_bytes).abi_encode_params();
+        (validators.to_vec(), weights.to_vec(), chain_id_bytes, epoch).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
@@ -203,68 +209,27 @@ pub fn deploy_contract(db: &mut CacheDB<EmptyDB>, deployer: Address, bytecode: V
     }
 }
 
-/// Calls a deployed contract and decodes the return value.
+/// Calls a deployed contract, returning the decoded return value, emitted logs, and gas used.
 pub fn call_contract<C: SolCall>(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     contract: Address,
     call: C,
-) -> C::Return {
+) -> (C::Return, Vec<Log>, u64) {
     match try_call_contract(db, deployer, contract, call) {
         Ok(ret) => ret,
         Err(msg) => panic!("{}", msg),
     }
 }
 
-/// Calls a deployed contract, returning output bytes and gas used.
-pub fn call_contract_with_gas(
-    db: &mut CacheDB<EmptyDB>,
-    deployer: Address,
-    contract: Address,
-    calldata: Vec<u8>,
-) -> (Bytes, u64) {
-    let nonce = db
-        .cache
-        .accounts
-        .get(&deployer)
-        .map_or(0, |info| info.info.nonce);
-    let result = Context::mainnet()
-        .with_db(db)
-        .modify_tx_chained(|tx| {
-            tx.caller = deployer;
-            tx.nonce = nonce;
-            tx.kind = TxKind::Call(contract);
-            tx.data = Bytes::from(calldata);
-            tx.gas_limit = GAS_LIMIT;
-            tx.value = U256::ZERO;
-        })
-        .build_mainnet()
-        .replay_commit()
-        .expect("call transaction failed");
-
-    let gas_used = result.gas_used();
-    match result {
-        ExecutionResult::Success { output, .. } => match output {
-            Output::Call(bytes) => (bytes, gas_used),
-            other => panic!("expected Call output, got: {:?}", other),
-        },
-        ExecutionResult::Revert { output, .. } => {
-            panic!("call reverted: {}", hex::encode(&output));
-        }
-        ExecutionResult::Halt { reason, .. } => {
-            panic!("call halted: {:?}", reason);
-        }
-    }
-}
-
-/// Calls a deployed contract, returning the decoded return value on success
+/// Calls a deployed contract, returning the decoded return value, logs, and gas on success
 /// or an error message on revert/halt/decode failure.
 pub fn try_call_contract<C: SolCall>(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     contract: Address,
     call: C,
-) -> Result<C::Return, String> {
+) -> Result<(C::Return, Vec<Log>, u64), String> {
     let nonce = db
         .cache
         .accounts
@@ -284,10 +249,14 @@ pub fn try_call_contract<C: SolCall>(
         .replay_commit()
         .expect("call transaction failed");
 
+    let gas_used = result.gas_used();
     match result {
-        ExecutionResult::Success { output, .. } => match output {
-            Output::Call(bytes) => C::abi_decode_returns(&bytes)
-                .map_err(|e| format!("failed to decode return value: {e}")),
+        ExecutionResult::Success { output, logs, .. } => match output {
+            Output::Call(bytes) => {
+                let ret = C::abi_decode_returns(&bytes)
+                    .map_err(|e| format!("failed to decode return value: {e}"))?;
+                Ok((ret, logs, gas_used))
+            }
             other => Err(format!("expected Call output, got: {:?}", other)),
         },
         ExecutionResult::Revert { output, .. } => {
