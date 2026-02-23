@@ -221,9 +221,13 @@ impl LineraNet for LocalKubernetesNet {
     }
 
     async fn terminate(&mut self) -> Result<()> {
-        let mut kubectl_instance = self.kubectl_instance.lock().await;
+        let mut port_forward_children = {
+            let mut kubectl_instance = self.kubectl_instance.lock().await;
+            std::mem::take(&mut kubectl_instance.port_forward_children)
+        };
+
         let mut errors = Vec::new();
-        for port_forward_child in &mut kubectl_instance.port_forward_children {
+        for port_forward_child in &mut port_forward_children {
             if let Err(e) = port_forward_child.kill().await {
                 errors.push(e.into());
             }
