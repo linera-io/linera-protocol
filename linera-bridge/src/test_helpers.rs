@@ -15,17 +15,17 @@ use alloy_primitives::keccak256;
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{BlobContent, BlockHeight, Epoch, Round, Timestamp},
+    data_types::{Amount, BlobContent, BlockHeight, Epoch, Round, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
     block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
-    data_types::{Transaction, Vote},
+    data_types::{IncomingBundle, MessageAction, MessageBundle, PostedMessage, Transaction, Vote},
     types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
-    committee::ValidatorState, system::AdminOperation, Operation, ResourceControlPolicy,
-    SystemOperation,
+    committee::ValidatorState, system::AdminOperation, Message, MessageKind, Operation,
+    ResourceControlPolicy, SystemOperation,
 };
 use revm::{
     database::{CacheDB, EmptyDB},
@@ -34,11 +34,15 @@ use revm::{
 };
 use revm_context::result::{ExecutionResult, Output};
 
-use crate::{light_client, microchain, BRIDGE_TYPES_SOURCE};
+use crate::{
+    light_client, microchain, BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, FUNGIBLE_TYPES_SOURCE,
+};
 
 const BRIDGE_TYPES_SOL: &str = BRIDGE_TYPES_SOURCE;
+const FUNGIBLE_TYPES_SOL: &str = FUNGIBLE_TYPES_SOURCE;
 const LIGHT_CLIENT_SOL: &str = light_client::SOURCE;
 const MICROCHAIN_SOL: &str = microchain::SOURCE;
+const FUNGIBLE_BRIDGE_SOL: &str = FUNGIBLE_BRIDGE_SOURCE;
 pub const GAS_LIMIT: u64 = 500_000_000;
 
 /// Derives the Ethereum address from a secp256k1 validator public key.
@@ -150,6 +154,92 @@ pub fn deploy_microchain(
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
+}
+
+pub fn deploy_fungible_bridge(
+    db: &mut CacheDB<EmptyDB>,
+    deployer: Address,
+    light_client: Address,
+    chain_id: CryptoHash,
+    latest_height: u64,
+    application_id: CryptoHash,
+    token: Address,
+) -> Address {
+    let bytecode = compile_contract(FUNGIBLE_BRIDGE_SOL, "FungibleBridge.sol", "FungibleBridge");
+    let constructor_args = (
+        light_client,
+        <[u8; 32]>::from(*chain_id.as_bytes()),
+        latest_height,
+        <[u8; 32]>::from(*application_id.as_bytes()),
+        token,
+    )
+        .abi_encode_params();
+    let mut deploy_data = bytecode;
+    deploy_data.extend_from_slice(&constructor_args);
+    deploy_contract(db, deployer, deploy_data)
+}
+
+const MOCK_ERC20_SOL: &str = r#"
+// SPDX-License-Identifier: Apache-2.0
+pragma solidity ^0.8.0;
+
+contract MockERC20 {
+    mapping(address => uint256) public balanceOf;
+    uint256 public totalSupply;
+
+    constructor(uint256 initialSupply) {
+        balanceOf[msg.sender] = initialSupply;
+        totalSupply = initialSupply;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        require(balanceOf[msg.sender] >= amount, "insufficient balance");
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+}
+"#;
+
+pub fn deploy_mock_erc20(
+    db: &mut CacheDB<EmptyDB>,
+    deployer: Address,
+    initial_supply: alloy_primitives::U256,
+) -> Address {
+    let bytecode = compile_contract(MOCK_ERC20_SOL, "MockERC20.sol", "MockERC20");
+    let constructor_args = (initial_supply,).abi_encode_params();
+    let mut deploy_data = bytecode;
+    deploy_data.extend_from_slice(&constructor_args);
+    deploy_contract(db, deployer, deploy_data)
+}
+
+/// Creates a Transaction::ReceiveMessages containing a fungible Message as a user message.
+pub fn fungible_message_transaction(
+    origin: ChainId,
+    application_id: CryptoHash,
+    message: &fungible::Message,
+) -> Transaction {
+    Transaction::ReceiveMessages(IncomingBundle {
+        origin,
+        bundle: MessageBundle {
+            height: BlockHeight(0),
+            timestamp: Timestamp::from(0),
+            certificate_hash: CryptoHash::new(&TestString::new("cert")),
+            transaction_index: 0,
+            messages: vec![PostedMessage {
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Simple,
+                index: 0,
+                message: Message::User {
+                    application_id: ApplicationId::new(application_id),
+                    bytes: bcs::to_bytes(message).unwrap(),
+                },
+            }],
+        },
+        action: MessageAction::Accept,
+    })
 }
 
 pub fn deploy_light_client(
@@ -310,8 +400,10 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     // Write shared source files so imports resolve
     for (name, content) in [
         ("BridgeTypes.sol", BRIDGE_TYPES_SOL),
+        ("FungibleTypes.sol", FUNGIBLE_TYPES_SOL),
         ("LightClient.sol", LIGHT_CLIENT_SOL),
         ("Microchain.sol", MICROCHAIN_SOL),
+        ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOL),
     ] {
         let mut f = File::create(path.join(name)).unwrap();
         writeln!(f, "{}", content).unwrap();

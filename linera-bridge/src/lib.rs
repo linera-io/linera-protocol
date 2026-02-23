@@ -14,6 +14,8 @@ pub mod light_client;
 pub mod microchain;
 
 #[cfg(test)]
+mod fungible_bridge;
+#[cfg(test)]
 mod gas;
 #[cfg(test)]
 pub(crate) mod test_helpers;
