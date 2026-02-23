@@ -645,8 +645,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                 };
                                 self.remove_event_subscriber(chain_id);
                                 listening_client.stop().await;
-                                let (client, _) = Self::shared_client_and_timing(&self.context).await;
-                                if let Err(error) = client.wallet().remove(chain_id).await {
+                                if let Err(error) = self.context.lock().await.wallet().remove(chain_id).await {
                                     error!(%error, %chain_id, "error removing a chain from the wallet");
                                 }
                             }
