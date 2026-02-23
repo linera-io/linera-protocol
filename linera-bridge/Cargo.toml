@@ -24,11 +24,13 @@ serde_yaml = "0.8.26"
 
 [dev-dependencies]
 bcs.workspace = true
+fungible.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-execution.workspace = true
+linera-sdk.workspace = true
 revm = { workspace = true, default-features = false, features = [
     "std",
     "kzg-rs",
