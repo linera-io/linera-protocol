@@ -3,6 +3,9 @@ name: Bridge E2E
 on:
   merge_group:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - 'testnet_*'
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull requests
 concurrency:
