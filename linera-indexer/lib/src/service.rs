@@ -153,7 +153,7 @@ impl Listener {
                         if let Reason::NewBlock { hash, .. } = data.notifications.reason {
                             match self.service.get_value(chain_id, Some(hash)).await {
                                 Ok(value) => indexer.process(self, &value).await?,
-                                Err(e) => error!("failed to fetch block {:?}: {}", hash, e),
+                                Err(error) => error!("failed to fetch block {hash}: {error}"),
                             }
                         }
                     } else {
