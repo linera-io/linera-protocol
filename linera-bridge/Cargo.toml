@@ -57,6 +57,9 @@ linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-execution.workspace = true
 linera-sdk.workspace = true
+proptest.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
 revm = { workspace = true, default-features = false, features = [
     "std",
     "kzg-rs",

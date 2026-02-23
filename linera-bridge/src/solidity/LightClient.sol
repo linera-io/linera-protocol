@@ -175,9 +175,9 @@ contract LightClient {
         currentEpoch = epoch;
     }
 
-    /// Parses a BCS-serialized CommitteeMinimal blob, verifying each compressed key
-    /// against the caller-provided uncompressed keys and deriving Ethereum addresses.
-    /// Returns (addresses, weights) extracted from the blob.
+    /// Parses a BCS-serialized CommitteeMinimal blob, matching each compressed key
+    /// against the caller-provided uncompressed keys (in any order) and deriving
+    /// Ethereum addresses. Returns (addresses, weights) extracted from the blob.
     function _parseCommitteeBlob(
         bytes memory blob,
         bytes[] calldata uncompressedKeys
@@ -189,14 +189,16 @@ contract LightClient {
 
         address[] memory addrs = new address[](count);
         uint64[] memory weights = new uint64[](count);
+        bool[] memory used = new bool[](count);
 
         for (uint256 i = 0; i < count; i++) {
-            // Read 33-byte compressed key and verify against caller's uncompressed key
-            require(uncompressedKeys[i].length == 64, "uncompressed key must be 64 bytes");
-            _verifyKeyCompression(uncompressedKeys[i], blob, pos);
+            // Find the uncompressed key whose x-coordinate matches this compressed key
+            uint256 matchIdx = _findMatchingKey(uncompressedKeys, used, blob, pos);
+            _verifyKeyCompression(uncompressedKeys[matchIdx], blob, pos);
+            used[matchIdx] = true;
 
-            // Derive Ethereum address from uncompressed key
-            addrs[i] = address(uint160(uint256(keccak256(uncompressedKeys[i]))));
+            // Derive Ethereum address from the matched uncompressed key
+            addrs[i] = address(uint160(uint256(keccak256(uncompressedKeys[matchIdx]))));
 
             pos += 33; // skip compressed key
 
@@ -220,6 +222,30 @@ contract LightClient {
         }
 
         return (addrs, weights);
+    }
+
+    /// Finds the index in uncompressedKeys whose x-coordinate matches the compressed
+    /// key at blob[keyPos]. Skips already-used indices. Reverts if no match found.
+    function _findMatchingKey(
+        bytes[] calldata uncompressedKeys,
+        bool[] memory used,
+        bytes memory blob,
+        uint256 keyPos
+    ) internal pure returns (uint256) {
+        for (uint256 j = 0; j < uncompressedKeys.length; j++) {
+            if (used[j]) continue;
+            if (uncompressedKeys[j].length != 64) continue;
+            // Compare x-coordinate: blob[keyPos+1..keyPos+33] vs uncompressed[0..32]
+            bool match_ = true;
+            for (uint256 k = 0; k < 32; k++) {
+                if (blob[keyPos + 1 + k] != uncompressedKeys[j][k]) {
+                    match_ = false;
+                    break;
+                }
+            }
+            if (match_) return j;
+        }
+        revert("no matching uncompressed key found");
     }
 
     /// Verifies that a caller-provided 64-byte uncompressed key matches
