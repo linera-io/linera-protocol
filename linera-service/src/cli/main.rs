@@ -1264,6 +1264,12 @@ impl Runnable for Job {
                     tokio::spawn(processor.run());
                 }
 
+                let controller_chain_client = if controller_application_id.is_some() {
+                    Some(context.make_chain_client(chain_id).await?)
+                } else {
+                    None
+                };
+
                 let context = Arc::new(Mutex::new(context));
 
                 let (command_sender, command_receiver) = mpsc::unbounded_channel();
@@ -1271,7 +1277,8 @@ impl Runnable for Job {
                 if let Some(controller_id) = controller_application_id {
                     // For the controller case, we share the context via Arc so the
                     // controller can spawn new processors for different chains.
-                    let chain_client = context.lock().await.make_chain_client(chain_id).await?;
+                    let chain_client = controller_chain_client
+                        .expect("controller chain client should exist when controller is enabled");
                     let controller = Controller::new(
                         chain_id,
                         controller_id,
