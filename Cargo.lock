@@ -5395,7 +5395,6 @@ dependencies = [
  "fungible",
  "hex",
  "insta",
- "k256",
  "linera-base",
  "linera-chain",
  "linera-execution",
@@ -5410,7 +5409,6 @@ dependencies = [
  "serde_yaml 0.8.26",
  "tempfile",
  "tokio",
- "tracing",
  "url",
 ]
 
