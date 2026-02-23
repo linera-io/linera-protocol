@@ -5435,6 +5435,13 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let task_count: u64 = service_task_app.query_json("taskCount").await?;
     assert_eq!(task_count, 2, "Task should have been processed");
 
+    // The fungible transfer to the service chain should have been rejected by the message
+    // policy (fungible is not an allowed application), and the tracked Credit message
+    // bounced back, restoring the admin's balance.
+    admin_fungible_app
+        .assert_balances([(admin_owner, Amount::from_tokens(100))])
+        .await;
+
     node_service1.ensure_is_running()?;
     node_service1.terminate().await?;
     node_service2.ensure_is_running()?;
