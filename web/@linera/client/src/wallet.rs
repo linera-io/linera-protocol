@@ -47,10 +47,15 @@ impl Wallet {
 
     /// Lock the wallet, preventing anyone else from using a wallet with this name.
     ///
+    /// If the wallet is already locked, this is a no-op.
+    ///
     /// # Errors
-    /// If the wallet is already locked.
+    /// If the wallet is locked elsewhere.
     pub async fn lock(&mut self) -> Result<()> {
-        self.lock = Some(Rc::new(Lock::try_acquire(&self.name()).await?));
+        if self.lock.is_none() {
+            self.lock = Some(Rc::new(Lock::try_acquire(&self.name()).await?));
+        }
+
         Ok(())
     }
 }
