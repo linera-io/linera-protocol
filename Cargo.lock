@@ -772,7 +772,7 @@ dependencies = [
  "num-bigint 0.4.6",
  "num-traits",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2140,7 +2140,7 @@ dependencies = [
  "alloy-sol-types",
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2528,7 +2528,7 @@ dependencies = [
  "async-graphql",
  "futures",
  "linera-sdk",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
  "serde_json",
 ]
 
@@ -2539,7 +2539,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2869,7 +2869,7 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
  "serde_json",
 ]
 
@@ -3534,7 +3534,7 @@ dependencies = [
  "async-graphql",
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -3826,7 +3826,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -4341,7 +4341,7 @@ dependencies = [
  "linera-sdk",
  "log",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -5392,7 +5392,7 @@ dependencies = [
  "revm",
  "revm-context",
  "serde-generate",
- "serde-reflection 0.5.2 (git+https://github.com/deuszx/serde-reflection?branch=solidity-external-definitions)",
+ "serde-reflection",
  "serde_json",
  "serde_yaml 0.8.26",
  "tempfile",
@@ -5881,7 +5881,7 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
  "test-strategy",
  "thiserror 1.0.69",
  "tokio",
@@ -5922,7 +5922,7 @@ dependencies = [
  "log",
  "papaya",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
@@ -6114,7 +6114,7 @@ dependencies = [
  "proptest",
  "prost 0.14.1",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
  "similar-asserts",
  "test-strategy",
  "thiserror 1.0.69",
@@ -6559,7 +6559,7 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -6738,7 +6738,7 @@ dependencies = [
  "linera-sdk",
  "log",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -6761,7 +6761,7 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
  "sha3",
 ]
 
@@ -9206,15 +9206,16 @@ dependencies = [
 
 [[package]]
 name = "serde-generate"
-version = "0.32.0"
-source = "git+https://github.com/deuszx/serde-reflection?branch=solidity-external-definitions#0054dd37f377afe7ead4d8d025b7c88b3785a345"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f0cd15a5e1d4648c9ba334c936c4d3047acbe275f571c9be07cda925ed82ba6"
 dependencies = [
  "anyhow",
  "heck 0.3.3",
  "include_dir",
  "phf 0.10.1",
  "serde",
- "serde-reflection 0.5.2 (git+https://github.com/deuszx/serde-reflection?branch=solidity-external-definitions)",
+ "serde-reflection",
  "textwrap",
 ]
 
@@ -9233,19 +9234,6 @@ name = "serde-reflection"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68fb2363ca88876b3e16442b02dde5305646fd50df297c79a4b54fc5f5cf51d4"
-dependencies = [
- "erased-discriminant",
- "once_cell",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "typeid",
-]
-
-[[package]]
-name = "serde-reflection"
-version = "0.5.2"
-source = "git+https://github.com/deuszx/serde-reflection?branch=solidity-external-definitions#0054dd37f377afe7ead4d8d025b7c88b3785a345"
 dependencies = [
  "erased-discriminant",
  "once_cell",
@@ -9705,7 +9693,7 @@ dependencies = [
  "bcs",
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -10243,7 +10231,7 @@ dependencies = [
  "async-graphql",
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -10466,7 +10454,7 @@ version = "0.1.0"
 dependencies = [
  "linera-sdk",
  "serde",
- "serde-reflection 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-reflection",
 ]
 
 [[package]]
