@@ -44,5 +44,7 @@ docs/
 # Git worktrees
 .worktrees/
 
-# Test failure output
+# Test output
 __screenshots__/
+test-results/
+playwright-report/
