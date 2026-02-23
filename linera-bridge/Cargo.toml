@@ -29,11 +29,11 @@ alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 anyhow.workspace = true
 bcs.workspace = true
+clap = { workspace = true, optional = true }
+fs-err = { workspace = true, optional = true }
 k256.workspace = true
 linera-base.workspace = true
 linera-execution.workspace = true
-clap = { workspace = true, optional = true }
-fs-err = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
