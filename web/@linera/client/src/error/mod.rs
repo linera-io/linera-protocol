@@ -31,6 +31,7 @@ impl<E: std::error::Error> From<E> for Error {
 }
 
 impl Error {
+    #[must_use]
     pub fn new(message: &str) -> Self {
         Self::Other(JsError::new(message))
     }

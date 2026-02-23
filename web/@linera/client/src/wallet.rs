@@ -34,7 +34,9 @@ impl Wallet {
         let owner = serde_wasm_bindgen::from_value(owner)?;
         self.chains
             .mutate(chain_id, |chain| chain.owner = Some(owner))
-            .ok_or(Error::new(&format!("chain {chain_id} doesn't exist in wallet")).into())
+            .ok_or(Error::new(&format!(
+                "chain {chain_id} doesn't exist in wallet"
+            )))
     }
 
     #[must_use]
@@ -63,6 +65,6 @@ impl Wallet {
 impl std::ops::Deref for Wallet {
     type Target = wallet::Memory;
     fn deref(&self) -> &Self::Target {
-        &*self.chains
+        &self.chains
     }
 }
