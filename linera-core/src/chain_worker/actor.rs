@@ -386,13 +386,6 @@ impl<Ctx: Context + Clone + 'static> ChainWorkerRequest<Ctx> {
             | ChainWorkerRequest::HandlePendingBlob { .. } => false,
         }
     }
-
-    /// Whether this read-only request requires a preparation step with `&mut self`
-    /// before it can run concurrently. Currently only `QueryApplication` needs this
-    /// (to clone the chain state via `clone_unchecked`).
-    fn needs_preparation(&self) -> bool {
-        matches!(self, ChainWorkerRequest::QueryApplication { .. })
-    }
 }
 
 /// The actor worker type.
@@ -556,6 +549,23 @@ where
         Some((request, span, queued_at))
     }
 
+    /// Preprocesses and executes a write request.
+    async fn process_write(
+        &self,
+        worker: &mut ChainWorkerState<StorageClient>,
+        item: RequestItem<StorageClient::Context>,
+        endpoint: &ChainActorEndpoint<StorageClient::Context>,
+    ) {
+        let (request, span, queued_at) = item;
+        if let Some((request, span, _)) =
+            self.preprocess_request(request, span, queued_at, endpoint)
+        {
+            Box::pin(worker.handle_request(request))
+                .instrument(span)
+                .await;
+        }
+    }
+
     /// Runs the worker until there are no more incoming requests.
     ///
     /// Prioritizes write requests (block processing, cross-chain updates, etc.) over
@@ -632,14 +642,8 @@ where
             // Inner loop: write-priority scheduling.
             loop {
                 // Phase 1: Drain all pending writes.
-                while let Ok((request, span, queued_at)) = receivers.write_receiver.try_recv() {
-                    if let Some((request, span, _)) =
-                        self.preprocess_request(request, span, queued_at, &endpoint)
-                    {
-                        Box::pin(worker.handle_request(request))
-                            .instrument(span)
-                            .await;
-                    }
+                while let Ok(item) = receivers.write_receiver.try_recv() {
+                    self.process_write(&mut worker, item, &endpoint).await;
                 }
 
                 // Phase 2: Collect and process all pending reads concurrently.
@@ -661,22 +665,9 @@ where
                             if let Some((request, span, _)) =
                                 self.preprocess_request(request, span, queued_at, &endpoint)
                             {
-                                if request.needs_preparation() {
-                                    if let ChainWorkerRequest::QueryApplication {
-                                        query,
-                                        block_hash,
-                                        callback,
-                                    } = request
-                                    {
-                                        owned_futures.push((
-                                            worker.prepare_query_application(
-                                                query, block_hash, callback,
-                                            ),
-                                            span,
-                                        ));
-                                    }
-                                } else {
-                                    simple_items.push((request, span));
+                                match worker.try_prepare_owned_read(request) {
+                                    Ok(fut) => owned_futures.push((fut, span)),
+                                    Err(request) => simple_items.push((request, span)),
                                 }
                             }
                         }
@@ -706,16 +697,10 @@ where
                         break; // TTL expired, unload state.
                     }
                     maybe_request = receivers.write_receiver.recv().fuse() => {
-                        let Some((request, span, queued_at)) = maybe_request else {
+                        let Some(item) = maybe_request else {
                             break;
                         };
-                        if let Some((request, span, _)) =
-                            self.preprocess_request(request, span, queued_at, &endpoint)
-                        {
-                            Box::pin(worker.handle_request(request))
-                                .instrument(span)
-                                .await;
-                        }
+                        self.process_write(&mut worker, item, &endpoint).await;
                     }
                     maybe_request = receivers.read_receiver.recv().fuse() => {
                         let Some((request, span, queued_at)) = maybe_request else {
@@ -724,29 +709,15 @@ where
                         if let Some((request, span, _)) =
                             self.preprocess_request(request, span, queued_at, &endpoint)
                         {
-                            if request.needs_preparation() {
-                                if let ChainWorkerRequest::QueryApplication {
-                                    query,
-                                    block_hash,
-                                    callback,
-                                } = request
-                                {
-                                    let fut = worker.prepare_query_application(
-                                        query, block_hash, callback,
-                                    );
-                                    fut.instrument(span).await;
+                            worker.ensure_shared_chain_view_initialized()?;
+                            match worker.try_prepare_owned_read(request) {
+                                Ok(fut) => fut.instrument(span).await,
+                                Err(request) => {
+                                    worker
+                                        .handle_read_request(request)
+                                        .instrument(span)
+                                        .await;
                                 }
-                            } else {
-                                if matches!(
-                                    request,
-                                    ChainWorkerRequest::GetChainStateView { .. }
-                                ) {
-                                    worker.ensure_shared_chain_view_initialized()?;
-                                }
-                                worker
-                                    .handle_read_request(request)
-                                    .instrument(span)
-                                    .await;
                             }
                         }
                     }

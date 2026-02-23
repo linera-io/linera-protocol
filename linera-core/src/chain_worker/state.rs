@@ -1644,6 +1644,26 @@ where
         })
     }
 
+    /// If this is a `QueryApplication` request, prepares an owned future by cloning
+    /// the chain state. Otherwise returns the request unchanged for
+    /// [`handle_read_request`](Self::handle_read_request).
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
+    pub(super) fn try_prepare_owned_read(
+        &mut self,
+        request: ChainWorkerRequest<StorageClient::Context>,
+    ) -> Result<BoxedFuture<'static>, ChainWorkerRequest<StorageClient::Context>> {
+        if let ChainWorkerRequest::QueryApplication {
+            query,
+            block_hash,
+            callback,
+        } = request
+        {
+            Ok(self.prepare_query_application(query, block_hash, callback))
+        } else {
+            Err(request)
+        }
+    }
+
     /// Returns an application's description.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
