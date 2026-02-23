@@ -15,8 +15,21 @@ alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-fe
     "json-rpc",
     "contract",
     "reqwest",
+    "signer-local",
 ] }
+bcs = "0.1.6"
 linera-base = { path = "../../../linera-base" }
+linera-client = { path = "../../../linera-client", default-features = false, features = [
+    "wasmer",
+] }
+linera-core = { path = "../../../linera-core", default-features = false, features = [
+    "wasmer",
+] }
+linera-execution = { path = "../../../linera-execution" }
+linera-faucet-client = { path = "../../../linera-faucet/client" }
+linera-sdk = { path = "../../../linera-sdk", default-features = false }
+linera-storage = { path = "../../../linera-storage", features = ["wasmer"] }
+linera-views = { path = "../../../linera-views" }
 rand = { version = "0.8", default-features = false, features = ["std_rng"] }
 testcontainers = { version = "0.27", features = ["docker-compose"] }
 tokio = { version = "1", features = ["full"] }
