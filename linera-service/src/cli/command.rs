@@ -748,6 +748,12 @@ pub enum ClientCommand {
         #[arg(long = "operators", value_parser = parse_operator)]
         operators: Vec<(String, PathBuf)>,
 
+        /// Delay in seconds before retrying a failed operator task batch.
+        /// Only relevant when operators are configured via `--operator-application-ids`
+        /// or `--controller-id`.
+        #[arg(long, default_value = "5")]
+        task_retry_delay_secs: u64,
+
         /// Run in read-only mode: disallow mutations and prevent queries from scheduling
         /// operations. Use this when exposing the service to untrusted clients.
         #[arg(long)]

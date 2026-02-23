@@ -263,6 +263,7 @@ pub async fn handle_net_up_service(
         storage_config_builder,
         path_provider,
         block_exporters,
+        binary_dir: None,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(

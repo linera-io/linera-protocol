@@ -29,6 +29,8 @@ pub mod client;
 pub use client::Client;
 pub mod chain;
 pub use chain::Chain;
+pub mod error;
+pub use error::Error;
 pub mod faucet;
 pub mod lock;
 
@@ -42,7 +44,8 @@ pub use wallet::Wallet;
 pub type Network = linera_rpc::node_provider::NodeProvider;
 pub type Environment = linera_core::environment::Impl<Storage, Network, Signer, Wallet>;
 
-type JsResult<T> = Result<T, JsError>;
+type JsResult<T> = std::result::Result<T, JsError>;
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(serde::Deserialize, Default, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
