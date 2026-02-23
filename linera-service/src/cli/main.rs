@@ -933,6 +933,7 @@ impl Runnable for Job {
                                         "--max-new-events-per-block".to_string(),
                                         "10000".to_string(),
                                     ],
+                                    None,
                                 )))
                             })
                             .collect::<Result<Vec<_>, anyhow::Error>>()?;

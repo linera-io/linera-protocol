@@ -24,7 +24,7 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
-    data_types::{Amount, BlockHeight, Bytecode, Epoch},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Bytecode, Epoch},
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
     },
@@ -110,6 +110,7 @@ impl ClientWrapper {
             id,
             on_drop,
             vec!["--wait-for-outgoing-messages".to_string()],
+            None,
         )
     }
 
@@ -120,6 +121,7 @@ impl ClientWrapper {
         id: usize,
         on_drop: OnClientDrop,
         extra_args: Vec<String>,
+        binary_dir: Option<PathBuf>,
     ) -> Self {
         let storage = format!(
             "rocksdb:{}/client_{}.db",
@@ -128,8 +130,9 @@ impl ClientWrapper {
         );
         let wallet = format!("wallet_{}.json", id);
         let keystore = format!("keystore_{}.json", id);
+        let binary_path = binary_dir.map(|dir| dir.join("linera"));
         Self {
-            binary_path: sync::Mutex::new(None),
+            binary_path: sync::Mutex::new(binary_path),
             testing_prng_seed,
             storage,
             wallet,
@@ -974,6 +977,23 @@ impl ClientWrapper {
                 .zip(std::iter::repeat(100u64))
                 .collect::<BTreeMap<_, _>>(),
         )?);
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
+    pub async fn change_application_permissions(
+        &self,
+        chain_id: ChainId,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .arg("change-application-permissions")
+            .args(["--chain-id", &chain_id.to_string()]);
+        command.arg("--manage-chain").arg(serde_json::to_string(
+            &application_permissions.manage_chain,
+        )?);
+        // TODO: add other fields
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
