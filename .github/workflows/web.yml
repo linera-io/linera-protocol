@@ -63,9 +63,6 @@ jobs:
     steps:
       # Install dependencies
     - uses: actions/checkout@v4
-    - name: Switch to nightly Rust toolchain
-      run: |
-        ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         rustflags: ""
@@ -109,6 +106,10 @@ jobs:
     - name: Deploy the counter application
       run: |
         echo LINERA_COUNTER_APPLICATION_ID=$(LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- project publish-and-create examples/counter --json-argument 0) >> "$GITHUB_ENV"
+
+    - name: Switch to nightly Rust toolchain
+      run: |
+        ln -sf toolchains/nightly/rust-toolchain.toml
 
     # Run tests
     - name: Test the npm packages
