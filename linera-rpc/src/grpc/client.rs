@@ -99,6 +99,15 @@ impl GrpcClient {
                 trace!("gRPC connection reset: {status:?}; retrying");
                 true
             }
+            Code::Internal if status.message().contains("502 Bad Gateway") => {
+                // When a proxy/ingress returns HTTP 502 (e.g. during rolling restarts),
+                // tonic's frame decoder fails on the non-gRPC response body before the
+                // HTTP-to-gRPC status mapping can run, producing Code::Internal instead
+                // of Code::Unavailable. Per the gRPC spec, HTTP 502 maps to UNAVAILABLE
+                // which is retryable. This works around tonic#2365.
+                trace!("gRPC proxy error (502): {status:?}; retrying");
+                true
+            }
             Code::NotFound => false, // This code is used if e.g. the validator is missing blobs.
             Code::InvalidArgument
             | Code::AlreadyExists
