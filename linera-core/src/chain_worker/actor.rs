@@ -11,6 +11,7 @@ use std::{
 
 use custom_debug_derive::Debug;
 use futures::{
+    future::Either,
     stream::{FuturesUnordered, StreamExt as _},
     FutureExt,
 };
@@ -51,10 +52,27 @@ pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscr
 /// A request item sent through a channel.
 type RequestItem<Ctx> = (ChainWorkerRequest<Ctx>, tracing::Span, Instant);
 
-/// The endpoint for sending requests to a [`ChainWorkerActor`].
+/// Creates a dual-channel pair for communicating with a [`ChainWorkerActor`].
 ///
 /// Read-only requests and write requests use separate channels so that
 /// the actor can schedule them with a fairness policy.
+pub(crate) fn chain_actor_channel<Ctx: Context + Clone + 'static>(
+) -> (ChainActorEndpoint<Ctx>, ChainActorReceivers<Ctx>) {
+    let (read_sender, read_receiver) = mpsc::unbounded_channel();
+    let (write_sender, write_receiver) = mpsc::unbounded_channel();
+    (
+        ChainActorEndpoint {
+            read_sender,
+            write_sender,
+        },
+        ChainActorReceivers {
+            read_receiver,
+            write_receiver,
+        },
+    )
+}
+
+/// The endpoint for sending requests to a [`ChainWorkerActor`].
 #[derive(Clone)]
 pub(crate) struct ChainActorEndpoint<Ctx: Context + Clone + 'static> {
     read_sender: mpsc::UnboundedSender<RequestItem<Ctx>>,
@@ -62,17 +80,6 @@ pub(crate) struct ChainActorEndpoint<Ctx: Context + Clone + 'static> {
 }
 
 impl<Ctx: Context + Clone + 'static> ChainActorEndpoint<Ctx> {
-    /// Creates a new endpoint from the read and write senders.
-    pub(crate) fn new(
-        read_sender: mpsc::UnboundedSender<RequestItem<Ctx>>,
-        write_sender: mpsc::UnboundedSender<RequestItem<Ctx>>,
-    ) -> Self {
-        Self {
-            read_sender,
-            write_sender,
-        }
-    }
-
     /// Sends a request to the appropriate channel based on whether it's read-only.
     pub(crate) fn send(
         &self,
@@ -91,19 +98,6 @@ impl<Ctx: Context + Clone + 'static> ChainActorEndpoint<Ctx> {
 pub(crate) struct ChainActorReceivers<Ctx: Context + Clone + 'static> {
     read_receiver: mpsc::UnboundedReceiver<RequestItem<Ctx>>,
     write_receiver: mpsc::UnboundedReceiver<RequestItem<Ctx>>,
-}
-
-impl<Ctx: Context + Clone + 'static> ChainActorReceivers<Ctx> {
-    /// Creates new receivers from the read and write receivers.
-    pub(crate) fn new(
-        read_receiver: mpsc::UnboundedReceiver<RequestItem<Ctx>>,
-        write_receiver: mpsc::UnboundedReceiver<RequestItem<Ctx>>,
-    ) -> Self {
-        Self {
-            read_receiver,
-            write_receiver,
-        }
-    }
 }
 
 #[cfg(with_metrics)]
@@ -657,7 +651,7 @@ where
                     }
                     if !pending_reads.is_empty() {
                         // Step A: Prepare (needs &mut worker).
-                        worker.ensure_shared_chain_view_initialized()?;
+                        worker.ensure_shared_chain_view_initialized();
 
                         let mut owned_futures = Vec::new();
                         let mut simple_items = Vec::new();
@@ -665,9 +659,9 @@ where
                             if let Some((request, span, _)) =
                                 self.preprocess_request(request, span, queued_at, &endpoint)
                             {
-                                match worker.try_prepare_owned_read(request) {
-                                    Ok(fut) => owned_futures.push((fut, span)),
-                                    Err(request) => simple_items.push((request, span)),
+                                match worker.maybe_prepare_owned_read(request) {
+                                    Either::Left(fut) => owned_futures.push((fut, span)),
+                                    Either::Right(request) => simple_items.push((request, span)),
                                 }
                             }
                         }
@@ -709,10 +703,10 @@ where
                         if let Some((request, span, _)) =
                             self.preprocess_request(request, span, queued_at, &endpoint)
                         {
-                            worker.ensure_shared_chain_view_initialized()?;
-                            match worker.try_prepare_owned_read(request) {
-                                Ok(fut) => fut.instrument(span).await,
-                                Err(request) => {
+                            worker.ensure_shared_chain_view_initialized();
+                            match worker.maybe_prepare_owned_read(request) {
+                                Either::Left(fut) => fut.instrument(span).await,
+                                Either::Right(request) => {
                                     worker
                                         .handle_read_request(request)
                                         .instrument(span)

@@ -37,15 +37,15 @@ use linera_storage::Storage;
 use linera_views::{context::InactiveContext, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
+use tokio::sync::{oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
 /// Re-export of [`EventSubscriptionsResult`] for use by other crate modules.
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        BlockOutcome, ChainActorEndpoint, ChainActorReceivers, ChainWorkerActor, ChainWorkerConfig,
-        ChainWorkerRequest, DeliveryNotifier,
+        chain_actor_channel, BlockOutcome, ChainActorEndpoint, ChainActorReceivers,
+        ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -1046,10 +1046,7 @@ where
         let (endpoint, new_receivers) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
             (endpoint, None)
         } else {
-            let (read_tx, read_rx) = mpsc::unbounded_channel();
-            let (write_tx, write_rx) = mpsc::unbounded_channel();
-            let endpoint = ChainActorEndpoint::new(read_tx, write_tx);
-            let receivers = ChainActorReceivers::new(read_rx, write_rx);
+            let (endpoint, receivers) = chain_actor_channel();
             (endpoint, Some(receivers))
         };
 

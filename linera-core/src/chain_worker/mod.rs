@@ -27,8 +27,8 @@ pub(super) use self::delivery_notifier::DeliveryNotifier;
 pub(crate) use self::state::CrossChainUpdateHelper;
 pub(crate) use self::{
     actor::{
-        ChainActorEndpoint, ChainActorReceivers, ChainWorkerActor, ChainWorkerRequest,
-        EventSubscriptionsResult,
+        chain_actor_channel, ChainActorEndpoint, ChainActorReceivers, ChainWorkerActor,
+        ChainWorkerRequest, EventSubscriptionsResult,
     },
     config::ChainWorkerConfig,
     state::BlockOutcome,

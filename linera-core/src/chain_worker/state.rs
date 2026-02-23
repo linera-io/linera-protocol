@@ -362,14 +362,13 @@ where
                 callback.send(self.read_certificate(height).await).is_ok()
             }
             ChainWorkerRequest::GetChainStateView { callback } => {
-                let result = self
-                    .shared_chain_view
-                    .as_ref()
-                    .expect("shared_chain_view should be initialized before read batch")
-                    .clone()
-                    .read_owned()
-                    .await;
-                callback.send(Ok(result)).is_ok()
+                let result = match self.shared_chain_view.as_ref() {
+                    Some(view) => Ok(view.clone().read_owned().await),
+                    None => Err(WorkerError::ViewError(linera_views::ViewError::NotFound(
+                        "shared chain view not initialized".to_string(),
+                    ))),
+                };
+                callback.send(result).is_ok()
             }
             ChainWorkerRequest::DescribeApplication {
                 application_id,
@@ -413,11 +412,17 @@ where
     /// Creates a clone of the chain state if not already present. Must be called
     /// before processing a batch of concurrent reads that may include
     /// `GetChainStateView`.
-    pub(super) fn ensure_shared_chain_view_initialized(&mut self) -> Result<(), WorkerError> {
+    pub(super) fn ensure_shared_chain_view_initialized(&mut self) {
         if self.shared_chain_view.is_none() {
-            self.shared_chain_view = Some(Arc::new(RwLock::new(self.chain.clone_unchecked()?)));
+            match self.chain.clone_unchecked() {
+                Ok(view) => {
+                    self.shared_chain_view = Some(Arc::new(RwLock::new(view)));
+                }
+                Err(err) => {
+                    trace!("Failed to initialize shared chain view: {err}");
+                }
+            }
         }
-        Ok(())
     }
 
     /// Clears the shared chain view, and acquires and drops its write lock.
@@ -1519,50 +1524,47 @@ where
     ) -> Result<QueryOutcome, WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
-        if let Some(requested_block) = block_hash {
-            if let Some(mut state) = self.execution_state_cache.remove(&requested_block) {
-                // We try to use a cached execution state for the requested block.
-                // We want to pretend that this block is committed, so we set the next block height.
-                let next_block_height = self
-                    .chain
-                    .tip_state
-                    .get()
-                    .next_block_height
-                    .try_add_one()
-                    .expect("block height to not overflow");
-                let context = QueryContext {
-                    chain_id: self.chain_id(),
-                    next_block_height,
-                    local_time,
-                };
-                let outcome = state
-                    .with_context(|ctx| {
-                        self.chain
-                            .execution_state
-                            .context()
-                            .clone_with_base_key(ctx.base_key().bytes.clone())
-                    })
-                    .await
-                    .query_application(context, query, self.service_runtime_endpoint.as_mut())
-                    .await
-                    .with_execution_context(ChainExecutionContext::Query)?;
-                self.execution_state_cache
-                    .insert_owned(&requested_block, state);
-                Ok(outcome)
-            } else {
-                tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
-                let outcome = self
-                    .chain
-                    .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
-                    .await?;
-                Ok(outcome)
-            }
+        // Try to use a cached execution state for the requested block.
+        // We want to pretend that this block is committed, so we set the next block height.
+        let cached_state =
+            block_hash.and_then(|h| self.execution_state_cache.remove(&h).map(|s| (h, s)));
+        if let Some((requested_block, mut state)) = cached_state {
+            let next_block_height = self
+                .chain
+                .tip_state
+                .get()
+                .next_block_height
+                .try_add_one()
+                .expect("block height to not overflow");
+            let context = QueryContext {
+                chain_id: self.chain_id(),
+                next_block_height,
+                local_time,
+            };
+            let outcome = state
+                .with_context(|ctx| {
+                    self.chain
+                        .execution_state
+                        .context()
+                        .clone_with_base_key(ctx.base_key().bytes.clone())
+                })
+                .await
+                .query_application(context, query, self.service_runtime_endpoint.as_mut())
+                .await
+                .with_execution_context(ChainExecutionContext::Query)?;
+            self.execution_state_cache
+                .insert_owned(&requested_block, state);
+            Ok(outcome)
         } else {
-            let outcome = self
+            if block_hash.is_some() {
+                tracing::debug!(
+                    "requested block hash not found in cache, querying committed state"
+                );
+            }
+            Ok(self
                 .chain
                 .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
-                .await?;
-            Ok(outcome)
+                .await?)
         }
     }
 
@@ -1600,40 +1602,38 @@ where
 
         Box::pin(async move {
             let result: Result<QueryOutcome, WorkerError> = async {
-                if let Some(requested_block) = block_hash {
-                    if let Some(mut state) = execution_state_cache.remove(&requested_block) {
-                        let next_block_height = next_block_height
-                            .try_add_one()
-                            .expect("block height to not overflow");
-                        let context = QueryContext {
-                            chain_id,
-                            next_block_height,
-                            local_time,
-                        };
-                        let outcome = state
-                            .with_context(|ctx| {
-                                chain_clone
-                                    .execution_state
-                                    .context()
-                                    .clone_with_base_key(ctx.base_key().bytes.clone())
-                            })
-                            .await
-                            .query_application(context, query, None)
-                            .await
-                            .with_execution_context(ChainExecutionContext::Query)?;
-                        execution_state_cache.insert_owned(&requested_block, state);
-                        Ok(outcome)
-                    } else {
+                // Try to use a cached execution state for the requested block.
+                let cached_state =
+                    block_hash.and_then(|h| execution_state_cache.remove(&h).map(|s| (h, s)));
+                if let Some((requested_block, mut state)) = cached_state {
+                    let next_block_height = next_block_height
+                        .try_add_one()
+                        .expect("block height to not overflow");
+                    let context = QueryContext {
+                        chain_id,
+                        next_block_height,
+                        local_time,
+                    };
+                    let outcome = state
+                        .with_context(|ctx| {
+                            chain_clone
+                                .execution_state
+                                .context()
+                                .clone_with_base_key(ctx.base_key().bytes.clone())
+                        })
+                        .await
+                        .query_application(context, query, None)
+                        .await
+                        .with_execution_context(ChainExecutionContext::Query)?;
+                    execution_state_cache.insert_owned(&requested_block, state);
+                    Ok(outcome)
+                } else {
+                    if block_hash.is_some() {
                         tracing::debug!(
-                            requested_block = %requested_block,
                             "requested block hash not found in cache, \
                              querying committed state"
                         );
-                        Ok(chain_clone
-                            .query_application(local_time, query, None)
-                            .await?)
                     }
-                } else {
                     Ok(chain_clone
                         .query_application(local_time, query, None)
                         .await?)
@@ -1645,22 +1645,21 @@ where
     }
 
     /// If this is a `QueryApplication` request, prepares an owned future by cloning
-    /// the chain state. Otherwise returns the request unchanged for
-    /// [`handle_read_request`](Self::handle_read_request).
-    #[allow(clippy::type_complexity, clippy::result_large_err)]
-    pub(super) fn try_prepare_owned_read(
+    /// the chain state (`Left`). Otherwise returns the request unchanged for
+    /// [`handle_read_request`](Self::handle_read_request) (`Right`).
+    pub(super) fn maybe_prepare_owned_read(
         &mut self,
         request: ChainWorkerRequest<StorageClient::Context>,
-    ) -> Result<BoxedFuture<'static>, ChainWorkerRequest<StorageClient::Context>> {
+    ) -> Either<BoxedFuture<'static>, ChainWorkerRequest<StorageClient::Context>> {
         if let ChainWorkerRequest::QueryApplication {
             query,
             block_hash,
             callback,
         } = request
         {
-            Ok(self.prepare_query_application(query, block_hash, callback))
+            Either::Left(self.prepare_query_application(query, block_hash, callback))
         } else {
-            Err(request)
+            Either::Right(request)
         }
     }
 
