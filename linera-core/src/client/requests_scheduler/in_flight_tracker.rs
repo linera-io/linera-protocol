@@ -134,6 +134,16 @@ impl<N: Clone> InFlightTracker<N> {
         0
     }
 
+    async fn alternative_peers_lock(
+        &self,
+        key: &RequestKey,
+    ) -> Option<Arc<tokio::sync::RwLock<Vec<N>>>> {
+        let in_flight = self.entries.read().await;
+        in_flight
+            .get(key)
+            .map(|entry| Arc::clone(&entry.alternative_peers))
+    }
+
     /// Registers an alternative peer for an in-flight request.
     ///
     /// If an entry exists for the given key, registers the peer as an alternative source
@@ -146,13 +156,11 @@ impl<N: Clone> InFlightTracker<N> {
     where
         N: PartialEq + Eq,
     {
-        if let Some(entry) = self.entries.read().await.get(key) {
-            // Register this peer as an alternative source if not already present
-            {
-                let mut alt_peers = entry.alternative_peers.write().await;
-                if !alt_peers.contains(&peer) {
-                    alt_peers.push(peer);
-                }
+        if let Some(alternative_peers) = self.alternative_peers_lock(key).await {
+            // Register this peer as an alternative source if not already present.
+            let mut alt_peers = alternative_peers.write().await;
+            if !alt_peers.contains(&peer) {
+                alt_peers.push(peer);
             }
         }
     }
@@ -167,10 +175,8 @@ impl<N: Clone> InFlightTracker<N> {
     /// # Returns
     /// - `Vec<N>`: List of alternative peers (empty if no entry exists)
     pub(super) async fn get_alternative_peers(&self, key: &RequestKey) -> Option<Vec<N>> {
-        let in_flight = self.entries.read().await;
-
-        let entry = in_flight.get(key)?;
-        let peers = entry.alternative_peers.read().await;
+        let alternative_peers = self.alternative_peers_lock(key).await?;
+        let peers = alternative_peers.read().await;
         Some(peers.clone())
     }
 
@@ -183,8 +189,8 @@ impl<N: Clone> InFlightTracker<N> {
     where
         N: PartialEq + Eq,
     {
-        if let Some(entry) = self.entries.read().await.get(key) {
-            let mut alt_peers = entry.alternative_peers.write().await;
+        if let Some(alternative_peers) = self.alternative_peers_lock(key).await {
+            let mut alt_peers = alternative_peers.write().await;
             alt_peers.retain(|p| p != peer);
         }
     }
@@ -201,12 +207,9 @@ impl<N: Clone> InFlightTracker<N> {
     /// - `Some(N)`: The newest alternative peer
     /// - `None`: No entry exists or alternatives list is empty
     pub(super) async fn pop_alternative_peer(&self, key: &RequestKey) -> Option<N> {
-        if let Some(entry) = self.entries.read().await.get(key) {
-            let mut alt_peers = entry.alternative_peers.write().await;
-            alt_peers.pop()
-        } else {
-            None
-        }
+        let alternative_peers = self.alternative_peers_lock(key).await?;
+        let mut alt_peers = alternative_peers.write().await;
+        alt_peers.pop()
     }
 }
 
