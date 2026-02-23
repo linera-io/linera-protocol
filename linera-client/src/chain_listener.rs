@@ -22,8 +22,7 @@ use linera_base::{
 use linera_core::{
     client::{
         chain_client::{self, ChainClient},
-        Client,
-        AbortOnDrop, ListeningMode,
+        AbortOnDrop, Client, ListeningMode,
     },
     node::NotificationStream,
     worker::{Notification, Reason},
