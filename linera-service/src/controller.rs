@@ -238,6 +238,9 @@ where
                     reject_message_bundles_without_application_ids: Some(
                         apps.iter()
                             .map(|app_id| GenericApplicationId::User(*app_id))
+                            .chain(std::iter::once(GenericApplicationId::User(
+                                self.controller_id,
+                            )))
                             .chain(std::iter::once(GenericApplicationId::System))
                             .collect(),
                     ),
