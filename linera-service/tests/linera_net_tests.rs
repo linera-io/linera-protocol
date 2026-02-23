@@ -5263,7 +5263,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     // to work.
     let service_port = get_node_port().await;
     let service_service = service_client
-        .run_node_service(service_port, ProcessInbox::Automatic)
+        // we only use this client to perform mutations - the messages should be only
+        // processed by the worker
+        .run_node_service(service_port, ProcessInbox::Skip)
         .await?;
     let service_task_app = service_service.make_application(&service_chain, &task_processor_id)?;
     service_task_app
