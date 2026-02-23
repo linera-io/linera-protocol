@@ -105,7 +105,9 @@ jobs:
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
     - name: Deploy the counter application
       run: |
-        echo LINERA_COUNTER_APPLICATION_ID=$(LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- project publish-and-create examples/counter --json-argument 0) >> "$GITHUB_ENV"
+        cargo run --bin linera -- wallet init
+        cargo run --bin linera -- wallet request-chain
+        echo LINERA_COUNTER_APPLICATION_ID=$(cargo run --bin linera -- project publish-and-create examples/counter --json-argument 0) >> "$GITHUB_ENV"
 
     - name: Switch to nightly Rust toolchain
       run: |
