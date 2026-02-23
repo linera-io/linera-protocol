@@ -24,6 +24,7 @@ serde_yaml = "0.8.26"
 
 [dev-dependencies]
 bcs.workspace = true
+fungible.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }
@@ -37,7 +38,6 @@ revm = { workspace = true, default-features = false, features = [
     "portable",
 ] }
 revm-context.workspace = true
-fungible.workspace = true
 serde-reflection.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
