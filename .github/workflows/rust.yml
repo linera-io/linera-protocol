@@ -151,6 +151,14 @@ jobs:
       if: steps.check-solc.outputs.solc-available == 'true'
       run: |
         cargo test --locked -p linera-bridge
+    - name: Check generated Solidity files are up to date
+      if: steps.check-solc.outputs.solc-available == 'true'
+      run: |
+        if ! git diff --exit-code linera-bridge/src/solidity/
+        then
+          echo 'Generated Solidity files are out of date. Run `cargo build -p linera-bridge` and commit the results.'
+          exit 1
+        fi
 
   metrics-test:
     needs: changed-files
