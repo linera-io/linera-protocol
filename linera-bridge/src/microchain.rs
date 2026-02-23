@@ -9,7 +9,7 @@ pub const SOURCE: &str = include_str!("solidity/Microchain.sol");
 sol! {
     function addBlock(bytes calldata data) external;
 
-    function latestHeight() external view returns (uint64);
+    function nextExpectedHeight() external view returns (uint64);
 
     function lightClient() external view returns (address);
 
@@ -28,7 +28,7 @@ mod tests {
         primitives::Address,
     };
 
-    use super::{addBlockCall, chainIdCall, latestHeightCall, lightClientCall};
+    use super::{addBlockCall, chainIdCall, lightClientCall, nextExpectedHeightCall};
     use crate::test_helpers::*;
 
     sol! {
@@ -68,9 +68,9 @@ mod tests {
 
         assert_eq!(microchain.query_block_count(), 1, "block count should be 1");
         assert_eq!(
-            microchain.query_latest_height(),
-            1,
-            "latest height should be 1"
+            microchain.query_next_expected_height(),
+            2,
+            "next expected height should be 2"
         );
     }
 
@@ -131,7 +131,7 @@ mod tests {
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let light_client =
                 deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
-            let contract = deploy_microchain(&mut db, deployer, light_client, chain_id, 0);
+            let contract = deploy_microchain(&mut db, deployer, light_client, chain_id, 1);
 
             Self {
                 db,
@@ -190,12 +190,12 @@ mod tests {
             count
         }
 
-        fn query_latest_height(&mut self) -> u64 {
+        fn query_next_expected_height(&mut self) -> u64 {
             let (height, _, _) = call_contract(
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                latestHeightCall {},
+                nextExpectedHeightCall {},
             );
             height
         }
