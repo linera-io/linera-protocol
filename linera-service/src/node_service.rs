@@ -30,7 +30,10 @@ use linera_client::chain_listener::{
     ChainListener, ChainListenerConfig, ClientContext, ListenerCommand,
 };
 use linera_core::{
-    client::chain_client::{self, ChainClient},
+    client::{
+        chain_client::{self, ChainClient},
+        Client,
+    },
     data_types::ClientOutcome,
     wallet::Wallet as _,
     worker::Notification,
@@ -128,6 +131,40 @@ impl<C> MutationRoot<C>
 where
     C: ClientContext,
 {
+    async fn shared_client(&self) -> Arc<Client<C::Environment>> {
+        let context = self.context.lock().await;
+        context.client().clone()
+    }
+
+    async fn persist_wallet_from_client(
+        &self,
+        chain_client: &ChainClient<C::Environment>,
+    ) -> Result<(), Error> {
+        let shared_client = self.shared_client().await;
+        let info = chain_client.chain_info().await?;
+        let chain_id = info.chain_id;
+        let existing_owner = shared_client
+            .wallet()
+            .get(chain_id)
+            .await
+            .map_err(|error| Error::new(format!("Failed to read wallet state: {error}")))?
+            .and_then(|chain| chain.owner);
+
+        let new_chain = linera_core::wallet::Chain {
+            pending_proposal: chain_client.pending_proposal(),
+            owner: existing_owner,
+            ..info.as_ref().into()
+        };
+
+        shared_client
+            .wallet()
+            .insert(chain_id, new_chain)
+            .await
+            .map_err(|error| Error::new(format!("Failed to update wallet state: {error}")))?;
+
+        Ok(())
+    }
+
     async fn execute_system_operation(
         &self,
         system_operation: SystemOperation,
@@ -169,7 +206,7 @@ where
                 .await?;
             let mut stream = client.subscribe()?;
             let (result, client) = f(client).await;
-            self.context.lock().await.update_wallet(&client).await?;
+            self.persist_wallet_from_client(&client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::Conflict(certificate) => {
@@ -202,7 +239,7 @@ where
                 .make_chain_client(chain_id)
                 .await?;
             let result = client.process_inbox().await;
-            self.context.lock().await.update_wallet(&client).await?;
+            self.persist_wallet_from_client(&client).await?;
             let (certificates, maybe_timeout) = result?;
             hashes.extend(certificates.into_iter().map(|cert| cert.hash()));
             match maybe_timeout {
@@ -231,7 +268,7 @@ where
             .make_chain_client(chain_id)
             .await?;
         let info = client.synchronize_from_validators().await?;
-        self.context.lock().await.update_wallet(&client).await?;
+        self.persist_wallet_from_client(&client).await?;
         Ok(info.next_block_height.0)
     }
 
@@ -247,7 +284,7 @@ where
             .make_chain_client(chain_id)
             .await?;
         let outcome = client.process_pending_block().await?;
-        self.context.lock().await.update_wallet(&client).await?;
+        self.persist_wallet_from_client(&client).await?;
         match outcome {
             ClientOutcome::Committed(Some(certificate)) => Ok(Some(certificate.hash())),
             ClientOutcome::Committed(None) => Ok(None),
