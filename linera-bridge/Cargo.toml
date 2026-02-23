@@ -10,17 +10,43 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[features]
+codegen = ["dep:serde-generate", "dep:serde-reflection", "dep:serde_yaml"]
+cli = ["dep:clap", "dep:reqwest", "dep:serde_json", "dep:serde", "dep:fs-err"]
+
 [lints]
 workspace = true
 
 [dependencies]
+alloy = { workspace = true, default-features = false, features = [
+    "rpc-types-eth",
+    "json-rpc",
+    "signer-local",
+    "contract",
+    "reqwest",
+] }
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
+anyhow.workspace = true
+bcs.workspace = true
+clap = { workspace = true, optional = true }
+fs-err = { workspace = true, optional = true }
+linera-base.workspace = true
+linera-execution.workspace = true
+reqwest = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["full"] }
+url.workspace = true
+
+[[bin]]
+name = "linera-bridge"
+required-features = ["cli"]
 
 [build-dependencies]
-serde-generate = { version = "0.33", features = ["solidity"] }
-serde-reflection.workspace = true
-serde_yaml = "0.8.26"
+serde-generate = { version = "0.33", features = ["solidity"], optional = true }
+serde-reflection = { workspace = true, optional = true }
+serde_yaml = { version = "0.8.26", optional = true }
 
 [dev-dependencies]
 bcs.workspace = true

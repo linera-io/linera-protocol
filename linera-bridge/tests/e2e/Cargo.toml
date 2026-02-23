@@ -1,0 +1,20 @@
+[package]
+name = "linera-bridge-e2e"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Separate workspace — avoids bollard version conflicts between
+# testcontainers (>=0.19) and dockertest (0.17) in the main workspace.
+
+[workspace]
+
+[dependencies]
+alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-features = false, features = [
+    "rpc-types-eth",
+    "json-rpc",
+    "contract",
+    "reqwest",
+] }
+testcontainers = { version = "0.27", features = ["docker-compose"] }
+tokio = { version = "1", features = ["full"] }

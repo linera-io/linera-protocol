@@ -19,7 +19,7 @@ ARG build_folder=release
 ARG build_features=scylladb,metrics,opentelemetry
 ARG rustflags="-C force-frame-pointers=yes"
 
-FROM rust:1.74-slim-bookworm AS builder
+FROM rust:1.86-slim-bookworm AS builder
 ARG git_commit
 ARG build_flag
 ARG build_folder
@@ -37,6 +37,7 @@ COPY linera-base linera-base
 COPY linera-chain linera-chain
 COPY linera-client linera-client
 COPY linera-core linera-core
+COPY linera-bridge linera-bridge
 COPY linera-ethereum linera-ethereum
 COPY linera-execution linera-execution
 COPY linera-explorer linera-explorer
@@ -89,7 +90,7 @@ COPY \
 FROM builder$copy AS binaries
 
 # Setup running environment for container
-FROM debian:latest
+FROM debian:bookworm-slim
 
 ARG git_commit
 LABEL git_commit=$git_commit

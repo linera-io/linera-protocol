@@ -4,10 +4,7 @@
 //! Code specific to the usage of the [Revm](https://bluealloy.github.io/revm/) runtime.
 //! Here we implement the Database traits of Revm.
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use linera_base::vm::VmRuntime;
 use linera_views::common::from_bytes_option;
@@ -130,7 +127,7 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
             storage_stats: Arc::new(Mutex::new(storage_stats)),
             contract_address: Address::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
-            changes: HashMap::new(),
+            changes: EvmState::default(),
         }
     }
 

@@ -195,11 +195,17 @@ mod tests {
             "target should start with zero balance"
         );
 
-        t.submit_credit(test_target(), Amount::from_tokens(100), test_source());
+        let transfer_amount = 100_000_000_000_000_000_000u128;
+
+        t.submit_credit(
+            test_target(),
+            Amount::from_attos(transfer_amount),
+            test_source(),
+        );
 
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
-            alloy_primitives::U256::from(100_000_000_000_000_000_000u128),
+            alloy_primitives::U256::from(transfer_amount),
             "target should have 100 tokens"
         );
     }
@@ -210,24 +216,28 @@ mod tests {
         let target = test_target();
         let source = test_source();
 
-        t.submit_credit(target, Amount::from_tokens(100), source);
+        let transfer_amount = 100_000_000_000_000_000_000u128;
+
+        t.submit_credit(target, Amount::from_attos(transfer_amount), source);
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
-            alloy_primitives::U256::from(100_000_000_000_000_000_000u128),
+            alloy_primitives::U256::from(transfer_amount),
             "balance should be 100 tokens after first credit"
         );
 
-        t.submit_credit(target, Amount::from_tokens(50), source);
+        let second_transfer = 50_000_000_000_000_000_000u128;
+
+        t.submit_credit(target, Amount::from_attos(second_transfer), source);
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
-            alloy_primitives::U256::from(150_000_000_000_000_000_000u128),
+            alloy_primitives::U256::from(transfer_amount + second_transfer),
             "balance should be 150 tokens after two credits"
         );
 
         // Bridge balance should have decreased accordingly
         assert_eq!(
             t.query_token_balance(t.bridge),
-            alloy_primitives::U256::from(INITIAL_SUPPLY - 150_000_000_000_000_000_000u128),
+            alloy_primitives::U256::from(INITIAL_SUPPLY - (transfer_amount + second_transfer)),
             "bridge balance should decrease"
         );
     }

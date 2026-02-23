@@ -147,18 +147,22 @@ jobs:
           echo "::warning::solc not found in PATH, skipping bridge tests"
           echo "solc-available=false" >> $GITHUB_OUTPUT
         fi
-    - name: Run bridge tests
+    - name: Regenerate Solidity types
       if: steps.check-solc.outputs.solc-available == 'true'
       run: |
-        cargo test --locked -p linera-bridge
+        cargo build --locked -p linera-bridge --features codegen
     - name: Check generated Solidity files are up to date
       if: steps.check-solc.outputs.solc-available == 'true'
       run: |
         if ! git diff --exit-code linera-bridge/src/solidity/
         then
-          echo 'Generated Solidity files are out of date. Run `cargo build -p linera-bridge` and commit the results.'
+          echo 'Generated Solidity files are out of date. Run `cargo build -p linera-bridge --features codegen` and commit the results.'
           exit 1
         fi
+    - name: Run bridge tests
+      if: steps.check-solc.outputs.solc-available == 'true'
+      run: |
+        cargo test --locked -p linera-bridge
 
   metrics-test:
     needs: changed-files

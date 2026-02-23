@@ -11,6 +11,8 @@ use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_service::config::{Destination, DestinationId, DestinationKind};
 use linera_storage::Storage;
 
+#[cfg(feature = "bridge")]
+use crate::runloops::evm_chain_exporter::EvmChainExporter;
 use crate::{runloops::logging_exporter::LoggingExporter, storage::ExporterStorage};
 
 /// This type manages tasks like spawning different exporters on the different
@@ -42,8 +44,12 @@ where
         startup_destinations: Vec<Destination>,
         current_committee_destinations: HashSet<DestinationId>,
     ) -> Self {
-        let exporters_builder =
-            ExporterBuilder::new(node_options, work_queue_size, shutdown_signal);
+        let exporters_builder = ExporterBuilder::new(
+            node_options,
+            work_queue_size,
+            shutdown_signal,
+            &startup_destinations,
+        );
         Self {
             exporters_builder,
             storage,
@@ -136,6 +142,10 @@ pub(super) struct ExporterBuilder<F> {
     work_queue_size: usize,
     node_provider: Arc<GrpcNodeProvider>,
     shutdown_signal: F,
+    /// Full destination configs keyed by ID, needed for destinations that
+    /// require more than just the address string (e.g. EvmChain).
+    #[cfg(feature = "bridge")]
+    destination_configs: HashMap<DestinationId, Destination>,
 }
 
 impl<F> ExporterBuilder<F>
@@ -143,15 +153,24 @@ where
     F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
     <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
 {
-    pub(super) fn new(options: NodeOptions, work_queue_size: usize, shutdown_signal: F) -> Self {
+    pub(super) fn new(
+        options: NodeOptions,
+        work_queue_size: usize,
+        shutdown_signal: F,
+        #[cfg_attr(not(feature = "bridge"), allow(unused))] destinations: &[Destination],
+    ) -> Self {
         let node_provider = GrpcNodeProvider::new(options);
         let arced_node_provider = Arc::new(node_provider);
+        #[cfg(feature = "bridge")]
+        let destination_configs = destinations.iter().map(|d| (d.id(), d.clone())).collect();
 
         Self {
             options,
             shutdown_signal,
             work_queue_size,
             node_provider: arced_node_provider,
+            #[cfg(feature = "bridge")]
+            destination_configs,
         }
     }
 
@@ -190,6 +209,22 @@ where
                 tokio::task::spawn(
                     exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
                 )
+            }
+
+            #[cfg(feature = "bridge")]
+            DestinationKind::EvmChain => {
+                let destination = self
+                    .destination_configs
+                    .get(&id)
+                    .expect("EvmChain destination config must exist");
+                let exporter_task = EvmChainExporter::new(id, destination.clone());
+                tokio::task::spawn(
+                    exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
+                )
+            }
+            #[cfg(not(feature = "bridge"))]
+            DestinationKind::EvmChain => {
+                panic!("EvmChain destination requires the `bridge` feature")
             }
         }
     }
