@@ -1,14 +1,17 @@
 DOCKER_DIR := ../docker
 COMPOSE_FILE := $(DOCKER_DIR)/docker-compose.bridge-test.yml
 
-.PHONY: build-all up down
+.PHONY: build-wasm build-all up down
 
-build-all: ## Build all docker images needed for the bridge test (debug mode)
+build-wasm: ## Build fungible example Wasm files
+	pushd ../examples && cargo build --release --target wasm32-unknown-unknown -p fungible
+
+build-all: build-wasm ## Build Wasm files and all docker images needed for the bridge test (debug mode)
 	cd $(DOCKER_DIR) && docker build \
 		-f ./Dockerfile.exporter \
 		--build-arg build_flag="" \
 		--build-arg build_folder=debug \
-		--build-arg build_features=scylladb,metrics,bridge \
+		--build-arg build_features=scylladb,metrics \
 		-t linera-exporter ..
 	cd $(DOCKER_DIR) && docker build -f ./Dockerfile \
 		--build-arg build_flag="" \

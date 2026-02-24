@@ -14,6 +14,19 @@ services:
     networks:
       - linera-network
 
+  # 0b. Foundry tools - persistent service for deploying contracts via forge
+  foundry-tools:
+    image: "${FOUNDRY_IMAGE:-foundry-jq}"
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - bridge-shared:/shared
+      - ../linera-bridge/src/solidity:/contracts:ro
+    depends_on:
+      anvil:
+        condition: service_healthy
+    networks:
+      - linera-network
+
   # 1. ScyllaDB - storage backend for linera network and exporter
   scylla-setup:
     image: ubuntu:24.04
@@ -55,6 +68,7 @@ services:
     ports:
       - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
       - "13001:13001"
+      - "9090:9090"
     command: >
       sh -c "mkdir -p ${LINERA_NET_PATH:-/tmp/wallet} &&
       ./linera net
@@ -79,6 +93,7 @@ services:
       start_period: 60s
     volumes:
       - network-data:/data
+      - ../examples/target/wasm32-unknown-unknown/release:/wasm:ro
     depends_on:
       scylla:
         condition: service_healthy
