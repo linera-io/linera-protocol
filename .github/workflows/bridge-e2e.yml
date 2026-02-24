@@ -3,9 +3,8 @@ name: Bridge E2E
 on:
   merge_group:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - 'testnet_*'
+  push:
+    branches: [ 'testnet_*', 'main']
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
@@ -71,8 +70,13 @@ jobs:
         with:
           filters: |
             bridge:
-              - 'linera-bridge/**'
-              - '!linera-bridge/tests/e2e/**'
+              - 'linera-bridge/src/**'
+              - 'linera-bridge/solidity/**'
+              - 'linera-bridge/tests/formats/**'
+              - 'linera-bridge/tests/snapshots/**'
+              - 'linera-bridge/tests/solidity/**'
+              - 'linera-bridge/Cargo.*'
+              - 'linera-bridge/rust-toolchain.toml'
               - 'docker/Dockerfile.bridge'
 
       - name: Build foundry-jq image
