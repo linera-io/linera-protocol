@@ -73,7 +73,7 @@ mod metrics {
 /// The state of the chain worker.
 pub(crate) struct ChainWorkerState<StorageClient>
 where
-    StorageClient: Storage + Clone + 'static,
+    StorageClient: Storage,
 {
     config: ChainWorkerConfig,
     pub(crate) storage: StorageClient,

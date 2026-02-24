@@ -76,7 +76,7 @@ use crate::{
 /// The test worker accepts blocks with a timestamp this far in the future.
 const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 
-struct TestEnvironment<S: Storage + Clone + 'static> {
+struct TestEnvironment<S: Storage> {
     committee: Committee,
     // The main worker used for assertions.
     worker: WorkerState<S>,

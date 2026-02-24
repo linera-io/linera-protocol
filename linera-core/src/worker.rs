@@ -481,10 +481,7 @@ impl WorkerError {
 }
 
 /// State of a worker in a validator or a local node.
-pub struct WorkerState<StorageClient>
-where
-    StorageClient: Storage + Clone + 'static,
-{
+pub struct WorkerState<StorageClient: Storage> {
     /// A name used for logging
     nickname: String,
     /// Access to local persistent storage.

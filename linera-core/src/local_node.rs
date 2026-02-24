@@ -32,19 +32,13 @@ use crate::{
 };
 
 /// A local node with a single worker, typically used by clients.
-pub struct LocalNode<S>
-where
-    S: Storage + Clone + 'static,
-{
+pub struct LocalNode<S: Storage> {
     state: WorkerState<S>,
 }
 
 /// A client to a local node.
 #[derive(Clone)]
-pub struct LocalNodeClient<S>
-where
-    S: Storage + Clone + 'static,
-{
+pub struct LocalNodeClient<S: Storage> {
     node: Arc<LocalNode<S>>,
 }
 

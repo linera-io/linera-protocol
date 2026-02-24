@@ -76,19 +76,13 @@ pub enum FaultType {
 /// All methods are executed in spawned Tokio tasks, so that canceling a client task doesn't cause
 /// the validator's tasks to be canceled: In a real network, a validator also wouldn't cancel
 /// tasks if the client stopped waiting for the response.
-struct LocalValidator<S>
-where
-    S: Storage + Clone + 'static,
-{
+struct LocalValidator<S: Storage> {
     state: WorkerState<S>,
     notifier: Arc<ChannelNotifier<Notification>>,
 }
 
 #[derive(Clone)]
-pub struct LocalValidatorClient<S>
-where
-    S: Storage + Clone + 'static,
-{
+pub struct LocalValidatorClient<S: Storage> {
     public_key: ValidatorPublicKey,
     client: Arc<Mutex<LocalValidator<S>>>,
     fault_type: FaultType,
@@ -704,9 +698,7 @@ where
 }
 
 #[derive(Clone)]
-pub struct NodeProvider<S>(Arc<std::sync::Mutex<Vec<LocalValidatorClient<S>>>>)
-where
-    S: Storage + Clone + 'static;
+pub struct NodeProvider<S: Storage>(Arc<std::sync::Mutex<Vec<LocalValidatorClient<S>>>>);
 
 impl<S> NodeProvider<S>
 where
@@ -750,10 +742,7 @@ where
     }
 }
 
-impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S>
-where
-    S: Storage + Clone + 'static,
-{
+impl<S: Storage> FromIterator<LocalValidatorClient<S>> for NodeProvider<S> {
     fn from_iter<T>(iter: T) -> Self
     where
         T: IntoIterator<Item = LocalValidatorClient<S>>,
