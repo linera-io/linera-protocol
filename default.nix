@@ -8,6 +8,7 @@
   cargoExtraArgs = "-p linera-service";
   nativeBuildInputs = with pkgs; [
     clang
+    llvmPackages.bintools
     pkg-config
     rocksdb
     protobufc
