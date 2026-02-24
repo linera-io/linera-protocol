@@ -63,7 +63,7 @@ use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
-    chain_worker::CrossChainUpdateHelper,
+    chain_worker::{ChainWorkerConfig, CrossChainUpdateHelper},
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -158,17 +158,22 @@ where
                 .await
                 .expect("writing a network description should not fail");
 
+            let config = ChainWorkerConfig {
+                allow_inactive_chains: is_client,
+                allow_messages_from_deprecated_epochs: is_client,
+                long_lived_services: has_long_lived_services,
+                block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+                ..ChainWorkerConfig::default()
+            }
+            .with_key_pair(Some(keypair.secret_key));
             WorkerState::new(
                 "Single validator node".to_string(),
-                Some(keypair.secret_key),
                 storage,
                 5_000,
                 10_000,
+                config,
+                None,
             )
-            .with_allow_inactive_chains(is_client)
-            .with_allow_messages_from_deprecated_epochs(is_client)
-            .with_long_lived_services(has_long_lived_services)
-            .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS))
         };
 
         let worker = make_worker(ValidatorKeypair::generate()).await;

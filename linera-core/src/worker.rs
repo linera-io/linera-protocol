@@ -4,16 +4,13 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex, RwLock,
-    },
+    sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
 
 use futures::future::Either;
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
+    crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
     data_types::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, TimeDelta,
         Timestamp,
@@ -69,7 +66,6 @@ use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     notifier::Notifier,
     value_cache::ValueCache,
-    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
 #[cfg(test)]
@@ -496,6 +492,97 @@ impl WorkerError {
     }
 }
 
+type ChainHandleMap<S> = Arc<Mutex<BTreeMap<ChainId, Arc<ChainHandle<S>>>>>;
+
+/// Starts the background TTL sweep task for a chain handle map.
+///
+/// The sweep runs periodically and evicts idle chain handles whose last access
+/// exceeds their configured TTL. Called once during `WorkerState` construction.
+fn start_sweep<S: Storage + Clone + 'static>(
+    chain_handles: &ChainHandleMap<S>,
+    config: &ChainWorkerConfig,
+) {
+    let ttl = config.ttl;
+    let sender_ttl = config.sender_chain_ttl;
+    // Sweep at the smaller of the two TTLs, divided by 4 for responsiveness.
+    // If both TTLs are zero, don't sweep at all (handles live forever).
+    let min_ttl = ttl.min(sender_ttl);
+    let interval = if min_ttl.is_zero() {
+        if ttl.is_zero() && sender_ttl.is_zero() {
+            return; // No TTL configured — nothing to sweep.
+        }
+        // One of them is zero (infinite); use the non-zero one.
+        ttl.max(sender_ttl) / 4
+    } else {
+        min_ttl / 4
+    };
+    // The sweep holds a Weak reference so it stops when all WorkerState clones are dropped.
+    let weak_handles = Arc::downgrade(chain_handles);
+    linera_base::task::spawn(async move {
+        loop {
+            linera_base::time::timer::sleep(interval).await;
+            let Some(chain_handles) = weak_handles.upgrade() else {
+                break; // All WorkerState clones have been dropped.
+            };
+            // Phase 1: Identify candidates without removing them from the map.
+            let candidates: Vec<ChainId> = {
+                let handles = chain_handles.lock().unwrap();
+                handles
+                    .iter()
+                    .filter(|(_, handle)| {
+                        handle.is_expired(ttl, sender_ttl) && Arc::strong_count(handle) == 1
+                    })
+                    .map(|(chain_id, _)| *chain_id)
+                    .collect()
+            };
+            // Phase 2: For each candidate, clone the Arc (keeping the entry in
+            // the map so new requests still find it rather than creating
+            // duplicates), then acquire the write lock to wait for all
+            // outstanding guards to drain. Finally, re-lock the map and
+            // remove only if no one else grabbed a reference in the meantime.
+            for chain_id in candidates {
+                let handle = {
+                    let handles = chain_handles.lock().unwrap();
+                    let Some(handle) = handles.get(&chain_id) else {
+                        continue; // Already removed by another path.
+                    };
+                    // Quick pre-check before cloning.
+                    if !handle.is_expired(ttl, sender_ttl) {
+                        continue;
+                    }
+                    handle.clone() // strong_count: map + us
+                };
+                // Acquire write lock — blocks until all outstanding
+                // OwnedRwLock{Read,Write}Guards are released. While we wait,
+                // the handle stays in the map so new requests reuse it.
+                let mut guard = handle.write().await;
+                // Re-lock the map. We hold the write lock, so no one can
+                // acquire new guards. If strong_count == 2 (map + us), no
+                // request is currently referencing this handle.
+                {
+                    let mut handles = chain_handles.lock().unwrap();
+                    if Arc::strong_count(&handle) != 2 || !handle.is_expired(ttl, sender_ttl) {
+                        // Someone grabbed a reference or it was touched
+                        // while we waited — not safe to evict.
+                        drop(guard);
+                        continue;
+                    }
+                    handles.remove(&chain_id);
+                }
+                // Drop the service runtime endpoint so the runtime task's
+                // channel closes, allowing it to exit its loop.
+                guard.clear_service_runtime_endpoint();
+                drop(guard);
+                if let Err(err) = handle.shutdown_service_runtime().await {
+                    tracing::warn!(%chain_id, %err, "Failed to shut down service runtime");
+                }
+            }
+            drop(chain_handles);
+        }
+    })
+    .forget();
+}
+
 /// State of a worker in a validator or a local node.
 pub struct WorkerState<StorageClient: Storage> {
     /// A name used for logging
@@ -517,9 +604,7 @@ pub struct WorkerState<StorageClient: Storage> {
     /// read/write lock. The TTL sweep task does the reverse (holds the handle's write
     /// lock, then briefly locks this map to remove the entry), so violating this order
     /// would deadlock.
-    chain_handles: Arc<Mutex<BTreeMap<ChainId, Arc<ChainHandle<StorageClient>>>>>,
-    /// Whether the TTL sweep task has been started.
-    sweep_started: Arc<AtomicBool>,
+    chain_handles: ChainHandleMap<StorageClient>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -536,7 +621,6 @@ where
             chain_modes: self.chain_modes.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_handles: self.chain_handles.clone(),
-            sweep_started: self.sweep_started.clone(),
         }
     }
 }
@@ -547,115 +631,6 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
 {
-    #[instrument(level = "trace", skip(nickname, key_pair, storage))]
-    pub fn new(
-        nickname: String,
-        key_pair: Option<ValidatorSecretKey>,
-        storage: StorageClient,
-        block_cache_size: usize,
-        execution_state_cache_size: usize,
-    ) -> Self {
-        WorkerState {
-            nickname,
-            storage,
-            chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
-            chain_modes: None,
-            delivery_notifiers: Arc::default(),
-            chain_handles: Arc::new(Mutex::new(BTreeMap::new())),
-            sweep_started: Arc::new(AtomicBool::new(false)),
-        }
-    }
-
-    #[instrument(level = "trace", skip(nickname, storage))]
-    pub fn new_for_client(
-        nickname: String,
-        storage: StorageClient,
-        chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
-        block_cache_size: usize,
-        execution_state_cache_size: usize,
-    ) -> Self {
-        WorkerState {
-            nickname,
-            storage,
-            chain_worker_config: ChainWorkerConfig::default(),
-            block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
-            chain_modes: Some(chain_modes),
-            delivery_notifiers: Arc::default(),
-            chain_handles: Arc::new(Mutex::new(BTreeMap::new())),
-            sweep_started: Arc::new(AtomicBool::new(false)),
-        }
-    }
-
-    #[instrument(level = "trace", skip(self, value))]
-    pub fn with_allow_inactive_chains(mut self, value: bool) -> Self {
-        self.chain_worker_config.allow_inactive_chains = value;
-        self
-    }
-
-    #[instrument(level = "trace", skip(self, value))]
-    pub fn with_allow_messages_from_deprecated_epochs(mut self, value: bool) -> Self {
-        self.chain_worker_config
-            .allow_messages_from_deprecated_epochs = value;
-        self
-    }
-
-    #[instrument(level = "trace", skip(self, value))]
-    pub fn with_long_lived_services(mut self, value: bool) -> Self {
-        self.chain_worker_config.long_lived_services = value;
-        self
-    }
-
-    /// Returns an instance with the specified block time grace period.
-    ///
-    /// Blocks with a timestamp this far in the future will still be accepted, but the validator
-    /// will wait until that timestamp before voting.
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_block_time_grace_period(mut self, block_time_grace_period: Duration) -> Self {
-        self.chain_worker_config.block_time_grace_period = block_time_grace_period;
-        self
-    }
-
-    /// Returns an instance with the specified chain worker TTL.
-    ///
-    /// Idle chain workers free their memory after that duration without requests.
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_chain_worker_ttl(mut self, chain_worker_ttl: Duration) -> Self {
-        self.chain_worker_config.ttl = chain_worker_ttl;
-        self
-    }
-
-    /// Returns an instance with the specified sender chain worker TTL.
-    ///
-    /// Idle sender chain workers free their memory after that duration without requests.
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_sender_chain_worker_ttl(mut self, sender_chain_worker_ttl: Duration) -> Self {
-        self.chain_worker_config.sender_chain_ttl = sender_chain_worker_ttl;
-        self
-    }
-
-    /// Returns an instance with the specified maximum size for received_log entries.
-    ///
-    /// Sizes below `CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES` should be avoided.
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_chain_info_max_received_log_entries(
-        mut self,
-        chain_info_max_received_log_entries: usize,
-    ) -> Self {
-        if chain_info_max_received_log_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
-            warn!(
-                "The value set for the maximum size of received_log entries \
-                   may not be compatible with the latest clients: {} instead of {}",
-                chain_info_max_received_log_entries, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES
-            );
-        }
-        self.chain_worker_config.chain_info_max_received_log_entries =
-            chain_info_max_received_log_entries;
-        self
-    }
-
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.nickname
@@ -748,6 +723,33 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + 'static,
 {
+    /// Creates a new `WorkerState`.
+    ///
+    /// The `chain_worker_config` must be fully configured before calling this, because the
+    /// TTL sweep task is started immediately based on the config's TTL values.
+    #[instrument(level = "trace", skip(nickname, storage, chain_worker_config))]
+    pub fn new(
+        nickname: String,
+        storage: StorageClient,
+        block_cache_size: usize,
+        execution_state_cache_size: usize,
+        chain_worker_config: ChainWorkerConfig,
+        chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+    ) -> Self {
+        let chain_handles = Arc::new(Mutex::new(BTreeMap::new()));
+        start_sweep(&chain_handles, &chain_worker_config);
+        WorkerState {
+            nickname,
+            storage,
+            chain_worker_config,
+            block_cache: Arc::new(ValueCache::new(block_cache_size)),
+            execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
+            chain_modes,
+            delivery_notifiers: Arc::default(),
+            chain_handles,
+        }
+    }
+
     #[instrument(level = "trace", skip(self, certificate, notifier))]
     #[inline]
     pub async fn fully_handle_certificate_with_notifications<T>(
@@ -775,107 +777,11 @@ where
         .await
     }
 
-    /// Starts the TTL sweep task if it hasn't been started yet.
-    ///
-    /// The sweep runs periodically and evicts idle chain handles whose last access
-    /// exceeds their configured TTL.
-    fn ensure_sweep_started(&self) {
-        if self
-            .sweep_started
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
-            .is_err()
-        {
-            return; // Already started.
-        }
-        let chain_handles = self.chain_handles.clone();
-        let ttl = self.chain_worker_config.ttl;
-        let sender_ttl = self.chain_worker_config.sender_chain_ttl;
-        // Sweep at the smaller of the two TTLs, divided by 4 for responsiveness.
-        // If both TTLs are zero, don't sweep at all (handles live forever).
-        let min_ttl = ttl.min(sender_ttl);
-        let interval = if min_ttl.is_zero() {
-            if ttl.is_zero() && sender_ttl.is_zero() {
-                return; // No TTL configured — nothing to sweep.
-            }
-            // One of them is zero (infinite); use the non-zero one.
-            ttl.max(sender_ttl) / 4
-        } else {
-            min_ttl / 4
-        };
-        // The sweep holds a Weak reference so it stops when all WorkerState clones are dropped.
-        let weak_handles = Arc::downgrade(&chain_handles);
-        linera_base::task::spawn(async move {
-            loop {
-                linera_base::time::timer::sleep(interval).await;
-                let Some(chain_handles) = weak_handles.upgrade() else {
-                    break; // All WorkerState clones have been dropped.
-                };
-                // Phase 1: Identify candidates without removing them from the map.
-                let candidates: Vec<ChainId> = {
-                    let handles = chain_handles.lock().unwrap();
-                    handles
-                        .iter()
-                        .filter(|(_, handle)| {
-                            handle.is_expired(ttl, sender_ttl) && Arc::strong_count(handle) == 1
-                        })
-                        .map(|(chain_id, _)| *chain_id)
-                        .collect()
-                };
-                // Phase 2: For each candidate, clone the Arc (keeping the entry in
-                // the map so new requests still find it rather than creating
-                // duplicates), then acquire the write lock to wait for all
-                // outstanding guards to drain. Finally, re-lock the map and
-                // remove only if no one else grabbed a reference in the meantime.
-                for chain_id in candidates {
-                    let handle = {
-                        let handles = chain_handles.lock().unwrap();
-                        let Some(handle) = handles.get(&chain_id) else {
-                            continue; // Already removed by another path.
-                        };
-                        // Quick pre-check before cloning.
-                        if !handle.is_expired(ttl, sender_ttl) {
-                            continue;
-                        }
-                        handle.clone() // strong_count: map + us
-                    };
-                    // Acquire write lock — blocks until all outstanding
-                    // OwnedRwLock{Read,Write}Guards are released. While we wait,
-                    // the handle stays in the map so new requests reuse it.
-                    let mut guard = handle.write().await;
-                    // Re-lock the map. We hold the write lock, so no one can
-                    // acquire new guards. If strong_count == 2 (map + us), no
-                    // request is currently referencing this handle.
-                    {
-                        let mut handles = chain_handles.lock().unwrap();
-                        if Arc::strong_count(&handle) != 2 || !handle.is_expired(ttl, sender_ttl) {
-                            // Someone grabbed a reference or it was touched
-                            // while we waited — not safe to evict.
-                            drop(guard);
-                            continue;
-                        }
-                        handles.remove(&chain_id);
-                    }
-                    // Drop the service runtime endpoint so the runtime task's
-                    // channel closes, allowing it to exit its loop.
-                    guard.clear_service_runtime_endpoint();
-                    drop(guard);
-                    if let Err(err) = handle.shutdown_service_runtime().await {
-                        tracing::warn!(%chain_id, %err, "Failed to shut down service runtime");
-                    }
-                }
-                drop(chain_handles);
-            }
-        })
-        .forget();
-    }
-
     /// Gets or creates a `ChainHandle` for the given chain.
     async fn get_or_create_chain_handle(
         &self,
         chain_id: ChainId,
     ) -> Result<Arc<ChainHandle<StorageClient>>, WorkerError> {
-        self.ensure_sweep_started();
-
         // Fast path: check if a handle already exists.
         {
             let handles = self.chain_handles.lock().unwrap();
