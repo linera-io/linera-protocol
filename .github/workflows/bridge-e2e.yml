@@ -65,26 +65,30 @@ jobs:
           docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
           docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter
 
-      - uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            bridge:
-              - 'linera-bridge/src/**'
-              - 'linera-bridge/solidity/**'
-              - 'linera-bridge/tests/formats/**'
-              - 'linera-bridge/tests/snapshots/**'
-              - 'linera-bridge/tests/solidity/**'
-              - 'linera-bridge/Cargo.*'
-              - 'linera-bridge/rust-toolchain.toml'
-              - 'docker/Dockerfile.bridge'
-
       - name: Build foundry-jq image
         run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
 
-      - name: Pull bridge image (unchanged)
+      - name: Check if bridge source changed
+        id: bridge-check
+        run: |
+          BASE="${{ github.base_ref }}"
+          if [ -n "$BASE" ]; then
+            BASE="origin/$BASE"
+          else
+            BASE="HEAD~1"
+          fi
+          CHANGED=$(git diff --name-only "$BASE" -- \
+            linera-bridge/ docker/Dockerfile.bridge \
+            ':!linera-bridge/tests/e2e' | head -1)
+          if [ -n "$CHANGED" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pull bridge image
         id: pull-bridge
-        if: steps.changes.outputs.bridge == 'false'
+        if: steps.bridge-check.outputs.changed == 'false'
         continue-on-error: true
         run: |
           BRANCH="${{ github.base_ref || github.ref_name }}"
@@ -93,7 +97,7 @@ jobs:
 
       - name: Build bridge image
         id: build-bridge
-        if: steps.changes.outputs.bridge == 'true' || steps.pull-bridge.outcome == 'failure'
+        if: steps.bridge-check.outputs.changed == 'true' || steps.pull-bridge.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
