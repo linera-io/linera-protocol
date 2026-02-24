@@ -18,6 +18,7 @@ alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-fe
     "signer-local",
 ] }
 bcs = "0.1.6"
+futures = "0.3"
 linera-base = { path = "../../../linera-base" }
 linera-client = { path = "../../../linera-client", default-features = false, features = [
     "wasmer",

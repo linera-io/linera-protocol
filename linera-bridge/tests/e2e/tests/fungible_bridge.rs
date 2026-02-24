@@ -6,6 +6,8 @@
 
 use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
+use futures::StreamExt as _;
+
 use alloy::{
     network::EthereumWallet,
     primitives::{Address, U256},
@@ -23,7 +25,7 @@ use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, start_compose, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::environment::wallet::Memory;
+use linera_core::{environment::wallet::Memory, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_sdk::abis::fungible::{self, FungibleOperation, FungibleTokenAbi};
@@ -166,7 +168,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
     let app_id = app_id.forget_abi();
     eprintln!("Application ID: {app_id}");
 
-    // ── 4. Claim chain B (bridge chain) from faucet ──
+    // ── 4. Claim chain B (bridge chain) from faucet and subscribe to notifications ──
     eprintln!("Claiming chain B from faucet...");
     let owner_b = AccountOwner::from(signer.generate_new());
     let chain_b_desc = faucet.claim(&owner_b).await.expect("claim chain B");
@@ -175,6 +177,14 @@ async fn test_fungible_bridge_transfers_to_evm() {
         .await
         .expect("register chain B");
     eprintln!("Chain B (bridge): {chain_b}");
+
+    let cc_b = ctx
+        .make_chain_client(chain_b)
+        .await
+        .expect("make chain client B");
+    let mut notifications = cc_b.subscribe().expect("subscribe to chain B");
+    let (listener, _abort_handle, _) = cc_b.listen().await.expect("listen on chain B");
+    tokio::spawn(listener);
 
     // ── 5. Deploy MockERC20 on Anvil ──
     eprintln!("Deploying MockERC20...");
@@ -278,28 +288,28 @@ async fn test_fungible_bridge_transfers_to_evm() {
         transfer_block.recipients()
     );
 
-    // ── 9. Process inbox on chain B (with retry) ──
-    eprintln!("Processing inbox on chain B...");
-    let cc_b = ctx
-        .make_chain_client(chain_b)
-        .await
-        .expect("make chain client B");
-    let mut certs = Vec::new();
-    for attempt in 1..=5 {
-        cc_b.synchronize_from_validators()
-            .await
-            .expect("sync chain B");
-        let (c, _) = cc_b
-            .process_inbox()
-            .await
-            .expect("process inbox on chain B");
-        if !c.is_empty() {
-            certs = c;
-            break;
+    // ── 9. Wait for incoming bundle notification, then process inbox on chain B ──
+    eprintln!("Waiting for NewIncomingBundle notification on chain B...");
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while let Some(notification) = notifications.next().await {
+            if matches!(notification.reason, Reason::NewIncomingBundle { .. }) {
+                eprintln!("Received NewIncomingBundle notification");
+                return;
+            }
         }
-        eprintln!("  process_inbox attempt {attempt}: 0 certificates, retrying after 2s...");
-        tokio::time::sleep(Duration::from_secs(2)).await;
-    }
+        panic!("Notification stream ended without NewIncomingBundle");
+    })
+    .await
+    .expect("timed out waiting for NewIncomingBundle notification");
+
+    eprintln!("Processing inbox on chain B...");
+    cc_b.synchronize_from_validators()
+        .await
+        .expect("sync chain B");
+    let (certs, _) = cc_b
+        .process_inbox()
+        .await
+        .expect("process inbox on chain B");
     eprintln!("Processed {} certificate(s) from inbox", certs.len());
     assert!(
         !certs.is_empty(),

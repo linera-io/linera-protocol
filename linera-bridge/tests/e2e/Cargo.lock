@@ -3607,6 +3607,7 @@ version = "0.0.1"
 dependencies = [
  "alloy",
  "bcs",
+ "futures",
  "linera-base",
  "linera-client",
  "linera-core",
