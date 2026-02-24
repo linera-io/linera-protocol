@@ -70,8 +70,8 @@ jobs:
       - name: Build bridge image 1
         uses: docker/build-push-action@v6
         with:
-          context: ./linera-bridge
-          file: ./linera-bridge/Dockerfile  # adjust
+          context: .
+          file: ./docker/Dockerfile.bridge
           load: true
           tags: linera-bridge:latest
           cache-from: type=gha,scope=linera-bridge
