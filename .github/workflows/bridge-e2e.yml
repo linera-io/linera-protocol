@@ -107,6 +107,10 @@ jobs:
           BRANCH="${{ github.base_ref || github.ref_name }}"
           docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
 
+      - name: Build fungible example Wasm
+        run: cargo build --release --target wasm32-unknown-unknown -p fungible
+        working-directory: examples
+
       - name: Run bridge E2E test
         working-directory: linera-bridge/tests/e2e
         env:
