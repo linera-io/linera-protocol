@@ -17,6 +17,7 @@ alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-fe
     "reqwest",
     "signer-local",
 ] }
+anyhow = "1"
 bcs = "0.1.6"
 futures = "0.3"
 linera-base = { path = "../../../linera-base" }

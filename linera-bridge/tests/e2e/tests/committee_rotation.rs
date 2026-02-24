@@ -21,26 +21,20 @@ sol! {
 }
 
 /// Queries the current epoch from the LightClient contract on Anvil.
-async fn query_current_epoch() -> Result<u32, String> {
-    let rpc_url = "http://localhost:8545"
-        .parse()
-        .map_err(|e| format!("Invalid RPC URL: {e}"))?;
+async fn query_current_epoch() -> anyhow::Result<u32> {
+    let rpc_url = "http://localhost:8545".parse()?;
     let provider = ProviderBuilder::new().connect_http(rpc_url);
 
     let contract = ILightClient::new(light_client_address(), &provider);
 
-    let epoch = contract
-        .currentEpoch()
-        .call()
-        .await
-        .map_err(|e| format!("currentEpoch() call failed: {e}"))?;
+    let epoch = contract.currentEpoch().call().await?;
 
     Ok(epoch)
 }
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images: `make -C linera-bridge build-all`
-async fn test_committee_rotation_updates_evm_light_client() {
+async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_test_writer().try_init().ok();
     let compose_file = compose_file_path();
     let project_name = "linera-bridge-test";
@@ -48,9 +42,7 @@ async fn test_committee_rotation_updates_evm_light_client() {
     let compose = start_compose(&compose_file, project_name).await;
 
     // Verify initial epoch is 0.
-    let epoch = query_current_epoch()
-        .await
-        .expect("should query initial epoch");
+    let epoch = query_current_epoch().await?;
     assert_eq!(epoch, 0, "initial epoch should be 0");
     tracing::info!(epoch, "Initial epoch verified");
 
@@ -95,7 +87,7 @@ async fn test_committee_rotation_updates_evm_light_client() {
             Ok(epoch) if epoch >= 1 => {
                 tracing::info!(epoch, "Epoch advanced");
                 assert_eq!(epoch, 1, "epoch should be exactly 1 after one rotation");
-                return;
+                return Ok(());
             }
             Ok(epoch) => {
                 tracing::info!(epoch, "Waiting for epoch to advance");
@@ -107,7 +99,7 @@ async fn test_committee_rotation_updates_evm_light_client() {
 
         if start.elapsed() > timeout {
             dump_compose_logs(project_name, &compose_file);
-            panic!(
+            anyhow::bail!(
                 "Timed out waiting for epoch to advance to 1 (waited {:?})",
                 start.elapsed()
             );

@@ -13,6 +13,7 @@ use alloy::{
     signers::local::PrivateKeySigner,
     sol,
 };
+use anyhow::Context as _;
 use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
@@ -46,18 +47,18 @@ sol! {
 }
 
 /// Parse a "Deployed to: 0x..." address from forge create output.
-fn parse_deployed_address(output: &str) -> Address {
+fn parse_deployed_address(output: &str) -> anyhow::Result<Address> {
     for line in output.lines() {
         if let Some(addr) = line.strip_prefix("Deployed to: ") {
-            return addr.trim().parse().expect("valid deployed address");
+            return Ok(addr.trim().parse()?);
         }
     }
-    panic!("Could not find 'Deployed to:' in forge output:\n{output}");
+    anyhow::bail!("Could not find 'Deployed to:' in forge output:\n{output}");
 }
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
-async fn test_fungible_bridge_transfers_to_evm() {
+async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_test_writer().try_init().ok();
     let compose_file = compose_file_path();
     let project_name = "linera-bridge-test";
@@ -67,7 +68,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
     // ── 1. Create programmatic Linera client ──
     tracing::info!("Creating programmatic Linera client...");
     let faucet = Faucet::new("http://localhost:8080".to_string());
-    let genesis_config = faucet.genesis_config().await.expect("fetch genesis config");
+    let genesis_config = faucet.genesis_config().await?;
 
     let config = MemoryStoreConfig {
         max_stream_queries: 10,
@@ -78,13 +79,9 @@ async fn test_fungible_bridge_transfers_to_evm() {
         "bridge-e2e-test",
         Some(WasmRuntime::default()),
     )
-    .await
-    .expect("create in-memory storage");
+    .await?;
 
-    genesis_config
-        .initialize_storage(&mut storage)
-        .await
-        .expect("initialize storage with genesis data");
+    genesis_config.initialize_storage(&mut storage).await?;
 
     let mut signer = InMemorySigner::new(None);
 
@@ -96,56 +93,41 @@ async fn test_fungible_bridge_transfers_to_evm() {
         None,
         genesis_config,
     )
-    .await
-    .expect("create client context");
+    .await?;
 
     // ── 2. Claim chain A from faucet ──
     tracing::info!("Claiming chain A from faucet...");
     let owner_a = AccountOwner::from(signer.generate_new());
-    let chain_a_desc = faucet.claim(&owner_a).await.expect("claim chain A");
+    let chain_a_desc = faucet.claim(&owner_a).await?;
     let chain_a = chain_a_desc.id();
-    ctx.extend_with_chain(chain_a_desc, Some(owner_a))
-        .await
-        .expect("register chain A");
+    ctx.extend_with_chain(chain_a_desc, Some(owner_a)).await?;
 
-    let cc_a = ctx
-        .make_chain_client(chain_a)
-        .await
-        .expect("make chain client A");
-    cc_a.synchronize_from_validators()
-        .await
-        .expect("sync chain A");
+    let cc_a = ctx.make_chain_client(chain_a).await?;
+    cc_a.synchronize_from_validators().await?;
     tracing::info!(%chain_a, %owner_a, "Chain A claimed");
 
     // ── 3. Publish and create fungible app on chain A ──
     tracing::info!("Publishing fungible module...");
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .unwrap()
+        .context("no parent dir")?
         .parent()
-        .unwrap()
+        .context("no grandparent dir")?
         .parent()
-        .unwrap()
+        .context("no great-grandparent dir")?
         .to_path_buf();
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
-    let contract_bytecode = Bytecode::load_from_file(wasm_dir.join("fungible_contract.wasm"))
-        .expect("load contract bytecode");
-    let service_bytecode = Bytecode::load_from_file(wasm_dir.join("fungible_service.wasm"))
-        .expect("load service bytecode");
+    let contract_bytecode = Bytecode::load_from_file(wasm_dir.join("fungible_contract.wasm"))?;
+    let service_bytecode = Bytecode::load_from_file(wasm_dir.join("fungible_service.wasm"))?;
 
     let (module_id, cert) = cc_a
         .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
-        .await
-        .expect("publish module")
+        .await?
         .expect("publish module committed");
     tracing::info!(height=?cert.inner().block().header.height, "Module published");
 
-    cc_a.synchronize_from_validators()
-        .await
-        .expect("sync after publish");
-    cc_a.process_inbox()
-        .await
-        .expect("process inbox after publish");
+    cc_a.synchronize_from_validators().await?;
+    cc_a.process_inbox().await?;
 
     tracing::info!("Creating fungible application...");
     let params = fungible::Parameters::new("TEST");
@@ -159,8 +141,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
             &init_state,
             vec![],
         )
-        .await
-        .expect("create fungible application")
+        .await?
         .expect("create application committed");
     let app_id = app_id.forget_abi();
     tracing::info!(%app_id, "Application created");
@@ -168,19 +149,14 @@ async fn test_fungible_bridge_transfers_to_evm() {
     // ── 4. Claim chain B (bridge chain) from faucet and subscribe to notifications ──
     tracing::info!("Claiming chain B from faucet...");
     let owner_b = AccountOwner::from(signer.generate_new());
-    let chain_b_desc = faucet.claim(&owner_b).await.expect("claim chain B");
+    let chain_b_desc = faucet.claim(&owner_b).await?;
     let chain_b = chain_b_desc.id();
-    ctx.extend_with_chain(chain_b_desc, Some(owner_b))
-        .await
-        .expect("register chain B");
+    ctx.extend_with_chain(chain_b_desc, Some(owner_b)).await?;
     tracing::info!(%chain_b, "Chain B claimed");
 
-    let cc_b = ctx
-        .make_chain_client(chain_b)
-        .await
-        .expect("make chain client B");
-    let mut notifications = cc_b.subscribe().expect("subscribe to chain B");
-    let (listener, _abort_handle, _) = cc_b.listen().await.expect("listen on chain B");
+    let cc_b = ctx.make_chain_client(chain_b).await?;
+    let mut notifications = cc_b.subscribe()?;
+    let (listener, _abort_handle, _) = cc_b.listen().await?;
     tokio::spawn(listener);
 
     // ── 5. Deploy MockERC20 on Anvil ──
@@ -201,7 +177,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
         &compose_file,
     )
     .await;
-    let erc20_addr = parse_deployed_address(&erc20_output);
+    let erc20_addr = parse_deployed_address(&erc20_output)?;
     tracing::info!(%erc20_addr, "MockERC20 deployed");
 
     // ── 6. Deploy FungibleBridge on Anvil ──
@@ -232,7 +208,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
         &compose_file,
     )
     .await;
-    let bridge_addr = parse_deployed_address(&bridge_output);
+    let bridge_addr = parse_deployed_address(&bridge_output)?;
     tracing::info!(%bridge_addr, "FungibleBridge deployed");
 
     // ── 7. Fund FungibleBridge with ERC20 tokens ──
@@ -255,27 +231,24 @@ async fn test_fungible_bridge_transfers_to_evm() {
 
     // ── 8. Transfer tokens from chain A to Address20 on chain B ──
     let evm_recipient = "70997970C51812dc3A010C7d01b50e0d17dc79C8";
-    let receiver: AccountOwner = format!("0x{evm_recipient}")
-        .parse()
-        .expect("parse EVM address");
+    let receiver: AccountOwner = format!("0x{evm_recipient}").parse()?;
 
     tracing::info!("Sending fungible transfer to Address20 on chain B...");
+    let transfer_bytes = bcs::to_bytes(&FungibleOperation::Transfer {
+        owner: owner_a,
+        amount: Amount::from_tokens(100),
+        target_account: fungible::Account {
+            chain_id: chain_b,
+            owner: receiver,
+        },
+    })?;
     let transfer_op = Operation::User {
         application_id: app_id,
-        bytes: bcs::to_bytes(&FungibleOperation::Transfer {
-            owner: owner_a,
-            amount: Amount::from_tokens(100),
-            target_account: fungible::Account {
-                chain_id: chain_b,
-                owner: receiver,
-            },
-        })
-        .expect("serialize transfer operation"),
+        bytes: transfer_bytes,
     };
     let transfer_cert = cc_a
         .execute_operations(vec![transfer_op], vec![])
-        .await
-        .expect("execute transfer")
+        .await?
         .expect("transfer committed");
     let transfer_block = transfer_cert.inner().block();
     tracing::info!(
@@ -296,17 +269,11 @@ async fn test_fungible_bridge_transfers_to_evm() {
         }
         panic!("Notification stream ended without NewIncomingBundle");
     })
-    .await
-    .expect("timed out waiting for NewIncomingBundle notification");
+    .await?;
 
     tracing::info!("Processing inbox on chain B...");
-    cc_b.synchronize_from_validators()
-        .await
-        .expect("sync chain B");
-    let (certs, _) = cc_b
-        .process_inbox()
-        .await
-        .expect("process inbox on chain B");
+    cc_b.synchronize_from_validators().await?;
+    let (certs, _) = cc_b.process_inbox().await?;
     tracing::info!(count = certs.len(), "Processed certificates from inbox");
     assert!(
         !certs.is_empty(),
@@ -314,36 +281,28 @@ async fn test_fungible_bridge_transfers_to_evm() {
     );
 
     // ── 10. Get certificate bytes for addBlock ──
-    let cert = certs.last().unwrap();
-    let cert_bytes = bcs::to_bytes(cert).expect("BCS serialize certificate");
+    let cert = certs.last().context("no certificates from inbox")?;
+    let cert_bytes = bcs::to_bytes(cert)?;
     tracing::info!(size = cert_bytes.len(), "Certificate serialized");
 
     // ── 11. Call addBlock() on FungibleBridge ──
     tracing::info!("Calling addBlock on FungibleBridge...");
-    let rpc_url = "http://localhost:8545".parse().unwrap();
-    let evm_signer: PrivateKeySigner = ANVIL_PRIVATE_KEY.parse().unwrap();
+    let rpc_url = "http://localhost:8545".parse()?;
+    let evm_signer: PrivateKeySigner = ANVIL_PRIVATE_KEY.parse()?;
     let evm_wallet = EthereumWallet::from(evm_signer);
     let provider = ProviderBuilder::new()
         .wallet(evm_wallet)
         .connect_http(rpc_url);
 
     let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
-    let tx = bridge_contract
-        .addBlock(cert_bytes.into())
-        .send()
-        .await
-        .expect("addBlock transaction send");
-    let receipt = tx.get_receipt().await.expect("addBlock receipt");
+    let tx = bridge_contract.addBlock(cert_bytes.into()).send().await?;
+    let receipt = tx.get_receipt().await?;
     tracing::info!(tx=?receipt.transaction_hash, "addBlock transaction submitted");
 
     // ── 12. Verify ERC20 balance ──
-    let evm_recipient_addr: Address = format!("0x{evm_recipient}").parse().unwrap();
+    let evm_recipient_addr: Address = format!("0x{evm_recipient}").parse()?;
     let erc20_contract = IERC20::new(erc20_addr, &provider);
-    let balance = erc20_contract
-        .balanceOf(evm_recipient_addr)
-        .call()
-        .await
-        .expect("balanceOf call");
+    let balance = erc20_contract.balanceOf(evm_recipient_addr).call().await?;
     tracing::info!(?balance, "ERC20 balance of recipient");
 
     // 100 tokens = 100 * 10^18 (Amount uses 18 decimal places)
@@ -354,4 +313,5 @@ async fn test_fungible_bridge_transfers_to_evm() {
     );
 
     tracing::info!("Test passed! ERC20 balance matches transferred amount.");
+    Ok(())
 }
