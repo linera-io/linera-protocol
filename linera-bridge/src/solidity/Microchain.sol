@@ -7,13 +7,13 @@ import "LightClient.sol";
 abstract contract Microchain {
     LightClient public immutable lightClient;
     bytes32 public immutable chainId;
-    uint64 public latestHeight;
+    uint64 public nextExpectedHeight;
     mapping(bytes32 => bool) public verifiedBlocks;
 
-    constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight) {
+    constructor(address _lightClient, bytes32 _chainId, uint64 _nextExpectedHeight) {
         lightClient = LightClient(_lightClient);
         chainId = _chainId;
-        latestHeight = _latestHeight;
+        nextExpectedHeight = _nextExpectedHeight;
     }
 
     /// Verifies a certificate and accepts the block if it matches this chain and
@@ -30,9 +30,9 @@ abstract contract Microchain {
 
         require(!verifiedBlocks[signedHash], "block already verified");
         require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
-        require(blockValue.header.height.value == latestHeight + 1, "block height must be sequential");
+        require(blockValue.header.height.value == nextExpectedHeight, "block height must be sequential");
 
-        latestHeight = blockValue.header.height.value;
+        nextExpectedHeight = blockValue.header.height.value + 1;
         verifiedBlocks[signedHash] = true;
         _onBlock(blockValue);
     }
