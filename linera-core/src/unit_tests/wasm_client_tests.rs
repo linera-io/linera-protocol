@@ -1171,9 +1171,29 @@ where
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
-        0,
-        "Should reject bundle without message from fake app"
+        1,
+        "Should create a block rejecting a bundle without messages from a fake app"
     );
+    let bundles: Vec<_> = certs[0].block().body.incoming_bundles().collect();
+    assert_eq!(bundles.len(), 1, "Should have one incoming bundle");
+    assert_eq!(
+        bundles[0].action,
+        MessageAction::Reject,
+        "The incoming bundle should be rejected"
+    );
+
+    // Reset for next test.
+    pledger_chain
+        .execute_operation(Operation::user(
+            crowd_funding_id,
+            &CrowdFundingOperation::Pledge {
+                owner: pledger_owner,
+                amount: pledge_amount,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+    campaign_chain.synchronize_from_validators().await?;
 
     // Test 4: Reject bundles that contain messages from apps not in the allowlist.
     // The bundle has messages from both fungible and crowd-funding, but we only allow fungible.
@@ -1186,9 +1206,29 @@ where
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
-        0,
-        "Should reject bundle with message from non-allowed crowd-funding app"
+        1,
+        "Should create a block rejecting a bundle with message from non-allowed crowd-funding app"
     );
+    let bundles: Vec<_> = certs[0].block().body.incoming_bundles().collect();
+    assert_eq!(bundles.len(), 1, "Should have one incoming bundle");
+    assert_eq!(
+        bundles[0].action,
+        MessageAction::Reject,
+        "The incoming bundle should be rejected"
+    );
+
+    // Reset for next test.
+    pledger_chain
+        .execute_operation(Operation::user(
+            crowd_funding_id,
+            &CrowdFundingOperation::Pledge {
+                owner: pledger_owner,
+                amount: pledge_amount,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+    campaign_chain.synchronize_from_validators().await?;
 
     // Test 5: Accept bundles when all app messages are in the allowlist.
     campaign_chain.options_mut().message_policy = MessagePolicy::new(
