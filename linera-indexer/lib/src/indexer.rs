@@ -3,7 +3,10 @@
 
 //! This module defines the base component of linera-indexer.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{btree_map, BTreeMap},
+    sync::Arc,
+};
 
 use allocative::Allocative;
 use async_graphql::{EmptyMutation, EmptySubscription, Schema, SimpleObject};
@@ -14,10 +17,9 @@ use linera_chain::types::{CertificateValue as _, ConfirmedBlock};
 use linera_views::{
     context::{Context, ViewContext},
     map_view::MapView,
-    register_view::RegisterView,
     set_view::SetView,
     store::{KeyValueDatabase, KeyValueStore},
-    views::{RootView, View},
+    views::RootView,
 };
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
@@ -25,7 +27,7 @@ use tracing::info;
 
 use crate::{
     common::{graphiql, IndexerError},
-    plugin::Plugin,
+    plugin::{self, Plugin},
     service::Listener,
 };
 
@@ -34,7 +36,6 @@ use crate::{
 pub struct StateView<C> {
     chains: MapView<C, ChainId, (CryptoHash, BlockHeight)>,
     plugins: SetView<C, String>,
-    initiated: RegisterView<C, bool>,
 }
 
 #[derive(Clone)]
@@ -48,11 +49,6 @@ where
 {
     pub state: State<ViewContext<(), D::Store>>,
     pub plugins: BTreeMap<String, Box<dyn Plugin<D>>>,
-}
-
-pub enum IndexerCommand {
-    Run,
-    Schema,
 }
 
 #[derive(Debug)]
@@ -69,14 +65,9 @@ where
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
     pub async fn load(database: D) -> Result<Self, IndexerError> {
-        let root_key = "indexer".as_bytes().to_vec();
-        let store = database
-            .open_exclusive(&root_key)
-            .map_err(|_e| IndexerError::OpenExclusiveError)?;
-        let context = ViewContext::create_root_context(store, ())
-            .await
-            .map_err(|e| IndexerError::ViewError(e.into()))?;
-        let state = State(Arc::new(Mutex::new(StateView::load(context).await?)));
+        let state = State(
+            plugin::load::<D, StateView<ViewContext<(), D::Store>>>(database, "indexer").await?,
+        );
         Ok(Indexer {
             state,
             plugins: BTreeMap::new(),
@@ -97,9 +88,7 @@ where
         let hash = value.hash();
         let height = value.height();
         info!("save {:?}: {:?} ({})", chain_id, hash, height);
-        state
-            .chains
-            .insert(&chain_id, (value.hash(), value.height()))?;
+        state.chains.insert(&chain_id, (hash, height))?;
         state.save().await.map_err(IndexerError::ViewError)
     }
 
@@ -113,64 +102,68 @@ where
         let chain_id = value.chain_id();
         let hash = value.hash();
         let height = value.height();
-        let mut state = self.state.0.lock().await;
         if height < listener.start {
             return Ok(());
-        };
-        let latest_block = match state.chains.get(&chain_id).await? {
-            None => LatestBlock::StartHeight(listener.start),
-            Some((last_hash, last_height)) => {
-                if last_hash == hash || last_height >= height {
-                    return Ok(());
+        }
+        // Hold the lock only long enough to read the current chain state.
+        let latest_block = {
+            let state = self.state.0.lock().await;
+            match state.chains.get(&chain_id).await? {
+                None => LatestBlock::StartHeight(listener.start),
+                Some((last_hash, last_height)) => {
+                    if last_hash == hash || last_height >= height {
+                        return Ok(());
+                    }
+                    LatestBlock::LatestHash(last_hash)
                 }
-                LatestBlock::LatestHash(last_hash)
             }
         };
         info!("process {:?}: {:?} ({})", chain_id, hash, height);
 
+        // Collect all missing blocks via network I/O without holding the lock.
         let mut values = Vec::new();
         let mut value = value.clone();
         loop {
             let header = &value.block().header;
             values.push(value.clone());
-            if let Some(hash) = header.previous_block_hash {
-                match latest_block {
-                    LatestBlock::LatestHash(latest_hash) if latest_hash != hash => {
-                        value = listener.service.get_value(chain_id, Some(hash)).await?;
-                        continue;
-                    }
-                    LatestBlock::StartHeight(start) if header.height > start => {
-                        value = listener.service.get_value(chain_id, Some(hash)).await?;
-                        continue;
-                    }
-                    _ => break,
-                }
+            let next_hash = header
+                .previous_block_hash
+                .filter(|&hash| match &latest_block {
+                    LatestBlock::LatestHash(latest_hash) => *latest_hash != hash,
+                    LatestBlock::StartHeight(start) => header.height > *start,
+                });
+            if let Some(hash) = next_hash {
+                value = listener.service.get_value(chain_id, Some(hash)).await?;
+            } else {
+                break;
             }
-            break;
         }
 
-        while let Some(value) = values.pop() {
-            self.process_value(&mut state, &value).await?
+        // Re-acquire the lock only for writing.
+        let mut state = self.state.0.lock().await;
+        values.reverse();
+        for value in &values {
+            self.process_value(&mut state, value).await?
         }
         Ok(())
     }
 
     pub async fn init(&self, listener: &Listener, chain_id: ChainId) -> Result<(), IndexerError> {
         match listener.service.get_value(chain_id, None).await {
-            Ok(value) => self.process(listener, &value).await,
             Err(IndexerError::NotFound(_)) => Ok(()),
-            Err(e) => Err(e),
+            result => self.process(listener, &result?).await,
         }
     }
 
     /// Produces the GraphQL schema for the indexer or for a certain plugin
     pub fn sdl(&self, plugin: Option<String>) -> Result<String, IndexerError> {
-        match plugin {
-            None => Ok(self.state.clone().schema().sdl()),
-            Some(plugin) => match self.plugins.get(&plugin) {
-                Some(plugin) => Ok(plugin.sdl()),
-                None => Err(IndexerError::UnknownPlugin(plugin.to_string())),
-            },
+        if let Some(plugin_name) = plugin {
+            self.plugins
+                .get(&plugin_name)
+                .map(|plugin| plugin.sdl())
+                .ok_or(IndexerError::UnknownPlugin(plugin_name))
+        } else {
+            Ok(self.state.clone().schema().sdl())
         }
     }
 
@@ -180,11 +173,15 @@ where
         plugin: impl Plugin<D> + 'static,
     ) -> Result<(), IndexerError> {
         let name = plugin.name();
-        self.plugins
-            .insert(name.clone(), Box::new(plugin))
-            .map_or_else(|| Ok(()), |_| Err(IndexerError::PluginAlreadyRegistered))?;
+        match self.plugins.entry(name.clone()) {
+            btree_map::Entry::Occupied(_) => return Err(IndexerError::PluginAlreadyRegistered),
+            btree_map::Entry::Vacant(entry) => {
+                entry.insert(Box::new(plugin));
+            }
+        }
         let mut state = self.state.0.lock().await;
-        Ok(state.plugins.insert(&name)?)
+        state.plugins.insert(&name)?;
+        Ok(())
     }
 
     /// Handles queries made to the root of the indexer
@@ -228,11 +225,14 @@ where
         let chains = state.chains.indices().await?;
         let mut result = Vec::new();
         for chain in chains {
-            let block = state.chains.get(&chain).await?;
+            let (block, height) = match state.chains.get(&chain).await? {
+                Some((hash, h)) => (Some(hash), Some(h)),
+                None => (None, None),
+            };
             result.push(HighestBlock {
                 chain,
-                block: block.map(|b| b.0),
-                height: block.map(|b| b.1),
+                block,
+                height,
             });
         }
         Ok(result)
