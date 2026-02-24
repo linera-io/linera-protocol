@@ -72,6 +72,7 @@ jobs:
           filters: |
             bridge:
               - 'linera-bridge/**'
+              - '!linera-bridge/tests/e2e/**'
               - 'docker/Dockerfile.bridge'
 
       - name: Pull bridge image (unchanged)
