@@ -95,22 +95,18 @@ impl ServerContext {
             self.server_config.validator_secret.public()
         );
         let config = ChainWorkerConfig {
+            nickname: format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
             key_pair: Some(Arc::new(self.server_config.validator_secret.copy())),
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             block_time_grace_period: self.block_time_grace_period,
             ttl: self.chain_worker_ttl,
             chain_info_max_received_log_entries: self.chain_info_max_received_log_entries,
+            block_cache_size: self.block_cache_size,
+            execution_state_cache_size: self.execution_state_cache_size,
             ..ChainWorkerConfig::default()
         };
-        let state = WorkerState::new(
-            format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
-            storage,
-            self.block_cache_size,
-            self.execution_state_cache_size,
-            config,
-            None,
-        );
+        let state = WorkerState::new(storage, config, None);
         (state, shard_id, shard.clone())
     }
 

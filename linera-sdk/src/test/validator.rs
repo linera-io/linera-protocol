@@ -89,17 +89,11 @@ impl TestValidator {
             .expect("execution of DbStorage::new should not await anything");
         let clock = storage.clock().clone();
         let config = ChainWorkerConfig {
+            nickname: "Single validator node".to_string(),
             key_pair: Some(Arc::new(validator_keypair.secret_key.copy())),
             ..ChainWorkerConfig::default()
         };
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            storage.clone(),
-            5_000,
-            10_000,
-            config,
-            None,
-        );
+        let worker = WorkerState::new(storage.clone(), config, None);
 
         // Create an admin chain.
         let key_pair = AccountSecretKey::generate();

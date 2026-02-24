@@ -266,18 +266,18 @@ impl<Env: Environment> Client<Env> {
     ) -> Self {
         let chain_modes = Arc::new(RwLock::new(chain_modes.into_iter().collect()));
         let config = ChainWorkerConfig {
+            nickname: name.into(),
             long_lived_services,
             allow_inactive_chains: true,
             allow_messages_from_deprecated_epochs: true,
             ttl: chain_worker_ttl,
             sender_chain_ttl: sender_chain_worker_ttl,
+            block_cache_size,
+            execution_state_cache_size,
             ..ChainWorkerConfig::default()
         };
         let state = WorkerState::new(
-            name.into(),
             environment.storage().clone(),
-            block_cache_size,
-            execution_state_cache_size,
             config,
             Some(chain_modes.clone()),
         );

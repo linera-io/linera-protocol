@@ -159,6 +159,7 @@ where
                 .expect("writing a network description should not fail");
 
             let config = ChainWorkerConfig {
+                nickname: "Single validator node".to_string(),
                 allow_inactive_chains: is_client,
                 allow_messages_from_deprecated_epochs: is_client,
                 long_lived_services: has_long_lived_services,
@@ -166,14 +167,7 @@ where
                 ..ChainWorkerConfig::default()
             }
             .with_key_pair(Some(keypair.secret_key));
-            WorkerState::new(
-                "Single validator node".to_string(),
-                storage,
-                5_000,
-                10_000,
-                config,
-                None,
-            )
+            WorkerState::new(storage, config, None)
         };
 
         let worker = make_worker(ValidatorKeypair::generate()).await;

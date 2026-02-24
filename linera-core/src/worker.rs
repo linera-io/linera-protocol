@@ -585,8 +585,6 @@ fn start_sweep<S: Storage + Clone + 'static>(
 
 /// State of a worker in a validator or a local node.
 pub struct WorkerState<StorageClient: Storage> {
-    /// A name used for logging
-    nickname: String,
     /// Access to local persistent storage.
     storage: StorageClient,
     /// Configuration options for chain workers.
@@ -613,7 +611,6 @@ where
 {
     fn clone(&self) -> Self {
         WorkerState {
-            nickname: self.nickname.clone(),
             storage: self.storage.clone(),
             chain_worker_config: self.chain_worker_config.clone(),
             block_cache: self.block_cache.clone(),
@@ -633,7 +630,7 @@ where
 {
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
-        &self.nickname
+        &self.chain_worker_config.nickname
     }
 
     /// Returns the storage client so that it can be manipulated or queried.
@@ -727,19 +724,17 @@ where
     ///
     /// The `chain_worker_config` must be fully configured before calling this, because the
     /// TTL sweep task is started immediately based on the config's TTL values.
-    #[instrument(level = "trace", skip(nickname, storage, chain_worker_config))]
+    #[instrument(level = "trace", skip(storage, chain_worker_config))]
     pub fn new(
-        nickname: String,
         storage: StorageClient,
-        block_cache_size: usize,
-        execution_state_cache_size: usize,
         chain_worker_config: ChainWorkerConfig,
         chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     ) -> Self {
         let chain_handles = Arc::new(Mutex::new(BTreeMap::new()));
         start_sweep(&chain_handles, &chain_worker_config);
+        let block_cache_size = chain_worker_config.block_cache_size;
+        let execution_state_cache_size = chain_worker_config.execution_state_cache_size;
         WorkerState {
-            nickname,
             storage,
             chain_worker_config,
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
@@ -893,7 +888,7 @@ where
     }
 
     #[instrument(level = "trace", skip(self, chain_id, application_id), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         application_id = %application_id
     ))]
@@ -912,7 +907,7 @@ where
         level = "trace",
         skip(self, certificate, notify_when_messages_are_delivered),
         fields(
-            nickname = %self.nickname,
+            nickname = %self.nickname(),
             chain_id = %certificate.block().header.chain_id,
             block_height = %certificate.block().header.height
         )
@@ -932,7 +927,7 @@ where
 
     /// Processes a validated block issued from a multi-owner chain.
     #[instrument(level = "trace", skip(self, certificate), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %certificate.block().header.chain_id,
         block_height = %certificate.block().header.height
     ))]
@@ -948,7 +943,7 @@ where
 
     /// Processes a leader timeout issued from a multi-owner chain.
     #[instrument(level = "trace", skip(self, certificate), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %certificate.value().chain_id(),
         height = %certificate.value().height()
     ))]
@@ -963,7 +958,7 @@ where
     }
 
     #[instrument(level = "trace", skip(self, origin, recipient, bundles), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         origin = %origin,
         recipient = %recipient,
         num_bundles = %bundles.len()
@@ -981,7 +976,7 @@ where
 
     /// Returns a stored [`ConfirmedBlockCertificate`] for a chain's block.
     #[instrument(level = "trace", skip(self, chain_id, height), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         height = %height
     ))]
@@ -1002,7 +997,7 @@ where
     /// The returned guard holds a read lock on the chain state, preventing writes for
     /// its lifetime. Multiple concurrent readers are allowed.
     #[instrument(level = "trace", skip(self), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id
     ))]
     pub async fn chain_state_view(
@@ -1018,7 +1013,7 @@ where
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", proposal.content.block.chain_id),
         height = %proposal.content.block.height,
     ))]
@@ -1026,7 +1021,7 @@ where
         &self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, proposal);
+        trace!("{} <-- {:?}", self.nickname(), proposal);
         #[cfg(with_metrics)]
         let round = proposal.content.round;
 
@@ -1085,7 +1080,7 @@ where
 
     /// Processes a confirmed block certificate.
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
     ))]
@@ -1094,7 +1089,7 @@ where
         certificate: ConfirmedBlockCertificate,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, certificate);
+        trace!("{} <-- {:?}", self.nickname(), certificate);
         #[cfg(with_metrics)]
         let metrics_data = metrics::MetricsData::new(&certificate);
 
@@ -1111,7 +1106,7 @@ where
 
     /// Processes a validated block certificate.
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
     ))]
@@ -1119,7 +1114,7 @@ where
         &self,
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, certificate);
+        trace!("{} <-- {:?}", self.nickname(), certificate);
 
         #[cfg(with_metrics)]
         let round = certificate.round;
@@ -1140,7 +1135,7 @@ where
 
     /// Processes a timeout certificate
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", certificate.inner().chain_id()),
         height = %certificate.inner().height(),
     ))]
@@ -1148,31 +1143,31 @@ where
         &self,
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, certificate);
+        trace!("{} <-- {:?}", self.nickname(), certificate);
         self.process_timeout(certificate).await
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", query.chain_id)
     ))]
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, query);
+        trace!("{} <-- {:?}", self.nickname(), query);
         #[cfg(with_metrics)]
         metrics::CHAIN_INFO_QUERIES.inc();
         let chain_id = query.chain_id;
         let result = spawn_chain_write!(self, chain_id, |guard| {
             guard.handle_chain_info_query(query).await
         });
-        trace!("{} --> {:?}", self.nickname, result);
+        trace!("{} --> {:?}", self.nickname(), result);
         result
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", chain_id)
     ))]
     pub async fn download_pending_blob(
@@ -1182,21 +1177,21 @@ where
     ) -> Result<Blob, WorkerError> {
         trace!(
             "{} <-- download_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname
+            self.nickname()
         );
         let result = spawn_chain_read!(self, chain_id, |guard| {
             guard.download_pending_blob(blob_id).await
         });
         trace!(
             "{} --> {:?}",
-            self.nickname,
+            self.nickname(),
             result.as_ref().map(|_| blob_id)
         );
         result
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", chain_id)
     ))]
     pub async fn handle_pending_blob(
@@ -1207,28 +1202,28 @@ where
         let blob_id = blob.id();
         trace!(
             "{} <-- handle_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname
+            self.nickname()
         );
         let result = spawn_chain_write!(self, chain_id, |guard| {
             guard.handle_pending_blob(blob).await
         });
         trace!(
             "{} --> {:?}",
-            self.nickname,
+            self.nickname(),
             result.as_ref().map(|_| blob_id)
         );
         result
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", request.target_chain_id())
     ))]
     pub async fn handle_cross_chain_request(
         &self,
         request: CrossChainRequest,
     ) -> Result<NetworkActions, WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, request);
+        trace!("{} <-- {:?}", self.nickname(), request);
         match request {
             CrossChainRequest::UpdateRecipient {
                 sender,
@@ -1273,7 +1268,7 @@ where
 
     /// Updates the received certificate trackers to at least the given values.
     #[instrument(skip_all, fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         num_trackers = %new_trackers.len()
     ))]
@@ -1291,7 +1286,7 @@ where
 
     /// Gets preprocessed block hashes in a given height range.
     #[instrument(skip_all, fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         start = %start,
         end = %end
@@ -1309,7 +1304,7 @@ where
 
     /// Gets the next block height to receive from an inbox.
     #[instrument(skip_all, fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         origin = %origin
     ))]
@@ -1326,7 +1321,7 @@ where
     /// Gets locking blobs for specific blob IDs.
     /// Returns `Ok(None)` if any of the blobs is not found.
     #[instrument(skip_all, fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         num_blob_ids = %blob_ids.len()
     ))]

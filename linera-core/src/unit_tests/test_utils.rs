@@ -873,16 +873,12 @@ where
         for (i, (validator_keypair, _account_public_key)) in validators.into_iter().enumerate() {
             let validator_public_key = validator_keypair.public_key;
             let storage = storage_builder.build().await?;
-            let config =
-                ChainWorkerConfig::default().with_key_pair(Some(validator_keypair.secret_key));
-            let state = WorkerState::new(
-                format!("Node {}", i),
-                storage.clone(),
-                5_000,
-                10_000,
-                config,
-                None,
-            );
+            let config = ChainWorkerConfig {
+                nickname: format!("Node {}", i),
+                ..ChainWorkerConfig::default()
+            }
+            .with_key_pair(Some(validator_keypair.secret_key));
+            let state = WorkerState::new(storage.clone(), config, None);
             let mut validator = LocalValidatorClient::new(validator_public_key, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(validator_public_key);

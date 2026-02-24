@@ -9,9 +9,12 @@ use linera_base::{crypto::ValidatorSecretKey, time::Duration};
 
 use crate::CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES;
 
-/// Configuration parameters for the [`ChainWorkerState`][`super::state::ChainWorkerState`].
+/// Configuration parameters for the [`ChainWorkerState`][`super::state::ChainWorkerState`]
+/// and its owning [`WorkerState`][`crate::worker::WorkerState`].
 #[derive(Clone)]
 pub struct ChainWorkerConfig {
+    /// A name used for logging.
+    pub nickname: String,
     /// The signature key pair of the validator. The key may be missing for replicas
     /// without voting rights (possibly with a partial view of chains).
     pub key_pair: Option<Arc<ValidatorSecretKey>>,
@@ -31,6 +34,10 @@ pub struct ChainWorkerConfig {
     pub sender_chain_ttl: Duration,
     /// The size to truncate receive log entries in chain info responses.
     pub chain_info_max_received_log_entries: usize,
+    /// Maximum number of entries in the block cache.
+    pub block_cache_size: usize,
+    /// Maximum number of entries in the execution state cache.
+    pub execution_state_cache_size: usize,
 }
 
 impl ChainWorkerConfig {
@@ -56,6 +63,7 @@ impl ChainWorkerConfig {
 impl Default for ChainWorkerConfig {
     fn default() -> Self {
         Self {
+            nickname: String::new(),
             key_pair: None,
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
@@ -64,6 +72,8 @@ impl Default for ChainWorkerConfig {
             ttl: Default::default(),
             sender_chain_ttl: Duration::from_secs(1),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+            block_cache_size: 5000,
+            execution_state_cache_size: 10_000,
         }
     }
 }
