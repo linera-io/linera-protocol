@@ -96,4 +96,6 @@ jobs:
 
       - name: Run bridge E2E test
         working-directory: linera-bridge/tests/e2e
+        env:
+          RUSTFLAGS: ""
         run: cargo test -- --ignored --nocapture
