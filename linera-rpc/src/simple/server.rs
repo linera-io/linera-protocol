@@ -24,7 +24,10 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct Server<S: Storage> {
+pub struct Server<S>
+where
+    S: Storage,
+{
     network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     host: String,
     port: u16,
@@ -156,7 +159,10 @@ where
 }
 
 #[derive(Clone)]
-struct RunningServerState<S: Storage> {
+struct RunningServerState<S>
+where
+    S: Storage,
+{
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(CrossChainRequest, ShardId)>,
 }

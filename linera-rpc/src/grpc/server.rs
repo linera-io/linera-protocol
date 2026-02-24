@@ -278,7 +278,10 @@ impl BatchForwarder {
 }
 
 #[derive(Clone)]
-pub struct GrpcServer<S: Storage> {
+pub struct GrpcServer<S>
+where
+    S: Storage,
+{
     state: WorkerState<S>,
     shard_id: ShardId,
     network: ValidatorInternalNetworkConfig,

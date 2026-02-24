@@ -23,7 +23,7 @@ use super::state::ChainWorkerState;
 ///
 /// Replaces the former channel-based `ChainWorkerActor`. Concurrent reads acquire the
 /// read lock; mutations acquire the write lock. Tokio's `RwLock` is write-preferring,
-/// providing the same scheduling semantics as the former actor's write-priority loop.
+/// which guarantees that mutations don't starve if there are many reads.
 pub(crate) struct ChainHandle<S: Storage> {
     state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicU64>,

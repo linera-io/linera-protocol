@@ -76,7 +76,7 @@ where
     StorageClient: Storage,
 {
     config: ChainWorkerConfig,
-    pub(crate) storage: StorageClient,
+    storage: StorageClient,
     pub(crate) chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
