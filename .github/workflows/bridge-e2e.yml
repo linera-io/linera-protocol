@@ -98,8 +98,6 @@ jobs:
           tags: |
             linera-bridge:latest
             ${{ env.GCP_REGISTRY }}/linera-bridge:${{ github.base_ref || github.ref_name }}
-          cache-from: type=gha,scope=linera-bridge
-          cache-to: type=gha,scope=linera-bridge,mode=max
 
       - name: Push bridge image to registry
         if: steps.build-bridge.outcome == 'success'
