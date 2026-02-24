@@ -22,7 +22,7 @@ use linera_base::{
 use linera_core::{
     client::{
         chain_client::{self, ChainClient},
-        AbortOnDrop, Client, ListeningMode,
+        AbortOnDrop, ListeningMode,
     },
     node::NotificationStream,
     worker::{Notification, Reason},
@@ -225,21 +225,14 @@ pub struct ChainListener<C: ClientContext> {
 }
 
 impl<C: ClientContext + 'static> ChainListener<C> {
-    async fn shared_client_and_timing(
-        context: &Arc<Mutex<C>>,
-    ) -> (
-        Arc<Client<C::Environment>>,
-        Option<tokio::sync::mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>>,
-    ) {
-        let guard = context.lock().await;
-        (guard.client().clone(), guard.timing_sender())
-    }
-
     async fn make_chain_client_from_context(
         context: &Arc<Mutex<C>>,
         chain_id: ChainId,
     ) -> Result<ContextChainClient<C>, Error> {
-        let (client, timing_sender) = Self::shared_client_and_timing(context).await;
+        let (client, timing_sender) = {
+            let guard = context.lock().await;
+            (guard.client().clone(), guard.timing_sender())
+        };
         let chain = client
             .wallet()
             .get(chain_id)
@@ -284,7 +277,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     #[instrument(skip(self))]
     pub async fn run(mut self) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
-            let (client, _timing_sender) = Self::shared_client_and_timing(&self.context).await;
+            let client = {
+                let guard = self.context.lock().await;
+                guard.client().clone()
+            };
             let admin_chain_id = client.admin_chain_id();
             Self::make_chain_client_from_context(&self.context, admin_chain_id)
                 .await?
