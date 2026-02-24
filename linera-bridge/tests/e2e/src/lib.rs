@@ -106,7 +106,7 @@ pub async fn exec_output(
             let exit_code: Option<i64> = r.exit_code().await.unwrap_or(Some(-1));
             let stdout_bytes: Vec<u8> = r.stdout_to_vec().await.unwrap_or_default();
             let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
-            tracing::info!(exit_code=?exit_code, %stdout, "Exec output");
+            tracing::info!(?exit_code, %stdout, "Exec output");
             if exit_code != Some(0) {
                 dump_compose_logs(project_name, compose_file);
                 panic!("exec failed (exit {exit_code:?}):\n{stdout}");
