@@ -34,3 +34,5 @@ linera-views = { path = "../../../linera-views" }
 rand = { version = "0.8", default-features = false, features = ["std_rng"] }
 testcontainers = { version = "0.27", features = ["docker-compose"] }
 tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }

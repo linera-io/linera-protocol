@@ -3619,6 +3619,8 @@ dependencies = [
  "rand 0.8.5",
  "testcontainers",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

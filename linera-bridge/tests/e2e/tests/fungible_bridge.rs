@@ -6,8 +6,6 @@
 
 use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
-use futures::StreamExt as _;
-
 use alloy::{
     network::EthereumWallet,
     primitives::{Address, U256},
@@ -15,6 +13,7 @@ use alloy::{
     signers::local::PrivateKeySigner,
     sol,
 };
+use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Amount, Bytecode},
@@ -59,13 +58,14 @@ fn parse_deployed_address(output: &str) -> Address {
 #[tokio::test]
 #[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
 async fn test_fungible_bridge_transfers_to_evm() {
+    tracing_subscriber::fmt().with_test_writer().try_init().ok();
     let compose_file = compose_file_path();
     let project_name = "linera-bridge-test";
 
     let compose = start_compose(&compose_file, project_name).await;
 
     // ── 1. Create programmatic Linera client ──
-    eprintln!("Creating programmatic Linera client...");
+    tracing::info!("Creating programmatic Linera client...");
     let faucet = Faucet::new("http://localhost:8080".to_string());
     let genesis_config = faucet.genesis_config().await.expect("fetch genesis config");
 
@@ -100,7 +100,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
     .expect("create client context");
 
     // ── 2. Claim chain A from faucet ──
-    eprintln!("Claiming chain A from faucet...");
+    tracing::info!("Claiming chain A from faucet...");
     let owner_a = AccountOwner::from(signer.generate_new());
     let chain_a_desc = faucet.claim(&owner_a).await.expect("claim chain A");
     let chain_a = chain_a_desc.id();
@@ -115,10 +115,10 @@ async fn test_fungible_bridge_transfers_to_evm() {
     cc_a.synchronize_from_validators()
         .await
         .expect("sync chain A");
-    eprintln!("Chain A: {chain_a}, Owner A: {owner_a}");
+    tracing::info!(%chain_a, %owner_a, "Chain A claimed");
 
     // ── 3. Publish and create fungible app on chain A ──
-    eprintln!("Publishing fungible module...");
+    tracing::info!("Publishing fungible module...");
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -138,10 +138,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
         .await
         .expect("publish module")
         .expect("publish module committed");
-    eprintln!(
-        "Module published in block: {:?}",
-        cert.inner().block().header.height
-    );
+    tracing::info!(height=?cert.inner().block().header.height, "Module published");
 
     cc_a.synchronize_from_validators()
         .await
@@ -150,7 +147,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
         .await
         .expect("process inbox after publish");
 
-    eprintln!("Creating fungible application...");
+    tracing::info!("Creating fungible application...");
     let params = fungible::Parameters::new("TEST");
     let init_state = fungible::InitialState {
         accounts: BTreeMap::from([(owner_a, Amount::from_tokens(1000))]),
@@ -166,17 +163,17 @@ async fn test_fungible_bridge_transfers_to_evm() {
         .expect("create fungible application")
         .expect("create application committed");
     let app_id = app_id.forget_abi();
-    eprintln!("Application ID: {app_id}");
+    tracing::info!(%app_id, "Application created");
 
     // ── 4. Claim chain B (bridge chain) from faucet and subscribe to notifications ──
-    eprintln!("Claiming chain B from faucet...");
+    tracing::info!("Claiming chain B from faucet...");
     let owner_b = AccountOwner::from(signer.generate_new());
     let chain_b_desc = faucet.claim(&owner_b).await.expect("claim chain B");
     let chain_b = chain_b_desc.id();
     ctx.extend_with_chain(chain_b_desc, Some(owner_b))
         .await
         .expect("register chain B");
-    eprintln!("Chain B (bridge): {chain_b}");
+    tracing::info!(%chain_b, "Chain B claimed");
 
     let cc_b = ctx
         .make_chain_client(chain_b)
@@ -187,7 +184,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
     tokio::spawn(listener);
 
     // ── 5. Deploy MockERC20 on Anvil ──
-    eprintln!("Deploying MockERC20...");
+    tracing::info!("Deploying MockERC20...");
     let erc20_output = exec_output(
         &compose,
         "foundry-tools",
@@ -205,13 +202,13 @@ async fn test_fungible_bridge_transfers_to_evm() {
     )
     .await;
     let erc20_addr = parse_deployed_address(&erc20_output);
-    eprintln!("MockERC20 deployed at: {erc20_addr}");
+    tracing::info!(%erc20_addr, "MockERC20 deployed");
 
     // ── 6. Deploy FungibleBridge on Anvil ──
     let app_id_bytes32 = format!("0x{}", app_id.application_description_hash);
     let chain_b_bytes32 = format!("0x{chain_b}");
 
-    eprintln!("Deploying FungibleBridge...");
+    tracing::info!("Deploying FungibleBridge...");
     let light_client = light_client_address();
     let bridge_output = exec_output(
         &compose,
@@ -236,10 +233,10 @@ async fn test_fungible_bridge_transfers_to_evm() {
     )
     .await;
     let bridge_addr = parse_deployed_address(&bridge_output);
-    eprintln!("FungibleBridge deployed at: {bridge_addr}");
+    tracing::info!(%bridge_addr, "FungibleBridge deployed");
 
     // ── 7. Fund FungibleBridge with ERC20 tokens ──
-    eprintln!("Funding FungibleBridge with ERC20 tokens...");
+    tracing::info!("Funding FungibleBridge with ERC20 tokens...");
     exec_ok(
         &compose,
         "foundry-tools",
@@ -262,7 +259,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
         .parse()
         .expect("parse EVM address");
 
-    eprintln!("Sending fungible transfer to Address20 on chain B...");
+    tracing::info!("Sending fungible transfer to Address20 on chain B...");
     let transfer_op = Operation::User {
         application_id: app_id,
         bytes: bcs::to_bytes(&FungibleOperation::Transfer {
@@ -281,19 +278,19 @@ async fn test_fungible_bridge_transfers_to_evm() {
         .expect("execute transfer")
         .expect("transfer committed");
     let transfer_block = transfer_cert.inner().block();
-    eprintln!(
-        "Transfer block height: {:?}, messages: {}, recipients: {:?}",
-        transfer_block.header.height,
-        transfer_block.body.messages.len(),
-        transfer_block.recipients()
+    tracing::info!(
+        height=?transfer_block.header.height,
+        messages=transfer_block.body.messages.len(),
+        recipients=?transfer_block.recipients(),
+        "Transfer block submitted"
     );
 
     // ── 9. Wait for incoming bundle notification, then process inbox on chain B ──
-    eprintln!("Waiting for NewIncomingBundle notification on chain B...");
+    tracing::info!("Waiting for NewIncomingBundle notification on chain B...");
     tokio::time::timeout(Duration::from_secs(30), async {
         while let Some(notification) = notifications.next().await {
             if matches!(notification.reason, Reason::NewIncomingBundle { .. }) {
-                eprintln!("Received NewIncomingBundle notification");
+                tracing::info!("Received NewIncomingBundle notification");
                 return;
             }
         }
@@ -302,7 +299,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
     .await
     .expect("timed out waiting for NewIncomingBundle notification");
 
-    eprintln!("Processing inbox on chain B...");
+    tracing::info!("Processing inbox on chain B...");
     cc_b.synchronize_from_validators()
         .await
         .expect("sync chain B");
@@ -310,7 +307,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
         .process_inbox()
         .await
         .expect("process inbox on chain B");
-    eprintln!("Processed {} certificate(s) from inbox", certs.len());
+    tracing::info!(count = certs.len(), "Processed certificates from inbox");
     assert!(
         !certs.is_empty(),
         "process_inbox should produce at least one certificate"
@@ -319,10 +316,10 @@ async fn test_fungible_bridge_transfers_to_evm() {
     // ── 10. Get certificate bytes for addBlock ──
     let cert = certs.last().unwrap();
     let cert_bytes = bcs::to_bytes(cert).expect("BCS serialize certificate");
-    eprintln!("Certificate size: {} bytes", cert_bytes.len());
+    tracing::info!(size = cert_bytes.len(), "Certificate serialized");
 
     // ── 11. Call addBlock() on FungibleBridge ──
-    eprintln!("Calling addBlock on FungibleBridge...");
+    tracing::info!("Calling addBlock on FungibleBridge...");
     let rpc_url = "http://localhost:8545".parse().unwrap();
     let evm_signer: PrivateKeySigner = ANVIL_PRIVATE_KEY.parse().unwrap();
     let evm_wallet = EthereumWallet::from(evm_signer);
@@ -337,7 +334,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
         .await
         .expect("addBlock transaction send");
     let receipt = tx.get_receipt().await.expect("addBlock receipt");
-    eprintln!("addBlock tx: {:?}", receipt.transaction_hash);
+    tracing::info!(tx=?receipt.transaction_hash, "addBlock transaction submitted");
 
     // ── 12. Verify ERC20 balance ──
     let evm_recipient_addr: Address = format!("0x{evm_recipient}").parse().unwrap();
@@ -347,7 +344,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
         .call()
         .await
         .expect("balanceOf call");
-    eprintln!("ERC20 balance of recipient: {balance}");
+    tracing::info!(?balance, "ERC20 balance of recipient");
 
     // 100 tokens = 100 * 10^18 (Amount uses 18 decimal places)
     let expected_balance = U256::from(100u128 * 10u128.pow(18));
@@ -356,5 +353,5 @@ async fn test_fungible_bridge_transfers_to_evm() {
         "ERC20 balance should match the transferred amount"
     );
 
-    eprintln!("Test passed! ERC20 balance matches transferred amount.");
+    tracing::info!("Test passed! ERC20 balance matches transferred amount.");
 }

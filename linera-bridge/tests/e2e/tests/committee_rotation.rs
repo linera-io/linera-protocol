@@ -41,6 +41,7 @@ async fn query_current_epoch() -> Result<u32, String> {
 #[tokio::test]
 #[ignore] // Requires pre-built docker images: `make -C linera-bridge build-all`
 async fn test_committee_rotation_updates_evm_light_client() {
+    tracing_subscriber::fmt().with_test_writer().try_init().ok();
     let compose_file = compose_file_path();
     let project_name = "linera-bridge-test";
 
@@ -51,12 +52,12 @@ async fn test_committee_rotation_updates_evm_light_client() {
         .await
         .expect("should query initial epoch");
     assert_eq!(epoch, 0, "initial epoch should be 0");
-    eprintln!("Initial epoch verified: {epoch}");
+    tracing::info!(epoch, "Initial epoch verified");
 
     create_extra_wallet(&compose, project_name, &compose_file).await;
 
     // Trigger committee rotation by adding a fake validator.
-    eprintln!("Triggering committee rotation...");
+    tracing::info!("Triggering committee rotation...");
     let mut rng = rand::rngs::OsRng;
     let validator_keypair = ValidatorKeypair::generate_from(&mut rng);
     let validator_public_key = validator_keypair.public_key;
@@ -81,7 +82,7 @@ async fn test_committee_rotation_updates_evm_light_client() {
     )
     .await;
 
-    eprintln!("Committee rotation triggered, waiting for exporter to relay...");
+    tracing::info!("Committee rotation triggered, waiting for exporter to relay...");
 
     // Poll until epoch advances to 1 (timeout 120s — compose startup is already done,
     // but the exporter needs to pick up the new committee and relay it).
@@ -92,15 +93,15 @@ async fn test_committee_rotation_updates_evm_light_client() {
     loop {
         match query_current_epoch().await {
             Ok(epoch) if epoch >= 1 => {
-                eprintln!("Epoch advanced to {epoch}");
+                tracing::info!(epoch, "Epoch advanced");
                 assert_eq!(epoch, 1, "epoch should be exactly 1 after one rotation");
                 return;
             }
             Ok(epoch) => {
-                eprintln!("Current epoch: {epoch}, waiting...");
+                tracing::info!(epoch, "Waiting for epoch to advance");
             }
             Err(e) => {
-                eprintln!("Error querying epoch: {e}, retrying...");
+                tracing::info!(error=%e, "Error querying epoch, retrying");
             }
         }
 
