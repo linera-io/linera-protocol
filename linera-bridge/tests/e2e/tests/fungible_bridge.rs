@@ -109,12 +109,9 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     // ── 3. Publish and create fungible app on chain A ──
     tracing::info!("Publishing fungible module...");
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .context("no parent dir")?
-        .parent()
-        .context("no grandparent dir")?
-        .parent()
-        .context("no great-grandparent dir")?
+        .ancestors()
+        .nth(3)
+        .context("manifest dir has fewer than 3 ancestors")?
         .to_path_buf();
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
     let contract_bytecode = Bytecode::load_from_file(wasm_dir.join("fungible_contract.wasm"))?;
