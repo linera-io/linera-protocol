@@ -4,6 +4,11 @@
 //! End-to-end test: deploy a fungible token on Linera, transfer tokens to an EVM address,
 //! submit the block certificate to FungibleBridge on Anvil, and verify the ERC20 balance.
 
+
+// The `listen()` future type is deeply nested; newer nightly compilers overflow the default
+// recursion limit (128) when proving `Send`.
+#![recursion_limit = "256"]
+
 use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
 use alloy::{
