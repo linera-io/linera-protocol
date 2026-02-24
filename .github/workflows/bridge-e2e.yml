@@ -3,9 +3,8 @@ name: Bridge E2E
 on:
   merge_group:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - 'testnet_*'
+  push:
+    branches: [ 'testnet_*', 'main']
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
