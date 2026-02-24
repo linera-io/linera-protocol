@@ -36,21 +36,34 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker};
 use linera_storage::{Clock as _, Storage};
-use linera_views::{
-    context::InactiveContext,
-    views::{ClonableView as _, View as _},
-    ViewError,
-};
+use linera_views::{context::InactiveContext, views::View as _, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
+/// A read guard providing access to a chain's [`ChainStateView`].
+///
+/// Holds a read lock on the chain handle, preventing writes for its lifetime.
+/// Dereferences to `ChainStateView`.
+pub struct ChainStateViewReadGuard<S: Storage>(
+    OwnedRwLockReadGuard<ChainWorkerState<S>, ChainStateView<S::Context>>,
+);
+
+impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
+    type Target = ChainStateView<S::Context>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Re-export of [`EventSubscriptionsResult`] for use by other crate modules.
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle::ServiceRuntimeActor, BlockOutcome, ChainHandle, ChainWorkerConfig, DeliveryNotifier,
+        handle::ServiceRuntimeActor, state::ChainWorkerState, BlockOutcome, ChainHandle,
+        ChainWorkerConfig, DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -1077,8 +1090,8 @@ where
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///
-    /// The returned view is a snapshot (clone) of the chain state. It does not hold a lock
-    /// on the actual chain state, so the worker may continue processing other requests.
+    /// The returned guard holds a read lock on the chain state, preventing writes for
+    /// its lifetime. Multiple concurrent readers are allowed.
     #[instrument(level = "trace", skip(self), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
@@ -1086,18 +1099,13 @@ where
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
-        let this = self.clone();
-        let clone = linera_base::task::spawn(async move {
-            let handle = this.get_or_create_chain_handle(chain_id).await?;
-            let mut guard = handle.write().await;
-            let c = guard.chain.clone_unchecked()?;
-            guard.chain.rollback();
-            Ok::<_, WorkerError>(c)
-        })
-        .await?;
-        let arc = Arc::new(tokio::sync::RwLock::new(clone));
-        Ok(arc.read_owned().await)
+    ) -> Result<ChainStateViewReadGuard<StorageClient>, WorkerError> {
+        let handle = self.get_or_create_chain_handle(chain_id).await?;
+        let guard = handle.read().await;
+        Ok(ChainStateViewReadGuard(OwnedRwLockReadGuard::map(
+            guard,
+            |state| &state.chain,
+        )))
     }
 
     #[instrument(skip_all, fields(
