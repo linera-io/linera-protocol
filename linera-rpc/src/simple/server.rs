@@ -38,7 +38,7 @@ pub struct Server<S: Storage> {
 
 impl<S> Server<S>
 where
-    S: Storage + Clone + 'static,
+    S: Storage,
 {
     pub fn new(
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
@@ -415,7 +415,7 @@ where
 
 impl<S> RunningServerState<S>
 where
-    S: Storage + Clone + Send + 'static,
+    S: Storage + Send,
 {
     fn handle_network_actions(&mut self, actions: NetworkActions) {
         for request in actions.cross_chain_requests {

@@ -27,9 +27,7 @@ use super::state::ChainWorkerState;
 pub(crate) struct ChainHandle<S: Storage> {
     state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicU64>,
-    #[allow(dead_code)] // Used by TTL sweep task
     service_runtime_task: Mutex<Option<web_thread_pool::Task<()>>>,
-    #[allow(dead_code)] // Used by TTL sweep task
     is_tracked: bool,
 }
 
@@ -94,9 +92,13 @@ impl<S: Storage + Clone + 'static> ChainHandle<S> {
     }
 
     /// Checks whether this handle has been idle beyond its TTL.
-    #[allow(dead_code)] // Used by TTL sweep task
+    ///
+    /// A zero TTL means "no expiry" (the handle lives forever).
     pub(crate) fn is_expired(&self, ttl: Duration, sender_ttl: Duration) -> bool {
         let timeout = if self.is_tracked { sender_ttl } else { ttl };
+        if timeout.is_zero() {
+            return false; // Zero means no expiry.
+        }
         let timeout_micros = u64::try_from(timeout.as_micros()).unwrap_or(u64::MAX);
         let last = self.last_access.load(Ordering::Relaxed);
         let now = current_time_micros();
@@ -116,7 +118,6 @@ impl<S: Storage + Clone + 'static> ChainHandle<S> {
     }
 
     /// Shuts down the service runtime task, if any.
-    #[allow(dead_code)] // Used by TTL sweep task
     pub(crate) async fn shutdown_service_runtime(&self) -> Result<(), web_thread_pool::Error> {
         let task = self.service_runtime_task.lock().unwrap().take();
         if let Some(task) = task {

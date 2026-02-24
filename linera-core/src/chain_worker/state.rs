@@ -1191,8 +1191,8 @@ where
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
     ///
-    /// Does not need `&mut self` because the chain is eagerly initialized by the actor
-    /// after loading.
+    /// Does not need `&mut self` because the chain is eagerly initialized when the
+    /// chain handle is created.
     #[cfg(with_testing)]
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
@@ -1270,11 +1270,6 @@ where
         }
     }
 
-    /// Returns an application's description.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        application_id = %application_id
-    ))]
     /// Returns an application's description by reading the blob directly from storage.
     ///
     /// Does not track blob usage (which requires `&mut self`), making it safe for
@@ -1467,9 +1462,9 @@ where
                 block_time_grace_period: self.config.block_time_grace_period,
             });
         }
-        // Note: The actor delays processing proposals with future timestamps (within the grace
-        // period) so that other requests can be handled in the meantime. By the time we reach
-        // here, the block timestamp should be in the past or very close to the current time.
+        // Note: WorkerState::handle_block_proposal delays processing proposals with future
+        // timestamps (within the grace period) before acquiring the chain lock. By the time
+        // we reach here, the block timestamp should be in the past or very close to current time.
 
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())

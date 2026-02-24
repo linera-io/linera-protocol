@@ -4,7 +4,10 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
-    sync::{Arc, Mutex, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, RwLock,
+    },
     time::Duration,
 };
 
@@ -486,7 +489,7 @@ pub struct WorkerState<StorageClient: Storage> {
     nickname: String,
     /// Access to local persistent storage.
     storage: StorageClient,
-    /// Configuration options for the [`ChainWorker`]s.
+    /// Configuration options for chain workers.
     chain_worker_config: ChainWorkerConfig,
     block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
@@ -495,13 +498,15 @@ pub struct WorkerState<StorageClient: Storage> {
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
-    /// The cache of loaded chain handles, protected by an RwLock.
+    /// The cache of loaded chain handles.
     chain_handles: Arc<Mutex<BTreeMap<ChainId, Arc<ChainHandle<StorageClient>>>>>,
+    /// Whether the TTL sweep task has been started.
+    sweep_started: Arc<AtomicBool>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
 where
-    StorageClient: Storage + Clone + 'static,
+    StorageClient: Storage + Clone,
 {
     fn clone(&self) -> Self {
         WorkerState {
@@ -513,6 +518,7 @@ where
             chain_modes: self.chain_modes.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_handles: self.chain_handles.clone(),
+            sweep_started: self.sweep_started.clone(),
         }
     }
 }
@@ -521,7 +527,7 @@ pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
 impl<StorageClient> WorkerState<StorageClient>
 where
-    StorageClient: Storage + Clone + 'static,
+    StorageClient: Storage,
 {
     #[instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(
@@ -540,6 +546,7 @@ where
             chain_modes: None,
             delivery_notifiers: Arc::default(),
             chain_handles: Arc::new(Mutex::new(BTreeMap::new())),
+            sweep_started: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -560,6 +567,7 @@ where
             chain_modes: Some(chain_modes),
             delivery_notifiers: Arc::default(),
             chain_handles: Arc::new(Mutex::new(BTreeMap::new())),
+            sweep_started: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -749,11 +757,76 @@ where
         .await
     }
 
+    /// Starts the TTL sweep task if it hasn't been started yet.
+    ///
+    /// The sweep runs periodically and evicts idle chain handles whose last access
+    /// exceeds their configured TTL.
+    fn ensure_sweep_started(&self) {
+        if self
+            .sweep_started
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+            .is_err()
+        {
+            return; // Already started.
+        }
+        let chain_handles = self.chain_handles.clone();
+        let ttl = self.chain_worker_config.ttl;
+        let sender_ttl = self.chain_worker_config.sender_chain_ttl;
+        // Sweep at the smaller of the two TTLs, divided by 4 for responsiveness.
+        // If both TTLs are zero, don't sweep at all (handles live forever).
+        let min_ttl = ttl.min(sender_ttl);
+        let interval = if min_ttl.is_zero() {
+            if ttl.is_zero() && sender_ttl.is_zero() {
+                return; // No TTL configured — nothing to sweep.
+            }
+            // One of them is zero (infinite); use the non-zero one.
+            ttl.max(sender_ttl) / 4
+        } else {
+            min_ttl / 4
+        };
+        // The sweep holds a Weak reference so it stops when all WorkerState clones are dropped.
+        let weak_handles = Arc::downgrade(&chain_handles);
+        linera_base::task::spawn(async move {
+            loop {
+                linera_base::time::timer::sleep(interval).await;
+                let Some(chain_handles) = weak_handles.upgrade() else {
+                    break; // All WorkerState clones have been dropped.
+                };
+                let expired: Vec<(ChainId, Arc<ChainHandle<StorageClient>>)> = {
+                    let mut handles = chain_handles.lock().unwrap();
+                    let mut expired = Vec::new();
+                    handles.retain(|chain_id, handle| {
+                        // Only evict if idle beyond TTL and no other references exist.
+                        if handle.is_expired(ttl, sender_ttl) && Arc::strong_count(handle) == 1 {
+                            expired.push((*chain_id, handle.clone()));
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                    expired
+                };
+                // Drop our strong reference before shutting down runtimes.
+                drop(chain_handles);
+                for (chain_id, handle) in expired {
+                    // Acquire write lock to ensure no readers are active, then drop it.
+                    drop(handle.write().await);
+                    if let Err(err) = handle.shutdown_service_runtime().await {
+                        tracing::warn!(%chain_id, %err, "Failed to shut down service runtime");
+                    }
+                }
+            }
+        })
+        .forget();
+    }
+
     /// Gets or creates a `ChainHandle` for the given chain.
     async fn get_or_create_chain_handle(
         &self,
         chain_id: ChainId,
     ) -> Result<Arc<ChainHandle<StorageClient>>, WorkerError> {
+        self.ensure_sweep_started();
+
         // Fast path: check if a handle already exists.
         {
             let handles = self.chain_handles.lock().unwrap();
@@ -971,8 +1044,8 @@ where
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///
-    /// The returned view holds a lock on the chain state, which prevents the worker from changing
-    /// the state of that chain.
+    /// The returned view is a snapshot (clone) of the chain state. It does not hold a lock
+    /// on the actual chain state, so the worker may continue processing other requests.
     #[instrument(level = "trace", skip(self), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
