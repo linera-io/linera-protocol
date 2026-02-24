@@ -1588,8 +1588,8 @@ pub struct ChainClientOptions {
     pub max_block_limit_errors: u32,
     /// Maximum number of new stream events processed at a time in a block.
     pub max_new_events_per_block: usize,
-    /// Time budget for staging message bundles. When set, limits bundle execution by time
-    /// rather than by count.
+    /// Time budget for staging message bundles. When set, limits bundle execution by
+    /// wall-clock time, in addition to the count limit from `max_pending_message_bundles`.
     pub staging_bundles_time_budget: Option<Duration>,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
@@ -2045,18 +2045,11 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
-        // When using time budget, take all bundles since limiting happens at execution time.
-        // Otherwise, limit at selection time.
-        let max_bundles = if self.options.staging_bundles_time_budget.is_some() {
-            usize::MAX
-        } else {
-            self.options.max_pending_message_bundles
-        };
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
-            .take(max_bundles)
+            .take(self.options.max_pending_message_bundles)
             .collect())
     }
 
