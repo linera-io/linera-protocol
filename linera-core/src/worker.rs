@@ -36,7 +36,7 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker};
 use linera_storage::{Clock as _, Storage};
-use linera_views::{context::InactiveContext, views::View as _, ViewError};
+use linera_views::{context::InactiveContext, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{oneshot, OwnedRwLockReadGuard};
@@ -105,7 +105,7 @@ macro_rules! spawn_chain_write {
             let handle = this.get_or_create_chain_handle(chain_id).await?;
             let mut $guard = handle.write().await;
             let result = $body;
-            $guard.chain.rollback();
+            $guard.rollback();
             result
         })
         .await
@@ -841,7 +841,7 @@ where
                     // Acquire write lock — blocks until all outstanding
                     // OwnedRwLock{Read,Write}Guards are released. While we wait,
                     // the handle stays in the map so new requests reuse it.
-                    let guard = handle.write().await;
+                    let mut guard = handle.write().await;
                     // Re-lock the map. We hold the write lock, so no one can
                     // acquire new guards. If strong_count == 2 (map + us), no
                     // request is currently referencing this handle.
@@ -855,6 +855,9 @@ where
                         }
                         handles.remove(&chain_id);
                     }
+                    // Drop the service runtime endpoint so the runtime task's
+                    // channel closes, allowing it to exit its loop.
+                    guard.clear_service_runtime_endpoint();
                     drop(guard);
                     if let Err(err) = handle.shutdown_service_runtime().await {
                         tracing::warn!(%chain_id, %err, "Failed to shut down service runtime");
@@ -1104,7 +1107,7 @@ where
         let guard = handle.read().await;
         Ok(ChainStateViewReadGuard(OwnedRwLockReadGuard::map(
             guard,
-            |state| &state.chain,
+            |state| state.chain(),
         )))
     }
 

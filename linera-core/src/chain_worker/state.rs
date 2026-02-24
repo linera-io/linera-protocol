@@ -77,7 +77,7 @@ where
 {
     config: ChainWorkerConfig,
     storage: StorageClient,
-    pub(crate) chain: ChainStateView<StorageClient::Context>,
+    chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
@@ -130,6 +130,21 @@ where
     /// Returns the [`ChainId`] of the chain handled by this worker.
     fn chain_id(&self) -> ChainId {
         self.chain.chain_id()
+    }
+
+    /// Returns a reference to the chain state view.
+    pub(crate) fn chain(&self) -> &ChainStateView<StorageClient::Context> {
+        &self.chain
+    }
+
+    /// Rolls back any uncommitted changes to the chain state.
+    pub(crate) fn rollback(&mut self) {
+        self.chain.rollback();
+    }
+
+    /// Drops the service runtime endpoint, signaling the runtime task to stop.
+    pub(crate) fn clear_service_runtime_endpoint(&mut self) {
+        self.service_runtime_endpoint.take();
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
