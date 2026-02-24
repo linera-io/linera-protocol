@@ -108,8 +108,12 @@ impl Indexer for DummyIndexer {
                             payload: Some(Payload::Block(indexer_block)),
                         }) => match TryInto::<ConfirmedBlockCertificate>::try_into(indexer_block) {
                             Ok(block) => {
-                                moved_state.pin().insert(block.hash());
-                                return Some((Ok(()), stream));
+                                let is_new = moved_state.pin().insert(block.hash());
+                                if is_new {
+                                    return Some((Ok(()), stream));
+                                }
+                                // Skip ack for already-seen blocks (idempotent)
+                                continue;
                             }
                             Err(e) => return Some((Err(Status::from_error(e)), stream)),
                         },
