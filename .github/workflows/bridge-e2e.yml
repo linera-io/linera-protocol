@@ -71,8 +71,13 @@ jobs:
         with:
           filters: |
             bridge:
-              - 'linera-bridge/**'
-              - '!linera-bridge/tests/e2e/**'
+              - 'linera-bridge/src/**'
+              - 'linera-bridge/solidity/**'
+              - 'linera-bridge/tests/formats/**'
+              - 'linera-bridge/tests/snapshots/**'
+              - 'linera-bridge/tests/solidity/**'
+              - 'linera-bridge/Cargo.*'
+              - 'linera-bridge/rust-toolchain.toml'
               - 'docker/Dockerfile.bridge'
 
       - name: Build foundry-jq image
