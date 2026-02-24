@@ -75,14 +75,16 @@ jobs:
               - 'docker/Dockerfile.bridge'
 
       - name: Pull bridge image (unchanged)
+        id: pull-bridge
         if: steps.changes.outputs.bridge == 'false'
+        continue-on-error: true
         run: |
           BRANCH="${{ github.base_ref || github.ref_name }}"
           docker pull "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
           docker tag "${GCP_REGISTRY}/linera-bridge:${BRANCH}" linera-bridge:latest
 
       - name: Build bridge image
-        if: steps.changes.outputs.bridge == 'true'
+        if: steps.changes.outputs.bridge == 'true' || steps.pull-bridge.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
