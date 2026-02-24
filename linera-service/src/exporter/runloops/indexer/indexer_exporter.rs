@@ -29,6 +29,11 @@ use crate::{
     ExporterError,
 };
 
+/// On reconnect, resume from a few heights before the last acked height.
+/// Since the destination is idempotent, replaying a small window is safe
+/// and prevents permanent stalls when ACKs are lost during stream resets.
+const REWIND_BLOCKS: usize = 3;
+
 pub(crate) struct Exporter {
     options: NodeOptions,
     work_queue_size: usize,
@@ -73,9 +78,18 @@ impl Exporter {
             let (outgoing_stream, incoming_stream) =
                 client.setup_indexer_client(self.work_queue_size).await?;
 
+            let acked_height = destination_state.load(Ordering::Acquire) as usize;
+            let start_height = acked_height.saturating_sub(REWIND_BLOCKS);
+
+            tracing::info!(
+                acked_height,
+                start_height,
+                "stream established, resuming export"
+            );
+
             let mut streamer = ExportTaskQueue::new(
                 self.work_queue_size,
-                destination_state.load(Ordering::Acquire) as usize,
+                start_height,
                 outgoing_stream,
                 storage.clone()?,
             );
@@ -83,13 +97,19 @@ impl Exporter {
             let mut acknowledgement_task =
                 AcknowledgementTask::new(incoming_stream, destination_state.clone());
 
+            // Pin the streamer future so it survives the select!. When
+            // the ack branch wins, select! only drops the &mut borrow,
+            // not the future itself, so we can keep polling it.
+            let streamer_fut = streamer.run();
+            tokio::pin!(streamer_fut);
+
             select! {
 
                 biased;
 
                 _ = &mut pinned_shutdown_signal => {break},
 
-                res = streamer.run() => {
+                res = &mut streamer_fut => {
                     if let Err(error) = res {
                         tracing::error!(?error, "exporter stream error. re-trying to establish a stream");
                         client = IndexerClient::new(address, self.options)?;
@@ -100,16 +120,31 @@ impl Exporter {
                 res = acknowledgement_task.run() => {
                     match res {
                         Err(error) => {
-                            tracing::error!(?error, "ack stream error. re-trying to establish a stream");
-                            client = IndexerClient::new(address, self.options)?;
+                            tracing::error!(?error, "ack stream error. letting export stream drain before reconnecting");
                         }
 
                         Ok(_) => {
-                            tracing::error!("ack stream unexpectedly. retrying to establish a stream");
-                            client = IndexerClient::new(address, self.options)?;
+                            tracing::error!("ack stream ended unexpectedly. letting export stream drain before reconnecting");
                         }
                     }
 
+                    // The ack stream died but the export streamer may still
+                    // have in-flight sends. Let it finish — it will error
+                    // out when it next tries to send on the dead connection
+                    // (at most one keepalive period, ~30s).
+                    select! {
+                        biased;
+
+                        _ = &mut pinned_shutdown_signal => {break},
+
+                        res = &mut streamer_fut => {
+                            if let Err(error) = res {
+                                tracing::error!(?error, "exporter stream error after ack stream failure");
+                            }
+                        },
+                    }
+
+                    client = IndexerClient::new(address, self.options)?;
                     sleep(Duration::from_millis(500)).await;
                 },
 
@@ -135,14 +170,14 @@ impl AcknowledgementTask {
 
     async fn run(&mut self) -> anyhow::Result<()> {
         while self.incoming.message().await?.is_some() {
-            self.increment_destination_state();
+            let new_height = self.destination_state.fetch_add(1, Ordering::Release) + 1;
+            tracing::info!(
+                acked_height = new_height,
+                "block acknowledged by destination"
+            );
         }
 
         Ok(())
-    }
-
-    fn increment_destination_state(&self) {
-        self.destination_state.fetch_add(1, Ordering::Release);
     }
 }
 
@@ -224,10 +259,17 @@ where
         &self,
         index: usize,
     ) -> Result<(Arc<ConfirmedBlockCertificate>, Vec<Arc<Blob>>), ExporterError> {
+        let mut retries = 0u32;
         loop {
             match self.storage.get_block_with_blobs(index).await {
                 Ok(res) => return Ok(res),
                 Err(ExporterError::UnprocessedBlock) => {
+                    retries += 1;
+                    if retries == 1 {
+                        tracing::info!(index, "waiting for block to be processed");
+                    } else if retries % 60 == 0 {
+                        tracing::warn!(index, retries, "still waiting for block to be processed");
+                    }
                     tokio::time::sleep(Duration::from_secs(1)).await
                 }
                 Err(e) => return Err(e),
