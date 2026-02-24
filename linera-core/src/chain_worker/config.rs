@@ -9,8 +9,8 @@ use linera_base::{crypto::ValidatorSecretKey, time::Duration};
 
 use crate::CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES;
 
-/// Configuration parameters for the [`ChainWorkerState`][`super::state::ChainWorkerState`]
-/// and its owning [`WorkerState`][`crate::worker::WorkerState`].
+/// Configuration parameters for the chain worker and its owning
+/// [`WorkerState`][`crate::worker::WorkerState`].
 #[derive(Clone)]
 pub struct ChainWorkerConfig {
     /// A name used for logging.
