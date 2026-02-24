@@ -499,6 +499,11 @@ pub struct WorkerState<StorageClient: Storage> {
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     /// The cache of loaded chain handles.
+    ///
+    /// **Lock ordering**: Never hold this mutex while acquiring a `ChainHandle`'s
+    /// read/write lock. The TTL sweep task does the reverse (holds the handle's write
+    /// lock, then briefly locks this map to remove the entry), so violating this order
+    /// would deadlock.
     chain_handles: Arc<Mutex<BTreeMap<ChainId, Arc<ChainHandle<StorageClient>>>>>,
     /// Whether the TTL sweep task has been started.
     sweep_started: Arc<AtomicBool>,
@@ -792,29 +797,57 @@ where
                 let Some(chain_handles) = weak_handles.upgrade() else {
                     break; // All WorkerState clones have been dropped.
                 };
-                let expired: Vec<(ChainId, Arc<ChainHandle<StorageClient>>)> = {
-                    let mut handles = chain_handles.lock().unwrap();
-                    let mut expired = Vec::new();
-                    handles.retain(|chain_id, handle| {
-                        // Only evict if idle beyond TTL and no other references exist.
-                        if handle.is_expired(ttl, sender_ttl) && Arc::strong_count(handle) == 1 {
-                            expired.push((*chain_id, handle.clone()));
-                            false
-                        } else {
-                            true
-                        }
-                    });
-                    expired
+                // Phase 1: Identify candidates without removing them from the map.
+                let candidates: Vec<ChainId> = {
+                    let handles = chain_handles.lock().unwrap();
+                    handles
+                        .iter()
+                        .filter(|(_, handle)| {
+                            handle.is_expired(ttl, sender_ttl) && Arc::strong_count(handle) == 1
+                        })
+                        .map(|(chain_id, _)| *chain_id)
+                        .collect()
                 };
-                // Drop our strong reference before shutting down runtimes.
-                drop(chain_handles);
-                for (chain_id, handle) in expired {
-                    // Acquire write lock to ensure no readers are active, then drop it.
-                    drop(handle.write().await);
+                // Phase 2: For each candidate, clone the Arc (keeping the entry in
+                // the map so new requests still find it rather than creating
+                // duplicates), then acquire the write lock to wait for all
+                // outstanding guards to drain. Finally, re-lock the map and
+                // remove only if no one else grabbed a reference in the meantime.
+                for chain_id in candidates {
+                    let handle = {
+                        let handles = chain_handles.lock().unwrap();
+                        let Some(handle) = handles.get(&chain_id) else {
+                            continue; // Already removed by another path.
+                        };
+                        // Quick pre-check before cloning.
+                        if !handle.is_expired(ttl, sender_ttl) {
+                            continue;
+                        }
+                        handle.clone() // strong_count: map + us
+                    };
+                    // Acquire write lock — blocks until all outstanding
+                    // OwnedRwLock{Read,Write}Guards are released. While we wait,
+                    // the handle stays in the map so new requests reuse it.
+                    let guard = handle.write().await;
+                    // Re-lock the map. We hold the write lock, so no one can
+                    // acquire new guards. If strong_count == 2 (map + us), no
+                    // request is currently referencing this handle.
+                    {
+                        let mut handles = chain_handles.lock().unwrap();
+                        if Arc::strong_count(&handle) != 2 || !handle.is_expired(ttl, sender_ttl) {
+                            // Someone grabbed a reference or it was touched
+                            // while we waited — not safe to evict.
+                            drop(guard);
+                            continue;
+                        }
+                        handles.remove(&chain_id);
+                    }
+                    drop(guard);
                     if let Err(err) = handle.shutdown_service_runtime().await {
                         tracing::warn!(%chain_id, %err, "Failed to shut down service runtime");
                     }
                 }
+                drop(chain_handles);
             }
         })
         .forget();
