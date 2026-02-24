@@ -23,9 +23,7 @@ use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, start_compose, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::{
-    client::create_bytecode_blobs, data_types::ClientOutcome, environment::wallet::Memory,
-};
+use linera_core::environment::wallet::Memory;
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_sdk::abis::fungible::{self, FungibleOperation, FungibleTokenAbi};
@@ -56,19 +54,8 @@ fn parse_deployed_address(output: &str) -> Address {
     panic!("Could not find 'Deployed to:' in forge output:\n{output}");
 }
 
-/// Unwrap a `ClientOutcome::Committed` value, panicking on conflict or timeout.
-fn unwrap_committed<T>(outcome: ClientOutcome<T>) -> T {
-    match outcome {
-        ClientOutcome::Committed(value) => value,
-        ClientOutcome::Conflict(_) => panic!("unexpected block conflict"),
-        ClientOutcome::WaitForTimeout(timeout) => {
-            panic!("unexpected timeout: {timeout:?}")
-        }
-    }
-}
-
 #[tokio::test]
-#[ignore] // Requires pre-built docker images and WASM: `make -C linera-bridge build-all`
+#[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
 async fn test_fungible_bridge_transfers_to_evm() {
     let compose_file = compose_file_path();
     let project_name = "linera-bridge-test";
@@ -144,17 +131,14 @@ async fn test_fungible_bridge_transfers_to_evm() {
     let service_bytecode = Bytecode::load_from_file(wasm_dir.join("fungible_service.wasm"))
         .expect("load service bytecode");
 
-    let (blobs, module_id) =
-        create_bytecode_blobs(contract_bytecode, service_bytecode, VmRuntime::Wasm).await;
-
-    let cert = unwrap_committed(
-        cc_a.publish_module_blobs(blobs, module_id)
-            .await
-            .expect("publish module blobs"),
-    );
+    let (module_id, cert) = cc_a
+        .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
+        .await
+        .expect("publish module")
+        .expect("publish module committed");
     eprintln!(
         "Module published in block: {:?}",
-        cert.1.inner().block().header.height
+        cert.inner().block().header.height
     );
 
     cc_a.synchronize_from_validators()
@@ -169,17 +153,16 @@ async fn test_fungible_bridge_transfers_to_evm() {
     let init_state = fungible::InitialState {
         accounts: BTreeMap::from([(owner_a, Amount::from_tokens(1000))]),
     };
-    let (app_id, _cert): (linera_base::identifiers::ApplicationId<FungibleTokenAbi>, _) =
-        unwrap_committed(
-            cc_a.create_application(
-                module_id.with_abi::<FungibleTokenAbi, _, _>(),
-                &params,
-                &init_state,
-                vec![],
-            )
-            .await
-            .expect("create fungible application"),
-        );
+    let (app_id, _cert): (linera_base::identifiers::ApplicationId<FungibleTokenAbi>, _) = cc_a
+        .create_application(
+            module_id.with_abi::<FungibleTokenAbi, _, _>(),
+            &params,
+            &init_state,
+            vec![],
+        )
+        .await
+        .expect("create fungible application")
+        .expect("create application committed");
     let app_id = app_id.forget_abi();
     eprintln!("Application ID: {app_id}");
 
@@ -282,11 +265,11 @@ async fn test_fungible_bridge_transfers_to_evm() {
         })
         .expect("serialize transfer operation"),
     };
-    let transfer_cert = unwrap_committed(
-        cc_a.execute_operations(vec![transfer_op], vec![])
-            .await
-            .expect("execute transfer"),
-    );
+    let transfer_cert = cc_a
+        .execute_operations(vec![transfer_op], vec![])
+        .await
+        .expect("execute transfer")
+        .expect("transfer committed");
     let transfer_block = transfer_cert.inner().block();
     eprintln!(
         "Transfer block height: {:?}, messages: {}, recipients: {:?}",
@@ -357,7 +340,7 @@ async fn test_fungible_bridge_transfers_to_evm() {
     eprintln!("ERC20 balance of recipient: {balance}");
 
     // 100 tokens = 100 * 10^18 (Amount uses 18 decimal places)
-    let expected_balance = U256::from(100u64) * U256::from(10u64).pow(U256::from(18));
+    let expected_balance = U256::from(100u128 * 10u128.pow(18));
     assert_eq!(
         balance, expected_balance,
         "ERC20 balance should match the transferred amount"

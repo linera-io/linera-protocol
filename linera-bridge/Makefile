@@ -3,10 +3,10 @@ COMPOSE_FILE := $(DOCKER_DIR)/docker-compose.bridge-test.yml
 
 .PHONY: build-wasm build-all up down
 
-build-wasm: ## Build fungible example WASM files
+build-wasm: ## Build fungible example Wasm files
 	pushd ../examples && cargo build --release --target wasm32-unknown-unknown -p fungible
 
-build-all: build-wasm ## Build WASM files and all docker images needed for the bridge test (debug mode)
+build-all: build-wasm ## Build Wasm files and all docker images needed for the bridge test (debug mode)
 	cd $(DOCKER_DIR) && docker build \
 		-f ./Dockerfile.exporter \
 		--build-arg build_flag="" \
