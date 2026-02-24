@@ -280,7 +280,7 @@ impl BatchForwarder {
 #[derive(Clone)]
 pub struct GrpcServer<S>
 where
-    S: Storage,
+    S: Storage + Clone + 'static,
 {
     state: WorkerState<S>,
     shard_id: ShardId,

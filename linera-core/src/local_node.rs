@@ -34,7 +34,7 @@ use crate::{
 /// A local node with a single worker, typically used by clients.
 pub struct LocalNode<S>
 where
-    S: Storage,
+    S: Storage + Clone + 'static,
 {
     state: WorkerState<S>,
 }
@@ -43,7 +43,7 @@ where
 #[derive(Clone)]
 pub struct LocalNodeClient<S>
 where
-    S: Storage,
+    S: Storage + Clone + 'static,
 {
     node: Arc<LocalNode<S>>,
 }

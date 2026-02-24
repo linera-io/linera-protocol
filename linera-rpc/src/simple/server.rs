@@ -26,7 +26,7 @@ use crate::{
 #[derive(Clone)]
 pub struct Server<S>
 where
-    S: Storage,
+    S: Storage + Clone + 'static,
 {
     network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     host: String,
@@ -41,7 +41,7 @@ where
 
 impl<S> Server<S>
 where
-    S: Storage,
+    S: Storage + Clone + 'static,
 {
     pub fn new(
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
@@ -161,7 +161,7 @@ where
 #[derive(Clone)]
 struct RunningServerState<S>
 where
-    S: Storage,
+    S: Storage + Clone + 'static,
 {
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(CrossChainRequest, ShardId)>,
@@ -421,7 +421,7 @@ where
 
 impl<S> RunningServerState<S>
 where
-    S: Storage + Send,
+    S: Storage + Clone + Send + 'static,
 {
     fn handle_network_actions(&mut self, actions: NetworkActions) {
         for request in actions.cross_chain_requests {

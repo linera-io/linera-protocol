@@ -78,7 +78,7 @@ pub enum FaultType {
 /// tasks if the client stopped waiting for the response.
 struct LocalValidator<S>
 where
-    S: Storage,
+    S: Storage + Clone + 'static,
 {
     state: WorkerState<S>,
     notifier: Arc<ChannelNotifier<Notification>>,
@@ -87,7 +87,7 @@ where
 #[derive(Clone)]
 pub struct LocalValidatorClient<S>
 where
-    S: Storage,
+    S: Storage + Clone + 'static,
 {
     public_key: ValidatorPublicKey,
     client: Arc<Mutex<LocalValidator<S>>>,
@@ -706,7 +706,7 @@ where
 #[derive(Clone)]
 pub struct NodeProvider<S>(Arc<std::sync::Mutex<Vec<LocalValidatorClient<S>>>>)
 where
-    S: Storage;
+    S: Storage + Clone + 'static;
 
 impl<S> NodeProvider<S>
 where
@@ -752,7 +752,7 @@ where
 
 impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S>
 where
-    S: Storage,
+    S: Storage + Clone + 'static,
 {
     fn from_iter<T>(iter: T) -> Self
     where
