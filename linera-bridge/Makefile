@@ -11,7 +11,7 @@ build-all: build-wasm ## Build WASM files and all docker images needed for the b
 		-f ./Dockerfile.exporter \
 		--build-arg build_flag="" \
 		--build-arg build_folder=debug \
-		--build-arg build_features=scylladb,metrics,bridge \
+		--build-arg build_features=scylladb,metrics \
 		-t linera-exporter ..
 	cd $(DOCKER_DIR) && docker build -f ./Dockerfile \
 		--build-arg build_flag="" \
