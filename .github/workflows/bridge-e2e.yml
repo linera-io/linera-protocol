@@ -66,8 +66,23 @@ jobs:
           docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera:latest
           docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter:latest
 
-      # Build bridge images with cache
-      - name: Build bridge image 1
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            bridge:
+              - 'linera-bridge/**'
+              - 'docker/Dockerfile.bridge'
+
+      - name: Pull bridge image (unchanged)
+        if: steps.changes.outputs.bridge == 'false'
+        run: |
+          BRANCH="${{ github.base_ref || github.ref_name }}"
+          docker pull "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
+          docker tag "${GCP_REGISTRY}/linera-bridge:${BRANCH}" linera-bridge:latest
+
+      - name: Build bridge image
+        if: steps.changes.outputs.bridge == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -76,8 +91,6 @@ jobs:
           tags: linera-bridge:latest
           cache-from: type=gha,scope=linera-bridge
           cache-to: type=gha,scope=linera-bridge,mode=max
-
-      # Repeat for other bridge images...
 
       - name: Run bridge E2E test
         run: cargo test -p linera-bridge-e2e -- --ignored --nocapture
