@@ -4706,7 +4706,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         .change_application_permissions(
             service_chain,
             ApplicationPermissions {
-                manage_chain: vec![controller_id.forget_abi()],
+                close_chain: vec![controller_id.forget_abi()],
                 ..Default::default()
             },
         )

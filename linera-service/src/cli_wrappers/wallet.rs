@@ -982,9 +982,9 @@ impl ClientWrapper {
         command
             .arg("change-application-permissions")
             .args(["--chain-id", &chain_id.to_string()]);
-        command.arg("--manage-chain").arg(serde_json::to_string(
-            &application_permissions.manage_chain,
-        )?);
+        command
+            .arg("--close-chain")
+            .arg(serde_json::to_string(&application_permissions.close_chain)?);
         // TODO: add other fields
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
