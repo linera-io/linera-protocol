@@ -767,7 +767,7 @@ impl<Env: Environment> Client<Env> {
         // Spawn a task to monitor clock skew reports and warn if threshold is reached.
         let validity_threshold = committee.validity_threshold();
         let committee_clone = committee.clone();
-        let clock_skew_check_handle = linera_base::task::spawn(async move {
+        let clock_skew_check_handle = linera_base::Task::spawn(async move {
             let mut skew_weight = 0u64;
             let mut min_skew = TimeDelta::MAX;
             let mut max_skew = TimeDelta::ZERO;

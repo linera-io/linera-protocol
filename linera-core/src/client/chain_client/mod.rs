@@ -11,8 +11,7 @@ use std::{
 
 use custom_debug_derive::Debug;
 use futures::{
-    future::{self, Either, FusedFuture, Future, FutureExt},
-    select,
+    future::{self, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt, TryStreamExt},
 };
 #[cfg(with_metrics)]
@@ -62,7 +61,6 @@ pub use state::State;
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use super::{
@@ -850,10 +848,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
     #[instrument(level = "trace")]
-    pub async fn find_received_certificates(
-        &self,
-        cancellation_token: Option<CancellationToken>,
-    ) -> Result<(), Error> {
+    pub async fn find_received_certificates(&self) -> Result<(), Error> {
         debug!(chain_id = %self.chain_id, "starting find_received_certificates");
         #[cfg(with_metrics)]
         let _latency = super::metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
@@ -931,12 +926,7 @@ impl<Env: Environment> ChainClient<Env> {
             max_blocks_per_chain,
         ) {
             validator_trackers = self
-                .receive_sender_certificates(
-                    received_log,
-                    validator_trackers,
-                    &nodes,
-                    cancellation_token.clone(),
-                )
+                .receive_sender_certificates(received_log, validator_trackers, &nodes)
                 .await?;
 
             self.update_received_certificate_trackers(&validator_trackers)
@@ -974,7 +964,6 @@ impl<Env: Environment> ChainClient<Env> {
         mut received_logs: ReceivedLogs,
         mut validator_trackers: ValidatorTrackers,
         nodes: &[RemoteNode<Env::ValidatorNode>],
-        cancellation_token: Option<CancellationToken>,
     ) -> Result<ValidatorTrackers, Error> {
         debug!(
             num_chains = %received_logs.num_chains(),
@@ -1028,31 +1017,17 @@ impl<Env: Environment> ChainClient<Env> {
             },
         );
 
-        let update_trackers = linera_base::task::spawn(async move {
+        stream::iter(cert_futures)
+            .buffer_unordered(self.options.max_joined_tasks)
+            .collect::<()>()
+            .await;
+
+        let update_trackers = linera_base::Task::spawn(async move {
             while let Some(chain_and_height) = receiver.recv().await {
                 validator_trackers.downloaded_cert(chain_and_height);
             }
             validator_trackers
         });
-
-        let mut cancellation_future = Box::pin(
-            async move {
-                if let Some(token) = cancellation_token {
-                    token.cancelled().await
-                } else {
-                    future::pending().await
-                }
-            }
-            .fuse(),
-        );
-
-        select! {
-            _ = stream::iter(cert_futures)
-            .buffer_unordered(self.options.max_joined_tasks)
-            .for_each(future::ready)
-            => (),
-            _ = cancellation_future => ()
-        };
 
         drop(sender);
 
@@ -1705,7 +1680,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
         let info = self.prepare_chain().await?;
         self.synchronize_publisher_chains().await?;
-        self.find_received_certificates(None).await?;
+        self.find_received_certificates().await?;
         Ok(info)
     }
 
