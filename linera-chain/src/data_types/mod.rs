@@ -295,12 +295,12 @@ impl IncomingBundle {
                 return false;
             }
         }
-        true
+        !policy.is_reject()
     }
 
     #[instrument(level = "trace", skip(self))]
     pub fn apply_policy(mut self, policy: &MessagePolicy) -> Option<IncomingBundle> {
-        if !self.matches_policy(policy) || policy.is_reject() {
+        if !self.matches_policy(policy) {
             if self.bundle.is_skippable() {
                 return None;
             } else if !self.bundle.is_protected() {
