@@ -202,7 +202,7 @@ where
         self.shared_storage.get_blob(blob_id).await
     }
 
-    pub(crate) fn load_destination_state(&self, id: &DestinationId) -> Arc<AtomicU64> {
+    pub(crate) fn load_destination_state(&self, id: &DestinationId) -> anyhow::Result<Arc<AtomicU64>> {
         self.shared_storage.destination_states.load_state(id)
     }
 

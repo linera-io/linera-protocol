@@ -57,7 +57,7 @@ impl Exporter {
 
         let address = self.destination_id.address();
         let mut client = IndexerClient::new(address, self.options)?;
-        let destination_state = storage.load_destination_state(&self.destination_id);
+        let destination_state = storage.load_destination_state(&self.destination_id)?;
 
         tracing::info!(
             start_index=&destination_state.load(Ordering::SeqCst),

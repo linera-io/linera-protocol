@@ -60,7 +60,7 @@ impl LoggingExporter {
     where
         S: linera_storage::Storage + Clone + Send + Sync + 'static,
     {
-        let destination_state = storage.load_destination_state(&self.id);
+        let destination_state = storage.load_destination_state(&self.id)?;
         let mut destination_height = destination_state.load(Ordering::Acquire) as usize;
         tracing::info!("starting logging exporter at height {}", destination_height);
 
