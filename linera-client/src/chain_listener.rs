@@ -543,6 +543,13 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         Some(cancellation_token)
     }
 
+    fn remove_event_subscriber(&mut self, chain_id: ChainId) {
+        self.event_subscribers.retain(|_, subscribers| {
+            subscribers.remove(&chain_id);
+            !subscribers.is_empty()
+        });
+    }
+
     /// Updates the event subscribers map, and returns all publishing chains we need to listen to.
     async fn update_event_subscriptions(
         &mut self,
@@ -608,6 +615,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                     error!(%chain_id, "attempted to drop a non-existent listener");
                                     continue;
                                 };
+                                self.remove_event_subscriber(chain_id);
                                 listening_client.stop().await;
                                 if let Err(error) = self.context.lock().await.wallet().remove(chain_id).await {
                                     error!(%error, %chain_id, "error removing a chain from the wallet");
@@ -638,6 +646,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                             error!(%chain_id, "attempted to drop a non-existent listener");
                             continue;
                         };
+                        self.remove_event_subscriber(chain_id);
                         listening_client.stop().await;
                         continue;
                     };
