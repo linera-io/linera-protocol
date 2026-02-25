@@ -52,7 +52,7 @@ pub struct Options {
     pub recv_timeout: Duration,
 
     /// The maximum number of incoming message bundles to include in a block proposal.
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "300")]
     pub max_pending_message_bundles: usize,
 
     /// Maximum number of message bundles to discard from a block proposal due to block limit
@@ -67,8 +67,8 @@ pub struct Options {
     pub max_new_events_per_block: usize,
 
     /// Time budget for staging message bundles in milliseconds. When set, limits bundle
-    /// execution by time rather than by count. This overrides `max_pending_message_bundles`
-    /// for bundle limiting purposes.
+    /// execution by wall-clock time, in addition to the count limit from
+    /// `max_pending_message_bundles`.
     #[arg(long = "staging-bundles-time-budget-ms", value_parser = util::parse_millis)]
     pub staging_bundles_time_budget: Option<Duration>,
 
