@@ -182,14 +182,21 @@ impl Runnable for ExporterContext {
 
         let service = ExporterService::new(sender);
 
-        let mut block_processor_task = tokio::task::spawn_blocking(move || handle.join().unwrap());
+        let mut block_processor_task = tokio::task::spawn_blocking(move || {
+            handle.join().unwrap_or_else(|_| {
+                Err(ExporterError::GenericError(
+                    "block processor thread panicked".into(),
+                ))
+            })
+        });
         tokio::select! {
             result = service.run(shutdown_notifier, self.config.service_config.port) => {
                 result?;
-                block_processor_task.await.expect("block processor task panicked")
+                block_processor_task.await
+                    .map_err(|e| ExporterError::GenericError(e.into()))?
             }
             result = &mut block_processor_task => {
-                result.expect("block processor task panicked")
+                result.map_err(|e| ExporterError::GenericError(e.into()))?
             }
         }
     }
