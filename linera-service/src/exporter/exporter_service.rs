@@ -41,11 +41,12 @@ impl NotifierService for ExporterService {
                     }
                 };
 
+            if self.block_processor_sender.send(block_id).is_err() {
+                tracing::error!("block processor has stopped, cannot forward notification");
+                return Err(Status::unavailable("block processor is not running"));
+            }
             #[cfg(with_metrics)]
             crate::metrics::EXPORTER_NOTIFICATION_QUEUE_LENGTH.inc();
-            self.block_processor_sender
-                .send(block_id)
-                .expect("sender should never fail");
         }
 
         Ok(Response::new(()))
