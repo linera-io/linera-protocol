@@ -10,8 +10,8 @@ use std::collections::HashSet;
 use async_graphql::ComplexObject;
 use linera_sdk::{
     abis::controller::{
-        ControllerAbi, ControllerCommand, ManagedServiceId, Message, Operation, Worker,
-        WorkerCommand,
+        ControllerAbi, ControllerCommand, ManagedService, ManagedServiceId, Message, Operation,
+        PendingService, Worker, WorkerCommand,
     },
     linera_base_types::{AccountOwner, ChainId, WithContractAbi},
     views::{RootView, View},
@@ -94,6 +94,34 @@ impl Contract for ControllerContract {
                         .send_to(creator_chain_id);
                 }
             }
+            Operation::StartLocalService { service_id } => {
+                // The command can only be executed on a worker chain.
+                assert!(self.state.local_worker.get().is_some());
+                let pending_service = self
+                    .state
+                    .local_pending_services
+                    .get(&service_id)
+                    .await
+                    .expect("storage")
+                    .expect("pending service should exist");
+                self.state
+                    .local_pending_services
+                    .remove(&service_id)
+                    .expect("storage");
+                self.state
+                    .local_services
+                    .insert(&service_id)
+                    .expect("storage");
+                // We can now remove the owners of the chain that are no longer needed.
+                let service_blob_bytes = self.runtime.read_data_blob(service_id);
+                let service_blob: ManagedService =
+                    bcs::from_bytes(&service_blob_bytes).expect("bcs bytes");
+                self.runtime
+                    .prepare_message(Message::RemoveOwners {
+                        owners_to_remove: pending_service.owners_to_remove,
+                    })
+                    .send_to(service_blob.chain_id);
+            }
         }
     }
 
@@ -107,7 +135,7 @@ impl Contract for ControllerContract {
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_creator_chain_id(),
-                    "ExecuteAdminCommand can only be executed on the chain that created the PM engine"
+                    "ExecuteWorkerCommand can only be executed on the chain that created the controller"
                 );
                 let origin_chain_id = self.runtime.message_origin_chain_id().expect(
                     "Incoming message origin chain ID has to be available when executing a message",
@@ -119,26 +147,126 @@ impl Contract for ControllerContract {
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_creator_chain_id(),
-                    "ExecuteAdminCommand can only be executed on the chain that created the PM engine"
+                    "ExecuteControllerCommand can only be executed on the chain that created the controller"
                 );
                 self.execute_controller_command_locally(admin, command)
                     .await;
+            }
+            Message::HandoffStarted {
+                service_id,
+                target_block_height,
+            } => {
+                assert_eq!(
+                    self.runtime.chain_id(),
+                    self.runtime.application_creator_chain_id(),
+                    "HandoffStarted can only be executed on the chain that created the controller"
+                );
+                let service_pending_handoff = self
+                    .state
+                    .pending_services
+                    .get(&service_id)
+                    .await
+                    .expect("storage")
+                    .unwrap_or_default();
+                self.state
+                    .pending_services
+                    .remove(&service_id)
+                    .expect("storage");
+                let message = Message::Start {
+                    service_id,
+                    owners_to_remove: service_pending_handoff.owners_to_remove.clone(),
+                    start_height: Some(target_block_height),
+                };
+                for worker in service_pending_handoff.pending_workers {
+                    log::info!("Notifying worker {worker}: {message:?}");
+                    self.runtime
+                        .prepare_message(message.clone())
+                        .send_to(worker);
+                }
             }
             Message::Reset => {
                 self.state.local_worker.set(None);
                 self.state.local_services.clear();
             }
-            Message::Start { service_id } => {
-                self.state
-                    .local_services
-                    .insert(&service_id)
-                    .expect("storage");
+            Message::Start {
+                service_id,
+                owners_to_remove,
+                start_height,
+            } => {
+                if let Some(start_block_height) = start_height {
+                    self.state
+                        .local_pending_services
+                        .insert(
+                            &service_id,
+                            PendingService {
+                                owners_to_remove,
+                                start_block_height,
+                            },
+                        )
+                        .expect("storage");
+                } else {
+                    self.state
+                        .local_services
+                        .insert(&service_id)
+                        .expect("storage");
+                    if !owners_to_remove.is_empty() {
+                        let service_blob_bytes = self.runtime.read_data_blob(service_id);
+                        let service_blob: ManagedService =
+                            bcs::from_bytes(&service_blob_bytes).expect("bcs bytes");
+                        self.runtime
+                            .prepare_message(Message::RemoveOwners { owners_to_remove })
+                            .send_to(service_blob.chain_id);
+                    }
+                }
             }
-            Message::Stop { service_id } => {
+            Message::Stop {
+                service_id,
+                new_owners,
+            } => {
+                let service_blob_bytes = self.runtime.read_data_blob(service_id);
+                let service_blob: ManagedService =
+                    bcs::from_bytes(&service_blob_bytes).expect("bcs bytes");
+                self.runtime
+                    .prepare_message(Message::AddOwners {
+                        service_id,
+                        new_owners,
+                    })
+                    .send_to(service_blob.chain_id);
+            }
+            Message::OwnersAdded {
+                service_id,
+                added_at,
+            } => {
                 self.state
                     .local_services
                     .remove(&service_id)
                     .expect("storage");
+                self.runtime
+                    .prepare_message(Message::HandoffStarted {
+                        service_id,
+                        target_block_height: added_at,
+                    })
+                    .send_to(self.runtime.application_creator_chain_id());
+            }
+            Message::AddOwners {
+                service_id,
+                new_owners,
+            } => {
+                self.update_owners(new_owners);
+                let added_at = self.runtime.block_height();
+                self.runtime
+                    .prepare_message(Message::OwnersAdded {
+                        service_id,
+                        added_at,
+                    })
+                    .send_to(
+                        self.runtime
+                            .message_origin_chain_id()
+                            .expect("message should have an origin"),
+                    );
+            }
+            Message::RemoveOwners { owners_to_remove } => {
+                self.remove_owners(owners_to_remove);
             }
             Message::FollowChain { chain_id } => {
                 self.state.local_chains.insert(&chain_id).expect("storage");
@@ -335,16 +463,64 @@ impl ControllerContract {
             .expect("storage")
             .unwrap_or_default();
 
-        let message = Message::Start { service_id };
-        for worker in &new_workers {
-            if !existing_workers.contains(worker) {
+        let mut new_owners = HashSet::new();
+        if existing_workers.is_empty() {
+            // No workers to do any handoffs - just start the service directly on the
+            // given workers.
+            // `new_owners` will remain empty - it's okay, as we won't be sending `Stop`
+            // messages, anyway.
+            let message = Message::Start {
+                service_id,
+                owners_to_remove: HashSet::new(),
+                start_height: None,
+            };
+            for worker in &new_workers {
                 log::info!("Notifying worker {worker}: {message:?}");
                 self.runtime
                     .prepare_message(message.clone())
                     .send_to(*worker);
             }
+        } else {
+            // We need the old workers to hand the service off to the new ones.
+            let pending_service_entry = self
+                .state
+                .pending_services
+                .get_mut_or_default(&service_id)
+                .await
+                .expect("storage");
+            for worker_to_remove in existing_workers.difference(&new_workers) {
+                let worker_key = self
+                    .state
+                    .workers
+                    .get(worker_to_remove)
+                    .await
+                    .expect("storage")
+                    .expect("should be removing an existing worker from a service")
+                    .owner;
+                pending_service_entry.owners_to_remove.insert(worker_key);
+            }
+
+            for worker in &new_workers {
+                let worker_key = self
+                    .state
+                    .workers
+                    .get(worker)
+                    .await
+                    .expect("storage")
+                    .expect("should assign service to a registered worker")
+                    .owner;
+                new_owners.insert(worker_key);
+                if !existing_workers.contains(worker) {
+                    log::info!("Adding worker {worker} to pending services");
+                    pending_service_entry.pending_workers.insert(*worker);
+                }
+            }
         }
-        let message = Message::Stop { service_id };
+
+        let message = Message::Stop {
+            service_id,
+            new_owners,
+        };
         for worker in &existing_workers {
             if !new_workers.contains(worker) {
                 log::info!("Notifying worker {worker}: {message:?}");
@@ -396,6 +572,46 @@ impl ControllerContract {
                 .insert(&chain_id, new_workers)
                 .expect("storage");
         }
+    }
+
+    /// Adds `new_owners` to the set of owners of the current chain, with a weight of 100.
+    /// Returns `true` if the set of owners has actually changed.
+    fn update_owners(&mut self, new_owners: HashSet<AccountOwner>) -> bool {
+        let mut ownership = self.runtime.chain_ownership();
+        // Check if new_owners contains any owners that haven't been owners already.
+        if new_owners
+            .difference(&ownership.owners.keys().copied().collect())
+            .count()
+            == 0
+        {
+            return false;
+        }
+        ownership
+            .owners
+            .extend(new_owners.into_iter().zip(std::iter::repeat(100)));
+        self.runtime
+            .change_ownership(ownership)
+            .expect("change ownership");
+        true
+    }
+
+    /// Removes `owners_to_remove` from the set of owners of the current chain.
+    fn remove_owners(&mut self, owners_to_remove: HashSet<AccountOwner>) {
+        let mut ownership = self.runtime.chain_ownership();
+        if owners_to_remove
+            .intersection(&ownership.owners.keys().copied().collect())
+            .count()
+            == 0
+        {
+            // No owners to remove that are in the set of current owners.
+            return;
+        }
+        for old_owner in owners_to_remove {
+            ownership.owners.remove(&old_owner);
+        }
+        self.runtime
+            .change_ownership(ownership)
+            .expect("change ownership");
     }
 }
 

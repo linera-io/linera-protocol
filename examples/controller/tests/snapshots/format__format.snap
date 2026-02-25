@@ -18,6 +18,8 @@ REGISTRY:
             TUPLEARRAY:
               CONTENT: U8
               SIZE: 20
+  BlockHeight:
+    NEWTYPESTRUCT: U64
   ChainId:
     NEWTYPESTRUCT:
       TYPENAME: CryptoHash
@@ -110,11 +112,20 @@ REGISTRY:
           STRUCT:
             - service_id:
                 TYPENAME: DataBlobHash
+            - owners_to_remove:
+                SEQ:
+                  TYPENAME: AccountOwner
+            - start_height:
+                OPTION:
+                  TYPENAME: BlockHeight
       4:
         Stop:
           STRUCT:
             - service_id:
                 TYPENAME: DataBlobHash
+            - new_owners:
+                SEQ:
+                  TYPENAME: AccountOwner
       5:
         FollowChain:
           STRUCT:
@@ -125,6 +136,34 @@ REGISTRY:
           STRUCT:
             - chain_id:
                 TYPENAME: ChainId
+      7:
+        AddOwners:
+          STRUCT:
+            - service_id:
+                TYPENAME: DataBlobHash
+            - new_owners:
+                SEQ:
+                  TYPENAME: AccountOwner
+      8:
+        RemoveOwners:
+          STRUCT:
+            - owners_to_remove:
+                SEQ:
+                  TYPENAME: AccountOwner
+      9:
+        OwnersAdded:
+          STRUCT:
+            - service_id:
+                TYPENAME: DataBlobHash
+            - added_at:
+                TYPENAME: BlockHeight
+      10:
+        HandoffStarted:
+          STRUCT:
+            - service_id:
+                TYPENAME: DataBlobHash
+            - target_block_height:
+                TYPENAME: BlockHeight
   Operation:
     ENUM:
       0:
@@ -141,6 +180,11 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - command:
                 TYPENAME: ControllerCommand
+      2:
+        StartLocalService:
+          STRUCT:
+            - service_id:
+                TYPENAME: DataBlobHash
   Worker:
     STRUCT:
       - owner:
