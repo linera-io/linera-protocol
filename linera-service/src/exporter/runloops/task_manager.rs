@@ -106,6 +106,11 @@ where
                 abort_handle.abort();
             }
         }
+
+        self.current_committee_destinations = new_committee
+            .into_iter()
+            .filter(|id| !self.startup_destinations.contains(id))
+            .collect();
     }
 
     pub(super) async fn join_all(self) {

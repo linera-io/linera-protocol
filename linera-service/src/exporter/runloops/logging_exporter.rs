@@ -25,9 +25,8 @@ impl LoggingExporter {
         let log_file = Path::new(id.address());
         // Don't truncate the file to preserve previous logs
         let file = OpenOptions::new()
-            .write(true)
+            .append(true)
             .create(true)
-            .truncate(false)
             .open(log_file)
             .expect("Failed to create log file");
         LoggingExporter { id, file }
