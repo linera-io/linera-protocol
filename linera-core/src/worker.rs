@@ -810,7 +810,7 @@ where
                 (None, None)
             };
 
-        let mut worker = crate::chain_worker::state::ChainWorkerState::load(
+        let worker = crate::chain_worker::state::ChainWorkerState::load(
             self.chain_worker_config.clone(),
             self.storage.clone(),
             self.block_cache.clone(),
@@ -821,11 +821,6 @@ where
             service_runtime_endpoint,
         )
         .await?;
-
-        // Eagerly initialize the chain so that read-only methods don't need &mut self.
-        if let Err(err) = worker.initialize_and_save_if_needed().await {
-            trace!("Eager initialization skipped for {chain_id}: {err}");
-        }
 
         let handle = Arc::new(ChainHandle::new(worker, service_runtime_task, is_tracked));
 
@@ -897,9 +892,13 @@ where
         chain_id: ChainId,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        let this = self.clone();
+        linera_base::task::spawn(async move {
+            let handle = this.get_or_create_chain_handle(chain_id).await?;
+            let guard = handle.read_initialized().await?;
             guard.describe_application_readonly(application_id).await
         })
+        .await
     }
 
     /// Processes a confirmed block (aka a commit).
@@ -986,9 +985,13 @@ where
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        let this = self.clone();
+        linera_base::task::spawn(async move {
+            let handle = this.get_or_create_chain_handle(chain_id).await?;
+            let guard = handle.read_initialized().await?;
             guard.read_certificate(height).await
         })
+        .await
     }
 
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its

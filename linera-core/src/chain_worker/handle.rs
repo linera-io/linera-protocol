@@ -111,6 +111,29 @@ impl<S: Storage + Clone + 'static> ChainHandle<S> {
         self.state.clone().read_owned().await
     }
 
+    /// Acquires a read lock, initializing the chain if needed.
+    ///
+    /// This method first acquires a read lock and checks if the chain is already known
+    /// to be active. If not, it drops the read lock, acquires a write lock to initialize
+    /// the chain, then re-acquires the read lock.
+    pub(crate) async fn read_initialized(
+        &self,
+    ) -> Result<OwnedRwLockReadGuard<ChainWorkerState<S>>, crate::worker::WorkerError> {
+        self.touch();
+        let guard = self.state.clone().read_owned().await;
+        if guard.knows_chain_is_active() {
+            return Ok(guard);
+        }
+        drop(guard);
+        let mut guard = self.state.clone().write_owned().await;
+        let result = guard.initialize_and_save_if_needed().await;
+        guard.rollback();
+        result?;
+        drop(guard);
+        let guard = self.state.clone().read_owned().await;
+        Ok(guard)
+    }
+
     /// Acquires a write lock, updating the last-access timestamp.
     pub(crate) async fn write(&self) -> OwnedRwLockWriteGuard<ChainWorkerState<S>> {
         self.touch();

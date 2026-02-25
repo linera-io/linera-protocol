@@ -137,6 +137,11 @@ where
         &self.chain
     }
 
+    /// Returns whether this chain is known to be active (initialized).
+    pub(crate) fn knows_chain_is_active(&self) -> bool {
+        self.knows_chain_is_active
+    }
+
     /// Rolls back any uncommitted changes to the chain state.
     pub(crate) fn rollback(&mut self) {
         self.chain.rollback();
