@@ -84,15 +84,18 @@ impl IndexerClient {
                         {
                             // We assume that indexer responds with ACKs only after storing a block
                             // and that it doesn't ACK blocks out of order.
-                            let start_time = self
+                            if let Some(start_time) = self
                                 .sent_latency
                                 .lock()
                                 .unwrap()
                                 .pop_front()
-                                .expect("have timer waiting");
-                            crate::metrics::DISPATCH_BLOCK_HISTOGRAM
-                                .with_label_values(&[&self.address])
-                                .observe(start_time.elapsed().as_secs_f64() * 1000.0);
+                            {
+                                crate::metrics::DISPATCH_BLOCK_HISTOGRAM
+                                    .with_label_values(&[&self.address])
+                                    .observe(start_time.elapsed().as_secs_f64() * 1000.0);
+                            } else {
+                                tracing::warn!("received ACK without matching send timestamp");
+                            }
                         }
                         response
                     });
