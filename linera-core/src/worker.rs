@@ -73,19 +73,12 @@ use crate::{
 mod worker_tests;
 
 /// Acquires a read lock on a chain handle, executes `$body` with the guard named `$guard`,
-/// and returns the result. The entire operation (including chain loading) runs in a spawned
-/// task to isolate the chain state from the caller's future, ensuring `Sync` compatibility
-/// and small future size.
-macro_rules! spawn_chain_read {
+/// and returns the result.
+macro_rules! chain_read {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let this = $self.clone();
-        let chain_id = $chain_id;
-        linera_base::task::spawn(async move {
-            let handle = this.get_or_create_chain_handle(chain_id).await?;
-            let $guard = handle.read().await;
-            $body
-        })
-        .await
+        let handle = $self.get_or_create_chain_handle($chain_id).await?;
+        let $guard = handle.read().await;
+        $body
     }};
 }
 
@@ -892,13 +885,9 @@ where
         chain_id: ChainId,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        let this = self.clone();
-        linera_base::task::spawn(async move {
-            let handle = this.get_or_create_chain_handle(chain_id).await?;
-            let guard = handle.read_initialized().await?;
-            guard.describe_application_readonly(application_id).await
-        })
-        .await
+        let handle = self.get_or_create_chain_handle(chain_id).await?;
+        let guard = handle.read_initialized().await?;
+        guard.describe_application_readonly(application_id).await
     }
 
     /// Processes a confirmed block (aka a commit).
@@ -985,13 +974,9 @@ where
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        let this = self.clone();
-        linera_base::task::spawn(async move {
-            let handle = this.get_or_create_chain_handle(chain_id).await?;
-            let guard = handle.read_initialized().await?;
-            guard.read_certificate(height).await
-        })
-        .await
+        let handle = self.get_or_create_chain_handle(chain_id).await?;
+        let guard = handle.read_initialized().await?;
+        guard.read_certificate(height).await
     }
 
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
@@ -1182,7 +1167,7 @@ where
             "{} <-- download_pending_blob({chain_id:8}, {blob_id:8})",
             self.nickname()
         );
-        let result = spawn_chain_read!(self, chain_id, |guard| {
+        let result = chain_read!(self, chain_id, |guard| {
             guard.download_pending_blob(blob_id).await
         });
         trace!(
@@ -1300,7 +1285,7 @@ where
         start: BlockHeight,
         end: BlockHeight,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_preprocessed_block_hashes(start, end).await
         })
     }
@@ -1316,7 +1301,7 @@ where
         chain_id: ChainId,
         origin: ChainId,
     ) -> Result<BlockHeight, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_inbox_next_height(origin).await
         })
     }
@@ -1333,7 +1318,7 @@ where
         chain_id: ChainId,
         blob_ids: Vec<BlobId>,
     ) -> Result<Option<Vec<Blob>>, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_locking_blobs(blob_ids).await
         })
     }
@@ -1344,7 +1329,7 @@ where
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_block_hashes(heights).await
         })
     }
@@ -1355,7 +1340,7 @@ where
         chain_id: ChainId,
         blob_ids: Vec<BlobId>,
     ) -> Result<Vec<Blob>, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_proposed_blobs(blob_ids).await
         })
     }
@@ -1365,7 +1350,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<EventSubscriptionsResult, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_event_subscriptions().await
         })
     }
@@ -1376,7 +1361,7 @@ where
         chain_id: ChainId,
         stream_id: StreamId,
     ) -> Result<Option<u32>, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_next_expected_event(stream_id).await
         })
     }
@@ -1386,7 +1371,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_received_certificate_trackers().await
         })
     }
@@ -1397,7 +1382,7 @@ where
         chain_id: ChainId,
         receiver_id: ChainId,
     ) -> Result<(BlockHeight, Option<BlockHeight>), WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_tip_state_and_outbox_info(receiver_id).await
         })
     }
@@ -1407,7 +1392,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<BlockHeight, WorkerError> {
-        spawn_chain_read!(self, chain_id, |guard| {
+        chain_read!(self, chain_id, |guard| {
             guard.get_next_height_to_preprocess().await
         })
     }
