@@ -537,11 +537,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     }
 
     fn remove_event_subscriber(&mut self, chain_id: ChainId) {
-        self.event_subscribers
-            .retain(|_, subscribers| {
-                subscribers.remove(&chain_id);
-                !subscribers.is_empty()
-            });
+        self.event_subscribers.retain(|_, subscribers| {
+            subscribers.remove(&chain_id);
+            !subscribers.is_empty()
+        });
     }
 
     /// Updates the event subscribers map, and returns all publishing chains we need to listen to.
