@@ -4669,7 +4669,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let state = InitialState { accounts };
     let (fungible_contract, fungible_service) = admin_client.build_example("fungible").await?;
     let fungible_id = admin_client
-        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
+        .publish_and_create::<fungible::FungibleTokenAbi, Parameters, InitialState>(
             fungible_contract,
             fungible_service,
             VmRuntime::Wasm,
@@ -4923,7 +4923,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         .transfer(
             &admin_owner,
             Amount::from_tokens(10),
-            Account {
+            fungible::Account {
                 chain_id: service_chain,
                 owner: admin_owner,
             },
