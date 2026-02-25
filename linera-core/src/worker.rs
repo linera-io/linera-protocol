@@ -72,13 +72,46 @@ use crate::{
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
+/// A future wrapper that asserts `Sync` for a `Send` future.
+///
+/// Futures are polled exclusively through `Pin<&mut Self>`, never through `&Self`,
+/// so `Sync` is never exercised at runtime. This wrapper is needed because the
+/// chain macros erase the future type to prevent compiler overflow on `Send` bound
+/// evaluation, and the resulting `!Sync` type would otherwise propagate to callers
+/// that require `Sync` (e.g. the `ClientContext` trait via `trait_variant::make(Send + Sync)`).
+#[repr(transparent)]
+struct AssertSync<F>(F);
+
+// SAFETY: `Sync` means `&Self` can be sent across threads. For futures, `&F` provides
+// no callable methods (polling requires `Pin<&mut F>`), so sharing a reference is harmless.
+unsafe impl<F: Send> Sync for AssertSync<F> {}
+
+impl<F: ::std::future::Future> ::std::future::Future for AssertSync<F> {
+    type Output = F::Output;
+
+    fn poll(
+        self: ::std::pin::Pin<&mut Self>,
+        cx: &mut ::std::task::Context<'_>,
+    ) -> ::std::task::Poll<Self::Output> {
+        // SAFETY: `AssertSync` is `repr(transparent)`, so the layout is identical.
+        unsafe { self.map_unchecked_mut(|s| &mut s.0) }.poll(cx)
+    }
+}
+
 /// Acquires a read lock on a chain handle, executes `$body` with the guard named `$guard`,
 /// and returns the result.
+///
+/// The future is erased to `dyn Future + Send + Sync` to prevent compiler overflow and
+/// to satisfy `Sync` requirements from async trait bounds.
 macro_rules! chain_read {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let handle = $self.get_or_create_chain_handle($chain_id).await?;
-        let $guard = handle.read().await;
-        $body
+        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send + Sync + '_>> =
+            Box::pin(AssertSync(async {
+                let handle = $self.get_or_create_chain_handle($chain_id).await?;
+                let $guard = handle.read().await;
+                $body
+            }));
+        fut.await
     }};
 }
 
@@ -86,17 +119,16 @@ macro_rules! chain_read {
 /// and returns the result. The [`RollbackGuard`] automatically rolls back uncommitted
 /// chain state changes when dropped, ensuring cancellation safety.
 ///
-/// The body is boxed as a `dyn Future` to erase the complex future type containing
-/// the chain worker state, which prevents compiler overflow when evaluating `Send`
-/// bounds in deeply nested async contexts (e.g. gRPC handlers with `#[instrument]`).
+/// The future is erased to `dyn Future + Send + Sync` to prevent compiler overflow and
+/// to satisfy `Sync` requirements from async trait bounds.
 macro_rules! chain_write {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let handle = $self.get_or_create_chain_handle($chain_id).await?;
-        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send>> =
-            Box::pin(async move {
+        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send + Sync + '_>> =
+            Box::pin(AssertSync(async {
+                let handle = $self.get_or_create_chain_handle($chain_id).await?;
                 let mut $guard = handle.write().await;
                 $body
-            });
+            }));
         fut.await
     }};
 }
