@@ -47,7 +47,7 @@ impl<R: 'static> Task<R> {
         Self::spawn_(future, wasm_bindgen_futures::spawn_local)
     }
 
-    /// Creates a [`NonBlockingFuture`] that is immediately ready.
+    /// Creates a [`Task`] that is immediately ready.
     pub fn ready(value: R) -> Self {
         Self::spawn_(async { value }, |fut| {
             fut.now_or_never().expect("the future is ready")
