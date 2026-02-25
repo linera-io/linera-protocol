@@ -21,6 +21,18 @@ pub struct Wallet {
     pub(crate) lock: Option<Rc<Lock>>,
 }
 
+impl Wallet {
+    /// Create a new wallet from a genesis config.
+    pub fn new(genesis_config: GenesisConfig) -> Self {
+        Self {
+            chains: Rc::new(wallet::Memory::default()),
+            default: None,
+            genesis_config,
+            lock: None,
+        }
+    }
+}
+
 #[wasm_bindgen]
 impl Wallet {
     /// Set the owner of a chain (the account used to sign blocks on this chain).

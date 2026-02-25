@@ -25,12 +25,7 @@ impl Faucet {
     /// If we couldn't retrieve the genesis config from the faucet.
     #[wasm_bindgen(js_name = createWallet)]
     pub async fn create_wallet(&self) -> Result<Wallet> {
-        Ok(Wallet {
-            chains: std::rc::Rc::new(wallet::Memory::default()),
-            default: None,
-            genesis_config: self.0.genesis_config().await?,
-            lock: None,
-        })
+        Ok(Wallet::new(self.0.genesis_config().await?))
     }
 
     /// Claims a new chain from the faucet, with a new keypair and some tokens.
