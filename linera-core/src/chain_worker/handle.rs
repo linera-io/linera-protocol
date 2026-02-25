@@ -3,9 +3,12 @@
 
 //! A handle providing RwLock-based access to a chain worker's state.
 
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc, Mutex,
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use linera_base::{
@@ -15,7 +18,7 @@ use linera_base::{
 };
 use linera_execution::{QueryContext, ServiceRuntimeEndpoint, ServiceSyncRuntime};
 use linera_storage::Storage;
-use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
+use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
 use super::state::ChainWorkerState;
 
@@ -29,6 +32,34 @@ pub(crate) struct ChainHandle<S: Storage> {
     last_access: Arc<AtomicU64>,
     service_runtime_task: Mutex<Option<web_thread_pool::Task<()>>>,
     is_tracked: bool,
+}
+
+/// A write guard that automatically rolls back uncommitted chain state changes on drop.
+///
+/// This ensures cancellation safety: if a write operation's future is dropped before
+/// completion, any uncommitted state changes are rolled back rather than leaked.
+pub(crate) struct RollbackGuard<S: Storage + Clone + 'static>(
+    tokio::sync::OwnedRwLockWriteGuard<ChainWorkerState<S>>,
+);
+
+impl<S: Storage + Clone + 'static> Deref for RollbackGuard<S> {
+    type Target = ChainWorkerState<S>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S: Storage + Clone + 'static> DerefMut for RollbackGuard<S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<S: Storage + Clone + 'static> Drop for RollbackGuard<S> {
+    fn drop(&mut self) {
+        self.0.rollback();
+    }
 }
 
 /// Actor that manages a long-lived service runtime in a background thread.
@@ -119,25 +150,26 @@ impl<S: Storage + Clone + 'static> ChainHandle<S> {
     pub(crate) async fn read_initialized(
         &self,
     ) -> Result<OwnedRwLockReadGuard<ChainWorkerState<S>>, crate::worker::WorkerError> {
-        self.touch();
-        let guard = self.state.clone().read_owned().await;
-        if guard.knows_chain_is_active() {
-            return Ok(guard);
+        {
+            let guard = self.read().await;
+            if guard.knows_chain_is_active() {
+                return Ok(guard);
+            }
         }
-        drop(guard);
-        let mut guard = self.state.clone().write_owned().await;
-        let result = guard.initialize_and_save_if_needed().await;
-        guard.rollback();
-        result?;
-        drop(guard);
-        let guard = self.state.clone().read_owned().await;
-        Ok(guard)
+        {
+            let mut guard = self.write().await;
+            guard.initialize_and_save_if_needed().await?;
+        }
+        Ok(self.read().await)
     }
 
     /// Acquires a write lock, updating the last-access timestamp.
-    pub(crate) async fn write(&self) -> OwnedRwLockWriteGuard<ChainWorkerState<S>> {
+    ///
+    /// Returns a [`RollbackGuard`] that automatically rolls back uncommitted changes
+    /// when dropped, ensuring cancellation safety.
+    pub(crate) async fn write(&self) -> RollbackGuard<S> {
         self.touch();
-        self.state.clone().write_owned().await
+        RollbackGuard(self.state.clone().write_owned().await)
     }
 
     /// Shuts down the service runtime task, if any.

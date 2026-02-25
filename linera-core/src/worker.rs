@@ -83,21 +83,21 @@ macro_rules! chain_read {
 }
 
 /// Acquires a write lock on a chain handle, executes `$body` with the guard named `$guard`,
-/// rolls back the chain state, and returns the result. The entire operation (including
-/// chain loading) runs in a spawned task to isolate the chain state from the caller's
-/// future, ensuring `Sync` compatibility and small future size.
-macro_rules! spawn_chain_write {
+/// and returns the result. The [`RollbackGuard`] automatically rolls back uncommitted
+/// chain state changes when dropped, ensuring cancellation safety.
+///
+/// The body is boxed as a `dyn Future` to erase the complex future type containing
+/// the chain worker state, which prevents compiler overflow when evaluating `Send`
+/// bounds in deeply nested async contexts (e.g. gRPC handlers with `#[instrument]`).
+macro_rules! chain_write {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let this = $self.clone();
-        let chain_id = $chain_id;
-        linera_base::task::spawn(async move {
-            let handle = this.get_or_create_chain_handle(chain_id).await?;
-            let mut $guard = handle.write().await;
-            let result = $body;
-            $guard.rollback();
-            result
-        })
-        .await
+        let handle = $self.get_or_create_chain_handle($chain_id).await?;
+        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send>> =
+            Box::pin(async move {
+                let mut $guard = handle.write().await;
+                $body
+            });
+        fut.await
     }};
 }
 
@@ -832,7 +832,7 @@ where
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         let chain_id = block.chain_id;
-        spawn_chain_write!(self, chain_id, |guard| {
+        chain_write!(self, chain_id, |guard| {
             guard
                 .stage_block_execution(block, round, &published_blobs)
                 .await
@@ -852,7 +852,7 @@ where
         policy: BundleExecutionPolicy,
     ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         let chain_id = block.chain_id;
-        spawn_chain_write!(self, chain_id, |guard| {
+        chain_write!(self, chain_id, |guard| {
             guard
                 .stage_block_execution_with_policy(block, round, &published_blobs, policy)
                 .await
@@ -870,7 +870,7 @@ where
         query: Query,
         block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, WorkerError> {
-        spawn_chain_write!(self, chain_id, |guard| {
+        chain_write!(self, chain_id, |guard| {
             guard.query_application(query, block_hash).await
         })
     }
@@ -906,7 +906,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        spawn_chain_write!(self, chain_id, |guard| {
+        chain_write!(self, chain_id, |guard| {
             guard
                 .process_confirmed_block(certificate, notify_when_messages_are_delivered)
                 .await
@@ -924,7 +924,7 @@ where
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        spawn_chain_write!(self, chain_id, |guard| {
+        chain_write!(self, chain_id, |guard| {
             guard.process_validated_block(certificate).await
         })
     }
@@ -940,7 +940,7 @@ where
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let chain_id = certificate.value().chain_id();
-        spawn_chain_write!(self, chain_id, |guard| {
+        chain_write!(self, chain_id, |guard| {
             guard.process_timeout(certificate).await
         })
     }
@@ -957,7 +957,7 @@ where
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
-        spawn_chain_write!(self, recipient, |guard| {
+        chain_write!(self, recipient, |guard| {
             guard.process_cross_chain_update(origin, bundles).await
         })
     }
@@ -1026,7 +1026,7 @@ where
             self.storage.clock().sleep_until(block_timestamp).await;
         }
 
-        let response = spawn_chain_write!(self, chain_id, |guard| {
+        let response = chain_write!(self, chain_id, |guard| {
             guard.handle_block_proposal(proposal).await
         })?;
         #[cfg(with_metrics)]
@@ -1147,7 +1147,7 @@ where
         #[cfg(with_metrics)]
         metrics::CHAIN_INFO_QUERIES.inc();
         let chain_id = query.chain_id;
-        let result = spawn_chain_write!(self, chain_id, |guard| {
+        let result = chain_write!(self, chain_id, |guard| {
             guard.handle_chain_info_query(query).await
         });
         trace!("{} --> {:?}", self.nickname(), result);
@@ -1192,7 +1192,7 @@ where
             "{} <-- handle_pending_blob({chain_id:8}, {blob_id:8})",
             self.nickname()
         );
-        let result = spawn_chain_write!(self, chain_id, |guard| {
+        let result = chain_write!(self, chain_id, |guard| {
             guard.handle_pending_blob(blob).await
         });
         trace!(
@@ -1244,7 +1244,7 @@ where
                 recipient,
                 latest_height,
             } => {
-                spawn_chain_write!(self, sender, |guard| {
+                chain_write!(self, sender, |guard| {
                     guard
                         .confirm_updated_recipient(recipient, latest_height)
                         .await
@@ -1265,7 +1265,7 @@ where
         chain_id: ChainId,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
-        spawn_chain_write!(self, chain_id, |guard| {
+        chain_write!(self, chain_id, |guard| {
             guard
                 .update_received_certificate_trackers(new_trackers)
                 .await
