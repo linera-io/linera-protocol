@@ -143,7 +143,7 @@ where
                                 // be inconsistent for too long.
                                 Some((retries, first_attempt)) => {
                                     let elapsed = Instant::now().duration_since(first_attempt);
-                                    if retries < 3 || elapsed < Duration::from_secs(1) {
+                                    if retries < 3 && elapsed < Duration::from_secs(1) {
                                         tracing::warn!(?hash, retry=retries+1, "retrying to read certificate");
                                         self.retried_certs.insert(hash, (retries + 1, first_attempt));
                                         self.new_block_queue.push_back(next_block_notification);
