@@ -83,6 +83,7 @@ impl LoggingExporter {
                 for blob in blobs {
                     writeln!(self.file, "\tBlob ID: {}", blob.id(),)?;
                 }
+                self.file.flush()?;
 
                 destination_state.fetch_add(1, Ordering::Release);
                 destination_height += 1;
