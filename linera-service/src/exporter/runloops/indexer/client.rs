@@ -84,11 +84,7 @@ impl IndexerClient {
                         {
                             // We assume that indexer responds with ACKs only after storing a block
                             // and that it doesn't ACK blocks out of order.
-                            if let Some(start_time) = self
-                                .sent_latency
-                                .lock()
-                                .unwrap()
-                                .pop_front()
+                            if let Some(start_time) = self.sent_latency.lock().unwrap().pop_front()
                             {
                                 crate::metrics::DISPATCH_BLOCK_HISTOGRAM
                                     .with_label_values(&[&self.address])

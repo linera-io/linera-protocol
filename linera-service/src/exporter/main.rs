@@ -184,7 +184,9 @@ impl Runnable for ExporterContext {
 
         let mut block_processor_task = tokio::task::spawn_blocking(move || {
             handle.join().unwrap_or_else(|_| {
-                Err(ExporterError::GenericError("block processor thread panicked".into()))
+                Err(ExporterError::GenericError(
+                    "block processor thread panicked".into(),
+                ))
             })
         });
         tokio::select! {
