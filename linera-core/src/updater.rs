@@ -187,9 +187,8 @@ where
                 };
                 let entry = error_scores.entry(err.clone()).or_insert(0);
                 *entry += committee.weight(&name);
-                if *entry >= committee.validity_threshold() {
-                    // At least one honest node returned this error.
-                    // No quorum can be reached, so return early.
+                if *entry > committee.total_votes() - committee.quorum_threshold() {
+                    // Too many errors: remaining validators can't form a quorum.
                     return Err(CommunicationError::Trusted(err));
                 }
             }
