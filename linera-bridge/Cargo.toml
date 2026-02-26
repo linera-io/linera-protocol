@@ -91,3 +91,14 @@ revm-context.workspace = true
 serde-reflection.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
+# Anvil-based integration tests
+alloy = { workspace = true, default-features = false, features = [
+    "rpc-types-eth",
+    "json-rpc",
+    "node-bindings",
+    "signer-local",
+    "contract",
+    "reqwest",
+] }
+alloy-sol-types.workspace = true
+tokio = { workspace = true, features = ["full"] }
