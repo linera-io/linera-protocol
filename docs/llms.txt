@@ -1,0 +1,132 @@
+# Linera Documentation
+
+> Linera is a decentralized protocol designed for highly scalable, low-latency Web3 applications using microchain architecture.
+
+## Protocol
+
+- [The Linera Manual](https://linera.dev/): Introduction to Linera and entry point for developer documentation.
+- [Overview](https://linera.dev/protocol/overview.html): How microchains work, what makes Linera real-time and agent-friendly, and comparison to traditional multi-chain protocols.
+- [Roadmap](https://linera.dev/protocol/roadmap.html): Technical development roadmap across four testnets (Archimedes, Babbage, Conway) and mainnet.
+
+## Getting Started
+
+- [Getting Started](https://linera.dev/developers/getting_started.html): Entry point for Linera developer documentation.
+- [Installation](https://linera.dev/developers/getting_started/installation.html): Install the Linera toolchain from crates.io or GitHub, including system requirements.
+- [Hello, Linera](https://linera.dev/developers/getting_started/hello_linera.html): Create a wallet, connect to the testnet or a local network, build and publish your first application.
+
+## Core Concepts
+
+- [Microchains](https://linera.dev/developers/core_concepts/microchains.html): Lightweight single-user blockchains that enable parallel execution, cross-chain messaging, and chain ownership semantics.
+- [Wallets](https://linera.dev/developers/core_concepts/wallets.html): Creating developer wallets, selecting wallets, managing chains, and opening multi-user chains.
+- [Node Service](https://linera.dev/developers/core_concepts/node_service.html): Running a local node service, GraphiQL IDE, system and application GraphQL APIs, and connecting AI agents via MCP.
+- [Applications](https://linera.dev/developers/core_concepts/applications.html): Application deployment lifecycle, anatomy (contract, service, state), operations, messages, and authentication.
+- [Common Design Patterns](https://linera.dev/developers/core_concepts/design_patterns.html): Five design patterns using microchains — user-chain apps, client/server, personal chains, temporary chains, and just-in-time oracles.
+
+## Writing Backends
+
+- [Writing Linera Applications](https://linera.dev/developers/backend.html): Guide to building Web3 applications using the Linera SDK with Rust smart contracts and GraphQL services.
+- [Creating a Linera Project](https://linera.dev/developers/backend/creating_a_project.html): Initialize a new project with `linera project new` and overview of scaffolded files.
+- [Creating the Application State](https://linera.dev/developers/backend/state.html): Define persistent application state using linera-views for on-chain storage.
+- [Defining the ABI](https://linera.dev/developers/backend/abi.html): Define the Application Binary Interface with marker structs, contract ABI, and service ABI.
+- [Writing the Contract Binary](https://linera.dev/developers/backend/contract.html): Implement the contract lifecycle, handle operations and messages, and declare the ABI.
+- [Writing the Service Binary](https://linera.dev/developers/backend/service.html): Implement the read-only service with GraphQL compatibility for querying application state.
+- [Deploying the Application](https://linera.dev/developers/backend/deploy.html): Deploy to local networks, devnets, and testnets, then interact with the application.
+- [Cross-Chain Messages](https://linera.dev/developers/backend/messages.html): Send and handle messages between microchains, with a fungible token example.
+- [Calling other Applications](https://linera.dev/developers/backend/composition.html): Cross-application calls using `call_application`, with a crowd-funding example.
+- [Using Data Blobs](https://linera.dev/developers/backend/blobs.html): Store and retrieve large data blobs in Linera applications.
+- [Printing Logs from an Application](https://linera.dev/developers/backend/logging.html): Add logging to Linera contracts and services for debugging.
+- [Writing Tests](https://linera.dev/developers/backend/testing.html): Unit tests with mock runtime and integration tests with simulated validators using `cargo test`.
+
+## Writing Frontends
+
+- [Writing Linera Application Frontends](https://linera.dev/developers/frontend.html): Build interactive web frontends using Linera's JavaScript API with push notifications.
+- [Frontend Architecture Overview](https://linera.dev/developers/frontend/overview.html): How the Rust client library compiles to WebAssembly and wraps with JavaScript APIs via wasm-bindgen.
+- [Setting up the Frontend Development Environment](https://linera.dev/developers/frontend/setup.html): Supported browsers, creating HTML pages, serving frontends, and getting the client library.
+- [Interacting with Linera](https://linera.dev/developers/frontend/interactivity.html): Import the client library, initialize wallets, communicate with applications, and handle notifications.
+- [External Wallets](https://linera.dev/developers/frontend/wallets.html): Integrating external wallet providers like MetaMask and Dynamic via the Signer interface.
+
+## Advanced Topics
+
+- [Advanced Topics](https://linera.dev/developers/advanced_topics.html): Supplementary topics for Linera protocol developers.
+- [Contract Finalization](https://linera.dev/developers/advanced_topics/contract_finalize.html): How contract finalization works and when to use it for cleanup operations.
+- [Validators](https://linera.dev/developers/advanced_topics/validators.html): Architecture of a validator, including workers, shards, and the consensus process.
+- [Creating New Blocks](https://linera.dev/developers/advanced_topics/block_creation.html): How blocks are created, proposed, and confirmed across microchains.
+- [Applications that Handle Assets](https://linera.dev/developers/advanced_topics/assets.html): Safely handle assets on temporary chains with ownership, permissions, and chain closure.
+
+## Experimental
+
+- [Experimental Topics](https://linera.dev/developers/experimental.html): Experimental features unavailable on testnet that require compiling from source with specific Cargo features.
+- [Machine Learning on Linera](https://linera.dev/developers/experimental/ml.html): Run ML models on the edge using the contract/service split for secure and efficient inference.
+- [Using EVM Smart Contracts on Linera](https://linera.dev/developers/experimental/ethereum.html): Run Ethereum Virtual Machine smart contracts within Linera microchains using Revm integration.
+
+## Operators — Devnets
+
+- [Devnets](https://linera.dev/operators/devnets.html): Set up developer networks for testing, managed by the Linera core team without real assets.
+- [Running Devnets with Docker Compose](https://linera.dev/operators/devnets/compose.html): Set up a local devnet with a single validator using Docker Compose.
+- [Running Devnets with kind](https://linera.dev/operators/devnets/kind.html): Set up a local devnet using Kubernetes in Docker (kind).
+
+## Operators — Testnets
+
+- [Testnets](https://linera.dev/operators/testnets.html): Deploy validator nodes and participate in decentralized Linera Testnets.
+- [Requirements](https://linera.dev/operators/testnets/requirements.html): Toolchain installation, Docker Compose requirements, key management, infrastructure, and ScyllaDB configuration.
+- [One-Click Deploy](https://linera.dev/operators/testnets/one-click.html): Automated validator deployment after downloading the linera-protocol repository.
+- [Manual Installation](https://linera.dev/operators/testnets/manual-installation.html): Step-by-step validator setup including genesis configuration and manual configuration.
+- [Verifying Installation](https://linera.dev/operators/testnets/verify-installation.html): Verify that your validator node is running correctly after deployment.
+- [Monitoring and Logging](https://linera.dev/operators/testnets/monitoring-logging.html): Prometheus metrics, Grafana dashboards, Watchtower for container updates, and log management.
+- [Debugging](https://linera.dev/operators/testnets/debugging.html): Common issues, troubleshooting steps, and support channels for validator operators.
+
+## Appendix
+
+- [Glossary](https://linera.dev/appendix/glossary.html): Definitions of 50+ technical terms including microchain, validator, view, epoch, certificate, and more.
+
+## API Reference
+
+- [Linera SDK (docs.rs)](https://docs.rs/linera-sdk/latest/linera_sdk/): Rust API reference for the Linera SDK crate — contracts, services, views, and runtime.
+- [Linera Views (docs.rs)](https://docs.rs/linera-views/latest/linera_views/): Rust API reference for linera-views — persistent storage with MapView, CollectionView, and more.
+
+## GitHub Repositories
+
+- [linera-protocol](https://github.com/linera-io/linera-protocol): Main Linera protocol repository — validator, client, SDK, views, and example applications.
+- [linera-agents](https://github.com/linera-io/linera-agents): AI agent skills for building on Linera and trading on Linera prediction markets.
+- [mcp-demo](https://github.com/linera-io/mcp-demo): Demo MCP server connecting Claude to a Linera counter application via GraphQL.
+- [linera-web](https://github.com/linera-io/linera-web): The Linera Web client for browser-based chain interaction.
+- [pm-app](https://github.com/linera-io/pm-app): Prediction market demo app — parimutuel contracts, fungible tokens, faucet, and oracle.
+
+## Example Applications
+
+- [Counter](https://github.com/linera-io/linera-protocol/tree/main/examples/counter): Minimal counter application demonstrating basic Linera SDK usage.
+- [Fungible Token](https://github.com/linera-io/linera-protocol/tree/main/examples/fungible): ERC-20-style fungible token with cross-chain transfers.
+- [Crowd Funding](https://github.com/linera-io/linera-protocol/tree/main/examples/crowd-funding): Campaign-based crowd funding with cross-application calls to fungible tokens.
+- [Social](https://github.com/linera-io/linera-protocol/tree/main/examples/social): Social media application with posts and subscriptions across microchains.
+- [AMM](https://github.com/linera-io/linera-protocol/tree/main/examples/amm): Automated market maker for token swaps.
+- [Matching Engine](https://github.com/linera-io/linera-protocol/tree/main/examples/matching-engine): Order book matching engine for trading.
+- [Non-Fungible Token](https://github.com/linera-io/linera-protocol/tree/main/examples/non-fungible): NFT application with minting and transfers.
+- [LLM](https://github.com/linera-io/linera-protocol/tree/main/examples/llm): On-chain LLM inference example.
+- [Agent](https://github.com/linera-io/linera-protocol/tree/main/examples/agent): AI agent integration example.
+- [Ethereum Tracker](https://github.com/linera-io/linera-protocol/tree/main/examples/ethereum-tracker): Track Ethereum state from within Linera.
+- [Hex Game](https://github.com/linera-io/linera-protocol/tree/main/examples/hex-game): Two-player hex board game on microchains.
+
+## AI Agent Skills
+
+- [Linera Dev Skill](https://github.com/linera-io/linera-agents/blob/main/skills/linera-dev/SKILL.md): AI assistant skill for building Linera applications — SDK, views, cross-chain messaging, GraphQL, MCP, testing, and deployment.
+- [Linera Markets Skill](https://github.com/linera-io/linera-agents/blob/main/skills/linera-markets/SKILL.md): AI assistant skill for interacting with Linera prediction markets — market queries, placing predictions, P&L tracking, and automated trading strategies.
+
+## AI Agent Skill References
+
+- [Cross-Chain Messaging Guide](https://github.com/linera-io/linera-agents/blob/main/skills/linera-dev/cross-chain-messaging.md): Advanced cross-chain messaging patterns for Linera applications.
+- [Deployment Guide](https://github.com/linera-io/linera-agents/blob/main/skills/linera-dev/deployment-guide.md): Testnet and production deployment guide for Linera applications.
+- [Linera Views Guide](https://github.com/linera-io/linera-agents/blob/main/skills/linera-dev/linera-views-guide.md): Storage patterns and view types for persistent state.
+- [MCP Integration Guide](https://github.com/linera-io/linera-agents/blob/main/skills/linera-dev/mcp-integration.md): Full MCP setup guide for connecting AI agents to Linera.
+- [Testing Patterns](https://github.com/linera-io/linera-agents/blob/main/skills/linera-dev/testing-patterns.md): Unit and integration testing patterns for Linera applications.
+- [API Examples](https://github.com/linera-io/linera-agents/blob/main/skills/linera-markets/references/api-examples.md): Full GraphQL query and mutation examples with sample responses for prediction markets.
+- [Faucet Claim Recipe](https://github.com/linera-io/linera-agents/blob/main/skills/linera-markets/references/faucet-claim-recipe.md): Step-by-step recipe for claiming tokens from the Linera faucet.
+- [RocksDB Locking Patterns](https://github.com/linera-io/linera-agents/blob/main/skills/linera-markets/references/rocksdb-locking.md): Workarounds for RocksDB single-process locking in multi-wallet setups.
+- [Resolution Timing](https://github.com/linera-io/linera-agents/blob/main/skills/linera-markets/references/resolution-timing.md): Market resolution timing, oracle delay, and generation lifecycle.
+- [Multi-Wallet Setup](https://github.com/linera-io/linera-agents/blob/main/skills/linera-markets/references/multi-wallet-setup.md): Running multiple Linera wallets and environments on one machine.
+
+## Community Demos
+
+- [Atoma Demo](https://github.com/linera-io/atoma-demo): Linera application demonstrating interaction with Atoma Network.
+- [Walrus Demo](https://github.com/linera-io/walrus-demo): Linera application demonstrating interaction with Walrus decentralized storage.
+- [DePIN Map-Reduce Demo](https://github.com/linera-io/depin-map-reduce-demo): Map-reduce computation across microchains example.
+- [Buildathon Template](https://github.com/linera-io/buildathon-template): Dockerized application template for Linera buildathon submissions.
