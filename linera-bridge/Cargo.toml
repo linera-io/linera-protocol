@@ -26,7 +26,9 @@ alloy = { workspace = true, default-features = false, features = [
     "reqwest",
 ] }
 alloy-primitives.workspace = true
+alloy-rlp.workspace = true
 alloy-sol-types.workspace = true
+alloy-trie.workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 clap = { workspace = true, optional = true }

@@ -13,6 +13,7 @@ pub const FUNGIBLE_BRIDGE_SOURCE: &str = include_str!("solidity/FungibleBridge.s
 pub mod evm_client;
 pub mod light_client;
 pub mod microchain;
+pub mod proof;
 
 #[cfg(test)]
 mod fungible_bridge;
