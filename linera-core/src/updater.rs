@@ -220,7 +220,7 @@ where
         [] => CommunicationError::NoConsensus(committee.quorum_threshold(), scores),
         [(_, score), ..] if *score >= committee.validity_threshold() => {
             // At least one honest validator returned this error.
-            CommunicationError::Trusted(sample.remove(0).0)
+            CommunicationError::Trusted(sample.into_iter().next().unwrap().0)
         }
         // Otherwise no specific error is available to report reliably.}
         _ => CommunicationError::Sample(sample),
