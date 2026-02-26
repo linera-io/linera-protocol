@@ -1,6 +1,6 @@
 ---
 source: fungible/tests/format.rs
-expression: "fungible::formats().unwrap()"
+expression: "FungibleApplication::formats().unwrap()"
 ---
 REGISTRY:
   Account:
@@ -81,6 +81,20 @@ REGISTRY:
                 TYPENAME: Amount
             - target_account:
                 TYPENAME: Account
+      6:
+        Mint:
+          STRUCT:
+            - target_account:
+                TYPENAME: Account
+            - amount:
+                TYPENAME: Amount
+      7:
+        Burn:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - amount:
+                TYPENAME: Amount
   FungibleResponse:
     ENUM:
       0:
