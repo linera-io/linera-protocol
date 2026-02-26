@@ -187,10 +187,6 @@ where
                 };
                 let entry = error_scores.entry(err.clone()).or_insert(0);
                 *entry += committee.weight(&name);
-                if *entry > committee.total_votes() - committee.quorum_threshold() {
-                    // Too many errors: remaining validators can't form a quorum.
-                    return Err(CommunicationError::Trusted(err));
-                }
             }
         }
         // If it becomes clear that no key can reach a quorum, break early.
@@ -224,11 +220,16 @@ where
         ));
     }
 
-    // No specific error is available to report reliably.
     let mut sample = error_scores.into_iter().collect::<Vec<_>>();
     sample.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
     sample.truncate(4);
-    Err(CommunicationError::Sample(sample))
+    if sample[0].1 >= committee.validity_threshold() {
+        // At least one honest validator returned this error.
+        Err(CommunicationError::Trusted(sample.remove(0).0))
+    } else {
+        // No specific error is available to report reliably.
+        Err(CommunicationError::Sample(sample))
+    }
 }
 
 impl<Env> ValidatorUpdater<Env>
