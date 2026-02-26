@@ -8,6 +8,9 @@ pub mod proof;
 // -- Off-chain only (requires `not(chain)` / default features) --
 
 #[cfg(not(feature = "chain"))]
+pub mod proof_gen;
+
+#[cfg(not(feature = "chain"))]
 /// Solidity source for the BridgeTypes library (generated).
 pub const BRIDGE_TYPES_SOURCE: &str = include_str!("solidity/BridgeTypes.sol");
 

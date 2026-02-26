@@ -13,9 +13,11 @@ version.workspace = true
 [features]
 default = ["offchain"]
 chain = []
+testing = []
 offchain = [
     "dep:alloy",
     "dep:alloy-sol-types",
+    "dep:async-trait",
     "dep:bcs",
     "dep:linera-base",
     "dep:linera-execution",
@@ -34,6 +36,8 @@ alloy-primitives.workspace = true
 alloy-rlp.workspace = true
 alloy-trie.workspace = true
 anyhow.workspace = true
+
+async-trait = { workspace = true, optional = true }
 
 # Off-chain only (heavy, native deps — enabled by `offchain` feature)
 alloy = { workspace = true, optional = true, default-features = false, features = [
