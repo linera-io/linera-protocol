@@ -218,7 +218,7 @@ where
     sample.truncate(4);
     Err(match sample.as_slice() {
         [] => CommunicationError::NoConsensus(committee.quorum_threshold(), scores),
-        [(_, score)] if *score >= committee.validity_threshold() => {
+        [(_, score), ..] if *score >= committee.validity_threshold() => {
             // At least one honest validator returned this error.
             CommunicationError::Trusted(sample.remove(0).0)
         }
