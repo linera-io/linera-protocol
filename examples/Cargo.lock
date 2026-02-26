@@ -7954,6 +7954,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "wrapped-fungible"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "fungible",
+ "futures",
+ "hex",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "write16"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

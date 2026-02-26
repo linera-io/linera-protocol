@@ -109,6 +109,20 @@ pub enum FungibleOperation {
         /// Target account to claim the amount into
         target_account: Account,
     },
+    /// Mints new tokens to a target account. Only the authorized minter can call this.
+    Mint {
+        /// Account to receive the minted tokens
+        target_account: Account,
+        /// Amount of tokens to mint
+        amount: Amount,
+    },
+    /// Burns tokens from an account. Only the authorized minter can call this.
+    Burn {
+        /// Account owner whose tokens to burn
+        owner: AccountOwner,
+        /// Amount of tokens to burn
+        amount: Amount,
+    },
 }
 
 /// An ABI for applications that implement a fungible token.
