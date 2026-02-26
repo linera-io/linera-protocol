@@ -1890,12 +1890,12 @@ fn init_tracing(options: &Options) {
 
 fn main() -> anyhow::Result<process::ExitCode> {
     let options = Options::init();
-    let mut runtime = if options.tokio_threads == Some(1) {
+    let mut runtime = if options.common.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
     } else {
         let mut builder = tokio::runtime::Builder::new_multi_thread();
 
-        if let Some(threads) = options.tokio_threads {
+        if let Some(threads) = options.common.tokio_threads {
             builder.worker_threads(threads);
         }
 
@@ -1904,12 +1904,12 @@ fn main() -> anyhow::Result<process::ExitCode> {
 
     // The default stack size 2 MiB causes some stack overflows in ValidatorUpdater methods.
     runtime.thread_stack_size(4 << 20);
-    if let Some(blocking_threads) = options.tokio_blocking_threads {
+    if let Some(blocking_threads) = options.common.tokio_blocking_threads {
         runtime.max_blocking_threads(blocking_threads);
     }
 
     let span = tracing::info_span!("linera::main");
-    if let Some(wallet_id) = &options.with_wallet {
+    if let Some(wallet_id) = &options.common.with_wallet {
         span.record("wallet_id", wallet_id);
     }
 
@@ -2258,7 +2258,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     *block_exporter_port,
                     path,
                     // Not using the default value for storage
-                    &options.storage_config,
+                    &options.common.storage_config,
                     external_protocol.clone(),
                     *with_faucet,
                     *faucet_chain,
