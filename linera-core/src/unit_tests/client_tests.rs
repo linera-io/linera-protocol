@@ -1226,8 +1226,7 @@ where
     let user = builder.add_root_chain(1, Amount::ZERO).await?;
     let validators = builder.initial_committee.validators().clone();
 
-    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel())
-        .expect("test committee votes should not overflow");
+    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel())?;
     admin.stage_new_committee(committee).await.unwrap();
 
     // Root chain 1 receives the notification about the new epoch.
@@ -1238,8 +1237,7 @@ where
     admin.revoke_epochs(Epoch::ZERO).await.unwrap();
 
     // Create a new committee.
-    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel())
-        .expect("test committee votes should not overflow");
+    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel())?;
     admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(
         admin.chain_info().await?.next_block_height,
@@ -1347,8 +1345,7 @@ where
     )))
     .await?;
 
-    let committee = Committee::new(validators, ResourceControlPolicy::default())
-        .expect("test committee votes should not overflow");
+    let committee = Committee::new(validators, ResourceControlPolicy::default())?;
     admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(admin.chain_info().await?.epoch, Epoch::from(3));
 
