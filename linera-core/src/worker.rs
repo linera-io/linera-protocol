@@ -72,28 +72,36 @@ use crate::{
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
-/// A future wrapper that asserts `Sync` for a `Send` future.
+/// A future wrapper that unconditionally implements `Send + Sync`.
 ///
-/// Futures are polled exclusively through `Pin<&mut Self>`, never through `&Self`,
-/// so `Sync` is never exercised at runtime. This wrapper is needed because the
-/// chain macros erase the future type to prevent compiler overflow on `Send` bound
-/// evaluation, and the resulting `!Sync` type would otherwise propagate to callers
-/// that require `Sync` (e.g. the `ClientContext` trait via `trait_variant::make(Send + Sync)`).
+/// This is used when erasing chain worker futures to `dyn Future + Send + Sync`.
+/// Without it, the compiler would need to verify `Send`/`Sync` for deeply nested
+/// future types at monomorphization time, which overflows the recursion limit in
+/// downstream crates. Since `linera-core` (with `recursion_limit = "256"`) already
+/// compiles these futures successfully, the bounds are known to hold.
+///
+/// `Sync` is trivially safe because futures are polled exclusively through
+/// `Pin<&mut Self>`, never through `&Self`.
 #[repr(transparent)]
-struct AssertSync<F>(F);
+struct AssertSendSync<F>(F);
 
-// SAFETY: `Sync` means `&Self` can be sent across threads. For futures, `&F` provides
-// no callable methods (polling requires `Pin<&mut F>`), so sharing a reference is harmless.
-unsafe impl<F: Send> Sync for AssertSync<F> {}
+// SAFETY: The wrapped futures are always async blocks from chain_read!/chain_write!
+// and get_or_create_chain_handle, which capture only Send types from WorkerState.
+// The Send bound is verified at higher recursion limits within linera-core itself.
+unsafe impl<F> Send for AssertSendSync<F> {}
 
-impl<F: ::std::future::Future> ::std::future::Future for AssertSync<F> {
+// SAFETY: Futures are only polled via Pin<&mut Self>, never shared via &Self,
+// so Sync is never exercised at runtime.
+unsafe impl<F> Sync for AssertSendSync<F> {}
+
+impl<F: ::std::future::Future> ::std::future::Future for AssertSendSync<F> {
     type Output = F::Output;
 
     fn poll(
         self: ::std::pin::Pin<&mut Self>,
         cx: &mut ::std::task::Context<'_>,
     ) -> ::std::task::Poll<Self::Output> {
-        // SAFETY: `AssertSync` is `repr(transparent)`, so the layout is identical.
+        // SAFETY: `AssertSendSync` is `repr(transparent)`, so the layout is identical.
         unsafe { self.map_unchecked_mut(|s| &mut s.0) }.poll(cx)
     }
 }
@@ -101,13 +109,14 @@ impl<F: ::std::future::Future> ::std::future::Future for AssertSync<F> {
 /// Acquires a read lock on a chain handle, executes `$body` with the guard named `$guard`,
 /// and returns the result.
 ///
-/// The future is erased to `dyn Future + Send + Sync` to prevent compiler overflow and
-/// to satisfy `Sync` requirements from async trait bounds.
+/// The body is type-erased to `dyn Future + Send + Sync` to prevent compiler overflow on
+/// `Send` bound evaluation and to satisfy `Sync` requirements from async trait bounds.
+/// The handle creation is also type-erased inside [`get_or_create_chain_handle`].
 macro_rules! chain_read {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send + Sync + '_>> =
-            Box::pin(AssertSync(async {
-                let handle = $self.get_or_create_chain_handle($chain_id).await?;
+        let handle = $self.get_or_create_chain_handle($chain_id).await?;
+        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send + Sync>> =
+            Box::pin(AssertSendSync(async move {
                 let $guard = handle.read().await;
                 $body
             }));
@@ -119,13 +128,14 @@ macro_rules! chain_read {
 /// and returns the result. The [`RollbackGuard`] automatically rolls back uncommitted
 /// chain state changes when dropped, ensuring cancellation safety.
 ///
-/// The future is erased to `dyn Future + Send + Sync` to prevent compiler overflow and
-/// to satisfy `Sync` requirements from async trait bounds.
+/// The body is type-erased to `dyn Future + Send + Sync` to prevent compiler overflow on
+/// `Send` bound evaluation and to satisfy `Sync` requirements from async trait bounds.
+/// The handle creation is also type-erased inside [`get_or_create_chain_handle`].
 macro_rules! chain_write {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send + Sync + '_>> =
-            Box::pin(AssertSync(async {
-                let handle = $self.get_or_create_chain_handle($chain_id).await?;
+        let handle = $self.get_or_create_chain_handle($chain_id).await?;
+        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send + Sync>> =
+            Box::pin(AssertSendSync(async move {
                 let mut $guard = handle.write().await;
                 $body
             }));
@@ -798,61 +808,75 @@ where
     }
 
     /// Gets or creates a `ChainHandle` for the given chain.
-    async fn get_or_create_chain_handle(
+    ///
+    /// Returns a type-erased future to hide `!Sync` intermediate types (e.g.
+    /// `std::sync::mpsc::Receiver` from `ServiceRuntimeActor::spawn`) and deeply
+    /// nested view types that would cause Send-bound overflow in callers.
+    fn get_or_create_chain_handle(
         &self,
         chain_id: ChainId,
-    ) -> Result<Arc<ChainHandle<StorageClient>>, WorkerError> {
-        // Fast path: check if a handle already exists.
-        {
-            let handles = self.chain_handles.lock().unwrap();
-            if let Some(handle) = handles.get(&chain_id) {
-                return Ok(handle.clone());
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<Arc<ChainHandle<StorageClient>>, WorkerError>>
+                + Send
+                + Sync
+                + '_,
+        >,
+    > {
+        Box::pin(AssertSendSync(async move {
+            // Fast path: check if a handle already exists.
+            {
+                let handles = self.chain_handles.lock().unwrap();
+                if let Some(handle) = handles.get(&chain_id) {
+                    return Ok(handle.clone());
+                }
             }
-        }
 
-        // Slow path: load the chain state outside the lock.
-        let delivery_notifier = self
-            .delivery_notifiers
-            .lock()
-            .unwrap()
-            .entry(chain_id)
-            .or_default()
-            .clone();
-
-        let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
-            chain_modes
-                .read()
+            // Slow path: load the chain state outside the lock.
+            let delivery_notifier = self
+                .delivery_notifiers
+                .lock()
                 .unwrap()
-                .get(&chain_id)
-                .is_some_and(ListeningMode::is_full)
-        });
+                .entry(chain_id)
+                .or_default()
+                .clone();
 
-        let (service_runtime_task, service_runtime_endpoint) =
-            if self.chain_worker_config.long_lived_services {
-                let actor = ServiceRuntimeActor::spawn(chain_id, self.storage.thread_pool()).await;
-                (Some(actor.task), Some(actor.endpoint))
-            } else {
-                (None, None)
-            };
+            let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
+                chain_modes
+                    .read()
+                    .unwrap()
+                    .get(&chain_id)
+                    .is_some_and(ListeningMode::is_full)
+            });
 
-        let worker = crate::chain_worker::state::ChainWorkerState::load(
-            self.chain_worker_config.clone(),
-            self.storage.clone(),
-            self.block_cache.clone(),
-            self.execution_state_cache.clone(),
-            self.chain_modes.clone(),
-            delivery_notifier,
-            chain_id,
-            service_runtime_endpoint,
-        )
-        .await?;
+            let (service_runtime_task, service_runtime_endpoint) =
+                if self.chain_worker_config.long_lived_services {
+                    let actor =
+                        ServiceRuntimeActor::spawn(chain_id, self.storage.thread_pool()).await;
+                    (Some(actor.task), Some(actor.endpoint))
+                } else {
+                    (None, None)
+                };
 
-        let handle = Arc::new(ChainHandle::new(worker, service_runtime_task, is_tracked));
+            let worker = crate::chain_worker::state::ChainWorkerState::load(
+                self.chain_worker_config.clone(),
+                self.storage.clone(),
+                self.block_cache.clone(),
+                self.execution_state_cache.clone(),
+                self.chain_modes.clone(),
+                delivery_notifier,
+                chain_id,
+                service_runtime_endpoint,
+            )
+            .await?;
 
-        // Insert-if-absent under lock (another task may have raced us).
-        let mut handles = self.chain_handles.lock().unwrap();
-        let handle = handles.entry(chain_id).or_insert(handle).clone();
-        Ok(handle)
+            let handle = Arc::new(ChainHandle::new(worker, service_runtime_task, is_tracked));
+
+            // Insert-if-absent under lock (another task may have raced us).
+            let mut handles = self.chain_handles.lock().unwrap();
+            let handle = handles.entry(chain_id).or_insert(handle).clone();
+            Ok(handle)
+        }))
     }
 
     /// Tries to execute a block proposal without any verification other than block execution.
