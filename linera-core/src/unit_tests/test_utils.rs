@@ -909,7 +909,8 @@ where
 
     pub fn with_policy(mut self, policy: ResourceControlPolicy) -> Self {
         let validators = self.initial_committee.validators().clone();
-        self.initial_committee = Committee::new(validators, policy);
+        self.initial_committee =
+            Committee::new(validators, policy).expect("committee votes should not overflow");
         self
     }
 

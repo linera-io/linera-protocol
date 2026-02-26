@@ -633,7 +633,7 @@ mod test {
         where
             S: Storage + Clone + Send + Sync + 'static,
         {
-            let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet());
+            let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet())?;
             let chain_id = self.chain_description.id();
             let chain_blob = Blob::new_chain_description(&self.chain_description);
 

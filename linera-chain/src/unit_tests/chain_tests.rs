@@ -175,7 +175,8 @@ fn committee_blob(policy: ResourceControlPolicy) -> Blob {
             },
         )]),
         policy,
-    );
+    )
+    .expect("test committee votes should not overflow");
     Blob::new_committee(bcs::to_bytes(&committee).expect("serializing a committee should succeed"))
 }
 
