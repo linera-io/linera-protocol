@@ -106,6 +106,10 @@ impl<F: ::std::future::Future> ::std::future::Future for AssertSendSync<F> {
     }
 }
 
+/// A type-erased, `Send + Sync` future returning `Result<T, WorkerError>`.
+type ErasedFuture<'a, T> =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, WorkerError>> + Send + Sync + 'a>>;
+
 /// Acquires a read lock on a chain handle, executes `$body` with the guard named `$guard`,
 /// and returns the result.
 ///
@@ -815,14 +819,7 @@ where
     fn get_or_create_chain_handle(
         &self,
         chain_id: ChainId,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<Output = Result<Arc<ChainHandle<StorageClient>>, WorkerError>>
-                + Send
-                + Sync
-                + '_,
-        >,
-    > {
+    ) -> ErasedFuture<'_, Arc<ChainHandle<StorageClient>>> {
         Box::pin(AssertSendSync(async move {
             // Fast path: check if a handle already exists.
             {
