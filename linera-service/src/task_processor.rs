@@ -119,14 +119,18 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 }
                 Some(result) = self.batch_receiver.recv() => {
                     self.in_flight_apps.remove(&result.application_id);
-                    if let Some(retry_at) = result.retry_at {
-                        self.deadlines.push(Reverse((
-                            retry_at,
-                            Some(result.application_id),
-                        )));
-                    } else {
-                        // Re-process immediately to pick up new tasks.
-                        self.process_actions(vec![result.application_id]).await;
+                    // The application could have been unassigned from this processor
+                    // in the meantime - do not retry if that is the case.
+                    if self.application_ids.contains(&result.application_id) {
+                        if let Some(retry_at) = result.retry_at {
+                            self.deadlines.push(Reverse((
+                                retry_at,
+                                Some(result.application_id),
+                            )));
+                        } else {
+                            // Re-process immediately to pick up new tasks.
+                            self.process_actions(vec![result.application_id]).await;
+                        }
                     }
                 }
                 Some(update) = self.update_receiver.recv() => {
