@@ -5387,7 +5387,9 @@ version = "0.15.13"
 dependencies = [
  "alloy",
  "alloy-primitives",
+ "alloy-rlp",
  "alloy-sol-types",
+ "alloy-trie",
  "anyhow",
  "bcs",
  "clap",
