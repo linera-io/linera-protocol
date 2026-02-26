@@ -7,12 +7,25 @@ import "Microchain.sol";
 
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-/// Bridges ERC20 tokens from a Linera microchain to Ethereum.
-/// When a Credit message is received targeting an Ethereum address,
-/// the contract transfers tokens from its own balance to the recipient.
+/// Bridges ERC20 tokens between Linera and EVM.
+/// Linera→EVM: processes Credit messages from Linera blocks and releases ERC-20 tokens.
+/// EVM→Linera: accepts deposits via deposit() and emits DepositInitiated events.
 contract FungibleBridge is Microchain {
+    /// Emitted when a user deposits ERC-20 tokens for bridging to Linera.
+    /// The off-chain relayer uses this event (plus an MPT receipt proof) to
+    /// mint the corresponding tokens on the target Linera chain.
+    event DepositInitiated(
+        uint256 source_chain_id,
+        bytes32 target_chain_id,
+        bytes32 target_application_id,
+        bytes32 target_account_owner,
+        address token,
+        uint256 amount
+    );
+
     bytes32 public immutable applicationId;
     IERC20 public immutable token;
 
@@ -29,6 +42,31 @@ contract FungibleBridge is Microchain {
         token = IERC20(_token);
     }
 
+    /// Locks ERC-20 tokens in the bridge and emits a DepositInitiated event.
+    /// Caller must first approve this contract to spend `amount` tokens.
+    /// The emitted event is consumed by the off-chain relayer to produce an
+    /// MPT proof that the Linera bridge app verifies before minting.
+    function deposit(
+        bytes32 target_chain_id,
+        bytes32 target_application_id,
+        bytes32 target_account_owner,
+        uint256 amount
+    ) external {
+        require(target_chain_id == chainId, "target chain mismatch");
+        require(target_application_id == applicationId, "target application mismatch");
+        require(token.transferFrom(msg.sender, address(this), amount), "transferFrom failed");
+        emit DepositInitiated(
+            block.chainid,
+            target_chain_id,
+            target_application_id,
+            target_account_owner,
+            address(token),
+            amount
+        );
+    }
+
+    /// Processes a Linera block and releases ERC-20 tokens for any Credit
+    /// messages targeting an Ethereum address (Address20).
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
         for (uint i = 0; i < blockValue.body.transactions.length; i++) {
             BridgeTypes.Transaction memory txn = blockValue.body.transactions[i];
