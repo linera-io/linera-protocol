@@ -19,11 +19,9 @@ wrapped-fungible.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 alloy-primitives.workspace = true
-alloy-rlp = "0.3.12"
-alloy-trie = "0.9.0"
 async-graphql.workspace = true
 fungible = { workspace = true, features = ["test"] }
-linera-bridge = { path = "../../linera-bridge", default-features = false, features = ["chain"] }
+linera-bridge = { path = "../../linera-bridge", default-features = false, features = ["chain", "testing"] }
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio.workspace = true
 wrapped-fungible.workspace = true

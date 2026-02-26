@@ -14,6 +14,8 @@ use clap::Parser;
 enum Cli {
     /// Query a Linera faucet and output LightClient constructor args for EVM deployment
     InitLightClient(InitLightClientOptions),
+    /// Generate a deposit proof for a given EVM transaction
+    GenerateDepositProof(GenerateDepositProofOptions),
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -27,15 +29,63 @@ struct InitLightClientOptions {
     output: PathBuf,
 }
 
+#[derive(clap::Args, Debug, Clone)]
+struct GenerateDepositProofOptions {
+    /// EVM JSON-RPC URL (e.g. https://mainnet.base.org)
+    #[arg(long)]
+    rpc_url: String,
+
+    /// Transaction hash containing the DepositInitiated event
+    #[arg(long)]
+    tx_hash: String,
+
+    /// Path to write the proof JSON file
+    #[arg(long, default_value = "deposit-proof.json")]
+    output: PathBuf,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     match cli {
-        Cli::InitLightClient(options) => {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()?;
-            runtime.block_on(options.run())
-        }
+        Cli::InitLightClient(options) => runtime.block_on(options.run()),
+        Cli::GenerateDepositProof(options) => runtime.block_on(options.run()),
+    }
+}
+
+impl GenerateDepositProofOptions {
+    async fn run(&self) -> Result<()> {
+        use alloy_primitives::B256;
+        use linera_bridge::proof_gen::{DepositProofClient, HttpDepositProofClient};
+
+        let tx_hash: B256 = self
+            .tx_hash
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid tx hash: {}", self.tx_hash))?;
+
+        eprintln!("Generating deposit proof for tx {}...", self.tx_hash);
+
+        let client = HttpDepositProofClient::new(&self.rpc_url)?;
+        let proof = client.generate_deposit_proof(tx_hash).await?;
+
+        let result = serde_json::json!({
+            "block_header_rlp": alloy_primitives::hex::encode_prefixed(&proof.block_header_rlp),
+            "receipt_rlp": alloy_primitives::hex::encode_prefixed(&proof.receipt_rlp),
+            "proof_nodes": proof.proof_nodes.iter()
+                .map(|n| alloy_primitives::hex::encode_prefixed(n))
+                .collect::<Vec<_>>(),
+            "tx_index": proof.tx_index,
+            "log_index": proof.log_index,
+        });
+
+        let json_str = serde_json::to_string_pretty(&result)?;
+        eprintln!("Writing deposit proof to {:?}", self.output);
+        fs_err::write(&self.output, &json_str)?;
+        println!("{json_str}");
+
+        Ok(())
     }
 }
 

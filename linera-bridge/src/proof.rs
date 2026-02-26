@@ -94,6 +94,172 @@ pub fn deposit_event_signature() -> B256 {
     keccak256(b"DepositInitiated(uint256,bytes32,bytes32,bytes32,address,uint256)")
 }
 
+/// Known keccak256 hash of the `DepositInitiated` event signature, for regression testing.
+/// If the event signature string changes, this constant must be updated.
+pub const DEPOSIT_EVENT_SIGNATURE_HASH: [u8; 32] = [
+    0x28, 0x4c, 0x86, 0x6e, 0xdd, 0x78, 0xc8, 0x53, 0xde, 0x6f, 0xf1, 0x5d, 0xd1, 0x2a, 0x71, 0xa3,
+    0x56, 0xfd, 0x7b, 0x7a, 0x62, 0x17, 0xa8, 0x84, 0x1a, 0xc0, 0x17, 0x02, 0xdf, 0x36, 0xe5, 0x1f,
+];
+
+/// Shared test helpers for building synthetic proofs.
+///
+/// Available when running tests (`#[cfg(test)]`) or when the `testing` feature is enabled.
+/// The `testing` feature lets downstream crates (e.g. `evm-bridge`) reuse these helpers
+/// in their own integration tests.
+#[cfg(any(test, feature = "testing"))]
+pub mod testing {
+    use alloy_primitives::{Address, Bloom, Bytes, FixedBytes, B256, U256};
+    use alloy_rlp::Encodable;
+    use alloy_trie::{proof::ProofRetainer, HashBuilder, Nibbles};
+
+    use super::{receipt_trie_key, ReceiptLog};
+
+    /// Builds a minimal RLP-encoded Ethereum block header with the given receipts root.
+    ///
+    /// All other header fields are set to zero/default values. This produces a valid
+    /// RLP list that can be decoded by [`super::decode_block_header`].
+    pub fn build_test_header(receipts_root: B256) -> Vec<u8> {
+        let mut payload = Vec::new();
+        B256::ZERO.encode(&mut payload); // 0: parentHash
+        B256::ZERO.encode(&mut payload); // 1: ommersHash
+        Address::ZERO.encode(&mut payload); // 2: beneficiary
+        B256::ZERO.encode(&mut payload); // 3: stateRoot
+        B256::ZERO.encode(&mut payload); // 4: transactionsRoot
+        receipts_root.encode(&mut payload); // 5: receiptsRoot
+        Bloom::ZERO.encode(&mut payload); // 6: logsBloom
+        0u64.encode(&mut payload); // 7: difficulty
+        12345u64.encode(&mut payload); // 8: number
+        30_000_000u64.encode(&mut payload); // 9: gasLimit
+        21_000u64.encode(&mut payload); // 10: gasUsed
+        1_700_000_000u64.encode(&mut payload); // 11: timestamp
+        Bytes::new().encode(&mut payload); // 12: extraData
+        B256::ZERO.encode(&mut payload); // 13: mixHash
+        FixedBytes::<8>::ZERO.encode(&mut payload); // 14: nonce
+
+        let mut out = Vec::new();
+        alloy_rlp::Header {
+            list: true,
+            payload_length: payload.len(),
+        }
+        .encode(&mut out);
+        out.extend_from_slice(&payload);
+        out
+    }
+
+    /// Builds a minimal legacy receipt RLP with the given logs and default gas (21000).
+    pub fn build_test_receipt(logs: &[ReceiptLog]) -> Vec<u8> {
+        build_test_receipt_with_gas(21_000, logs)
+    }
+
+    /// Builds a minimal legacy receipt RLP with the given cumulative gas and logs.
+    pub fn build_test_receipt_with_gas(cumulative_gas: u64, logs: &[ReceiptLog]) -> Vec<u8> {
+        let mut payload = Vec::new();
+        1u8.encode(&mut payload); // status = success
+        cumulative_gas.encode(&mut payload); // cumulative_gas_used
+        Bloom::ZERO.encode(&mut payload); // logs_bloom
+
+        let mut logs_payload = Vec::new();
+        for log in logs {
+            encode_log(log, &mut logs_payload);
+        }
+        alloy_rlp::Header {
+            list: true,
+            payload_length: logs_payload.len(),
+        }
+        .encode(&mut payload);
+        payload.extend_from_slice(&logs_payload);
+
+        let mut out = Vec::new();
+        alloy_rlp::Header {
+            list: true,
+            payload_length: payload.len(),
+        }
+        .encode(&mut out);
+        out.extend_from_slice(&payload);
+        out
+    }
+
+    fn encode_log(log: &ReceiptLog, out: &mut Vec<u8>) {
+        let mut payload = Vec::new();
+        log.address.encode(&mut payload);
+
+        let mut topics_payload = Vec::new();
+        for topic in &log.topics {
+            topic.encode(&mut topics_payload);
+        }
+        alloy_rlp::Header {
+            list: true,
+            payload_length: topics_payload.len(),
+        }
+        .encode(&mut payload);
+        payload.extend_from_slice(&topics_payload);
+
+        Bytes::copy_from_slice(&log.data).encode(&mut payload);
+
+        alloy_rlp::Header {
+            list: true,
+            payload_length: payload.len(),
+        }
+        .encode(out);
+        out.extend_from_slice(&payload);
+    }
+
+    /// Builds ABI-encoded data for a `DepositInitiated` event.
+    pub fn build_deposit_event_data(
+        source_chain_id: u64,
+        target_chain_id: B256,
+        target_application_id: B256,
+        target_account_owner: B256,
+        token: Address,
+        amount: u64,
+    ) -> Vec<u8> {
+        let mut data = Vec::with_capacity(192);
+        data.extend_from_slice(&U256::from(source_chain_id).to_be_bytes::<32>());
+        data.extend_from_slice(target_chain_id.as_slice());
+        data.extend_from_slice(target_application_id.as_slice());
+        data.extend_from_slice(target_account_owner.as_slice());
+        data.extend_from_slice(&[0u8; 12]);
+        data.extend_from_slice(token.as_slice());
+        data.extend_from_slice(&U256::from(amount).to_be_bytes::<32>());
+        data
+    }
+
+    /// Builds a receipts MPT trie from `(tx_index, receipt_rlp)` pairs and returns
+    /// the trie root and proof nodes for `target_tx_index`.
+    pub fn build_receipt_trie(
+        receipts: &[(u64, Vec<u8>)],
+        target_tx_index: u64,
+    ) -> (B256, Vec<Bytes>) {
+        let mut entries: Vec<(Nibbles, Vec<u8>)> = receipts
+            .iter()
+            .map(|(idx, rlp)| {
+                let mut key_bytes = Vec::new();
+                idx.encode(&mut key_bytes);
+                (Nibbles::unpack(&key_bytes), rlp.clone())
+            })
+            .collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let target_key = receipt_trie_key(target_tx_index);
+        let retainer = ProofRetainer::new(vec![target_key]);
+        let mut builder = HashBuilder::default().with_proof_retainer(retainer);
+
+        for (key, value) in &entries {
+            builder.add_leaf(*key, value);
+        }
+
+        let root = builder.root();
+        let proof_nodes = builder.take_proof_nodes();
+        let proof: Vec<Bytes> = proof_nodes
+            .matching_nodes_sorted(&target_key)
+            .into_iter()
+            .map(|(_, bytes)| bytes)
+            .collect();
+
+        (root, proof)
+    }
+}
+
 /// Decodes an RLP-encoded Ethereum block header, returning `(block_hash, receipts_root)`.
 ///
 /// The block hash is `keccak256(header_rlp)`. The receipts root is field index 5
@@ -255,145 +421,22 @@ fn decode_log(data: &mut &[u8]) -> Result<ReceiptLog> {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{Bloom, FixedBytes};
-    use alloy_trie::{proof::ProofRetainer, HashBuilder};
+    use super::{
+        testing::{
+            build_deposit_event_data, build_receipt_trie, build_test_header, build_test_receipt,
+        },
+        *,
+    };
 
-    use super::*;
-
-    // -- test helpers --
-
-    /// Builds a minimal RLP-encoded Ethereum block header with the given receipts root.
-    fn build_test_header(receipts_root: B256) -> Vec<u8> {
-        let mut payload = Vec::new();
-        B256::ZERO.encode(&mut payload); // 0: parentHash
-        B256::ZERO.encode(&mut payload); // 1: ommersHash
-        Address::ZERO.encode(&mut payload); // 2: beneficiary
-        B256::ZERO.encode(&mut payload); // 3: stateRoot
-        B256::ZERO.encode(&mut payload); // 4: transactionsRoot
-        receipts_root.encode(&mut payload); // 5: receiptsRoot
-        Bloom::ZERO.encode(&mut payload); // 6: logsBloom
-        0u64.encode(&mut payload); // 7: difficulty
-        12345u64.encode(&mut payload); // 8: number
-        30_000_000u64.encode(&mut payload); // 9: gasLimit
-        21_000u64.encode(&mut payload); // 10: gasUsed
-        1_700_000_000u64.encode(&mut payload); // 11: timestamp
-        Bytes::new().encode(&mut payload); // 12: extraData
-        B256::ZERO.encode(&mut payload); // 13: mixHash
-        FixedBytes::<8>::ZERO.encode(&mut payload); // 14: nonce
-
-        let mut out = Vec::new();
-        alloy_rlp::Header {
-            list: true,
-            payload_length: payload.len(),
-        }
-        .encode(&mut out);
-        out.extend_from_slice(&payload);
-        out
-    }
-
-    /// Builds a minimal legacy receipt RLP with the given logs.
-    fn build_test_receipt(logs: &[ReceiptLog]) -> Vec<u8> {
-        let mut payload = Vec::new();
-        1u8.encode(&mut payload); // status = success
-        21_000u64.encode(&mut payload); // cumulative_gas_used
-        Bloom::ZERO.encode(&mut payload); // logs_bloom
-
-        let mut logs_payload = Vec::new();
-        for log in logs {
-            encode_log(log, &mut logs_payload);
-        }
-        alloy_rlp::Header {
-            list: true,
-            payload_length: logs_payload.len(),
-        }
-        .encode(&mut payload);
-        payload.extend_from_slice(&logs_payload);
-
-        let mut out = Vec::new();
-        alloy_rlp::Header {
-            list: true,
-            payload_length: payload.len(),
-        }
-        .encode(&mut out);
-        out.extend_from_slice(&payload);
-        out
-    }
-
-    fn encode_log(log: &ReceiptLog, out: &mut Vec<u8>) {
-        let mut payload = Vec::new();
-        log.address.encode(&mut payload);
-
-        let mut topics_payload = Vec::new();
-        for topic in &log.topics {
-            topic.encode(&mut topics_payload);
-        }
-        alloy_rlp::Header {
-            list: true,
-            payload_length: topics_payload.len(),
-        }
-        .encode(&mut payload);
-        payload.extend_from_slice(&topics_payload);
-
-        Bytes::copy_from_slice(&log.data).encode(&mut payload);
-
-        alloy_rlp::Header {
-            list: true,
-            payload_length: payload.len(),
-        }
-        .encode(out);
-        out.extend_from_slice(&payload);
-    }
-
-    /// Builds a receipts trie and returns `(root, proof_for_target)`.
-    fn build_receipt_trie(receipts: &[(u64, Vec<u8>)], target_tx_index: u64) -> (B256, Vec<Bytes>) {
-        let mut entries: Vec<(Nibbles, Vec<u8>)> = receipts
-            .iter()
-            .map(|(idx, rlp)| {
-                let mut key_bytes = Vec::new();
-                idx.encode(&mut key_bytes);
-                (Nibbles::unpack(&key_bytes), rlp.clone())
-            })
-            .collect();
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
-
-        let target_key = receipt_trie_key(target_tx_index);
-
-        let retainer = ProofRetainer::new(vec![target_key]);
-        let mut builder = HashBuilder::default().with_proof_retainer(retainer);
-
-        for (key, value) in &entries {
-            builder.add_leaf(*key, value);
-        }
-
-        let root = builder.root();
-        let proof_nodes = builder.take_proof_nodes();
-        let proof: Vec<Bytes> = proof_nodes
-            .matching_nodes_sorted(&target_key)
-            .into_iter()
-            .map(|(_, bytes)| bytes)
-            .collect();
-
-        (root, proof)
-    }
-
-    fn build_deposit_event_data(
-        source_chain_id: u64,
-        target_chain_id: B256,
-        target_application_id: B256,
-        target_account_owner: B256,
-        token: Address,
-        amount: u64,
-    ) -> Vec<u8> {
-        let mut data = Vec::with_capacity(192);
-        data.extend_from_slice(&U256::from(source_chain_id).to_be_bytes::<32>());
-        data.extend_from_slice(target_chain_id.as_slice());
-        data.extend_from_slice(target_application_id.as_slice());
-        data.extend_from_slice(target_account_owner.as_slice());
-        // ABI: address is left-padded to 32 bytes
-        data.extend_from_slice(&[0u8; 12]);
-        data.extend_from_slice(token.as_slice());
-        data.extend_from_slice(&U256::from(amount).to_be_bytes::<32>());
-        data
+    #[test]
+    fn test_deposit_event_signature_known_hash() {
+        let hash = deposit_event_signature();
+        assert_eq!(
+            hash.0, DEPOSIT_EVENT_SIGNATURE_HASH,
+            "deposit event signature hash has changed! \
+             Update DEPOSIT_EVENT_SIGNATURE_HASH to: {:?}",
+            hash.0
+        );
     }
 
     // -- block header tests --

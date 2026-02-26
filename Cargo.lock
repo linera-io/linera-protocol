@@ -5391,6 +5391,7 @@ dependencies = [
  "alloy-sol-types",
  "alloy-trie",
  "anyhow",
+ "async-trait",
  "bcs",
  "clap",
  "fs-err",
