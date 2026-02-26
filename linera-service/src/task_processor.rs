@@ -200,6 +200,10 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
     async fn process_actions(&mut self, application_ids: Vec<ApplicationId>) {
         for application_id in application_ids {
+            if !self.application_ids.contains(&application_id) {
+                debug!("Skipping {application_id}: it's no longer assigned to this processor");
+                continue;
+            }
             if self.in_flight_apps.contains(&application_id) {
                 debug!("Skipping {application_id}: tasks already in flight");
                 continue;
