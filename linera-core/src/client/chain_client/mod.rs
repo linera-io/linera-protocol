@@ -988,8 +988,11 @@ impl<Env: Environment> ChainClient<Env> {
         let mut other_sender_chains = Vec::new();
         let (sender, mut receiver) = mpsc::unbounded_channel::<ChainAndHeight>();
 
-        let cert_futures = received_logs.heights_per_chain().into_iter().filter_map(
-            |(sender_chain_id, remote_heights)| {
+        let cert_futures = received_logs.heights_per_chain().into_iter().filter_map({
+            let received_logs = &received_logs;
+            let other_sender_chains = &mut other_sender_chains;
+
+            move |(sender_chain_id, remote_heights)| {
                 if remote_heights.is_empty() {
                     // Our highest, locally executed block is higher than any block height
                     // from the current batch. Skip this batch, but remember to wait for
@@ -1002,36 +1005,31 @@ impl<Env: Environment> ChainClient<Env> {
                 let client = self.client.clone();
                 let mut nodes = nodes.to_vec();
                 nodes.shuffle(&mut rand::thread_rng());
-                let received_logs_ref = &received_logs;
                 Some(async move {
                     client
                         .download_and_process_sender_chain(
                             sender_chain_id,
                             &nodes,
-                            received_logs_ref,
+                            received_logs,
                             remote_heights,
                             sender,
                         )
                         .await
                 })
-            },
-        );
-
-        stream::iter(cert_futures)
-            .buffer_unordered(self.options.max_joined_tasks)
-            .collect::<()>()
-            .await;
-
-        let update_trackers = linera_base::Task::spawn(async move {
-            while let Some(chain_and_height) = receiver.recv().await {
-                validator_trackers.downloaded_cert(chain_and_height);
             }
-            validator_trackers
         });
 
-        drop(sender);
-
-        let validator_trackers = update_trackers.await;
+        future::join(
+            stream::iter(cert_futures)
+                .buffer_unordered(self.options.max_joined_tasks)
+                .collect::<()>(),
+            async {
+                while let Some(chain_and_height) = receiver.recv().await {
+                    validator_trackers.downloaded_cert(chain_and_height);
+                }
+            },
+        )
+        .await;
 
         debug!(
             num_other_chains = %other_sender_chains.len(),
