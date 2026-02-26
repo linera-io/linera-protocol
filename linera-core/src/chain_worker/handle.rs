@@ -184,8 +184,8 @@ impl<S: Storage + Clone + 'static> ChainHandle<S> {
 
 /// Returns current time in microseconds since the Unix epoch.
 fn current_time_micros() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    linera_base::time::SystemTime::now()
+        .duration_since(linera_base::time::UNIX_EPOCH)
         .map(|d| d.as_micros() as u64)
         .unwrap_or(0)
 }
