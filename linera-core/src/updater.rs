@@ -213,23 +213,18 @@ where
         return Ok((key, values));
     }
 
-    if error_scores.is_empty() {
-        return Err(CommunicationError::NoConsensus(
-            committee.quorum_threshold(),
-            scores,
-        ));
-    }
-
     let mut sample = error_scores.into_iter().collect::<Vec<_>>();
     sample.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
     sample.truncate(4);
-    if sample[0].1 >= committee.validity_threshold() {
-        // At least one honest validator returned this error.
-        Err(CommunicationError::Trusted(sample.remove(0).0))
-    } else {
-        // No specific error is available to report reliably.
-        Err(CommunicationError::Sample(sample))
-    }
+    Err(match sample.as_slice() {
+        [] => CommunicationError::NoConsensus(committee.quorum_threshold(), scores),
+        [(_, score)] if *score >= committee.validity_threshold() => {
+            // At least one honest validator returned this error.
+            CommunicationError::Trusted(sample.remove(0).0)
+        }
+        // Otherwise no specific error is available to report reliably.}
+        _ => CommunicationError::Sample(sample),
+    })
 }
 
 impl<Env> ValidatorUpdater<Env>
