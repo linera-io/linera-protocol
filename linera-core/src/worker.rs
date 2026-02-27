@@ -72,59 +72,20 @@ use crate::{
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
-/// A future wrapper that unconditionally implements `Send + Sync`.
-///
-/// This is used when erasing chain worker futures to `dyn Future + Send + Sync`.
-/// Without it, the compiler would need to verify `Send`/`Sync` for deeply nested
-/// future types at monomorphization time, which overflows the recursion limit in
-/// downstream crates. Since `linera-core` (with `recursion_limit = "256"`) already
-/// compiles these futures successfully, the bounds are known to hold.
-///
-/// `Sync` is trivially safe because futures are polled exclusively through
-/// `Pin<&mut Self>`, never through `&Self`.
-#[repr(transparent)]
-struct AssertSendSync<F>(F);
-
-// SAFETY: The wrapped futures are always async blocks from chain_read!/chain_write!
-// and get_or_create_chain_handle, which capture only Send types from WorkerState.
-// The Send bound is verified at higher recursion limits within linera-core itself.
-unsafe impl<F> Send for AssertSendSync<F> {}
-
-// SAFETY: Futures are only polled via Pin<&mut Self>, never shared via &Self,
-// so Sync is never exercised at runtime.
-unsafe impl<F> Sync for AssertSendSync<F> {}
-
-impl<F: ::std::future::Future> ::std::future::Future for AssertSendSync<F> {
-    type Output = F::Output;
-
-    fn poll(
-        self: ::std::pin::Pin<&mut Self>,
-        cx: &mut ::std::task::Context<'_>,
-    ) -> ::std::task::Poll<Self::Output> {
-        // SAFETY: `AssertSendSync` is `repr(transparent)`, so the layout is identical.
-        unsafe { self.map_unchecked_mut(|s| &mut s.0) }.poll(cx)
-    }
-}
-
-/// A type-erased, `Send + Sync` future returning `Result<T, WorkerError>`.
-type ErasedFuture<'a, T> =
-    std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, WorkerError>> + Send + Sync + 'a>>;
-
 /// Acquires a read lock on a chain handle, executes `$body` with the guard named `$guard`,
 /// and returns the result.
 ///
-/// The body is type-erased to `dyn Future + Send + Sync` to prevent compiler overflow on
-/// `Send` bound evaluation and to satisfy `Sync` requirements from async trait bounds.
-/// The handle creation is also type-erased inside [`get_or_create_chain_handle`].
+/// The body is boxed to keep deeply nested future types off the stack. On non-web
+/// targets it is also wrapped in `SyncFuture` to satisfy `Sync` bounds from async
+/// trait signatures.
 macro_rules! chain_read {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
         let handle = $self.get_or_create_chain_handle($chain_id).await?;
-        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send + Sync>> =
-            Box::pin(AssertSendSync(async move {
-                let $guard = handle.read().await;
-                $body
-            }));
-        fut.await
+        Box::pin(crate::worker::wrap_future(async move {
+            let $guard = handle.read().await;
+            $body
+        }))
+        .await
     }};
 }
 
@@ -132,19 +93,32 @@ macro_rules! chain_read {
 /// and returns the result. The [`RollbackGuard`] automatically rolls back uncommitted
 /// chain state changes when dropped, ensuring cancellation safety.
 ///
-/// The body is type-erased to `dyn Future + Send + Sync` to prevent compiler overflow on
-/// `Send` bound evaluation and to satisfy `Sync` requirements from async trait bounds.
-/// The handle creation is also type-erased inside [`get_or_create_chain_handle`].
+/// The body is boxed to keep deeply nested future types off the stack. On non-web
+/// targets it is also wrapped in `SyncFuture` to satisfy `Sync` bounds from async
+/// trait signatures.
 macro_rules! chain_write {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
         let handle = $self.get_or_create_chain_handle($chain_id).await?;
-        let fut: ::std::pin::Pin<Box<dyn ::std::future::Future<Output = _> + Send + Sync>> =
-            Box::pin(AssertSendSync(async move {
-                let mut $guard = handle.write().await;
-                $body
-            }));
-        fut.await
+        Box::pin(crate::worker::wrap_future(async move {
+            let mut $guard = handle.write().await;
+            $body
+        }))
+        .await
     }};
+}
+
+/// Wraps a future in `SyncFuture` on non-web targets so that it satisfies `Sync` bounds.
+/// On web targets the future is returned as-is.
+#[cfg(not(web))]
+pub(crate) fn wrap_future<F: std::future::Future>(f: F) -> sync_wrapper::SyncFuture<F> {
+    sync_wrapper::SyncFuture::new(f)
+}
+
+/// Wraps a future in `SyncFuture` on non-web targets so that it satisfies `Sync` bounds.
+/// On web targets the future is returned as-is.
+#[cfg(web)]
+pub(crate) fn wrap_future<F: std::future::Future>(f: F) -> F {
+    f
 }
 
 #[cfg(with_metrics)]
@@ -813,14 +787,15 @@ where
 
     /// Gets or creates a `ChainHandle` for the given chain.
     ///
-    /// Returns a type-erased future to hide `!Sync` intermediate types (e.g.
-    /// `std::sync::mpsc::Receiver` from `ServiceRuntimeActor::spawn`) and deeply
-    /// nested view types that would cause Send-bound overflow in callers.
+    /// Returns a type-erased future to keep `!Sync` intermediate types (e.g.
+    /// `std::sync::mpsc::Receiver` from `ServiceRuntimeActor::spawn`) out of
+    /// the caller's future type.
     fn get_or_create_chain_handle(
         &self,
         chain_id: ChainId,
-    ) -> ErasedFuture<'_, Arc<ChainHandle<StorageClient>>> {
-        Box::pin(AssertSendSync(async move {
+    ) -> std::pin::Pin<Box<impl std::future::Future<Output = Result<Arc<ChainHandle<StorageClient>>, WorkerError>> + '_>>
+    {
+        Box::pin(wrap_future(async move {
             // Fast path: check if a handle already exists.
             {
                 let handles = self.chain_handles.lock().unwrap();
