@@ -274,11 +274,10 @@ impl IncomingBundle {
         self.bundle.messages.iter()
     }
 
-    #[instrument(level = "trace", skip(self))]
-    pub fn apply_policy(mut self, policy: &MessagePolicy) -> Option<IncomingBundle> {
+    fn matches_policy(&self, policy: &MessagePolicy) -> bool {
         if let Some(chain_ids) = &policy.restrict_chain_ids_to {
             if !chain_ids.contains(&self.origin) {
-                return None;
+                return false;
             }
         }
         if let Some(app_ids) = &policy.reject_message_bundles_without_application_ids {
@@ -286,7 +285,7 @@ impl IncomingBundle {
                 .messages()
                 .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
             {
-                return None;
+                return false;
             }
         }
         if let Some(app_ids) = &policy.reject_message_bundles_with_other_application_ids {
@@ -294,10 +293,15 @@ impl IncomingBundle {
                 .messages()
                 .all(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
             {
-                return None;
+                return false;
             }
         }
-        if policy.is_reject() {
+        !policy.is_reject()
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn apply_policy(mut self, policy: &MessagePolicy) -> Option<IncomingBundle> {
+        if !self.matches_policy(policy) {
             if self.bundle.is_skippable() {
                 return None;
             } else if !self.bundle.is_protected() {

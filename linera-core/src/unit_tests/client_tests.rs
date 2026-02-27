@@ -2697,18 +2697,15 @@ where
     receiver.synchronize_from_validators().await?;
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
-    // Only the transfer from sender should have been accepted.
+    // Only the transfer from sender should have been accepted. The other should have been
+    // rejected.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ONE);
 
-    // Let's accept the other one, too.
+    // Even if we change the policy, there's no longer a message to receive.
     receiver.options_mut().message_policy =
         MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
     let certs = receiver.process_inbox().await?.0;
-    assert_eq!(certs.len(), 1);
-    assert_eq!(
-        receiver.local_balance().await.unwrap(),
-        Amount::from_tokens(2)
-    );
+    assert_eq!(certs.len(), 0);
 
     Ok(())
 }

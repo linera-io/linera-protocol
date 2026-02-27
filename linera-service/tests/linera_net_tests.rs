@@ -4660,23 +4660,43 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
+    // Admin chain block start_h+4: publish fungible module
+    // Admin chain block start_h+5: create fungible application
+    use std::collections::BTreeMap;
+
+    use fungible::{InitialState, Parameters};
+    let accounts = BTreeMap::from([(admin_owner, Amount::from_tokens(100))]);
+    let state = InitialState { accounts };
+    let (fungible_contract, fungible_service) = admin_client.build_example("fungible").await?;
+    let fungible_id = admin_client
+        .publish_and_create::<fungible::FungibleTokenAbi, Parameters, InitialState>(
+            fungible_contract,
+            fungible_service,
+            VmRuntime::Wasm,
+            &Parameters::new("FUN"),
+            &state,
+            &[],
+            None,
+        )
+        .await?;
+
     let operators = vec![("ls".to_string(), "/bin/ls".into())];
 
-    // Admin chain block start_h+4: open chain for worker 1
+    // Admin chain block start_h+6: open chain for worker 1
     let worker1_client = net.make_client().await;
     worker1_client.wallet_init(None).await?;
     let worker1_chain = admin_client
         .open_and_assign(&worker1_client, Amount::from_tokens(10))
         .await?;
 
-    // Admin chain block start_h+5: open chain for worker 2
+    // Admin chain block start_h+7: open chain for worker 2
     let worker2_client = net.make_client().await;
     worker2_client.wallet_init(None).await?;
     let worker2_chain = admin_client
         .open_and_assign(&worker2_client, Amount::from_tokens(10))
         .await?;
 
-    // Admin chain block start_h+6: open chain for the operator service
+    // Admin chain block start_h+8: open chain for the operator service
     let service_client = net.make_client().await;
     service_client.wallet_init(None).await?;
     let service_owner = service_client.keygen().await?;
@@ -4736,9 +4756,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
 
     // Waiting for a notification about a block created right after starting the service
     // is unreliable - wait for the block created on the controller admin chain instead.
-    // Admin chain block start_h+7: receive worker 1 registration.
+    // Admin chain block start_h+9: receive worker 1 registration.
     admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 7))
+        .wait_for_block(BlockHeight::from(start_h + 9))
         .await
         .unwrap_or_else(|_| panic!("should get notification about a block on chain {admin_chain}"));
 
@@ -4770,9 +4790,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
 
     // Same as above: instead of waiting for the notification on worker2_chain, wait for
     // the notification about reception of the registration on admin chain.
-    // Admin chain block start_h+8: receive worker 2 registration.
+    // Admin chain block start_h+10: receive worker 2 registration.
     admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 8))
+        .wait_for_block(BlockHeight::from(start_h + 10))
         .await
         .unwrap_or_else(|_| panic!("should get notification about a block on chain {admin_chain}"));
 
@@ -4809,7 +4829,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         requirements: vec![],
     };
     let service_bytes = bcs::to_bytes(&managed_service)?;
-    // Admin chain block start_h+9: publish data blob
+    // Admin chain block start_h+11: publish data blob
     let service_id = admin_node_service
         .publish_data_blob(&admin_chain, service_bytes)
         .await?;
@@ -4820,9 +4840,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block start_h+10: set admins
+    // Admin chain block start_h+12: set admins
     admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 10))
+        .wait_for_block(BlockHeight::from(start_h + 12))
         .await
         .unwrap_or_else(|_| {
             panic!("should receive a notification about a block on chain {admin_chain}")
@@ -4834,9 +4854,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block start_h+11: assign service to worker 1
+    // Admin chain block start_h+13: assign service to worker 1
     admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 11))
+        .wait_for_block(BlockHeight::from(start_h + 13))
         .await
         .unwrap_or_else(|_| {
             panic!("should receive a notification about a block on chain {admin_chain}")
@@ -4869,7 +4889,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     // to work.
     let service_port = get_node_port().await;
     let service_service = service_client
-        .run_node_service(service_port, ProcessInbox::Automatic)
+        // we only use this client to perform mutations - the messages should be only
+        // processed by the worker
+        .run_node_service(service_port, ProcessInbox::Skip)
         .await?;
     let service_task_app = service_service.make_application(&service_chain, &task_processor_id)?;
     service_task_app
@@ -4895,6 +4917,27 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let task_count: u64 = task_app.query_json("taskCount").await?;
     assert_eq!(task_count, 1, "Task should have been processed");
 
+    let admin_fungible_app =
+        FungibleApp(admin_node_service.make_application(&admin_chain, &fungible_id)?);
+    admin_fungible_app
+        .transfer(
+            &admin_owner,
+            Amount::from_tokens(10),
+            fungible::Account {
+                chain_id: service_chain,
+                owner: admin_owner,
+            },
+        )
+        .await;
+
+    // Admin chain block start_h+14: the transfer operation.
+    admin_notifications
+        .wait_for_block(BlockHeight::from(start_h + 14))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should receive a notification about a block on chain {admin_chain}")
+        });
+
     // Move the service to the second worker.
     let mutation = format!(
         "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
@@ -4902,9 +4945,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block start_h+12: remove service from worker 1
+    // Admin chain block start_h+15: remove service from worker 1
     admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 12))
+        .wait_for_block(BlockHeight::from(start_h + 15))
         .await
         .unwrap_or_else(|_| {
             panic!("should receive a notification about a block on chain {admin_chain}")
@@ -4962,12 +5005,24 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     // service.
     let mut service_notifications = service_service.notifications(service_chain).await?;
 
-    // Check that the service can still be processed by the second worker.
-    service_task_app
-        .mutate(r#"requestTask(operator: "ls", input: "")"#)
+    let admin_task_app = admin_node_service.make_application(&admin_chain, &task_processor_id)?;
+    admin_task_app
+        .mutate(&format!(
+            r#"requestTaskOn(chainId: "{}", operator: "ls", input: "")"#,
+            service_chain
+        ))
         .await?;
 
-    // Service chain block 5: RequestTask
+    // Admin chain block start_h+16: the RequestTaskOn operation sends a message to
+    // the service chain.
+    admin_notifications
+        .wait_for_block(BlockHeight::from(start_h + 16))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should receive a notification about a block on chain {admin_chain}")
+        });
+
+    // Service chain block 5: receive RequestTask message from admin chain
     service_notifications
         .wait_for_block(BlockHeight::from(5))
         .await
@@ -4985,6 +5040,13 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
 
     let task_count: u64 = service_task_app.query_json("taskCount").await?;
     assert_eq!(task_count, 2, "Task should have been processed");
+
+    // The fungible transfer to the service chain should have been rejected by the message
+    // policy (fungible is not an allowed application), and the tracked Credit message
+    // bounced back, restoring the admin's balance.
+    admin_fungible_app
+        .assert_balances([(admin_owner, Amount::from_tokens(100))])
+        .await;
 
     node_service1.ensure_is_running()?;
     node_service1.terminate().await?;
