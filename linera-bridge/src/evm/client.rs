@@ -107,7 +107,7 @@ pub fn extract_validator_keys(committee_blob: &[u8]) -> anyhow::Result<Vec<Vec<u
     let committee: Committee = bcs::from_bytes(committee_blob)?;
     let mut keys: Vec<ValidatorPublicKey> = committee.validators().keys().copied().collect();
     keys.sort_by_key(|a| a.as_bytes());
-    Ok(keys.iter().map(uncompressed_key).collect())
+    Ok(keys.iter().map(validator_uncompressed_key).collect())
 }
 
 /// Derives the Ethereum address from a secp256k1 validator public key.
@@ -118,7 +118,7 @@ pub fn validator_evm_address(public: &ValidatorPublicKey) -> Address {
 }
 
 /// Returns the 64-byte uncompressed public key (without the 0x04 prefix).
-fn uncompressed_key(public: &ValidatorPublicKey) -> Vec<u8> {
+pub fn validator_uncompressed_key(public: &ValidatorPublicKey) -> Vec<u8> {
     let uncompressed = public.0.to_encoded_point(false);
     uncompressed.as_bytes()[1..].to_vec()
 }
