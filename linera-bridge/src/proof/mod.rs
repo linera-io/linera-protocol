@@ -65,6 +65,10 @@
 //! `(source_chain_id, block_hash, tx_index, log_index)` and for checking block finality
 //! via an HTTP oracle before accepting a deposit.
 
+/// Off-chain deposit proof generation via EVM JSON-RPC.
+#[cfg(not(feature = "chain"))]
+pub mod gen;
+
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_trie::Nibbles;

@@ -4,7 +4,7 @@
 use alloy_sol_types::sol;
 
 /// Solidity source for the Microchain abstract contract.
-pub const SOURCE: &str = include_str!("solidity/Microchain.sol");
+pub const SOURCE: &str = include_str!("../solidity/Microchain.sol");
 
 sol! {
     function addBlock(bytes calldata data) external;

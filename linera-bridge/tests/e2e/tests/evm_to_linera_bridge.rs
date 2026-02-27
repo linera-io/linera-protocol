@@ -21,7 +21,7 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId},
     vm::VmRuntime,
 };
-use linera_bridge::proof_gen::{DepositProofClient as _, HttpDepositProofClient};
+use linera_bridge::proof::gen::{DepositProofClient as _, HttpDepositProofClient};
 use linera_bridge_e2e::{
     compose_file_path, exec_output, light_client_address, parse_deployed_address, start_compose,
     ANVIL_PRIVATE_KEY,

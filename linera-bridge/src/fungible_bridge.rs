@@ -21,7 +21,7 @@ mod tests {
         primitives::Address,
     };
 
-    use crate::{microchain::addBlockCall, test_helpers::*};
+    use crate::{evm::microchain::addBlockCall, test_helpers::*};
 
     mod erc20 {
         use alloy_sol_types::sol;

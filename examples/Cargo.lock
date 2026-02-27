@@ -7984,7 +7984,6 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
- "futures",
  "hex",
  "linera-sdk",
  "serde",

@@ -11,7 +11,10 @@ mod tests {
     };
     use revm::{database::CacheDB, primitives::Address};
 
-    use crate::{light_client::addCommitteeCall, microchain::addBlockCall, test_helpers::*};
+    use crate::{
+        evm::{light_client::addCommitteeCall, microchain::addBlockCall},
+        test_helpers::*,
+    };
 
     #[test]
     fn test_gas_light_client_add_committee() {
