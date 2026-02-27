@@ -43,7 +43,7 @@ pub type Network = linera_rpc::node_provider::NodeProvider;
 pub type Environment = linera_core::environment::Impl<Storage, Network, Signer, Wallet>;
 
 type JsResult<T> = std::result::Result<T, JsError>;
-type Result<T> = std::result::Result<T, Error>;
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(serde::Deserialize, Default, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
@@ -73,7 +73,7 @@ pub fn initialize(options: Option<InitializeOptions>) {
     // If no log filter is provided, disable the user application log by default, to avoid
     // overwhelming the console with logs from the client library itself.
     let log_filter = if options.log.is_empty() {
-        "user_application_log=off,linera_client=info"
+        "user_application_log=off,linera_web=info"
     } else {
         &options.log
     };

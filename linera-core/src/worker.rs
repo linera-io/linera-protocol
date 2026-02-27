@@ -736,7 +736,7 @@ where
     {
         let notifications = (*notifier).clone();
         let this = self.clone();
-        linera_base::task::spawn(async move {
+        linera_base::Task::spawn(async move {
             let (response, actions) =
                 ProcessableCertificate::process_certificate(&this, certificate).await?;
             notifications.notify(&actions.notifications);

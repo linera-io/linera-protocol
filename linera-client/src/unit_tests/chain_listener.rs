@@ -159,7 +159,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
     // Transfer one token to chain 0. The listener should eventually become leader and receive
     // the message.
     let recipient0 = Account::chain(chain_id0);
@@ -274,7 +274,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
     // Send a message to chain A first (follow-only). This notification should be ignored.
     sender
@@ -393,7 +393,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
     // Burn one token.
     let certificate = client0
         .burn(AccountOwner::CHAIN, Amount::ONE)
@@ -475,7 +475,7 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
     let mut chains_to_listen = BTreeMap::new();
     chains_to_listen.insert(chain_id0, Some(client0.identity().await?));
@@ -615,7 +615,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
     // Send a message from chain 1 to chain 0. The listener should process the inbox.
     let recipient0 = Account::chain(chain_id0);

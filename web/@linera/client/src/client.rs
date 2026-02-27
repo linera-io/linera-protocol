@@ -1,15 +1,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
-use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
+use futures::{
+    future::{self, FutureExt as _},
+    lock::Mutex as AsyncMutex,
+};
 use linera_base::identifiers::{AccountOwner, ChainId};
 use linera_client::chain_listener::{ChainListener, ClientContext as _};
+use tokio_util::sync::CancellationToken;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use crate::{chain::Chain, signer::Signer, storage, wallet::Wallet, Environment, Result};
+use crate::{chain::Chain, signer::Signer, storage, wallet::Wallet, Environment, Error, Result};
 
 /// The full client API, exposed to the wallet implementation. Calls
 /// to this API can be trusted to have originated from the user's
@@ -23,6 +27,9 @@ pub struct Client {
     // It does nothing here in this single-threaded context, but is
     // hard-coded by `ChainListener`.
     pub(crate) client_context: Arc<AsyncMutex<linera_client::ClientContext<Environment>>>,
+    cancellation_token: CancellationToken,
+    chain_listener_result:
+        future::Shared<future::RemoteHandle<Result<(), Rc<linera_client::Error>>>>,
 }
 
 #[derive(Default, serde::Deserialize, tsify::Tsify)]
@@ -72,29 +79,34 @@ impl Client {
         #[expect(clippy::arc_with_non_send_sync)]
         let client = Arc::new(AsyncMutex::new(client));
         let client_clone = client.clone();
+        let cancellation_token = tokio_util::sync::CancellationToken::new();
         let chain_listener = ChainListener::new(
             options.chain_listener_config,
             client_clone,
             storage,
-            tokio_util::sync::CancellationToken::new(),
+            cancellation_token.clone(),
             tokio::sync::mpsc::unbounded_channel().1,
             true, // Enable background sync
         )
         .run()
-        .boxed_local()
-        .await?
-        .boxed_local();
-        wasm_bindgen_futures::spawn_local(
-            async move {
-                if let Err(error) = chain_listener.await {
-                    tracing::error!("ChainListener error: {error:?}");
-                }
-            }
-            .boxed_local(),
-        );
-        log::info!("Linera Web client successfully initialized");
+        .await?;
+
+        let (run_chain_listener, chain_listener_result) = async move {
+            let result = chain_listener.await.map_err(|error| {
+                tracing::error!("ChainListener error: {error:?}");
+                Rc::new(error)
+            });
+            tracing::debug!("chain listener completed");
+            result
+        }
+        .remote_handle();
+
+        wasm_bindgen_futures::spawn_local(run_chain_listener);
+
         Ok(Self {
             client_context: client,
+            cancellation_token,
+            chain_listener_result: chain_listener_result.shared(),
         })
     }
 
@@ -120,5 +132,33 @@ impl Client {
             chain_client,
             client: self.clone(),
         })
+    }
+
+    /// Cleanly shut down the client, completing when it is destroyed and all
+    /// resources it owns are released.
+    ///
+    /// # Errors
+    ///
+    /// If the context is being referenced by any other objects (chains,
+    /// applications…). Free these with `.free()` before disposing of this
+    /// object.
+    ///
+    /// Propagates any errors that occurred during background execution of the
+    /// client.
+    #[wasm_bindgen(js_name = asyncDispose)]
+    pub async fn async_dispose(self) -> Result<()> {
+        self.cancellation_token.cancel();
+
+        if let Err(Some(e)) = self.chain_listener_result.await.map_err(Rc::into_inner) {
+            return Err(e.into());
+        }
+
+        let context = Arc::into_inner(self.client_context).ok_or(Error::new(
+            "Client disposed while being referenced elsewhere",
+        ))?;
+
+        drop(context);
+
+        Ok(())
     }
 }

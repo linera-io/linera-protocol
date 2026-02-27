@@ -16,8 +16,8 @@ use linera_base::{
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
-    task,
     time::Instant,
+    Task,
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
@@ -437,7 +437,7 @@ where
                 tracing::debug!(%delay_until, "delaying block proposal");
                 let sender = request_sender.clone();
                 let clock = self.storage.clock().clone();
-                task::spawn(async move {
+                Task::spawn(async move {
                     clock.sleep_until(delay_until).await;
                     // Re-insert the request into the queue. If the channel is closed,
                     // the actor is shutting down, so we can ignore the error.

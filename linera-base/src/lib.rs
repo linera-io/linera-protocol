@@ -33,7 +33,9 @@ pub mod port;
 #[cfg(with_metrics)]
 pub mod prometheus_util;
 #[cfg(not(chain))]
-pub mod task;
+mod task;
+#[cfg(not(chain))]
+pub use task::Task;
 pub mod task_processor;
 pub mod time;
 #[cfg_attr(web, path = "tracing_web.rs")]
