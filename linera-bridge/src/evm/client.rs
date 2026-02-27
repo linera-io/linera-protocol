@@ -21,7 +21,7 @@ use linera_base::crypto::ValidatorPublicKey;
 use linera_execution::committee::Committee;
 use url::Url;
 
-use crate::light_client::addCommitteeCall;
+use super::light_client::addCommitteeCall;
 
 /// Client for interacting with a deployed LightClient contract on an EVM chain.
 #[allow(clippy::type_complexity)]

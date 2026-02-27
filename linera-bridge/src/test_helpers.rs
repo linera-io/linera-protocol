@@ -34,15 +34,13 @@ use revm::{
 };
 use revm_context::result::{ExecutionResult, Output};
 
-use crate::{
-    light_client, microchain, BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, FUNGIBLE_TYPES_SOURCE,
-};
+use crate::evm;
 
-const BRIDGE_TYPES_SOL: &str = BRIDGE_TYPES_SOURCE;
-const FUNGIBLE_TYPES_SOL: &str = FUNGIBLE_TYPES_SOURCE;
-const LIGHT_CLIENT_SOL: &str = light_client::SOURCE;
-const MICROCHAIN_SOL: &str = microchain::SOURCE;
-const FUNGIBLE_BRIDGE_SOL: &str = FUNGIBLE_BRIDGE_SOURCE;
+const BRIDGE_TYPES_SOL: &str = evm::BRIDGE_TYPES_SOURCE;
+const FUNGIBLE_TYPES_SOL: &str = evm::FUNGIBLE_TYPES_SOURCE;
+const LIGHT_CLIENT_SOL: &str = evm::light_client::SOURCE;
+const MICROCHAIN_SOL: &str = evm::microchain::SOURCE;
+const FUNGIBLE_BRIDGE_SOL: &str = evm::FUNGIBLE_BRIDGE_SOURCE;
 pub const GAS_LIMIT: u64 = 500_000_000;
 
 /// Derives the Ethereum address from a secp256k1 validator public key.

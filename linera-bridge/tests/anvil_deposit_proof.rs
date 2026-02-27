@@ -25,11 +25,12 @@ use alloy::{
 use alloy_primitives::{Bytes, B256, U256};
 use alloy_sol_types::{SolCall, SolValue};
 use linera_bridge::{
+    evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, FUNGIBLE_TYPES_SOURCE},
     proof::{
-        decode_block_header, decode_receipt_logs, parse_deposit_event, verify_receipt_inclusion,
+        decode_block_header, decode_receipt_logs,
+        gen::{DepositProofClient, HttpDepositProofClient},
+        parse_deposit_event, verify_receipt_inclusion,
     },
-    proof_gen::{DepositProofClient, HttpDepositProofClient},
-    BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, FUNGIBLE_TYPES_SOURCE,
 };
 
 const MOCK_ERC20_SOL: &str = r#"
@@ -91,8 +92,8 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
         ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
         ("FungibleTypes.sol", FUNGIBLE_TYPES_SOURCE),
         ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
-        ("LightClient.sol", linera_bridge::light_client::SOURCE),
-        ("Microchain.sol", linera_bridge::microchain::SOURCE),
+        ("LightClient.sol", linera_bridge::evm::light_client::SOURCE),
+        ("Microchain.sol", linera_bridge::evm::microchain::SOURCE),
     ] {
         let mut f = File::create(path.join(name)).unwrap();
         writeln!(f, "{}", content).unwrap();
