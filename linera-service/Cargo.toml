@@ -114,6 +114,7 @@ linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
+lru.workspace = true
 mini-moka.workspace = true
 nonzero_lit.workspace = true
 papaya.workspace = true

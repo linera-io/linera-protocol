@@ -1191,6 +1191,7 @@ impl Runnable for Job {
                 controller_application_id,
                 task_retry_delay_secs,
                 read_only,
+                query_cache_size,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1253,6 +1254,11 @@ impl Runnable for Job {
                     tokio::spawn(controller.run());
                 }
 
+                assert!(
+                    query_cache_size.is_none() || !options.client_options.long_lived_services,
+                    "--query-cache-size is incompatible with --long-lived-services"
+                );
+
                 let service = NodeService::new(
                     config,
                     port,
@@ -1261,6 +1267,7 @@ impl Runnable for Job {
                     Some(chain_id),
                     context,
                     read_only,
+                    query_cache_size,
                 );
                 service.run(cancellation_token, command_receiver).await?;
             }

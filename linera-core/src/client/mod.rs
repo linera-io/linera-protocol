@@ -277,6 +277,14 @@ impl<Env: Environment> Client<Env> {
         self.admin_chain_id
     }
 
+    /// Subscribes to notifications for the given chain IDs.
+    pub fn subscribe(
+        &self,
+        chain_ids: Vec<ChainId>,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<Notification> {
+        self.notifier.subscribe(chain_ids)
+    }
+
     /// Returns the storage client used by this client's local node.
     pub fn storage_client(&self) -> &Env::Storage {
         self.environment.storage()

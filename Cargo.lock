@@ -6019,6 +6019,7 @@ dependencies = [
  "linera-storage-service",
  "linera-version",
  "linera-views",
+ "lru 0.15.0",
  "matching-engine",
  "mini-moka",
  "native-fungible",
