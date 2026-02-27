@@ -12,8 +12,7 @@ use std::{
 use chain_client_state::ChainClientState;
 use custom_debug_derive::Debug;
 use futures::{
-    future::{self, Either, FusedFuture, Future, FutureExt},
-    select,
+    future::{self, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt, TryStreamExt},
 };
 #[cfg(with_metrics)]
@@ -63,7 +62,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 use validator_trackers::ValidatorTrackers;
 
@@ -721,7 +719,7 @@ impl<Env: Environment> Client<Env> {
         // Spawn a task to monitor clock skew reports and warn if threshold is reached.
         let validity_threshold = committee.validity_threshold();
         let committee_clone = committee.clone();
-        let clock_skew_check_handle = linera_base::task::spawn(async move {
+        let clock_skew_check_handle = linera_base::Task::spawn(async move {
             let mut skew_weight = 0u64;
             let mut min_skew = TimeDelta::MAX;
             let mut max_skew = TimeDelta::ZERO;
@@ -2354,10 +2352,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
     #[instrument(level = "trace")]
-    pub async fn find_received_certificates(
-        &self,
-        cancellation_token: Option<CancellationToken>,
-    ) -> Result<(), ChainClientError> {
+    pub async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
         debug!(chain_id = %self.chain_id, "starting find_received_certificates");
         #[cfg(with_metrics)]
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
@@ -2435,12 +2430,7 @@ impl<Env: Environment> ChainClient<Env> {
             max_blocks_per_chain,
         ) {
             validator_trackers = self
-                .receive_sender_certificates(
-                    received_log,
-                    validator_trackers,
-                    &nodes,
-                    cancellation_token.clone(),
-                )
+                .receive_sender_certificates(received_log, validator_trackers, &nodes)
                 .await?;
 
             self.update_received_certificate_trackers(&validator_trackers)
@@ -2478,7 +2468,6 @@ impl<Env: Environment> ChainClient<Env> {
         mut received_logs: ReceivedLogs,
         mut validator_trackers: ValidatorTrackers,
         nodes: &[RemoteNode<Env::ValidatorNode>],
-        cancellation_token: Option<CancellationToken>,
     ) -> Result<ValidatorTrackers, ChainClientError> {
         debug!(
             num_chains = %received_logs.num_chains(),
@@ -2503,8 +2492,11 @@ impl<Env: Environment> ChainClient<Env> {
         let mut other_sender_chains = Vec::new();
         let (sender, mut receiver) = mpsc::unbounded_channel::<ChainAndHeight>();
 
-        let cert_futures = received_logs.heights_per_chain().into_iter().filter_map(
-            |(sender_chain_id, remote_heights)| {
+        let cert_futures = received_logs.heights_per_chain().into_iter().filter_map({
+            let received_logs = &received_logs;
+            let other_sender_chains = &mut other_sender_chains;
+
+            move |(sender_chain_id, remote_heights)| {
                 if remote_heights.is_empty() {
                     // Our highest, locally executed block is higher than any block height
                     // from the current batch. Skip this batch, but remember to wait for
@@ -2517,50 +2509,31 @@ impl<Env: Environment> ChainClient<Env> {
                 let client = self.client.clone();
                 let mut nodes = nodes.to_vec();
                 nodes.shuffle(&mut rand::thread_rng());
-                let received_logs_ref = &received_logs;
                 Some(async move {
                     client
                         .download_and_process_sender_chain(
                             sender_chain_id,
                             &nodes,
-                            received_logs_ref,
+                            received_logs,
                             remote_heights,
                             sender,
                         )
                         .await
                 })
-            },
-        );
-
-        let update_trackers = linera_base::task::spawn(async move {
-            while let Some(chain_and_height) = receiver.recv().await {
-                validator_trackers.downloaded_cert(chain_and_height);
             }
-            validator_trackers
         });
 
-        let mut cancellation_future = Box::pin(
-            async move {
-                if let Some(token) = cancellation_token {
-                    token.cancelled().await
-                } else {
-                    future::pending().await
+        future::join(
+            stream::iter(cert_futures)
+                .buffer_unordered(self.options.max_joined_tasks)
+                .collect::<()>(),
+            async {
+                while let Some(chain_and_height) = receiver.recv().await {
+                    validator_trackers.downloaded_cert(chain_and_height);
                 }
-            }
-            .fuse(),
-        );
-
-        select! {
-            _ = stream::iter(cert_futures)
-            .buffer_unordered(self.options.max_joined_tasks)
-            .for_each(future::ready)
-            => (),
-            _ = cancellation_future => ()
-        };
-
-        drop(sender);
-
-        let validator_trackers = update_trackers.await;
+            },
+        )
+        .await;
 
         debug!(
             num_other_chains = %other_sender_chains.len(),
@@ -3228,7 +3201,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
         let info = self.prepare_chain().await?;
         self.synchronize_publisher_chains().await?;
-        self.find_received_certificates(None).await?;
+        self.find_received_certificates().await?;
         Ok(info)
     }
 
