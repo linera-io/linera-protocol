@@ -793,8 +793,11 @@ where
     fn get_or_create_chain_handle(
         &self,
         chain_id: ChainId,
-    ) -> std::pin::Pin<Box<impl std::future::Future<Output = Result<Arc<ChainHandle<StorageClient>>, WorkerError>> + '_>>
-    {
+    ) -> std::pin::Pin<
+        Box<
+            impl std::future::Future<Output = Result<Arc<ChainHandle<StorageClient>>, WorkerError>> + '_,
+        >,
+    > {
         Box::pin(wrap_future(async move {
             // Fast path: check if a handle already exists.
             {
