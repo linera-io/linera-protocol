@@ -250,6 +250,13 @@ pub fn decode_block_header(header_rlp: &[u8]) -> Result<(B256, B256)> {
         alloy_rlp::Header::decode(&mut data).map_err(|e| anyhow!("invalid RLP header: {e}"))?;
     ensure!(list_header.list, "block header must be an RLP list");
 
+    // Limit reads to the header's declared payload.
+    ensure!(
+        data.len() >= list_header.payload_length,
+        "block header payload extends past available data"
+    );
+    let mut data = &data[..list_header.payload_length];
+
     // Skip first 5 fields: parentHash, ommersHash, beneficiary, stateRoot, transactionsRoot
     for i in 0..5 {
         skip_rlp_item(&mut data).map_err(|e| anyhow!("failed to skip header field {i}: {e}"))?;
@@ -290,6 +297,13 @@ pub fn decode_receipt_logs(receipt_rlp: &[u8]) -> Result<Vec<ReceiptLog>> {
         alloy_rlp::Header::decode(&mut data).map_err(|e| anyhow!("invalid receipt RLP: {e}"))?;
     ensure!(list_header.list, "receipt must be an RLP list");
 
+    // Limit reads to the receipt's declared payload.
+    ensure!(
+        data.len() >= list_header.payload_length,
+        "receipt payload extends past available data"
+    );
+    let mut data = &data[..list_header.payload_length];
+
     // Skip: status (0), cumulative_gas_used (1), logs_bloom (2)
     for i in 0..3 {
         skip_rlp_item(&mut data).map_err(|e| anyhow!("failed to skip receipt field {i}: {e}"))?;
@@ -299,6 +313,10 @@ pub fn decode_receipt_logs(receipt_rlp: &[u8]) -> Result<Vec<ReceiptLog>> {
     let logs_header =
         alloy_rlp::Header::decode(&mut data).map_err(|e| anyhow!("invalid logs list RLP: {e}"))?;
     ensure!(logs_header.list, "logs must be an RLP list");
+    ensure!(
+        data.len() >= logs_header.payload_length,
+        "logs payload extends past receipt boundary"
+    );
 
     let mut logs_data = &data[..logs_header.payload_length];
     let mut logs = Vec::new();
@@ -325,12 +343,18 @@ pub fn parse_deposit_event(log: &ReceiptLog) -> Result<DepositEvent> {
     );
 
     let d = &log.data;
+
+    // ABI encodes addresses as left-padded 32-byte words; the first 12 bytes must be zero.
+    ensure!(
+        d[128..140] == [0u8; 12],
+        "invalid ABI encoding: address padding bytes (128..140) must be zero"
+    );
+
     Ok(DepositEvent {
         source_chain_id: U256::from_be_slice(&d[0..32]),
         target_chain_id: B256::from_slice(&d[32..64]),
         target_application_id: B256::from_slice(&d[64..96]),
         target_account_owner: B256::from_slice(&d[96..128]),
-        // Address is left-padded with 12 zero bytes in ABI encoding
         token: Address::from_slice(&d[140..160]),
         amount: U256::from_be_slice(&d[160..192]),
     })
@@ -391,20 +415,36 @@ fn skip_rlp_item(data: &mut &[u8]) -> Result<()> {
 }
 
 /// Decodes a single log entry from RLP.
+///
+/// Enforces the declared payload boundary: after decoding address, topics, and data,
+/// verifies that exactly `payload_length` bytes were consumed.
 fn decode_log(data: &mut &[u8]) -> Result<ReceiptLog> {
-    let _log_header =
+    let log_header =
         alloy_rlp::Header::decode(data).map_err(|e| anyhow!("invalid log RLP: {e}"))?;
+    ensure!(log_header.list, "log must be an RLP list");
+    ensure!(
+        data.len() >= log_header.payload_length,
+        "log payload extends past available data"
+    );
 
-    let address = <Address as alloy_rlp::Decodable>::decode(data)
+    // Limit reads to the declared payload boundary.
+    let mut log_data_buf = &data[..log_header.payload_length];
+    *data = &data[log_header.payload_length..];
+
+    let address = <Address as alloy_rlp::Decodable>::decode(&mut log_data_buf)
         .map_err(|e| anyhow!("invalid log address: {e}"))?;
 
     // Decode topics list
-    let topics_header =
-        alloy_rlp::Header::decode(data).map_err(|e| anyhow!("invalid topics list RLP: {e}"))?;
+    let topics_header = alloy_rlp::Header::decode(&mut log_data_buf)
+        .map_err(|e| anyhow!("invalid topics list RLP: {e}"))?;
     ensure!(topics_header.list, "topics must be an RLP list");
+    ensure!(
+        log_data_buf.len() >= topics_header.payload_length,
+        "topics payload extends past log boundary"
+    );
 
-    let mut topics_data = &data[..topics_header.payload_length];
-    *data = &data[topics_header.payload_length..];
+    let mut topics_data = &log_data_buf[..topics_header.payload_length];
+    log_data_buf = &log_data_buf[topics_header.payload_length..];
 
     let mut topics = Vec::new();
     while !topics_data.is_empty() {
@@ -414,19 +454,29 @@ fn decode_log(data: &mut &[u8]) -> Result<ReceiptLog> {
     }
 
     // Decode log data (byte string)
-    let data_header =
-        alloy_rlp::Header::decode(data).map_err(|e| anyhow!("invalid log data RLP: {e}"))?;
+    let data_header = alloy_rlp::Header::decode(&mut log_data_buf)
+        .map_err(|e| anyhow!("invalid log data RLP: {e}"))?;
     ensure!(
         !data_header.list,
         "log data must be a byte string, not a list"
     );
-    let log_data = data[..data_header.payload_length].to_vec();
-    *data = &data[data_header.payload_length..];
+    ensure!(
+        log_data_buf.len() >= data_header.payload_length,
+        "log data extends past log boundary"
+    );
+    let log_bytes = log_data_buf[..data_header.payload_length].to_vec();
+    log_data_buf = &log_data_buf[data_header.payload_length..];
+
+    ensure!(
+        log_data_buf.is_empty(),
+        "trailing data after log fields ({} unexpected bytes)",
+        log_data_buf.len()
+    );
 
     Ok(ReceiptLog {
         address,
         topics,
-        data: log_data,
+        data: log_bytes,
     })
 }
 
@@ -637,5 +687,256 @@ mod tests {
             data: vec![0; 100], // too short
         };
         assert!(parse_deposit_event(&log).is_err());
+    }
+
+    #[test]
+    fn test_parse_deposit_event_data_too_long() {
+        let log = ReceiptLog {
+            address: Address::ZERO,
+            topics: vec![deposit_event_signature()],
+            data: vec![0; 193], // one byte too many
+        };
+        assert!(parse_deposit_event(&log).is_err());
+    }
+
+    #[test]
+    fn test_parse_deposit_event_data_off_by_one_short() {
+        let log = ReceiptLog {
+            address: Address::ZERO,
+            topics: vec![deposit_event_signature()],
+            data: vec![0; 191], // one byte too short
+        };
+        assert!(parse_deposit_event(&log).is_err());
+    }
+
+    #[test]
+    fn test_parse_deposit_event_nonzero_address_padding() {
+        // Build valid event data, then corrupt the ABI padding for the address field.
+        // Bytes 128..140 should be zero (left-padding for a 20-byte address in a 32-byte slot).
+        let mut data = build_deposit_event_data(
+            1,
+            B256::ZERO,
+            B256::ZERO,
+            B256::ZERO,
+            Address::from([0xAA; 20]),
+            100,
+        );
+        // Corrupt the padding: set byte 128 to nonzero.
+        data[128] = 0xFF;
+        let log = ReceiptLog {
+            address: Address::ZERO,
+            topics: vec![deposit_event_signature()],
+            data,
+        };
+        assert!(
+            parse_deposit_event(&log).is_err(),
+            "should reject non-zero address padding"
+        );
+    }
+
+    // -- block header edge cases --
+
+    #[test]
+    fn test_decode_block_header_empty() {
+        assert!(decode_block_header(&[]).is_err());
+    }
+
+    #[test]
+    fn test_decode_block_header_non_list() {
+        // RLP string instead of list: 0x83 = 3-byte string
+        assert!(decode_block_header(&[0x83, 0x01, 0x02, 0x03]).is_err());
+    }
+
+    #[test]
+    fn test_decode_block_header_truncated() {
+        // Valid list with only 3 fields — not enough to reach receipts_root at index 5
+        let mut payload = Vec::new();
+        B256::ZERO.encode(&mut payload); // field 0
+        B256::ZERO.encode(&mut payload); // field 1
+        Address::ZERO.encode(&mut payload); // field 2
+
+        let mut header = Vec::new();
+        alloy_rlp::Header {
+            list: true,
+            payload_length: payload.len(),
+        }
+        .encode(&mut header);
+        header.extend_from_slice(&payload);
+
+        assert!(decode_block_header(&header).is_err());
+    }
+
+    // -- receipt decoding edge cases --
+
+    #[test]
+    fn test_decode_receipt_logs_non_list() {
+        // RLP byte string, not a list
+        assert!(decode_receipt_logs(&[0x83, 0x01, 0x02, 0x03]).is_err());
+    }
+
+    #[test]
+    fn test_decode_receipt_logs_truncated_fields() {
+        // A valid receipt list with only 2 fields — not enough (needs 4: status, gas, bloom, logs)
+        let mut payload = Vec::new();
+        1u8.encode(&mut payload); // status
+        21_000u64.encode(&mut payload); // cumulative_gas_used
+                                        // Missing: logs_bloom, logs
+
+        let mut receipt = Vec::new();
+        alloy_rlp::Header {
+            list: true,
+            payload_length: payload.len(),
+        }
+        .encode(&mut receipt);
+        receipt.extend_from_slice(&payload);
+
+        assert!(decode_receipt_logs(&receipt).is_err());
+    }
+
+    #[test]
+    fn test_decode_receipt_logs_type_byte_zero() {
+        // Type byte 0x00 + valid legacy receipt body
+        let log = ReceiptLog {
+            address: Address::from([0xAA; 20]),
+            topics: vec![],
+            data: vec![42],
+        };
+        let legacy = build_test_receipt(&[log.clone()]);
+        let mut typed = vec![0x00];
+        typed.extend_from_slice(&legacy);
+
+        let decoded = decode_receipt_logs(&typed).unwrap();
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0], log);
+    }
+
+    #[test]
+    fn test_decode_receipt_logs_type_byte_max() {
+        // Type byte 0x7F (max EIP-2718 type) + valid legacy receipt body
+        let legacy = build_test_receipt(&[]);
+        let mut typed = vec![0x7F];
+        typed.extend_from_slice(&legacy);
+
+        let decoded = decode_receipt_logs(&typed).unwrap();
+        assert!(decoded.is_empty());
+    }
+
+    // -- verify_receipt_inclusion edge cases --
+
+    #[test]
+    fn test_verify_receipt_inclusion_empty_proof() {
+        let receipt = build_test_receipt(&[]);
+        assert!(verify_receipt_inclusion(B256::ZERO, 0, &receipt, &[]).is_err());
+    }
+
+    #[test]
+    fn test_verify_receipt_inclusion_wrong_tx_index() {
+        let receipt = build_test_receipt(&[]);
+        let (root, proof) = build_receipt_trie(&[(0, receipt.clone())], 0);
+        // Proof was generated for tx_index=0, but we verify with tx_index=1
+        assert!(verify_receipt_inclusion(root, 1, &receipt, &proof).is_err());
+    }
+
+    #[test]
+    fn test_verify_receipt_inclusion_empty_receipt() {
+        assert!(verify_receipt_inclusion(B256::ZERO, 0, &[], &[]).is_err());
+    }
+
+    // -- decode_log edge cases --
+
+    #[test]
+    fn test_decode_receipt_with_log_boundary_overflow() {
+        // Build a receipt where the log header claims a smaller payload than actual content.
+        // This tests that decode_log enforces the declared payload boundary.
+        //
+        // Construct a log where: address + topics + data > declared log payload_length
+        // by manually building the RLP.
+
+        let mut receipt_payload = Vec::new();
+        1u8.encode(&mut receipt_payload); // status
+        21_000u64.encode(&mut receipt_payload); // cumulative_gas
+        alloy_primitives::Bloom::ZERO.encode(&mut receipt_payload); // logs_bloom
+
+        // Build a log that claims to be very short but contains full data
+        let mut log_payload = Vec::new();
+        Address::from([0xAA; 20]).encode(&mut log_payload); // address (21 bytes encoded)
+
+        // Topics: empty list
+        alloy_rlp::Header {
+            list: true,
+            payload_length: 0,
+        }
+        .encode(&mut log_payload);
+
+        // Data: 4 bytes
+        alloy_primitives::Bytes::copy_from_slice(&[1, 2, 3, 4]).encode(&mut log_payload);
+
+        // Now build the log header but claim payload is only 10 bytes (less than actual ~28)
+        let mut bad_log = Vec::new();
+        alloy_rlp::Header {
+            list: true,
+            payload_length: 10, // lie about size
+        }
+        .encode(&mut bad_log);
+        bad_log.extend_from_slice(&log_payload);
+
+        // Wrap in logs list
+        let mut logs_list = Vec::new();
+        alloy_rlp::Header {
+            list: true,
+            payload_length: bad_log.len(),
+        }
+        .encode(&mut logs_list);
+        logs_list.extend_from_slice(&bad_log);
+
+        receipt_payload.extend_from_slice(&logs_list);
+
+        let mut receipt = Vec::new();
+        alloy_rlp::Header {
+            list: true,
+            payload_length: receipt_payload.len(),
+        }
+        .encode(&mut receipt);
+        receipt.extend_from_slice(&receipt_payload);
+
+        // This should fail because the log header lies about its payload size
+        assert!(
+            decode_receipt_logs(&receipt).is_err(),
+            "should reject log with mismatched payload length"
+        );
+    }
+
+    #[test]
+    fn test_decode_receipt_trailing_data_in_logs() {
+        // Build a valid receipt, but append extra bytes inside the logs list.
+        // The logs list header declares a payload larger than the actual log entries.
+
+        let mut receipt_payload = Vec::new();
+        1u8.encode(&mut receipt_payload); // status
+        21_000u64.encode(&mut receipt_payload); // cumulative_gas
+        alloy_primitives::Bloom::ZERO.encode(&mut receipt_payload); // logs_bloom
+
+        // An empty logs list would have payload_length=0.
+        // Instead, declare payload_length=5 but have no actual logs — just garbage.
+        let mut logs_list = Vec::new();
+        alloy_rlp::Header {
+            list: true,
+            payload_length: 5,
+        }
+        .encode(&mut logs_list);
+        logs_list.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF, 0x00]); // garbage
+
+        receipt_payload.extend_from_slice(&logs_list);
+
+        let mut receipt = Vec::new();
+        alloy_rlp::Header {
+            list: true,
+            payload_length: receipt_payload.len(),
+        }
+        .encode(&mut receipt);
+        receipt.extend_from_slice(&receipt_payload);
+
+        // Should fail trying to decode the garbage as a log
+        assert!(decode_receipt_logs(&receipt).is_err());
     }
 }
