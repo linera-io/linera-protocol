@@ -187,11 +187,6 @@ where
                 };
                 let entry = error_scores.entry(err.clone()).or_insert(0);
                 *entry += committee.weight(&name);
-                if *entry >= committee.validity_threshold() {
-                    // At least one honest node returned this error.
-                    // No quorum can be reached, so return early.
-                    return Err(CommunicationError::Trusted(err));
-                }
             }
         }
         // If it becomes clear that no key can reach a quorum, break early.
@@ -218,18 +213,18 @@ where
         return Ok((key, values));
     }
 
-    if error_scores.is_empty() {
-        return Err(CommunicationError::NoConsensus(
-            committee.quorum_threshold(),
-            scores,
-        ));
-    }
-
-    // No specific error is available to report reliably.
     let mut sample = error_scores.into_iter().collect::<Vec<_>>();
     sample.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
     sample.truncate(4);
-    Err(CommunicationError::Sample(sample))
+    Err(match sample.as_slice() {
+        [] => CommunicationError::NoConsensus(committee.quorum_threshold(), scores),
+        [(_, score), ..] if *score >= committee.validity_threshold() => {
+            // At least one honest validator returned this error.
+            CommunicationError::Trusted(sample.into_iter().next().unwrap().0)
+        }
+        // Otherwise no specific error is available to report reliably.}
+        _ => CommunicationError::Sample(sample),
+    })
 }
 
 impl<Env> ValidatorUpdater<Env>
