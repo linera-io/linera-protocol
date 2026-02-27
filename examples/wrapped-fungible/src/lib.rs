@@ -4,10 +4,10 @@
 //! ABI and types for a wrapped (bridged) fungible token with Mint/Burn support.
 
 use async_graphql::{Request, Response};
-use linera_sdk::linera_base_types::{AccountOwner, ContractAbi, ServiceAbi};
 pub use linera_sdk::abis::fungible::{
     Account, FungibleOperation, FungibleResponse, InitialState, InitialStateBuilder,
 };
+use linera_sdk::linera_base_types::{AccountOwner, ContractAbi, ServiceAbi};
 use serde::{Deserialize, Serialize};
 
 /// Parameters for a wrapped fungible token backed by an EVM bridge.

@@ -24,9 +24,7 @@ pub struct BridgeParameters {
 }
 
 /// Replay-protection key for processed deposits.
-#[derive(
-    Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize,
-)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct DepositKey {
     pub source_chain_id: u64,
     pub block_hash: [u8; 32],

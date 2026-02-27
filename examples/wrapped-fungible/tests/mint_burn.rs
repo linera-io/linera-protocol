@@ -46,10 +46,12 @@ fn test_params(minter: AccountOwner) -> WrappedParameters {
 
 #[tokio::test]
 async fn test_mint_from_authorized_minter() {
-    let (validator, module_id) =
-        TestValidator::with_current_module::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
-        )
-        .await;
+    let (validator, module_id) = TestValidator::with_current_module::<
+        WrappedFungibleTokenAbi,
+        WrappedParameters,
+        InitialState,
+    >()
+    .await;
     let mut minter_chain = validator.new_chain().await;
     let minter_account = AccountOwner::from(minter_chain.public_key());
 
@@ -84,10 +86,12 @@ async fn test_mint_from_authorized_minter() {
 
 #[tokio::test]
 async fn test_mint_from_unauthorized_signer() {
-    let (validator, module_id) =
-        TestValidator::with_current_module::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
-        )
-        .await;
+    let (validator, module_id) = TestValidator::with_current_module::<
+        WrappedFungibleTokenAbi,
+        WrappedParameters,
+        InitialState,
+    >()
+    .await;
     let mut chain = validator.new_chain().await;
     let chain_owner = AccountOwner::from(chain.public_key());
 
@@ -119,10 +123,12 @@ async fn test_mint_from_unauthorized_signer() {
 
 #[tokio::test]
 async fn test_burn_from_authorized_minter() {
-    let (validator, module_id) =
-        TestValidator::with_current_module::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
-        )
-        .await;
+    let (validator, module_id) = TestValidator::with_current_module::<
+        WrappedFungibleTokenAbi,
+        WrappedParameters,
+        InitialState,
+    >()
+    .await;
     let mut minter_chain = validator.new_chain().await;
     let minter_account = AccountOwner::from(minter_chain.public_key());
 
@@ -156,10 +162,12 @@ async fn test_burn_from_authorized_minter() {
 
 #[tokio::test]
 async fn test_burn_from_unauthorized_signer() {
-    let (validator, module_id) =
-        TestValidator::with_current_module::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
-        )
-        .await;
+    let (validator, module_id) = TestValidator::with_current_module::<
+        WrappedFungibleTokenAbi,
+        WrappedParameters,
+        InitialState,
+    >()
+    .await;
     let mut chain = validator.new_chain().await;
     let chain_owner = AccountOwner::from(chain.public_key());
 
@@ -188,10 +196,12 @@ async fn test_burn_from_unauthorized_signer() {
 
 #[tokio::test]
 async fn test_burn_insufficient_balance() {
-    let (validator, module_id) =
-        TestValidator::with_current_module::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
-        )
-        .await;
+    let (validator, module_id) = TestValidator::with_current_module::<
+        WrappedFungibleTokenAbi,
+        WrappedParameters,
+        InitialState,
+    >()
+    .await;
     let mut minter_chain = validator.new_chain().await;
     let minter_account = AccountOwner::from(minter_chain.public_key());
 
@@ -223,10 +233,12 @@ async fn test_burn_insufficient_balance() {
 
 #[tokio::test]
 async fn test_wrapped_fungible_standard_transfer() {
-    let (validator, module_id) =
-        TestValidator::with_current_module::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
-        )
-        .await;
+    let (validator, module_id) = TestValidator::with_current_module::<
+        WrappedFungibleTokenAbi,
+        WrappedParameters,
+        InitialState,
+    >()
+    .await;
     let mut chain = validator.new_chain().await;
     let owner = AccountOwner::from(chain.public_key());
     let recipient = AccountOwner::Address20([0xCC; 20]);

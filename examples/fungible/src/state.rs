@@ -42,12 +42,7 @@ impl FungibleTokenState {
     }
 
     /// Credits an `account` with the provided `amount`.
-    pub async fn approve(
-        &mut self,
-        owner: AccountOwner,
-        spender: AccountOwner,
-        allowance: Amount,
-    ) {
+    pub async fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, allowance: Amount) {
         if allowance == Amount::ZERO {
             return;
         }
