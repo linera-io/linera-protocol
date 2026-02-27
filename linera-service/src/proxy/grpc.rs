@@ -643,20 +643,22 @@ where
         &self,
         request: Request<PendingBlobRequest>,
     ) -> Result<Response<PendingBlobResult>, Status> {
+        #[cfg(with_metrics)]
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
         #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
         match client.download_pending_blob(inner).await {
             Ok(blob_result) => {
                 #[cfg(with_metrics)]
                 metrics::PROXY_REQUEST_SUCCESS
-                    .with_label_values(&["download_pending_blob"])
+                    .with_label_values(&["download_pending_blob", traffic_type])
                     .inc();
                 Ok(blob_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
                 metrics::PROXY_REQUEST_ERROR
-                    .with_label_values(&["download_pending_blob"])
+                    .with_label_values(&["download_pending_blob", traffic_type])
                     .inc();
                 Err(status)
             }
@@ -668,24 +670,13 @@ where
         &self,
         request: Request<HandlePendingBlobRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
-        #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
-        match client.handle_pending_blob(inner).await {
-            Ok(blob_result) => {
-                #[cfg(with_metrics)]
-                metrics::PROXY_REQUEST_SUCCESS
-                    .with_label_values(&["handle_pending_blob"])
-                    .inc();
-                Ok(blob_result)
-            }
-            Err(status) => {
-                #[cfg(with_metrics)]
-                metrics::PROXY_REQUEST_ERROR
-                    .with_label_values(&["handle_pending_blob"])
-                    .inc();
-                Err(status)
-            }
-        }
+        Self::log_and_return_proxy_request_outcome(
+            client.handle_pending_blob(inner).await,
+            "handle_pending_blob",
+            traffic_type,
+        )
     }
 
     #[instrument(skip_all, err(Display), fields(method = "download_certificate"))]
