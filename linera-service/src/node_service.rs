@@ -902,8 +902,8 @@ where
 mod query_cache_metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::register_int_counter_vec;
-    use prometheus::IntCounterVec;
+    use linera_base::prometheus_util::{register_int_counter_vec, register_int_gauge};
+    use prometheus::{IntCounterVec, IntGauge};
 
     pub static QUERY_CACHE_HIT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec("query_response_cache_hit", "Query response cache hits", &[])
@@ -922,6 +922,13 @@ mod query_cache_metrics {
             "query_response_cache_invalidation",
             "Query response cache invalidations (per chain)",
             &[],
+        )
+    });
+
+    pub static QUERY_CACHE_ENTRIES: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "query_response_cache_entries",
+            "Current number of cached query responses across all chains",
         )
     });
 }
@@ -978,13 +985,21 @@ impl QueryResponseCache {
         let capacity = self.capacity_per_chain;
         let mutex = pinned.get_or_insert_with(chain_id, || StdMutex::new(LruCache::new(capacity)));
         let mut lru = mutex.lock().expect("LRU mutex poisoned");
+        #[cfg(with_metrics)]
+        let prev_len = lru.len();
         lru.put((app_id, request), response);
+        #[cfg(with_metrics)]
+        if lru.len() != prev_len {
+            query_cache_metrics::QUERY_CACHE_ENTRIES.inc();
+        }
     }
 
     fn invalidate_chain(&self, chain_id: &ChainId) {
         let pinned = self.chains.pin();
         if let Some(mutex) = pinned.get(chain_id) {
             let mut lru = mutex.lock().expect("LRU mutex poisoned");
+            #[cfg(with_metrics)]
+            query_cache_metrics::QUERY_CACHE_ENTRIES.sub(lru.len() as i64);
             lru.clear();
             #[cfg(with_metrics)]
             query_cache_metrics::QUERY_CACHE_INVALIDATION
