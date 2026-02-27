@@ -677,7 +677,7 @@ impl Runnable for Job {
                                 }
                                 _ => unreachable!(),
                             }
-                            committee = Committee::new(validators, policy);
+                            committee = Committee::new(validators, policy)?;
                             chain_client
                                 .stage_new_committee(committee)
                                 .await
@@ -2148,7 +2148,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     network_name,
                     admin_public_key,
                     *initial_funding,
-                ),
+                )?,
             )?;
             let admin_chain_description = genesis_config.admin_chain_description();
             let mut chains = vec![(

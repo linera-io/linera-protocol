@@ -751,7 +751,7 @@ mod test {
                 account_public_key: account_key,
             },
         );
-        let committee = Committee::new(validators, ResourceControlPolicy::default());
+        let committee = Committee::new(validators, ResourceControlPolicy::default())?;
         let committee_bytes = bcs::to_bytes(&committee)?;
         let committee_blob = Blob::new(BlobContent::new_committee(committee_bytes));
         let committee_blob_hash = CryptoHash::new(committee_blob.content());
@@ -862,7 +862,7 @@ mod test {
                 account_public_key: account_key,
             },
         );
-        let committee = Committee::new(validators, ResourceControlPolicy::default());
+        let committee = Committee::new(validators, ResourceControlPolicy::default())?;
         let committee_bytes = bcs::to_bytes(&committee)?;
         let committee_blob = Blob::new(BlobContent::new_committee(committee_bytes.clone()));
         let committee_blob_hash = CryptoHash::new(committee_blob.content());

@@ -7,8 +7,8 @@ use std::iter::IntoIterator;
 use linera_base::{
     crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
-        Amount, Blob, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, NetworkDescription,
-        Timestamp,
+        Amount, ArithmeticError, Blob, ChainDescription, ChainOrigin, Epoch, InitialChainConfig,
+        NetworkDescription, Timestamp,
     },
     identifiers::ChainId,
     ownership::ChainOwnership,
@@ -59,7 +59,10 @@ pub struct CommitteeConfig {
 }
 
 impl CommitteeConfig {
-    pub fn into_committee(self, policy: ResourceControlPolicy) -> Committee {
+    pub fn into_committee(
+        self,
+        policy: ResourceControlPolicy,
+    ) -> Result<Committee, ArithmeticError> {
         let validators = self
             .validators
             .into_iter()
@@ -115,15 +118,15 @@ impl GenesisConfig {
         network_name: String,
         admin_public_key: AccountPublicKey,
         admin_balance: Amount,
-    ) -> Self {
-        let committee = committee.into_committee(policy);
+    ) -> Result<Self, ArithmeticError> {
+        let committee = committee.into_committee(policy)?;
         let admin_chain = make_chain(0, admin_public_key, admin_balance, timestamp);
-        Self {
+        Ok(Self {
             committee,
             timestamp,
             chains: vec![admin_chain],
             network_name,
-        }
+        })
     }
 
     pub fn add_root_chain(
@@ -247,7 +250,8 @@ mod test {
                 "test network".to_string(),
                 admin_public_key,
                 admin_balance,
-            );
+            )
+            .expect("test committee votes should not overflow");
             for (public_key, amount) in genesis_chains {
                 genesis_config.add_root_chain(public_key, amount);
             }

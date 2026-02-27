@@ -277,7 +277,7 @@ impl Add {
                         },
                     );
 
-                    committee = Committee::new(validators, policy);
+                    committee = Committee::new(validators, policy)?;
                     chain_client
                         .stage_new_committee(committee)
                         .await
@@ -560,7 +560,7 @@ impl Update {
                     }
 
                     // Create new committee
-                    committee = Committee::new(validators, policy);
+                    committee = Committee::new(validators, policy)?;
                     chain_client
                         .stage_new_committee(committee)
                         .await
@@ -714,7 +714,7 @@ impl Remove {
                         return Ok(ClientOutcome::Committed(None));
                     }
 
-                    committee = Committee::new(validators, policy);
+                    committee = Committee::new(validators, policy)?;
                     chain_client
                         .stage_new_committee(committee)
                         .await

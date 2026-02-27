@@ -7,7 +7,10 @@
 
 use std::collections::BTreeMap;
 
-use linera_base::{crypto::ValidatorPublicKey, data_types::ChainDescription};
+use linera_base::{
+    crypto::ValidatorPublicKey,
+    data_types::{ArithmeticError, ChainDescription},
+};
 use linera_client::config::GenesisConfig;
 use linera_execution::{committee::ValidatorState, Committee, ResourceControlPolicy};
 use linera_version::VersionInfo;
@@ -22,6 +25,8 @@ pub enum ErrorInner {
     GraphQl(Vec<serde_json::Value>),
     #[error("HTTP error: {0:?}")]
     Http(#[from] reqwest::Error),
+    #[error(transparent)]
+    ArithmeticError(#[from] ArithmeticError),
 }
 
 thiserror_context::impl_context!(Error(ErrorInner));
@@ -185,6 +190,6 @@ impl Faucet {
         Ok(Committee::new(
             committee_response.validators,
             committee_response.policy,
-        ))
+        )?)
     }
 }

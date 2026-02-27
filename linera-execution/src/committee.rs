@@ -5,7 +5,10 @@
 use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 use allocative::Allocative;
-use linera_base::crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey};
+use linera_base::{
+    crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey},
+    data_types::ArithmeticError,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::policy::ResourceControlPolicy;
@@ -98,7 +101,7 @@ impl<'de> Deserialize<'de> for Committee {
             Committee::try_from(committee_full).map_err(serde::de::Error::custom)
         } else {
             let committee_minimal = CommitteeMinimal::deserialize(deserializer)?;
-            Ok(Committee::from(committee_minimal))
+            Committee::try_from(committee_minimal).map_err(serde::de::Error::custom)
         }
     }
 }
@@ -131,7 +134,8 @@ impl TryFrom<CommitteeFull<'static>> for Committee {
             validity_threshold,
             policy,
         } = committee_full;
-        let committee = Committee::new(validators.into_owned(), policy.into_owned());
+        let committee = Committee::new(validators.into_owned(), policy.into_owned())
+            .map_err(|e| e.to_string())?;
         if total_votes != committee.total_votes {
             Err(format!(
                 "invalid committee: total_votes is {}; should be {}",
@@ -172,8 +176,10 @@ impl<'a> From<&'a Committee> for CommitteeFull<'a> {
     }
 }
 
-impl From<CommitteeMinimal<'static>> for Committee {
-    fn from(committee_min: CommitteeMinimal) -> Committee {
+impl TryFrom<CommitteeMinimal<'static>> for Committee {
+    type Error = ArithmeticError;
+
+    fn try_from(committee_min: CommitteeMinimal) -> Result<Committee, ArithmeticError> {
         let CommitteeMinimal { validators, policy } = committee_min;
         Committee::new(validators.into_owned(), policy.into_owned())
     }
@@ -219,22 +225,30 @@ impl Committee {
     pub fn new(
         validators: BTreeMap<ValidatorPublicKey, ValidatorState>,
         policy: ResourceControlPolicy,
-    ) -> Self {
-        let total_votes = validators.values().fold(0, |sum, state| sum + state.votes);
+    ) -> Result<Self, ArithmeticError> {
+        let mut total_votes: u64 = 0;
+        for state in validators.values() {
+            total_votes = total_votes
+                .checked_add(state.votes)
+                .ok_or(ArithmeticError::Overflow)?;
+        }
         // The validity threshold is f + 1, where f is maximal so that it is less than a third.
         // So the threshold is N / 3, rounded up.
         let validity_threshold = total_votes.div_ceil(3);
         // The quorum threshold is minimal such that any two quorums intersect in at least one
         // validity threshold.
-        let quorum_threshold = (total_votes + validity_threshold).div_ceil(2);
+        let quorum_threshold = total_votes
+            .checked_add(validity_threshold)
+            .ok_or(ArithmeticError::Overflow)?
+            .div_ceil(2);
 
-        Committee {
+        Ok(Committee {
             validators,
             total_votes,
             quorum_threshold,
             validity_threshold,
             policy,
-        }
+        })
     }
 
     #[cfg(with_testing)]
@@ -253,6 +267,7 @@ impl Committee {
             })
             .collect();
         Committee::new(map, ResourceControlPolicy::default())
+            .expect("test committee votes should not overflow")
     }
 
     pub fn weight(&self, author: &ValidatorPublicKey) -> u64 {
