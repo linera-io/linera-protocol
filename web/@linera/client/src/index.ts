@@ -1,4 +1,5 @@
 export * from './wasm/index.js';
+export * from './error/index.js';
 export * as signer from './signer/index.js';
 export type { Signer } from './signer/Signer.js';
 

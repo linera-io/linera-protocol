@@ -5,9 +5,9 @@ use wasm_bindgen::{prelude::wasm_bindgen, JsError, JsValue};
 
 use crate::lock;
 
-#[wasm_bindgen(module = "/src/error/index.ts")]
+#[wasm_bindgen(raw_module = "../error/index.js")]
 extern "C" {
-    type LockError;
+    pub type LockError;
 
     #[wasm_bindgen(constructor)]
     fn new(message: String) -> LockError;
@@ -31,6 +31,7 @@ impl<E: std::error::Error> From<E> for Error {
 }
 
 impl Error {
+    #[must_use]
     pub fn new(message: &str) -> Self {
         Self::Other(JsError::new(message))
     }
