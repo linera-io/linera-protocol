@@ -225,6 +225,33 @@ pub struct ChainListener<C: ClientContext> {
 }
 
 impl<C: ClientContext + 'static> ChainListener<C> {
+    async fn make_chain_client_from_context(
+        context: &Arc<Mutex<C>>,
+        chain_id: ChainId,
+    ) -> Result<ContextChainClient<C>, Error> {
+        let (client, timing_sender) = {
+            let guard = context.lock().await;
+            (guard.client().clone(), guard.timing_sender())
+        };
+        let chain = client
+            .wallet()
+            .get(chain_id)
+            .make_sync()
+            .await
+            .map_err(error::Inner::wallet)?
+            .unwrap_or_default();
+        let follow_only = chain.is_follow_only();
+        Ok(client.create_chain_client(
+            chain_id,
+            chain.block_hash,
+            chain.next_block_height,
+            chain.pending_proposal,
+            chain.owner,
+            timing_sender,
+            follow_only,
+        ))
+    }
+
     /// Creates a new chain listener given client chains.
     pub fn new(
         config: ChainListenerConfig,
@@ -250,14 +277,16 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     #[instrument(skip(self))]
     pub async fn run(mut self) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
-            let guard = self.context.lock().await;
-            let admin_chain_id = guard.admin_chain_id();
-            guard
-                .make_chain_client(admin_chain_id)
+            let client = {
+                let guard = self.context.lock().await;
+                guard.client().clone()
+            };
+            let admin_chain_id = client.admin_chain_id();
+            Self::make_chain_client_from_context(&self.context, admin_chain_id)
                 .await?
                 .synchronize_chain_state(admin_chain_id)
                 .await?;
-            let mut chain_ids: BTreeMap<_, _> = guard
+            let mut chain_ids: BTreeMap<_, _> = client
                 .wallet()
                 .items()
                 .collect::<Vec<_>>()
@@ -459,7 +488,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         cancellation_token: CancellationToken,
     ) -> Result<(), Error> {
         info!("Starting background certificate sync for chain {chain_id}");
-        let client = context.lock().await.make_chain_client(chain_id).await?;
+        let client = Self::make_chain_client_from_context(&context, chain_id).await?;
 
         Ok(client
             .find_received_certificates(Some(cancellation_token))
@@ -490,12 +519,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
         // Start background tasks to sync received certificates, if enabled.
         let maybe_sync_cancellation_token = self.start_background_sync(chain_id).await;
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await?;
+        let client = Self::make_chain_client_from_context(&self.context, chain_id).await?;
         let (listener, abort_handle, notification_stream) = client.listen().await?;
         let join_handle = linera_base::task::spawn(listener.in_current_span());
         let listening_client = ListeningClient::new(

@@ -2,12 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io, mem, net::SocketAddr, pin::pin, sync::Arc};
+use std::{collections::HashMap, io, mem, net::SocketAddr, pin::pin};
 
 use async_trait::async_trait;
 use futures::{
     future,
-    stream::{self, FuturesUnordered, SplitSink, SplitStream},
+    stream::{self, FuturesUnordered, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
 use linera_core::{JoinSetExt as _, TaskHandle};
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{
     io::AsyncWriteExt,
     net::{lookup_host, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
-    sync::Mutex,
+    sync::mpsc,
     task::JoinSet,
 };
 use tokio_util::{codec::Framed, sync::CancellationToken, udp::UdpFramed};
@@ -203,14 +203,14 @@ impl ConnectionPool for UdpConnectionPool {
 /// Server implementation for UDP.
 pub struct UdpServer<State> {
     handler: State,
-    udp_sink: SharedUdpSink,
+    udp_sender: UdpReplySender,
     udp_stream: SplitStream<UdpFramed<Codec>>,
     active_handlers: HashMap<SocketAddr, TaskHandle<()>>,
     join_set: JoinSet<()>,
 }
 
-/// Type alias for the outgoing endpoint of UDP messages.
-type SharedUdpSink = Arc<Mutex<SplitSink<UdpFramed<Codec>, (RpcMessage, SocketAddr)>>>;
+/// Type alias for scheduling UDP replies to be sent by the writer task.
+type UdpReplySender = mpsc::UnboundedSender<(RpcMessage, SocketAddr)>;
 
 impl<State> UdpServer<State>
 where
@@ -243,14 +243,24 @@ where
     /// provided `handler`.
     async fn bind(address: impl ToSocketAddrs, handler: State) -> Result<Self, std::io::Error> {
         let socket = UdpSocket::bind(address).await?;
-        let (udp_sink, udp_stream) = UdpFramed::new(socket, Codec).split();
+        let (mut udp_sink, udp_stream) = UdpFramed::new(socket, Codec).split();
+        let (udp_sender, mut udp_receiver) = mpsc::unbounded_channel();
+        let mut join_set = JoinSet::new();
+
+        join_set.spawn_task(async move {
+            while let Some((reply, peer)) = udp_receiver.recv().await {
+                if let Err(error) = udp_sink.send((reply, peer)).await {
+                    error!("Failed to send query response: {}", error);
+                }
+            }
+        });
 
         Ok(UdpServer {
             handler,
-            udp_sink: Arc::new(Mutex::new(udp_sink)),
+            udp_sender,
             udp_stream,
             active_handlers: HashMap::new(),
-            join_set: JoinSet::new(),
+            join_set,
         })
     }
 
@@ -258,7 +268,7 @@ where
     fn handle_message(&mut self, message: RpcMessage, peer: SocketAddr) {
         let previous_task = self.active_handlers.remove(&peer);
         let mut state = self.handler.clone();
-        let udp_sink = self.udp_sink.clone();
+        let udp_sender = self.udp_sender.clone();
 
         let new_task = self.join_set.spawn_task(async move {
             if let Some(reply) = state.handle_message(message).await {
@@ -267,8 +277,7 @@ where
                         warn!("Message handler task panicked: {}", error);
                     }
                 }
-                let status = udp_sink.lock().await.send((reply, peer)).await;
-                if let Err(error) = status {
+                if let Err(error) = udp_sender.send((reply, peer)) {
                     error!("Failed to send query response: {}", error);
                 }
             }
@@ -308,6 +317,10 @@ where
                 warn!("Message handler panicked: {}", error);
             }
         }
+
+        // Close reply channel so the UDP writer task can exit cleanly.
+        let (replacement_sender, _receiver) = mpsc::unbounded_channel();
+        drop(mem::replace(&mut self.udp_sender, replacement_sender));
 
         self.join_set.await_all_tasks().await;
     }
