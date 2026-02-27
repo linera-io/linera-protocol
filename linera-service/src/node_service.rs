@@ -1052,8 +1052,8 @@ where
     /// Creates a new instance of the node service given a client chain and a port.
     ///
     /// `query_cache_size` controls the per-chain LRU cache capacity for application query
-    /// responses. Pass `None` to disable the cache entirely (e.g. when using
-    /// `--long-lived-services` or `--no-query-cache`).
+    /// responses. Pass `None` to disable the cache (the default). Enable with
+    /// `--query-cache-size <N>`. Incompatible with `--long-lived-services`.
     pub fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,

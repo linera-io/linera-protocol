@@ -740,10 +740,7 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
   Default value: `5`
 * `--read-only` — Run in read-only mode: disallow mutations and prevent queries from scheduling operations. Use this when exposing the service to untrusted clients
-* `--no-query-cache` — Disable the application query response cache. The cache is also automatically disabled when `--long-lived-services` is enabled
-* `--query-cache-size <QUERY_CACHE_SIZE>` — Maximum number of cached query responses per chain. Each entry stores a serialized GraphQL response keyed by (application_id, request_bytes)
-
-  Default value: `1000`
+* `--query-cache-size <QUERY_CACHE_SIZE>` — Enable the application query response cache with the given per-chain capacity. Each entry stores a serialized GraphQL response keyed by (application_id, request_bytes). Incompatible with `--long-lived-services`
 
 
 

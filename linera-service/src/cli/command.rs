@@ -785,15 +785,11 @@ pub enum ClientCommand {
         #[arg(long)]
         read_only: bool,
 
-        /// Disable the application query response cache. The cache is also automatically
-        /// disabled when `--long-lived-services` is enabled.
+        /// Enable the application query response cache with the given per-chain capacity.
+        /// Each entry stores a serialized GraphQL response keyed by
+        /// (application_id, request_bytes). Incompatible with `--long-lived-services`.
         #[arg(long)]
-        no_query_cache: bool,
-
-        /// Maximum number of cached query responses per chain. Each entry stores a
-        /// serialized GraphQL response keyed by (application_id, request_bytes).
-        #[arg(long, default_value = "1000")]
-        query_cache_size: usize,
+        query_cache_size: Option<usize>,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.
