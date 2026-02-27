@@ -147,10 +147,9 @@ impl EvmBridgeContract {
             .expect("failed to insert deposit key");
 
         // 6. Convert deposit fields to Linera types and call Mint
-        let target_chain_id = ChainId::try_from(deposit.target_chain_id.as_slice())
-            .expect("invalid target chain ID");
-        let target_owner =
-            AccountOwner::Address32(deposit.target_account_owner.0.into());
+        let target_chain_id =
+            ChainId::try_from(deposit.target_chain_id.as_slice()).expect("invalid target chain ID");
+        let target_owner = AccountOwner::Address32(deposit.target_account_owner.0.into());
         let amount_u128: u128 = deposit
             .amount
             .try_into()

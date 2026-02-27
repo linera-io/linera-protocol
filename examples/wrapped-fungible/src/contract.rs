@@ -116,13 +116,9 @@ impl Contract for WrappedFungibleTokenContract {
             FungibleOperation::Mint {
                 target_account,
                 amount,
-            } => {
-                self.execute_mint(target_account, amount).await
-            }
+            } => self.execute_mint(target_account, amount).await,
 
-            FungibleOperation::Burn { owner, amount } => {
-                self.execute_burn(owner, amount).await
-            }
+            FungibleOperation::Burn { owner, amount } => self.execute_burn(owner, amount).await,
         }
     }
 
@@ -176,11 +172,7 @@ impl WrappedFungibleTokenContract {
     }
 
     /// Mints tokens to a target account (local or remote).
-    async fn execute_mint(
-        &mut self,
-        target_account: Account,
-        amount: Amount,
-    ) -> FungibleResponse {
+    async fn execute_mint(&mut self, target_account: Account, amount: Amount) -> FungibleResponse {
         let signer = self.require_minter();
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;
@@ -205,12 +197,7 @@ impl WrappedFungibleTokenContract {
         FungibleResponse::Ok
     }
 
-    async fn claim(
-        &mut self,
-        source_account: Account,
-        amount: Amount,
-        target_account: Account,
-    ) {
+    async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {
         if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await;
             self.finish_transfer_to_account(amount, target_account, source_account.owner)

@@ -10,7 +10,9 @@ use evm_bridge::{BridgeOperation, BridgeParameters, EvmBridgeAbi};
 use fungible::{InitialState, InitialStateBuilder};
 use linera_bridge::proof::{
     deposit_event_signature,
-    testing::{build_deposit_event_data, build_receipt_trie, build_test_header, build_test_receipt},
+    testing::{
+        build_deposit_event_data, build_receipt_trie, build_test_header, build_test_receipt,
+    },
     ReceiptLog,
 };
 use linera_sdk::{
