@@ -24,8 +24,20 @@ offchain = [
     "dep:tokio",
     "dep:url",
 ]
-codegen = ["offchain", "dep:serde-generate", "dep:serde-reflection", "dep:serde_yaml"]
-cli = ["offchain", "dep:clap", "dep:reqwest", "dep:serde_json", "dep:serde", "dep:fs-err"]
+codegen = [
+    "offchain",
+    "dep:serde-generate",
+    "dep:serde-reflection",
+    "dep:serde_yaml",
+]
+cli = [
+    "offchain",
+    "dep:clap",
+    "dep:reqwest",
+    "dep:serde_json",
+    "dep:serde",
+    "dep:fs-err",
+]
 
 [lints]
 workspace = true

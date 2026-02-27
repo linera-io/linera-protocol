@@ -343,11 +343,11 @@ matching-engine = { path = "./examples/matching-engine" }
 meta-counter = { path = "./linera-sdk/tests/fixtures/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
-wrapped-fungible = { path = "./examples/wrapped-fungible" }
 publish-read-data-blob = { path = "./linera-sdk/tests/fixtures/publish-read-data-blob" }
 social = { path = "./examples/social" }
 task-processor = { path = "./examples/task-processor" }
 time-expiry = { path = "./examples/time-expiry" }
+wrapped-fungible = { path = "./examples/wrapped-fungible" }
 
 [workspace.dependencies.aws-config]
 default-features = false

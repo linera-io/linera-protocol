@@ -62,11 +62,11 @@ tokenizers = { git = "https://github.com/christos-h/tokenizers", default-feature
 ] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
-evm-bridge = { path = "./evm-bridge" }
 amm = { path = "./amm" }
 counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
 ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
+evm-bridge = { path = "./evm-bridge" }
 fungible = { path = "./fungible" }
 matching-engine = { path = "./matching-engine" }
 native-fungible = { path = "./native-fungible" }
