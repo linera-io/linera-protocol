@@ -33,7 +33,7 @@ use linera_core::{
     client::chain_client::{self, ChainClient},
     data_types::ClientOutcome,
     wallet::Wallet as _,
-    worker::Notification,
+    worker::{ChainStateViewReadGuard, Notification},
 };
 use linera_execution::{
     committee::Committee, system::AdminOperation, Operation, Query, QueryOutcome, QueryResponse,
@@ -42,9 +42,10 @@ use linera_execution::{
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
 use linera_sdk::linera_base_types::BlobContent;
+use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tokio::sync::{mpsc::UnboundedReceiver, OwnedRwLockReadGuard};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info, instrument, trace};
@@ -657,10 +658,8 @@ where
     async fn chain(
         &self,
         chain_id: ChainId,
-    ) -> Result<
-        ChainStateExtendedView<<C::Environment as linera_core::Environment>::StorageContext>,
-        Error,
-    > {
+    ) -> Result<ChainStateExtendedView<<C::Environment as linera_core::Environment>::Storage>, Error>
+    {
         let client = self
             .context
             .lock()
@@ -798,20 +797,15 @@ impl ChainStateViewExtension {
 }
 
 #[derive(MergedObject)]
-struct ChainStateExtendedView<C>(ChainStateViewExtension, ReadOnlyChainStateView<C>)
-where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static,
-    C::Extra: linera_execution::ExecutionRuntimeContext;
+struct ChainStateExtendedView<S: Storage>(ChainStateViewExtension, ReadOnlyChainStateView<S>);
 
-/// A wrapper type that allows proxying GraphQL queries to a [`ChainStateView`] that's behind an
-/// [`OwnedRwLockReadGuard`].
-pub struct ReadOnlyChainStateView<C>(OwnedRwLockReadGuard<ChainStateView<C>>)
-where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static;
+/// A wrapper type that allows proxying GraphQL queries to a [`ChainStateView`] that's behind
+/// a read guard.
+pub struct ReadOnlyChainStateView<S: Storage>(ChainStateViewReadGuard<S>);
 
-impl<C> ContainerType for ReadOnlyChainStateView<C>
+impl<S: Storage> ContainerType for ReadOnlyChainStateView<S>
 where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static,
+    ChainStateView<S::Context>: ContainerType,
 {
     async fn resolve_field(
         &self,
@@ -821,16 +815,16 @@ where
     }
 }
 
-impl<C> OutputType for ReadOnlyChainStateView<C>
+impl<S: Storage> OutputType for ReadOnlyChainStateView<S>
 where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static,
+    ChainStateView<S::Context>: OutputType,
 {
     fn type_name() -> Cow<'static, str> {
-        ChainStateView::<C>::type_name()
+        ChainStateView::<S::Context>::type_name()
     }
 
     fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
-        ChainStateView::<C>::create_type_info(registry)
+        ChainStateView::<S::Context>::create_type_info(registry)
     }
 
     async fn resolve(
@@ -842,12 +836,8 @@ where
     }
 }
 
-impl<C> ChainStateExtendedView<C>
-where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static,
-    C::Extra: linera_execution::ExecutionRuntimeContext,
-{
-    fn new(view: OwnedRwLockReadGuard<ChainStateView<C>>) -> Self {
+impl<S: Storage> ChainStateExtendedView<S> {
+    fn new(view: ChainStateViewReadGuard<S>) -> Self {
         Self(
             ChainStateViewExtension(view.chain_id()),
             ReadOnlyChainStateView(view),

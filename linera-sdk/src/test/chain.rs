@@ -96,10 +96,7 @@ impl ActiveChain {
 
     /// Returns the current [`Epoch`] the chain is in.
     pub async fn epoch(&self) -> Epoch {
-        *self
-            .validator
-            .worker()
-            .chain_state_view(self.id())
+        *Box::pin(self.validator.worker().chain_state_view(self.id()))
             .await
             .expect("Failed to load chain")
             .execution_state
@@ -128,10 +125,7 @@ impl ActiveChain {
 
     /// Reads the current account balance on this microchain of an [`AccountOwner`].
     pub async fn owner_balance(&self, owner: &AccountOwner) -> Option<Amount> {
-        let chain_state = self
-            .validator
-            .worker()
-            .chain_state_view(self.id())
+        let chain_state = Box::pin(self.validator.worker().chain_state_view(self.id()))
             .await
             .expect("Failed to read chain state");
 
@@ -149,10 +143,7 @@ impl ActiveChain {
         &self,
         owners: impl IntoIterator<Item = AccountOwner>,
     ) -> HashMap<AccountOwner, Option<Amount>> {
-        let chain_state = self
-            .validator
-            .worker()
-            .chain_state_view(self.id())
+        let chain_state = Box::pin(self.validator.worker().chain_state_view(self.id()))
             .await
             .expect("Failed to read chain state");
 
@@ -175,10 +166,7 @@ impl ActiveChain {
 
     /// Reads a list of [`AccountOwner`]s that have a non-zero balance on this microchain.
     pub async fn accounts(&self) -> Vec<AccountOwner> {
-        let chain_state = self
-            .validator
-            .worker()
-            .chain_state_view(self.id())
+        let chain_state = Box::pin(self.validator.worker().chain_state_view(self.id()))
             .await
             .expect("Failed to read chain state");
 
@@ -267,7 +255,7 @@ impl ActiveChain {
         let mut block = BlockBuilder::new(
             self.description.id(),
             self.key_pair.public().into(),
-            self.epoch().await,
+            Box::pin(self.epoch()).await,
             tip.as_ref(),
             self.validator.clone(),
         );
@@ -321,11 +309,10 @@ impl ActiveChain {
         if messages.is_empty() {
             return None;
         }
-        let result = self
-            .add_block(|block| {
-                block.with_incoming_bundles(messages);
-            })
-            .await;
+        let result = Box::pin(self.add_block(|block| {
+            block.with_incoming_bundles(messages);
+        }))
+        .await;
         Some(result)
     }
 
@@ -337,8 +324,7 @@ impl ActiveChain {
     pub async fn handle_new_events(&self) -> (ConfirmedBlockCertificate, ResourceTracker) {
         let chain_id = self.id();
         let worker = self.validator.worker();
-        let subscription_map = worker
-            .chain_state_view(chain_id)
+        let subscription_map = Box::pin(worker.chain_state_view(chain_id))
             .await
             .expect("Failed to query chain state view")
             .execution_state
@@ -353,8 +339,7 @@ impl ActiveChain {
             .map(|((chain_id, stream_id), subscriptions)| {
                 let worker = worker.clone();
                 async move {
-                    worker
-                        .chain_state_view(chain_id)
+                    Box::pin(worker.chain_state_view(chain_id))
                         .await
                         .expect("Failed to query chain state view")
                         .execution_state
@@ -374,9 +359,9 @@ impl ActiveChain {
             .collect::<Vec<_>>();
         assert!(!updates.is_empty(), "No new events to process");
 
-        self.add_block(|block| {
+        Box::pin(self.add_block(|block| {
             block.with_system_operation(SystemOperation::UpdateStreams(updates));
-        })
+        }))
         .await
     }
 
@@ -388,7 +373,7 @@ impl ActiveChain {
     pub async fn publish_current_module<Abi, Parameters, InstantiationArgument>(
         &self,
     ) -> ModuleId<Abi, Parameters, InstantiationArgument> {
-        self.publish_bytecode_files_in(".").await
+        Box::pin(self.publish_bytecode_files_in(".")).await
     }
 
     /// Publishes the bytecode files in the crate at `repository_path`.
@@ -413,14 +398,13 @@ impl ActiveChain {
 
         let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, vm_runtime);
 
-        let (certificate, _) = self
-            .add_block_with_blobs(
-                |block| {
-                    block.with_system_operation(SystemOperation::PublishModule { module_id });
-                },
-                vec![contract_blob, service_blob],
-            )
-            .await;
+        let (certificate, _) = Box::pin(self.add_block_with_blobs(
+            |block| {
+                block.with_system_operation(SystemOperation::PublishModule { module_id });
+            },
+            vec![contract_blob, service_blob],
+        ))
+        .await;
 
         let block = certificate.inner().block();
         assert_eq!(block.messages().len(), 1);
@@ -564,16 +548,15 @@ impl ActiveChain {
         let parameters = serde_json::to_vec(&parameters).unwrap();
         let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
 
-        let (creation_certificate, _) = self
-            .add_block(|block| {
-                block.with_system_operation(SystemOperation::CreateApplication {
-                    module_id: module_id.forget_abi(),
-                    parameters: parameters.clone(),
-                    instantiation_argument,
-                    required_application_ids: required_application_ids.clone(),
-                });
-            })
-            .await;
+        let (creation_certificate, _) = Box::pin(self.add_block(|block| {
+            block.with_system_operation(SystemOperation::CreateApplication {
+                module_id: module_id.forget_abi(),
+                parameters: parameters.clone(),
+                instantiation_argument,
+                required_application_ids: required_application_ids.clone(),
+            });
+        }))
+        .await;
 
         let block = creation_certificate.inner().block();
         assert_eq!(block.messages().len(), 1);
@@ -592,10 +575,7 @@ impl ActiveChain {
 
     /// Returns whether this chain has been closed.
     pub async fn is_closed(&self) -> bool {
-        let chain = self
-            .validator
-            .worker()
-            .chain_state_view(self.id())
+        let chain = Box::pin(self.validator.worker().chain_state_view(self.id()))
             .await
             .expect("Failed to load chain");
         *chain.execution_state.system.closed.get()
@@ -739,23 +719,22 @@ impl ActiveChain {
     {
         let QueryOutcome { operations, .. } = self.try_graphql_query(application_id, query).await?;
 
-        let (certificate, _) = self
-            .try_add_block(|block| {
-                for operation in operations {
-                    match operation {
-                        Operation::User {
-                            application_id,
-                            bytes,
-                        } => {
-                            block.with_raw_operation(application_id, bytes);
-                        }
-                        Operation::System(system_operation) => {
-                            block.with_system_operation(*system_operation);
-                        }
+        let (certificate, _) = Box::pin(self.try_add_block(|block| {
+            for operation in operations {
+                match operation {
+                    Operation::User {
+                        application_id,
+                        bytes,
+                    } => {
+                        block.with_raw_operation(application_id, bytes);
+                    }
+                    Operation::System(system_operation) => {
+                        block.with_system_operation(*system_operation);
                     }
                 }
-            })
-            .await?;
+            }
+        }))
+        .await?;
 
         Ok(certificate)
     }

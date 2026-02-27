@@ -31,25 +31,28 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    system::{EpochEventData, EPOCH_STREAM_NAME},
+    system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
     Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
 use linera_views::{
     context::{Context, InactiveContext},
-    views::{ClonableView, ReplaceContext as _, RootView as _, View as _},
+    views::{ReplaceContext as _, RootView as _, View as _},
 };
-use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
+use tokio::sync::oneshot;
 use tracing::{debug, instrument, trace, warn};
 
-use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult};
+use super::{ChainWorkerConfig, DeliveryNotifier};
 use crate::{
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
     worker::{NetworkActions, Notification, Reason, WorkerError},
 };
+
+/// Type alias for event subscriptions result.
+pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -70,12 +73,11 @@ mod metrics {
 /// The state of the chain worker.
 pub(crate) struct ChainWorkerState<StorageClient>
 where
-    StorageClient: Storage + Clone + 'static,
+    StorageClient: Storage,
 {
     config: ChainWorkerConfig,
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
-    shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
@@ -100,7 +102,7 @@ where
         chain_id = %chain_id
     ))]
     #[expect(clippy::too_many_arguments)]
-    pub(super) async fn load(
+    pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
@@ -116,7 +118,6 @@ where
             config,
             storage,
             chain,
-            shared_chain_view: None,
             service_runtime_endpoint,
             block_values,
             execution_state_cache,
@@ -131,209 +132,29 @@ where
         self.chain.chain_id()
     }
 
-    /// Handles a request and applies it to the chain state.
-    #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
-    pub(super) async fn handle_request(
-        &mut self,
-        request: ChainWorkerRequest<StorageClient::Context>,
-    ) {
-        tracing::trace!("Handling chain worker request: {request:?}");
-        // TODO(#2237): Spawn concurrent tasks for read-only operations
-        let responded = match request {
-            #[cfg(with_testing)]
-            ChainWorkerRequest::ReadCertificate { height, callback } => {
-                callback.send(self.read_certificate(height).await).is_ok()
-            }
-            ChainWorkerRequest::GetChainStateView { callback } => {
-                callback.send(self.chain_state_view().await).is_ok()
-            }
-            ChainWorkerRequest::QueryApplication {
-                query,
-                block_hash,
-                callback,
-            } => callback
-                .send(self.query_application(query, block_hash).await)
-                .is_ok(),
-            ChainWorkerRequest::DescribeApplication {
-                application_id,
-                callback,
-            } => callback
-                .send(self.describe_application(application_id).await)
-                .is_ok(),
-            ChainWorkerRequest::StageBlockExecution {
-                block,
-                round,
-                published_blobs,
-                callback,
-            } => callback
-                .send(
-                    self.stage_block_execution(block, round, &published_blobs)
-                        .await,
-                )
-                .is_ok(),
-            ChainWorkerRequest::StageBlockExecutionWithPolicy {
-                block,
-                round,
-                published_blobs,
-                policy,
-                callback,
-            } => {
-                let result = self
-                    .stage_block_execution_with_policy(block, round, &published_blobs, policy)
-                    .await;
-                callback.send(result).is_ok()
-            }
-            ChainWorkerRequest::ProcessTimeout {
-                certificate,
-                callback,
-            } => callback
-                .send(self.process_timeout(certificate).await)
-                .is_ok(),
-            ChainWorkerRequest::HandleBlockProposal { proposal, callback } => callback
-                .send(self.handle_block_proposal(proposal).await)
-                .is_ok(),
-            ChainWorkerRequest::ProcessValidatedBlock {
-                certificate,
-                callback,
-            } => callback
-                .send(self.process_validated_block(certificate).await)
-                .is_ok(),
-            ChainWorkerRequest::ProcessConfirmedBlock {
-                certificate,
-                notify_when_messages_are_delivered,
-                callback,
-            } => callback
-                .send(
-                    self.process_confirmed_block(certificate, notify_when_messages_are_delivered)
-                        .await,
-                )
-                .is_ok(),
-            ChainWorkerRequest::ProcessCrossChainUpdate {
-                origin,
-                bundles,
-                callback,
-            } => callback
-                .send(self.process_cross_chain_update(origin, bundles).await)
-                .is_ok(),
-            ChainWorkerRequest::ConfirmUpdatedRecipient {
-                recipient,
-                latest_height,
-                callback,
-            } => callback
-                .send(
-                    self.confirm_updated_recipient(recipient, latest_height)
-                        .await,
-                )
-                .is_ok(),
-            ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
-                .send(self.handle_chain_info_query(query).await)
-                .is_ok(),
-            ChainWorkerRequest::DownloadPendingBlob { blob_id, callback } => callback
-                .send(self.download_pending_blob(blob_id).await)
-                .is_ok(),
-            ChainWorkerRequest::HandlePendingBlob { blob, callback } => {
-                callback.send(self.handle_pending_blob(blob).await).is_ok()
-            }
-            ChainWorkerRequest::UpdateReceivedCertificateTrackers {
-                new_trackers,
-                callback,
-            } => callback
-                .send(
-                    self.update_received_certificate_trackers(new_trackers)
-                        .await,
-                )
-                .is_ok(),
-            ChainWorkerRequest::GetPreprocessedBlockHashes {
-                start,
-                end,
-                callback,
-            } => callback
-                .send(self.get_preprocessed_block_hashes(start, end).await)
-                .is_ok(),
-            ChainWorkerRequest::GetInboxNextHeight { origin, callback } => callback
-                .send(self.get_inbox_next_height(origin).await)
-                .is_ok(),
-            ChainWorkerRequest::GetLockingBlobs { blob_ids, callback } => callback
-                .send(self.get_locking_blobs(blob_ids).await)
-                .is_ok(),
-            ChainWorkerRequest::GetBlockHashes { heights, callback } => {
-                callback.send(self.get_block_hashes(heights).await).is_ok()
-            }
-            ChainWorkerRequest::GetProposedBlobs { blob_ids, callback } => callback
-                .send(self.get_proposed_blobs(blob_ids).await)
-                .is_ok(),
-            ChainWorkerRequest::GetEventSubscriptions { callback } => {
-                callback.send(self.get_event_subscriptions().await).is_ok()
-            }
-            ChainWorkerRequest::GetNextExpectedEvent {
-                stream_id,
-                callback,
-            } => callback
-                .send(self.get_next_expected_event(stream_id).await)
-                .is_ok(),
-            ChainWorkerRequest::GetReceivedCertificateTrackers { callback } => callback
-                .send(self.get_received_certificate_trackers().await)
-                .is_ok(),
-            ChainWorkerRequest::GetTipStateAndOutboxInfo {
-                receiver_id,
-                callback,
-            } => callback
-                .send(self.get_tip_state_and_outbox_info(receiver_id).await)
-                .is_ok(),
-            ChainWorkerRequest::GetNextHeightToPreprocess { callback } => callback
-                .send(self.get_next_height_to_preprocess().await)
-                .is_ok(),
-        };
+    /// Returns a reference to the chain state view.
+    pub(crate) fn chain(&self) -> &ChainStateView<StorageClient::Context> {
+        &self.chain
+    }
 
-        if !responded {
-            debug!("Callback for `ChainWorkerActor` was dropped before a response was sent");
-        }
+    /// Returns whether this chain is known to be active (initialized).
+    pub(crate) fn knows_chain_is_active(&self) -> bool {
+        self.knows_chain_is_active
+    }
 
-        // Roll back any unsaved changes to the chain state: If there was an error while trying
-        // to handle the request, the chain state might contain unsaved and potentially invalid
-        // changes. The next request needs to be applied to the chain state as it is in storage.
+    /// Rolls back any uncommitted changes to the chain state.
+    pub(crate) fn rollback(&mut self) {
         self.chain.rollback();
     }
 
-    /// Returns a read-only view of the [`ChainStateView`].
-    ///
-    /// The returned view holds a lock on the chain state, which prevents the worker from changing
-    /// it.
-    async fn chain_state_view(
-        &mut self,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
-        if self.shared_chain_view.is_none() {
-            self.shared_chain_view = Some(Arc::new(RwLock::new(self.chain.clone_unchecked()?)));
-        }
-
-        Ok(self
-            .shared_chain_view
-            .as_ref()
-            .expect("`shared_chain_view` should be initialized above")
-            .clone()
-            .read_owned()
-            .await)
-    }
-
-    /// Clears the shared chain view, and acquires and drops its write lock.
-    ///
-    /// This is the only place a write lock is acquired, and read locks are acquired in
-    /// the `chain_state_view` method, which has a `&mut self` receiver like this one.
-    /// That means that when this function returns, no readers will be waiting to acquire
-    /// the lock and it is safe to write the chain state to storage without any readers
-    /// having a stale view of it.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id()
-    ))]
-    pub(super) async fn clear_shared_chain_view(&mut self) {
-        if let Some(shared_chain_view) = self.shared_chain_view.take() {
-            let _: RwLockWriteGuard<_> = shared_chain_view.write().await;
-        }
+    /// Drops the service runtime endpoint, signaling the runtime task to stop.
+    pub(crate) fn clear_service_runtime_endpoint(&mut self) {
+        self.service_runtime_endpoint.take();
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn handle_chain_info_query(
+    pub(crate) async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -359,7 +180,7 @@ where
         chain_id = %self.chain_id(),
         blob_id = %blob_id
     ))]
-    async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
+    pub(crate) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
             return Ok(blob);
         }
@@ -634,7 +455,7 @@ where
         chain_id = %self.chain_id(),
         height = %certificate.inner().height()
     ))]
-    async fn process_timeout(
+    pub(crate) async fn process_timeout(
         &mut self,
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -724,7 +545,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %certificate.block().header.height
     ))]
-    async fn process_validated_block(
+    pub(crate) async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
@@ -798,7 +619,7 @@ where
         height = %certificate.block().header.height,
         block_hash = %certificate.hash(),
     ))]
-    async fn process_confirmed_block(
+    pub(crate) async fn process_confirmed_block(
         &mut self,
         certificate: ConfirmedBlockCertificate,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
@@ -1045,7 +866,7 @@ where
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     #[instrument(level = "trace", skip(self, bundles))]
-    async fn process_cross_chain_update(
+    pub(crate) async fn process_cross_chain_update(
         &mut self,
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
@@ -1098,7 +919,7 @@ where
         recipient = %recipient,
         latest_height = %latest_height
     ))]
-    async fn confirm_updated_recipient(
+    pub(crate) async fn confirm_updated_recipient(
         &mut self,
         recipient: ChainId,
         latest_height: BlockHeight,
@@ -1124,7 +945,7 @@ where
         chain_id = %self.chain_id(),
         num_trackers = %new_trackers.len()
     ))]
-    async fn update_received_certificate_trackers(
+    pub(crate) async fn update_received_certificate_trackers(
         &mut self,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
@@ -1140,7 +961,7 @@ where
         start = %start,
         end = %end
     ))]
-    async fn get_preprocessed_block_hashes(
+    pub(crate) async fn get_preprocessed_block_hashes(
         &self,
         start: BlockHeight,
         end: BlockHeight,
@@ -1162,7 +983,10 @@ where
         chain_id = %self.chain_id(),
         origin = %origin
     ))]
-    async fn get_inbox_next_height(&self, origin: ChainId) -> Result<BlockHeight, WorkerError> {
+    pub(crate) async fn get_inbox_next_height(
+        &self,
+        origin: ChainId,
+    ) -> Result<BlockHeight, WorkerError> {
         Ok(match self.chain.inboxes.try_load_entry(&origin).await? {
             Some(inbox) => inbox.next_block_height_to_receive()?,
             None => BlockHeight::ZERO,
@@ -1175,7 +999,7 @@ where
         chain_id = %self.chain_id(),
         num_blob_ids = %blob_ids.len()
     ))]
-    async fn get_locking_blobs(
+    pub(crate) async fn get_locking_blobs(
         &self,
         blob_ids: Vec<BlobId>,
     ) -> Result<Option<Vec<Blob>>, WorkerError> {
@@ -1189,7 +1013,7 @@ where
     }
 
     /// Gets block hashes for specified heights.
-    async fn get_block_hashes(
+    pub(crate) async fn get_block_hashes(
         &self,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
@@ -1197,7 +1021,10 @@ where
     }
 
     /// Gets proposed blobs from the manager for specified blob IDs.
-    async fn get_proposed_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<Blob>, WorkerError> {
+    pub(crate) async fn get_proposed_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<Vec<Blob>, WorkerError> {
         let results = self
             .chain
             .manager
@@ -1219,7 +1046,9 @@ where
     }
 
     /// Gets event subscriptions.
-    async fn get_event_subscriptions(&self) -> Result<EventSubscriptionsResult, WorkerError> {
+    pub(crate) async fn get_event_subscriptions(
+        &self,
+    ) -> Result<EventSubscriptionsResult, WorkerError> {
         Ok(self
             .chain
             .execution_state
@@ -1230,7 +1059,7 @@ where
     }
 
     /// Gets the next expected event index for a stream.
-    async fn get_next_expected_event(
+    pub(crate) async fn get_next_expected_event(
         &self,
         stream_id: StreamId,
     ) -> Result<Option<u32>, WorkerError> {
@@ -1238,14 +1067,14 @@ where
     }
 
     /// Gets received certificate trackers.
-    async fn get_received_certificate_trackers(
+    pub(crate) async fn get_received_certificate_trackers(
         &self,
     ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
         Ok(self.chain.received_certificate_trackers.get().clone())
     }
 
     /// Gets tip state and outbox info for next_outbox_heights calculation.
-    async fn get_tip_state_and_outbox_info(
+    pub(crate) async fn get_tip_state_and_outbox_info(
         &self,
         receiver_id: ChainId,
     ) -> Result<(BlockHeight, Option<BlockHeight>), WorkerError> {
@@ -1260,7 +1089,7 @@ where
     }
 
     /// Gets the next height to preprocess.
-    async fn get_next_height_to_preprocess(&self) -> Result<BlockHeight, WorkerError> {
+    pub(crate) async fn get_next_height_to_preprocess(&self) -> Result<BlockHeight, WorkerError> {
         Ok(self.chain.next_height_to_preprocess().await?)
     }
 
@@ -1346,7 +1175,10 @@ where
         chain_id = %self.chain_id(),
         blob_id = %blob.id()
     ))]
-    async fn handle_pending_blob(&mut self, blob: Blob) -> Result<ChainInfoResponse, WorkerError> {
+    pub(crate) async fn handle_pending_blob(
+        &mut self,
+        blob: Blob,
+    ) -> Result<ChainInfoResponse, WorkerError> {
         let mut was_expected = self
             .chain
             .pending_validated_blobs
@@ -1378,16 +1210,18 @@ where
     }
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
+    ///
+    /// Does not need `&mut self` because the chain is eagerly initialized when the
+    /// chain handle is created.
     #[cfg(with_testing)]
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         height = %height
     ))]
-    async fn read_certificate(
-        &mut self,
+    pub(crate) async fn read_certificate(
+        &self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        self.initialize_and_save_if_needed().await?;
         let certificate_hash = match self.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -1405,72 +1239,77 @@ where
         chain_id = %self.chain_id(),
         query_application_id = %query.application_id()
     ))]
-    pub(super) async fn query_application(
+    pub(crate) async fn query_application(
         &mut self,
         query: Query,
         block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
-        if let Some(requested_block) = block_hash {
-            if let Some(mut state) = self.execution_state_cache.remove(&requested_block) {
-                // We try to use a cached execution state for the requested block.
-                // We want to pretend that this block is committed, so we set the next block height.
-                let next_block_height = self
-                    .chain
-                    .tip_state
-                    .get()
-                    .next_block_height
-                    .try_add_one()
-                    .expect("block height to not overflow");
-                let context = QueryContext {
-                    chain_id: self.chain_id(),
-                    next_block_height,
-                    local_time,
-                };
-                let outcome = state
-                    .with_context(|ctx| {
-                        self.chain
-                            .execution_state
-                            .context()
-                            .clone_with_base_key(ctx.base_key().bytes.clone())
-                    })
-                    .await
-                    .query_application(context, query, self.service_runtime_endpoint.as_mut())
-                    .await
-                    .with_execution_context(ChainExecutionContext::Query)?;
-                self.execution_state_cache
-                    .insert_owned(&requested_block, state);
-                Ok(outcome)
-            } else {
-                tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
-                let outcome = self
-                    .chain
-                    .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
-                    .await?;
-                Ok(outcome)
-            }
+        // Try to use a cached execution state for the requested block.
+        // We want to pretend that this block is committed, so we set the next block height.
+        let cached_state =
+            block_hash.and_then(|h| self.execution_state_cache.remove(&h).map(|s| (h, s)));
+        if let Some((requested_block, mut state)) = cached_state {
+            let next_block_height = self
+                .chain
+                .tip_state
+                .get()
+                .next_block_height
+                .try_add_one()
+                .expect("block height to not overflow");
+            let context = QueryContext {
+                chain_id: self.chain_id(),
+                next_block_height,
+                local_time,
+            };
+            let outcome = state
+                .with_context(|ctx| {
+                    self.chain
+                        .execution_state
+                        .context()
+                        .clone_with_base_key(ctx.base_key().bytes.clone())
+                })
+                .await
+                .query_application(context, query, self.service_runtime_endpoint.as_mut())
+                .await
+                .with_execution_context(ChainExecutionContext::Query)?;
+            self.execution_state_cache
+                .insert_owned(&requested_block, state);
+            Ok(outcome)
         } else {
-            let outcome = self
+            if block_hash.is_some() {
+                tracing::debug!(
+                    "requested block hash not found in cache, querying committed state"
+                );
+            }
+            Ok(self
                 .chain
                 .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
-                .await?;
-            Ok(outcome)
+                .await?)
         }
     }
 
-    /// Returns an application's description.
+    /// Returns an application's description by reading the blob directly from storage.
+    ///
+    /// Does not track blob usage (which requires `&mut self`), making it safe for
+    /// concurrent reads. Blob tracking is only relevant during block execution and is
+    /// always rolled back for read-only queries.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         application_id = %application_id
     ))]
-    async fn describe_application(
-        &mut self,
+    pub(crate) async fn describe_application_readonly(
+        &self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        self.initialize_and_save_if_needed().await?;
-        let response = self.chain.describe_application(application_id).await?;
-        Ok(response)
+        let blob_id = application_id.description_blob_id();
+        let blob = self
+            .storage
+            .read_blob(blob_id)
+            .await?
+            .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))?;
+        Ok(bcs::from_bytes(blob.bytes())?)
     }
 
     /// Executes a block without persisting any changes to the state.
@@ -1478,7 +1317,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
-    async fn stage_block_execution(
+    pub(crate) async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
         round: Option<u32>,
@@ -1504,7 +1343,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
-    async fn stage_block_execution_with_policy(
+    pub(crate) async fn stage_block_execution_with_policy(
         &mut self,
         block: ProposedBlock,
         round: Option<u32>,
@@ -1543,7 +1382,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %proposal.content.block.height
     ))]
-    async fn handle_block_proposal(
+    pub(crate) async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -1643,9 +1482,9 @@ where
                 block_time_grace_period: self.config.block_time_grace_period,
             });
         }
-        // Note: The actor delays processing proposals with future timestamps (within the grace
-        // period) so that other requests can be handled in the meantime. By the time we reach
-        // here, the block timestamp should be in the past or very close to the current time.
+        // Note: WorkerState::handle_block_proposal delays processing proposals with future
+        // timestamps (within the grace period) before acquiring the chain lock. By the time
+        // we reach here, the block timestamp should be in the past or very close to current time.
 
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
@@ -1813,7 +1652,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
-    async fn initialize_and_save_if_needed(&mut self) -> Result<(), WorkerError> {
+    pub(crate) async fn initialize_and_save_if_needed(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
             let local_time = self.storage.clock().current_time();
             self.chain.initialize_if_needed(local_time).await?;
@@ -1823,18 +1662,15 @@ where
         Ok(())
     }
 
-    fn chain_info_response(&self) -> ChainInfoResponse {
+    pub(crate) fn chain_info_response(&self) -> ChainInfoResponse {
         ChainInfoResponse::new(&self.chain, self.config.key_pair())
     }
 
     /// Stores the chain state in persistent storage.
-    ///
-    /// Waits until the [`ChainStateView`] is no longer shared before persisting the changes.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
-        self.clear_shared_chain_view().await;
         self.chain.save().await?;
         Ok(())
     }

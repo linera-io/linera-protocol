@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
+
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::{
     stream::{self, FuturesUnordered},

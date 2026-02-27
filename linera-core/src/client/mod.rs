@@ -53,7 +53,7 @@ use crate::{
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
     worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
-    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+    ChainWorkerConfig, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
 pub mod chain_client;
@@ -265,18 +265,22 @@ impl<Env: Environment> Client<Env> {
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
         let chain_modes = Arc::new(RwLock::new(chain_modes.into_iter().collect()));
-        let state = WorkerState::new_for_client(
-            name.into(),
-            environment.storage().clone(),
-            chain_modes.clone(),
+        let config = ChainWorkerConfig {
+            nickname: name.into(),
+            long_lived_services,
+            allow_inactive_chains: true,
+            allow_messages_from_deprecated_epochs: true,
+            ttl: chain_worker_ttl,
+            sender_chain_ttl: sender_chain_worker_ttl,
             block_cache_size,
             execution_state_cache_size,
-        )
-        .with_long_lived_services(long_lived_services)
-        .with_allow_inactive_chains(true)
-        .with_allow_messages_from_deprecated_epochs(true)
-        .with_chain_worker_ttl(chain_worker_ttl)
-        .with_sender_chain_worker_ttl(sender_chain_worker_ttl);
+            ..ChainWorkerConfig::default()
+        };
+        let state = WorkerState::new(
+            environment.storage().clone(),
+            config,
+            Some(chain_modes.clone()),
+        );
         let local_node = LocalNodeClient::new(state);
         let requests_scheduler = RequestsScheduler::new(vec![], requests_scheduler_config);
 
