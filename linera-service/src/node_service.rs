@@ -1,7 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, future::IntoFuture, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{
+    borrow::Cow,
+    future::IntoFuture,
+    iter,
+    net::SocketAddr,
+    num::NonZeroU16,
+    sync::{Arc, Mutex as StdMutex},
+};
 
 use async_graphql::{
     futures_util::Stream, resolver_utils::ContainerType, EmptyMutation, Error, MergedObject,
@@ -33,7 +40,7 @@ use linera_core::{
     client::{ChainClient, ChainClientError},
     data_types::ClientOutcome,
     wallet::Wallet as _,
-    worker::Notification,
+    worker::{Notification, Reason},
 };
 use linera_execution::{
     committee::Committee, system::AdminOperation, Operation, Query, QueryOutcome, QueryResponse,
@@ -42,6 +49,7 @@ use linera_execution::{
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
 use linera_sdk::linera_base_types::BlobContent;
+use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::{mpsc::UnboundedReceiver, OwnedRwLockReadGuard};
@@ -890,6 +898,102 @@ where
     }
 }
 
+#[cfg(with_metrics)]
+mod query_cache_metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::register_int_counter_vec;
+    use prometheus::IntCounterVec;
+
+    pub static QUERY_CACHE_HIT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec("query_response_cache_hit", "Query response cache hits", &[])
+    });
+
+    pub static QUERY_CACHE_MISS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "query_response_cache_miss",
+            "Query response cache misses",
+            &[],
+        )
+    });
+
+    pub static QUERY_CACHE_INVALIDATION: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "query_response_cache_invalidation",
+            "Query response cache invalidations (per chain)",
+            &[],
+        )
+    });
+}
+
+type PerChainLruCache = StdMutex<LruCache<(ApplicationId, Vec<u8>), Vec<u8>>>;
+
+/// An LRU cache for application query responses, keyed per chain.
+///
+/// Caches serialized response bytes keyed on `(chain_id, application_id, request_bytes)`.
+/// The entire per-chain cache is invalidated when a `NewBlock` notification arrives.
+struct QueryResponseCache {
+    chains: papaya::HashMap<ChainId, PerChainLruCache>,
+    capacity_per_chain: std::num::NonZeroUsize,
+}
+
+impl QueryResponseCache {
+    fn new(capacity_per_chain: usize) -> Self {
+        Self {
+            chains: papaya::HashMap::new(),
+            capacity_per_chain: std::num::NonZeroUsize::new(capacity_per_chain)
+                .expect("capacity must be > 0"),
+        }
+    }
+
+    fn get(&self, chain_id: ChainId, app_id: &ApplicationId, request: &[u8]) -> Option<Vec<u8>> {
+        let pinned = self.chains.pin();
+        let mutex = pinned.get(&chain_id)?;
+        let mut lru = mutex.lock().expect("LRU mutex poisoned");
+        let key = (*app_id, request.to_vec());
+        let result = lru.get(&key).cloned();
+        #[cfg(with_metrics)]
+        {
+            if result.is_some() {
+                query_cache_metrics::QUERY_CACHE_HIT
+                    .with_label_values(&[])
+                    .inc();
+            } else {
+                query_cache_metrics::QUERY_CACHE_MISS
+                    .with_label_values(&[])
+                    .inc();
+            }
+        }
+        result
+    }
+
+    fn insert(
+        &self,
+        chain_id: ChainId,
+        app_id: ApplicationId,
+        request: Vec<u8>,
+        response: Vec<u8>,
+    ) {
+        let pinned = self.chains.pin();
+        let capacity = self.capacity_per_chain;
+        let mutex = pinned.get_or_insert_with(chain_id, || StdMutex::new(LruCache::new(capacity)));
+        let mut lru = mutex.lock().expect("LRU mutex poisoned");
+        lru.put((app_id, request), response);
+    }
+
+    fn invalidate_chain(&self, chain_id: &ChainId) {
+        let pinned = self.chains.pin();
+        if let Some(mutex) = pinned.get(chain_id) {
+            let mut lru = mutex.lock().expect("LRU mutex poisoned");
+            lru.clear();
+            #[cfg(with_metrics)]
+            query_cache_metrics::QUERY_CACHE_INVALIDATION
+                .with_label_values(&[])
+                .inc();
+        }
+    }
+}
+
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<C>
@@ -904,6 +1008,8 @@ where
     context: Arc<Mutex<C>>,
     /// If true, disallow mutations and prevent queries from scheduling operations.
     read_only: bool,
+    /// Optional LRU cache for application query responses. `None` when caching is disabled.
+    query_cache: Option<Arc<QueryResponseCache>>,
 }
 
 impl<C> Clone for NodeService<C>
@@ -919,6 +1025,7 @@ where
             default_chain: self.default_chain,
             context: Arc::clone(&self.context),
             read_only: self.read_only,
+            query_cache: self.query_cache.clone(),
         }
     }
 }
@@ -928,6 +1035,10 @@ where
     C: ClientContext,
 {
     /// Creates a new instance of the node service given a client chain and a port.
+    ///
+    /// `query_cache_size` controls the per-chain LRU cache capacity for application query
+    /// responses. Pass `None` to disable the cache entirely (e.g. when using
+    /// `--long-lived-services` or `--no-query-cache`).
     pub fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,
@@ -935,7 +1046,9 @@ where
         default_chain: Option<ChainId>,
         context: Arc<Mutex<C>>,
         read_only: bool,
+        query_cache_size: Option<usize>,
     ) -> Self {
+        let query_cache = query_cache_size.map(|size| Arc::new(QueryResponseCache::new(size)));
         Self {
             config,
             port,
@@ -944,6 +1057,7 @@ where
             default_chain,
             context,
             read_only,
+            query_cache,
         }
     }
 
@@ -1016,6 +1130,22 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
+        // Spawn the cache invalidation listener if caching is enabled.
+        if let Some(cache) = &self.query_cache {
+            let guard = self.context.lock().await;
+            let chain_ids: Vec<ChainId> = guard.wallet().chain_ids().try_collect().await?;
+            let mut receiver = guard.client().subscribe(chain_ids);
+            drop(guard);
+            let cache = Arc::clone(cache);
+            tokio::spawn(async move {
+                while let Some(notification) = receiver.recv().await {
+                    if matches!(notification.reason, Reason::NewBlock { .. }) {
+                        cache.invalidate_chain(&notification.chain_id);
+                    }
+                }
+            });
+        }
+
         let storage = self.context.lock().await.storage().clone();
 
         let chain_listener = ChainListener::new(
@@ -1050,13 +1180,28 @@ where
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
     ) -> Result<Vec<u8>, NodeServiceError> {
+        // Only cache queries against the latest state (block_hash == None).
+        if block_hash.is_none() {
+            if let Some(cache) = &self.query_cache {
+                if let Some(cached) = cache.get(chain_id, &application_id, &request) {
+                    return Ok(cached);
+                }
+            }
+        }
+
         let QueryOutcome {
             response,
             operations,
         } = self
-            .query_user_application(application_id, request, chain_id, block_hash)
+            .query_user_application(application_id, request.clone(), chain_id, block_hash)
             .await?;
         if operations.is_empty() {
+            // Cache read-only responses against the latest state.
+            if block_hash.is_none() {
+                if let Some(cache) = &self.query_cache {
+                    cache.insert(chain_id, application_id, request, response.clone());
+                }
+            }
             return Ok(response);
         }
 
@@ -1157,5 +1302,85 @@ where
             .await?;
 
         Ok(response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        crypto::CryptoHash,
+        identifiers::{ApplicationId, ChainId},
+    };
+
+    use super::QueryResponseCache;
+
+    fn test_chain(n: u64) -> ChainId {
+        ChainId(CryptoHash::test_hash(format!("chain-{n}")))
+    }
+
+    fn test_app(n: u64) -> ApplicationId {
+        ApplicationId::new(CryptoHash::test_hash(format!("app-{n}")))
+    }
+
+    #[test]
+    fn cache_hit_and_miss() {
+        let cache = QueryResponseCache::new(100);
+        let chain = test_chain(0);
+        let app = test_app(0);
+        let request = b"query { balance }".to_vec();
+        let response = b"{ \"balance\": 42 }".to_vec();
+
+        // Miss before insert.
+        assert!(cache.get(chain, &app, &request).is_none());
+
+        // Hit after insert.
+        cache.insert(chain, app, request.clone(), response.clone());
+        assert_eq!(cache.get(chain, &app, &request), Some(response));
+    }
+
+    #[test]
+    fn per_chain_isolation() {
+        let cache = QueryResponseCache::new(100);
+        let chain_a = test_chain(0);
+        let chain_b = test_chain(1);
+        let app = test_app(0);
+        let request = b"q".to_vec();
+        let response = b"r".to_vec();
+
+        cache.insert(chain_a, app, request.clone(), response.clone());
+
+        // Invalidating chain B must not affect chain A.
+        cache.invalidate_chain(&chain_b);
+        assert_eq!(cache.get(chain_a, &app, &request), Some(response));
+    }
+
+    #[test]
+    fn invalidation_clears_all_entries() {
+        let cache = QueryResponseCache::new(100);
+        let chain = test_chain(0);
+        let app = test_app(0);
+
+        cache.insert(chain, app, b"q1".to_vec(), b"r1".to_vec());
+        cache.insert(chain, app, b"q2".to_vec(), b"r2".to_vec());
+
+        cache.invalidate_chain(&chain);
+        assert!(cache.get(chain, &app, b"q1").is_none());
+        assert!(cache.get(chain, &app, b"q2").is_none());
+    }
+
+    #[test]
+    fn lru_eviction() {
+        let cache = QueryResponseCache::new(2);
+        let chain = test_chain(0);
+        let app = test_app(0);
+
+        cache.insert(chain, app, b"q1".to_vec(), b"r1".to_vec());
+        cache.insert(chain, app, b"q2".to_vec(), b"r2".to_vec());
+        // Third insert evicts q1 (least recently used).
+        cache.insert(chain, app, b"q3".to_vec(), b"r3".to_vec());
+
+        assert!(cache.get(chain, &app, b"q1").is_none());
+        assert!(cache.get(chain, &app, b"q2").is_some());
+        assert!(cache.get(chain, &app, b"q3").is_some());
     }
 }

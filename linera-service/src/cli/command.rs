@@ -784,6 +784,16 @@ pub enum ClientCommand {
         /// operations. Use this when exposing the service to untrusted clients.
         #[arg(long)]
         read_only: bool,
+
+        /// Disable the application query response cache. The cache is also automatically
+        /// disabled when `--long-lived-services` is enabled.
+        #[arg(long)]
+        no_query_cache: bool,
+
+        /// Maximum number of cached query responses per chain. Each entry stores a
+        /// serialized GraphQL response keyed by (application_id, request_bytes).
+        #[arg(long, default_value = "1000")]
+        query_cache_size: usize,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.
