@@ -24,7 +24,7 @@ use futures::{
 use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
     crypto::{CryptoHash, Secp256k1SecretKey},
-    data_types::{Amount, ApplicationPermissions},
+    data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     time::{Duration, Instant},
     vm::VmRuntime,
@@ -4701,17 +4701,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
     service_client.assign(service_owner, service_chain).await?;
-    // Service chain block 0: allow the controller application to change ownership
-    service_client
-        .change_application_permissions(
-            service_chain,
-            ApplicationPermissions {
-                close_chain: vec![controller_id.forget_abi()],
-                ..Default::default()
-            },
-        )
-        .await
-        .expect("changing application permissions should succeed");
 
     let admin_port = get_node_port().await;
     let mut admin_node_service = admin_client
@@ -4762,11 +4751,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             port2,
             ProcessInbox::Automatic,
             &controller_id.forget_abi(),
-            &operators,
+            &[],
         )
         .await?;
-
-    let mut notifications2 = node_service2.notifications(worker2_chain).await?;
 
     // Same as above: instead of waiting for the notification on worker2_chain, wait for
     // the notification about reception of the registration on admin chain.
@@ -4782,7 +4769,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let worker = state
         .local_worker
         .expect("Worker 2 should be registered after block notification");
-    assert_eq!(worker.capabilities.len(), 1);
+    assert!(worker.capabilities.is_empty());
     assert_ne!(
         worker2_chain, admin_chain,
         "Worker 2 should be on a different chain than admin"
@@ -4842,8 +4829,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             panic!("should receive a notification about a block on chain {admin_chain}")
         });
 
-    // Worker 1 chain block 1: receive service assignment and start the service
-    // (Block 0 is worker registration.)
+    // Worker 1 chain block 1: receive service assignment
     notifications1
         .wait_for_block(BlockHeight::from(1))
         .await
@@ -4876,17 +4862,15 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         .mutate(r#"requestTask(operator: "ls", input: "")"#)
         .await?;
 
-    // Service chain block 1: RequestTask
     service_notifications
-        .wait_for_block(BlockHeight::from(1))
+        .wait_for_block(BlockHeight::from(0))
         .await
         .unwrap_or_else(|_| {
             panic!("should get notification about RequestTask block on chain {service_chain}")
         });
 
-    // Service chain block 2: StoreResult
     service_notifications
-        .wait_for_block(BlockHeight::from(2))
+        .wait_for_block(BlockHeight::from(1))
         .await
         .unwrap_or_else(|_| {
             panic!("should get notification about StoreResult block on chain {service_chain}")
@@ -4895,10 +4879,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let task_count: u64 = task_app.query_json("taskCount").await?;
     assert_eq!(task_count, 1, "Task should have been processed");
 
-    // Move the service to the second worker.
     let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
-        admin_owner, service_id, worker2_chain
+        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [] }} }})",
+        admin_owner, service_id
     );
     admin_app.mutate(&mutation).await?;
 
@@ -4910,21 +4893,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             panic!("should receive a notification about a block on chain {admin_chain}")
         });
 
-    // Worker 1 chain block 2: receive a `Stop` message. This will send `AddOwners` to the
-    // service chain
+    // Worker 1 chain block 2: receive service removal
     notifications1
         .wait_for_block(BlockHeight::from(2))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should get notification about a block on chain {worker1_chain}")
-        });
-
-    // Service chain block 3: handle `AddOwners`, respond with `OwnersAdded` to worker 1
-
-    // Worker 1 chain block 3: receive `OwnersAdded`, tell the controller that handoff has
-    // started
-    notifications1
-        .wait_for_block(BlockHeight::from(3))
         .await
         .unwrap_or_else(|_| {
             panic!("should get notification about a block on chain {worker1_chain}")
@@ -4936,55 +4907,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         state.local_services.is_empty(),
         "Service should be removed after block notification"
     );
-
-    // Worker 2 block 1: reception of a `Start` message. This will add the service to
-    // `local_pending_services`, which will trigger an operation `StartLocalService` after
-    // the service chain is synced.
-    notifications2
-        .wait_for_block(BlockHeight::from(1))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should get notification about a block on chain {worker2_chain}")
-        });
-
-    // Worker 2 block 2: the node service executes a `StartLocalService` operation. This
-    // sends `RemoveOwners` to the service chain.
-    notifications2
-        .wait_for_block(BlockHeight::from(2))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should get notification about a block on chain {worker2_chain}")
-        });
-
-    // Service chain block 4: removal of old owners
-
-    // We start listening to notifications on the service chain via the service client's node
-    // service.
-    let mut service_notifications = service_service.notifications(service_chain).await?;
-
-    // Check that the service can still be processed by the second worker.
-    service_task_app
-        .mutate(r#"requestTask(operator: "ls", input: "")"#)
-        .await?;
-
-    // Service chain block 5: RequestTask
-    service_notifications
-        .wait_for_block(BlockHeight::from(5))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should get notification about RequestTask block on chain {service_chain}")
-        });
-
-    // Service chain block 6: StoreResult
-    service_notifications
-        .wait_for_block(BlockHeight::from(6))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should get notification about StoreResult block on chain {service_chain}")
-        });
-
-    let task_count: u64 = service_task_app.query_json("taskCount").await?;
-    assert_eq!(task_count, 2, "Task should have been processed");
 
     node_service1.ensure_is_running()?;
     node_service1.terminate().await?;
