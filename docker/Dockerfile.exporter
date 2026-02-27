@@ -67,7 +67,6 @@ COPY linera-views-derive linera-views-derive
 COPY web web
 COPY linera-witty linera-witty
 COPY linera-witty-macros linera-witty-macros
-COPY linera-bridge linera-bridge
 COPY scripts scripts
 COPY rust-toolchain* Cargo.* ./
 
