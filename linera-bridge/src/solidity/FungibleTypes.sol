@@ -17,6 +17,10 @@ library FungibleTypes {
         FungibleOperation_TransferFrom transfer_from;
         // choice=5 corresponds to Claim
         FungibleOperation_Claim claim;
+        // choice=6 corresponds to Mint
+        FungibleOperation_Mint mint;
+        // choice=7 corresponds to Burn
+        FungibleOperation_Burn burn;
     }
 
     function FungibleOperation_case_balance(FungibleOperation_Balance memory balance_)
@@ -28,7 +32,9 @@ library FungibleTypes {
         FungibleOperation_Transfer memory transfer_;
         FungibleOperation_TransferFrom memory transfer_from;
         FungibleOperation_Claim memory claim;
-        return FungibleOperation(uint8(0), balance_, approve, transfer_, transfer_from, claim);
+        FungibleOperation_Mint memory mint;
+        FungibleOperation_Burn memory burn;
+        return FungibleOperation(uint8(0), balance_, approve, transfer_, transfer_from, claim, mint, burn);
     }
 
     function FungibleOperation_case_ticker_symbol()
@@ -41,7 +47,9 @@ library FungibleTypes {
         FungibleOperation_Transfer memory transfer_;
         FungibleOperation_TransferFrom memory transfer_from;
         FungibleOperation_Claim memory claim;
-        return FungibleOperation(uint8(1), balance_, approve, transfer_, transfer_from, claim);
+        FungibleOperation_Mint memory mint;
+        FungibleOperation_Burn memory burn;
+        return FungibleOperation(uint8(1), balance_, approve, transfer_, transfer_from, claim, mint, burn);
     }
 
     function FungibleOperation_case_approve(FungibleOperation_Approve memory approve)
@@ -53,7 +61,9 @@ library FungibleTypes {
         FungibleOperation_Transfer memory transfer_;
         FungibleOperation_TransferFrom memory transfer_from;
         FungibleOperation_Claim memory claim;
-        return FungibleOperation(uint8(2), balance_, approve, transfer_, transfer_from, claim);
+        FungibleOperation_Mint memory mint;
+        FungibleOperation_Burn memory burn;
+        return FungibleOperation(uint8(2), balance_, approve, transfer_, transfer_from, claim, mint, burn);
     }
 
     function FungibleOperation_case_transfer(FungibleOperation_Transfer memory transfer_)
@@ -65,7 +75,9 @@ library FungibleTypes {
         FungibleOperation_Approve memory approve;
         FungibleOperation_TransferFrom memory transfer_from;
         FungibleOperation_Claim memory claim;
-        return FungibleOperation(uint8(3), balance_, approve, transfer_, transfer_from, claim);
+        FungibleOperation_Mint memory mint;
+        FungibleOperation_Burn memory burn;
+        return FungibleOperation(uint8(3), balance_, approve, transfer_, transfer_from, claim, mint, burn);
     }
 
     function FungibleOperation_case_transfer_from(FungibleOperation_TransferFrom memory transfer_from)
@@ -77,7 +89,9 @@ library FungibleTypes {
         FungibleOperation_Approve memory approve;
         FungibleOperation_Transfer memory transfer_;
         FungibleOperation_Claim memory claim;
-        return FungibleOperation(uint8(4), balance_, approve, transfer_, transfer_from, claim);
+        FungibleOperation_Mint memory mint;
+        FungibleOperation_Burn memory burn;
+        return FungibleOperation(uint8(4), balance_, approve, transfer_, transfer_from, claim, mint, burn);
     }
 
     function FungibleOperation_case_claim(FungibleOperation_Claim memory claim)
@@ -89,7 +103,37 @@ library FungibleTypes {
         FungibleOperation_Approve memory approve;
         FungibleOperation_Transfer memory transfer_;
         FungibleOperation_TransferFrom memory transfer_from;
-        return FungibleOperation(uint8(5), balance_, approve, transfer_, transfer_from, claim);
+        FungibleOperation_Mint memory mint;
+        FungibleOperation_Burn memory burn;
+        return FungibleOperation(uint8(5), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+    }
+
+    function FungibleOperation_case_mint(FungibleOperation_Mint memory mint)
+        internal
+        pure
+        returns (FungibleOperation memory)
+    {
+        FungibleOperation_Balance memory balance_;
+        FungibleOperation_Approve memory approve;
+        FungibleOperation_Transfer memory transfer_;
+        FungibleOperation_TransferFrom memory transfer_from;
+        FungibleOperation_Claim memory claim;
+        FungibleOperation_Burn memory burn;
+        return FungibleOperation(uint8(6), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+    }
+
+    function FungibleOperation_case_burn(FungibleOperation_Burn memory burn)
+        internal
+        pure
+        returns (FungibleOperation memory)
+    {
+        FungibleOperation_Balance memory balance_;
+        FungibleOperation_Approve memory approve;
+        FungibleOperation_Transfer memory transfer_;
+        FungibleOperation_TransferFrom memory transfer_from;
+        FungibleOperation_Claim memory claim;
+        FungibleOperation_Mint memory mint;
+        return FungibleOperation(uint8(7), balance_, approve, transfer_, transfer_from, claim, mint, burn);
     }
 
     function bcs_serialize_FungibleOperation(FungibleOperation memory input)
@@ -111,6 +155,12 @@ library FungibleTypes {
         }
         if (input.choice == 5) {
             return abi.encodePacked(input.choice, bcs_serialize_FungibleOperation_Claim(input.claim));
+        }
+        if (input.choice == 6) {
+            return abi.encodePacked(input.choice, bcs_serialize_FungibleOperation_Mint(input.mint));
+        }
+        if (input.choice == 7) {
+            return abi.encodePacked(input.choice, bcs_serialize_FungibleOperation_Burn(input.burn));
         }
         return abi.encodePacked(input.choice);
     }
@@ -143,8 +193,16 @@ library FungibleTypes {
         if (choice == 5) {
             (new_pos, claim) = bcs_deserialize_offset_FungibleOperation_Claim(new_pos, input);
         }
-        require(choice < 6);
-        return (new_pos, FungibleOperation(choice, balance_, approve, transfer_, transfer_from, claim));
+        FungibleOperation_Mint memory mint;
+        if (choice == 6) {
+            (new_pos, mint) = bcs_deserialize_offset_FungibleOperation_Mint(new_pos, input);
+        }
+        FungibleOperation_Burn memory burn;
+        if (choice == 7) {
+            (new_pos, burn) = bcs_deserialize_offset_FungibleOperation_Burn(new_pos, input);
+        }
+        require(choice < 8);
+        return (new_pos, FungibleOperation(choice, balance_, approve, transfer_, transfer_from, claim, mint, burn));
     }
 
     function bcs_deserialize_FungibleOperation(bytes memory input)
@@ -237,6 +295,45 @@ library FungibleTypes {
         return value;
     }
 
+    struct FungibleOperation_Burn {
+        BridgeTypes.AccountOwner owner;
+        BridgeTypes.Amount amount;
+    }
+
+    function bcs_serialize_FungibleOperation_Burn(FungibleOperation_Burn memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.owner);
+        return abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
+    }
+
+    function bcs_deserialize_offset_FungibleOperation_Burn(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, FungibleOperation_Burn memory)
+    {
+        uint256 new_pos;
+        BridgeTypes.AccountOwner memory owner;
+        (new_pos, owner) = BridgeTypes.bcs_deserialize_offset_AccountOwner(pos, input);
+        BridgeTypes.Amount memory amount;
+        (new_pos, amount) = BridgeTypes.bcs_deserialize_offset_Amount(new_pos, input);
+        return (new_pos, FungibleOperation_Burn(owner, amount));
+    }
+
+    function bcs_deserialize_FungibleOperation_Burn(bytes memory input)
+        internal
+        pure
+        returns (FungibleOperation_Burn memory)
+    {
+        uint256 new_pos;
+        FungibleOperation_Burn memory value;
+        (new_pos, value) = bcs_deserialize_offset_FungibleOperation_Burn(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct FungibleOperation_Claim {
         BridgeTypes.Account source_account;
         BridgeTypes.Amount amount;
@@ -276,6 +373,45 @@ library FungibleTypes {
         uint256 new_pos;
         FungibleOperation_Claim memory value;
         (new_pos, value) = bcs_deserialize_offset_FungibleOperation_Claim(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct FungibleOperation_Mint {
+        BridgeTypes.Account target_account;
+        BridgeTypes.Amount amount;
+    }
+
+    function bcs_serialize_FungibleOperation_Mint(FungibleOperation_Mint memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = BridgeTypes.bcs_serialize_Account(input.target_account);
+        return abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
+    }
+
+    function bcs_deserialize_offset_FungibleOperation_Mint(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, FungibleOperation_Mint memory)
+    {
+        uint256 new_pos;
+        BridgeTypes.Account memory target_account;
+        (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(pos, input);
+        BridgeTypes.Amount memory amount;
+        (new_pos, amount) = BridgeTypes.bcs_deserialize_offset_Amount(new_pos, input);
+        return (new_pos, FungibleOperation_Mint(target_account, amount));
+    }
+
+    function bcs_deserialize_FungibleOperation_Mint(bytes memory input)
+        internal
+        pure
+        returns (FungibleOperation_Mint memory)
+    {
+        uint256 new_pos;
+        FungibleOperation_Mint memory value;
+        (new_pos, value) = bcs_deserialize_offset_FungibleOperation_Mint(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
