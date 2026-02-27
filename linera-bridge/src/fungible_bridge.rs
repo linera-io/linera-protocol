@@ -8,14 +8,10 @@ mod tests {
     use alloy_sol_types::SolEvent;
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
-        data_types::{Amount, BlockHeight, Epoch, Round},
+        data_types::{Amount, BlockHeight},
         identifiers::{AccountOwner, ChainId},
     };
-    use linera_chain::{
-        block::ConfirmedBlock,
-        data_types::{Transaction, Vote},
-        types::ConfirmedBlockCertificate,
-    };
+    use linera_chain::data_types::Transaction;
     use revm::{
         database::{CacheDB, EmptyDB},
         primitives::Address,
@@ -181,18 +177,7 @@ mod tests {
     }
 
     /// Creates a certificate containing a specific set of transactions.
-    fn create_certificate_with_transactions(
-        secret: &ValidatorSecretKey,
-        public: &linera_base::crypto::ValidatorPublicKey,
-        chain_id: CryptoHash,
-        height: BlockHeight,
-        transactions: Vec<Transaction>,
-    ) -> ConfirmedBlockCertificate {
-        let block = create_test_block(chain_id, Epoch::ZERO, height, transactions);
-        let confirmed = ConfirmedBlock::new(block);
-        let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
-        ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
-    }
+    use crate::test_helpers::create_certificate_with_transactions;
 
     const TEST_TARGET: [u8; 20] = [0xAB; 20];
     const TEST_SOURCE_NAME: &str = "source_owner";

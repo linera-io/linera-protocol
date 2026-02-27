@@ -23,7 +23,6 @@ use alloy::{
     providers::{Provider, ProviderBuilder},
 };
 use alloy_rlp::Encodable;
-use alloy_trie::{proof::ProofRetainer, HashBuilder, Nibbles};
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 
@@ -150,7 +149,8 @@ impl DepositProofClient for HttpDepositProofClient {
             .map(|(_, rlp)| rlp.clone())
             .with_context(|| format!("tx_index {tx_index} not found in block receipts"))?;
 
-        let (receipts_root, proof_nodes) = build_receipt_proof(&canonical_receipts, tx_index)?;
+        let (receipts_root, proof_nodes) =
+            crate::proof::build_receipt_proof(&canonical_receipts, tx_index);
 
         // Sanity check: computed receipts root matches block header
         if receipts_root != block.header.inner.receipts_root {
@@ -171,55 +171,10 @@ impl DepositProofClient for HttpDepositProofClient {
     }
 }
 
-/// Build a receipt MPT trie from canonical receipt bytes and generate a proof
-/// for the receipt at `target_tx_index`.
-///
-/// Returns `(receipts_root, proof_nodes)`.
-///
-/// Each entry in `receipts` is `(tx_index, canonical_receipt_bytes)` where the
-/// bytes are EIP-2718 encoded (type-prefixed for non-legacy, bare RLP for legacy).
-fn build_receipt_proof(
-    receipts: &[(u64, Vec<u8>)],
-    target_tx_index: u64,
-) -> Result<(B256, Vec<Vec<u8>>)> {
-    // MPT trie keys are RLP-encoded transaction indices
-    let mut entries: Vec<(Nibbles, &[u8])> = receipts
-        .iter()
-        .map(|(idx, rlp)| {
-            let mut key_bytes = Vec::new();
-            idx.encode(&mut key_bytes);
-            (Nibbles::unpack(&key_bytes), rlp.as_slice())
-        })
-        .collect();
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
-
-    let mut target_key_bytes = Vec::new();
-    target_tx_index.encode(&mut target_key_bytes);
-    let target_key = Nibbles::unpack(&target_key_bytes);
-
-    let retainer = ProofRetainer::new(vec![target_key]);
-    let mut builder = HashBuilder::default().with_proof_retainer(retainer);
-
-    for (key, value) in &entries {
-        builder.add_leaf(*key, value);
-    }
-
-    let root = builder.root();
-    let proof_nodes = builder.take_proof_nodes();
-    let proof: Vec<Vec<u8>> = proof_nodes
-        .matching_nodes_sorted(&target_key)
-        .into_iter()
-        .map(|(_, bytes)| bytes.to_vec())
-        .collect();
-
-    Ok((root, proof))
-}
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{Address, B256, U256};
 
-    use super::*;
     use crate::proof::{
         self,
         testing::{build_deposit_event_data, build_test_receipt, build_test_receipt_with_gas},
@@ -229,7 +184,7 @@ mod tests {
     #[test]
     fn test_build_receipt_proof_single_receipt() {
         let receipt = build_test_receipt(&[]);
-        let (root, proof_nodes) = build_receipt_proof(&[(0, receipt.clone())], 0).unwrap();
+        let (root, proof_nodes) = proof::build_receipt_proof(&[(0, receipt.clone())], 0);
 
         let proof_bytes: Vec<alloy_primitives::Bytes> = proof_nodes
             .iter()
@@ -249,7 +204,7 @@ mod tests {
             .collect();
 
         let target = 5u64;
-        let (root, proof_nodes) = build_receipt_proof(&receipts, target).unwrap();
+        let (root, proof_nodes) = proof::build_receipt_proof(&receipts, target);
 
         let target_receipt = &receipts[target as usize].1;
         let proof_bytes: Vec<alloy_primitives::Bytes> = proof_nodes
@@ -289,7 +244,7 @@ mod tests {
             (4, build_test_receipt_with_gas(105000, &[])),
         ];
 
-        let (root, proof_nodes) = build_receipt_proof(&receipts, tx_index).unwrap();
+        let (root, proof_nodes) = proof::build_receipt_proof(&receipts, tx_index);
 
         let proof_bytes: Vec<alloy_primitives::Bytes> = proof_nodes
             .iter()
@@ -310,7 +265,7 @@ mod tests {
             .map(|i| (i, build_test_receipt_with_gas(21000 * (i + 1), &[])))
             .collect();
 
-        let (root, proof_nodes) = build_receipt_proof(&receipts, 2).unwrap();
+        let (root, proof_nodes) = proof::build_receipt_proof(&receipts, 2);
 
         let wrong_receipt = &receipts[3].1;
         let proof_bytes: Vec<alloy_primitives::Bytes> = proof_nodes

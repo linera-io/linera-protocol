@@ -71,7 +71,7 @@ pub mod gen;
 
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use alloy_rlp::Encodable;
-use alloy_trie::Nibbles;
+use alloy_trie::{proof::ProofRetainer, HashBuilder, Nibbles};
 use anyhow::{anyhow, ensure, Result};
 
 /// A decoded log from an EVM transaction receipt.
@@ -114,9 +114,8 @@ pub const DEPOSIT_EVENT_SIGNATURE_HASH: [u8; 32] = [
 pub mod testing {
     use alloy_primitives::{Address, Bloom, Bytes, FixedBytes, B256, U256};
     use alloy_rlp::Encodable;
-    use alloy_trie::{proof::ProofRetainer, HashBuilder, Nibbles};
 
-    use super::{receipt_trie_key, ReceiptLog};
+    use super::ReceiptLog;
 
     /// Builds a minimal RLP-encoded Ethereum block header with the given receipts root.
     ///
@@ -234,33 +233,8 @@ pub mod testing {
         receipts: &[(u64, Vec<u8>)],
         target_tx_index: u64,
     ) -> (B256, Vec<Bytes>) {
-        let mut entries: Vec<(Nibbles, Vec<u8>)> = receipts
-            .iter()
-            .map(|(idx, rlp)| {
-                let mut key_bytes = Vec::new();
-                idx.encode(&mut key_bytes);
-                (Nibbles::unpack(&key_bytes), rlp.clone())
-            })
-            .collect();
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
-
-        let target_key = receipt_trie_key(target_tx_index);
-        let retainer = ProofRetainer::new(vec![target_key]);
-        let mut builder = HashBuilder::default().with_proof_retainer(retainer);
-
-        for (key, value) in &entries {
-            builder.add_leaf(*key, value);
-        }
-
-        let root = builder.root();
-        let proof_nodes = builder.take_proof_nodes();
-        let proof: Vec<Bytes> = proof_nodes
-            .matching_nodes_sorted(&target_key)
-            .into_iter()
-            .map(|(_, bytes)| bytes)
-            .collect();
-
-        (root, proof)
+        let (root, proof) = super::build_receipt_proof(receipts, target_tx_index);
+        (root, proof.into_iter().map(Into::into).collect())
     }
 }
 
@@ -366,10 +340,43 @@ pub fn parse_deposit_event(log: &ReceiptLog) -> Result<DepositEvent> {
 
 /// Computes the receipt trie key for a given transaction index.
 /// The key is the RLP encoding of the index, converted to nibbles.
-fn receipt_trie_key(tx_index: u64) -> Nibbles {
+pub fn receipt_trie_key(tx_index: u64) -> Nibbles {
     let mut key_bytes = Vec::new();
     tx_index.encode(&mut key_bytes);
     Nibbles::unpack(&key_bytes)
+}
+
+/// Builds a receipts MPT trie from `(tx_index, receipt_bytes)` pairs and generates
+/// a Merkle proof for the receipt at `target_tx_index`.
+///
+/// Returns `(receipts_root, proof_nodes)`.
+pub fn build_receipt_proof(
+    receipts: &[(u64, Vec<u8>)],
+    target_tx_index: u64,
+) -> (B256, Vec<Vec<u8>>) {
+    let mut entries: Vec<(Nibbles, &[u8])> = receipts
+        .iter()
+        .map(|(idx, rlp)| (receipt_trie_key(*idx), rlp.as_slice()))
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let target_key = receipt_trie_key(target_tx_index);
+    let retainer = ProofRetainer::new(vec![target_key]);
+    let mut builder = HashBuilder::default().with_proof_retainer(retainer);
+
+    for (key, value) in &entries {
+        builder.add_leaf(*key, value);
+    }
+
+    let root = builder.root();
+    let proof_nodes = builder.take_proof_nodes();
+    let proof = proof_nodes
+        .matching_nodes_sorted(&target_key)
+        .into_iter()
+        .map(|(_, bytes)| bytes.to_vec())
+        .collect();
+
+    (root, proof)
 }
 
 /// Skips one RLP item (string or list) by reading its header and advancing past the payload.
