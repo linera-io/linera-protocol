@@ -2,7 +2,7 @@ services:
   # 0. Anvil - local EVM node for LightClient contract
   anvil:
     image: ghcr.io/foundry-rs/foundry:stable
-    entrypoint: ["anvil", "--host", "0.0.0.0", "--code-size-limit", "300000"]
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--code-size-limit", "300000", "--hardfork", "shanghai"]
     ports:
       - "${ANVIL_PORT:-8545}:8545"
     healthcheck:
@@ -184,6 +184,7 @@ services:
           --via-ir \
           --optimize \
           --optimizer-runs 1 \
+          --evm-version shanghai \
           --ignored-error-codes 6321 \
           --out /tmp/forge-out \
           --cache-path /tmp/forge-cache \
