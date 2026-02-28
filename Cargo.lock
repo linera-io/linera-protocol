@@ -5265,6 +5265,7 @@ name = "linera-chain"
 version = "0.16.0"
 dependencies = [
  "allocative",
+ "alloy-primitives",
  "anyhow",
  "assert_matches",
  "async-graphql",
@@ -5276,6 +5277,7 @@ dependencies = [
  "hex",
  "linera-base",
  "linera-chain",
+ "linera-eip712-derive",
  "linera-execution",
  "linera-views",
  "prometheus",
@@ -5406,6 +5408,16 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-thread-pool",
+]
+
+[[package]]
+name = "linera-eip712-derive"
+version = "0.16.0"
+dependencies = [
+ "convert_case",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.105",
 ]
 
 [[package]]

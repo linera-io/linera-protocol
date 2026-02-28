@@ -10,7 +10,10 @@ use std::error::Error as StdError;
 pub use in_mem::InMemorySigner;
 
 use super::CryptoHash;
-use crate::{crypto::AccountSignature, identifiers::AccountOwner};
+use crate::{
+    crypto::{AccountSignature, SignatureScheme},
+    identifiers::AccountOwner,
+};
 
 cfg_if::cfg_if! {
     if #[cfg(web)] {
@@ -52,6 +55,17 @@ pub trait Signer {
 
     /// Returns whether the given `owner` is a known signer.
     async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Self::Error>;
+
+    /// Returns the signature scheme for the given owner's key.
+    async fn scheme(&self, owner: &AccountOwner) -> Result<SignatureScheme, Self::Error>;
+
+    /// Signs EIP-712 typed data. The `typed_data` parameter is a JSON string
+    /// containing the EIP-712 structure ({types, primaryType, domain, message}).
+    async fn sign_typed_data(
+        &self,
+        owner: &AccountOwner,
+        typed_data: &str,
+    ) -> Result<AccountSignature, Self::Error>;
 }
 
 /// In-memory implementation of the [`Signer`] trait.
@@ -210,6 +224,28 @@ mod in_mem {
         /// Returns whether the given `owner` is a known signer.
         async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Error> {
             Ok(self.0.read().unwrap().keys.contains_key(owner))
+        }
+
+        /// Returns the signature scheme for the given owner's key.
+        async fn scheme(
+            &self,
+            owner: &AccountOwner,
+        ) -> Result<crate::crypto::SignatureScheme, Error> {
+            let inner = self.0.read().unwrap();
+            if let Some(secret) = inner.keys.get(owner) {
+                Ok(secret.public().scheme())
+            } else {
+                Err(Error::NoSuchOwner)
+            }
+        }
+
+        async fn sign_typed_data(
+            &self,
+            owner: &AccountOwner,
+            typed_data: &str,
+        ) -> Result<AccountSignature, Error> {
+            let hash = CryptoHash::from(crate::crypto::eip712::compute_eip712_hash(typed_data));
+            self.sign(owner, &hash).await
         }
     }
 

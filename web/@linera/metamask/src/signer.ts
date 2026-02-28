@@ -86,6 +86,50 @@ export default class Signer implements SignerInterface {
     );
   }
 
+  async scheme(_owner: string): Promise<string> {
+    return "EvmSecp256k1";
+  }
+
+  async signTypedData(owner: string, typedData: string): Promise<string> {
+    if (!window.ethereum) {
+      throw new Error("MetaMask is not available");
+    }
+
+    const accounts = (await window.ethereum.request({
+      method: "eth_requestAccounts",
+    })) as string[] | undefined;
+
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No MetaMask accounts connected");
+    }
+
+    const connected = accounts.find(
+      (acc) => acc.toLowerCase() === owner.toLowerCase(),
+    );
+    if (!connected) {
+      throw new Error(
+        `MetaMask is not connected with the requested owner: ${owner}`,
+      );
+    }
+
+    try {
+      const signature = (await window.ethereum.request({
+        method: "eth_signTypedData_v4",
+        params: [owner, typedData],
+      })) as string;
+
+      if (!signature) {
+        throw new Error("No signature returned");
+      }
+
+      return signature;
+    } catch (err: any) {
+      throw new Error(
+        `MetaMask EIP-712 signature request failed: ${err?.message || err}`,
+      );
+    }
+  }
+
   /**
    * Returns the currently connected MetaMask account address.
    */

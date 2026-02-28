@@ -18,6 +18,7 @@ members = [
     "linera-rpc",
     "linera-sdk",
     "linera-sdk-derive",
+    "linera-eip712-derive",
     "linera-service",
     "linera-service-graphql-client",
     "linera-storage",
@@ -49,6 +50,7 @@ default-members = [
     "linera-rpc",
     "linera-sdk",
     "linera-sdk-derive",
+    "linera-eip712-derive",
     "linera-service",
     "linera-service-graphql-client",
     "linera-storage",
@@ -303,6 +305,7 @@ linera-base = { version = "0.16.0", path = "./linera-base" }
 linera-chain = { version = "0.16.0", path = "./linera-chain" }
 linera-client = { version = "0.16.0", path = "./linera-client", default-features = false }
 linera-core = { version = "0.16.0", path = "./linera-core", default-features = false }
+linera-eip712-derive = { version = "0.16.0", path = "./linera-eip712-derive" }
 linera-ethereum = { version = "0.16.0", path = "./linera-ethereum", default-features = false }
 linera-execution = { version = "0.16.0", path = "./linera-execution", default-features = false }
 linera-faucet-client = { version = "0.16.0", path = "linera-faucet/client" }

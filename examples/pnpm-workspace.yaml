@@ -1,6 +1,7 @@
 packages:
 - ../web/@linera/client
 - ../web/@linera/metamask
+- ../web/@linera/metamask-eip712
 - counter
 - counter/metamask
 - native-fungible
