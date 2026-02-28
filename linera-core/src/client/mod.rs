@@ -283,6 +283,15 @@ impl<Env: Environment> Client<Env> {
         self.notifier.subscribe(chain_ids)
     }
 
+    /// Adds additional chain IDs to an existing subscription.
+    pub fn subscribe_extra(
+        &self,
+        chain_ids: Vec<ChainId>,
+        sender: &tokio::sync::mpsc::UnboundedSender<Notification>,
+    ) {
+        self.notifier.add_sender(chain_ids, sender);
+    }
+
     /// Returns the storage client used by this client's local node.
     pub fn storage_client(&self) -> &Env::Storage {
         self.environment.storage()

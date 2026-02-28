@@ -951,6 +951,10 @@ struct PerChainCache {
 /// If a newer block has since been processed, the insert is silently dropped.
 struct QueryResponseCache {
     chains: papaya::HashMap<ChainId, StdMutex<PerChainCache>>,
+    /// Chains for which we have registered a notification subscription.
+    subscribed: papaya::HashSet<ChainId>,
+    /// Sender half of the notification channel, used to subscribe new chains lazily.
+    notification_sender: StdMutex<Option<tokio::sync::mpsc::UnboundedSender<Notification>>>,
     capacity_per_chain: std::num::NonZeroUsize,
 }
 
@@ -958,8 +962,44 @@ impl QueryResponseCache {
     fn new(capacity_per_chain: usize) -> Self {
         Self {
             chains: papaya::HashMap::new(),
+            subscribed: papaya::HashSet::new(),
+            notification_sender: StdMutex::new(None),
             capacity_per_chain: std::num::NonZeroUsize::new(capacity_per_chain)
                 .expect("capacity must be > 0"),
+        }
+    }
+
+    /// Stores the notification sender (called once during startup).
+    fn set_notification_sender(&self, sender: tokio::sync::mpsc::UnboundedSender<Notification>) {
+        *self
+            .notification_sender
+            .lock()
+            .expect("sender mutex poisoned") = Some(sender);
+    }
+
+    /// Returns the notification sender, if set.
+    fn notification_sender(&self) -> Option<tokio::sync::mpsc::UnboundedSender<Notification>> {
+        self.notification_sender
+            .lock()
+            .expect("sender mutex poisoned")
+            .clone()
+    }
+
+    /// Marks a chain as subscribed to notifications.
+    fn mark_subscribed(&self, chain_id: ChainId) {
+        self.subscribed.pin().insert(chain_id);
+    }
+
+    /// Returns `true` if the chain is not yet subscribed to notifications.
+    fn needs_subscription(&self, chain_id: &ChainId) -> bool {
+        !self.subscribed.pin().contains(chain_id)
+    }
+
+    /// Marks initial chains as subscribed (called during startup).
+    fn mark_all_subscribed(&self, chain_ids: &[ChainId]) {
+        let pinned = self.subscribed.pin();
+        for &chain_id in chain_ids {
+            pinned.insert(chain_id);
         }
     }
 
@@ -967,7 +1007,13 @@ impl QueryResponseCache {
     /// (including when the chain has no cache entry yet).
     fn get(&self, chain_id: ChainId, app_id: &ApplicationId, request: &[u8]) -> Option<Vec<u8>> {
         let pinned = self.chains.pin();
-        let mutex = pinned.get(&chain_id)?;
+        let Some(mutex) = pinned.get(&chain_id) else {
+            #[cfg(with_metrics)]
+            query_cache_metrics::QUERY_CACHE_MISS
+                .with_label_values(&[])
+                .inc();
+            return None;
+        };
         let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
         let key = (*app_id, request.to_vec());
         let result = per_chain.lru.get(&key).cloned();
@@ -989,6 +1035,10 @@ impl QueryResponseCache {
     /// Inserts a response into the cache, unless the chain's `next_block_height` has
     /// advanced past the caller's snapshot (which would mean a new block arrived and
     /// this response is potentially stale).
+    ///
+    /// If the caller's `next_block_height` is *higher* than the cache's, all existing
+    /// entries for the chain are cleared first (they are stale). This handles chains
+    /// that were not subscribed to at startup.
     fn insert(
         &self,
         chain_id: ChainId,
@@ -1008,6 +1058,13 @@ impl QueryResponseCache {
         let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
         if next_block_height < per_chain.next_block_height {
             return; // A new block arrived since this query started; discard stale response.
+        }
+        if next_block_height > per_chain.next_block_height {
+            // The chain has advanced since the last cache update. Clear stale entries.
+            #[cfg(with_metrics)]
+            query_cache_metrics::QUERY_CACHE_ENTRIES.sub(per_chain.lru.len() as i64);
+            per_chain.lru.clear();
+            per_chain.next_block_height = next_block_height;
         }
         #[cfg(with_metrics)]
         let prev_len = per_chain.lru.len();
@@ -1181,7 +1238,10 @@ where
         if let Some(cache) = &self.query_cache {
             let guard = self.context.lock().await;
             let chain_ids: Vec<ChainId> = guard.wallet().chain_ids().try_collect().await?;
-            let mut receiver = guard.client().subscribe(chain_ids);
+            let (tx, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+            guard.client().subscribe_extra(chain_ids.clone(), &tx);
+            cache.mark_all_subscribed(&chain_ids);
+            cache.set_notification_sender(tx);
             drop(guard);
             let cache = Arc::clone(cache);
             tokio::spawn(async move {
@@ -1256,6 +1316,17 @@ where
             .await?;
         if operations.is_empty() {
             if let Some(cache) = cache {
+                // Lazily subscribe to notifications for chains discovered after startup.
+                if cache.needs_subscription(&chain_id) {
+                    if let Some(sender) = cache.notification_sender() {
+                        self.context
+                            .lock()
+                            .await
+                            .client()
+                            .subscribe_extra(vec![chain_id], &sender);
+                        cache.mark_subscribed(chain_id);
+                    }
+                }
                 cache.insert(
                     chain_id,
                     application_id,
