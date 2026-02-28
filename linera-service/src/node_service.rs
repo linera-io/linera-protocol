@@ -1035,10 +1035,6 @@ impl QueryResponseCache {
     /// Inserts a response into the cache, unless the chain's `next_block_height` has
     /// advanced past the caller's snapshot (which would mean a new block arrived and
     /// this response is potentially stale).
-    ///
-    /// If the caller's `next_block_height` is *higher* than the cache's, all existing
-    /// entries for the chain are cleared first (they are stale). This handles chains
-    /// that were not subscribed to at startup.
     fn insert(
         &self,
         chain_id: ChainId,
@@ -1061,8 +1057,14 @@ impl QueryResponseCache {
         }
         if next_block_height > per_chain.next_block_height {
             // The chain has advanced since the last cache update. Clear stale entries.
+            // Note: This should not happen if notifications are timely and only works if
+            // we had a cache miss.
             #[cfg(with_metrics)]
             query_cache_metrics::QUERY_CACHE_ENTRIES.sub(per_chain.lru.len() as i64);
+            #[cfg(with_metrics)]
+            query_cache_metrics::QUERY_CACHE_INVALIDATION
+                .with_label_values(&[])
+                .inc();
             per_chain.lru.clear();
             per_chain.next_block_height = next_block_height;
         }
@@ -1247,8 +1249,6 @@ where
             tokio::spawn(async move {
                 while let Some(notification) = receiver.recv().await {
                     if let Reason::NewBlock { height, .. } = notification.reason {
-                        // Convert block height to next_block_height for consistent
-                        // staleness comparison with cached insert heights.
                         let next_block_height = height
                             .try_add_one()
                             .expect("block height should not overflow");
