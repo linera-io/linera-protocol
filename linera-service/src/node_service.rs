@@ -934,11 +934,11 @@ mod query_cache_metrics {
     });
 }
 
-/// Per-chain cache state: an LRU map plus the block height at which the cache was
-/// last invalidated. Both are behind the same mutex.
+/// Per-chain cache state: an LRU map plus the `next_block_height` at which the cache
+/// was last invalidated. Both are behind the same mutex.
 struct PerChainCache {
     lru: LruCache<(ApplicationId, Vec<u8>), Vec<u8>>,
-    block_height: BlockHeight,
+    next_block_height: BlockHeight,
 }
 
 /// An LRU cache for application query responses, keyed per chain.
@@ -949,6 +949,10 @@ struct PerChainCache {
 /// To prevent a race where a slow query inserts stale data *after* an invalidation,
 /// each insert carries the chain's `next_block_height` at the time the query ran.
 /// If a newer block has since been processed, the insert is silently dropped.
+///
+/// **Note:** There is a small window between block commit and the async `NewBlock`
+/// notification being processed during which stale cached responses may be served.
+/// This is inherent to async cache invalidation and acceptable for a response cache.
 struct QueryResponseCache {
     chains: papaya::HashMap<ChainId, StdMutex<PerChainCache>>,
     capacity_per_chain: std::num::NonZeroUsize,
@@ -986,27 +990,27 @@ impl QueryResponseCache {
         result
     }
 
-    /// Inserts a response into the cache, unless the chain's block height has advanced
-    /// past the caller's snapshot (which would mean a new block arrived and this
-    /// response is potentially stale).
+    /// Inserts a response into the cache, unless the chain's `next_block_height` has
+    /// advanced past the caller's snapshot (which would mean a new block arrived and
+    /// this response is potentially stale).
     fn insert(
         &self,
         chain_id: ChainId,
         app_id: ApplicationId,
         request: Vec<u8>,
         response: Vec<u8>,
-        block_height: BlockHeight,
+        next_block_height: BlockHeight,
     ) {
         let pinned = self.chains.pin();
         let capacity = self.capacity_per_chain;
         let mutex = pinned.get_or_insert_with(chain_id, || {
             StdMutex::new(PerChainCache {
                 lru: LruCache::new(capacity),
-                block_height,
+                next_block_height,
             })
         });
         let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
-        if block_height < per_chain.block_height {
+        if next_block_height < per_chain.next_block_height {
             return; // A new block arrived since this query started; discard stale response.
         }
         #[cfg(with_metrics)]
@@ -1018,19 +1022,19 @@ impl QueryResponseCache {
         }
     }
 
-    /// Called when a `NewBlock` notification arrives. Sets the block height and
+    /// Called when a `NewBlock` notification arrives. Sets `next_block_height` and
     /// clears all cached responses for the chain.
-    fn invalidate_chain(&self, chain_id: &ChainId, block_height: BlockHeight) {
+    fn invalidate_chain(&self, chain_id: &ChainId, next_block_height: BlockHeight) {
         let pinned = self.chains.pin();
         let capacity = self.capacity_per_chain;
         let mutex = pinned.get_or_insert_with(*chain_id, || {
             StdMutex::new(PerChainCache {
                 lru: LruCache::new(capacity),
-                block_height,
+                next_block_height,
             })
         });
         let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
-        per_chain.block_height = block_height;
+        per_chain.next_block_height = next_block_height;
         #[cfg(with_metrics)]
         query_cache_metrics::QUERY_CACHE_ENTRIES.sub(per_chain.lru.len() as i64);
         per_chain.lru.clear();
@@ -1187,7 +1191,10 @@ where
             tokio::spawn(async move {
                 while let Some(notification) = receiver.recv().await {
                     if let Reason::NewBlock { height, .. } = notification.reason {
-                        cache.invalidate_chain(&notification.chain_id, height);
+                        cache.invalidate_chain(
+                            &notification.chain_id,
+                            height.try_add_one().expect("block height overflow"),
+                        );
                     }
                 }
             });
@@ -1245,7 +1252,7 @@ where
                 response,
                 operations,
             },
-            block_height,
+            next_block_height,
         ) = self
             .query_user_application(application_id, request.clone(), chain_id, block_hash)
             .await?;
@@ -1256,7 +1263,7 @@ where
                     application_id,
                     request,
                     response.clone(),
-                    block_height,
+                    next_block_height,
                 );
             }
             return Ok(response);
@@ -1293,8 +1300,8 @@ where
         Ok(serde_json::to_vec(&response)?)
     }
 
-    /// Queries a user application, returning the raw [`QueryOutcome`] and the height of the
-    /// chain's latest block at the time of the query (used for cache staleness detection).
+    /// Queries a user application, returning the raw [`QueryOutcome`] and the chain's
+    /// `next_block_height` at the time of the query (used for cache staleness detection).
     async fn query_user_application(
         &self,
         application_id: ApplicationId,
@@ -1312,13 +1319,11 @@ where
             .await
             .make_chain_client(chain_id)
             .await?;
-        let block_height = client
+        let next_block_height = client
             .chain_info()
             .await
             .map_err(ChainClientError::from)?
-            .next_block_height
-            .try_sub_one()
-            .unwrap_or(BlockHeight::ZERO);
+            .next_block_height;
         let QueryOutcome {
             response,
             operations,
@@ -1332,7 +1337,7 @@ where
                     response: user_response_bytes,
                     operations,
                 },
-                block_height,
+                next_block_height,
             )),
         }
     }
@@ -1473,15 +1478,21 @@ mod tests {
         let chain = test_chain(0);
         let app = test_app(0);
 
-        // Chain is at block 3. A query starts and snapshots this height.
+        // Chain's next_block_height is 3. A query starts and snapshots this.
         cache.insert(chain, app, b"q0".to_vec(), b"r0".to_vec(), BlockHeight(3));
-        let stale_height = BlockHeight(3);
+        let stale_next_height = BlockHeight(3);
 
-        // Block 4 arrives while the query is in flight.
+        // Block 3 arrives while the query is in flight; next_block_height is now 4.
         cache.invalidate_chain(&chain, BlockHeight(4));
 
-        // Slow query finishes and tries to insert with the stale height.
-        cache.insert(chain, app, b"q".to_vec(), b"stale".to_vec(), stale_height);
+        // Slow query finishes and tries to insert with the stale next_block_height.
+        cache.insert(
+            chain,
+            app,
+            b"q".to_vec(),
+            b"stale".to_vec(),
+            stale_next_height,
+        );
 
         // The stale insert should have been rejected.
         assert!(cache.get(chain, &app, b"q").is_none());
