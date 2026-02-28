@@ -9,13 +9,20 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "ci": "pnpm build"
+    "ci": "pnpm build",
+    "test": "playwright test"
   },
   "dependencies": {
     "@linera/client": "workspace:*",
     "ethers": "^6.15.0"
   },
   "devDependencies": {
-    "vite": "7.1.7"
+    "@types/node": "22.7.5",
+    "eslint": "^9.39.2",
+    "stylelint": "^16.26.1",
+    "typescript": "^5.9.3",
+    "vite": "7.1.7",
+    "vite-plugin-checker": "^0.8.0",
+    "@playwright/test": "1.54.0"
   }
 }
