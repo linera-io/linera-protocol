@@ -112,7 +112,7 @@ where
         query: Query,
         block_hash: Option<CryptoHash>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<QueryOutcome, WorkerError>>,
+        callback: oneshot::Sender<Result<(QueryOutcome, BlockHeight), WorkerError>>,
     },
 
     /// Describe an application.

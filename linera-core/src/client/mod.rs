@@ -283,6 +283,15 @@ impl<Env: Environment> Client<Env> {
         self.notifier.subscribe(chain_ids)
     }
 
+    /// Adds additional chain IDs to an existing subscription.
+    pub fn subscribe_extra(
+        &self,
+        chain_ids: Vec<ChainId>,
+        sender: &tokio::sync::mpsc::UnboundedSender<Notification>,
+    ) {
+        self.notifier.add_sender(chain_ids, sender);
+    }
+
     /// Returns the storage client used by this client's local node.
     pub fn storage_client(&self) -> &Env::Storage {
         self.environment.storage()
@@ -2933,7 +2942,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         query: Query,
         block_hash: Option<CryptoHash>,
-    ) -> Result<QueryOutcome, ChainClientError> {
+    ) -> Result<(QueryOutcome, BlockHeight), ChainClientError> {
         loop {
             let result = self
                 .client
@@ -2957,10 +2966,13 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         query: SystemQuery,
     ) -> Result<QueryOutcome<SystemResponse>, ChainClientError> {
-        let QueryOutcome {
-            response,
-            operations,
-        } = self.query_application(Query::System(query), None).await?;
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            _,
+        ) = self.query_application(Query::System(query), None).await?;
         match response {
             QueryResponse::System(response) => Ok(QueryOutcome {
                 response,
@@ -2981,10 +2993,13 @@ impl<Env: Environment> ChainClient<Env> {
         query: &A::Query,
     ) -> Result<QueryOutcome<A::QueryResponse>, ChainClientError> {
         let query = Query::user(application_id, query)?;
-        let QueryOutcome {
-            response,
-            operations,
-        } = self.query_application(query, None).await?;
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            _,
+        ) = self.query_application(query, None).await?;
         match response {
             QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;

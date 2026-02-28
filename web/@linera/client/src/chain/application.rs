@@ -49,10 +49,13 @@ impl Application {
         } else {
             None
         };
-        let linera_execution::QueryOutcome {
-            response: linera_execution::QueryResponse::User(response),
-            operations,
-        } = chain_client
+        let (
+            linera_execution::QueryOutcome {
+                response: linera_execution::QueryResponse::User(response),
+                operations,
+            },
+            _,
+        ) = chain_client
             .query_application(
                 linera_execution::Query::User {
                     application_id: self.id,
