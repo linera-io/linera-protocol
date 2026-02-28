@@ -25,7 +25,7 @@ env:
 jobs:
   long-faucet-chain-test:
     if: ${{ github.event_name == 'merge_group' }}
-    runs-on: ubuntu-latest-16-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
     steps:

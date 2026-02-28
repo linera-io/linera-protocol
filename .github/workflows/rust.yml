@@ -37,7 +37,7 @@ permissions:
 jobs:
   # paths-ignore within a pull_request doesn't work well with merge_group, so we need to use a custom filter.
   changed-files:
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
@@ -60,7 +60,7 @@ jobs:
   remote-net-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest-8-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
     steps:
@@ -99,7 +99,7 @@ jobs:
   execution-wasmtime-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 10
 
     steps:
@@ -112,7 +112,7 @@ jobs:
   bridge-format-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 15
 
     steps:
@@ -167,7 +167,7 @@ jobs:
   metrics-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 10
 
     steps:
@@ -180,7 +180,7 @@ jobs:
   wasm-application-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 15
 
     steps:
@@ -201,7 +201,7 @@ jobs:
   linera-sdk-tests-fixtures:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 10
 
     steps:
@@ -227,7 +227,7 @@ jobs:
   default-features-and-witty-integration-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest-8-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
     steps:
@@ -251,7 +251,7 @@ jobs:
   check-outdated-cli-md:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 10
 
     steps:
@@ -273,7 +273,7 @@ jobs:
   benchmark-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
     steps:
@@ -297,7 +297,7 @@ jobs:
   ethereum-tests:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 30
 
     steps:
@@ -360,7 +360,7 @@ jobs:
   storage-service-tests:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest-16-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
     steps:
     - uses: actions/checkout@v4
@@ -386,7 +386,7 @@ jobs:
   check-wit-files:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -397,7 +397,7 @@ jobs:
   lint-unexpected-chain-load-operations:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 2
 
     steps:
@@ -409,7 +409,7 @@ jobs:
   lint-check-copyright-headers:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 2
 
     steps:
@@ -426,7 +426,7 @@ jobs:
   lint-cargo-machete:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 2
 
     steps:
@@ -445,7 +445,7 @@ jobs:
   lint-cargo-fmt:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 2
 
     steps:
@@ -461,7 +461,7 @@ jobs:
   lint-taplo-fmt:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 5
 
     steps:
@@ -475,7 +475,7 @@ jobs:
   lint-check-for-outdated-readme:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 5
 
     steps:
@@ -504,7 +504,7 @@ jobs:
   lint-wasm-applications:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 10
 
     steps:
@@ -529,7 +529,7 @@ jobs:
   lint-cargo-clippy:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 20
 
     steps:
@@ -555,7 +555,7 @@ jobs:
   lint-cargo-doc:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 20
 
     steps:
@@ -575,7 +575,7 @@ jobs:
   lint-check-linera-service-graphql-schema:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 15
 
     steps:

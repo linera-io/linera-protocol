@@ -19,7 +19,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     steps:
       - name: 'Checkout'
         uses: actions/checkout@v3
@@ -78,7 +78,7 @@ jobs:
           mdbook test -L ../target/debug/deps/
 
   formatting:
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     steps:
       - name: 'Checkout'
         uses: actions/checkout@v3
