@@ -112,7 +112,7 @@ impl ActiveChain {
     pub async fn chain_balance(&self) -> Amount {
         let query = Query::System(SystemQuery);
 
-        let QueryOutcome { response, .. } = self
+        let (QueryOutcome { response, .. }, _) = self
             .validator
             .worker()
             .query_application(self.id(), query, None)
@@ -627,10 +627,13 @@ impl ActiveChain {
     {
         let query_bytes = serde_json::to_vec(&query)?;
 
-        let QueryOutcome {
-            response,
-            operations,
-        } = self
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            _,
+        ) = self
             .validator
             .worker()
             .query_application(

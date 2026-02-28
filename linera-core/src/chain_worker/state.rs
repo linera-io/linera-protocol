@@ -1353,18 +1353,15 @@ where
         &mut self,
         query: Query,
         block_hash: Option<CryptoHash>,
-    ) -> Result<QueryOutcome, WorkerError> {
+    ) -> Result<(QueryOutcome, BlockHeight), WorkerError> {
         self.initialize_and_save_if_needed().await?;
+        let next_block_height = self.chain.tip_state.get().next_block_height;
         let local_time = self.storage.clock().current_time();
         if let Some(requested_block) = block_hash {
             if let Some(mut state) = self.execution_state_cache.remove(&requested_block) {
                 // We try to use a cached execution state for the requested block.
                 // We want to pretend that this block is committed, so we set the next block height.
-                let next_block_height = self
-                    .chain
-                    .tip_state
-                    .get()
-                    .next_block_height
+                let next_block_height = next_block_height
                     .try_add_one()
                     .expect("block height to not overflow");
                 let context = QueryContext {
@@ -1385,21 +1382,21 @@ where
                     .with_execution_context(ChainExecutionContext::Query)?;
                 self.execution_state_cache
                     .insert_owned(&requested_block, state);
-                Ok(outcome)
+                Ok((outcome, next_block_height))
             } else {
                 tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
                 let outcome = self
                     .chain
                     .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
                     .await?;
-                Ok(outcome)
+                Ok((outcome, next_block_height))
             }
         } else {
             let outcome = self
                 .chain
                 .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
                 .await?;
-            Ok(outcome)
+            Ok((outcome, next_block_height))
         }
     }
 

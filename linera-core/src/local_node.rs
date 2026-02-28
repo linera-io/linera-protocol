@@ -261,13 +261,13 @@ where
         chain_id: ChainId,
         query: Query,
         block_hash: Option<CryptoHash>,
-    ) -> Result<QueryOutcome, LocalNodeError> {
-        let outcome = self
+    ) -> Result<(QueryOutcome, BlockHeight), LocalNodeError> {
+        let result = self
             .node
             .state
             .query_application(chain_id, query, block_hash)
             .await?;
-        Ok(outcome)
+        Ok(result)
     }
 
     /// Handles any pending local cross-chain requests.
