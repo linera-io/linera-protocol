@@ -1056,16 +1056,22 @@ impl QueryResponseCache {
         if next_block_height < cache.next_block_height {
             return; // A new block arrived since this query started; discard stale response.
         }
+        // If the chain has advanced since the last cache update, also clear stale entries.
+        // Note: This should not happen if notifications are timely. Also, this only
+        // works when we have a cache miss.
         if next_block_height > cache.next_block_height {
-            // The chain has advanced since the last cache update. Clear stale entries.
-            // Note: This should not happen if notifications are timely and only works if
-            // we had a cache miss.
+            debug!(
+                "Unexpected query cache invalidation for chain {chain_id}:\
+                 {next_block_height} > {}",
+                cache.next_block_height
+            );
             #[cfg(with_metrics)]
-            query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
-            #[cfg(with_metrics)]
-            query_cache_metrics::QUERY_CACHE_INVALIDATION
-                .with_label_values(&[])
-                .inc();
+            {
+                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
+                query_cache_metrics::QUERY_CACHE_INVALIDATION
+                    .with_label_values(&[])
+                    .inc();
+            }
             cache.lru.clear();
             cache.next_block_height = next_block_height;
         }
@@ -1090,14 +1096,23 @@ impl QueryResponseCache {
             })
         });
         let mut cache = mutex.lock().expect("LRU mutex poisoned");
-        cache.next_block_height = next_block_height;
-        #[cfg(with_metrics)]
-        query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
-        cache.lru.clear();
-        #[cfg(with_metrics)]
-        query_cache_metrics::QUERY_CACHE_INVALIDATION
-            .with_label_values(&[])
-            .inc();
+        if next_block_height > cache.next_block_height {
+            #[cfg(with_metrics)]
+            {
+                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
+                query_cache_metrics::QUERY_CACHE_INVALIDATION
+                    .with_label_values(&[])
+                    .inc();
+            }
+            cache.lru.clear();
+            cache.next_block_height = next_block_height;
+        } else {
+            debug!(
+                "Query cache for chain {chain_id} was already invalidated:\
+                 {next_block_height} <= {}",
+                cache.next_block_height
+            );
+        }
     }
 }
 
