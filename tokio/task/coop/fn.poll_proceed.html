@@ -1,0 +1,82 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Decrements the task budget and returns `Poll::Pending` if the budget is depleted. This indicates that the task should yield to the scheduler. Otherwise, returns `RestoreOnPending` which can be used to commit the budget consumption."><title>poll_proceed in tokio::task::coop - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tokio/index.html">tokio</a><span class="version">1.47.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">poll_<wbr>proceed</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In tokio::<wbr>task::<wbr>coop</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">tokio</a>::<wbr><a href="../index.html">task</a>::<wbr><a href="index.html">coop</a></div><h1>Function <span class="fn">poll_proceed</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/tokio/task/coop/mod.rs.html#379-400">Source</a> </span></div><pre class="rust item-decl"><code>pub fn poll_proceed(cx: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.86.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context">Context</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/task/poll/enum.Poll.html" title="enum core::task::poll::Poll">Poll</a>&lt;<a class="struct" href="struct.RestoreOnPending.html" title="struct tokio::task::coop::RestoreOnPending">RestoreOnPending</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Decrements the task budget and returns <a href="https://doc.rust-lang.org/1.86.0/core/task/poll/enum.Poll.html#variant.Pending" title="variant core::task::poll::Poll::Pending"><code>Poll::Pending</code></a> if the budget is depleted.
+This indicates that the task should yield to the scheduler. Otherwise, returns
+<a href="struct.RestoreOnPending.html" title="struct tokio::task::coop::RestoreOnPending"><code>RestoreOnPending</code></a> which can be used to commit the budget consumption.</p>
+<p>The returned <a href="struct.RestoreOnPending.html" title="struct tokio::task::coop::RestoreOnPending"><code>RestoreOnPending</code></a> will revert the budget to its former
+value when dropped unless <a href="struct.RestoreOnPending.html#method.made_progress" title="method tokio::task::coop::RestoreOnPending::made_progress"><code>RestoreOnPending::made_progress</code></a>
+is called. It is the caller’s responsibility to do so when it <em>was</em> able to
+make progress after the call to <a href="fn.poll_proceed.html" title="fn tokio::task::coop::poll_proceed"><code>poll_proceed</code></a>.
+Restoring the budget automatically ensures the task can try to make progress in some other
+way.</p>
+<p>Note that <a href="struct.RestoreOnPending.html" title="struct tokio::task::coop::RestoreOnPending"><code>RestoreOnPending</code></a> restores the budget <strong>as it was before <a href="fn.poll_proceed.html" title="fn tokio::task::coop::poll_proceed"><code>poll_proceed</code></a></strong>.
+Therefore, if the budget is <em>further</em> adjusted between when <a href="fn.poll_proceed.html" title="fn tokio::task::coop::poll_proceed"><code>poll_proceed</code></a> returns and
+<a href="struct.RestoreOnPending.html" title="struct tokio::task::coop::RestoreOnPending"><code>RestoreOnPending</code></a> is dropped, those adjustments are erased unless the caller indicates
+that progress was made.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This example shows a simple countdown latch that uses <a href="fn.poll_proceed.html" title="fn tokio::task::coop::poll_proceed"><code>poll_proceed</code></a> to participate in
+cooperative scheduling.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::future::{Future};
+<span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>std::task::{ready, Context, Poll, Waker};
+<span class="kw">use </span>tokio::task::coop;
+
+<span class="kw">struct </span>CountdownLatch&lt;T&gt; {
+    counter: usize,
+    value: <span class="prelude-ty">Option</span>&lt;T&gt;,
+    waker: <span class="prelude-ty">Option</span>&lt;Waker&gt;
+}
+
+<span class="kw">impl</span>&lt;T&gt; CountdownLatch&lt;T&gt; {
+    <span class="kw">fn </span>new(value: T, count: usize) -&gt; <span class="self">Self </span>{
+        CountdownLatch {
+            counter: count,
+            value: <span class="prelude-val">Some</span>(value),
+            waker: <span class="prelude-val">None
+        </span>}
+    }
+    <span class="kw">fn </span>count_down(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">if </span><span class="self">self</span>.counter &lt;= <span class="number">0 </span>{
+            <span class="kw">return</span>;
+        }
+
+        <span class="self">self</span>.counter -= <span class="number">1</span>;
+        <span class="kw">if </span><span class="self">self</span>.counter == <span class="number">0 </span>{
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(w) = <span class="self">self</span>.waker.take() {
+                w.wake();
+            }
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; Future <span class="kw">for </span>CountdownLatch&lt;T&gt; {
+    <span class="kw">type </span>Output = T;
+
+    <span class="kw">fn </span>poll(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt; {
+        <span class="comment">// `poll_proceed` checks with the runtime if this task is still allowed to proceed
+        // with performing work.
+        // If not, `Pending` is returned and `ready!` ensures this function returns.
+        // If we are allowed to proceed, coop now represents the budget consumption
+        </span><span class="kw">let </span>coop = <span class="macro">ready!</span>(coop::poll_proceed(cx));
+
+        <span class="comment">// Get a mutable reference to the CountdownLatch
+        </span><span class="kw">let </span>this = Pin::get_mut(<span class="self">self</span>);
+
+        <span class="comment">// Next we check if the latch is ready to release its value
+        </span><span class="kw">if </span>this.counter == <span class="number">0 </span>{
+            <span class="kw">let </span>t = this.value.take();
+            <span class="comment">// The latch made progress so call `made_progress` to ensure the budget
+            // is not reverted.
+            </span>coop.made_progress();
+            Poll::Ready(t.unwrap())
+        } <span class="kw">else </span>{
+            <span class="comment">// If the latch is not ready so return pending and simply drop `coop`.
+            // This will restore the budget making it available again to perform any
+            // other work.
+            </span>this.waker = <span class="prelude-val">Some</span>(cx.waker().clone());
+            Poll::Pending
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; Unpin <span class="kw">for </span>CountdownLatch&lt;T&gt; {}</code></pre></div>
+</div></details></section></div></main></body></html>

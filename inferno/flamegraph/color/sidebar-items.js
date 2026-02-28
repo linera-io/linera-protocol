@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BackgroundColor","BasicPalette","MultiPalette","Palette","StrokeColor"],"fn":["parse_hex_color"],"struct":["PaletteMap","SearchColor"],"type":["Color"]};

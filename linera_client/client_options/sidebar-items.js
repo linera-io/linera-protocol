@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","ResourceControlPolicyConfig"],"struct":["ApplicationPermissionsConfig","ChainOwnershipConfig","Options"]};

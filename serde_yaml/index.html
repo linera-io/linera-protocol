@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>serde_yaml - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_yaml" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_yaml/index.html">serde_<wbr>yaml</a><span class="version">0.9.34+deprecated</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#using-serde-derive" title="Using Serde derive">Using Serde derive</a></li></ul></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>serde_yaml</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/serde_yaml/lib.rs.html#1-191">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/serde-yaml"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/serde-yaml"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/serde-yaml"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>Rust library for using the <a href="https://github.com/serde-rs/serde">Serde</a> serialization framework with data in
+<a href="https://yaml.org/">YAML</a> file format. <em>(This project is no longer maintained.)</em></p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::collections::BTreeMap;
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), serde_yaml::Error&gt; {
+    <span class="comment">// You have some type.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>map = BTreeMap::new();
+    map.insert(<span class="string">"x"</span>.to_string(), <span class="number">1.0</span>);
+    map.insert(<span class="string">"y"</span>.to_string(), <span class="number">2.0</span>);
+
+    <span class="comment">// Serialize it to a YAML string.
+    </span><span class="kw">let </span>yaml = serde_yaml::to_string(<span class="kw-2">&amp;</span>map)<span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(yaml, <span class="string">"x: 1.0\ny: 2.0\n"</span>);
+
+    <span class="comment">// Deserialize it back to a Rust type.
+    </span><span class="kw">let </span>deserialized_map: BTreeMap&lt;String, f64&gt; = serde_yaml::from_str(<span class="kw-2">&amp;</span>yaml)<span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(map, deserialized_map);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h3 id="using-serde-derive"><a class="doc-anchor" href="#using-serde-derive">§</a>Using Serde derive</h3>
+<p>It can also be used with Serde’s derive macros to handle structs and enums
+defined in your program.</p>
+<p>Structs serialize in the obvious way:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Deserialize};
+
+<span class="attr">#[derive(Serialize, Deserialize, PartialEq, Debug)]
+</span><span class="kw">struct </span>Point {
+    x: f64,
+    y: f64,
+}
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), serde_yaml::Error&gt; {
+    <span class="kw">let </span>point = Point { x: <span class="number">1.0</span>, y: <span class="number">2.0 </span>};
+
+    <span class="kw">let </span>yaml = serde_yaml::to_string(<span class="kw-2">&amp;</span>point)<span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(yaml, <span class="string">"x: 1.0\ny: 2.0\n"</span>);
+
+    <span class="kw">let </span>deserialized_point: Point = serde_yaml::from_str(<span class="kw-2">&amp;</span>yaml)<span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(point, deserialized_point);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Enums serialize using YAML’s <code>!tag</code> syntax to identify the variant name.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Deserialize};
+
+<span class="attr">#[derive(Serialize, Deserialize, PartialEq, Debug)]
+</span><span class="kw">enum </span>Enum {
+    Unit,
+    Newtype(usize),
+    Tuple(usize, usize, usize),
+    Struct { x: f64, y: f64 },
+}
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), serde_yaml::Error&gt; {
+    <span class="kw">let </span>yaml = <span class="string">"
+        - !Newtype 1
+        - !Tuple [0, 0, 0]
+        - !Struct {x: 1.0, y: 2.0}
+    "</span>;
+    <span class="kw">let </span>values: Vec&lt;Enum&gt; = serde_yaml::from_str(yaml).unwrap();
+    <span class="macro">assert_eq!</span>(values[<span class="number">0</span>], Enum::Newtype(<span class="number">1</span>));
+    <span class="macro">assert_eq!</span>(values[<span class="number">1</span>], Enum::Tuple(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>));
+    <span class="macro">assert_eq!</span>(values[<span class="number">2</span>], Enum::Struct { x: <span class="number">1.0</span>, y: <span class="number">2.0 </span>});
+
+    <span class="comment">// The last two in YAML's block style instead:
+    </span><span class="kw">let </span>yaml = <span class="string">"
+        - !Tuple
+          - 0
+          - 0
+          - 0
+        - !Struct
+          x: 1.0
+          y: 2.0
+    "</span>;
+    <span class="kw">let </span>values: Vec&lt;Enum&gt; = serde_yaml::from_str(yaml).unwrap();
+    <span class="macro">assert_eq!</span>(values[<span class="number">0</span>], Enum::Tuple(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>));
+    <span class="macro">assert_eq!</span>(values[<span class="number">1</span>], Enum::Struct { x: <span class="number">1.0</span>, y: <span class="number">2.0 </span>});
+
+    <span class="comment">// Variants with no data can be written using !Tag or just the string name.
+    </span><span class="kw">let </span>yaml = <span class="string">"
+        - Unit  # serialization produces this one
+        - !Unit
+    "</span>;
+    <span class="kw">let </span>values: Vec&lt;Enum&gt; = serde_yaml::from_str(yaml).unwrap();
+    <span class="macro">assert_eq!</span>(values[<span class="number">0</span>], Enum::Unit);
+    <span class="macro">assert_eq!</span>(values[<span class="number">1</span>], Enum::Unit);
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="mapping/index.html" title="mod serde_yaml::mapping">mapping</a></dt><dd>A YAML mapping and its iterator types.</dd><dt><a class="mod" href="value/index.html" title="mod serde_yaml::value">value</a></dt><dd>The Value enum, a loosely typed way of representing any valid YAML value.</dd><dt><a class="mod" href="with/index.html" title="mod serde_yaml::with">with</a></dt><dd>Customizations to use with Serde’s <code>#[serde(with = …)]</code> attribute.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Deserializer.html" title="struct serde_yaml::Deserializer">Deserializer</a></dt><dd>A structure that deserializes YAML into Rust values.</dd><dt><a class="struct" href="struct.Error.html" title="struct serde_yaml::Error">Error</a></dt><dd>An error that happened serializing or deserializing YAML data.</dd><dt><a class="struct" href="struct.Location.html" title="struct serde_yaml::Location">Location</a></dt><dd>The input location that an error occured.</dd><dt><a class="struct" href="struct.Mapping.html" title="struct serde_yaml::Mapping">Mapping</a></dt><dd>A YAML mapping in which the keys and values are both <code>serde_yaml::Value</code>.</dd><dt><a class="struct" href="struct.Number.html" title="struct serde_yaml::Number">Number</a></dt><dd>Represents a YAML number, whether integer or floating point.</dd><dt><a class="struct" href="struct.Serializer.html" title="struct serde_yaml::Serializer">Serializer</a></dt><dd>A structure for serializing Rust values into YAML.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Value.html" title="enum serde_yaml::Value">Value</a></dt><dd>Represents any valid YAML value.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Index.html" title="trait serde_yaml::Index">Index</a></dt><dd>A type that can be used to index into a <code>serde_yaml::Value</code>. See the <code>get</code>
+and <code>get_mut</code> methods of <code>Value</code>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.from_reader.html" title="fn serde_yaml::from_reader">from_<wbr>reader</a></dt><dd>Deserialize an instance of type <code>T</code> from an IO stream of YAML.</dd><dt><a class="fn" href="fn.from_slice.html" title="fn serde_yaml::from_slice">from_<wbr>slice</a></dt><dd>Deserialize an instance of type <code>T</code> from bytes of YAML text.</dd><dt><a class="fn" href="fn.from_str.html" title="fn serde_yaml::from_str">from_<wbr>str</a></dt><dd>Deserialize an instance of type <code>T</code> from a string of YAML text.</dd><dt><a class="fn" href="fn.from_value.html" title="fn serde_yaml::from_value">from_<wbr>value</a></dt><dd>Interpret a <code>serde_yaml::Value</code> as an instance of type <code>T</code>.</dd><dt><a class="fn" href="fn.to_string.html" title="fn serde_yaml::to_string">to_<wbr>string</a></dt><dd>Serialize the given data structure as a String of YAML.</dd><dt><a class="fn" href="fn.to_value.html" title="fn serde_yaml::to_value">to_<wbr>value</a></dt><dd>Convert a <code>T</code> into <code>serde_yaml::Value</code> which is an enum that can represent
+any valid YAML data.</dd><dt><a class="fn" href="fn.to_writer.html" title="fn serde_yaml::to_writer">to_<wbr>writer</a></dt><dd>Serialize the given data structure as YAML into the IO stream.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Result.html" title="type serde_yaml::Result">Result</a></dt><dd>Alias for a <code>Result</code> with the error type <code>serde_yaml::Error</code>.</dd><dt><a class="type" href="type.Sequence.html" title="type serde_yaml::Sequence">Sequence</a></dt><dd>A YAML sequence in which the elements are <code>serde_yaml::Value</code>.</dd></dl><script type="text/json" id="notable-traits-data">{"&<Vec<T, A> as Index<I>>::Output":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html\" title=\"trait core::alloc::Allocator\">Allocator</a>,</div></div>","&mut <Vec<T, A> as Index<I>>::Output":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html\" title=\"trait core::alloc::Allocator\">Allocator</a>,</div></div>","<Vec<T, A> as IntoIterator>::IntoIter":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html\" title=\"trait core::alloc::Allocator\">Allocator</a>,</div></div>","<Vec<T> as IntoDeserializer<'de, E>>::Deserializer":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html\" title=\"trait core::alloc::Allocator\">Allocator</a>,</div></div>"}</script></section></div></main></body></html>

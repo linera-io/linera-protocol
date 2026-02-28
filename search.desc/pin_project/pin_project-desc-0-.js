@@ -1,0 +1,1 @@
+searchState.loadedDescShard("pin_project", 0, "A crate for safe and ergonomic pin-projection.\nA trait used for custom implementations of <code>Unpin</code>.\nAn attribute that creates projection types covering all …\nAn attribute used for custom implementations of [<code>Drop</code>].")

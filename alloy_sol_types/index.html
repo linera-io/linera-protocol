@@ -1,0 +1,112 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="alloy-sol-types"><title>alloy_sol_types - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="alloy_sol_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../alloy_sol_types/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../alloy_sol_types/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../alloy_sol_types/index.html">alloy_<wbr>sol_<wbr>types</a><span class="version">1.3.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#alloy-sol-types" title="alloy-sol-types">alloy-sol-types</a><ul><li><a href="#sol" title="`sol!`"><code>sol!</code></a></li><li><a href="#solstruct" title="`SolStruct`"><code>SolStruct</code></a></li><li><a href="#tokenizationdetokenization" title="Tokenization/Detokenization">Tokenization/Detokenization</a></li><li><a href="#encodingdecoding" title="Encoding/Decoding">Encoding/Decoding</a></li><li><a href="#licensing" title="Licensing">Licensing</a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>alloy_sol_types</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/alloy_sol_types/lib.rs.html#1-119">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="alloy-sol-types"><a class="doc-anchor" href="#alloy-sol-types">§</a>alloy-sol-types</h2>
+<p>Solidity type modeling and <a href="https://docs.soliditylang.org/en/latest/abi-spec.html">ABI</a> and <a href="https://eips.ethereum.org/EIPS/eip-712">EIP-712</a> codec implementation.</p>
+<p>This crate provides tools for expressing Solidity types in Rust, and for
+encoding these representations into ABI blobs suitable for smart contract
+processing. In other words, you can represent your smart contract args in
+native Rust, easily encode them to pass to a smart contract, and easily
+decode the smart contract return values.</p>
+<p>We do this by representing Solidity types in rust via the <a href="trait.SolType.html" title="trait alloy_sol_types::SolType"><code>SolType</code></a> trait.
+This trait maps Solidity types to Rust types via the associated
+<a href="trait.SolType.html#associatedtype.RustType" title="associated type alloy_sol_types::SolType::RustType"><code>SolType::RustType</code></a>.</p>
+<p>The ABI encoding and decoding is implemented in the <a href="abi/index.html" title="mod alloy_sol_types::abi"><code>abi</code></a> module, see <a href="abi/index.html" title="mod alloy_sol_types::abi">its
+documentation</a> to learn how it works.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>alloy_sol_types::{sol_data::<span class="kw-2">*</span>, SolType, SolValue};
+
+<span class="comment">// Represent a Solidity type in rust
+</span><span class="kw">type </span>MySolType = FixedArray&lt;Bool, <span class="number">2</span>&gt;;
+
+<span class="kw">let </span>data = [<span class="bool-val">true</span>, <span class="bool-val">false</span>];
+<span class="kw">let </span>validate = <span class="bool-val">true</span>;
+
+<span class="comment">// SolTypes expose their Solidity name :)
+</span><span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>MySolType::sol_type_name(), <span class="string">"bool[2]"</span>);
+
+<span class="comment">// SolTypes are used to transform Rust into ABI blobs, and back.
+</span><span class="kw">let </span>encoded: Vec&lt;u8&gt; = MySolType::abi_encode(<span class="kw-2">&amp;</span>data);
+<span class="kw">let </span>decoded: [bool; <span class="number">2</span>] = MySolType::abi_decode(<span class="kw-2">&amp;</span>encoded)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(data, decoded);
+
+<span class="comment">// This is more easily done with the `SolValue` trait:
+</span><span class="kw">let </span>encoded: Vec&lt;u8&gt; = data.abi_encode();
+<span class="kw">let </span>decoded: [bool; <span class="number">2</span>] = &lt;[bool; <span class="number">2</span>]&gt;::abi_decode(<span class="kw-2">&amp;</span>encoded)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(data, decoded);</code></pre></div>
+<h3 id="sol"><a class="doc-anchor" href="#sol">§</a><a href="../alloy_sol_macro/macro.sol.html" title="macro alloy_sol_macro::sol"><code>sol!</code></a></h3>
+<p>The <a href="../alloy_sol_macro/macro.sol.html" title="macro alloy_sol_macro::sol"><code>sol!</code></a> procedural macro provides a convenient way to define
+custom <a href="trait.SolType.html" title="trait alloy_sol_types::SolType"><code>SolType</code></a>s and reference primitive ones. See
+<a href="../alloy_sol_macro/macro.sol.html" title="macro alloy_sol_macro::sol">its documentation</a> for details on how to use it.</p>
+<h3 id="solstruct"><a class="doc-anchor" href="#solstruct">§</a><a href="trait.SolStruct.html" title="trait alloy_sol_types::SolStruct"><code>SolStruct</code></a></h3>
+<p>The <a href="trait.SolStruct.html" title="trait alloy_sol_types::SolStruct"><code>SolStruct</code></a> trait primarily provides EIP-712 signing support.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// `sol!` allows you to define struct types!
+// You can just paste Solidity into the macro and it should work :)
+</span><span class="macro">sol!</span> {
+    <span class="kw">struct </span>MyStruct {
+        uint256 a;
+        bytes32 b;
+        address[] c;
+    }
+}
+
+<span class="macro">sol!</span> {
+    <span class="kw">struct </span>MyStruct2 {
+        MyStruct a;
+        bytes32 b;
+        address[] c;
+    }
+}
+
+<span class="comment">// All structs generated with `sol!` implement `crate::SolType` &amp;
+// `crate::SolStruct`. This means you get eip-712 signing for freeeeee
+</span><span class="kw">let </span>my_struct = MyStruct {
+    a: U256::from(<span class="number">1</span>),
+    b: [<span class="number">0</span>; <span class="number">32</span>].into(),
+    c: <span class="macro">vec!</span>[Default::default()],
+};
+
+<span class="comment">// The `eip712_domain` macro lets you easily define an EIP-712 domain
+// object :)
+</span><span class="kw">let </span>my_domain = <span class="macro">alloy_sol_types::eip712_domain!</span>(
+   name: <span class="string">"MyDomain"</span>,
+   version: <span class="string">"1"</span>,
+);
+
+<span class="comment">// Because all the hard work is done by the `sol!` macro, EIP-712 is as easy
+// as calling `eip712_signing_hash` with your domain
+</span><span class="kw">let </span>signing_hash = my_struct.eip712_signing_hash(<span class="kw-2">&amp;</span>my_domain);</code></pre></div>
+<h4 id="sol-user-defined-value-types"><a class="doc-anchor" href="#sol-user-defined-value-types">§</a><a href="../alloy_sol_macro/macro.sol.html" title="macro alloy_sol_macro::sol"><code>sol!</code></a> User-defined Value Types</h4>
+<p>Support for user-defined value types is new! These are currently
+implemented as wrapper types. Watch this space for more
+features!</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// We also also support Solidity value types
+</span><span class="macro">sol!</span> {
+    <span class="kw">type </span>MyValueType is uint256;
+}
+
+<span class="comment">// UDTs are encoded as their underlying type
+</span><span class="kw">let </span>mvt = MyValueType::from(U256::from(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(mvt.abi_encode(), sol_data::Uint::&lt;<span class="number">256</span>&gt;::abi_encode(<span class="kw-2">&amp;</span>U256::from(<span class="number">1</span>)));</code></pre></div>
+<h3 id="tokenizationdetokenization"><a class="doc-anchor" href="#tokenizationdetokenization">§</a>Tokenization/Detokenization</h3>
+<p>The process of converting from a Rust type to a to an abi token is called
+“Tokenization”. Typical users will not access tokenization directly.
+Power users should use the <a href="trait.SolType.html#method.tokenize" title="associated function alloy_sol_types::SolType::tokenize"><code>SolType::tokenize()</code></a> and
+<a href="trait.SolType.html#tymethod.detokenize" title="associated function alloy_sol_types::SolType::detokenize"><code>SolType::detokenize()</code></a> methods.</p>
+<p>When implementing your own <a href="trait.SolType.html" title="trait alloy_sol_types::SolType"><code>SolType</code></a>, a variety of <code>From</code> impls have been
+provided on the token structs to aid in converting from Rust data to tokens.</p>
+<h3 id="encodingdecoding"><a class="doc-anchor" href="#encodingdecoding">§</a>Encoding/Decoding</h3>
+<p>The process of converting from a <a href="abi/token/trait.Token.html" title="trait alloy_sol_types::abi::token::Token"><code>Token</code></a> to a serialized ABI blob is
+called “Encoding”. It is the reciprocal of decoding.</p>
+<p>ABI encoding and decoding operates on sequences of tokens.</p>
+<p>The <a href="trait.SolType.html" title="trait alloy_sol_types::SolType"><code>SolType</code></a> encoding and decoding methods operate on Rust types. We
+recommend users use them wherever possible. We do not recommend that users
+interact with Tokens, except when implementing their own <a href="trait.SolType.html" title="trait alloy_sol_types::SolType"><code>SolType</code></a>.</p>
+<h3 id="licensing"><a class="doc-anchor" href="#licensing">§</a>Licensing</h3>
+<p>This crate is an extensive rewrite of the
+<a href="https://github.com/rust-ethereum/ethabi">ethabi</a> crate by the parity team.
+That codebase is used under the terms of the <strong>MIT</strong> license. We have preserved
+the original license notice in files incorporating <code>ethabi</code> code.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.sol"><code>pub use alloy_sol_macro::<a class="macro" href="../alloy_sol_macro/macro.sol.html" title="macro alloy_sol_macro::sol">sol</a>;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="abi/index.html" title="mod alloy_sol_types::abi">abi</a></dt><dd>Ethereum ABI codec implementation.</dd><dt><a class="mod" href="sol_data/index.html" title="mod alloy_sol_types::sol_data">sol_<wbr>data</a></dt><dd>Solidity types.</dd><dt><a class="mod" href="utils/index.html" title="mod alloy_sol_types::utils">utils</a></dt><dd>Utilities used by different modules.</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.eip712_domain.html" title="macro alloy_sol_types::eip712_domain">eip712_<wbr>domain</a></dt><dd>Convenience macro to instantiate an <a href="struct.Eip712Domain.html" title="struct alloy_sol_types::Eip712Domain">EIP-712 domain</a>.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Eip712Domain.html" title="struct alloy_sol_types::Eip712Domain">Eip712<wbr>Domain</a></dt><dd>EIP-712 domain attributes used in determining the domain separator.</dd><dt><a class="struct" href="struct.Panic.html" title="struct alloy_sol_types::Panic">Panic</a></dt><dd>A <a href="https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require">Solidity panic</a>.</dd><dt><a class="struct" href="struct.Revert.html" title="struct alloy_sol_types::Revert">Revert</a></dt><dd>Represents a standard Solidity revert. These are thrown by <code>revert(reason)</code>
+or <code>require(condition, reason)</code> statements in Solidity.</dd><dt><a class="struct" href="struct.Selectors.html" title="struct alloy_sol_types::Selectors">Selectors</a></dt><dd>Iterator over the function or error selectors of a <a href="trait.SolInterface.html" title="trait alloy_sol_types::SolInterface"><code>SolInterface</code></a> type.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.ContractError.html" title="enum alloy_sol_types::ContractError">Contract<wbr>Error</a></dt><dd>A generic contract error.</dd><dt><a class="enum" href="enum.Error.html" title="enum alloy_sol_types::Error">Error</a></dt><dd>ABI Encoding and Decoding errors.</dd><dt><a class="enum" href="enum.PanicKind.html" title="enum alloy_sol_types::PanicKind">Panic<wbr>Kind</a></dt><dd>Represents a <a href="https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require">Solidity panic</a>.
+Same as the <a href="https://github.com/ethereum/solidity/blob/9eaa5cebdb1458457135097efdca1a3573af17c8/libsolutil/ErrorCodes.h#L25-L37">Solidity definition</a>.</dd><dt><a class="enum" href="enum.RevertReason.html" title="enum alloy_sol_types::RevertReason">Revert<wbr>Reason</a></dt><dd>Represents the reason for a revert in a smart contract.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.EventTopic.html" title="trait alloy_sol_types::EventTopic">Event<wbr>Topic</a></dt><dd>A Solidity event topic.</dd><dt><a class="trait" href="trait.JsonAbiExt.html" title="trait alloy_sol_types::JsonAbiExt">Json<wbr>AbiExt</a></dt><dd>Extension trait for ABI representation.</dd><dt><a class="trait" href="trait.SolCall.html" title="trait alloy_sol_types::SolCall">SolCall</a></dt><dd>A Solidity function call.</dd><dt><a class="trait" href="trait.SolConstructor.html" title="trait alloy_sol_types::SolConstructor">SolConstructor</a></dt><dd>A Solidity constructor.</dd><dt><a class="trait" href="trait.SolEnum.html" title="trait alloy_sol_types::SolEnum">SolEnum</a></dt><dd>A Solidity enum. This is always a wrapper around a <a href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html" title="primitive u8"><code>u8</code></a>.</dd><dt><a class="trait" href="trait.SolError.html" title="trait alloy_sol_types::SolError">SolError</a></dt><dd>A Solidity custom error.</dd><dt><a class="trait" href="trait.SolEvent.html" title="trait alloy_sol_types::SolEvent">SolEvent</a></dt><dd>Solidity event.</dd><dt><a class="trait" href="trait.SolEventInterface.html" title="trait alloy_sol_types::SolEventInterface">SolEvent<wbr>Interface</a></dt><dd>A collection of <a href="trait.SolEvent.html" title="trait alloy_sol_types::SolEvent"><code>SolEvent</code></a>s.</dd><dt><a class="trait" href="trait.SolInterface.html" title="trait alloy_sol_types::SolInterface">SolInterface</a></dt><dd>A collection of ABI-encodable call-like types. This currently includes
+<a href="trait.SolCall.html" title="trait alloy_sol_types::SolCall"><code>SolCall</code></a> and <a href="trait.SolError.html" title="trait alloy_sol_types::SolError"><code>SolError</code></a>.</dd><dt><a class="trait" href="trait.SolStruct.html" title="trait alloy_sol_types::SolStruct">SolStruct</a></dt><dd>A Solidity struct.</dd><dt><a class="trait" href="trait.SolType.html" title="trait alloy_sol_types::SolType">SolType</a></dt><dd>A Solidity type.</dd><dt><a class="trait" href="trait.SolValue.html" title="trait alloy_sol_types::SolValue">SolValue</a></dt><dd>A Solidity value.</dd><dt><a class="trait" href="trait.TopicList.html" title="trait alloy_sol_types::TopicList">Topic<wbr>List</a></dt><dd>A list of Solidity event topics.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.decode_revert_reason.html" title="fn alloy_sol_types::decode_revert_reason">decode_<wbr>revert_<wbr>reason</a></dt><dd>Decodes and retrieves the reason for a revert from the provided output data.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.GenericContractError.html" title="type alloy_sol_types::GenericContractError">Generic<wbr>Contract<wbr>Error</a></dt><dd>A generic contract error.</dd><dt><a class="type" href="type.GenericRevertReason.html" title="type alloy_sol_types::GenericRevertReason">Generic<wbr>Revert<wbr>Reason</a></dt><dd>Represents the reason for a revert in a generic contract error.</dd><dt><a class="type" href="type.Result.html" title="type alloy_sol_types::Result">Result</a></dt><dd>ABI result type.</dd><dt><a class="type" href="type.Word.html" title="type alloy_sol_types::Word">Word</a></dt><dd>The ABI word type.</dd></dl><script type="text/json" id="notable-traits-data">{"Selectors<Self>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.Selectors.html\" title=\"struct alloy_sol_types::Selectors\">Selectors</a>&lt;T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T: <a class=\"trait\" href=\"trait.SolInterface.html\" title=\"trait alloy_sol_types::SolInterface\">SolInterface</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.Selectors.html\" title=\"struct alloy_sol_types::Selectors\">Selectors</a>&lt;T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = [<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>; <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.array.html\">4</a>];</div>","Vec<u8>":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html\" title=\"trait core::alloc::Allocator\">Allocator</a>,</div></div>"}</script></section></div></main></body></html>

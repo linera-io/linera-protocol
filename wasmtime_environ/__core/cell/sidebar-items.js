@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BorrowError","BorrowMutError","Cell","LazyCell","OnceCell","Ref","RefCell","RefMut","SyncUnsafeCell","UnsafeCell"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"type":["RadiumBool","RadiumI16","RadiumI32","RadiumI64","RadiumI8","RadiumIsize","RadiumPtr","RadiumU16","RadiumU32","RadiumU64","RadiumU8","RadiumUsize"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AttemptResult","HistoryEvent","RequestHistoryResult"],"struct":["AttemptHistory","AttemptId","FiberHistory","HistoryCollector","HistoryCollectorData","RequestHistory","RequestId","SpeculativeId","StructuredHistory"],"trait":["HistoryListener"],"type":["TimePoint"]};

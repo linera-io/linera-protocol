@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BETA"],"fn":["endomorphism"],"struct":["G1Affine","G1Compressed","G1Projective","G1Uncompressed"]};

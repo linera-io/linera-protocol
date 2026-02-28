@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BenchmarkError"],"fn":["fungible_transfer"],"struct":["Benchmark","BenchmarkConfig","FungibleTransferGenerator","NativeFungibleTransferGenerator"],"trait":["OperationGenerator"]};

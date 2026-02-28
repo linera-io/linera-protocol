@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Formatting for log records."><title>env_logger::fmt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="env_logger" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../env_logger/index.html">env_<wbr>logger</a><span class="version">0.11.8</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module fmt</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#formatting-log-records" title="Formatting log records">Formatting log records</a></li><li><a href="#key-value-arguments" title="Key Value arguments">Key Value arguments</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate env_<wbr>logger</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">env_logger</a></div><h1>Module <span>fmt</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/env_logger/fmt/mod.rs.html#1-1003">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Formatting for log records.</p>
+<p>This module contains a <a href="struct.Formatter.html" title="struct env_logger::fmt::Formatter"><code>Formatter</code></a> that can be used to format log records
+into without needing temporary allocations. Usually you won’t need to worry
+about the contents of this module and can use the <code>Formatter</code> like an ordinary
+<a href="https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html" title="trait std::io::Write"><code>Write</code></a>.</p>
+<h2 id="formatting-log-records"><a class="doc-anchor" href="#formatting-log-records">§</a>Formatting log records</h2>
+<p>The format used to print log records can be customised using the <a href="../struct.Builder.html#method.format" title="method env_logger::Builder::format"><code>Builder::format</code></a>
+method.</p>
+<p>Terminal styling is done through ANSI escape codes and will be adapted to the capabilities of
+the target stream.s</p>
+<p>For example, you could use one of:</p>
+<ul>
+<li><a href="https://docs.rs/anstyle">anstyle</a> is a minimal, runtime string styling API and is re-exported as [<code>style</code>]</li>
+<li><a href="https://docs.rs/owo-colors">owo-colors</a> is a feature rich runtime string styling API</li>
+<li><a href="https://docs.rs/color-print">color-print</a> for feature-rich compile-time styling API</li>
+</ul>
+<p>See also [<code>Formatter::default_level_style</code>]</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Write;
+
+<span class="kw">let </span><span class="kw-2">mut </span>builder = env_logger::Builder::new();
+
+builder.format(|buf, record| {
+    <span class="macro">writeln!</span>(buf, <span class="string">"{}: {}"</span>,
+        record.level(),
+        record.args())
+});</code></pre></div>
+<h2 id="key-value-arguments"><a class="doc-anchor" href="#key-value-arguments">§</a>Key Value arguments</h2>
+<p>If the <code>kv</code> feature is enabled, then the default format will include key values from
+the log by default, but this can be disabled by calling <a href="crate::Builder::format_key_values"><code>Builder::format_key_values</code></a>
+with [<code>hidden_kv_format</code>] as the format function.</p>
+<p>The way these keys and values are formatted can also be customized with a separate format
+function that is called by the default format with <a href="crate::Builder::format_key_values"><code>Builder::format_key_values</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>log::info;
+env_logger::init();
+<span class="macro">info!</span>(x=<span class="string">"45"</span>; <span class="string">"Some message"</span>);
+<span class="macro">info!</span>(x=<span class="string">"12"</span>; <span class="string">"Another message {x}"</span>, x=<span class="string">"12"</span>);</code></pre></div>
+<p>See <a href="https://docs.rs/log/latest/log/#structured-logging">https://docs.rs/log/latest/log/#structured-logging</a>.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ConfigurableFormat.html" title="struct env_logger::fmt::ConfigurableFormat">Configurable<wbr>Format</a></dt><dd>A <a href="../struct.Builder.html#method.format" title="method env_logger::Builder::format">custom format</a> with settings for which fields to show</dd><dt><a class="struct" href="struct.Formatter.html" title="struct env_logger::fmt::Formatter">Formatter</a></dt><dd>A formatter to write logs into.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Target.html" title="enum env_logger::fmt::Target">Target</a></dt><dd>Log target, either <code>stdout</code>, <code>stderr</code> or a custom pipe.</dd><dt><a class="enum" href="enum.TimestampPrecision.html" title="enum env_logger::fmt::TimestampPrecision">Timestamp<wbr>Precision</a></dt><dd>Formatting precision of timestamps.</dd><dt><a class="enum" href="enum.WriteStyle.html" title="enum env_logger::fmt::WriteStyle">Write<wbr>Style</a></dt><dd>Whether or not to print styles to the target.</dd></dl></section></div></main></body></html>

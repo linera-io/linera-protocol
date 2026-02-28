@@ -1,0 +1,1 @@
+searchState.loadedDescShard("tracing_attributes", 0, "A procedural macro attribute for instrumenting functions …\nInstruments a function to create and enter a <code>tracing</code> span …")

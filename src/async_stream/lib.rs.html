@@ -1,0 +1,242 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-stream-0.3.6/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="async_stream" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">async_stream/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![warn(
+<a href=#2 id=2 data-nosnippet>2</a>    missing_debug_implementations,
+<a href=#3 id=3 data-nosnippet>3</a>    missing_docs,
+<a href=#4 id=4 data-nosnippet>4</a>    rust_2018_idioms,
+<a href=#5 id=5 data-nosnippet>5</a>    unreachable_pub
+<a href=#6 id=6 data-nosnippet>6</a>)]
+<a href=#7 id=7 data-nosnippet>7</a>#![doc(test(no_crate_inject, attr(deny(rust_2018_idioms))))]
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="doccomment">//! Asynchronous stream of elements.
+<a href=#10 id=10 data-nosnippet>10</a>//!
+<a href=#11 id=11 data-nosnippet>11</a>//! Provides two macros, `stream!` and `try_stream!`, allowing the caller to
+<a href=#12 id=12 data-nosnippet>12</a>//! define asynchronous streams of elements. These are implemented using `async`
+<a href=#13 id=13 data-nosnippet>13</a>//! &amp; `await` notation. This crate works without unstable features.
+<a href=#14 id=14 data-nosnippet>14</a>//!
+<a href=#15 id=15 data-nosnippet>15</a>//! The `stream!` macro returns an anonymous type implementing the [`Stream`]
+<a href=#16 id=16 data-nosnippet>16</a>//! trait. The `Item` associated type is the type of the values yielded from the
+<a href=#17 id=17 data-nosnippet>17</a>//! stream. The `try_stream!` also returns an anonymous type implementing the
+<a href=#18 id=18 data-nosnippet>18</a>//! [`Stream`] trait, but the `Item` associated type is `Result&lt;T, Error&gt;`. The
+<a href=#19 id=19 data-nosnippet>19</a>//! `try_stream!` macro supports using `?` notation as part of the
+<a href=#20 id=20 data-nosnippet>20</a>//! implementation.
+<a href=#21 id=21 data-nosnippet>21</a>//!
+<a href=#22 id=22 data-nosnippet>22</a>//! # Usage
+<a href=#23 id=23 data-nosnippet>23</a>//!
+<a href=#24 id=24 data-nosnippet>24</a>//! A basic stream yielding numbers. Values are yielded using the `yield`
+<a href=#25 id=25 data-nosnippet>25</a>//! keyword. The stream block must return `()`.
+<a href=#26 id=26 data-nosnippet>26</a>//!
+<a href=#27 id=27 data-nosnippet>27</a>//! ```rust
+<a href=#28 id=28 data-nosnippet>28</a>//! use async_stream::stream;
+<a href=#29 id=29 data-nosnippet>29</a>//!
+<a href=#30 id=30 data-nosnippet>30</a>//! use futures_util::pin_mut;
+<a href=#31 id=31 data-nosnippet>31</a>//! use futures_util::stream::StreamExt;
+<a href=#32 id=32 data-nosnippet>32</a>//!
+<a href=#33 id=33 data-nosnippet>33</a>//! #[tokio::main]
+<a href=#34 id=34 data-nosnippet>34</a>//! async fn main() {
+<a href=#35 id=35 data-nosnippet>35</a>//!     let s = stream! {
+<a href=#36 id=36 data-nosnippet>36</a>//!         for i in 0..3 {
+<a href=#37 id=37 data-nosnippet>37</a>//!             yield i;
+<a href=#38 id=38 data-nosnippet>38</a>//!         }
+<a href=#39 id=39 data-nosnippet>39</a>//!     };
+<a href=#40 id=40 data-nosnippet>40</a>//!
+<a href=#41 id=41 data-nosnippet>41</a>//!     pin_mut!(s); // needed for iteration
+<a href=#42 id=42 data-nosnippet>42</a>//!
+<a href=#43 id=43 data-nosnippet>43</a>//!     while let Some(value) = s.next().await {
+<a href=#44 id=44 data-nosnippet>44</a>//!         println!("got {}", value);
+<a href=#45 id=45 data-nosnippet>45</a>//!     }
+<a href=#46 id=46 data-nosnippet>46</a>//! }
+<a href=#47 id=47 data-nosnippet>47</a>//! ```
+<a href=#48 id=48 data-nosnippet>48</a>//!
+<a href=#49 id=49 data-nosnippet>49</a>//! Streams may be returned by using `impl Stream&lt;Item = T&gt;`:
+<a href=#50 id=50 data-nosnippet>50</a>//!
+<a href=#51 id=51 data-nosnippet>51</a>//! ```rust
+<a href=#52 id=52 data-nosnippet>52</a>//! use async_stream::stream;
+<a href=#53 id=53 data-nosnippet>53</a>//!
+<a href=#54 id=54 data-nosnippet>54</a>//! use futures_core::stream::Stream;
+<a href=#55 id=55 data-nosnippet>55</a>//! use futures_util::pin_mut;
+<a href=#56 id=56 data-nosnippet>56</a>//! use futures_util::stream::StreamExt;
+<a href=#57 id=57 data-nosnippet>57</a>//!
+<a href=#58 id=58 data-nosnippet>58</a>//! fn zero_to_three() -&gt; impl Stream&lt;Item = u32&gt; {
+<a href=#59 id=59 data-nosnippet>59</a>//!     stream! {
+<a href=#60 id=60 data-nosnippet>60</a>//!         for i in 0..3 {
+<a href=#61 id=61 data-nosnippet>61</a>//!             yield i;
+<a href=#62 id=62 data-nosnippet>62</a>//!         }
+<a href=#63 id=63 data-nosnippet>63</a>//!     }
+<a href=#64 id=64 data-nosnippet>64</a>//! }
+<a href=#65 id=65 data-nosnippet>65</a>//!
+<a href=#66 id=66 data-nosnippet>66</a>//! #[tokio::main]
+<a href=#67 id=67 data-nosnippet>67</a>//! async fn main() {
+<a href=#68 id=68 data-nosnippet>68</a>//!     let s = zero_to_three();
+<a href=#69 id=69 data-nosnippet>69</a>//!     pin_mut!(s); // needed for iteration
+<a href=#70 id=70 data-nosnippet>70</a>//!
+<a href=#71 id=71 data-nosnippet>71</a>//!     while let Some(value) = s.next().await {
+<a href=#72 id=72 data-nosnippet>72</a>//!         println!("got {}", value);
+<a href=#73 id=73 data-nosnippet>73</a>//!     }
+<a href=#74 id=74 data-nosnippet>74</a>//! }
+<a href=#75 id=75 data-nosnippet>75</a>//! ```
+<a href=#76 id=76 data-nosnippet>76</a>//!
+<a href=#77 id=77 data-nosnippet>77</a>//! Streams may be implemented in terms of other streams - `async-stream` provides `for await`
+<a href=#78 id=78 data-nosnippet>78</a>//! syntax to assist with this:
+<a href=#79 id=79 data-nosnippet>79</a>//!
+<a href=#80 id=80 data-nosnippet>80</a>//! ```rust
+<a href=#81 id=81 data-nosnippet>81</a>//! use async_stream::stream;
+<a href=#82 id=82 data-nosnippet>82</a>//!
+<a href=#83 id=83 data-nosnippet>83</a>//! use futures_core::stream::Stream;
+<a href=#84 id=84 data-nosnippet>84</a>//! use futures_util::pin_mut;
+<a href=#85 id=85 data-nosnippet>85</a>//! use futures_util::stream::StreamExt;
+<a href=#86 id=86 data-nosnippet>86</a>//!
+<a href=#87 id=87 data-nosnippet>87</a>//! fn zero_to_three() -&gt; impl Stream&lt;Item = u32&gt; {
+<a href=#88 id=88 data-nosnippet>88</a>//!     stream! {
+<a href=#89 id=89 data-nosnippet>89</a>//!         for i in 0..3 {
+<a href=#90 id=90 data-nosnippet>90</a>//!             yield i;
+<a href=#91 id=91 data-nosnippet>91</a>//!         }
+<a href=#92 id=92 data-nosnippet>92</a>//!     }
+<a href=#93 id=93 data-nosnippet>93</a>//! }
+<a href=#94 id=94 data-nosnippet>94</a>//!
+<a href=#95 id=95 data-nosnippet>95</a>//! fn double&lt;S: Stream&lt;Item = u32&gt;&gt;(input: S)
+<a href=#96 id=96 data-nosnippet>96</a>//!     -&gt; impl Stream&lt;Item = u32&gt;
+<a href=#97 id=97 data-nosnippet>97</a>//! {
+<a href=#98 id=98 data-nosnippet>98</a>//!     stream! {
+<a href=#99 id=99 data-nosnippet>99</a>//!         for await value in input {
+<a href=#100 id=100 data-nosnippet>100</a>//!             yield value * 2;
+<a href=#101 id=101 data-nosnippet>101</a>//!         }
+<a href=#102 id=102 data-nosnippet>102</a>//!     }
+<a href=#103 id=103 data-nosnippet>103</a>//! }
+<a href=#104 id=104 data-nosnippet>104</a>//!
+<a href=#105 id=105 data-nosnippet>105</a>//! #[tokio::main]
+<a href=#106 id=106 data-nosnippet>106</a>//! async fn main() {
+<a href=#107 id=107 data-nosnippet>107</a>//!     let s = double(zero_to_three());
+<a href=#108 id=108 data-nosnippet>108</a>//!     pin_mut!(s); // needed for iteration
+<a href=#109 id=109 data-nosnippet>109</a>//!
+<a href=#110 id=110 data-nosnippet>110</a>//!     while let Some(value) = s.next().await {
+<a href=#111 id=111 data-nosnippet>111</a>//!         println!("got {}", value);
+<a href=#112 id=112 data-nosnippet>112</a>//!     }
+<a href=#113 id=113 data-nosnippet>113</a>//! }
+<a href=#114 id=114 data-nosnippet>114</a>//! ```
+<a href=#115 id=115 data-nosnippet>115</a>//!
+<a href=#116 id=116 data-nosnippet>116</a>//! Rust try notation (`?`) can be used with the `try_stream!` macro. The `Item`
+<a href=#117 id=117 data-nosnippet>117</a>//! of the returned stream is `Result` with `Ok` being the value yielded and
+<a href=#118 id=118 data-nosnippet>118</a>//! `Err` the error type returned by `?`.
+<a href=#119 id=119 data-nosnippet>119</a>//!
+<a href=#120 id=120 data-nosnippet>120</a>//! ```rust
+<a href=#121 id=121 data-nosnippet>121</a>//! use tokio::net::{TcpListener, TcpStream};
+<a href=#122 id=122 data-nosnippet>122</a>//!
+<a href=#123 id=123 data-nosnippet>123</a>//! use async_stream::try_stream;
+<a href=#124 id=124 data-nosnippet>124</a>//! use futures_core::stream::Stream;
+<a href=#125 id=125 data-nosnippet>125</a>//!
+<a href=#126 id=126 data-nosnippet>126</a>//! use std::io;
+<a href=#127 id=127 data-nosnippet>127</a>//! use std::net::SocketAddr;
+<a href=#128 id=128 data-nosnippet>128</a>//!
+<a href=#129 id=129 data-nosnippet>129</a>//! fn bind_and_accept(addr: SocketAddr)
+<a href=#130 id=130 data-nosnippet>130</a>//!     -&gt; impl Stream&lt;Item = io::Result&lt;TcpStream&gt;&gt;
+<a href=#131 id=131 data-nosnippet>131</a>//! {
+<a href=#132 id=132 data-nosnippet>132</a>//!     try_stream! {
+<a href=#133 id=133 data-nosnippet>133</a>//!         let mut listener = TcpListener::bind(addr).await?;
+<a href=#134 id=134 data-nosnippet>134</a>//!
+<a href=#135 id=135 data-nosnippet>135</a>//!         loop {
+<a href=#136 id=136 data-nosnippet>136</a>//!             let (stream, addr) = listener.accept().await?;
+<a href=#137 id=137 data-nosnippet>137</a>//!             println!("received on {:?}", addr);
+<a href=#138 id=138 data-nosnippet>138</a>//!             yield stream;
+<a href=#139 id=139 data-nosnippet>139</a>//!         }
+<a href=#140 id=140 data-nosnippet>140</a>//!     }
+<a href=#141 id=141 data-nosnippet>141</a>//! }
+<a href=#142 id=142 data-nosnippet>142</a>//! ```
+<a href=#143 id=143 data-nosnippet>143</a>//!
+<a href=#144 id=144 data-nosnippet>144</a>//! # Implementation
+<a href=#145 id=145 data-nosnippet>145</a>//!
+<a href=#146 id=146 data-nosnippet>146</a>//! The `stream!` and `try_stream!` macros are implemented using proc macros.
+<a href=#147 id=147 data-nosnippet>147</a>//! The macro searches the syntax tree for instances of `yield $expr` and
+<a href=#148 id=148 data-nosnippet>148</a>//! transforms them into `sender.send($expr).await`.
+<a href=#149 id=149 data-nosnippet>149</a>//!
+<a href=#150 id=150 data-nosnippet>150</a>//! The stream uses a lightweight sender to send values from the stream
+<a href=#151 id=151 data-nosnippet>151</a>//! implementation to the caller. When entering the stream, an `Option&lt;T&gt;` is
+<a href=#152 id=152 data-nosnippet>152</a>//! stored on the stack. A pointer to the cell is stored in a thread local and
+<a href=#153 id=153 data-nosnippet>153</a>//! `poll` is called on the async block. When `poll` returns.
+<a href=#154 id=154 data-nosnippet>154</a>//! `sender.send(value)` stores the value that cell and yields back to the
+<a href=#155 id=155 data-nosnippet>155</a>//! caller.
+<a href=#156 id=156 data-nosnippet>156</a>//!
+<a href=#157 id=157 data-nosnippet>157</a>//! [`Stream`]: https://docs.rs/futures-core/*/futures_core/stream/trait.Stream.html
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a></span><span class="kw">mod </span>async_stream;
+<a href=#160 id=160 data-nosnippet>160</a><span class="kw">mod </span>next;
+<a href=#161 id=161 data-nosnippet>161</a><span class="kw">mod </span>yielder;
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a><span class="doccomment">/// Asynchronous stream
+<a href=#164 id=164 data-nosnippet>164</a>///
+<a href=#165 id=165 data-nosnippet>165</a>/// See [crate](index.html) documentation for more details.
+<a href=#166 id=166 data-nosnippet>166</a>///
+<a href=#167 id=167 data-nosnippet>167</a>/// # Examples
+<a href=#168 id=168 data-nosnippet>168</a>///
+<a href=#169 id=169 data-nosnippet>169</a>/// ```
+<a href=#170 id=170 data-nosnippet>170</a>/// use async_stream::stream;
+<a href=#171 id=171 data-nosnippet>171</a>///
+<a href=#172 id=172 data-nosnippet>172</a>/// use futures_util::pin_mut;
+<a href=#173 id=173 data-nosnippet>173</a>/// use futures_util::stream::StreamExt;
+<a href=#174 id=174 data-nosnippet>174</a>///
+<a href=#175 id=175 data-nosnippet>175</a>/// #[tokio::main]
+<a href=#176 id=176 data-nosnippet>176</a>/// async fn main() {
+<a href=#177 id=177 data-nosnippet>177</a>///     let s = stream! {
+<a href=#178 id=178 data-nosnippet>178</a>///         for i in 0..3 {
+<a href=#179 id=179 data-nosnippet>179</a>///             yield i;
+<a href=#180 id=180 data-nosnippet>180</a>///         }
+<a href=#181 id=181 data-nosnippet>181</a>///     };
+<a href=#182 id=182 data-nosnippet>182</a>///
+<a href=#183 id=183 data-nosnippet>183</a>///     pin_mut!(s); // needed for iteration
+<a href=#184 id=184 data-nosnippet>184</a>///
+<a href=#185 id=185 data-nosnippet>185</a>///     while let Some(value) = s.next().await {
+<a href=#186 id=186 data-nosnippet>186</a>///         println!("got {}", value);
+<a href=#187 id=187 data-nosnippet>187</a>///     }
+<a href=#188 id=188 data-nosnippet>188</a>/// }
+<a href=#189 id=189 data-nosnippet>189</a>/// ```
+<a href=#190 id=190 data-nosnippet>190</a></span><span class="attr">#[macro_export]
+<a href=#191 id=191 data-nosnippet>191</a></span><span class="macro">macro_rules!</span> stream {
+<a href=#192 id=192 data-nosnippet>192</a>    ($(<span class="macro-nonterminal">$tt</span>:tt)<span class="kw-2">*</span>) =&gt; {
+<a href=#193 id=193 data-nosnippet>193</a>        <span class="macro-nonterminal">$</span><span class="macro">crate::__private::stream_inner!</span>((<span class="macro-nonterminal">$</span><span class="kw">crate</span>) $(<span class="macro-nonterminal">$tt</span>)<span class="kw-2">*</span>)
+<a href=#194 id=194 data-nosnippet>194</a>    }
+<a href=#195 id=195 data-nosnippet>195</a>}
+<a href=#196 id=196 data-nosnippet>196</a>
+<a href=#197 id=197 data-nosnippet>197</a><span class="doccomment">/// Asynchronous fallible stream
+<a href=#198 id=198 data-nosnippet>198</a>///
+<a href=#199 id=199 data-nosnippet>199</a>/// See [crate](index.html) documentation for more details.
+<a href=#200 id=200 data-nosnippet>200</a>///
+<a href=#201 id=201 data-nosnippet>201</a>/// # Examples
+<a href=#202 id=202 data-nosnippet>202</a>///
+<a href=#203 id=203 data-nosnippet>203</a>/// ```
+<a href=#204 id=204 data-nosnippet>204</a>/// use tokio::net::{TcpListener, TcpStream};
+<a href=#205 id=205 data-nosnippet>205</a>///
+<a href=#206 id=206 data-nosnippet>206</a>/// use async_stream::try_stream;
+<a href=#207 id=207 data-nosnippet>207</a>/// use futures_core::stream::Stream;
+<a href=#208 id=208 data-nosnippet>208</a>///
+<a href=#209 id=209 data-nosnippet>209</a>/// use std::io;
+<a href=#210 id=210 data-nosnippet>210</a>/// use std::net::SocketAddr;
+<a href=#211 id=211 data-nosnippet>211</a>///
+<a href=#212 id=212 data-nosnippet>212</a>/// fn bind_and_accept(addr: SocketAddr)
+<a href=#213 id=213 data-nosnippet>213</a>///     -&gt; impl Stream&lt;Item = io::Result&lt;TcpStream&gt;&gt;
+<a href=#214 id=214 data-nosnippet>214</a>/// {
+<a href=#215 id=215 data-nosnippet>215</a>///     try_stream! {
+<a href=#216 id=216 data-nosnippet>216</a>///         let mut listener = TcpListener::bind(addr).await?;
+<a href=#217 id=217 data-nosnippet>217</a>///
+<a href=#218 id=218 data-nosnippet>218</a>///         loop {
+<a href=#219 id=219 data-nosnippet>219</a>///             let (stream, addr) = listener.accept().await?;
+<a href=#220 id=220 data-nosnippet>220</a>///             println!("received on {:?}", addr);
+<a href=#221 id=221 data-nosnippet>221</a>///             yield stream;
+<a href=#222 id=222 data-nosnippet>222</a>///         }
+<a href=#223 id=223 data-nosnippet>223</a>///     }
+<a href=#224 id=224 data-nosnippet>224</a>/// }
+<a href=#225 id=225 data-nosnippet>225</a>/// ```
+<a href=#226 id=226 data-nosnippet>226</a></span><span class="attr">#[macro_export]
+<a href=#227 id=227 data-nosnippet>227</a></span><span class="macro">macro_rules!</span> try_stream {
+<a href=#228 id=228 data-nosnippet>228</a>    ($(<span class="macro-nonterminal">$tt</span>:tt)<span class="kw-2">*</span>) =&gt; {
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="macro-nonterminal">$</span><span class="macro">crate::__private::try_stream_inner!</span>((<span class="macro-nonterminal">$</span><span class="kw">crate</span>) $(<span class="macro-nonterminal">$tt</span>)<span class="kw-2">*</span>)
+<a href=#230 id=230 data-nosnippet>230</a>    }
+<a href=#231 id=231 data-nosnippet>231</a>}
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a><span class="comment">// Not public API.
+<a href=#234 id=234 data-nosnippet>234</a></span><span class="attr">#[doc(hidden)]
+<a href=#235 id=235 data-nosnippet>235</a></span><span class="kw">pub mod </span>__private {
+<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">pub use </span><span class="kw">crate</span>::async_stream::AsyncStream;
+<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">pub use </span><span class="kw">crate</span>::next::next;
+<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">pub use </span>async_stream_impl::{stream_inner, try_stream_inner};
+<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw">pub mod </span>yielder {
+<a href=#240 id=240 data-nosnippet>240</a>        <span class="kw">pub use </span><span class="kw">crate</span>::yielder::pair;
+<a href=#241 id=241 data-nosnippet>241</a>    }
+<a href=#242 id=242 data-nosnippet>242</a>}</code></pre></div></section></main></body></html>

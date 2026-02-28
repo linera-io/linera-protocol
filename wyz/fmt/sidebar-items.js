@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FmtBinary","FmtDisplay","FmtList","FmtLowerExp","FmtLowerHex","FmtOctal","FmtPointer","FmtUpperExp","FmtUpperHex"],"trait":["FmtForward"]};

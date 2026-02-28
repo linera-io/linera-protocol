@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["impl_context","impl_from_carry_context"],"mod":["composition"],"trait":["Context"]};

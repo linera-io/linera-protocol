@@ -1,0 +1,717 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-0.23.31/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">rustls/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! # Rustls - a modern TLS library
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! Rustls is a TLS library that aims to provide a good level of cryptographic security,
+<a href=#4 id=4 data-nosnippet>4</a>//! requires no configuration to achieve that security, and provides no unsafe features or
+<a href=#5 id=5 data-nosnippet>5</a>//! obsolete cryptography by default.
+<a href=#6 id=6 data-nosnippet>6</a>//!
+<a href=#7 id=7 data-nosnippet>7</a>//! Rustls implements TLS1.2 and TLS1.3 for both clients and servers. See [the full
+<a href=#8 id=8 data-nosnippet>8</a>//! list of protocol features](manual::_04_features).
+<a href=#9 id=9 data-nosnippet>9</a>//!
+<a href=#10 id=10 data-nosnippet>10</a>//! ### Platform support
+<a href=#11 id=11 data-nosnippet>11</a>//!
+<a href=#12 id=12 data-nosnippet>12</a>//! While Rustls itself is platform independent, by default it uses [`aws-lc-rs`] for implementing
+<a href=#13 id=13 data-nosnippet>13</a>//! the cryptography in TLS.  See [the aws-lc-rs FAQ][aws-lc-rs-platforms-faq] for more details of the
+<a href=#14 id=14 data-nosnippet>14</a>//! platform/architecture support constraints in aws-lc-rs.
+<a href=#15 id=15 data-nosnippet>15</a>//!
+<a href=#16 id=16 data-nosnippet>16</a>//! [`ring`] is also available via the `ring` crate feature: see
+<a href=#17 id=17 data-nosnippet>17</a>//! [the supported `ring` target platforms][ring-target-platforms].
+<a href=#18 id=18 data-nosnippet>18</a>//!
+<a href=#19 id=19 data-nosnippet>19</a>//! By providing a custom instance of the [`crypto::CryptoProvider`] struct, you
+<a href=#20 id=20 data-nosnippet>20</a>//! can replace all cryptography dependencies of rustls.  This is a route to being portable
+<a href=#21 id=21 data-nosnippet>21</a>//! to a wider set of architectures and environments, or compliance requirements.  See the
+<a href=#22 id=22 data-nosnippet>22</a>//! [`crypto::CryptoProvider`] documentation for more details.
+<a href=#23 id=23 data-nosnippet>23</a>//!
+<a href=#24 id=24 data-nosnippet>24</a>//! Specifying `default-features = false` when depending on rustls will remove the implicit
+<a href=#25 id=25 data-nosnippet>25</a>//! dependency on aws-lc-rs.
+<a href=#26 id=26 data-nosnippet>26</a>//!
+<a href=#27 id=27 data-nosnippet>27</a>//! Rustls requires Rust 1.71 or later. It has an optional dependency on zlib-rs which requires 1.75 or later.
+<a href=#28 id=28 data-nosnippet>28</a>//!
+<a href=#29 id=29 data-nosnippet>29</a>//! [ring-target-platforms]: https://github.com/briansmith/ring/blob/2e8363b433fa3b3962c877d9ed2e9145612f3160/include/ring-core/target.h#L18-L64
+<a href=#30 id=30 data-nosnippet>30</a>//! [`crypto::CryptoProvider`]: crate::crypto::CryptoProvider
+<a href=#31 id=31 data-nosnippet>31</a>//! [`ring`]: https://crates.io/crates/ring
+<a href=#32 id=32 data-nosnippet>32</a>//! [aws-lc-rs-platforms-faq]: https://aws.github.io/aws-lc-rs/faq.html#can-i-run-aws-lc-rs-on-x-platform-or-architecture
+<a href=#33 id=33 data-nosnippet>33</a>//! [`aws-lc-rs`]: https://crates.io/crates/aws-lc-rs
+<a href=#34 id=34 data-nosnippet>34</a>//!
+<a href=#35 id=35 data-nosnippet>35</a>//! ### Cryptography providers
+<a href=#36 id=36 data-nosnippet>36</a>//!
+<a href=#37 id=37 data-nosnippet>37</a>//! Since Rustls 0.22 it has been possible to choose the provider of the cryptographic primitives
+<a href=#38 id=38 data-nosnippet>38</a>//! that Rustls uses. This may be appealing if you have specific platform, compliance or feature
+<a href=#39 id=39 data-nosnippet>39</a>//! requirements that aren't met by the default provider, [`aws-lc-rs`].
+<a href=#40 id=40 data-nosnippet>40</a>//!
+<a href=#41 id=41 data-nosnippet>41</a>//! Users that wish to customize the provider in use can do so when constructing `ClientConfig`
+<a href=#42 id=42 data-nosnippet>42</a>//! and `ServerConfig` instances using the `with_crypto_provider` method on the respective config
+<a href=#43 id=43 data-nosnippet>43</a>//! builder types. See the [`crypto::CryptoProvider`] documentation for more details.
+<a href=#44 id=44 data-nosnippet>44</a>//!
+<a href=#45 id=45 data-nosnippet>45</a>//! #### Built-in providers
+<a href=#46 id=46 data-nosnippet>46</a>//!
+<a href=#47 id=47 data-nosnippet>47</a>//! Rustls ships with two built-in providers controlled by associated crate features:
+<a href=#48 id=48 data-nosnippet>48</a>//!
+<a href=#49 id=49 data-nosnippet>49</a>//!   * [`aws-lc-rs`] - enabled by default, available with the `aws_lc_rs` crate feature enabled.
+<a href=#50 id=50 data-nosnippet>50</a>//!   * [`ring`] - available with the `ring` crate feature enabled.
+<a href=#51 id=51 data-nosnippet>51</a>//!
+<a href=#52 id=52 data-nosnippet>52</a>//! See the documentation for [`crypto::CryptoProvider`] for details on how providers are
+<a href=#53 id=53 data-nosnippet>53</a>//! selected.
+<a href=#54 id=54 data-nosnippet>54</a>//!
+<a href=#55 id=55 data-nosnippet>55</a>//! #### Third-party providers
+<a href=#56 id=56 data-nosnippet>56</a>//!
+<a href=#57 id=57 data-nosnippet>57</a>//! The community has also started developing third-party providers for Rustls:
+<a href=#58 id=58 data-nosnippet>58</a>//!
+<a href=#59 id=59 data-nosnippet>59</a>//!   * [`boring-rustls-provider`] - a work-in-progress provider that uses [`boringssl`] for
+<a href=#60 id=60 data-nosnippet>60</a>//!     cryptography.
+<a href=#61 id=61 data-nosnippet>61</a>//!   * [`rustls-graviola`] - a provider that uses [`graviola`] for cryptography.
+<a href=#62 id=62 data-nosnippet>62</a>//!   * [`rustls-mbedtls-provider`] - a provider that uses [`mbedtls`] for cryptography.
+<a href=#63 id=63 data-nosnippet>63</a>//!   * [`rustls-openssl`] - a provider that uses [OpenSSL] for cryptography.
+<a href=#64 id=64 data-nosnippet>64</a>//!   * [`rustls-rustcrypto`] - an experimental provider that uses the crypto primitives
+<a href=#65 id=65 data-nosnippet>65</a>//!     from [`RustCrypto`] for cryptography.
+<a href=#66 id=66 data-nosnippet>66</a>//!   * [`rustls-symcrypt`] - a provider that uses Microsoft's [SymCrypt] library.
+<a href=#67 id=67 data-nosnippet>67</a>//!   * [`rustls-wolfcrypt-provider`] - a work-in-progress provider that uses [`wolfCrypt`] for cryptography.
+<a href=#68 id=68 data-nosnippet>68</a>//!
+<a href=#69 id=69 data-nosnippet>69</a>//! [`rustls-graviola`]: https://crates.io/crates/rustls-graviola
+<a href=#70 id=70 data-nosnippet>70</a>//! [`graviola`]: https://github.com/ctz/graviola
+<a href=#71 id=71 data-nosnippet>71</a>//! [`rustls-mbedtls-provider`]: https://github.com/fortanix/rustls-mbedtls-provider
+<a href=#72 id=72 data-nosnippet>72</a>//! [`mbedtls`]: https://github.com/Mbed-TLS/mbedtls
+<a href=#73 id=73 data-nosnippet>73</a>//! [`rustls-openssl`]: https://github.com/tofay/rustls-openssl
+<a href=#74 id=74 data-nosnippet>74</a>//! [OpenSSL]: https://openssl-library.org/
+<a href=#75 id=75 data-nosnippet>75</a>//! [`rustls-symcrypt`]: https://github.com/microsoft/rustls-symcrypt
+<a href=#76 id=76 data-nosnippet>76</a>//! [SymCrypt]: https://github.com/microsoft/SymCrypt
+<a href=#77 id=77 data-nosnippet>77</a>//! [`boring-rustls-provider`]: https://github.com/janrueth/boring-rustls-provider
+<a href=#78 id=78 data-nosnippet>78</a>//! [`boringssl`]: https://github.com/google/boringssl
+<a href=#79 id=79 data-nosnippet>79</a>//! [`rustls-rustcrypto`]: https://github.com/RustCrypto/rustls-rustcrypto
+<a href=#80 id=80 data-nosnippet>80</a>//! [`RustCrypto`]: https://github.com/RustCrypto
+<a href=#81 id=81 data-nosnippet>81</a>//! [`rustls-wolfcrypt-provider`]: https://github.com/wolfSSL/rustls-wolfcrypt-provider
+<a href=#82 id=82 data-nosnippet>82</a>//! [`wolfCrypt`]: https://www.wolfssl.com/products/wolfcrypt
+<a href=#83 id=83 data-nosnippet>83</a>//!
+<a href=#84 id=84 data-nosnippet>84</a>//! #### Custom provider
+<a href=#85 id=85 data-nosnippet>85</a>//!
+<a href=#86 id=86 data-nosnippet>86</a>//! We also provide a simple example of writing your own provider in the [custom provider example].
+<a href=#87 id=87 data-nosnippet>87</a>//! This example implements a minimal provider using parts of the [`RustCrypto`] ecosystem.
+<a href=#88 id=88 data-nosnippet>88</a>//!
+<a href=#89 id=89 data-nosnippet>89</a>//! See the [Making a custom CryptoProvider] section of the documentation for more information
+<a href=#90 id=90 data-nosnippet>90</a>//! on this topic.
+<a href=#91 id=91 data-nosnippet>91</a>//!
+<a href=#92 id=92 data-nosnippet>92</a>//! [custom provider example]: https://github.com/rustls/rustls/tree/main/provider-example/
+<a href=#93 id=93 data-nosnippet>93</a>//! [`RustCrypto`]: https://github.com/RustCrypto
+<a href=#94 id=94 data-nosnippet>94</a>//! [Making a custom CryptoProvider]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#making-a-custom-cryptoprovider
+<a href=#95 id=95 data-nosnippet>95</a>//!
+<a href=#96 id=96 data-nosnippet>96</a>//! ## Design overview
+<a href=#97 id=97 data-nosnippet>97</a>//!
+<a href=#98 id=98 data-nosnippet>98</a>//! Rustls is a low-level library. If your goal is to make HTTPS connections you may prefer
+<a href=#99 id=99 data-nosnippet>99</a>//! to use a library built on top of Rustls like [hyper] or [ureq].
+<a href=#100 id=100 data-nosnippet>100</a>//!
+<a href=#101 id=101 data-nosnippet>101</a>//! [hyper]: https://crates.io/crates/hyper
+<a href=#102 id=102 data-nosnippet>102</a>//! [ureq]: https://crates.io/crates/ureq
+<a href=#103 id=103 data-nosnippet>103</a>//!
+<a href=#104 id=104 data-nosnippet>104</a>//! ### Rustls does not take care of network IO
+<a href=#105 id=105 data-nosnippet>105</a>//! It doesn't make or accept TCP connections, or do DNS, or read or write files.
+<a href=#106 id=106 data-nosnippet>106</a>//!
+<a href=#107 id=107 data-nosnippet>107</a>//! Our [examples] directory contains demos that show how to handle I/O using the
+<a href=#108 id=108 data-nosnippet>108</a>//! [`stream::Stream`] helper, as well as more complex asynchronous I/O using [`mio`].
+<a href=#109 id=109 data-nosnippet>109</a>//! If you're already using Tokio for an async runtime you may prefer to use [`tokio-rustls`] instead
+<a href=#110 id=110 data-nosnippet>110</a>//! of interacting with rustls directly.
+<a href=#111 id=111 data-nosnippet>111</a>//!
+<a href=#112 id=112 data-nosnippet>112</a>//! [examples]: https://github.com/rustls/rustls/tree/main/examples
+<a href=#113 id=113 data-nosnippet>113</a>//! [`tokio-rustls`]: https://github.com/rustls/tokio-rustls
+<a href=#114 id=114 data-nosnippet>114</a>//!
+<a href=#115 id=115 data-nosnippet>115</a>//! ### Rustls provides encrypted pipes
+<a href=#116 id=116 data-nosnippet>116</a>//! These are the [`ServerConnection`] and [`ClientConnection`] types.  You supply raw TLS traffic
+<a href=#117 id=117 data-nosnippet>117</a>//! on the left (via the [`read_tls()`] and [`write_tls()`] methods) and then read/write the
+<a href=#118 id=118 data-nosnippet>118</a>//! plaintext on the right:
+<a href=#119 id=119 data-nosnippet>119</a>//!
+<a href=#120 id=120 data-nosnippet>120</a>//! [`read_tls()`]: Connection::read_tls
+<a href=#121 id=121 data-nosnippet>121</a>//! [`write_tls()`]: Connection::read_tls
+<a href=#122 id=122 data-nosnippet>122</a>//!
+<a href=#123 id=123 data-nosnippet>123</a>//! ```text
+<a href=#124 id=124 data-nosnippet>124</a>//!          TLS                                   Plaintext
+<a href=#125 id=125 data-nosnippet>125</a>//!          ===                                   =========
+<a href=#126 id=126 data-nosnippet>126</a>//!     read_tls()      +-----------------------+      reader() as io::Read
+<a href=#127 id=127 data-nosnippet>127</a>//!                     |                       |
+<a href=#128 id=128 data-nosnippet>128</a>//!           +---------&gt;   ClientConnection    +---------&gt;
+<a href=#129 id=129 data-nosnippet>129</a>//!                     |          or           |
+<a href=#130 id=130 data-nosnippet>130</a>//!           &lt;---------+   ServerConnection    &lt;---------+
+<a href=#131 id=131 data-nosnippet>131</a>//!                     |                       |
+<a href=#132 id=132 data-nosnippet>132</a>//!     write_tls()     +-----------------------+      writer() as io::Write
+<a href=#133 id=133 data-nosnippet>133</a>//! ```
+<a href=#134 id=134 data-nosnippet>134</a>//!
+<a href=#135 id=135 data-nosnippet>135</a>//! ### Rustls takes care of server certificate verification
+<a href=#136 id=136 data-nosnippet>136</a>//! You do not need to provide anything other than a set of root certificates to trust.
+<a href=#137 id=137 data-nosnippet>137</a>//! Certificate verification cannot be turned off or disabled in the main API.
+<a href=#138 id=138 data-nosnippet>138</a>//!
+<a href=#139 id=139 data-nosnippet>139</a>//! ## Getting started
+<a href=#140 id=140 data-nosnippet>140</a>//! This is the minimum you need to do to make a TLS client connection.
+<a href=#141 id=141 data-nosnippet>141</a>//!
+<a href=#142 id=142 data-nosnippet>142</a>//! First we load some root certificates.  These are used to authenticate the server.
+<a href=#143 id=143 data-nosnippet>143</a>//! The simplest way is to depend on the [`webpki_roots`] crate which contains
+<a href=#144 id=144 data-nosnippet>144</a>//! the Mozilla set of root certificates.
+<a href=#145 id=145 data-nosnippet>145</a>//!
+<a href=#146 id=146 data-nosnippet>146</a>//! ```rust,no_run
+<a href=#147 id=147 data-nosnippet>147</a>//! # #[cfg(feature = "aws-lc-rs")] {
+<a href=#148 id=148 data-nosnippet>148</a>//! let root_store = rustls::RootCertStore::from_iter(
+<a href=#149 id=149 data-nosnippet>149</a>//!     webpki_roots::TLS_SERVER_ROOTS
+<a href=#150 id=150 data-nosnippet>150</a>//!         .iter()
+<a href=#151 id=151 data-nosnippet>151</a>//!         .cloned(),
+<a href=#152 id=152 data-nosnippet>152</a>//! );
+<a href=#153 id=153 data-nosnippet>153</a>//! # }
+<a href=#154 id=154 data-nosnippet>154</a>//! ```
+<a href=#155 id=155 data-nosnippet>155</a>//!
+<a href=#156 id=156 data-nosnippet>156</a>//! [`webpki_roots`]: https://crates.io/crates/webpki-roots
+<a href=#157 id=157 data-nosnippet>157</a>//!
+<a href=#158 id=158 data-nosnippet>158</a>//! Next, we make a `ClientConfig`.  You're likely to make one of these per process,
+<a href=#159 id=159 data-nosnippet>159</a>//! and use it for all connections made by that process.
+<a href=#160 id=160 data-nosnippet>160</a>//!
+<a href=#161 id=161 data-nosnippet>161</a>//! ```rust,no_run
+<a href=#162 id=162 data-nosnippet>162</a>//! # #[cfg(feature = "aws_lc_rs")] {
+<a href=#163 id=163 data-nosnippet>163</a>//! # let root_store: rustls::RootCertStore = panic!();
+<a href=#164 id=164 data-nosnippet>164</a>//! let config = rustls::ClientConfig::builder()
+<a href=#165 id=165 data-nosnippet>165</a>//!     .with_root_certificates(root_store)
+<a href=#166 id=166 data-nosnippet>166</a>//!     .with_no_client_auth();
+<a href=#167 id=167 data-nosnippet>167</a>//! # }
+<a href=#168 id=168 data-nosnippet>168</a>//! ```
+<a href=#169 id=169 data-nosnippet>169</a>//!
+<a href=#170 id=170 data-nosnippet>170</a>//! Now we can make a connection.  You need to provide the server's hostname so we
+<a href=#171 id=171 data-nosnippet>171</a>//! know what to expect to find in the server's certificate.
+<a href=#172 id=172 data-nosnippet>172</a>//!
+<a href=#173 id=173 data-nosnippet>173</a>//! ```rust
+<a href=#174 id=174 data-nosnippet>174</a>//! # #[cfg(feature = "aws_lc_rs")] {
+<a href=#175 id=175 data-nosnippet>175</a>//! # use rustls;
+<a href=#176 id=176 data-nosnippet>176</a>//! # use webpki;
+<a href=#177 id=177 data-nosnippet>177</a>//! # use std::sync::Arc;
+<a href=#178 id=178 data-nosnippet>178</a>//! # rustls::crypto::aws_lc_rs::default_provider().install_default();
+<a href=#179 id=179 data-nosnippet>179</a>//! # let root_store = rustls::RootCertStore::from_iter(
+<a href=#180 id=180 data-nosnippet>180</a>//! #  webpki_roots::TLS_SERVER_ROOTS
+<a href=#181 id=181 data-nosnippet>181</a>//! #      .iter()
+<a href=#182 id=182 data-nosnippet>182</a>//! #      .cloned(),
+<a href=#183 id=183 data-nosnippet>183</a>//! # );
+<a href=#184 id=184 data-nosnippet>184</a>//! # let config = rustls::ClientConfig::builder()
+<a href=#185 id=185 data-nosnippet>185</a>//! #     .with_root_certificates(root_store)
+<a href=#186 id=186 data-nosnippet>186</a>//! #     .with_no_client_auth();
+<a href=#187 id=187 data-nosnippet>187</a>//! let rc_config = Arc::new(config);
+<a href=#188 id=188 data-nosnippet>188</a>//! let example_com = "example.com".try_into().unwrap();
+<a href=#189 id=189 data-nosnippet>189</a>//! let mut client = rustls::ClientConnection::new(rc_config, example_com);
+<a href=#190 id=190 data-nosnippet>190</a>//! # }
+<a href=#191 id=191 data-nosnippet>191</a>//! ```
+<a href=#192 id=192 data-nosnippet>192</a>//!
+<a href=#193 id=193 data-nosnippet>193</a>//! Now you should do appropriate IO for the `client` object.  If `client.wants_read()` yields
+<a href=#194 id=194 data-nosnippet>194</a>//! true, you should call `client.read_tls()` when the underlying connection has data.
+<a href=#195 id=195 data-nosnippet>195</a>//! Likewise, if `client.wants_write()` yields true, you should call `client.write_tls()`
+<a href=#196 id=196 data-nosnippet>196</a>//! when the underlying connection is able to send data.  You should continue doing this
+<a href=#197 id=197 data-nosnippet>197</a>//! as long as the connection is valid.
+<a href=#198 id=198 data-nosnippet>198</a>//!
+<a href=#199 id=199 data-nosnippet>199</a>//! The return types of `read_tls()` and `write_tls()` only tell you if the IO worked.  No
+<a href=#200 id=200 data-nosnippet>200</a>//! parsing or processing of the TLS messages is done.  After each `read_tls()` you should
+<a href=#201 id=201 data-nosnippet>201</a>//! therefore call `client.process_new_packets()` which parses and processes the messages.
+<a href=#202 id=202 data-nosnippet>202</a>//! Any error returned from `process_new_packets` is fatal to the connection, and will tell you
+<a href=#203 id=203 data-nosnippet>203</a>//! why.  For example, if the server's certificate is expired `process_new_packets` will
+<a href=#204 id=204 data-nosnippet>204</a>//! return `Err(InvalidCertificate(Expired))`.  From this point on,
+<a href=#205 id=205 data-nosnippet>205</a>//! `process_new_packets` will not do any new work and will return that error continually.
+<a href=#206 id=206 data-nosnippet>206</a>//!
+<a href=#207 id=207 data-nosnippet>207</a>//! You can extract newly received data by calling `client.reader()` (which implements the
+<a href=#208 id=208 data-nosnippet>208</a>//! `io::Read` trait).  You can send data to the peer by calling `client.writer()` (which
+<a href=#209 id=209 data-nosnippet>209</a>//! implements `io::Write` trait).  Note that `client.writer().write()` buffers data you
+<a href=#210 id=210 data-nosnippet>210</a>//! send if the TLS connection is not yet established: this is useful for writing (say) a
+<a href=#211 id=211 data-nosnippet>211</a>//! HTTP request, but this is buffered so avoid large amounts of data.
+<a href=#212 id=212 data-nosnippet>212</a>//!
+<a href=#213 id=213 data-nosnippet>213</a>//! The following code uses a fictional socket IO API for illustration, and does not handle
+<a href=#214 id=214 data-nosnippet>214</a>//! errors.
+<a href=#215 id=215 data-nosnippet>215</a>//!
+<a href=#216 id=216 data-nosnippet>216</a>//! ```rust,no_run
+<a href=#217 id=217 data-nosnippet>217</a>//! # #[cfg(feature = "aws_lc_rs")] {
+<a href=#218 id=218 data-nosnippet>218</a>//! # let mut client = rustls::ClientConnection::new(panic!(), panic!()).unwrap();
+<a href=#219 id=219 data-nosnippet>219</a>//! # struct Socket { }
+<a href=#220 id=220 data-nosnippet>220</a>//! # impl Socket {
+<a href=#221 id=221 data-nosnippet>221</a>//! #   fn ready_for_write(&amp;self) -&gt; bool { false }
+<a href=#222 id=222 data-nosnippet>222</a>//! #   fn ready_for_read(&amp;self) -&gt; bool { false }
+<a href=#223 id=223 data-nosnippet>223</a>//! #   fn wait_for_something_to_happen(&amp;self) { }
+<a href=#224 id=224 data-nosnippet>224</a>//! # }
+<a href=#225 id=225 data-nosnippet>225</a>//! #
+<a href=#226 id=226 data-nosnippet>226</a>//! # use std::io::{Read, Write, Result};
+<a href=#227 id=227 data-nosnippet>227</a>//! # impl Read for Socket {
+<a href=#228 id=228 data-nosnippet>228</a>//! #   fn read(&amp;mut self, buf: &amp;mut [u8]) -&gt; Result&lt;usize&gt; { panic!() }
+<a href=#229 id=229 data-nosnippet>229</a>//! # }
+<a href=#230 id=230 data-nosnippet>230</a>//! # impl Write for Socket {
+<a href=#231 id=231 data-nosnippet>231</a>//! #   fn write(&amp;mut self, buf: &amp;[u8]) -&gt; Result&lt;usize&gt; { panic!() }
+<a href=#232 id=232 data-nosnippet>232</a>//! #   fn flush(&amp;mut self) -&gt; Result&lt;()&gt; { panic!() }
+<a href=#233 id=233 data-nosnippet>233</a>//! # }
+<a href=#234 id=234 data-nosnippet>234</a>//! #
+<a href=#235 id=235 data-nosnippet>235</a>//! # fn connect(_address: &amp;str, _port: u16) -&gt; Socket {
+<a href=#236 id=236 data-nosnippet>236</a>//! #   panic!();
+<a href=#237 id=237 data-nosnippet>237</a>//! # }
+<a href=#238 id=238 data-nosnippet>238</a>//! use std::io;
+<a href=#239 id=239 data-nosnippet>239</a>//! use rustls::Connection;
+<a href=#240 id=240 data-nosnippet>240</a>//!
+<a href=#241 id=241 data-nosnippet>241</a>//! client.writer().write(b"GET / HTTP/1.0\r\n\r\n").unwrap();
+<a href=#242 id=242 data-nosnippet>242</a>//! let mut socket = connect("example.com", 443);
+<a href=#243 id=243 data-nosnippet>243</a>//! loop {
+<a href=#244 id=244 data-nosnippet>244</a>//!   if client.wants_read() &amp;&amp; socket.ready_for_read() {
+<a href=#245 id=245 data-nosnippet>245</a>//!     client.read_tls(&amp;mut socket).unwrap();
+<a href=#246 id=246 data-nosnippet>246</a>//!     client.process_new_packets().unwrap();
+<a href=#247 id=247 data-nosnippet>247</a>//!
+<a href=#248 id=248 data-nosnippet>248</a>//!     let mut plaintext = Vec::new();
+<a href=#249 id=249 data-nosnippet>249</a>//!     client.reader().read_to_end(&amp;mut plaintext).unwrap();
+<a href=#250 id=250 data-nosnippet>250</a>//!     io::stdout().write(&amp;plaintext).unwrap();
+<a href=#251 id=251 data-nosnippet>251</a>//!   }
+<a href=#252 id=252 data-nosnippet>252</a>//!
+<a href=#253 id=253 data-nosnippet>253</a>//!   if client.wants_write() &amp;&amp; socket.ready_for_write() {
+<a href=#254 id=254 data-nosnippet>254</a>//!     client.write_tls(&amp;mut socket).unwrap();
+<a href=#255 id=255 data-nosnippet>255</a>//!   }
+<a href=#256 id=256 data-nosnippet>256</a>//!
+<a href=#257 id=257 data-nosnippet>257</a>//!   socket.wait_for_something_to_happen();
+<a href=#258 id=258 data-nosnippet>258</a>//! }
+<a href=#259 id=259 data-nosnippet>259</a>//! # }
+<a href=#260 id=260 data-nosnippet>260</a>//! ```
+<a href=#261 id=261 data-nosnippet>261</a>//!
+<a href=#262 id=262 data-nosnippet>262</a>//! # Examples
+<a href=#263 id=263 data-nosnippet>263</a>//!
+<a href=#264 id=264 data-nosnippet>264</a>//! You can find several client and server examples of varying complexity in the [examples]
+<a href=#265 id=265 data-nosnippet>265</a>//! directory, including [`tlsserver-mio`](https://github.com/rustls/rustls/blob/main/examples/src/bin/tlsserver-mio.rs)
+<a href=#266 id=266 data-nosnippet>266</a>//! and [`tlsclient-mio`](https://github.com/rustls/rustls/blob/main/examples/src/bin/tlsclient-mio.rs)
+<a href=#267 id=267 data-nosnippet>267</a>//! \- full worked examples using [`mio`].
+<a href=#268 id=268 data-nosnippet>268</a>//!
+<a href=#269 id=269 data-nosnippet>269</a>//! [`mio`]: https://docs.rs/mio/latest/mio/
+<a href=#270 id=270 data-nosnippet>270</a>//!
+<a href=#271 id=271 data-nosnippet>271</a>//! # Manual
+<a href=#272 id=272 data-nosnippet>272</a>//!
+<a href=#273 id=273 data-nosnippet>273</a>//! The [rustls manual](crate::manual) explains design decisions and includes how-to guidance.
+<a href=#274 id=274 data-nosnippet>274</a>//!
+<a href=#275 id=275 data-nosnippet>275</a>//! # Crate features
+<a href=#276 id=276 data-nosnippet>276</a>//! Here's a list of what features are exposed by the rustls crate and what
+<a href=#277 id=277 data-nosnippet>277</a>//! they mean.
+<a href=#278 id=278 data-nosnippet>278</a>//!
+<a href=#279 id=279 data-nosnippet>279</a>//! - `std` (enabled by default): enable the high-level (buffered) Connection API and other functionality
+<a href=#280 id=280 data-nosnippet>280</a>//!   which relies on the `std` library.
+<a href=#281 id=281 data-nosnippet>281</a>//!
+<a href=#282 id=282 data-nosnippet>282</a>//! - `aws_lc_rs` (enabled by default): makes the rustls crate depend on the [`aws-lc-rs`] crate.
+<a href=#283 id=283 data-nosnippet>283</a>//!   Use `rustls::crypto::aws_lc_rs::default_provider().install_default()` to
+<a href=#284 id=284 data-nosnippet>284</a>//!   use it as the default `CryptoProvider`, or provide it explicitly
+<a href=#285 id=285 data-nosnippet>285</a>//!   when making a `ClientConfig` or `ServerConfig`.
+<a href=#286 id=286 data-nosnippet>286</a>//!
+<a href=#287 id=287 data-nosnippet>287</a>//!   Note that aws-lc-rs has additional build-time dependencies like cmake.
+<a href=#288 id=288 data-nosnippet>288</a>//!   See [the documentation](https://aws.github.io/aws-lc-rs/requirements/index.html) for details.
+<a href=#289 id=289 data-nosnippet>289</a>//!
+<a href=#290 id=290 data-nosnippet>290</a>//! - `ring`: makes the rustls crate depend on the *ring* crate for cryptography.
+<a href=#291 id=291 data-nosnippet>291</a>//!   Use `rustls::crypto::ring::default_provider().install_default()` to
+<a href=#292 id=292 data-nosnippet>292</a>//!   use it as the default `CryptoProvider`, or provide it explicitly
+<a href=#293 id=293 data-nosnippet>293</a>//!   when making a `ClientConfig` or `ServerConfig`.
+<a href=#294 id=294 data-nosnippet>294</a>//!
+<a href=#295 id=295 data-nosnippet>295</a>//! - `fips`: enable support for FIPS140-3-approved cryptography, via the [`aws-lc-rs`] crate.
+<a href=#296 id=296 data-nosnippet>296</a>//!   This feature enables the `aws_lc_rs` crate feature, which makes the rustls crate depend
+<a href=#297 id=297 data-nosnippet>297</a>//!   on [aws-lc-rs](https://github.com/aws/aws-lc-rs).  It also changes the default
+<a href=#298 id=298 data-nosnippet>298</a>//!   for [`ServerConfig::require_ems`] and [`ClientConfig::require_ems`].
+<a href=#299 id=299 data-nosnippet>299</a>//!
+<a href=#300 id=300 data-nosnippet>300</a>//!   See [manual::_06_fips] for more details.
+<a href=#301 id=301 data-nosnippet>301</a>//!
+<a href=#302 id=302 data-nosnippet>302</a>//! - `prefer-post-quantum` (enabled by default): for the [`aws-lc-rs`]-backed provider,
+<a href=#303 id=303 data-nosnippet>303</a>//!   prioritizes post-quantum secure key exchange by default (using X25519MLKEM768).
+<a href=#304 id=304 data-nosnippet>304</a>//!   This feature merely alters the order of `rustls::crypto::aws_lc_rs::DEFAULT_KX_GROUPS`.
+<a href=#305 id=305 data-nosnippet>305</a>//!   See [the manual][x25519mlkem768-manual] for more details.
+<a href=#306 id=306 data-nosnippet>306</a>//!
+<a href=#307 id=307 data-nosnippet>307</a>//! - `custom-provider`: disables implicit use of built-in providers (`aws-lc-rs` or `ring`). This forces
+<a href=#308 id=308 data-nosnippet>308</a>//!   applications to manually install one, for instance, when using a custom `CryptoProvider`.
+<a href=#309 id=309 data-nosnippet>309</a>//!
+<a href=#310 id=310 data-nosnippet>310</a>//! - `tls12` (enabled by default): enable support for TLS version 1.2. Note that, due to the
+<a href=#311 id=311 data-nosnippet>311</a>//!   additive nature of Cargo features and because it is enabled by default, other crates
+<a href=#312 id=312 data-nosnippet>312</a>//!   in your dependency graph could re-enable it for your application. If you want to disable
+<a href=#313 id=313 data-nosnippet>313</a>//!   TLS 1.2 for security reasons, consider explicitly enabling TLS 1.3 only in the config
+<a href=#314 id=314 data-nosnippet>314</a>//!   builder API.
+<a href=#315 id=315 data-nosnippet>315</a>//!
+<a href=#316 id=316 data-nosnippet>316</a>//! - `logging` (enabled by default): make the rustls crate depend on the `log` crate.
+<a href=#317 id=317 data-nosnippet>317</a>//!   rustls outputs interesting protocol-level messages at `trace!` and `debug!` level,
+<a href=#318 id=318 data-nosnippet>318</a>//!   and protocol-level errors at `warn!` and `error!` level.  The log messages do not
+<a href=#319 id=319 data-nosnippet>319</a>//!   contain secret key data, and so are safe to archive without affecting session security.
+<a href=#320 id=320 data-nosnippet>320</a>//!
+<a href=#321 id=321 data-nosnippet>321</a>//! - `read_buf`: when building with Rust Nightly, adds support for the unstable
+<a href=#322 id=322 data-nosnippet>322</a>//!   `std::io::ReadBuf` and related APIs. This reduces costs from initializing
+<a href=#323 id=323 data-nosnippet>323</a>//!   buffers. Will do nothing on non-Nightly releases.
+<a href=#324 id=324 data-nosnippet>324</a>//!
+<a href=#325 id=325 data-nosnippet>325</a>//! - `brotli`: uses the `brotli` crate for RFC8879 certificate compression support.
+<a href=#326 id=326 data-nosnippet>326</a>//!
+<a href=#327 id=327 data-nosnippet>327</a>//! - `zlib`: uses the `zlib-rs` crate for RFC8879 certificate compression support.
+<a href=#328 id=328 data-nosnippet>328</a>//!
+<a href=#329 id=329 data-nosnippet>329</a>//! [x25519mlkem768-manual]: manual::_05_defaults#about-the-post-quantum-secure-key-exchange-x25519mlkem768
+<a href=#330 id=330 data-nosnippet>330</a>
+<a href=#331 id=331 data-nosnippet>331</a></span><span class="comment">// Require docs for public APIs, deny unsafe code, etc.
+<a href=#332 id=332 data-nosnippet>332</a></span><span class="attr">#![forbid(unsafe_code, unused_must_use)]
+<a href=#333 id=333 data-nosnippet>333</a>#![cfg_attr(not(any(read_buf, bench, coverage_nightly)), forbid(unstable_features))]
+<a href=#334 id=334 data-nosnippet>334</a>#![warn(
+<a href=#335 id=335 data-nosnippet>335</a>    clippy::alloc_instead_of_core,
+<a href=#336 id=336 data-nosnippet>336</a>    clippy::manual_let_else,
+<a href=#337 id=337 data-nosnippet>337</a>    clippy::std_instead_of_core,
+<a href=#338 id=338 data-nosnippet>338</a>    clippy::use_self,
+<a href=#339 id=339 data-nosnippet>339</a>    clippy::upper_case_acronyms,
+<a href=#340 id=340 data-nosnippet>340</a>    elided_lifetimes_in_paths,
+<a href=#341 id=341 data-nosnippet>341</a>    missing_docs,
+<a href=#342 id=342 data-nosnippet>342</a>    trivial_casts,
+<a href=#343 id=343 data-nosnippet>343</a>    trivial_numeric_casts,
+<a href=#344 id=344 data-nosnippet>344</a>    unreachable_pub,
+<a href=#345 id=345 data-nosnippet>345</a>    unused_import_braces,
+<a href=#346 id=346 data-nosnippet>346</a>    unused_extern_crates,
+<a href=#347 id=347 data-nosnippet>347</a>    unused_qualifications
+<a href=#348 id=348 data-nosnippet>348</a>)]
+<a href=#349 id=349 data-nosnippet>349</a></span><span class="comment">// Relax these clippy lints:
+<a href=#350 id=350 data-nosnippet>350</a>// - ptr_arg: this triggers on references to type aliases that are Vec
+<a href=#351 id=351 data-nosnippet>351</a>//   underneath.
+<a href=#352 id=352 data-nosnippet>352</a>// - too_many_arguments: some things just need a lot of state, wrapping it
+<a href=#353 id=353 data-nosnippet>353</a>//   doesn't necessarily make it easier to follow what's going on
+<a href=#354 id=354 data-nosnippet>354</a>// - new_ret_no_self: we sometimes return `Arc&lt;Self&gt;`, which seems fine
+<a href=#355 id=355 data-nosnippet>355</a>// - single_component_path_imports: our top-level `use log` import causes
+<a href=#356 id=356 data-nosnippet>356</a>//   a false positive, https://github.com/rust-lang/rust-clippy/issues/5210
+<a href=#357 id=357 data-nosnippet>357</a>// - new_without_default: for internal constructors, the indirection is not
+<a href=#358 id=358 data-nosnippet>358</a>//   helpful
+<a href=#359 id=359 data-nosnippet>359</a></span><span class="attr">#![allow(
+<a href=#360 id=360 data-nosnippet>360</a>    clippy::too_many_arguments,
+<a href=#361 id=361 data-nosnippet>361</a>    clippy::new_ret_no_self,
+<a href=#362 id=362 data-nosnippet>362</a>    clippy::ptr_arg,
+<a href=#363 id=363 data-nosnippet>363</a>    clippy::single_component_path_imports,
+<a href=#364 id=364 data-nosnippet>364</a>    clippy::new_without_default
+<a href=#365 id=365 data-nosnippet>365</a>)]
+<a href=#366 id=366 data-nosnippet>366</a></span><span class="comment">// Enable documentation for all features on docs.rs
+<a href=#367 id=367 data-nosnippet>367</a></span><span class="attr">#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+<a href=#368 id=368 data-nosnippet>368</a></span><span class="comment">// Enable coverage() attr for nightly coverage builds, see
+<a href=#369 id=369 data-nosnippet>369</a>// &lt;https://github.com/rust-lang/rust/issues/84605&gt;
+<a href=#370 id=370 data-nosnippet>370</a>// (`coverage_nightly` is a cfg set by `cargo-llvm-cov`)
+<a href=#371 id=371 data-nosnippet>371</a></span><span class="attr">#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+<a href=#372 id=372 data-nosnippet>372</a></span><span class="comment">// XXX: Because of https://github.com/rust-lang/rust/issues/54726, we cannot
+<a href=#373 id=373 data-nosnippet>373</a>// write `#![rustversion::attr(nightly, feature(read_buf))]` here. Instead,
+<a href=#374 id=374 data-nosnippet>374</a>// build.rs set `read_buf` for (only) Rust Nightly to get the same effect.
+<a href=#375 id=375 data-nosnippet>375</a>//
+<a href=#376 id=376 data-nosnippet>376</a>// All the other conditional logic in the crate could use
+<a href=#377 id=377 data-nosnippet>377</a>// `#[rustversion::nightly]` instead of `#[cfg(read_buf)]`; `#[cfg(read_buf)]`
+<a href=#378 id=378 data-nosnippet>378</a>// is used to avoid needing `rustversion` to be compiled twice during
+<a href=#379 id=379 data-nosnippet>379</a>// cross-compiling.
+<a href=#380 id=380 data-nosnippet>380</a></span><span class="attr">#![cfg_attr(read_buf, feature(read_buf))]
+<a href=#381 id=381 data-nosnippet>381</a>#![cfg_attr(read_buf, feature(core_io_borrowed_buf))]
+<a href=#382 id=382 data-nosnippet>382</a>#![cfg_attr(bench, feature(test))]
+<a href=#383 id=383 data-nosnippet>383</a>#![no_std]
+<a href=#384 id=384 data-nosnippet>384</a>
+<a href=#385 id=385 data-nosnippet>385</a></span><span class="kw">extern crate </span>alloc;
+<a href=#386 id=386 data-nosnippet>386</a><span class="comment">// This `extern crate` plus the `#![no_std]` attribute changes the default prelude from
+<a href=#387 id=387 data-nosnippet>387</a>// `std::prelude` to `core::prelude`. That forces one to _explicitly_ import (`use`) everything that
+<a href=#388 id=388 data-nosnippet>388</a>// is in `std::prelude` but not in `core::prelude`. This helps maintain no-std support as even
+<a href=#389 id=389 data-nosnippet>389</a>// developers that are not interested in, or aware of, no-std support and / or that never run
+<a href=#390 id=390 data-nosnippet>390</a>// `cargo build --no-default-features` locally will get errors when they rely on `std::prelude` API.
+<a href=#391 id=391 data-nosnippet>391</a></span><span class="attr">#[cfg(any(feature = <span class="string">"std"</span>, test))]
+<a href=#392 id=392 data-nosnippet>392</a></span><span class="kw">extern crate </span>std;
+<a href=#393 id=393 data-nosnippet>393</a>
+<a href=#394 id=394 data-nosnippet>394</a><span class="attr">#[cfg(doc)]
+<a href=#395 id=395 data-nosnippet>395</a></span><span class="kw">use </span><span class="kw">crate</span>::crypto::CryptoProvider;
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a><span class="comment">// Import `test` sysroot crate for `Bencher` definitions.
+<a href=#398 id=398 data-nosnippet>398</a></span><span class="attr">#[cfg(bench)]
+<a href=#399 id=399 data-nosnippet>399</a>#[allow(unused_extern_crates)]
+<a href=#400 id=400 data-nosnippet>400</a></span><span class="kw">extern crate </span>test;
+<a href=#401 id=401 data-nosnippet>401</a>
+<a href=#402 id=402 data-nosnippet>402</a><span class="comment">// log for logging (optional).
+<a href=#403 id=403 data-nosnippet>403</a></span><span class="attr">#[cfg(feature = <span class="string">"logging"</span>)]
+<a href=#404 id=404 data-nosnippet>404</a></span><span class="kw">use </span>log;
+<a href=#405 id=405 data-nosnippet>405</a>
+<a href=#406 id=406 data-nosnippet>406</a><span class="attr">#[cfg(not(feature = <span class="string">"logging"</span>))]
+<a href=#407 id=407 data-nosnippet>407</a></span><span class="kw">mod </span>log {
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="macro">macro_rules!</span> trace    ( ($(<span class="macro-nonterminal">$tt</span>:tt)<span class="kw-2">*</span>) =&gt; {{}} );
+<a href=#409 id=409 data-nosnippet>409</a>    <span class="macro">macro_rules!</span> debug    ( ($(<span class="macro-nonterminal">$tt</span>:tt)<span class="kw-2">*</span>) =&gt; {{}} );
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="macro">macro_rules!</span> error    ( ($(<span class="macro-nonterminal">$tt</span>:tt)<span class="kw-2">*</span>) =&gt; {{}} );
+<a href=#411 id=411 data-nosnippet>411</a>    <span class="macro">macro_rules!</span> _warn    ( ($(<span class="macro-nonterminal">$tt</span>:tt)<span class="kw-2">*</span>) =&gt; {{}} );
+<a href=#412 id=412 data-nosnippet>412</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>{_warn <span class="kw">as </span>warn, debug, error, trace};
+<a href=#413 id=413 data-nosnippet>413</a>}
+<a href=#414 id=414 data-nosnippet>414</a>
+<a href=#415 id=415 data-nosnippet>415</a><span class="attr">#[cfg(test)]
+<a href=#416 id=416 data-nosnippet>416</a>#[macro_use]
+<a href=#417 id=417 data-nosnippet>417</a></span><span class="kw">mod </span>test_macros;
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a><span class="doccomment">/// This internal `sync` module aliases the `Arc` implementation to allow downstream forks
+<a href=#420 id=420 data-nosnippet>420</a>/// of rustls targeting architectures without atomic pointers to replace the implementation
+<a href=#421 id=421 data-nosnippet>421</a>/// with another implementation such as `portable_atomic_util::Arc` in one central location.
+<a href=#422 id=422 data-nosnippet>422</a></span><span class="kw">mod </span>sync {
+<a href=#423 id=423 data-nosnippet>423</a>    <span class="attr">#[allow(clippy::disallowed_types)]
+<a href=#424 id=424 data-nosnippet>424</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>Arc&lt;T&gt; = alloc::sync::Arc&lt;T&gt;;
+<a href=#425 id=425 data-nosnippet>425</a>    <span class="attr">#[allow(clippy::disallowed_types)]
+<a href=#426 id=426 data-nosnippet>426</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>Weak&lt;T&gt; = alloc::sync::Weak&lt;T&gt;;
+<a href=#427 id=427 data-nosnippet>427</a>}
+<a href=#428 id=428 data-nosnippet>428</a>
+<a href=#429 id=429 data-nosnippet>429</a><span class="attr">#[macro_use]
+<a href=#430 id=430 data-nosnippet>430</a></span><span class="kw">mod </span>msgs;
+<a href=#431 id=431 data-nosnippet>431</a><span class="kw">mod </span>common_state;
+<a href=#432 id=432 data-nosnippet>432</a><span class="kw">pub mod </span>compress;
+<a href=#433 id=433 data-nosnippet>433</a><span class="kw">mod </span>conn;
+<a href=#434 id=434 data-nosnippet>434</a><span class="doccomment">/// Crypto provider interface.
+<a href=#435 id=435 data-nosnippet>435</a></span><span class="kw">pub mod </span>crypto;
+<a href=#436 id=436 data-nosnippet>436</a><span class="kw">mod </span>error;
+<a href=#437 id=437 data-nosnippet>437</a><span class="kw">mod </span>hash_hs;
+<a href=#438 id=438 data-nosnippet>438</a><span class="attr">#[cfg(any(feature = <span class="string">"std"</span>, feature = <span class="string">"hashbrown"</span>))]
+<a href=#439 id=439 data-nosnippet>439</a></span><span class="kw">mod </span>limited_cache;
+<a href=#440 id=440 data-nosnippet>440</a><span class="kw">mod </span>rand;
+<a href=#441 id=441 data-nosnippet>441</a><span class="kw">mod </span>record_layer;
+<a href=#442 id=442 data-nosnippet>442</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#443 id=443 data-nosnippet>443</a></span><span class="kw">mod </span>stream;
+<a href=#444 id=444 data-nosnippet>444</a><span class="attr">#[cfg(feature = <span class="string">"tls12"</span>)]
+<a href=#445 id=445 data-nosnippet>445</a></span><span class="kw">mod </span>tls12;
+<a href=#446 id=446 data-nosnippet>446</a><span class="kw">mod </span>tls13;
+<a href=#447 id=447 data-nosnippet>447</a><span class="kw">mod </span>vecbuf;
+<a href=#448 id=448 data-nosnippet>448</a><span class="kw">mod </span>verify;
+<a href=#449 id=449 data-nosnippet>449</a><span class="attr">#[cfg(test)]
+<a href=#450 id=450 data-nosnippet>450</a></span><span class="kw">mod </span>verifybench;
+<a href=#451 id=451 data-nosnippet>451</a><span class="kw">mod </span>x509;
+<a href=#452 id=452 data-nosnippet>452</a><span class="attr">#[macro_use]
+<a href=#453 id=453 data-nosnippet>453</a></span><span class="kw">mod </span>check;
+<a href=#454 id=454 data-nosnippet>454</a><span class="attr">#[cfg(feature = <span class="string">"logging"</span>)]
+<a href=#455 id=455 data-nosnippet>455</a></span><span class="kw">mod </span>bs_debug;
+<a href=#456 id=456 data-nosnippet>456</a><span class="kw">mod </span>builder;
+<a href=#457 id=457 data-nosnippet>457</a><span class="kw">mod </span>enums;
+<a href=#458 id=458 data-nosnippet>458</a><span class="kw">mod </span>key_log;
+<a href=#459 id=459 data-nosnippet>459</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#460 id=460 data-nosnippet>460</a></span><span class="kw">mod </span>key_log_file;
+<a href=#461 id=461 data-nosnippet>461</a><span class="kw">mod </span>suites;
+<a href=#462 id=462 data-nosnippet>462</a><span class="kw">mod </span>versions;
+<a href=#463 id=463 data-nosnippet>463</a><span class="kw">mod </span>webpki;
+<a href=#464 id=464 data-nosnippet>464</a>
+<a href=#465 id=465 data-nosnippet>465</a><span class="doccomment">/// Internal classes that are used in integration tests.
+<a href=#466 id=466 data-nosnippet>466</a>/// The contents of this section DO NOT form part of the stable interface.
+<a href=#467 id=467 data-nosnippet>467</a></span><span class="attr">#[allow(missing_docs)]
+<a href=#468 id=468 data-nosnippet>468</a>#[doc(hidden)]
+<a href=#469 id=469 data-nosnippet>469</a></span><span class="kw">pub mod </span>internal {
+<a href=#470 id=470 data-nosnippet>470</a>    <span class="doccomment">/// Low-level TLS message parsing and encoding functions.
+<a href=#471 id=471 data-nosnippet>471</a>    </span><span class="kw">pub mod </span>msgs {
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">pub mod </span>base {
+<a href=#473 id=473 data-nosnippet>473</a>            <span class="kw">pub use </span><span class="kw">crate</span>::msgs::base::{Payload, PayloadU16};
+<a href=#474 id=474 data-nosnippet>474</a>        }
+<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">pub mod </span>codec {
+<a href=#476 id=476 data-nosnippet>476</a>            <span class="kw">pub use </span><span class="kw">crate</span>::msgs::codec::{Codec, Reader};
+<a href=#477 id=477 data-nosnippet>477</a>        }
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">pub mod </span>enums {
+<a href=#479 id=479 data-nosnippet>479</a>            <span class="kw">pub use </span><span class="kw">crate</span>::msgs::enums::{
+<a href=#480 id=480 data-nosnippet>480</a>                AlertLevel, EchVersion, ExtensionType, HpkeAead, HpkeKdf, HpkeKem,
+<a href=#481 id=481 data-nosnippet>481</a>            };
+<a href=#482 id=482 data-nosnippet>482</a>        }
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="kw">pub mod </span>fragmenter {
+<a href=#484 id=484 data-nosnippet>484</a>            <span class="kw">pub use </span><span class="kw">crate</span>::msgs::fragmenter::MessageFragmenter;
+<a href=#485 id=485 data-nosnippet>485</a>        }
+<a href=#486 id=486 data-nosnippet>486</a>        <span class="kw">pub mod </span>handshake {
+<a href=#487 id=487 data-nosnippet>487</a>            <span class="kw">pub use </span><span class="kw">crate</span>::msgs::handshake::{
+<a href=#488 id=488 data-nosnippet>488</a>                EchConfigContents, EchConfigPayload, HpkeKeyConfig, HpkeSymmetricCipherSuite,
+<a href=#489 id=489 data-nosnippet>489</a>            };
+<a href=#490 id=490 data-nosnippet>490</a>        }
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="kw">pub mod </span>message {
+<a href=#492 id=492 data-nosnippet>492</a>            <span class="kw">pub use </span><span class="kw">crate</span>::msgs::message::{
+<a href=#493 id=493 data-nosnippet>493</a>                Message, MessagePayload, OutboundOpaqueMessage, PlainMessage,
+<a href=#494 id=494 data-nosnippet>494</a>            };
+<a href=#495 id=495 data-nosnippet>495</a>        }
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="kw">pub mod </span>persist {
+<a href=#497 id=497 data-nosnippet>497</a>            <span class="kw">pub use </span><span class="kw">crate</span>::msgs::persist::ServerSessionValue;
+<a href=#498 id=498 data-nosnippet>498</a>        }
+<a href=#499 id=499 data-nosnippet>499</a>    }
+<a href=#500 id=500 data-nosnippet>500</a>
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="kw">pub use </span><span class="kw">crate</span>::tls13::key_schedule::{derive_traffic_iv, derive_traffic_key};
+<a href=#502 id=502 data-nosnippet>502</a>
+<a href=#503 id=503 data-nosnippet>503</a>    <span class="kw">pub mod </span>fuzzing {
+<a href=#504 id=504 data-nosnippet>504</a>        <span class="kw">pub use </span><span class="kw">crate</span>::msgs::deframer::fuzz_deframer;
+<a href=#505 id=505 data-nosnippet>505</a>    }
+<a href=#506 id=506 data-nosnippet>506</a>}
+<a href=#507 id=507 data-nosnippet>507</a>
+<a href=#508 id=508 data-nosnippet>508</a><span class="doccomment">/// Unbuffered connection API
+<a href=#509 id=509 data-nosnippet>509</a>///
+<a href=#510 id=510 data-nosnippet>510</a>/// This is an alternative to the [`crate::ConnectionCommon`] API that does not internally buffer
+<a href=#511 id=511 data-nosnippet>511</a>/// TLS nor plaintext data. Instead those buffers are managed by the API user so they have
+<a href=#512 id=512 data-nosnippet>512</a>/// control over when and how to allocate, resize and dispose of them.
+<a href=#513 id=513 data-nosnippet>513</a>///
+<a href=#514 id=514 data-nosnippet>514</a>/// This API is lower level than the `ConnectionCommon` API and is built around a state machine
+<a href=#515 id=515 data-nosnippet>515</a>/// interface where the API user must handle each state to advance and complete the
+<a href=#516 id=516 data-nosnippet>516</a>/// handshake process.
+<a href=#517 id=517 data-nosnippet>517</a>///
+<a href=#518 id=518 data-nosnippet>518</a>/// Like the `ConnectionCommon` API, no IO happens internally so all IO must be handled by the API
+<a href=#519 id=519 data-nosnippet>519</a>/// user. Unlike the `ConnectionCommon` API, this API does not make use of the [`std::io::Read`] and
+<a href=#520 id=520 data-nosnippet>520</a>/// [`std::io::Write`] traits so it's usable in no-std context.
+<a href=#521 id=521 data-nosnippet>521</a>///
+<a href=#522 id=522 data-nosnippet>522</a>/// The entry points into this API are [`crate::client::UnbufferedClientConnection::new`],
+<a href=#523 id=523 data-nosnippet>523</a>/// [`crate::server::UnbufferedServerConnection::new`] and
+<a href=#524 id=524 data-nosnippet>524</a>/// [`unbuffered::UnbufferedConnectionCommon::process_tls_records`]. The state machine API is
+<a href=#525 id=525 data-nosnippet>525</a>/// documented in [`unbuffered::ConnectionState`].
+<a href=#526 id=526 data-nosnippet>526</a>///
+<a href=#527 id=527 data-nosnippet>527</a>/// # Examples
+<a href=#528 id=528 data-nosnippet>528</a>///
+<a href=#529 id=529 data-nosnippet>529</a>/// [`unbuffered-client`] and [`unbuffered-server`] are examples that fully exercise the API in
+<a href=#530 id=530 data-nosnippet>530</a>/// std, non-async context.
+<a href=#531 id=531 data-nosnippet>531</a>///
+<a href=#532 id=532 data-nosnippet>532</a>/// [`unbuffered-client`]: https://github.com/rustls/rustls/blob/main/examples/src/bin/unbuffered-client.rs
+<a href=#533 id=533 data-nosnippet>533</a>/// [`unbuffered-server`]: https://github.com/rustls/rustls/blob/main/examples/src/bin/unbuffered-server.rs
+<a href=#534 id=534 data-nosnippet>534</a></span><span class="kw">pub mod </span>unbuffered {
+<a href=#535 id=535 data-nosnippet>535</a>    <span class="kw">pub use </span><span class="kw">crate</span>::conn::UnbufferedConnectionCommon;
+<a href=#536 id=536 data-nosnippet>536</a>    <span class="kw">pub use </span><span class="kw">crate</span>::conn::unbuffered::{
+<a href=#537 id=537 data-nosnippet>537</a>        AppDataRecord, ConnectionState, EncodeError, EncodeTlsData, EncryptError,
+<a href=#538 id=538 data-nosnippet>538</a>        InsufficientSizeError, ReadEarlyData, ReadTraffic, TransmitTlsData, UnbufferedStatus,
+<a href=#539 id=539 data-nosnippet>539</a>        WriteTraffic,
+<a href=#540 id=540 data-nosnippet>540</a>    };
+<a href=#541 id=541 data-nosnippet>541</a>}
+<a href=#542 id=542 data-nosnippet>542</a>
+<a href=#543 id=543 data-nosnippet>543</a><span class="comment">// The public interface is:
+<a href=#544 id=544 data-nosnippet>544</a></span><span class="kw">pub use </span><span class="kw">crate</span>::builder::{ConfigBuilder, ConfigSide, WantsVerifier, WantsVersions};
+<a href=#545 id=545 data-nosnippet>545</a><span class="kw">pub use </span><span class="kw">crate</span>::common_state::{CommonState, HandshakeKind, IoState, Side};
+<a href=#546 id=546 data-nosnippet>546</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#547 id=547 data-nosnippet>547</a></span><span class="kw">pub use </span><span class="kw">crate</span>::conn::{Connection, Reader, Writer};
+<a href=#548 id=548 data-nosnippet>548</a><span class="kw">pub use </span><span class="kw">crate</span>::conn::{ConnectionCommon, SideData, kernel};
+<a href=#549 id=549 data-nosnippet>549</a><span class="kw">pub use </span><span class="kw">crate</span>::enums::{
+<a href=#550 id=550 data-nosnippet>550</a>    AlertDescription, CertificateCompressionAlgorithm, CipherSuite, ContentType, HandshakeType,
+<a href=#551 id=551 data-nosnippet>551</a>    ProtocolVersion, SignatureAlgorithm, SignatureScheme,
+<a href=#552 id=552 data-nosnippet>552</a>};
+<a href=#553 id=553 data-nosnippet>553</a><span class="kw">pub use </span><span class="kw">crate</span>::error::{
+<a href=#554 id=554 data-nosnippet>554</a>    CertRevocationListError, CertificateError, EncryptedClientHelloError, Error,
+<a href=#555 id=555 data-nosnippet>555</a>    ExtendedKeyPurpose, InconsistentKeys, InvalidMessage, OtherError, PeerIncompatible,
+<a href=#556 id=556 data-nosnippet>556</a>    PeerMisbehaved,
+<a href=#557 id=557 data-nosnippet>557</a>};
+<a href=#558 id=558 data-nosnippet>558</a><span class="kw">pub use </span><span class="kw">crate</span>::key_log::{KeyLog, NoKeyLog};
+<a href=#559 id=559 data-nosnippet>559</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#560 id=560 data-nosnippet>560</a></span><span class="kw">pub use </span><span class="kw">crate</span>::key_log_file::KeyLogFile;
+<a href=#561 id=561 data-nosnippet>561</a><span class="kw">pub use </span><span class="kw">crate</span>::msgs::enums::NamedGroup;
+<a href=#562 id=562 data-nosnippet>562</a><span class="kw">pub use </span><span class="kw">crate</span>::msgs::ffdhe_groups;
+<a href=#563 id=563 data-nosnippet>563</a><span class="kw">pub use </span><span class="kw">crate</span>::msgs::handshake::DistinguishedName;
+<a href=#564 id=564 data-nosnippet>564</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#565 id=565 data-nosnippet>565</a></span><span class="kw">pub use </span><span class="kw">crate</span>::stream::{Stream, StreamOwned};
+<a href=#566 id=566 data-nosnippet>566</a><span class="kw">pub use </span><span class="kw">crate</span>::suites::{
+<a href=#567 id=567 data-nosnippet>567</a>    CipherSuiteCommon, ConnectionTrafficSecrets, ExtractedSecrets, SupportedCipherSuite,
+<a href=#568 id=568 data-nosnippet>568</a>};
+<a href=#569 id=569 data-nosnippet>569</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#570 id=570 data-nosnippet>570</a></span><span class="kw">pub use </span><span class="kw">crate</span>::ticketer::TicketRotator;
+<a href=#571 id=571 data-nosnippet>571</a><span class="attr">#[cfg(any(feature = <span class="string">"std"</span>, feature = <span class="string">"hashbrown"</span>))] </span><span class="comment">// &lt; XXX: incorrect feature gate
+<a href=#572 id=572 data-nosnippet>572</a></span><span class="kw">pub use </span><span class="kw">crate</span>::ticketer::TicketSwitcher;
+<a href=#573 id=573 data-nosnippet>573</a><span class="attr">#[cfg(feature = <span class="string">"tls12"</span>)]
+<a href=#574 id=574 data-nosnippet>574</a></span><span class="kw">pub use </span><span class="kw">crate</span>::tls12::Tls12CipherSuite;
+<a href=#575 id=575 data-nosnippet>575</a><span class="kw">pub use </span><span class="kw">crate</span>::tls13::Tls13CipherSuite;
+<a href=#576 id=576 data-nosnippet>576</a><span class="kw">pub use </span><span class="kw">crate</span>::verify::DigitallySignedStruct;
+<a href=#577 id=577 data-nosnippet>577</a><span class="kw">pub use </span><span class="kw">crate</span>::versions::{ALL_VERSIONS, DEFAULT_VERSIONS, SupportedProtocolVersion};
+<a href=#578 id=578 data-nosnippet>578</a><span class="kw">pub use </span><span class="kw">crate</span>::webpki::RootCertStore;
+<a href=#579 id=579 data-nosnippet>579</a>
+<a href=#580 id=580 data-nosnippet>580</a><span class="doccomment">/// Items for use in a client.
+<a href=#581 id=581 data-nosnippet>581</a></span><span class="kw">pub mod </span>client {
+<a href=#582 id=582 data-nosnippet>582</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>builder;
+<a href=#583 id=583 data-nosnippet>583</a>    <span class="kw">mod </span>client_conn;
+<a href=#584 id=584 data-nosnippet>584</a>    <span class="kw">mod </span>common;
+<a href=#585 id=585 data-nosnippet>585</a>    <span class="kw">mod </span>ech;
+<a href=#586 id=586 data-nosnippet>586</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>handy;
+<a href=#587 id=587 data-nosnippet>587</a>    <span class="kw">mod </span>hs;
+<a href=#588 id=588 data-nosnippet>588</a>    <span class="attr">#[cfg(test)]
+<a href=#589 id=589 data-nosnippet>589</a>    </span><span class="kw">mod </span>test;
+<a href=#590 id=590 data-nosnippet>590</a>    <span class="attr">#[cfg(feature = <span class="string">"tls12"</span>)]
+<a href=#591 id=591 data-nosnippet>591</a>    </span><span class="kw">mod </span>tls12;
+<a href=#592 id=592 data-nosnippet>592</a>    <span class="kw">mod </span>tls13;
+<a href=#593 id=593 data-nosnippet>593</a>
+<a href=#594 id=594 data-nosnippet>594</a>    <span class="kw">pub use </span>builder::WantsClientCert;
+<a href=#595 id=595 data-nosnippet>595</a>    <span class="kw">pub use </span>client_conn::{
+<a href=#596 id=596 data-nosnippet>596</a>        ClientConfig, ClientConnectionData, ClientSessionStore, EarlyDataError, ResolvesClientCert,
+<a href=#597 id=597 data-nosnippet>597</a>        Resumption, Tls12Resumption, UnbufferedClientConnection,
+<a href=#598 id=598 data-nosnippet>598</a>    };
+<a href=#599 id=599 data-nosnippet>599</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#600 id=600 data-nosnippet>600</a>    </span><span class="kw">pub use </span>client_conn::{ClientConnection, WriteEarlyData};
+<a href=#601 id=601 data-nosnippet>601</a>    <span class="kw">pub use </span>ech::{EchConfig, EchGreaseConfig, EchMode, EchStatus};
+<a href=#602 id=602 data-nosnippet>602</a>    <span class="kw">pub use </span>handy::AlwaysResolvesClientRawPublicKeys;
+<a href=#603 id=603 data-nosnippet>603</a>    <span class="attr">#[cfg(any(feature = <span class="string">"std"</span>, feature = <span class="string">"hashbrown"</span>))]
+<a href=#604 id=604 data-nosnippet>604</a>    </span><span class="kw">pub use </span>handy::ClientSessionMemoryCache;
+<a href=#605 id=605 data-nosnippet>605</a>
+<a href=#606 id=606 data-nosnippet>606</a>    <span class="doccomment">/// Dangerous configuration that should be audited and used with extreme care.
+<a href=#607 id=607 data-nosnippet>607</a>    </span><span class="kw">pub mod </span>danger {
+<a href=#608 id=608 data-nosnippet>608</a>        <span class="kw">pub use </span><span class="kw">super</span>::builder::danger::DangerousClientConfigBuilder;
+<a href=#609 id=609 data-nosnippet>609</a>        <span class="kw">pub use </span><span class="kw">super</span>::client_conn::danger::DangerousClientConfig;
+<a href=#610 id=610 data-nosnippet>610</a>        <span class="kw">pub use </span><span class="kw">crate</span>::verify::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+<a href=#611 id=611 data-nosnippet>611</a>    }
+<a href=#612 id=612 data-nosnippet>612</a>
+<a href=#613 id=613 data-nosnippet>613</a>    <span class="kw">pub use </span><span class="kw">crate</span>::msgs::persist::{Tls12ClientSessionValue, Tls13ClientSessionValue};
+<a href=#614 id=614 data-nosnippet>614</a>    <span class="kw">pub use </span><span class="kw">crate</span>::webpki::{
+<a href=#615 id=615 data-nosnippet>615</a>        ServerCertVerifierBuilder, VerifierBuilderError, WebPkiServerVerifier,
+<a href=#616 id=616 data-nosnippet>616</a>        verify_server_cert_signed_by_trust_anchor, verify_server_name,
+<a href=#617 id=617 data-nosnippet>617</a>    };
+<a href=#618 id=618 data-nosnippet>618</a>}
+<a href=#619 id=619 data-nosnippet>619</a>
+<a href=#620 id=620 data-nosnippet>620</a><span class="kw">pub use </span>client::ClientConfig;
+<a href=#621 id=621 data-nosnippet>621</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#622 id=622 data-nosnippet>622</a></span><span class="kw">pub use </span>client::ClientConnection;
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a><span class="doccomment">/// Items for use in a server.
+<a href=#625 id=625 data-nosnippet>625</a></span><span class="kw">pub mod </span>server {
+<a href=#626 id=626 data-nosnippet>626</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>builder;
+<a href=#627 id=627 data-nosnippet>627</a>    <span class="kw">mod </span>common;
+<a href=#628 id=628 data-nosnippet>628</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>handy;
+<a href=#629 id=629 data-nosnippet>629</a>    <span class="kw">mod </span>hs;
+<a href=#630 id=630 data-nosnippet>630</a>    <span class="kw">mod </span>server_conn;
+<a href=#631 id=631 data-nosnippet>631</a>    <span class="attr">#[cfg(test)]
+<a href=#632 id=632 data-nosnippet>632</a>    </span><span class="kw">mod </span>test;
+<a href=#633 id=633 data-nosnippet>633</a>    <span class="attr">#[cfg(feature = <span class="string">"tls12"</span>)]
+<a href=#634 id=634 data-nosnippet>634</a>    </span><span class="kw">mod </span>tls12;
+<a href=#635 id=635 data-nosnippet>635</a>    <span class="kw">mod </span>tls13;
+<a href=#636 id=636 data-nosnippet>636</a>
+<a href=#637 id=637 data-nosnippet>637</a>    <span class="kw">pub use </span>builder::WantsServerCert;
+<a href=#638 id=638 data-nosnippet>638</a>    <span class="attr">#[cfg(any(feature = <span class="string">"std"</span>, feature = <span class="string">"hashbrown"</span>))]
+<a href=#639 id=639 data-nosnippet>639</a>    </span><span class="kw">pub use </span>handy::ResolvesServerCertUsingSni;
+<a href=#640 id=640 data-nosnippet>640</a>    <span class="attr">#[cfg(any(feature = <span class="string">"std"</span>, feature = <span class="string">"hashbrown"</span>))]
+<a href=#641 id=641 data-nosnippet>641</a>    </span><span class="kw">pub use </span>handy::ServerSessionMemoryCache;
+<a href=#642 id=642 data-nosnippet>642</a>    <span class="kw">pub use </span>handy::{AlwaysResolvesServerRawPublicKeys, NoServerSessionStorage};
+<a href=#643 id=643 data-nosnippet>643</a>    <span class="kw">pub use </span>server_conn::{
+<a href=#644 id=644 data-nosnippet>644</a>        Accepted, ClientHello, ProducesTickets, ResolvesServerCert, ServerConfig,
+<a href=#645 id=645 data-nosnippet>645</a>        ServerConnectionData, StoresServerSessions, UnbufferedServerConnection,
+<a href=#646 id=646 data-nosnippet>646</a>    };
+<a href=#647 id=647 data-nosnippet>647</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#648 id=648 data-nosnippet>648</a>    </span><span class="kw">pub use </span>server_conn::{AcceptedAlert, Acceptor, ReadEarlyData, ServerConnection};
+<a href=#649 id=649 data-nosnippet>649</a>
+<a href=#650 id=650 data-nosnippet>650</a>    <span class="kw">pub use </span><span class="kw">crate</span>::enums::CertificateType;
+<a href=#651 id=651 data-nosnippet>651</a>    <span class="kw">pub use </span><span class="kw">crate</span>::verify::NoClientAuth;
+<a href=#652 id=652 data-nosnippet>652</a>    <span class="kw">pub use </span><span class="kw">crate</span>::webpki::{
+<a href=#653 id=653 data-nosnippet>653</a>        ClientCertVerifierBuilder, ParsedCertificate, VerifierBuilderError, WebPkiClientVerifier,
+<a href=#654 id=654 data-nosnippet>654</a>    };
+<a href=#655 id=655 data-nosnippet>655</a>
+<a href=#656 id=656 data-nosnippet>656</a>    <span class="doccomment">/// Dangerous configuration that should be audited and used with extreme care.
+<a href=#657 id=657 data-nosnippet>657</a>    </span><span class="kw">pub mod </span>danger {
+<a href=#658 id=658 data-nosnippet>658</a>        <span class="kw">pub use </span><span class="kw">crate</span>::verify::{ClientCertVerified, ClientCertVerifier};
+<a href=#659 id=659 data-nosnippet>659</a>    }
+<a href=#660 id=660 data-nosnippet>660</a>}
+<a href=#661 id=661 data-nosnippet>661</a>
+<a href=#662 id=662 data-nosnippet>662</a><span class="kw">pub use </span>server::ServerConfig;
+<a href=#663 id=663 data-nosnippet>663</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#664 id=664 data-nosnippet>664</a></span><span class="kw">pub use </span>server::ServerConnection;
+<a href=#665 id=665 data-nosnippet>665</a>
+<a href=#666 id=666 data-nosnippet>666</a><span class="doccomment">/// All defined protocol versions appear in this module.
+<a href=#667 id=667 data-nosnippet>667</a>///
+<a href=#668 id=668 data-nosnippet>668</a>/// ALL_VERSIONS is a provided as an array of all of these values.
+<a href=#669 id=669 data-nosnippet>669</a></span><span class="kw">pub mod </span>version {
+<a href=#670 id=670 data-nosnippet>670</a>    <span class="attr">#[cfg(feature = <span class="string">"tls12"</span>)]
+<a href=#671 id=671 data-nosnippet>671</a>    </span><span class="kw">pub use </span><span class="kw">crate</span>::versions::TLS12;
+<a href=#672 id=672 data-nosnippet>672</a>    <span class="kw">pub use </span><span class="kw">crate</span>::versions::TLS13;
+<a href=#673 id=673 data-nosnippet>673</a>}
+<a href=#674 id=674 data-nosnippet>674</a>
+<a href=#675 id=675 data-nosnippet>675</a><span class="doccomment">/// Re-exports the contents of the [rustls-pki-types](https://docs.rs/rustls-pki-types) crate for easy access
+<a href=#676 id=676 data-nosnippet>676</a></span><span class="kw">pub mod </span>pki_types {
+<a href=#677 id=677 data-nosnippet>677</a>    <span class="attr">#[doc(no_inline)]
+<a href=#678 id=678 data-nosnippet>678</a>    </span><span class="kw">pub use </span>pki_types::<span class="kw-2">*</span>;
+<a href=#679 id=679 data-nosnippet>679</a>}
+<a href=#680 id=680 data-nosnippet>680</a>
+<a href=#681 id=681 data-nosnippet>681</a><span class="doccomment">/// Message signing interfaces.
+<a href=#682 id=682 data-nosnippet>682</a></span><span class="kw">pub mod </span>sign {
+<a href=#683 id=683 data-nosnippet>683</a>    <span class="kw">pub use </span><span class="kw">crate</span>::crypto::signer::{
+<a href=#684 id=684 data-nosnippet>684</a>        CertifiedKey, Signer, SigningKey, SingleCertAndKey, public_key_to_spki,
+<a href=#685 id=685 data-nosnippet>685</a>    };
+<a href=#686 id=686 data-nosnippet>686</a>}
+<a href=#687 id=687 data-nosnippet>687</a>
+<a href=#688 id=688 data-nosnippet>688</a><span class="doccomment">/// APIs for implementing QUIC TLS
+<a href=#689 id=689 data-nosnippet>689</a></span><span class="kw">pub mod </span>quic;
+<a href=#690 id=690 data-nosnippet>690</a>
+<a href=#691 id=691 data-nosnippet>691</a><span class="attr">#[cfg(any(feature = <span class="string">"std"</span>, feature = <span class="string">"hashbrown"</span>))] </span><span class="comment">// &lt; XXX: incorrect feature gate
+<a href=#692 id=692 data-nosnippet>692</a></span><span class="doccomment">/// APIs for implementing TLS tickets
+<a href=#693 id=693 data-nosnippet>693</a></span><span class="kw">pub mod </span>ticketer;
+<a href=#694 id=694 data-nosnippet>694</a>
+<a href=#695 id=695 data-nosnippet>695</a><span class="doccomment">/// This is the rustls manual.
+<a href=#696 id=696 data-nosnippet>696</a></span><span class="kw">pub mod </span>manual;
+<a href=#697 id=697 data-nosnippet>697</a>
+<a href=#698 id=698 data-nosnippet>698</a><span class="kw">pub mod </span>time_provider;
+<a href=#699 id=699 data-nosnippet>699</a>
+<a href=#700 id=700 data-nosnippet>700</a><span class="doccomment">/// APIs abstracting over locking primitives.
+<a href=#701 id=701 data-nosnippet>701</a></span><span class="kw">pub mod </span>lock;
+<a href=#702 id=702 data-nosnippet>702</a>
+<a href=#703 id=703 data-nosnippet>703</a><span class="doccomment">/// Polyfills for features that are not yet stabilized or available with current MSRV.
+<a href=#704 id=704 data-nosnippet>704</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>polyfill;
+<a href=#705 id=705 data-nosnippet>705</a>
+<a href=#706 id=706 data-nosnippet>706</a><span class="attr">#[cfg(any(feature = <span class="string">"std"</span>, feature = <span class="string">"hashbrown"</span>))]
+<a href=#707 id=707 data-nosnippet>707</a></span><span class="kw">mod </span>hash_map {
+<a href=#708 id=708 data-nosnippet>708</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#709 id=709 data-nosnippet>709</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>std::collections::HashMap;
+<a href=#710 id=710 data-nosnippet>710</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#711 id=711 data-nosnippet>711</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>std::collections::hash_map::Entry;
+<a href=#712 id=712 data-nosnippet>712</a>
+<a href=#713 id=713 data-nosnippet>713</a>    <span class="attr">#[cfg(all(not(feature = <span class="string">"std"</span>), feature = <span class="string">"hashbrown"</span>))]
+<a href=#714 id=714 data-nosnippet>714</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>hashbrown::HashMap;
+<a href=#715 id=715 data-nosnippet>715</a>    <span class="attr">#[cfg(all(not(feature = <span class="string">"std"</span>), feature = <span class="string">"hashbrown"</span>))]
+<a href=#716 id=716 data-nosnippet>716</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>hashbrown::hash_map::Entry;
+<a href=#717 id=717 data-nosnippet>717</a>}</code></pre></div></section></main></body></html>

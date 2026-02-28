@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["proc_macro_error"],"enum":["Level"],"fn":["abort_if_dirty"],"macro":["abort","abort_call_site","diagnostic","emit_call_site_error","emit_call_site_warning","emit_error","emit_warning"],"mod":["dummy"],"struct":["Diagnostic","SpanRange"],"trait":["DiagnosticExt","OptionExt","ResultExt"]};

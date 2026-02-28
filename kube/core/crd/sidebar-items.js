@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MergeError"],"fn":["merge_crds"],"mod":["v1"],"trait":["CustomResourceExt"]};

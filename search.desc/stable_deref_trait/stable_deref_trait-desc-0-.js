@@ -1,0 +1,1 @@
+searchState.loadedDescShard("stable_deref_trait", 0, "This module defines an unsafe marker trait, StableDeref, …\nAn unsafe marker trait for types where clones deref to the …\nAn unsafe marker trait for types that deref to a stable …")

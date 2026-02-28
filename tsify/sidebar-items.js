@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["declare"],"derive":["Tsify"],"struct":["SerializationConfig"],"trait":["Tsify"]};

@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns a new `LayerFn` that implements `Layer` by calling the given function."><title>layer_fn in tower::layer - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tower" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tower/index.html">tower</a><span class="version">0.5.2</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">layer_<wbr>fn</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In tower::<wbr>layer</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">tower</a>::<wbr><a href="index.html">layer</a></div><h1>Function <span class="fn">layer_fn</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/tower_layer/layer_fn.rs.html#67">Source</a> </span></div><pre class="rust item-decl"><code>pub fn layer_fn&lt;T&gt;(f: T) -&gt; <a class="struct" href="struct.LayerFn.html" title="struct tower::layer::LayerFn">LayerFn</a>&lt;T&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns a new <a href="struct.LayerFn.html" title="struct tower::layer::LayerFn"><code>LayerFn</code></a> that implements <a href="../trait.Layer.html" title="trait tower::Layer"><code>Layer</code></a> by calling the
+given function.</p>
+<p>The <a href="../trait.Layer.html#tymethod.layer" title="method tower::Layer::layer"><code>Layer::layer</code></a> method takes a type implementing <a href="https://docs.rs/tower-service/latest/tower_service/trait.Service.html"><code>Service</code></a> and
+returns a different type implementing <a href="https://docs.rs/tower-service/latest/tower_service/trait.Service.html"><code>Service</code></a>. In many cases, this can
+be implemented by a function or a closure. The <a href="struct.LayerFn.html" title="struct tower::layer::LayerFn"><code>LayerFn</code></a> helper allows
+writing simple <a href="../trait.Layer.html" title="trait tower::Layer"><code>Layer</code></a> implementations without needing the boilerplate of
+a new struct implementing <a href="../trait.Layer.html" title="trait tower::Layer"><code>Layer</code></a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// A middleware that logs requests before forwarding them to another service
+</span><span class="kw">pub struct </span>LogService&lt;S&gt; {
+    target: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+    service: S,
+}
+
+<span class="kw">impl</span>&lt;S, Request&gt; Service&lt;Request&gt; <span class="kw">for </span>LogService&lt;S&gt;
+<span class="kw">where
+    </span>S: Service&lt;Request&gt;,
+    Request: fmt::Debug,
+{
+    <span class="kw">type </span>Response = S::Response;
+    <span class="kw">type </span>Error = S::Error;
+    <span class="kw">type </span>Future = S::Future;
+
+    <span class="kw">fn </span>poll_ready(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt;&gt; {
+        <span class="self">self</span>.service.poll_ready(cx)
+    }
+
+    <span class="kw">fn </span>call(<span class="kw-2">&amp;mut </span><span class="self">self</span>, request: Request) -&gt; <span class="self">Self</span>::Future {
+        <span class="comment">// Log the request
+        </span><span class="macro">println!</span>(<span class="string">"request = {:?}, target = {:?}"</span>, request, <span class="self">self</span>.target);
+
+        <span class="self">self</span>.service.call(request)
+    }
+}
+
+<span class="comment">// A `Layer` that wraps services in `LogService`
+</span><span class="kw">let </span>log_layer = layer_fn(|service| {
+    LogService {
+        service,
+        target: <span class="string">"tower-docs"</span>,
+    }
+});
+
+<span class="comment">// An example service. This one uppercases strings
+</span><span class="kw">let </span>uppercase_service = tower::service_fn(|request: String| <span class="kw">async move </span>{
+    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, Infallible&gt;(request.to_uppercase())
+});
+
+<span class="comment">// Wrap our service in a `LogService` so requests are logged.
+</span><span class="kw">let </span>wrapped_service = log_layer.layer(uppercase_service);</code></pre></div>
+</div></details></section></div></main></body></html>

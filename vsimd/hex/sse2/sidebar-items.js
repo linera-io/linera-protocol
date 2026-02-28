@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["LOWER_OFFSET","UPPER_OFFSET"],"fn":["decode_nibbles","encode16","merge_bits"]};

@@ -1,0 +1,176 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Conversions between Rust and SQLite types."><title>sqlx_sqlite::types - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sqlx_sqlite" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sqlx_sqlite/index.html">sqlx_<wbr>sqlite</a><span class="version">0.8.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module types</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#types" title="Types">Types</a><ul><li><a href="#note-unsigned-integers" title="Note: Unsigned Integers">Note: Unsigned Integers</a></li><li><a href="#chrono" title="`chrono`"><code>chrono</code></a></li><li><a href="#time" title="`time`"><code>time</code></a></li><li><a href="#uuid" title="`uuid`"><code>uuid</code></a></li><li><a href="#json" title="`json`"><code>json</code></a></li></ul></li><li><a href="#nullable" title="Nullable">Nullable</a></li><li><a href="#non-feature-numeric--rust_decimal--bigdecimal-support" title="Non-feature: `NUMERIC` / `rust_decimal` / `bigdecimal` Support">Non-feature: <code>NUMERIC</code> / <code>rust_decimal</code> / <code>bigdecimal</code> Support</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sqlx_<wbr>sqlite</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sqlx_sqlite</a></div><h1>Module <span>types</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sqlx_sqlite/types/mod.rs.html#1-240">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Conversions between Rust and <strong>SQLite</strong> types.</p>
+<h2 id="types"><a class="doc-anchor" href="#types">§</a>Types</h2><div><table><thead><tr><th>Rust type</th><th>SQLite type(s)</th></tr></thead><tbody>
+<tr><td><code>bool</code></td><td>BOOLEAN</td></tr>
+<tr><td><code>i8</code></td><td>INTEGER</td></tr>
+<tr><td><code>i16</code></td><td>INTEGER</td></tr>
+<tr><td><code>i32</code></td><td>INTEGER, INT4</td></tr>
+<tr><td><code>i64</code></td><td>BIGINT, INT8</td></tr>
+<tr><td><code>u8</code></td><td>INTEGER</td></tr>
+<tr><td><code>u16</code></td><td>INTEGER</td></tr>
+<tr><td><code>u32</code></td><td>INTEGER</td></tr>
+<tr><td><code>u64</code></td><td>INTEGER (Decode only; see note)</td></tr>
+<tr><td><code>f32</code></td><td>REAL</td></tr>
+<tr><td><code>f64</code></td><td>REAL</td></tr>
+<tr><td><code>&amp;str</code>, <a href="https://doc.rust-lang.org/1.86.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a></td><td>TEXT</td></tr>
+<tr><td><code>&amp;[u8]</code>, <code>Vec&lt;u8&gt;</code></td><td>BLOB</td></tr>
+</tbody></table>
+</div><h5 id="note-unsigned-integers"><a class="doc-anchor" href="#note-unsigned-integers">§</a>Note: Unsigned Integers</h5>
+<p>Decoding of unsigned integer types simply performs a checked conversion
+to ensure that overflow does not occur.</p>
+<p>Encoding of the unsigned integer types <code>u8</code>, <code>u16</code> and <code>u32</code> is implemented by zero-extending to
+the next-larger signed type. So <code>u8</code> becomes <code>i16</code>, <code>u16</code> becomes <code>i32</code>, and <code>u32</code> becomes <code>i64</code>
+while still retaining their semantic values.</p>
+<p>SQLite stores integers in a variable-width encoding and always handles them in memory as 64-bit
+signed values, so no space is wasted by this implicit widening.</p>
+<p>However, there is no corresponding larger type for <code>u64</code> in SQLite
+(it would require a native 16-byte integer, i.e. the equivalent of <code>i128</code>),
+and so encoding is not supported for this type.</p>
+<p>Bit-casting <code>u64</code> to <code>i64</code>, or storing it as <code>REAL</code>, <code>BLOB</code> or <code>TEXT</code>,
+would change the semantics of the value in SQL and so violates the principle of least surprise.</p>
+<h4 id="chrono"><a class="doc-anchor" href="#chrono">§</a><a href="https://crates.io/crates/chrono"><code>chrono</code></a></h4>
+<p>Requires the <code>chrono</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Sqlite type(s)</th></tr></thead><tbody>
+<tr><td><code>chrono::NaiveDateTime</code></td><td>DATETIME (TEXT, INTEGER, REAL)</td></tr>
+<tr><td><code>chrono::DateTime&lt;Utc&gt;</code></td><td>DATETIME (TEXT, INTEGER, REAL)</td></tr>
+<tr><td><code>chrono::DateTime&lt;Local&gt;</code></td><td>DATETIME (TEXT, INTEGER, REAL)</td></tr>
+<tr><td><code>chrono::DateTime&lt;FixedOffset&gt;</code></td><td>DATETIME (TEXT, INTEGER, REAL)</td></tr>
+<tr><td><code>chrono::NaiveDate</code></td><td>DATE (TEXT only)</td></tr>
+<tr><td><code>chrono::NaiveTime</code></td><td>TIME (TEXT only)</td></tr>
+</tbody></table>
+</div><h6 id="note-datetime-conversions"><a class="doc-anchor" href="#note-datetime-conversions">§</a>NOTE: <code>DATETIME</code> conversions</h6>
+<p>SQLite may represent <code>DATETIME</code> values as one of three types: <code>TEXT</code>, <code>REAL</code>, or <code>INTEGER</code>.
+Which one is used is entirely up to you and how you store timestamps in your database.</p>
+<p>The deserialization for <code>NaiveDateTime</code>, <code>DateTime&lt;Utc&gt;</code> and <code>DateTime&lt;Local&gt;</code> infer the date
+format from the type of the value they’re being decoded from:</p>
+<ul>
+<li>If <code>TEXT</code>, the format is assumed to be an ISO-8601 compatible datetime string.
+A number of possible formats are tried; see <code>sqlx-sqlite/src/types/chrono.rs</code> for the current
+set of formats.</li>
+<li>If <code>INTEGER</code>, it is expected to be the number of seconds since January 1, 1970 00:00 UTC,
+as if returned from the <code>unixepoch()</code> function (without the <code>subsec</code> modifier).</li>
+<li>If <code>REAL</code>, it is expected to be the (possibly fractional) number of days since the Julian epoch,
+November 24, 4714 BCE 12:00 UTC, as if returned from the <code>julianday()</code> function.</li>
+</ul>
+<p>These types will always encode to a datetime string, either
+with a timezone offset (<code>DateTime&lt;Tz&gt;</code> for any <code>Tz: TimeZone</code>) or without (<code>NaiveDateTime</code>).</p>
+<h6 id="note-current_timestamp-and-comparisoninteroperability-of-datetime-values"><a class="doc-anchor" href="#note-current_timestamp-and-comparisoninteroperability-of-datetime-values">§</a>NOTE: <code>CURRENT_TIMESTAMP</code> and comparison/interoperability of <code>DATETIME</code> values</h6>
+<p>As stated previously, <code>DateTime&lt;Tz&gt;</code> always encodes to a date-time string
+<em>with</em> a timezone offset,
+in [RFC 3339 format][::chrono::DateTime::to_rfc3339_opts] (with <code>use_z: false</code>).</p>
+<p>However, most of SQLite’s datetime functions
+(including <code>datetime()</code> and <code>DEFAULT CURRENT_TIMESTAMP</code>)
+do not use this format. They instead use <code>YYYY-MM-DD HH:MM:SS.SSSS</code> without a timezone offset.</p>
+<p>This may cause problems with interoperability with other applications, and especially
+when comparing datetime values, which compares the actual string values lexicographically.</p>
+<p>Date-time strings in the SQLite format will generally <em>not</em> compare consistently
+with date-time strings in the RFC 3339 format.</p>
+<p>We recommend that you decide up-front whether <code>DATETIME</code> values should be stored
+with explicit time zones or not, and use the corresponding type
+(and its corresponding offset, if applicable) <em>consistently</em> throughout your
+application:</p>
+<ul>
+<li>RFC 3339 format: <code>DateTime&lt;Tz&gt;</code> (e.g. <code>DateTime&lt;Utc&gt;</code>, <code>DateTime&lt;Local&gt;</code>, <code>DateTime&lt;FixedOffset&gt;</code>)
+<ul>
+<li>Changing or mixing and matching offsets may break comparisons with existing timestamps.</li>
+<li><code>DateTime&lt;Local&gt;</code> is <strong>not recommended</strong> for portable applications.</li>
+<li><code>DateTime&lt;FixedOffset&gt;</code> is only recommended if the offset is <strong>constant</strong>.</li>
+</ul>
+</li>
+<li>SQLite format: <code>NaiveDateTime</code></li>
+</ul>
+<p>Note that non-constant offsets may still cause issues when comparing timestamps,
+as the comparison operators are not timezone-aware.</p>
+<h4 id="time"><a class="doc-anchor" href="#time">§</a><a href="https://crates.io/crates/time"><code>time</code></a></h4>
+<p>Requires the <code>time</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Sqlite type(s)</th></tr></thead><tbody>
+<tr><td><code>time::PrimitiveDateTime</code></td><td>DATETIME (TEXT, INTEGER)</td></tr>
+<tr><td><code>time::OffsetDateTime</code></td><td>DATETIME (TEXT, INTEGER)</td></tr>
+<tr><td><code>time::Date</code></td><td>DATE (TEXT only)</td></tr>
+<tr><td><code>time::Time</code></td><td>TIME (TEXT only)</td></tr>
+</tbody></table>
+</div><h6 id="note-datetime-conversions-1"><a class="doc-anchor" href="#note-datetime-conversions-1">§</a>NOTE: <code>DATETIME</code> conversions</h6>
+<p>The behavior here is identical to the corresponding <code>chrono</code> types, minus the support for <code>REAL</code>
+values as Julian days (it’s just not implemented).</p>
+<p><code>PrimitiveDateTime</code> and <code>OffsetDateTime</code> will always encode to a datetime string, either
+with a timezone offset (<code>OffsetDateTime</code>) or without (<code>PrimitiveDateTime</code>).</p>
+<h6 id="note-current_timestamp-and-comparisoninteroperability-of-datetime-values-1"><a class="doc-anchor" href="#note-current_timestamp-and-comparisoninteroperability-of-datetime-values-1">§</a>NOTE: <code>CURRENT_TIMESTAMP</code> and comparison/interoperability of <code>DATETIME</code> values</h6>
+<p>As stated previously, <code>OffsetDateTime</code> always encodes to a datetime string <em>with</em> a timezone offset,
+in [RFC 3339 format][::time::format_description::well_known::Rfc3339] (using <code>Z</code> for UTC offsets).</p>
+<p>However, most of SQLite’s datetime functions
+(including <code>datetime()</code> and <code>DEFAULT CURRENT_TIMESTAMP</code>)
+do not use this format. They instead use <code>YYYY-MM-DD HH:MM:SS.SSSS</code> without a timezone offset.</p>
+<p>This may cause problems with interoperability with other applications, and especially
+when comparing datetime values, which compares the actual string values lexicographically.</p>
+<p>Date-time strings in the SQLite format will generally <em>not</em> compare consistently
+with date-time strings in the RFC 3339 format.</p>
+<p>We recommend that you decide up-front whether <code>DATETIME</code> values should be stored
+with explicit time zones or not, and use the corresponding type
+(and its corresponding offset, if applicable) <em>consistently</em> throughout your
+application:</p>
+<ul>
+<li>RFC 3339 format: <code>OffsetDateTime</code> with a <strong>constant</strong> offset.
+<ul>
+<li>Changing or mixing and matching offsets may break comparisons with existing timestamps.</li>
+<li><code>OffsetDateTime::now_local()</code> is <strong>not recommended</strong> for portable applications.</li>
+<li>Non-UTC offsets are only recommended if the offset is <strong>constant</strong>.</li>
+</ul>
+</li>
+<li>SQLite format: <code>PrimitiveDateTime</code></li>
+</ul>
+<p>Note that non-constant offsets may still cause issues when comparing timestamps,
+as the comparison operators are not timezone-aware.</p>
+<h4 id="uuid"><a class="doc-anchor" href="#uuid">§</a><a href="https://crates.io/crates/uuid"><code>uuid</code></a></h4>
+<p>Requires the <code>uuid</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Sqlite type(s)</th></tr></thead><tbody>
+<tr><td><code>uuid::Uuid</code></td><td>BLOB, TEXT</td></tr>
+<tr><td><code>uuid::fmt::Hyphenated</code></td><td>TEXT</td></tr>
+<tr><td><code>uuid::fmt::Simple</code></td><td>TEXT</td></tr>
+</tbody></table>
+</div><h4 id="json"><a class="doc-anchor" href="#json">§</a><a href="https://crates.io/crates/serde_json"><code>json</code></a></h4>
+<p>Requires the <code>json</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Sqlite type(s)</th></tr></thead><tbody>
+<tr><td><a href="../../sqlx_core/types/json/struct.Json.html" title="struct sqlx_core::types::json::Json"><code>Json&lt;T&gt;</code></a></td><td>TEXT</td></tr>
+<tr><td><code>serde_json::JsonValue</code></td><td>TEXT</td></tr>
+<tr><td><code>&amp;serde_json::value::RawValue</code></td><td>TEXT</td></tr>
+</tbody></table>
+</div><h2 id="nullable"><a class="doc-anchor" href="#nullable">§</a>Nullable</h2>
+<p>In addition, <code>Option&lt;T&gt;</code> is supported where <code>T</code> implements <code>Type</code>. An <code>Option&lt;T&gt;</code> represents
+a potentially <code>NULL</code> value from SQLite.</p>
+<h2 id="non-feature-numeric--rust_decimal--bigdecimal-support"><a class="doc-anchor" href="#non-feature-numeric--rust_decimal--bigdecimal-support">§</a>Non-feature: <code>NUMERIC</code> / <code>rust_decimal</code> / <code>bigdecimal</code> Support</h2>
+<p>Support for mapping <code>rust_decimal::Decimal</code> and <code>bigdecimal::BigDecimal</code> to SQLite has been
+deliberately omitted because SQLite does not have native support for high-
+or arbitrary-precision decimal arithmetic, and to pretend so otherwise would be a
+significant misstep in API design.</p>
+<p>The in-tree <a href="https://www.sqlite.org/floatingpoint.html#the_decimal_c_extension"><code>decimal.c</code></a> extension is unfortunately not included in the <a href="https://www.sqlite.org/amalgamation.html">amalgamation</a>,
+which is used to build the bundled version of SQLite3 for <code>libsqlite3-sys</code> (which we have
+enabled by default for the simpler setup experience), otherwise we could support that.</p>
+<p>The <code>NUMERIC</code> type affinity, while seemingly designed for storing decimal values,
+stores non-integer real numbers as double-precision IEEE-754 floating point,
+i.e. <code>REAL</code> in SQLite, <code>f64</code> in Rust, <code>double</code> in C/C++, etc.</p>
+<p><a href="https://www.sqlite.org/datatype3.html#type_affinity">Datatypes in SQLite: Type Affinity</a> (accessed 2023/11/20):</p>
+<blockquote>
+<p>A column with NUMERIC affinity may contain values using all five storage classes.
+When text data is inserted into a NUMERIC column, the storage class of the text is converted to
+INTEGER or REAL (in order of preference) if the text is a well-formed integer or real literal,
+respectively. If the TEXT value is a well-formed integer literal that is too large to fit in a
+64-bit signed integer, it is converted to REAL. For conversions between TEXT and REAL storage
+classes, only the first 15 significant decimal digits of the number are preserved.</p>
+</blockquote>
+<p>With the SQLite3 interactive CLI, we can see that a higher-precision value
+(20 digits in this case) is rounded off:</p>
+<div class="example-wrap"><pre class="language-text"><code>sqlite&gt; CREATE TABLE foo(bar NUMERIC);
+sqlite&gt; INSERT INTO foo(bar) VALUES(&#39;1.2345678901234567890&#39;);
+sqlite&gt; SELECT * FROM foo;
+1.23456789012346</code></pre></div>
+<p>It appears the <code>TEXT</code> storage class is only used if the value contains invalid characters
+or extra whitespace.</p>
+<p>Thus, the <code>NUMERIC</code> type affinity is <strong>unsuitable</strong> for storage of high-precision decimal values
+and should be <strong>avoided at all costs</strong>.</p>
+<p>Support for <code>rust_decimal</code> and <code>bigdecimal</code> would only be a trap because users will naturally
+want to use the <code>NUMERIC</code> type affinity, and might otherwise encounter serious bugs caused by
+rounding errors that they were deliberately avoiding when they chose an arbitrary-precision type
+over a floating-point type in the first place.</p>
+<p>Instead, you should only use a type affinity that SQLite will not attempt to convert implicitly,
+such as <code>TEXT</code> or <code>BLOB</code>, and map values to/from SQLite as strings. You can do this easily
+using <a href="../../sqlx_core/types/text/struct.Text.html" title="struct sqlx_core::types::text::Text">the <code>Text</code> adapter</a>.</p>
+</div></details></section></div></main></body></html>

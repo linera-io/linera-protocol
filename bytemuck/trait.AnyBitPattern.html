@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Marker trait for “plain old data” types that are valid for any bit pattern."><title>AnyBitPattern in bytemuck - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bytemuck" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bytemuck/index.html">bytemuck</a><span class="version">1.23.2</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">AnyBit<wbr>Pattern</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#derive" title="Derive">Derive</a></li><li><a href="#safety" title="Safety">Safety</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate bytemuck</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">bytemuck</a></div><h1>Trait <span class="trait">AnyBitPattern</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/bytemuck/anybitpattern.rs.html#51-54">Source</a> </span></div><pre class="rust item-decl"><code>pub unsafe trait AnyBitPattern:
+    <a class="trait" href="trait.Zeroable.html" title="trait bytemuck::Zeroable">Zeroable</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Copy.html" title="trait core::marker::Copy">Copy</a>
+    + 'static { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Marker trait for “plain old data” types that are valid for any bit pattern.</p>
+<p>The requirements for this is very similar to <a href="trait.Pod.html" title="trait bytemuck::Pod"><code>Pod</code></a>, except that the type
+can allow uninit (or padding) bytes. This limits what you can do with a type
+of this kind, but also broadens the included types to <code>repr(C)</code> <code>struct</code>s
+that contain padding as well as <code>union</code>s. Notably, you can only cast
+<em>immutable</em> references and <em>owned</em> values into <a href="trait.AnyBitPattern.html" title="trait bytemuck::AnyBitPattern"><code>AnyBitPattern</code></a> types, not
+<em>mutable</em> references.</p>
+<p><a href="trait.Pod.html" title="trait bytemuck::Pod"><code>Pod</code></a> is a subset of <a href="trait.AnyBitPattern.html" title="trait bytemuck::AnyBitPattern"><code>AnyBitPattern</code></a>, meaning that any <code>T: Pod</code> is also
+<a href="trait.AnyBitPattern.html" title="trait bytemuck::AnyBitPattern"><code>AnyBitPattern</code></a> but any <code>T: AnyBitPattern</code> is not necessarily <a href="trait.Pod.html" title="trait bytemuck::Pod"><code>Pod</code></a>.</p>
+<p><a href="trait.AnyBitPattern.html" title="trait bytemuck::AnyBitPattern"><code>AnyBitPattern</code></a> is a subset of <a href="trait.Zeroable.html" title="trait bytemuck::Zeroable"><code>Zeroable</code></a>, meaning that any <code>T: AnyBitPattern</code> is also <a href="trait.Zeroable.html" title="trait bytemuck::Zeroable"><code>Zeroable</code></a>, but any <code>T: Zeroable</code> is not
+necessarily <a href="trait.AnyBitPattern.html" title="trait bytemuck::AnyBitPattern"><code>AnyBitPattern</code></a></p>
+<h2 id="derive"><a class="doc-anchor" href="#derive">§</a>Derive</h2>
+<p>A <code>#[derive(AnyBitPattern)]</code> macro is provided under the <code>derive</code> feature
+flag which will automatically validate the requirements of this trait and
+implement the trait for you for both structs and enums. This is the
+recommended method for implementing the trait, however it’s also possible to
+do manually. If you implement it manually, you <em>must</em> carefully follow the
+below safety rules.</p>
+<ul>
+<li>*NOTE: even <code>C-style</code>, fieldless enums are intentionally <strong>excluded</strong> from
+this trait, since it is <strong>unsound</strong> for an enum to have a discriminant
+value that is not one of its defined variants.</li>
+</ul>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Similar to <a href="trait.Pod.html" title="trait bytemuck::Pod"><code>Pod</code></a> except we disregard the rule about it must not contain
+uninit bytes. Still, this is a quite strong guarantee about a type, so <em>be
+careful</em> when implementing it manually.</p>
+<ul>
+<li>The type must be inhabited (eg: no
+<a href="https://doc.rust-lang.org/1.86.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a>).</li>
+<li>The type must be valid for any bit pattern of its backing memory.</li>
+<li>Structs need to have all fields also be <code>AnyBitPattern</code>.</li>
+<li>It is disallowed for types to contain pointer types, <code>Cell</code>, <code>UnsafeCell</code>,
+atomics, and any other forms of interior mutability.</li>
+<li>More precisely: A shared reference to the type must allow reads, and
+<em>only</em> reads. RustBelt’s separation logic is based on the notion that a
+type is allowed to define a sharing predicate, its own invariant that must
+hold for shared references, and this predicate is the reasoning that allow
+it to deal with atomic and cells etc. We require the sharing predicate to
+be trivial and permit only read-only access.</li>
+<li>There’s probably more, don’t mess it up (I mean it).</li>
+</ul>
+</div></details><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-AnyBitPattern-for-T" class="impl"><a class="src rightside" href="../src/bytemuck/anybitpattern.rs.html#56">Source</a><a href="#impl-AnyBitPattern-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="trait.Pod.html" title="trait bytemuck::Pod">Pod</a>&gt; <a class="trait" href="trait.AnyBitPattern.html" title="trait bytemuck::AnyBitPattern">AnyBitPattern</a> for T</h3></section></div><script src="../trait.impl/bytemuck/anybitpattern/trait.AnyBitPattern.js" async></script></section></div></main></body></html>

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("alloy_tx_macros", 0, "alloy-tx-macros\nDerive macro for creating transaction envelope types.")

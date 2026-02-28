@@ -1,0 +1,165 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-25.0.3/src/runtime/debug.rs`."><title>debug.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">wasmtime/runtime/</div>debug.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>core::mem::size_of;
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>object::elf::<span class="kw-2">*</span>;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>object::endian::{BigEndian, Endian, Endianness, LittleEndian};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>object::read::elf::{FileHeader, SectionHeader};
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>object::{
+<a href=#7 id=7 data-nosnippet>7</a>    File, NativeEndian <span class="kw">as </span>NE, Object, ObjectSection, ObjectSymbol, RelocationEncoding,
+<a href=#8 id=8 data-nosnippet>8</a>    RelocationKind, RelocationTarget, U64Bytes,
+<a href=#9 id=9 data-nosnippet>9</a>};
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>create_gdbjit_image(
+<a href=#12 id=12 data-nosnippet>12</a>    <span class="kw-2">mut </span>bytes: Vec&lt;u8&gt;,
+<a href=#13 id=13 data-nosnippet>13</a>    code_region: (<span class="kw-2">*const </span>u8, usize),
+<a href=#14 id=14 data-nosnippet>14</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, Error&gt; {
+<a href=#15 id=15 data-nosnippet>15</a>    <span class="kw">let </span>e = ensure_supported_elf_format(<span class="kw-2">&amp;</span>bytes)<span class="question-mark">?</span>;
+<a href=#16 id=16 data-nosnippet>16</a>
+<a href=#17 id=17 data-nosnippet>17</a>    <span class="comment">// patch relocs
+<a href=#18 id=18 data-nosnippet>18</a>    </span>relocate_dwarf_sections(<span class="kw-2">&amp;mut </span>bytes, code_region)<span class="question-mark">?</span>;
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="comment">// elf is still missing details...
+<a href=#21 id=21 data-nosnippet>21</a>    </span><span class="kw">match </span>e {
+<a href=#22 id=22 data-nosnippet>22</a>        Endianness::Little =&gt; {
+<a href=#23 id=23 data-nosnippet>23</a>            convert_object_elf_to_loadable_file::&lt;LittleEndian&gt;(<span class="kw-2">&amp;mut </span>bytes, code_region)
+<a href=#24 id=24 data-nosnippet>24</a>        }
+<a href=#25 id=25 data-nosnippet>25</a>        Endianness::Big =&gt; {
+<a href=#26 id=26 data-nosnippet>26</a>            convert_object_elf_to_loadable_file::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>bytes, code_region)
+<a href=#27 id=27 data-nosnippet>27</a>        }
+<a href=#28 id=28 data-nosnippet>28</a>    }
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a>    <span class="prelude-val">Ok</span>(bytes)
+<a href=#31 id=31 data-nosnippet>31</a>}
+<a href=#32 id=32 data-nosnippet>32</a>
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">fn </span>relocate_dwarf_sections(bytes: <span class="kw-2">&amp;mut </span>[u8], code_region: (<span class="kw-2">*const </span>u8, usize)) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">let </span><span class="kw-2">mut </span>relocations = Vec::new();
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="kw">let </span>obj = File::parse(<span class="kw-2">&amp;</span>bytes[..]).err2anyhow()<span class="question-mark">?</span>;
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="kw">for </span>section <span class="kw">in </span>obj.sections() {
+<a href=#37 id=37 data-nosnippet>37</a>        <span class="kw">let </span>section_start = <span class="kw">match </span>section.file_range() {
+<a href=#38 id=38 data-nosnippet>38</a>            <span class="prelude-val">Some</span>((start, <span class="kw">_</span>)) =&gt; start,
+<a href=#39 id=39 data-nosnippet>39</a>            <span class="prelude-val">None </span>=&gt; <span class="kw">continue</span>,
+<a href=#40 id=40 data-nosnippet>40</a>        };
+<a href=#41 id=41 data-nosnippet>41</a>        <span class="kw">for </span>(off, r) <span class="kw">in </span>section.relocations() {
+<a href=#42 id=42 data-nosnippet>42</a>            <span class="kw">if </span>r.kind() != RelocationKind::Absolute
+<a href=#43 id=43 data-nosnippet>43</a>                || r.encoding() != RelocationEncoding::Generic
+<a href=#44 id=44 data-nosnippet>44</a>                || r.size() != <span class="number">64
+<a href=#45 id=45 data-nosnippet>45</a>            </span>{
+<a href=#46 id=46 data-nosnippet>46</a>                <span class="kw">continue</span>;
+<a href=#47 id=47 data-nosnippet>47</a>            }
+<a href=#48 id=48 data-nosnippet>48</a>
+<a href=#49 id=49 data-nosnippet>49</a>            <span class="kw">let </span>sym = <span class="kw">match </span>r.target() {
+<a href=#50 id=50 data-nosnippet>50</a>                RelocationTarget::Symbol(index) =&gt; <span class="kw">match </span>obj.symbol_by_index(index) {
+<a href=#51 id=51 data-nosnippet>51</a>                    <span class="prelude-val">Ok</span>(sym) =&gt; sym,
+<a href=#52 id=52 data-nosnippet>52</a>                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">continue</span>,
+<a href=#53 id=53 data-nosnippet>53</a>                },
+<a href=#54 id=54 data-nosnippet>54</a>                <span class="kw">_ </span>=&gt; <span class="kw">continue</span>,
+<a href=#55 id=55 data-nosnippet>55</a>            };
+<a href=#56 id=56 data-nosnippet>56</a>            relocations.push((
+<a href=#57 id=57 data-nosnippet>57</a>                section_start + off,
+<a href=#58 id=58 data-nosnippet>58</a>                (code_region.<span class="number">0 </span><span class="kw">as </span>u64)
+<a href=#59 id=59 data-nosnippet>59</a>                    .wrapping_add(sym.address())
+<a href=#60 id=60 data-nosnippet>60</a>                    .wrapping_add(r.addend() <span class="kw">as </span>u64),
+<a href=#61 id=61 data-nosnippet>61</a>            ));
+<a href=#62 id=62 data-nosnippet>62</a>        }
+<a href=#63 id=63 data-nosnippet>63</a>    }
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="kw">for </span>(offset, value) <span class="kw">in </span>relocations {
+<a href=#66 id=66 data-nosnippet>66</a>        <span class="kw">let </span>(loc, <span class="kw">_</span>) = object::from_bytes_mut::&lt;U64Bytes&lt;NE&gt;&gt;(<span class="kw-2">&amp;mut </span>bytes[offset <span class="kw">as </span>usize..])
+<a href=#67 id=67 data-nosnippet>67</a>            .map_err(|()| <span class="macro">anyhow!</span>(<span class="string">"invalid dwarf relocations"</span>))<span class="question-mark">?</span>;
+<a href=#68 id=68 data-nosnippet>68</a>        loc.set(NE, value);
+<a href=#69 id=69 data-nosnippet>69</a>    }
+<a href=#70 id=70 data-nosnippet>70</a>    <span class="prelude-val">Ok</span>(())
+<a href=#71 id=71 data-nosnippet>71</a>}
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a><span class="kw">fn </span>ensure_supported_elf_format(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;Endianness, Error&gt; {
+<a href=#74 id=74 data-nosnippet>74</a>    <span class="kw">use </span>object::elf::<span class="kw-2">*</span>;
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">use </span>object::read::elf::<span class="kw-2">*</span>;
+<a href=#76 id=76 data-nosnippet>76</a>
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">let </span>kind = <span class="kw">match </span>object::FileKind::parse(bytes) {
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="prelude-val">Ok</span>(file) =&gt; file,
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#80 id=80 data-nosnippet>80</a>            <span class="macro">bail!</span>(<span class="string">"Failed to parse file: {}"</span>, err);
+<a href=#81 id=81 data-nosnippet>81</a>        }
+<a href=#82 id=82 data-nosnippet>82</a>    };
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="kw">let </span>header = <span class="kw">match </span>kind {
+<a href=#84 id=84 data-nosnippet>84</a>        object::FileKind::Elf64 =&gt; <span class="kw">match </span>object::elf::FileHeader64::&lt;Endianness&gt;::parse(bytes) {
+<a href=#85 id=85 data-nosnippet>85</a>            <span class="prelude-val">Ok</span>(header) =&gt; header,
+<a href=#86 id=86 data-nosnippet>86</a>            <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#87 id=87 data-nosnippet>87</a>                <span class="macro">bail!</span>(<span class="string">"Unsupported ELF file: {}"</span>, err);
+<a href=#88 id=88 data-nosnippet>88</a>            }
+<a href=#89 id=89 data-nosnippet>89</a>        },
+<a href=#90 id=90 data-nosnippet>90</a>        <span class="kw">_ </span>=&gt; {
+<a href=#91 id=91 data-nosnippet>91</a>            <span class="macro">bail!</span>(<span class="string">"only 64-bit ELF files currently supported"</span>)
+<a href=#92 id=92 data-nosnippet>92</a>        }
+<a href=#93 id=93 data-nosnippet>93</a>    };
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">let </span>e = header.endian().unwrap();
+<a href=#95 id=95 data-nosnippet>95</a>
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">match </span>header.e_machine.get(e) {
+<a href=#97 id=97 data-nosnippet>97</a>        EM_AARCH64 =&gt; (),
+<a href=#98 id=98 data-nosnippet>98</a>        EM_X86_64 =&gt; (),
+<a href=#99 id=99 data-nosnippet>99</a>        EM_S390 =&gt; (),
+<a href=#100 id=100 data-nosnippet>100</a>        EM_RISCV =&gt; (),
+<a href=#101 id=101 data-nosnippet>101</a>        machine =&gt; {
+<a href=#102 id=102 data-nosnippet>102</a>            <span class="macro">bail!</span>(<span class="string">"Unsupported ELF target machine: {:x}"</span>, machine);
+<a href=#103 id=103 data-nosnippet>103</a>        }
+<a href=#104 id=104 data-nosnippet>104</a>    }
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="macro">ensure!</span>(
+<a href=#106 id=106 data-nosnippet>106</a>        header.e_phoff.get(e) == <span class="number">0 </span>&amp;&amp; header.e_phnum.get(e) == <span class="number">0</span>,
+<a href=#107 id=107 data-nosnippet>107</a>        <span class="string">"program header table is empty"
+<a href=#108 id=108 data-nosnippet>108</a>    </span>);
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">let </span>e_shentsize = header.e_shentsize.get(e);
+<a href=#110 id=110 data-nosnippet>110</a>    <span class="kw">let </span>req_shentsize = <span class="kw">match </span>e {
+<a href=#111 id=111 data-nosnippet>111</a>        Endianness::Little =&gt; size_of::&lt;SectionHeader64&lt;LittleEndian&gt;&gt;(),
+<a href=#112 id=112 data-nosnippet>112</a>        Endianness::Big =&gt; size_of::&lt;SectionHeader64&lt;BigEndian&gt;&gt;(),
+<a href=#113 id=113 data-nosnippet>113</a>    };
+<a href=#114 id=114 data-nosnippet>114</a>    <span class="macro">ensure!</span>(e_shentsize <span class="kw">as </span>usize == req_shentsize, <span class="string">"size of sh"</span>);
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="prelude-val">Ok</span>(e)
+<a href=#116 id=116 data-nosnippet>116</a>}
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a><span class="kw">fn </span>convert_object_elf_to_loadable_file&lt;E: Endian&gt;(
+<a href=#119 id=119 data-nosnippet>119</a>    bytes: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;,
+<a href=#120 id=120 data-nosnippet>120</a>    code_region: (<span class="kw-2">*const </span>u8, usize),
+<a href=#121 id=121 data-nosnippet>121</a>) {
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">let </span>e = E::default();
+<a href=#123 id=123 data-nosnippet>123</a>
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">let </span>header = FileHeader64::&lt;E&gt;::parse(<span class="kw-2">&amp;</span>bytes[..]).unwrap();
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">let </span>sections = header.sections(e, <span class="kw-2">&amp;</span>bytes[..]).unwrap();
+<a href=#126 id=126 data-nosnippet>126</a>    <span class="kw">let </span>text_range = <span class="kw">match </span>sections.section_by_name(e, <span class="string">b".text"</span>) {
+<a href=#127 id=127 data-nosnippet>127</a>        <span class="prelude-val">Some</span>((i, text)) =&gt; {
+<a href=#128 id=128 data-nosnippet>128</a>            <span class="kw">let </span>range = text.file_range(e);
+<a href=#129 id=129 data-nosnippet>129</a>            <span class="kw">let </span>off = header.e_shoff.get(e) <span class="kw">as </span>usize + i.<span class="number">0 </span>* header.e_shentsize.get(e) <span class="kw">as </span>usize;
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a>            <span class="kw">let </span>section: <span class="kw-2">&amp;mut </span>SectionHeader64&lt;E&gt; =
+<a href=#132 id=132 data-nosnippet>132</a>                object::from_bytes_mut(<span class="kw-2">&amp;mut </span>bytes[off..]).unwrap().<span class="number">0</span>;
+<a href=#133 id=133 data-nosnippet>133</a>            <span class="comment">// Patch vaddr, and save file location and its size.
+<a href=#134 id=134 data-nosnippet>134</a>            </span>section.sh_addr.set(e, code_region.<span class="number">0 </span><span class="kw">as </span>u64);
+<a href=#135 id=135 data-nosnippet>135</a>            range
+<a href=#136 id=136 data-nosnippet>136</a>        }
+<a href=#137 id=137 data-nosnippet>137</a>        <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#138 id=138 data-nosnippet>138</a>    };
+<a href=#139 id=139 data-nosnippet>139</a>
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="comment">// LLDB wants segment with virtual address set, placing them at the end of ELF.
+<a href=#141 id=141 data-nosnippet>141</a>    </span><span class="kw">let </span>ph_off = bytes.len();
+<a href=#142 id=142 data-nosnippet>142</a>    <span class="kw">let </span>e_phentsize = size_of::&lt;ProgramHeader64&lt;E&gt;&gt;();
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">let </span>e_phnum = <span class="number">1</span>;
+<a href=#144 id=144 data-nosnippet>144</a>    bytes.resize(ph_off + e_phentsize * e_phnum, <span class="number">0</span>);
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>((sh_offset, sh_size)) = text_range {
+<a href=#146 id=146 data-nosnippet>146</a>        <span class="kw">let </span>(v_offset, size) = code_region;
+<a href=#147 id=147 data-nosnippet>147</a>        <span class="kw">let </span>program: <span class="kw-2">&amp;mut </span>ProgramHeader64&lt;E&gt; =
+<a href=#148 id=148 data-nosnippet>148</a>            object::from_bytes_mut(<span class="kw-2">&amp;mut </span>bytes[ph_off..]).unwrap().<span class="number">0</span>;
+<a href=#149 id=149 data-nosnippet>149</a>        program.p_type.set(e, PT_LOAD);
+<a href=#150 id=150 data-nosnippet>150</a>        program.p_offset.set(e, sh_offset);
+<a href=#151 id=151 data-nosnippet>151</a>        program.p_vaddr.set(e, v_offset <span class="kw">as </span>u64);
+<a href=#152 id=152 data-nosnippet>152</a>        program.p_paddr.set(e, v_offset <span class="kw">as </span>u64);
+<a href=#153 id=153 data-nosnippet>153</a>        program.p_filesz.set(e, sh_size);
+<a href=#154 id=154 data-nosnippet>154</a>        program.p_memsz.set(e, size <span class="kw">as </span>u64);
+<a href=#155 id=155 data-nosnippet>155</a>    } <span class="kw">else </span>{
+<a href=#156 id=156 data-nosnippet>156</a>        <span class="macro">unreachable!</span>();
+<a href=#157 id=157 data-nosnippet>157</a>    }
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a>    <span class="comment">// It is somewhat loadable ELF file at this moment.
+<a href=#160 id=160 data-nosnippet>160</a>    </span><span class="kw">let </span>header: <span class="kw-2">&amp;mut </span>FileHeader64&lt;E&gt; = object::from_bytes_mut(bytes).unwrap().<span class="number">0</span>;
+<a href=#161 id=161 data-nosnippet>161</a>    header.e_type.set(e, ET_DYN);
+<a href=#162 id=162 data-nosnippet>162</a>    header.e_phoff.set(e, ph_off <span class="kw">as </span>u64);
+<a href=#163 id=163 data-nosnippet>163</a>    header.e_phentsize.set(e, e_phentsize <span class="kw">as </span>u16);
+<a href=#164 id=164 data-nosnippet>164</a>    header.e_phnum.set(e, e_phnum <span class="kw">as </span>u16);
+<a href=#165 id=165 data-nosnippet>165</a>}</code></pre></div></section></main></body></html>

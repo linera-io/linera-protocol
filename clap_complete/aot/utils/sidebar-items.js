@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["all_subcommands","find_subcommand_with_path","flags","longs_and_visible_aliases","possible_values","shorts_and_visible_aliases","subcommands"]};

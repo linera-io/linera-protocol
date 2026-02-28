@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A trait which contains a variety of convenient adapters and utilities for `Future`s."><title>FutureExt in tokio_util::future - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio_util" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio_util/index.html">tokio_<wbr>util</a><span class="version">0.7.16</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Future<wbr>Ext</a></h2><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.with_cancellation_token" title="with_cancellation_token">with_cancellation_token</a></li><li><a href="#method.with_cancellation_token_owned" title="with_cancellation_token_owned">with_cancellation_token_owned</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In tokio_<wbr>util::<wbr>future</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">tokio_util</a>::<wbr><a href="index.html">future</a></div><h1>Trait <span class="trait">FutureExt</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/tokio_util/future.rs.html#11-136">Source</a> </span></div><pre class="rust item-decl"><code>pub trait FutureExt: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a> {
+    // Provided methods
+    fn <a href="#method.with_cancellation_token" class="fn">with_cancellation_token</a>(
+        self,
+        cancellation_token: &amp;<a class="struct" href="../sync/struct.CancellationToken.html" title="struct tokio_util::sync::CancellationToken">CancellationToken</a>,
+    ) -&gt; WithCancellationTokenFuture&lt;'_, Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.with_cancellation_token_owned" class="fn">with_cancellation_token_owned</a>(
+        self,
+        cancellation_token: <a class="struct" href="../sync/struct.CancellationToken.html" title="struct tokio_util::sync::CancellationToken">CancellationToken</a>,
+    ) -&gt; WithCancellationTokenFutureOwned&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A trait which contains a variety of convenient adapters and utilities for <code>Future</code>s.</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.with_cancellation_token" class="method"><a class="src rightside" href="../../src/tokio_util/future.rs.html#89-97">Source</a><h4 class="code-header">fn <a href="#method.with_cancellation_token" class="fn">with_cancellation_token</a>(
+    self,
+    cancellation_token: &amp;<a class="struct" href="../sync/struct.CancellationToken.html" title="struct tokio_util::sync::CancellationToken">CancellationToken</a>,
+) -&gt; WithCancellationTokenFuture&lt;'_, Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Similar to <a href="../sync/struct.CancellationToken.html#method.run_until_cancelled" title="method tokio_util::sync::CancellationToken::run_until_cancelled"><code>CancellationToken::run_until_cancelled</code></a>,
+but with the advantage that it is easier to write fluent call chains,
+and biased towards waiting for <a href="../sync/struct.CancellationToken.html" title="struct tokio_util::sync::CancellationToken"><code>CancellationToken</code></a> to complete.</p>
+<h5 id="fairness"><a class="doc-anchor" href="#fairness">§</a>Fairness</h5>
+<p>Calling this on an already-cancelled token directly returns <code>None</code>.
+For all subsequent polls, in case of concurrent completion and
+cancellation, this is biased towards the future completion.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::oneshot;
+<span class="kw">use </span>tokio_util::future::FutureExt;
+<span class="kw">use </span>tokio_util::sync::CancellationToken;
+
+<span class="kw">let </span>(_tx, rx) = oneshot::channel::&lt;()&gt;();
+<span class="kw">let </span>token = CancellationToken::new();
+<span class="kw">let </span>token_clone = token.clone();
+tokio::spawn(<span class="kw">async move </span>{
+    tokio::time::sleep(std::time::Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
+    token.cancel();
+});
+<span class="macro">assert!</span>(rx.with_cancellation_token(<span class="kw-2">&amp;</span>token_clone).<span class="kw">await</span>.is_none())</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_cancellation_token_owned" class="method"><a class="src rightside" href="../../src/tokio_util/future.rs.html#127-135">Source</a><h4 class="code-header">fn <a href="#method.with_cancellation_token_owned" class="fn">with_cancellation_token_owned</a>(
+    self,
+    cancellation_token: <a class="struct" href="../sync/struct.CancellationToken.html" title="struct tokio_util::sync::CancellationToken">CancellationToken</a>,
+) -&gt; WithCancellationTokenFutureOwned&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Similar to <a href="../sync/struct.CancellationToken.html#method.run_until_cancelled_owned" title="method tokio_util::sync::CancellationToken::run_until_cancelled_owned"><code>CancellationToken::run_until_cancelled_owned</code></a>,
+but with the advantage that it is easier to write fluent call chains,
+and biased towards waiting for <a href="../sync/struct.CancellationToken.html" title="struct tokio_util::sync::CancellationToken"><code>CancellationToken</code></a> to complete.</p>
+<h5 id="fairness-1"><a class="doc-anchor" href="#fairness-1">§</a>Fairness</h5>
+<p>Calling this on an already-cancelled token directly returns <code>None</code>.
+For all subsequent polls, in case of concurrent completion and
+cancellation, this is biased towards the future completion.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::oneshot;
+<span class="kw">use </span>tokio_util::future::FutureExt;
+<span class="kw">use </span>tokio_util::sync::CancellationToken;
+
+<span class="kw">let </span>(_tx, rx) = oneshot::channel::&lt;()&gt;();
+<span class="kw">let </span>token = CancellationToken::new();
+<span class="kw">let </span>token_clone = token.clone();
+tokio::spawn(<span class="kw">async move </span>{
+    tokio::time::sleep(std::time::Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
+    token.cancel();
+});
+<span class="macro">assert!</span>(rx.with_cancellation_token_owned(token_clone).<span class="kw">await</span>.is_none())</code></pre></div>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-FutureExt-for-T" class="impl"><a class="src rightside" href="../../src/tokio_util/future.rs.html#138">Source</a><a href="#impl-FutureExt-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.FutureExt.html" title="trait tokio_util::future::FutureExt">FutureExt</a> for T</h3></section></div><script src="../../trait.impl/tokio_util/future/trait.FutureExt.js" async></script></section></div></main></body></html>

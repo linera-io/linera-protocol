@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ListContributorInsightsError"],"mod":["builders","paginator"],"struct":["ListContributorInsights","ListContributorInsightsInput","ListContributorInsightsOutput"]};

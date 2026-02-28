@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LogRecordFlags","SeverityNumber"],"struct":["LogRecord","LogsData","ResourceLogs","ScopeLogs"]};

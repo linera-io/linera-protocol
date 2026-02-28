@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GuardResult"],"struct":["Cache","DefaultLifecycle","Drain","Iter","JoinFuture","PlaceholderGuard"]};

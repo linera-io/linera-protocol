@@ -1,0 +1,29 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A common backend for bindgen crates."><title>wasm_bindgen_backend - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasm_bindgen_backend" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasm_bindgen_backend/index.html">wasm_<wbr>bindgen_<wbr>backend</a><span class="version">0.2.100</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>wasm_bindgen_backend</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/wasm_bindgen_backend/lib.rs.html#1-40">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A common backend for bindgen crates.</p>
+<p>This (internal) crate provides functionality common to multiple bindgen
+dependency crates. There are 4 main things exported from this crate:</p>
+<ol>
+<li>
+<p><a href="./trait.TryToTokens.html"><strong><code>TryToTokens</code></strong></a></p>
+<p>Provides the ability to attempt conversion from an AST struct
+into a TokenStream</p>
+</li>
+<li>
+<p><a href="./struct.Diagnostic.html"><strong><code>Diagnostic</code></strong></a></p>
+<p>A struct used to provide diagnostic responses for failures of said
+tokenization</p>
+</li>
+<li>
+<p><a href="./ast/index.html"><strong><code>ast</code></strong></a></p>
+<p>Abstract Syntax Tree types used to represent a Rust program, with
+the necessary metadata to generate bindings for it</p>
+</li>
+<li>
+<p><a href="./util/index.html"><strong><code>util</code></strong></a></p>
+<p>Common utilities for manipulating parsed types from syn</p>
+</li>
+</ol>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="ast/index.html" title="mod wasm_bindgen_backend::ast">ast</a></dt><dd>A representation of the Abstract Syntax Tree of a Rust program,
+with all the added metadata necessary to generate Wasm bindings
+for it.</dd><dt><a class="mod" href="util/index.html" title="mod wasm_bindgen_backend::util">util</a></dt><dd>Common utility function for manipulating syn types and
+handling parsed values</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.bail_span.html" title="macro wasm_bindgen_backend::bail_span">bail_<wbr>span</a></dt><dd>Immediately fail and return an Err, with the arguments passed to err_span!</dd><dt><a class="macro" href="macro.err_span.html" title="macro wasm_bindgen_backend::err_span">err_<wbr>span</a></dt><dd>Provide a Diagnostic with the given span and message</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Diagnostic.html" title="struct wasm_bindgen_backend::Diagnostic">Diagnostic</a></dt><dd>A struct representing a diagnostic to emit to the end-user as an error.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.TryToTokens.html" title="trait wasm_bindgen_backend::TryToTokens">TryTo<wbr>Tokens</a></dt><dd>A trait for converting AST structs into Tokens and adding them to a TokenStream,
+or providing a diagnostic if conversion fails.</dd></dl></section></div></main></body></html>

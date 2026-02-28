@@ -1,0 +1,114 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Types that can be split in two."><title>SplitAt in zerocopy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zerocopy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zerocopy/index.html">zerocopy</a><span class="version">0.8.26</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">SplitAt</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#implementation" title="Implementation">Implementation</a></li><li><a href="#safety" title="Safety">Safety</a></li></ul><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Elem" title="Elem">Elem</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.split_at" title="split_at">split_at</a></li><li><a href="#method.split_at_mut" title="split_at_mut">split_at_mut</a></li><li><a href="#method.split_at_mut_unchecked" title="split_at_mut_unchecked">split_at_mut_unchecked</a></li><li><a href="#method.split_at_unchecked" title="split_at_unchecked">split_at_unchecked</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-SplitAt-for-%5BT%5D" title="[T]">[T]</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate zerocopy</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">zerocopy</a></div><h1>Trait <span class="trait">SplitAt</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/zerocopy/split_at.rs.html#61-204">Source</a> </span></div><pre class="rust item-decl"><code>pub unsafe trait SplitAt: <a class="trait" href="trait.KnownLayout.html" title="trait zerocopy::KnownLayout">KnownLayout</a>&lt;PointerMetadata = <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.usize.html">usize</a>&gt; {
+    type <a href="#associatedtype.Elem" class="associatedtype">Elem</a>;
+
+    // Provided methods
+    unsafe fn <a href="#method.split_at_unchecked" class="fn">split_at_unchecked</a>(&amp;self, l_len: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.Split.html" title="struct zerocopy::Split">Split</a>&lt;&amp;Self&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.split_at" class="fn">split_at</a>(&amp;self, l_len: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Split.html" title="struct zerocopy::Split">Split</a>&lt;&amp;Self&gt;&gt; { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.split_at_mut_unchecked" class="fn">split_at_mut_unchecked</a>(
+        &amp;mut self,
+        l_len: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="struct" href="struct.Split.html" title="struct zerocopy::Split">Split</a>&lt;&amp;mut Self&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.split_at_mut" class="fn">split_at_mut</a>(&amp;mut self, l_len: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Split.html" title="struct zerocopy::Split">Split</a>&lt;&amp;mut Self&gt;&gt; { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Types that can be split in two.</p>
+<p>This trait generalizes Rust’s existing support for splitting slices to
+support slices and slice-based dynamically-sized types (“slice DSTs”).</p>
+<h2 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h2>
+<p><strong>Do not implement this trait yourself!</strong> Instead, use
+<a href="https://docs.rs/zerocopy/0.8.26/zerocopy/derive.SplitAt.html"><code>#[derive(SplitAt)]</code></a>; e.g.:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(SplitAt, KnownLayout)]
+#[repr(C)]
+</span><span class="kw">struct </span>MyStruct&lt;T: <span class="question-mark">?</span>Sized&gt; {
+    ...,
+    <span class="comment">// `SplitAt` types must have at least one field.
+    </span>field: T,
+}</code></pre></div>
+<p>This derive performs a sophisticated, compile-time safety analysis to
+determine whether a type is <code>SplitAt</code>.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>This trait does not convey any safety guarantees to code outside this crate.</p>
+<p>You must not rely on the <code>#[doc(hidden)]</code> internals of <code>SplitAt</code>. Future
+releases of zerocopy may make backwards-breaking changes to these items,
+including changes that only affect soundness, which may cause code which
+uses those items to silently become unsound.</p>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Elem" class="method"><a class="src rightside" href="../src/zerocopy/split_at.rs.html#63">Source</a><h4 class="code-header">type <a href="#associatedtype.Elem" class="associatedtype">Elem</a></h4></section></summary><div class="docblock"><p>The element type of the trailing slice.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.split_at_unchecked" class="method"><a class="src rightside" href="../src/zerocopy/split_at.rs.html#78-81">Source</a><h4 class="code-header">unsafe fn <a href="#method.split_at_unchecked" class="fn">split_at_unchecked</a>(&amp;self, l_len: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.Split.html" title="struct zerocopy::Split">Split</a>&lt;&amp;Self&gt;</h4></section></summary><div class="docblock"><p>Unsafely splits <code>self</code> in two.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<p>The caller promises that <code>l_len</code> is not greater than the length of
+<code>self</code>’s trailing slice.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.split_at" class="method"><a class="src rightside" href="../src/zerocopy/split_at.rs.html#122-131">Source</a><h4 class="code-header">fn <a href="#method.split_at" class="fn">split_at</a>(&amp;self, l_len: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Split.html" title="struct zerocopy::Split">Split</a>&lt;&amp;Self&gt;&gt;</h4></section></summary><div class="docblock"><p>Attempts to split <code>self</code> in two.</p>
+<p>Returns <code>None</code> if <code>l_len</code> is greater than the length of <code>self</code>’s
+trailing slice.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::{SplitAt, FromBytes};
+
+<span class="attr">#[derive(SplitAt, FromBytes, KnownLayout, Immutable)]
+#[repr(C)]
+</span><span class="kw">struct </span>Packet {
+    length: u8,
+    body: [u8],
+}
+
+<span class="comment">// These bytes encode a `Packet`.
+</span><span class="kw">let </span>bytes = <span class="kw-2">&amp;</span>[<span class="number">4</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>][..];
+
+<span class="kw">let </span>packet = Packet::ref_from_bytes(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(packet.length, <span class="number">4</span>);
+<span class="macro">assert_eq!</span>(packet.body, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>]);
+
+<span class="comment">// Attempt to split `packet` at `length`.
+</span><span class="kw">let </span>split = packet.split_at(packet.length <span class="kw">as </span>usize).unwrap();
+
+<span class="comment">// Use the `Immutable` bound on `Packet` to prove that it's okay to
+// return concurrent references to `packet` and `rest`.
+</span><span class="kw">let </span>(packet, rest) = split.via_immutable();
+
+<span class="macro">assert_eq!</span>(packet.length, <span class="number">4</span>);
+<span class="macro">assert_eq!</span>(packet.body, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);
+<span class="macro">assert_eq!</span>(rest, [<span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.split_at_mut_unchecked" class="method"><a class="src rightside" href="../src/zerocopy/split_at.rs.html#141-144">Source</a><h4 class="code-header">unsafe fn <a href="#method.split_at_mut_unchecked" class="fn">split_at_mut_unchecked</a>(&amp;mut self, l_len: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.Split.html" title="struct zerocopy::Split">Split</a>&lt;&amp;mut Self&gt;</h4></section></summary><div class="docblock"><p>Unsafely splits <code>self</code> in two.</p>
+<h5 id="safety-2"><a class="doc-anchor" href="#safety-2">§</a>Safety</h5>
+<p>The caller promises that <code>l_len</code> is not greater than the length of
+<code>self</code>’s trailing slice.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.split_at_mut" class="method"><a class="src rightside" href="../src/zerocopy/split_at.rs.html#194-203">Source</a><h4 class="code-header">fn <a href="#method.split_at_mut" class="fn">split_at_mut</a>(&amp;mut self, l_len: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Split.html" title="struct zerocopy::Split">Split</a>&lt;&amp;mut Self&gt;&gt;</h4></section></summary><div class="docblock"><p>Attempts to split <code>self</code> in two.</p>
+<p>Returns <code>None</code> if <code>l_len</code> is greater than the length of <code>self</code>’s
+trailing slice, or if the given <code>l_len</code> would result in <a href="trait.KnownLayout.html#slice-dst-layout" title="trait zerocopy::KnownLayout">the trailing
+padding</a> of the left portion overlapping
+the right portion.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::{SplitAt, FromBytes};
+
+<span class="attr">#[derive(SplitAt, FromBytes, KnownLayout, IntoBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>Packet&lt;B: <span class="question-mark">?</span>Sized&gt; {
+    length: u8,
+    body: B,
+}
+
+<span class="comment">// These bytes encode a `Packet`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="kw-2">&amp;mut </span>[<span class="number">4</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>][..];
+
+<span class="kw">let </span>packet = Packet::&lt;[u8]&gt;::mut_from_bytes(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(packet.length, <span class="number">4</span>);
+<span class="macro">assert_eq!</span>(packet.body, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>]);
+
+{
+    <span class="comment">// Attempt to split `packet` at `length`.
+    </span><span class="kw">let </span>split = packet.split_at_mut(packet.length <span class="kw">as </span>usize).unwrap();
+
+    <span class="comment">// Use the `IntoBytes` bound on `Packet` to prove that it's okay to
+    // return concurrent references to `packet` and `rest`.
+    </span><span class="kw">let </span>(packet, rest) = split.via_into_bytes();
+
+    <span class="macro">assert_eq!</span>(packet.length, <span class="number">4</span>);
+    <span class="macro">assert_eq!</span>(packet.body, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);
+    <span class="macro">assert_eq!</span>(rest, [<span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>]);
+
+    rest.fill(<span class="number">0</span>);
+}
+
+<span class="macro">assert_eq!</span>(packet.length, <span class="number">4</span>);
+<span class="macro">assert_eq!</span>(packet.body, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]);</code></pre></div>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-SplitAt-for-%5BT%5D" class="impl"><a class="src rightside" href="../src/zerocopy/split_at.rs.html#207-217">Source</a><a href="#impl-SplitAt-for-%5BT%5D" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.SplitAt.html" title="trait zerocopy::SplitAt">SplitAt</a> for <a class="primitive" href="https://doc.rust-lang.org/1.86.0/core/primitive.slice.html">[T]</a></h3></section></summary><div class="impl-items"><section id="associatedtype.Elem-1" class="associatedtype trait-impl"><a class="src rightside" href="../src/zerocopy/split_at.rs.html#208">Source</a><a href="#associatedtype.Elem-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Elem" class="associatedtype">Elem</a> = T</h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/zerocopy/split_at/trait.SplitAt.js" data-ignore-extern-crates="core" async></script></section></div></main></body></html>

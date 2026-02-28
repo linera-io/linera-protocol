@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Sign"],"struct":["BigInt","BigUint","ParseBigIntError","TryFromBigIntError","U32Digits","U64Digits"],"trait":["ToBigInt","ToBigUint"]};

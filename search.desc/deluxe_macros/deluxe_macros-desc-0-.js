@@ -1,0 +1,1 @@
+searchState.loadedDescShard("deluxe_macros", 0, "Deluxe Macros\nGenerates <code>ExtractAttributes</code> for a struct or enum.\nGenerates <code>ParseAttributes</code> for a struct or enum.\nGenerates <code>ParseMetaItem</code> for a struct or enum.")

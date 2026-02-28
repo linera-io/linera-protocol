@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AppendItemIter","CloneableLayer","ConfigBag","FrozenLayer","ItemIter","Layer","StoreAppend","StoreReplace"],"trait":["Storable","Store"]};

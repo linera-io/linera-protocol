@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implementation-level interface for RNGs"><title>RngCore in rand_core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rand_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../rand_core/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../rand_core/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt="logo"></a><h2><a href="../rand_core/index.html">rand_<wbr>core</a><span class="version">0.9.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">RngCore</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.fill_bytes" title="fill_bytes">fill_bytes</a></li><li><a href="#tymethod.next_u32" title="next_u32">next_u32</a></li><li><a href="#tymethod.next_u64" title="next_u64">next_u64</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate rand_<wbr>core</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">rand_core</a></div><h1>Trait <span class="trait">RngCore</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/rand_core/lib.rs.html#130-156">Source</a> </span></div><pre class="rust item-decl"><code>pub trait RngCore {
+    // Required methods
+    fn <a href="#tymethod.next_u32" class="fn">next_u32</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.next_u64" class="fn">next_u64</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.fill_bytes" class="fn">fill_bytes</a>(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]);
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implementation-level interface for RNGs</p>
+<p>This trait encapsulates the low-level functionality common to all
+generators, and is the “back end”, to be implemented by generators.
+End users should normally use the <a href="https://docs.rs/rand/latest/rand/trait.Rng.html"><code>rand::Rng</code></a> trait
+which is automatically implemented for every type implementing <code>RngCore</code>.</p>
+<p>Three different methods for generating random data are provided since the
+optimal implementation of each is dependent on the type of generator. There
+is no required relationship between the output of each; e.g. many
+implementations of <a href="trait.RngCore.html#tymethod.fill_bytes" title="method rand_core::RngCore::fill_bytes"><code>fill_bytes</code></a> consume a whole number of <code>u32</code> or <code>u64</code>
+values and drop any remaining unused bytes. The same can happen with the
+<a href="trait.RngCore.html#tymethod.next_u32" title="method rand_core::RngCore::next_u32"><code>next_u32</code></a> and <a href="trait.RngCore.html#tymethod.next_u64" title="method rand_core::RngCore::next_u64"><code>next_u64</code></a> methods, implementations may discard some
+random bits for efficiency.</p>
+<p>Implementers should produce bits uniformly. Pathological RNGs (e.g. always
+returning the same value, or never setting certain bits) can break rejection
+sampling used by random distributions, and also break other RNGs when
+seeding them via <a href="trait.SeedableRng.html#method.from_rng" title="associated function rand_core::SeedableRng::from_rng"><code>SeedableRng::from_rng</code></a>.</p>
+<p>Algorithmic generators implementing <a href="trait.SeedableRng.html" title="trait rand_core::SeedableRng"><code>SeedableRng</code></a> should normally have
+<em>portable, reproducible</em> output, i.e. fix Endianness when converting values
+to avoid platform differences, and avoid making any changes which affect
+output (except by communicating that the release has breaking changes).</p>
+<p>Typically an RNG will implement only one of the methods available
+in this trait directly, then use the helper functions from the
+<a href="impls/index.html" title="mod rand_core::impls"><code>impls</code></a> module to implement the other methods.</p>
+<p>Note that implementors of <a href="trait.RngCore.html" title="trait rand_core::RngCore"><code>RngCore</code></a> also automatically implement
+the <a href="trait.TryRngCore.html" title="trait rand_core::TryRngCore"><code>TryRngCore</code></a> trait with the <code>Error</code> associated type being
+equal to <a href="https://doc.rust-lang.org/1.86.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible"><code>Infallible</code></a>.</p>
+<p>It is recommended that implementations also implement:</p>
+<ul>
+<li><code>Debug</code> with a custom implementation which <em>does not</em> print any internal
+state (at least, <a href="trait.CryptoRng.html" title="trait rand_core::CryptoRng"><code>CryptoRng</code></a>s should not risk leaking state through
+<code>Debug</code>).</li>
+<li><code>Serialize</code> and <code>Deserialize</code> (from Serde), preferably making Serde
+support optional at the crate level in PRNG libs.</li>
+<li><code>Clone</code>, if possible.</li>
+<li><em>never</em> implement <code>Copy</code> (accidental copies may cause repeated values).</li>
+<li><em>do not</em> implement <code>Default</code> for pseudorandom generators, but instead
+implement <a href="trait.SeedableRng.html" title="trait rand_core::SeedableRng"><code>SeedableRng</code></a>, to guide users towards proper seeding.
+External / hardware RNGs can choose to implement <code>Default</code>.</li>
+<li><code>Eq</code> and <code>PartialEq</code> could be implemented, but are probably not useful.</li>
+</ul>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>A simple example, obviously not generating very <em>random</em> output:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![allow(dead_code)]
+</span><span class="kw">use </span>rand_core::{RngCore, impls};
+
+<span class="kw">struct </span>CountingRng(u64);
+
+<span class="kw">impl </span>RngCore <span class="kw">for </span>CountingRng {
+    <span class="kw">fn </span>next_u32(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; u32 {
+        <span class="self">self</span>.next_u64() <span class="kw">as </span>u32
+    }
+
+    <span class="kw">fn </span>next_u64(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; u64 {
+        <span class="self">self</span>.<span class="number">0 </span>+= <span class="number">1</span>;
+        <span class="self">self</span>.<span class="number">0
+    </span>}
+
+    <span class="kw">fn </span>fill_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, dst: <span class="kw-2">&amp;mut </span>[u8]) {
+        impls::fill_bytes_via_next(<span class="self">self</span>, dst)
+    }
+}</code></pre></div>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.next_u32" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#136">Source</a><h4 class="code-header">fn <a href="#tymethod.next_u32" class="fn">next_u32</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Return the next random <code>u32</code>.</p>
+<p>RNGs must implement at least one method from this trait directly. In
+the case this method is not implemented directly, it can be implemented
+using <code>self.next_u64() as u32</code> or via <a href="impls/fn.next_u32_via_fill.html" title="fn rand_core::impls::next_u32_via_fill"><code>impls::next_u32_via_fill</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.next_u64" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#143">Source</a><h4 class="code-header">fn <a href="#tymethod.next_u64" class="fn">next_u64</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a></h4></section></summary><div class="docblock"><p>Return the next random <code>u64</code>.</p>
+<p>RNGs must implement at least one method from this trait directly. In
+the case this method is not implemented directly, it can be implemented
+via <a href="impls/fn.next_u64_via_u32.html" title="fn rand_core::impls::next_u64_via_u32"><code>impls::next_u64_via_u32</code></a> or via <a href="impls/fn.next_u64_via_fill.html" title="fn rand_core::impls::next_u64_via_fill"><code>impls::next_u64_via_fill</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.fill_bytes" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#155">Source</a><h4 class="code-header">fn <a href="#tymethod.fill_bytes" class="fn">fill_bytes</a>(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Fill <code>dest</code> with random data.</p>
+<p>RNGs must implement at least one method from this trait directly. In
+the case this method is not implemented directly, it can be implemented
+via <a href="impls/fn.fill_bytes_via_next.html" title="fn rand_core::impls::fill_bytes_via_next"><code>impls::fill_bytes_via_next</code></a>.</p>
+<p>This method should guarantee that <code>dest</code> is entirely filled
+with new data, and may panic if this is impossible
+(e.g. reading past the end of a file that is being used as the
+source of randomness).</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-RngCore-for-BlockRng%3CR%3E" class="impl"><a class="src rightside" href="../src/rand_core/block.rs.html#184-235">Source</a><a href="#impl-RngCore-for-BlockRng%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="block/trait.BlockRngCore.html" title="trait rand_core::block::BlockRngCore">BlockRngCore</a>&lt;Item = <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>&gt;&gt; <a class="trait" href="trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a> for <a class="struct" href="block/struct.BlockRng.html" title="struct rand_core::block::BlockRng">BlockRng</a>&lt;R&gt;</h3></section><section id="impl-RngCore-for-BlockRng64%3CR%3E" class="impl"><a class="src rightside" href="../src/rand_core/block.rs.html#348-398">Source</a><a href="#impl-RngCore-for-BlockRng64%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="block/trait.BlockRngCore.html" title="trait rand_core::block::BlockRngCore">BlockRngCore</a>&lt;Item = <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>&gt;&gt; <a class="trait" href="trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a> for <a class="struct" href="block/struct.BlockRng64.html" title="struct rand_core::block::BlockRng64">BlockRng64</a>&lt;R&gt;</h3></section><section id="impl-RngCore-for-UnwrapMut%3C'_,+R%3E" class="impl"><a class="src rightside" href="../src/rand_core/lib.rs.html#339-354">Source</a><a href="#impl-RngCore-for-UnwrapMut%3C'_,+R%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="trait.TryRngCore.html" title="trait rand_core::TryRngCore">TryRngCore</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a> for <a class="struct" href="struct.UnwrapMut.html" title="struct rand_core::UnwrapMut">UnwrapMut</a>&lt;'_, R&gt;</h3></section><section id="impl-RngCore-for-UnwrapErr%3CR%3E" class="impl"><a class="src rightside" href="../src/rand_core/lib.rs.html#300-315">Source</a><a href="#impl-RngCore-for-UnwrapErr%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="trait.TryRngCore.html" title="trait rand_core::TryRngCore">TryRngCore</a>&gt; <a class="trait" href="trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a> for <a class="struct" href="struct.UnwrapErr.html" title="struct rand_core::UnwrapErr">UnwrapErr</a>&lt;R&gt;</h3></section><section id="impl-RngCore-for-T" class="impl"><a class="src rightside" href="../src/rand_core/lib.rs.html#158-176">Source</a><a href="#impl-RngCore-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.DerefMut.html" title="trait core::ops::deref::DerefMut">DerefMut</a>&gt; <a class="trait" href="trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a> for T<div class="where">where
+    T::<a class="associatedtype" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html#associatedtype.Target" title="type core::ops::deref::Deref::Target">Target</a>: <a class="trait" href="trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a>,</div></h3></section></div><script src="../trait.impl/rand_core/trait.RngCore.js" async></script></section></div></main></body></html>

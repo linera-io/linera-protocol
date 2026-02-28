@@ -1,0 +1,275 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Description"><title>derive_where - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="derive_where" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../derive_where/index.html">derive_<wbr>where</a><span class="version">1.6.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#description" title="Description">Description</a></li><li><a href="#usage" title="Usage">Usage</a><ul><li><a href="#generic-type-bounds" title="Generic type bounds">Generic type bounds</a></li><li><a href="#enum-default" title="Enum default">Enum default</a></li><li><a href="#skipping-fields" title="Skipping fields">Skipping fields</a></li><li><a href="#incomparable-variantsitems" title="Incomparable variants/items">Incomparable variants/items</a></li><li><a href="#serde-deserialize-and-serialize" title="Serde `Deserialize` and `Serialize`">Serde <code>Deserialize</code> and <code>Serialize</code></a></li><li><a href="#zeroize-options" title="`Zeroize` options"><code>Zeroize</code> options</a></li><li><a href="#zeroizeondrop-options" title="`ZeroizeOnDrop` options"><code>ZeroizeOnDrop</code> options</a></li><li><a href="#supported-traits" title="Supported traits">Supported traits</a></li><li><a href="#supported-items" title="Supported items">Supported items</a></li><li><a href="#no_std-support" title="`no_std` support"><code>no_std</code> support</a></li></ul></li><li><a href="#crate-features" title="Crate features">Crate features</a></li><li><a href="#msrv" title="MSRV">MSRV</a></li><li><a href="#alternatives" title="Alternatives">Alternatives</a></li><li><a href="#changelog" title="Changelog">Changelog</a></li><li><a href="#license" title="License">License</a><ul><li><a href="#contribution" title="Contribution">Contribution</a></li></ul></li></ul><h3><a href="#attributes">Crate Items</a></h3><ul class="block"><li><a href="#attributes" title="Attribute Macros">Attribute Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>derive_where</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/derive_where/lib.rs.html#1-752">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="description"><a class="doc-anchor" href="#description">§</a>Description</h2>
+<p>Attribute proc-macro to simplify deriving standard and other traits with
+custom generic type bounds.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>The <a href="attr.derive_where.html" title="attr derive_where::derive_where"><code>derive_where</code></a> attribute can be used just like
+std’s <code>#[derive(...)]</code> statements:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(Clone, Debug)]
+</span><span class="kw">struct </span>Example&lt;T&gt;(PhantomData&lt;T&gt;);</code></pre></div>
+<p>This will generate trait implementations for <code>Example</code> for any <code>T</code>,
+as opposed to std’s derives, which would only implement these traits with
+<code>T: Trait</code> bound to the corresponding trait.</p>
+<p>Multiple <a href="attr.derive_where.html" title="attr derive_where::derive_where"><code>derive_where</code></a> attributes can be added to an
+item, but only the first one must use any path qualifications.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where::derive_where(Clone, Debug)]
+#[derive_where(Eq, PartialEq)]
+</span><span class="kw">struct </span>Example1&lt;T&gt;(PhantomData&lt;T&gt;);</code></pre></div>
+<p>If using a different package name, you must specify this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(<span class="kw">crate </span>= derive_where_)]
+#[derive_where(Clone, Debug)]
+</span><span class="kw">struct </span>Example&lt;T&gt;(PhantomData&lt;T&gt;);</code></pre></div>
+<p>In addition, the following convenience options are available:</p>
+<h3 id="generic-type-bounds"><a class="doc-anchor" href="#generic-type-bounds">§</a>Generic type bounds</h3>
+<p>Separated from the list of traits with a semicolon, types to bind to can be
+specified. This example will restrict the implementation for <code>Example</code> to
+<code>T: Clone</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(Clone, Debug; T)]
+</span><span class="kw">struct </span>Example&lt;T, U&gt;(T, PhantomData&lt;U&gt;);</code></pre></div>
+<p>It is also possible to specify the bounds to be applied. This will
+bind implementation for <code>Example</code> to <code>T: Super</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">trait </span>Super: Clone + Debug {}
+
+<span class="attr">#[derive_where(Clone, Debug; T: Super)]
+</span><span class="kw">struct </span>Example&lt;T&gt;(PhantomData&lt;T&gt;);</code></pre></div>
+<p>But more complex trait bounds are possible as well.
+The example below will restrict the <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a> implementation for <code>Example</code>
+to <code>T::Type: Clone</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">trait </span>Trait {
+	<span class="kw">type </span>Type;
+}
+
+<span class="kw">struct </span>Impl;
+
+<span class="kw">impl </span>Trait <span class="kw">for </span>Impl {
+	<span class="kw">type </span>Type = i32;
+}
+
+<span class="attr">#[derive_where(Clone, Debug; T::Type)]
+</span><span class="kw">struct </span>Example&lt;T: Trait&gt;(T::Type);</code></pre></div>
+<p>Any combination of options listed here can be used to satisfy a
+specific constrain. It is also possible to use multiple separate
+constrain specifications when required:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(Clone, Debug; T)]
+#[derive_where(Eq, PartialEq; U)]
+</span><span class="kw">struct </span>Example&lt;T, U&gt;(PhantomData&lt;T&gt;, PhantomData&lt;U&gt;);</code></pre></div>
+<h3 id="enum-default"><a class="doc-anchor" href="#enum-default">§</a>Enum default</h3>
+<p>Since Rust 1.62 deriving <a href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html" title="trait core::default::Default"><code>Default</code></a> on an enum is possible with the
+<code>#[default]</code> attribute. Derive-where allows this with a
+<code>#[derive_where(default)]</code> attribute:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(Clone, Default)]
+</span><span class="kw">enum </span>Example&lt;T&gt; {
+	<span class="attr">#[derive_where(default)]
+	</span>A(PhantomData&lt;T&gt;),
+}</code></pre></div>
+<h3 id="skipping-fields"><a class="doc-anchor" href="#skipping-fields">§</a>Skipping fields</h3>
+<p>With a <code>skip</code> or <code>skip_inner</code> attribute fields can be skipped for traits
+that allow it, which are: <a href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug"><code>Debug</code></a>, <a href="https://doc.rust-lang.org/1.86.0/core/hash/trait.Hash.html" title="trait core::hash::Hash"><code>Hash</code></a>, <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a>, <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a>,
+<a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a>, <a href="https://docs.rs/zeroize"><code>Zeroize</code></a> and <a href="https://docs.rs/zeroize/latest/zeroize/trait.ZeroizeOnDrop.html"><code>ZeroizeOnDrop</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(Debug, PartialEq; T)]
+</span><span class="kw">struct </span>Example&lt;T&gt;(<span class="attr">#[derive_where(skip)] </span>T);
+
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:?}"</span>, Example(<span class="number">42</span>)), <span class="string">"Example"</span>);
+<span class="macro">assert_eq!</span>(Example(<span class="number">42</span>), Example(<span class="number">0</span>));</code></pre></div>
+<p>It is also possible to skip all fields in an item or variant if desired:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(Debug, PartialEq)]
+#[derive_where(skip_inner)]
+</span><span class="kw">struct </span>StructExample&lt;T&gt;(T);
+
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:?}"</span>, StructExample(<span class="number">42</span>)), <span class="string">"StructExample"</span>);
+<span class="macro">assert_eq!</span>(StructExample(<span class="number">42</span>), StructExample(<span class="number">0</span>));
+
+<span class="attr">#[derive_where(Debug, PartialEq)]
+</span><span class="kw">enum </span>EnumExample&lt;T&gt; {
+	<span class="attr">#[derive_where(skip_inner)]
+	</span>A(T),
+}
+
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:?}"</span>, EnumExample::A(<span class="number">42</span>)), <span class="string">"A"</span>);
+<span class="macro">assert_eq!</span>(EnumExample::A(<span class="number">42</span>), EnumExample::A(<span class="number">0</span>));</code></pre></div>
+<p>Selective skipping of fields for certain traits is also an option, both in
+<code>skip</code> and <code>skip_inner</code>. To prevent breaking invariants defined for these
+traits, some of them can only be skipped in groups. The following groups are
+available:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a>: Uses <a href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html" title="trait core::default::Default"><code>Default</code></a> instead of <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a>.</li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug"><code>Debug</code></a></li>
+<li><code>EqHashOrd</code>: Skips <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq"><code>Eq</code></a>, <a href="https://doc.rust-lang.org/1.86.0/core/hash/trait.Hash.html" title="trait core::hash::Hash"><code>Hash</code></a>, <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a>, <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a> and
+<a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a>.</li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/hash/trait.Hash.html" title="trait core::hash::Hash"><code>Hash</code></a></li>
+<li><code>Zeroize</code>: Skips <a href="https://docs.rs/zeroize"><code>Zeroize</code></a> and <a href="https://docs.rs/zeroize/latest/zeroize/trait.ZeroizeOnDrop.html"><code>ZeroizeOnDrop</code></a>.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(Debug, PartialEq)]
+#[derive_where(skip_inner(Debug))]
+</span><span class="kw">struct </span>Example&lt;T&gt;(i32, PhantomData&lt;T&gt;);
+
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:?}"</span>, Example(<span class="number">42</span>, PhantomData::&lt;()&gt;)), <span class="string">"Example"</span>);
+<span class="macro">assert_ne!</span>(
+	Example(<span class="number">42</span>, PhantomData::&lt;()&gt;),
+	Example(<span class="number">0</span>, PhantomData::&lt;()&gt;)
+);</code></pre></div>
+<h3 id="incomparable-variantsitems"><a class="doc-anchor" href="#incomparable-variantsitems">§</a>Incomparable variants/items</h3>
+<p>Similar to the <code>skip</code> attribute, <code>incomparable</code> can be used to skip variants
+or items in <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a> and <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a> trait implementations, meaning
+they will always yield <code>false</code> for <code>eq</code> and <code>None</code> for <code>partial_cmp</code>. This
+results in all comparisons but <code>!=</code>, i.e. <code>==</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;=</code> and <code>&gt;</code>,
+with the marked variant or struct evaluating to <code>false</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug)]
+#[derive_where(PartialEq, PartialOrd)]
+</span><span class="kw">enum </span>EnumExample {
+	<span class="attr">#[derive_where(incomparable)]
+	</span>Incomparable,
+	Comparable,
+}
+<span class="macro">assert_eq!</span>(EnumExample::Comparable, EnumExample::Comparable);
+<span class="macro">assert_ne!</span>(EnumExample::Incomparable, EnumExample::Incomparable);
+<span class="macro">assert!</span>(!(EnumExample::Comparable &gt;= EnumExample::Incomparable));
+<span class="macro">assert!</span>(!(EnumExample::Comparable &lt;= EnumExample::Incomparable));
+<span class="macro">assert!</span>(!(EnumExample::Incomparable &gt;= EnumExample::Incomparable));
+<span class="macro">assert!</span>(!(EnumExample::Incomparable &lt;= EnumExample::Incomparable));
+
+<span class="attr">#[derive(Debug)]
+#[derive_where(PartialEq, PartialOrd)]
+#[derive_where(incomparable)]
+</span><span class="kw">struct </span>StructExample;
+
+<span class="macro">assert_ne!</span>(StructExample, StructExample);
+<span class="macro">assert!</span>(!(StructExample &gt;= StructExample));
+<span class="macro">assert!</span>(!(StructExample &lt;= StructExample));</code></pre></div>
+<p>Note that it is not possible to use <code>incomparable</code> with <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq"><code>Eq</code></a> or <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a> as
+that would break their invariants.</p>
+<h3 id="serde-deserialize-and-serialize"><a class="doc-anchor" href="#serde-deserialize-and-serialize">§</a>Serde <code>Deserialize</code> and <code>Serialize</code></h3>
+<p>Deriving <a href="https://docs.rs/serde/latest/serde/derive.Deserialize.html"><code>Deserialize</code></a> and <a href="https://docs.rs/serde/latest/serde/derive.Serialize.html"><code>Serialize</code></a> works as expected. While
+derive-where does not offer any attribute options, regular <code>serde</code>
+attributes can be used. Derive-where will respect
+<a href="https://serde.rs/container-attrs.html#crate"><code>#[serde(crate = "...")]</code></a>.</p>
+<h3 id="zeroize-options"><a class="doc-anchor" href="#zeroize-options">§</a><code>Zeroize</code> options</h3>
+<p><code>Zeroize</code> has two options:</p>
+<ul>
+<li><code>crate</code>: an item-level option which specifies a path to the <a href="https://docs.rs/zeroize"><code>zeroize</code></a>
+crate in case of a re-export or rename.</li>
+<li><code>fqs</code>: a field-level option which will use fully-qualified-syntax instead
+of calling the <a href="https://docs.rs/zeroize/latest/zeroize/trait.Zeroize.html#tymethod.zeroize"><code>zeroize</code></a> method on <code>self</code> directly. This
+is to avoid ambiguity between another method also called <code>zeroize</code>.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(Zeroize(<span class="kw">crate </span>= zeroize_))]
+</span><span class="kw">struct </span>Example(<span class="attr">#[derive_where(Zeroize(fqs))] </span>i32);
+
+<span class="kw">impl </span>Example {
+	<span class="comment">// If we didn't specify the `fqs` option, this would lead to a compile
+	// error because of method ambiguity.
+	</span><span class="kw">fn </span>zeroize(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+		<span class="self">self</span>.<span class="number">0 </span>= <span class="number">1</span>;
+	}
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>test = Example(<span class="number">42</span>);
+
+<span class="comment">// Will call the struct method.
+</span>test.zeroize();
+<span class="macro">assert_eq!</span>(test.<span class="number">0</span>, <span class="number">1</span>);
+
+<span class="comment">// WIll call the `Zeroize::zeroize` method.
+</span>Zeroize::zeroize(<span class="kw-2">&amp;mut </span>test);
+<span class="macro">assert_eq!</span>(test.<span class="number">0</span>, <span class="number">0</span>);</code></pre></div>
+<h3 id="zeroizeondrop-options"><a class="doc-anchor" href="#zeroizeondrop-options">§</a><code>ZeroizeOnDrop</code> options</h3>
+<p>If the <code>zeroize-on-drop</code> feature is enabled, it implements <a href="https://docs.rs/zeroize/latest/zeroize/trait.ZeroizeOnDrop.html"><code>ZeroizeOnDrop</code></a>
+and can be implemented without <a href="https://docs.rs/zeroize"><code>Zeroize</code></a>, otherwise it only implements
+<a href="https://doc.rust-lang.org/1.86.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop"><code>Drop</code></a> and requires <a href="https://docs.rs/zeroize"><code>Zeroize</code></a> to be implemented.</p>
+<p><a href="https://docs.rs/zeroize/latest/zeroize/trait.ZeroizeOnDrop.html"><code>ZeroizeOnDrop</code></a> has two options:</p>
+<ul>
+<li><code>crate</code>: an item-level option which specifies a path to the <a href="https://docs.rs/zeroize"><code>zeroize</code></a>
+crate in case of a re-export or rename.</li>
+<li><code>no_drop</code>: an item-level option which will not implement <a href="https://doc.rust-lang.org/1.86.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop"><code>Drop</code></a> but
+instead only assert that every field implements <a href="https://docs.rs/zeroize/latest/zeroize/trait.ZeroizeOnDrop.html"><code>ZeroizeOnDrop</code></a>.
+Requires the <code>zeroize-on-drop</code> feature.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_where(ZeroizeOnDrop(<span class="kw">crate </span>= zeroize_))]
+</span><span class="kw">struct </span>Example(i32);
+
+<span class="macro">assert!</span>(core::mem::needs_drop::&lt;Example&gt;());</code></pre></div>
+<h3 id="supported-traits"><a class="doc-anchor" href="#supported-traits">§</a>Supported traits</h3>
+<p>The following traits can be derived with derive-where:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a></li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Copy.html" title="trait core::marker::Copy"><code>Copy</code></a></li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug"><code>Debug</code></a></li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html" title="trait core::default::Default"><code>Default</code></a></li>
+<li><a href="https://docs.rs/serde/latest/serde/derive.Deserialize.html"><code>Deserialize</code></a>: Only available with the <code>serde</code> crate feature.</li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq"><code>Eq</code></a></li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/hash/trait.Hash.html" title="trait core::hash::Hash"><code>Hash</code></a></li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a></li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a></li>
+<li><a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a></li>
+<li><a href="https://docs.rs/serde/latest/serde/derive.Serialize.html"><code>Serialize</code></a>: Only available with the <code>serde</code> crate feature.</li>
+<li><a href="https://docs.rs/zeroize"><code>Zeroize</code></a>: Only available with the <code>zeroize</code> crate feature.</li>
+<li><a href="https://docs.rs/zeroize/latest/zeroize/trait.ZeroizeOnDrop.html"><code>ZeroizeOnDrop</code></a>: Only available with the <code>zeroize</code> crate feature. If the
+<code>zeroize-on-drop</code> feature is enabled, it implements <a href="https://docs.rs/zeroize/latest/zeroize/trait.ZeroizeOnDrop.html"><code>ZeroizeOnDrop</code></a>,
+otherwise it only implements <a href="https://doc.rust-lang.org/1.86.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop"><code>Drop</code></a>.</li>
+</ul>
+<h3 id="supported-items"><a class="doc-anchor" href="#supported-items">§</a>Supported items</h3>
+<p>Structs, tuple structs, unions and enums are supported. Derive-where tries
+its best to discourage usage that could be covered by std’s <code>derive</code>. For
+example unit structs and enums only containing unit variants aren’t
+supported.</p>
+<p>Unions only support <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a> and <a href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Copy.html" title="trait core::marker::Copy"><code>Copy</code></a>.</p>
+<p><a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a> and <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a> need to determine the discriminant type to
+function correctly. To protect against a potential future change to the
+default discriminant type, some compile-time validation is inserted to
+ascertain that the type remains <code>isize</code>.</p>
+<h3 id="no_std-support"><a class="doc-anchor" href="#no_std-support">§</a><code>no_std</code> support</h3>
+<p><code>no_std</code> support is provided by default.</p>
+<h2 id="crate-features"><a class="doc-anchor" href="#crate-features">§</a>Crate features</h2>
+<ul>
+<li><code>nightly</code>: Implements <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a> and <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a> with the help of
+<a href="https://doc.rust-lang.org/1.86.0/core/intrinsics/fn.discriminant_value.html" title="fn core::intrinsics::discriminant_value"><code>core::intrinsics::discriminant_value</code></a>, which is what Rust does by
+default too. This requires a nightly version of the Rust compiler.</li>
+<li><code>safe</code>: <code>safe</code>: Uses only safe ways to access the discriminant of the enum
+for <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a> and <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a>. It also replaces all cases of
+<a href="https://doc.rust-lang.org/1.86.0/core/hint/fn.unreachable_unchecked.html" title="fn core::hint::unreachable_unchecked"><code>core::hint::unreachable_unchecked</code></a> in <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a>, <a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a> and
+<a href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a>, which is what std uses, with <a href="https://doc.rust-lang.org/1.86.0/core/macro.unreachable.html" title="macro core::unreachable"><code>unreachable</code></a>.</li>
+<li><code>zeroize</code>: Allows deriving <a href="https://docs.rs/zeroize"><code>Zeroize</code></a> and <a href="https://docs.rs/zeroize/latest/zeroize/trait.Zeroize.html#tymethod.zeroize"><code>zeroize</code></a> on
+<a href="https://doc.rust-lang.org/1.86.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop"><code>Drop</code></a>.</li>
+<li><code>zeroize-on-drop</code>: Allows deriving <a href="https://docs.rs/zeroize"><code>Zeroize</code></a> and <a href="https://docs.rs/zeroize/latest/zeroize/trait.ZeroizeOnDrop.html"><code>ZeroizeOnDrop</code></a> and
+requires <a href="https://docs.rs/zeroize"><code>zeroize</code></a> v1.5.</li>
+</ul>
+<h2 id="msrv"><a class="doc-anchor" href="#msrv">§</a>MSRV</h2>
+<p>The current MSRV is 1.57 and is being checked by the CI. A change will be
+accompanied by a minor version bump. If MSRV is important to you, use
+<code>derive-where = "~1.x"</code> to pin a specific minor version to your crate.</p>
+<h2 id="alternatives"><a class="doc-anchor" href="#alternatives">§</a>Alternatives</h2>
+<ul>
+<li><a href="https://crates.io/crates/derivative">derivative</a> <a href="https://crates.io/crates/derivative"><img src="https://img.shields.io/crates/v/derivative.svg" alt="Crates.io" /></a>
+is a great alternative with many options. Notably it doesn’t support
+<code>no_std</code> and requires an extra <code>#[derive(Derivative)]</code> to use.</li>
+<li><a href="https://crates.io/crates/derive_bounded">derive_bounded</a> <a href="https://crates.io/crates/derive_bounded"><img src="https://img.shields.io/crates/v/derive_bounded.svg" alt="Crates.io" /></a>
+is a new alternative still in development.</li>
+</ul>
+<h2 id="changelog"><a class="doc-anchor" href="#changelog">§</a>Changelog</h2>
+<p>See the <a href="https://github.com/ModProg/derive-where/blob/main/CHANGELOG.md">CHANGELOG</a> file for details.</p>
+<h2 id="license"><a class="doc-anchor" href="#license">§</a>License</h2>
+<p>Licensed under either of</p>
+<ul>
+<li>Apache License, Version 2.0 (<a href="https://github.com/ModProg/derive-where/blob/main/LICENSE-APACHE">LICENSE-APACHE</a> or <a href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>)</li>
+<li>MIT license (<a href="https://github.com/ModProg/derive-where/blob/main/LICENSE-MIT">LICENSE-MIT</a> or <a href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>)</li>
+</ul>
+<p>at your option.</p>
+<h3 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h3>
+<p>Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be dual licensed as above, without any additional terms or
+conditions.</p>
+</div></details><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><dl class="item-table"><dt><a class="attr" href="attr.derive_where.html" title="attr derive_where::derive_where">derive_<wbr>where</a></dt><dd>Item-level options:</dd></dl></section></div></main></body></html>

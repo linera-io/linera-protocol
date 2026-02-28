@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AttributeValue","ErrorKind"],"mod":["global","instruments","meter"],"struct":["Attributes","GlobalTelemetryProviderError","ObservabilityError","TelemetryProvider","TelemetryProviderBuilder"],"trait":["Context","ContextManager","Scope"]};

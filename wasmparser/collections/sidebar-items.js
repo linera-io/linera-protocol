@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["hash","index_map","index_set","map","set"],"struct":["IndexMap","IndexSet","Map","Set"]};

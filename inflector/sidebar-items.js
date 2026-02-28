@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["cases","numbers","string","suffix"],"trait":["Inflector","InflectorNumbers"]};

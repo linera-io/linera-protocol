@@ -1,0 +1,1446 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gimli-0.31.1/src/constants.rs`."><title>constants.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="gimli" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">gimli/</div>constants.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// This file originally from https://github.com/philipc/rust-dwarf/ and
+<a href=#2 id=2 data-nosnippet>2</a>// distributed under either MIT or Apache 2.0 licenses.
+<a href=#3 id=3 data-nosnippet>3</a>//
+<a href=#4 id=4 data-nosnippet>4</a>// Copyright 2016 The rust-dwarf Developers
+<a href=#5 id=5 data-nosnippet>5</a>//
+<a href=#6 id=6 data-nosnippet>6</a>// Licensed under the Apache License, Version 2.0 (the "License");
+<a href=#7 id=7 data-nosnippet>7</a>// you may not use this file except in compliance with the License.
+<a href=#8 id=8 data-nosnippet>8</a>// You may obtain a copy of the License at
+<a href=#9 id=9 data-nosnippet>9</a>//
+<a href=#10 id=10 data-nosnippet>10</a>//     https://www.apache.org/licenses/LICENSE-2.0
+<a href=#11 id=11 data-nosnippet>11</a>//
+<a href=#12 id=12 data-nosnippet>12</a>// Unless required by applicable law or agreed to in writing, software
+<a href=#13 id=13 data-nosnippet>13</a>// distributed under the License is distributed on an "AS IS" BASIS,
+<a href=#14 id=14 data-nosnippet>14</a>// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+<a href=#15 id=15 data-nosnippet>15</a>// See the License for the specific language governing permissions and
+<a href=#16 id=16 data-nosnippet>16</a>// limitations under the License.
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a></span><span class="doccomment">//! Constant definitions.
+<a href=#19 id=19 data-nosnippet>19</a>//!
+<a href=#20 id=20 data-nosnippet>20</a>//! The DWARF spec's `DW_AT_*` type is represented as `struct DwAt(u16)`,
+<a href=#21 id=21 data-nosnippet>21</a>//! `DW_FORM_*` as `DwForm(u16)`, etc.
+<a href=#22 id=22 data-nosnippet>22</a>//!
+<a href=#23 id=23 data-nosnippet>23</a>//! There are also exported const definitions for each constant.
+<a href=#24 id=24 data-nosnippet>24</a>
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="attr">#![allow(non_upper_case_globals)]
+<a href=#26 id=26 data-nosnippet>26</a>#![allow(missing_docs)]
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">use </span>core::{fmt, ops};
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a><span class="comment">// The `dw!` macro turns this:
+<a href=#31 id=31 data-nosnippet>31</a>//
+<a href=#32 id=32 data-nosnippet>32</a>//     dw!(DwFoo(u32) {
+<a href=#33 id=33 data-nosnippet>33</a>//         DW_FOO_bar = 0,
+<a href=#34 id=34 data-nosnippet>34</a>//         DW_FOO_baz = 1,
+<a href=#35 id=35 data-nosnippet>35</a>//         DW_FOO_bang = 2,
+<a href=#36 id=36 data-nosnippet>36</a>//     });
+<a href=#37 id=37 data-nosnippet>37</a>//
+<a href=#38 id=38 data-nosnippet>38</a>// into this:
+<a href=#39 id=39 data-nosnippet>39</a>//
+<a href=#40 id=40 data-nosnippet>40</a>//     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+<a href=#41 id=41 data-nosnippet>41</a>//     pub struct DwFoo(pub u32);
+<a href=#42 id=42 data-nosnippet>42</a>//
+<a href=#43 id=43 data-nosnippet>43</a>//     pub const DW_FOO_bar: DwFoo = DwFoo(0);
+<a href=#44 id=44 data-nosnippet>44</a>//     pub const DW_FOO_baz: DwFoo = DwFoo(1);
+<a href=#45 id=45 data-nosnippet>45</a>//     pub const DW_FOO_bang: DwFoo = DwFoo(2);
+<a href=#46 id=46 data-nosnippet>46</a>//
+<a href=#47 id=47 data-nosnippet>47</a>//     impl DwFoo {
+<a href=#48 id=48 data-nosnippet>48</a>//         pub fn static_string(&amp;self) -&gt; Option&lt;&amp;'static str&gt; {
+<a href=#49 id=49 data-nosnippet>49</a>//             ...
+<a href=#50 id=50 data-nosnippet>50</a>//         }
+<a href=#51 id=51 data-nosnippet>51</a>//     }
+<a href=#52 id=52 data-nosnippet>52</a>//
+<a href=#53 id=53 data-nosnippet>53</a>//     impl fmt::Display for DwFoo {
+<a href=#54 id=54 data-nosnippet>54</a>//         fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; Result&lt;(), fmt::Error&gt; {
+<a href=#55 id=55 data-nosnippet>55</a>//             ...
+<a href=#56 id=56 data-nosnippet>56</a>//         }
+<a href=#57 id=57 data-nosnippet>57</a>//     }
+<a href=#58 id=58 data-nosnippet>58</a></span><span class="macro">macro_rules!</span> dw {
+<a href=#59 id=59 data-nosnippet>59</a>    ($(<span class="attr">#[<span class="macro-nonterminal">$meta</span>:meta]</span>)* <span class="macro-nonterminal">$struct_name</span>:ident(<span class="macro-nonterminal">$struct_type</span>:ty)
+<a href=#60 id=60 data-nosnippet>60</a>        { $(<span class="macro-nonterminal">$name</span>:ident = <span class="macro-nonterminal">$val</span>:expr),+ $(,)<span class="question-mark">? </span>}
+<a href=#61 id=61 data-nosnippet>61</a>        $(, aliases { $(<span class="macro-nonterminal">$alias_name</span>:ident = <span class="macro-nonterminal">$alias_val</span>:expr),+ $(,)<span class="question-mark">? </span>})<span class="question-mark">?
+<a href=#62 id=62 data-nosnippet>62</a>    </span>) =&gt; {
+<a href=#63 id=63 data-nosnippet>63</a>        $(<span class="attr">#[<span class="macro-nonterminal">$meta</span>]</span>)*
+<a href=#64 id=64 data-nosnippet>64</a>        <span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+<a href=#65 id=65 data-nosnippet>65</a>        </span><span class="kw">pub struct </span><span class="macro-nonterminal">$struct_name</span>(<span class="kw">pub </span><span class="macro-nonterminal">$struct_type</span>);
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a>        $(
+<a href=#68 id=68 data-nosnippet>68</a>            <span class="kw">pub const </span><span class="macro-nonterminal">$name</span>: <span class="macro-nonterminal">$struct_name </span>= <span class="macro-nonterminal">$struct_name</span>(<span class="macro-nonterminal">$val</span>);
+<a href=#69 id=69 data-nosnippet>69</a>        )+
+<a href=#70 id=70 data-nosnippet>70</a>        $($(
+<a href=#71 id=71 data-nosnippet>71</a>            <span class="kw">pub const </span><span class="macro-nonterminal">$alias_name</span>: <span class="macro-nonterminal">$struct_name </span>= <span class="macro-nonterminal">$struct_name</span>(<span class="macro-nonterminal">$alias_val</span>);
+<a href=#72 id=72 data-nosnippet>72</a>        )+)*
+<a href=#73 id=73 data-nosnippet>73</a>
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="kw">impl </span><span class="macro-nonterminal">$struct_name </span>{
+<a href=#75 id=75 data-nosnippet>75</a>            <span class="kw">pub fn </span>static_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+<a href=#76 id=76 data-nosnippet>76</a>                <span class="prelude-val">Some</span>(<span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+<a href=#77 id=77 data-nosnippet>77</a>                    $(
+<a href=#78 id=78 data-nosnippet>78</a>                        <span class="macro-nonterminal">$name </span>=&gt; <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>),
+<a href=#79 id=79 data-nosnippet>79</a>                    )+
+<a href=#80 id=80 data-nosnippet>80</a>                    <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+<a href=#81 id=81 data-nosnippet>81</a>                })
+<a href=#82 id=82 data-nosnippet>82</a>            }
+<a href=#83 id=83 data-nosnippet>83</a>        }
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a>        <span class="kw">impl </span>fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$struct_name </span>{
+<a href=#86 id=86 data-nosnippet>86</a>            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), fmt::Error&gt; {
+<a href=#87 id=87 data-nosnippet>87</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = <span class="self">self</span>.static_string() {
+<a href=#88 id=88 data-nosnippet>88</a>                    f.pad(s)
+<a href=#89 id=89 data-nosnippet>89</a>                } <span class="kw">else </span>{
+<a href=#90 id=90 data-nosnippet>90</a>                    <span class="attr">#[cfg(feature = <span class="string">"read"</span>)]
+<a href=#91 id=91 data-nosnippet>91</a>                    </span>{
+<a href=#92 id=92 data-nosnippet>92</a>                        f.pad(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Unknown {}: {}"</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$struct_name</span>), <span class="self">self</span>.<span class="number">0</span>))
+<a href=#93 id=93 data-nosnippet>93</a>                    }
+<a href=#94 id=94 data-nosnippet>94</a>                    <span class="attr">#[cfg(not(feature = <span class="string">"read"</span>))]
+<a href=#95 id=95 data-nosnippet>95</a>                    </span>{
+<a href=#96 id=96 data-nosnippet>96</a>                        <span class="macro">write!</span>(f, <span class="string">"Unknown {}: {}"</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$struct_name</span>), <span class="self">self</span>.<span class="number">0</span>)
+<a href=#97 id=97 data-nosnippet>97</a>                    }
+<a href=#98 id=98 data-nosnippet>98</a>                }
+<a href=#99 id=99 data-nosnippet>99</a>            }
+<a href=#100 id=100 data-nosnippet>100</a>        }
+<a href=#101 id=101 data-nosnippet>101</a>    };
+<a href=#102 id=102 data-nosnippet>102</a>}
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a><span class="macro">dw!</span>(
+<a href=#105 id=105 data-nosnippet>105</a><span class="doccomment">/// The section type field in a `.dwp` unit index.
+<a href=#106 id=106 data-nosnippet>106</a>///
+<a href=#107 id=107 data-nosnippet>107</a>/// This is used for version 5 and later.
+<a href=#108 id=108 data-nosnippet>108</a>///
+<a href=#109 id=109 data-nosnippet>109</a>/// See Section 7.3.5.
+<a href=#110 id=110 data-nosnippet>110</a></span>DwSect(u32) {
+<a href=#111 id=111 data-nosnippet>111</a>    DW_SECT_INFO = <span class="number">1</span>,
+<a href=#112 id=112 data-nosnippet>112</a>    DW_SECT_ABBREV = <span class="number">3</span>,
+<a href=#113 id=113 data-nosnippet>113</a>    DW_SECT_LINE = <span class="number">4</span>,
+<a href=#114 id=114 data-nosnippet>114</a>    DW_SECT_LOCLISTS = <span class="number">5</span>,
+<a href=#115 id=115 data-nosnippet>115</a>    DW_SECT_STR_OFFSETS = <span class="number">6</span>,
+<a href=#116 id=116 data-nosnippet>116</a>    DW_SECT_MACRO = <span class="number">7</span>,
+<a href=#117 id=117 data-nosnippet>117</a>    DW_SECT_RNGLISTS = <span class="number">8</span>,
+<a href=#118 id=118 data-nosnippet>118</a>});
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a><span class="macro">dw!</span>(
+<a href=#121 id=121 data-nosnippet>121</a><span class="doccomment">/// The section type field in a `.dwp` unit index with version 2.
+<a href=#122 id=122 data-nosnippet>122</a></span>DwSectV2(u32) {
+<a href=#123 id=123 data-nosnippet>123</a>    DW_SECT_V2_INFO = <span class="number">1</span>,
+<a href=#124 id=124 data-nosnippet>124</a>    DW_SECT_V2_TYPES = <span class="number">2</span>,
+<a href=#125 id=125 data-nosnippet>125</a>    DW_SECT_V2_ABBREV = <span class="number">3</span>,
+<a href=#126 id=126 data-nosnippet>126</a>    DW_SECT_V2_LINE = <span class="number">4</span>,
+<a href=#127 id=127 data-nosnippet>127</a>    DW_SECT_V2_LOC = <span class="number">5</span>,
+<a href=#128 id=128 data-nosnippet>128</a>    DW_SECT_V2_STR_OFFSETS = <span class="number">6</span>,
+<a href=#129 id=129 data-nosnippet>129</a>    DW_SECT_V2_MACINFO = <span class="number">7</span>,
+<a href=#130 id=130 data-nosnippet>130</a>    DW_SECT_V2_MACRO = <span class="number">8</span>,
+<a href=#131 id=131 data-nosnippet>131</a>});
+<a href=#132 id=132 data-nosnippet>132</a>
+<a href=#133 id=133 data-nosnippet>133</a><span class="macro">dw!</span>(
+<a href=#134 id=134 data-nosnippet>134</a><span class="doccomment">/// The unit type field in a unit header.
+<a href=#135 id=135 data-nosnippet>135</a>///
+<a href=#136 id=136 data-nosnippet>136</a>/// See Section 7.5.1, Table 7.2.
+<a href=#137 id=137 data-nosnippet>137</a></span>DwUt(u8) {
+<a href=#138 id=138 data-nosnippet>138</a>    DW_UT_compile = <span class="number">0x01</span>,
+<a href=#139 id=139 data-nosnippet>139</a>    DW_UT_type = <span class="number">0x02</span>,
+<a href=#140 id=140 data-nosnippet>140</a>    DW_UT_partial = <span class="number">0x03</span>,
+<a href=#141 id=141 data-nosnippet>141</a>    DW_UT_skeleton = <span class="number">0x04</span>,
+<a href=#142 id=142 data-nosnippet>142</a>    DW_UT_split_compile = <span class="number">0x05</span>,
+<a href=#143 id=143 data-nosnippet>143</a>    DW_UT_split_type = <span class="number">0x06</span>,
+<a href=#144 id=144 data-nosnippet>144</a>    DW_UT_lo_user = <span class="number">0x80</span>,
+<a href=#145 id=145 data-nosnippet>145</a>    DW_UT_hi_user = <span class="number">0xff</span>,
+<a href=#146 id=146 data-nosnippet>146</a>});
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a><span class="macro">dw!</span>(
+<a href=#149 id=149 data-nosnippet>149</a><span class="doccomment">/// The opcode for a call frame instruction.
+<a href=#150 id=150 data-nosnippet>150</a>///
+<a href=#151 id=151 data-nosnippet>151</a>/// Section 7.24:
+<a href=#152 id=152 data-nosnippet>152</a>/// &gt; Call frame instructions are encoded in one or more bytes. The primary
+<a href=#153 id=153 data-nosnippet>153</a>/// &gt; opcode is encoded in the high order two bits of the first byte (that is,
+<a href=#154 id=154 data-nosnippet>154</a>/// &gt; opcode = byte &gt;&gt; 6). An operand or extended opcode may be encoded in the
+<a href=#155 id=155 data-nosnippet>155</a>/// &gt; low order 6 bits. Additional operands are encoded in subsequent bytes.
+<a href=#156 id=156 data-nosnippet>156</a></span>DwCfa(u8) {
+<a href=#157 id=157 data-nosnippet>157</a>    DW_CFA_advance_loc = <span class="number">0x01 </span>&lt;&lt; <span class="number">6</span>,
+<a href=#158 id=158 data-nosnippet>158</a>    DW_CFA_offset = <span class="number">0x02 </span>&lt;&lt; <span class="number">6</span>,
+<a href=#159 id=159 data-nosnippet>159</a>    DW_CFA_restore = <span class="number">0x03 </span>&lt;&lt; <span class="number">6</span>,
+<a href=#160 id=160 data-nosnippet>160</a>    DW_CFA_nop = <span class="number">0</span>,
+<a href=#161 id=161 data-nosnippet>161</a>    DW_CFA_set_loc = <span class="number">0x01</span>,
+<a href=#162 id=162 data-nosnippet>162</a>    DW_CFA_advance_loc1 = <span class="number">0x02</span>,
+<a href=#163 id=163 data-nosnippet>163</a>    DW_CFA_advance_loc2 = <span class="number">0x03</span>,
+<a href=#164 id=164 data-nosnippet>164</a>    DW_CFA_advance_loc4 = <span class="number">0x04</span>,
+<a href=#165 id=165 data-nosnippet>165</a>    DW_CFA_offset_extended = <span class="number">0x05</span>,
+<a href=#166 id=166 data-nosnippet>166</a>    DW_CFA_restore_extended = <span class="number">0x06</span>,
+<a href=#167 id=167 data-nosnippet>167</a>    DW_CFA_undefined = <span class="number">0x07</span>,
+<a href=#168 id=168 data-nosnippet>168</a>    DW_CFA_same_value = <span class="number">0x08</span>,
+<a href=#169 id=169 data-nosnippet>169</a>    DW_CFA_register = <span class="number">0x09</span>,
+<a href=#170 id=170 data-nosnippet>170</a>    DW_CFA_remember_state = <span class="number">0x0a</span>,
+<a href=#171 id=171 data-nosnippet>171</a>    DW_CFA_restore_state = <span class="number">0x0b</span>,
+<a href=#172 id=172 data-nosnippet>172</a>    DW_CFA_def_cfa = <span class="number">0x0c</span>,
+<a href=#173 id=173 data-nosnippet>173</a>    DW_CFA_def_cfa_register = <span class="number">0x0d</span>,
+<a href=#174 id=174 data-nosnippet>174</a>    DW_CFA_def_cfa_offset = <span class="number">0x0e</span>,
+<a href=#175 id=175 data-nosnippet>175</a>    DW_CFA_def_cfa_expression = <span class="number">0x0f</span>,
+<a href=#176 id=176 data-nosnippet>176</a>    DW_CFA_expression = <span class="number">0x10</span>,
+<a href=#177 id=177 data-nosnippet>177</a>    DW_CFA_offset_extended_sf = <span class="number">0x11</span>,
+<a href=#178 id=178 data-nosnippet>178</a>    DW_CFA_def_cfa_sf = <span class="number">0x12</span>,
+<a href=#179 id=179 data-nosnippet>179</a>    DW_CFA_def_cfa_offset_sf = <span class="number">0x13</span>,
+<a href=#180 id=180 data-nosnippet>180</a>    DW_CFA_val_offset = <span class="number">0x14</span>,
+<a href=#181 id=181 data-nosnippet>181</a>    DW_CFA_val_offset_sf = <span class="number">0x15</span>,
+<a href=#182 id=182 data-nosnippet>182</a>    DW_CFA_val_expression = <span class="number">0x16</span>,
+<a href=#183 id=183 data-nosnippet>183</a>
+<a href=#184 id=184 data-nosnippet>184</a>    DW_CFA_lo_user = <span class="number">0x1c</span>,
+<a href=#185 id=185 data-nosnippet>185</a>    DW_CFA_hi_user = <span class="number">0x3f</span>,
+<a href=#186 id=186 data-nosnippet>186</a>
+<a href=#187 id=187 data-nosnippet>187</a>    DW_CFA_MIPS_advance_loc8 = <span class="number">0x1d</span>,
+<a href=#188 id=188 data-nosnippet>188</a>    DW_CFA_GNU_window_save = <span class="number">0x2d</span>,
+<a href=#189 id=189 data-nosnippet>189</a>    DW_CFA_GNU_args_size = <span class="number">0x2e</span>,
+<a href=#190 id=190 data-nosnippet>190</a>    DW_CFA_GNU_negative_offset_extended = <span class="number">0x2f</span>,
+<a href=#191 id=191 data-nosnippet>191</a>},
+<a href=#192 id=192 data-nosnippet>192</a>aliases {
+<a href=#193 id=193 data-nosnippet>193</a>    DW_CFA_AARCH64_negate_ra_state = <span class="number">0x2d</span>,
+<a href=#194 id=194 data-nosnippet>194</a>});
+<a href=#195 id=195 data-nosnippet>195</a>
+<a href=#196 id=196 data-nosnippet>196</a><span class="macro">dw!</span>(
+<a href=#197 id=197 data-nosnippet>197</a><span class="doccomment">/// The child determination encodings for DIE attributes.
+<a href=#198 id=198 data-nosnippet>198</a>///
+<a href=#199 id=199 data-nosnippet>199</a>/// See Section 7.5.3, Table 7.4.
+<a href=#200 id=200 data-nosnippet>200</a></span>DwChildren(u8) {
+<a href=#201 id=201 data-nosnippet>201</a>    DW_CHILDREN_no = <span class="number">0</span>,
+<a href=#202 id=202 data-nosnippet>202</a>    DW_CHILDREN_yes = <span class="number">1</span>,
+<a href=#203 id=203 data-nosnippet>203</a>});
+<a href=#204 id=204 data-nosnippet>204</a>
+<a href=#205 id=205 data-nosnippet>205</a><span class="macro">dw!</span>(
+<a href=#206 id=206 data-nosnippet>206</a><span class="doccomment">/// The tag encodings for DIE attributes.
+<a href=#207 id=207 data-nosnippet>207</a>///
+<a href=#208 id=208 data-nosnippet>208</a>/// See Section 7.5.3, Table 7.3.
+<a href=#209 id=209 data-nosnippet>209</a></span>DwTag(u16) {
+<a href=#210 id=210 data-nosnippet>210</a>    DW_TAG_null = <span class="number">0x00</span>,
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a>    DW_TAG_array_type = <span class="number">0x01</span>,
+<a href=#213 id=213 data-nosnippet>213</a>    DW_TAG_class_type = <span class="number">0x02</span>,
+<a href=#214 id=214 data-nosnippet>214</a>    DW_TAG_entry_point = <span class="number">0x03</span>,
+<a href=#215 id=215 data-nosnippet>215</a>    DW_TAG_enumeration_type = <span class="number">0x04</span>,
+<a href=#216 id=216 data-nosnippet>216</a>    DW_TAG_formal_parameter = <span class="number">0x05</span>,
+<a href=#217 id=217 data-nosnippet>217</a>    DW_TAG_imported_declaration = <span class="number">0x08</span>,
+<a href=#218 id=218 data-nosnippet>218</a>    DW_TAG_label = <span class="number">0x0a</span>,
+<a href=#219 id=219 data-nosnippet>219</a>    DW_TAG_lexical_block = <span class="number">0x0b</span>,
+<a href=#220 id=220 data-nosnippet>220</a>    DW_TAG_member = <span class="number">0x0d</span>,
+<a href=#221 id=221 data-nosnippet>221</a>    DW_TAG_pointer_type = <span class="number">0x0f</span>,
+<a href=#222 id=222 data-nosnippet>222</a>    DW_TAG_reference_type = <span class="number">0x10</span>,
+<a href=#223 id=223 data-nosnippet>223</a>    DW_TAG_compile_unit = <span class="number">0x11</span>,
+<a href=#224 id=224 data-nosnippet>224</a>    DW_TAG_string_type = <span class="number">0x12</span>,
+<a href=#225 id=225 data-nosnippet>225</a>    DW_TAG_structure_type = <span class="number">0x13</span>,
+<a href=#226 id=226 data-nosnippet>226</a>    DW_TAG_subroutine_type = <span class="number">0x15</span>,
+<a href=#227 id=227 data-nosnippet>227</a>    DW_TAG_typedef = <span class="number">0x16</span>,
+<a href=#228 id=228 data-nosnippet>228</a>    DW_TAG_union_type = <span class="number">0x17</span>,
+<a href=#229 id=229 data-nosnippet>229</a>    DW_TAG_unspecified_parameters = <span class="number">0x18</span>,
+<a href=#230 id=230 data-nosnippet>230</a>    DW_TAG_variant = <span class="number">0x19</span>,
+<a href=#231 id=231 data-nosnippet>231</a>    DW_TAG_common_block = <span class="number">0x1a</span>,
+<a href=#232 id=232 data-nosnippet>232</a>    DW_TAG_common_inclusion = <span class="number">0x1b</span>,
+<a href=#233 id=233 data-nosnippet>233</a>    DW_TAG_inheritance = <span class="number">0x1c</span>,
+<a href=#234 id=234 data-nosnippet>234</a>    DW_TAG_inlined_subroutine = <span class="number">0x1d</span>,
+<a href=#235 id=235 data-nosnippet>235</a>    DW_TAG_module = <span class="number">0x1e</span>,
+<a href=#236 id=236 data-nosnippet>236</a>    DW_TAG_ptr_to_member_type = <span class="number">0x1f</span>,
+<a href=#237 id=237 data-nosnippet>237</a>    DW_TAG_set_type = <span class="number">0x20</span>,
+<a href=#238 id=238 data-nosnippet>238</a>    DW_TAG_subrange_type = <span class="number">0x21</span>,
+<a href=#239 id=239 data-nosnippet>239</a>    DW_TAG_with_stmt = <span class="number">0x22</span>,
+<a href=#240 id=240 data-nosnippet>240</a>    DW_TAG_access_declaration = <span class="number">0x23</span>,
+<a href=#241 id=241 data-nosnippet>241</a>    DW_TAG_base_type = <span class="number">0x24</span>,
+<a href=#242 id=242 data-nosnippet>242</a>    DW_TAG_catch_block = <span class="number">0x25</span>,
+<a href=#243 id=243 data-nosnippet>243</a>    DW_TAG_const_type = <span class="number">0x26</span>,
+<a href=#244 id=244 data-nosnippet>244</a>    DW_TAG_constant = <span class="number">0x27</span>,
+<a href=#245 id=245 data-nosnippet>245</a>    DW_TAG_enumerator = <span class="number">0x28</span>,
+<a href=#246 id=246 data-nosnippet>246</a>    DW_TAG_file_type = <span class="number">0x29</span>,
+<a href=#247 id=247 data-nosnippet>247</a>    DW_TAG_friend = <span class="number">0x2a</span>,
+<a href=#248 id=248 data-nosnippet>248</a>    DW_TAG_namelist = <span class="number">0x2b</span>,
+<a href=#249 id=249 data-nosnippet>249</a>    DW_TAG_namelist_item = <span class="number">0x2c</span>,
+<a href=#250 id=250 data-nosnippet>250</a>    DW_TAG_packed_type = <span class="number">0x2d</span>,
+<a href=#251 id=251 data-nosnippet>251</a>    DW_TAG_subprogram = <span class="number">0x2e</span>,
+<a href=#252 id=252 data-nosnippet>252</a>    DW_TAG_template_type_parameter = <span class="number">0x2f</span>,
+<a href=#253 id=253 data-nosnippet>253</a>    DW_TAG_template_value_parameter = <span class="number">0x30</span>,
+<a href=#254 id=254 data-nosnippet>254</a>    DW_TAG_thrown_type = <span class="number">0x31</span>,
+<a href=#255 id=255 data-nosnippet>255</a>    DW_TAG_try_block = <span class="number">0x32</span>,
+<a href=#256 id=256 data-nosnippet>256</a>    DW_TAG_variant_part = <span class="number">0x33</span>,
+<a href=#257 id=257 data-nosnippet>257</a>    DW_TAG_variable = <span class="number">0x34</span>,
+<a href=#258 id=258 data-nosnippet>258</a>    DW_TAG_volatile_type = <span class="number">0x35</span>,
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a><span class="comment">// DWARF 3.
+<a href=#261 id=261 data-nosnippet>261</a>    </span>DW_TAG_dwarf_procedure = <span class="number">0x36</span>,
+<a href=#262 id=262 data-nosnippet>262</a>    DW_TAG_restrict_type = <span class="number">0x37</span>,
+<a href=#263 id=263 data-nosnippet>263</a>    DW_TAG_interface_type = <span class="number">0x38</span>,
+<a href=#264 id=264 data-nosnippet>264</a>    DW_TAG_namespace = <span class="number">0x39</span>,
+<a href=#265 id=265 data-nosnippet>265</a>    DW_TAG_imported_module = <span class="number">0x3a</span>,
+<a href=#266 id=266 data-nosnippet>266</a>    DW_TAG_unspecified_type = <span class="number">0x3b</span>,
+<a href=#267 id=267 data-nosnippet>267</a>    DW_TAG_partial_unit = <span class="number">0x3c</span>,
+<a href=#268 id=268 data-nosnippet>268</a>    DW_TAG_imported_unit = <span class="number">0x3d</span>,
+<a href=#269 id=269 data-nosnippet>269</a>    DW_TAG_condition = <span class="number">0x3f</span>,
+<a href=#270 id=270 data-nosnippet>270</a>    DW_TAG_shared_type = <span class="number">0x40</span>,
+<a href=#271 id=271 data-nosnippet>271</a>
+<a href=#272 id=272 data-nosnippet>272</a><span class="comment">// DWARF 4.
+<a href=#273 id=273 data-nosnippet>273</a>    </span>DW_TAG_type_unit = <span class="number">0x41</span>,
+<a href=#274 id=274 data-nosnippet>274</a>    DW_TAG_rvalue_reference_type = <span class="number">0x42</span>,
+<a href=#275 id=275 data-nosnippet>275</a>    DW_TAG_template_alias = <span class="number">0x43</span>,
+<a href=#276 id=276 data-nosnippet>276</a>
+<a href=#277 id=277 data-nosnippet>277</a><span class="comment">// DWARF 5.
+<a href=#278 id=278 data-nosnippet>278</a>    </span>DW_TAG_coarray_type = <span class="number">0x44</span>,
+<a href=#279 id=279 data-nosnippet>279</a>    DW_TAG_generic_subrange = <span class="number">0x45</span>,
+<a href=#280 id=280 data-nosnippet>280</a>    DW_TAG_dynamic_type = <span class="number">0x46</span>,
+<a href=#281 id=281 data-nosnippet>281</a>    DW_TAG_atomic_type = <span class="number">0x47</span>,
+<a href=#282 id=282 data-nosnippet>282</a>    DW_TAG_call_site = <span class="number">0x48</span>,
+<a href=#283 id=283 data-nosnippet>283</a>    DW_TAG_call_site_parameter = <span class="number">0x49</span>,
+<a href=#284 id=284 data-nosnippet>284</a>    DW_TAG_skeleton_unit = <span class="number">0x4a</span>,
+<a href=#285 id=285 data-nosnippet>285</a>    DW_TAG_immutable_type = <span class="number">0x4b</span>,
+<a href=#286 id=286 data-nosnippet>286</a>
+<a href=#287 id=287 data-nosnippet>287</a>    DW_TAG_lo_user = <span class="number">0x4080</span>,
+<a href=#288 id=288 data-nosnippet>288</a>    DW_TAG_hi_user = <span class="number">0xffff</span>,
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a><span class="comment">// SGI/MIPS extensions.
+<a href=#291 id=291 data-nosnippet>291</a>    </span>DW_TAG_MIPS_loop = <span class="number">0x4081</span>,
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a><span class="comment">// HP extensions.
+<a href=#294 id=294 data-nosnippet>294</a>    </span>DW_TAG_HP_array_descriptor = <span class="number">0x4090</span>,
+<a href=#295 id=295 data-nosnippet>295</a>    DW_TAG_HP_Bliss_field = <span class="number">0x4091</span>,
+<a href=#296 id=296 data-nosnippet>296</a>    DW_TAG_HP_Bliss_field_set = <span class="number">0x4092</span>,
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a><span class="comment">// GNU extensions.
+<a href=#299 id=299 data-nosnippet>299</a>    </span>DW_TAG_format_label = <span class="number">0x4101</span>,
+<a href=#300 id=300 data-nosnippet>300</a>    DW_TAG_function_template = <span class="number">0x4102</span>,
+<a href=#301 id=301 data-nosnippet>301</a>    DW_TAG_class_template = <span class="number">0x4103</span>,
+<a href=#302 id=302 data-nosnippet>302</a>    DW_TAG_GNU_BINCL = <span class="number">0x4104</span>,
+<a href=#303 id=303 data-nosnippet>303</a>    DW_TAG_GNU_EINCL = <span class="number">0x4105</span>,
+<a href=#304 id=304 data-nosnippet>304</a>    DW_TAG_GNU_template_template_param = <span class="number">0x4106</span>,
+<a href=#305 id=305 data-nosnippet>305</a>    DW_TAG_GNU_template_parameter_pack = <span class="number">0x4107</span>,
+<a href=#306 id=306 data-nosnippet>306</a>    DW_TAG_GNU_formal_parameter_pack = <span class="number">0x4108</span>,
+<a href=#307 id=307 data-nosnippet>307</a>    DW_TAG_GNU_call_site = <span class="number">0x4109</span>,
+<a href=#308 id=308 data-nosnippet>308</a>    DW_TAG_GNU_call_site_parameter = <span class="number">0x410a</span>,
+<a href=#309 id=309 data-nosnippet>309</a>
+<a href=#310 id=310 data-nosnippet>310</a>    DW_TAG_APPLE_property = <span class="number">0x4200</span>,
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a><span class="comment">// SUN extensions.
+<a href=#313 id=313 data-nosnippet>313</a>    </span>DW_TAG_SUN_function_template = <span class="number">0x4201</span>,
+<a href=#314 id=314 data-nosnippet>314</a>    DW_TAG_SUN_class_template = <span class="number">0x4202</span>,
+<a href=#315 id=315 data-nosnippet>315</a>    DW_TAG_SUN_struct_template = <span class="number">0x4203</span>,
+<a href=#316 id=316 data-nosnippet>316</a>    DW_TAG_SUN_union_template = <span class="number">0x4204</span>,
+<a href=#317 id=317 data-nosnippet>317</a>    DW_TAG_SUN_indirect_inheritance = <span class="number">0x4205</span>,
+<a href=#318 id=318 data-nosnippet>318</a>    DW_TAG_SUN_codeflags = <span class="number">0x4206</span>,
+<a href=#319 id=319 data-nosnippet>319</a>    DW_TAG_SUN_memop_info = <span class="number">0x4207</span>,
+<a href=#320 id=320 data-nosnippet>320</a>    DW_TAG_SUN_omp_child_func = <span class="number">0x4208</span>,
+<a href=#321 id=321 data-nosnippet>321</a>    DW_TAG_SUN_rtti_descriptor = <span class="number">0x4209</span>,
+<a href=#322 id=322 data-nosnippet>322</a>    DW_TAG_SUN_dtor_info = <span class="number">0x420a</span>,
+<a href=#323 id=323 data-nosnippet>323</a>    DW_TAG_SUN_dtor = <span class="number">0x420b</span>,
+<a href=#324 id=324 data-nosnippet>324</a>    DW_TAG_SUN_f90_interface = <span class="number">0x420c</span>,
+<a href=#325 id=325 data-nosnippet>325</a>    DW_TAG_SUN_fortran_vax_structure = <span class="number">0x420d</span>,
+<a href=#326 id=326 data-nosnippet>326</a>
+<a href=#327 id=327 data-nosnippet>327</a><span class="comment">// ALTIUM extensions.
+<a href=#328 id=328 data-nosnippet>328</a>    </span>DW_TAG_ALTIUM_circ_type = <span class="number">0x5101</span>,
+<a href=#329 id=329 data-nosnippet>329</a>    DW_TAG_ALTIUM_mwa_circ_type = <span class="number">0x5102</span>,
+<a href=#330 id=330 data-nosnippet>330</a>    DW_TAG_ALTIUM_rev_carry_type = <span class="number">0x5103</span>,
+<a href=#331 id=331 data-nosnippet>331</a>    DW_TAG_ALTIUM_rom = <span class="number">0x5111</span>,
+<a href=#332 id=332 data-nosnippet>332</a>
+<a href=#333 id=333 data-nosnippet>333</a><span class="comment">// Extensions for UPC.
+<a href=#334 id=334 data-nosnippet>334</a>    </span>DW_TAG_upc_shared_type = <span class="number">0x8765</span>,
+<a href=#335 id=335 data-nosnippet>335</a>    DW_TAG_upc_strict_type = <span class="number">0x8766</span>,
+<a href=#336 id=336 data-nosnippet>336</a>    DW_TAG_upc_relaxed_type = <span class="number">0x8767</span>,
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a><span class="comment">// PGI (STMicroelectronics) extensions.
+<a href=#339 id=339 data-nosnippet>339</a>    </span>DW_TAG_PGI_kanji_type = <span class="number">0xa000</span>,
+<a href=#340 id=340 data-nosnippet>340</a>    DW_TAG_PGI_interface_block = <span class="number">0xa020</span>,
+<a href=#341 id=341 data-nosnippet>341</a>
+<a href=#342 id=342 data-nosnippet>342</a><span class="comment">// Borland extensions.
+<a href=#343 id=343 data-nosnippet>343</a>    </span>DW_TAG_BORLAND_property = <span class="number">0xb000</span>,
+<a href=#344 id=344 data-nosnippet>344</a>    DW_TAG_BORLAND_Delphi_string = <span class="number">0xb001</span>,
+<a href=#345 id=345 data-nosnippet>345</a>    DW_TAG_BORLAND_Delphi_dynamic_array = <span class="number">0xb002</span>,
+<a href=#346 id=346 data-nosnippet>346</a>    DW_TAG_BORLAND_Delphi_set = <span class="number">0xb003</span>,
+<a href=#347 id=347 data-nosnippet>347</a>    DW_TAG_BORLAND_Delphi_variant = <span class="number">0xb004</span>,
+<a href=#348 id=348 data-nosnippet>348</a>});
+<a href=#349 id=349 data-nosnippet>349</a>
+<a href=#350 id=350 data-nosnippet>350</a><span class="macro">dw!</span>(
+<a href=#351 id=351 data-nosnippet>351</a><span class="doccomment">/// The attribute encodings for DIE attributes.
+<a href=#352 id=352 data-nosnippet>352</a>///
+<a href=#353 id=353 data-nosnippet>353</a>/// See Section 7.5.4, Table 7.5.
+<a href=#354 id=354 data-nosnippet>354</a></span>DwAt(u16) {
+<a href=#355 id=355 data-nosnippet>355</a>    DW_AT_null = <span class="number">0x00</span>,
+<a href=#356 id=356 data-nosnippet>356</a>
+<a href=#357 id=357 data-nosnippet>357</a>    DW_AT_sibling = <span class="number">0x01</span>,
+<a href=#358 id=358 data-nosnippet>358</a>    DW_AT_location = <span class="number">0x02</span>,
+<a href=#359 id=359 data-nosnippet>359</a>    DW_AT_name = <span class="number">0x03</span>,
+<a href=#360 id=360 data-nosnippet>360</a>    DW_AT_ordering = <span class="number">0x09</span>,
+<a href=#361 id=361 data-nosnippet>361</a>    DW_AT_byte_size = <span class="number">0x0b</span>,
+<a href=#362 id=362 data-nosnippet>362</a>    DW_AT_bit_offset = <span class="number">0x0c</span>,
+<a href=#363 id=363 data-nosnippet>363</a>    DW_AT_bit_size = <span class="number">0x0d</span>,
+<a href=#364 id=364 data-nosnippet>364</a>    DW_AT_stmt_list = <span class="number">0x10</span>,
+<a href=#365 id=365 data-nosnippet>365</a>    DW_AT_low_pc = <span class="number">0x11</span>,
+<a href=#366 id=366 data-nosnippet>366</a>    DW_AT_high_pc = <span class="number">0x12</span>,
+<a href=#367 id=367 data-nosnippet>367</a>    DW_AT_language = <span class="number">0x13</span>,
+<a href=#368 id=368 data-nosnippet>368</a>    DW_AT_discr = <span class="number">0x15</span>,
+<a href=#369 id=369 data-nosnippet>369</a>    DW_AT_discr_value = <span class="number">0x16</span>,
+<a href=#370 id=370 data-nosnippet>370</a>    DW_AT_visibility = <span class="number">0x17</span>,
+<a href=#371 id=371 data-nosnippet>371</a>    DW_AT_import = <span class="number">0x18</span>,
+<a href=#372 id=372 data-nosnippet>372</a>    DW_AT_string_length = <span class="number">0x19</span>,
+<a href=#373 id=373 data-nosnippet>373</a>    DW_AT_common_reference = <span class="number">0x1a</span>,
+<a href=#374 id=374 data-nosnippet>374</a>    DW_AT_comp_dir = <span class="number">0x1b</span>,
+<a href=#375 id=375 data-nosnippet>375</a>    DW_AT_const_value = <span class="number">0x1c</span>,
+<a href=#376 id=376 data-nosnippet>376</a>    DW_AT_containing_type = <span class="number">0x1d</span>,
+<a href=#377 id=377 data-nosnippet>377</a>    DW_AT_default_value = <span class="number">0x1e</span>,
+<a href=#378 id=378 data-nosnippet>378</a>    DW_AT_inline = <span class="number">0x20</span>,
+<a href=#379 id=379 data-nosnippet>379</a>    DW_AT_is_optional = <span class="number">0x21</span>,
+<a href=#380 id=380 data-nosnippet>380</a>    DW_AT_lower_bound = <span class="number">0x22</span>,
+<a href=#381 id=381 data-nosnippet>381</a>    DW_AT_producer = <span class="number">0x25</span>,
+<a href=#382 id=382 data-nosnippet>382</a>    DW_AT_prototyped = <span class="number">0x27</span>,
+<a href=#383 id=383 data-nosnippet>383</a>    DW_AT_return_addr = <span class="number">0x2a</span>,
+<a href=#384 id=384 data-nosnippet>384</a>    DW_AT_start_scope = <span class="number">0x2c</span>,
+<a href=#385 id=385 data-nosnippet>385</a>    DW_AT_bit_stride = <span class="number">0x2e</span>,
+<a href=#386 id=386 data-nosnippet>386</a>    DW_AT_upper_bound = <span class="number">0x2f</span>,
+<a href=#387 id=387 data-nosnippet>387</a>    DW_AT_abstract_origin = <span class="number">0x31</span>,
+<a href=#388 id=388 data-nosnippet>388</a>    DW_AT_accessibility = <span class="number">0x32</span>,
+<a href=#389 id=389 data-nosnippet>389</a>    DW_AT_address_class = <span class="number">0x33</span>,
+<a href=#390 id=390 data-nosnippet>390</a>    DW_AT_artificial = <span class="number">0x34</span>,
+<a href=#391 id=391 data-nosnippet>391</a>    DW_AT_base_types = <span class="number">0x35</span>,
+<a href=#392 id=392 data-nosnippet>392</a>    DW_AT_calling_convention = <span class="number">0x36</span>,
+<a href=#393 id=393 data-nosnippet>393</a>    DW_AT_count = <span class="number">0x37</span>,
+<a href=#394 id=394 data-nosnippet>394</a>    DW_AT_data_member_location = <span class="number">0x38</span>,
+<a href=#395 id=395 data-nosnippet>395</a>    DW_AT_decl_column = <span class="number">0x39</span>,
+<a href=#396 id=396 data-nosnippet>396</a>    DW_AT_decl_file = <span class="number">0x3a</span>,
+<a href=#397 id=397 data-nosnippet>397</a>    DW_AT_decl_line = <span class="number">0x3b</span>,
+<a href=#398 id=398 data-nosnippet>398</a>    DW_AT_declaration = <span class="number">0x3c</span>,
+<a href=#399 id=399 data-nosnippet>399</a>    DW_AT_discr_list = <span class="number">0x3d</span>,
+<a href=#400 id=400 data-nosnippet>400</a>    DW_AT_encoding = <span class="number">0x3e</span>,
+<a href=#401 id=401 data-nosnippet>401</a>    DW_AT_external = <span class="number">0x3f</span>,
+<a href=#402 id=402 data-nosnippet>402</a>    DW_AT_frame_base = <span class="number">0x40</span>,
+<a href=#403 id=403 data-nosnippet>403</a>    DW_AT_friend = <span class="number">0x41</span>,
+<a href=#404 id=404 data-nosnippet>404</a>    DW_AT_identifier_case = <span class="number">0x42</span>,
+<a href=#405 id=405 data-nosnippet>405</a>    DW_AT_macro_info = <span class="number">0x43</span>,
+<a href=#406 id=406 data-nosnippet>406</a>    DW_AT_namelist_item = <span class="number">0x44</span>,
+<a href=#407 id=407 data-nosnippet>407</a>    DW_AT_priority = <span class="number">0x45</span>,
+<a href=#408 id=408 data-nosnippet>408</a>    DW_AT_segment = <span class="number">0x46</span>,
+<a href=#409 id=409 data-nosnippet>409</a>    DW_AT_specification = <span class="number">0x47</span>,
+<a href=#410 id=410 data-nosnippet>410</a>    DW_AT_static_link = <span class="number">0x48</span>,
+<a href=#411 id=411 data-nosnippet>411</a>    DW_AT_type = <span class="number">0x49</span>,
+<a href=#412 id=412 data-nosnippet>412</a>    DW_AT_use_location = <span class="number">0x4a</span>,
+<a href=#413 id=413 data-nosnippet>413</a>    DW_AT_variable_parameter = <span class="number">0x4b</span>,
+<a href=#414 id=414 data-nosnippet>414</a>    DW_AT_virtuality = <span class="number">0x4c</span>,
+<a href=#415 id=415 data-nosnippet>415</a>    DW_AT_vtable_elem_location = <span class="number">0x4d</span>,
+<a href=#416 id=416 data-nosnippet>416</a>
+<a href=#417 id=417 data-nosnippet>417</a><span class="comment">// DWARF 3.
+<a href=#418 id=418 data-nosnippet>418</a>    </span>DW_AT_allocated = <span class="number">0x4e</span>,
+<a href=#419 id=419 data-nosnippet>419</a>    DW_AT_associated = <span class="number">0x4f</span>,
+<a href=#420 id=420 data-nosnippet>420</a>    DW_AT_data_location = <span class="number">0x50</span>,
+<a href=#421 id=421 data-nosnippet>421</a>    DW_AT_byte_stride = <span class="number">0x51</span>,
+<a href=#422 id=422 data-nosnippet>422</a>    DW_AT_entry_pc = <span class="number">0x52</span>,
+<a href=#423 id=423 data-nosnippet>423</a>    DW_AT_use_UTF8 = <span class="number">0x53</span>,
+<a href=#424 id=424 data-nosnippet>424</a>    DW_AT_extension = <span class="number">0x54</span>,
+<a href=#425 id=425 data-nosnippet>425</a>    DW_AT_ranges = <span class="number">0x55</span>,
+<a href=#426 id=426 data-nosnippet>426</a>    DW_AT_trampoline = <span class="number">0x56</span>,
+<a href=#427 id=427 data-nosnippet>427</a>    DW_AT_call_column = <span class="number">0x57</span>,
+<a href=#428 id=428 data-nosnippet>428</a>    DW_AT_call_file = <span class="number">0x58</span>,
+<a href=#429 id=429 data-nosnippet>429</a>    DW_AT_call_line = <span class="number">0x59</span>,
+<a href=#430 id=430 data-nosnippet>430</a>    DW_AT_description = <span class="number">0x5a</span>,
+<a href=#431 id=431 data-nosnippet>431</a>    DW_AT_binary_scale = <span class="number">0x5b</span>,
+<a href=#432 id=432 data-nosnippet>432</a>    DW_AT_decimal_scale = <span class="number">0x5c</span>,
+<a href=#433 id=433 data-nosnippet>433</a>    DW_AT_small = <span class="number">0x5d</span>,
+<a href=#434 id=434 data-nosnippet>434</a>    DW_AT_decimal_sign = <span class="number">0x5e</span>,
+<a href=#435 id=435 data-nosnippet>435</a>    DW_AT_digit_count = <span class="number">0x5f</span>,
+<a href=#436 id=436 data-nosnippet>436</a>    DW_AT_picture_string = <span class="number">0x60</span>,
+<a href=#437 id=437 data-nosnippet>437</a>    DW_AT_mutable = <span class="number">0x61</span>,
+<a href=#438 id=438 data-nosnippet>438</a>    DW_AT_threads_scaled = <span class="number">0x62</span>,
+<a href=#439 id=439 data-nosnippet>439</a>    DW_AT_explicit = <span class="number">0x63</span>,
+<a href=#440 id=440 data-nosnippet>440</a>    DW_AT_object_pointer = <span class="number">0x64</span>,
+<a href=#441 id=441 data-nosnippet>441</a>    DW_AT_endianity = <span class="number">0x65</span>,
+<a href=#442 id=442 data-nosnippet>442</a>    DW_AT_elemental = <span class="number">0x66</span>,
+<a href=#443 id=443 data-nosnippet>443</a>    DW_AT_pure = <span class="number">0x67</span>,
+<a href=#444 id=444 data-nosnippet>444</a>    DW_AT_recursive = <span class="number">0x68</span>,
+<a href=#445 id=445 data-nosnippet>445</a>
+<a href=#446 id=446 data-nosnippet>446</a><span class="comment">// DWARF 4.
+<a href=#447 id=447 data-nosnippet>447</a>    </span>DW_AT_signature = <span class="number">0x69</span>,
+<a href=#448 id=448 data-nosnippet>448</a>    DW_AT_main_subprogram = <span class="number">0x6a</span>,
+<a href=#449 id=449 data-nosnippet>449</a>    DW_AT_data_bit_offset = <span class="number">0x6b</span>,
+<a href=#450 id=450 data-nosnippet>450</a>    DW_AT_const_expr = <span class="number">0x6c</span>,
+<a href=#451 id=451 data-nosnippet>451</a>    DW_AT_enum_class = <span class="number">0x6d</span>,
+<a href=#452 id=452 data-nosnippet>452</a>    DW_AT_linkage_name = <span class="number">0x6e</span>,
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a><span class="comment">// DWARF 5.
+<a href=#455 id=455 data-nosnippet>455</a>    </span>DW_AT_string_length_bit_size = <span class="number">0x6f</span>,
+<a href=#456 id=456 data-nosnippet>456</a>    DW_AT_string_length_byte_size = <span class="number">0x70</span>,
+<a href=#457 id=457 data-nosnippet>457</a>    DW_AT_rank = <span class="number">0x71</span>,
+<a href=#458 id=458 data-nosnippet>458</a>    DW_AT_str_offsets_base = <span class="number">0x72</span>,
+<a href=#459 id=459 data-nosnippet>459</a>    DW_AT_addr_base = <span class="number">0x73</span>,
+<a href=#460 id=460 data-nosnippet>460</a>    DW_AT_rnglists_base = <span class="number">0x74</span>,
+<a href=#461 id=461 data-nosnippet>461</a>    DW_AT_dwo_name = <span class="number">0x76</span>,
+<a href=#462 id=462 data-nosnippet>462</a>    DW_AT_reference = <span class="number">0x77</span>,
+<a href=#463 id=463 data-nosnippet>463</a>    DW_AT_rvalue_reference = <span class="number">0x78</span>,
+<a href=#464 id=464 data-nosnippet>464</a>    DW_AT_macros = <span class="number">0x79</span>,
+<a href=#465 id=465 data-nosnippet>465</a>    DW_AT_call_all_calls = <span class="number">0x7a</span>,
+<a href=#466 id=466 data-nosnippet>466</a>    DW_AT_call_all_source_calls = <span class="number">0x7b</span>,
+<a href=#467 id=467 data-nosnippet>467</a>    DW_AT_call_all_tail_calls = <span class="number">0x7c</span>,
+<a href=#468 id=468 data-nosnippet>468</a>    DW_AT_call_return_pc = <span class="number">0x7d</span>,
+<a href=#469 id=469 data-nosnippet>469</a>    DW_AT_call_value = <span class="number">0x7e</span>,
+<a href=#470 id=470 data-nosnippet>470</a>    DW_AT_call_origin = <span class="number">0x7f</span>,
+<a href=#471 id=471 data-nosnippet>471</a>    DW_AT_call_parameter = <span class="number">0x80</span>,
+<a href=#472 id=472 data-nosnippet>472</a>    DW_AT_call_pc = <span class="number">0x81</span>,
+<a href=#473 id=473 data-nosnippet>473</a>    DW_AT_call_tail_call = <span class="number">0x82</span>,
+<a href=#474 id=474 data-nosnippet>474</a>    DW_AT_call_target = <span class="number">0x83</span>,
+<a href=#475 id=475 data-nosnippet>475</a>    DW_AT_call_target_clobbered = <span class="number">0x84</span>,
+<a href=#476 id=476 data-nosnippet>476</a>    DW_AT_call_data_location = <span class="number">0x85</span>,
+<a href=#477 id=477 data-nosnippet>477</a>    DW_AT_call_data_value = <span class="number">0x86</span>,
+<a href=#478 id=478 data-nosnippet>478</a>    DW_AT_noreturn = <span class="number">0x87</span>,
+<a href=#479 id=479 data-nosnippet>479</a>    DW_AT_alignment = <span class="number">0x88</span>,
+<a href=#480 id=480 data-nosnippet>480</a>    DW_AT_export_symbols = <span class="number">0x89</span>,
+<a href=#481 id=481 data-nosnippet>481</a>    DW_AT_deleted = <span class="number">0x8a</span>,
+<a href=#482 id=482 data-nosnippet>482</a>    DW_AT_defaulted = <span class="number">0x8b</span>,
+<a href=#483 id=483 data-nosnippet>483</a>    DW_AT_loclists_base = <span class="number">0x8c</span>,
+<a href=#484 id=484 data-nosnippet>484</a>
+<a href=#485 id=485 data-nosnippet>485</a>    DW_AT_lo_user = <span class="number">0x2000</span>,
+<a href=#486 id=486 data-nosnippet>486</a>    DW_AT_hi_user = <span class="number">0x3fff</span>,
+<a href=#487 id=487 data-nosnippet>487</a>
+<a href=#488 id=488 data-nosnippet>488</a><span class="comment">// SGI/MIPS extensions.
+<a href=#489 id=489 data-nosnippet>489</a>    </span>DW_AT_MIPS_fde = <span class="number">0x2001</span>,
+<a href=#490 id=490 data-nosnippet>490</a>    DW_AT_MIPS_loop_begin = <span class="number">0x2002</span>,
+<a href=#491 id=491 data-nosnippet>491</a>    DW_AT_MIPS_tail_loop_begin = <span class="number">0x2003</span>,
+<a href=#492 id=492 data-nosnippet>492</a>    DW_AT_MIPS_epilog_begin = <span class="number">0x2004</span>,
+<a href=#493 id=493 data-nosnippet>493</a>    DW_AT_MIPS_loop_unroll_factor = <span class="number">0x2005</span>,
+<a href=#494 id=494 data-nosnippet>494</a>    DW_AT_MIPS_software_pipeline_depth = <span class="number">0x2006</span>,
+<a href=#495 id=495 data-nosnippet>495</a>    DW_AT_MIPS_linkage_name = <span class="number">0x2007</span>,
+<a href=#496 id=496 data-nosnippet>496</a>    DW_AT_MIPS_stride = <span class="number">0x2008</span>,
+<a href=#497 id=497 data-nosnippet>497</a>    DW_AT_MIPS_abstract_name = <span class="number">0x2009</span>,
+<a href=#498 id=498 data-nosnippet>498</a>    DW_AT_MIPS_clone_origin = <span class="number">0x200a</span>,
+<a href=#499 id=499 data-nosnippet>499</a>    DW_AT_MIPS_has_inlines = <span class="number">0x200b</span>,
+<a href=#500 id=500 data-nosnippet>500</a>    DW_AT_MIPS_stride_byte = <span class="number">0x200c</span>,
+<a href=#501 id=501 data-nosnippet>501</a>    DW_AT_MIPS_stride_elem = <span class="number">0x200d</span>,
+<a href=#502 id=502 data-nosnippet>502</a>    DW_AT_MIPS_ptr_dopetype = <span class="number">0x200e</span>,
+<a href=#503 id=503 data-nosnippet>503</a>    DW_AT_MIPS_allocatable_dopetype = <span class="number">0x200f</span>,
+<a href=#504 id=504 data-nosnippet>504</a>    DW_AT_MIPS_assumed_shape_dopetype = <span class="number">0x2010</span>,
+<a href=#505 id=505 data-nosnippet>505</a>
+<a href=#506 id=506 data-nosnippet>506</a><span class="comment">// This one appears to have only been implemented by Open64 for
+<a href=#507 id=507 data-nosnippet>507</a>// fortran and may conflict with other extensions.
+<a href=#508 id=508 data-nosnippet>508</a>    </span>DW_AT_MIPS_assumed_size = <span class="number">0x2011</span>,
+<a href=#509 id=509 data-nosnippet>509</a>
+<a href=#510 id=510 data-nosnippet>510</a><span class="comment">// TODO: HP/CPQ extensions.
+<a href=#511 id=511 data-nosnippet>511</a>// These conflict with the MIPS extensions.
+<a href=#512 id=512 data-nosnippet>512</a>
+<a href=#513 id=513 data-nosnippet>513</a>    </span>DW_AT_INTEL_other_endian = <span class="number">0x2026</span>,
+<a href=#514 id=514 data-nosnippet>514</a>
+<a href=#515 id=515 data-nosnippet>515</a><span class="comment">// GNU extensions
+<a href=#516 id=516 data-nosnippet>516</a>    </span>DW_AT_sf_names = <span class="number">0x2101</span>,
+<a href=#517 id=517 data-nosnippet>517</a>    DW_AT_src_info = <span class="number">0x2102</span>,
+<a href=#518 id=518 data-nosnippet>518</a>    DW_AT_mac_info = <span class="number">0x2103</span>,
+<a href=#519 id=519 data-nosnippet>519</a>    DW_AT_src_coords = <span class="number">0x2104</span>,
+<a href=#520 id=520 data-nosnippet>520</a>    DW_AT_body_begin = <span class="number">0x2105</span>,
+<a href=#521 id=521 data-nosnippet>521</a>    DW_AT_body_end = <span class="number">0x2106</span>,
+<a href=#522 id=522 data-nosnippet>522</a>    DW_AT_GNU_vector = <span class="number">0x2107</span>,
+<a href=#523 id=523 data-nosnippet>523</a>    DW_AT_GNU_guarded_by = <span class="number">0x2108</span>,
+<a href=#524 id=524 data-nosnippet>524</a>    DW_AT_GNU_pt_guarded_by = <span class="number">0x2109</span>,
+<a href=#525 id=525 data-nosnippet>525</a>    DW_AT_GNU_guarded = <span class="number">0x210a</span>,
+<a href=#526 id=526 data-nosnippet>526</a>    DW_AT_GNU_pt_guarded = <span class="number">0x210b</span>,
+<a href=#527 id=527 data-nosnippet>527</a>    DW_AT_GNU_locks_excluded = <span class="number">0x210c</span>,
+<a href=#528 id=528 data-nosnippet>528</a>    DW_AT_GNU_exclusive_locks_required = <span class="number">0x210d</span>,
+<a href=#529 id=529 data-nosnippet>529</a>    DW_AT_GNU_shared_locks_required = <span class="number">0x210e</span>,
+<a href=#530 id=530 data-nosnippet>530</a>    DW_AT_GNU_odr_signature = <span class="number">0x210f</span>,
+<a href=#531 id=531 data-nosnippet>531</a>    DW_AT_GNU_template_name = <span class="number">0x2110</span>,
+<a href=#532 id=532 data-nosnippet>532</a>    DW_AT_GNU_call_site_value = <span class="number">0x2111</span>,
+<a href=#533 id=533 data-nosnippet>533</a>    DW_AT_GNU_call_site_data_value = <span class="number">0x2112</span>,
+<a href=#534 id=534 data-nosnippet>534</a>    DW_AT_GNU_call_site_target = <span class="number">0x2113</span>,
+<a href=#535 id=535 data-nosnippet>535</a>    DW_AT_GNU_call_site_target_clobbered = <span class="number">0x2114</span>,
+<a href=#536 id=536 data-nosnippet>536</a>    DW_AT_GNU_tail_call = <span class="number">0x2115</span>,
+<a href=#537 id=537 data-nosnippet>537</a>    DW_AT_GNU_all_tail_call_sites = <span class="number">0x2116</span>,
+<a href=#538 id=538 data-nosnippet>538</a>    DW_AT_GNU_all_call_sites = <span class="number">0x2117</span>,
+<a href=#539 id=539 data-nosnippet>539</a>    DW_AT_GNU_all_source_call_sites = <span class="number">0x2118</span>,
+<a href=#540 id=540 data-nosnippet>540</a>    DW_AT_GNU_macros = <span class="number">0x2119</span>,
+<a href=#541 id=541 data-nosnippet>541</a>    DW_AT_GNU_deleted = <span class="number">0x211a</span>,
+<a href=#542 id=542 data-nosnippet>542</a>
+<a href=#543 id=543 data-nosnippet>543</a><span class="comment">// Extensions for Fission proposal.
+<a href=#544 id=544 data-nosnippet>544</a>    </span>DW_AT_GNU_dwo_name = <span class="number">0x2130</span>,
+<a href=#545 id=545 data-nosnippet>545</a>    DW_AT_GNU_dwo_id = <span class="number">0x2131</span>,
+<a href=#546 id=546 data-nosnippet>546</a>    DW_AT_GNU_ranges_base = <span class="number">0x2132</span>,
+<a href=#547 id=547 data-nosnippet>547</a>    DW_AT_GNU_addr_base = <span class="number">0x2133</span>,
+<a href=#548 id=548 data-nosnippet>548</a>    DW_AT_GNU_pubnames = <span class="number">0x2134</span>,
+<a href=#549 id=549 data-nosnippet>549</a>    DW_AT_GNU_pubtypes = <span class="number">0x2135</span>,
+<a href=#550 id=550 data-nosnippet>550</a>    DW_AT_GNU_discriminator = <span class="number">0x2136</span>,
+<a href=#551 id=551 data-nosnippet>551</a>    DW_AT_GNU_locviews = <span class="number">0x2137</span>,
+<a href=#552 id=552 data-nosnippet>552</a>    DW_AT_GNU_entry_view = <span class="number">0x2138</span>,
+<a href=#553 id=553 data-nosnippet>553</a>
+<a href=#554 id=554 data-nosnippet>554</a><span class="comment">// Conflict with Sun.
+<a href=#555 id=555 data-nosnippet>555</a>// DW_AT_VMS_rtnbeg_pd_address = 0x2201,
+<a href=#556 id=556 data-nosnippet>556</a>
+<a href=#557 id=557 data-nosnippet>557</a>// Sun extensions.
+<a href=#558 id=558 data-nosnippet>558</a>    </span>DW_AT_SUN_template = <span class="number">0x2201</span>,
+<a href=#559 id=559 data-nosnippet>559</a>    DW_AT_SUN_alignment = <span class="number">0x2202</span>,
+<a href=#560 id=560 data-nosnippet>560</a>    DW_AT_SUN_vtable = <span class="number">0x2203</span>,
+<a href=#561 id=561 data-nosnippet>561</a>    DW_AT_SUN_count_guarantee = <span class="number">0x2204</span>,
+<a href=#562 id=562 data-nosnippet>562</a>    DW_AT_SUN_command_line = <span class="number">0x2205</span>,
+<a href=#563 id=563 data-nosnippet>563</a>    DW_AT_SUN_vbase = <span class="number">0x2206</span>,
+<a href=#564 id=564 data-nosnippet>564</a>    DW_AT_SUN_compile_options = <span class="number">0x2207</span>,
+<a href=#565 id=565 data-nosnippet>565</a>    DW_AT_SUN_language = <span class="number">0x2208</span>,
+<a href=#566 id=566 data-nosnippet>566</a>    DW_AT_SUN_browser_file = <span class="number">0x2209</span>,
+<a href=#567 id=567 data-nosnippet>567</a>    DW_AT_SUN_vtable_abi = <span class="number">0x2210</span>,
+<a href=#568 id=568 data-nosnippet>568</a>    DW_AT_SUN_func_offsets = <span class="number">0x2211</span>,
+<a href=#569 id=569 data-nosnippet>569</a>    DW_AT_SUN_cf_kind = <span class="number">0x2212</span>,
+<a href=#570 id=570 data-nosnippet>570</a>    DW_AT_SUN_vtable_index = <span class="number">0x2213</span>,
+<a href=#571 id=571 data-nosnippet>571</a>    DW_AT_SUN_omp_tpriv_addr = <span class="number">0x2214</span>,
+<a href=#572 id=572 data-nosnippet>572</a>    DW_AT_SUN_omp_child_func = <span class="number">0x2215</span>,
+<a href=#573 id=573 data-nosnippet>573</a>    DW_AT_SUN_func_offset = <span class="number">0x2216</span>,
+<a href=#574 id=574 data-nosnippet>574</a>    DW_AT_SUN_memop_type_ref = <span class="number">0x2217</span>,
+<a href=#575 id=575 data-nosnippet>575</a>    DW_AT_SUN_profile_id = <span class="number">0x2218</span>,
+<a href=#576 id=576 data-nosnippet>576</a>    DW_AT_SUN_memop_signature = <span class="number">0x2219</span>,
+<a href=#577 id=577 data-nosnippet>577</a>    DW_AT_SUN_obj_dir = <span class="number">0x2220</span>,
+<a href=#578 id=578 data-nosnippet>578</a>    DW_AT_SUN_obj_file = <span class="number">0x2221</span>,
+<a href=#579 id=579 data-nosnippet>579</a>    DW_AT_SUN_original_name = <span class="number">0x2222</span>,
+<a href=#580 id=580 data-nosnippet>580</a>    DW_AT_SUN_hwcprof_signature = <span class="number">0x2223</span>,
+<a href=#581 id=581 data-nosnippet>581</a>    DW_AT_SUN_amd64_parmdump = <span class="number">0x2224</span>,
+<a href=#582 id=582 data-nosnippet>582</a>    DW_AT_SUN_part_link_name = <span class="number">0x2225</span>,
+<a href=#583 id=583 data-nosnippet>583</a>    DW_AT_SUN_link_name = <span class="number">0x2226</span>,
+<a href=#584 id=584 data-nosnippet>584</a>    DW_AT_SUN_pass_with_const = <span class="number">0x2227</span>,
+<a href=#585 id=585 data-nosnippet>585</a>    DW_AT_SUN_return_with_const = <span class="number">0x2228</span>,
+<a href=#586 id=586 data-nosnippet>586</a>    DW_AT_SUN_import_by_name = <span class="number">0x2229</span>,
+<a href=#587 id=587 data-nosnippet>587</a>    DW_AT_SUN_f90_pointer = <span class="number">0x222a</span>,
+<a href=#588 id=588 data-nosnippet>588</a>    DW_AT_SUN_pass_by_ref = <span class="number">0x222b</span>,
+<a href=#589 id=589 data-nosnippet>589</a>    DW_AT_SUN_f90_allocatable = <span class="number">0x222c</span>,
+<a href=#590 id=590 data-nosnippet>590</a>    DW_AT_SUN_f90_assumed_shape_array = <span class="number">0x222d</span>,
+<a href=#591 id=591 data-nosnippet>591</a>    DW_AT_SUN_c_vla = <span class="number">0x222e</span>,
+<a href=#592 id=592 data-nosnippet>592</a>    DW_AT_SUN_return_value_ptr = <span class="number">0x2230</span>,
+<a href=#593 id=593 data-nosnippet>593</a>    DW_AT_SUN_dtor_start = <span class="number">0x2231</span>,
+<a href=#594 id=594 data-nosnippet>594</a>    DW_AT_SUN_dtor_length = <span class="number">0x2232</span>,
+<a href=#595 id=595 data-nosnippet>595</a>    DW_AT_SUN_dtor_state_initial = <span class="number">0x2233</span>,
+<a href=#596 id=596 data-nosnippet>596</a>    DW_AT_SUN_dtor_state_final = <span class="number">0x2234</span>,
+<a href=#597 id=597 data-nosnippet>597</a>    DW_AT_SUN_dtor_state_deltas = <span class="number">0x2235</span>,
+<a href=#598 id=598 data-nosnippet>598</a>    DW_AT_SUN_import_by_lname = <span class="number">0x2236</span>,
+<a href=#599 id=599 data-nosnippet>599</a>    DW_AT_SUN_f90_use_only = <span class="number">0x2237</span>,
+<a href=#600 id=600 data-nosnippet>600</a>    DW_AT_SUN_namelist_spec = <span class="number">0x2238</span>,
+<a href=#601 id=601 data-nosnippet>601</a>    DW_AT_SUN_is_omp_child_func = <span class="number">0x2239</span>,
+<a href=#602 id=602 data-nosnippet>602</a>    DW_AT_SUN_fortran_main_alias = <span class="number">0x223a</span>,
+<a href=#603 id=603 data-nosnippet>603</a>    DW_AT_SUN_fortran_based = <span class="number">0x223b</span>,
+<a href=#604 id=604 data-nosnippet>604</a>
+<a href=#605 id=605 data-nosnippet>605</a>    DW_AT_ALTIUM_loclist = <span class="number">0x2300</span>,
+<a href=#606 id=606 data-nosnippet>606</a>
+<a href=#607 id=607 data-nosnippet>607</a>    DW_AT_use_GNAT_descriptive_type = <span class="number">0x2301</span>,
+<a href=#608 id=608 data-nosnippet>608</a>    DW_AT_GNAT_descriptive_type = <span class="number">0x2302</span>,
+<a href=#609 id=609 data-nosnippet>609</a>    DW_AT_GNU_numerator = <span class="number">0x2303</span>,
+<a href=#610 id=610 data-nosnippet>610</a>    DW_AT_GNU_denominator = <span class="number">0x2304</span>,
+<a href=#611 id=611 data-nosnippet>611</a>    DW_AT_GNU_bias = <span class="number">0x2305</span>,
+<a href=#612 id=612 data-nosnippet>612</a>
+<a href=#613 id=613 data-nosnippet>613</a>    DW_AT_upc_threads_scaled = <span class="number">0x3210</span>,
+<a href=#614 id=614 data-nosnippet>614</a>
+<a href=#615 id=615 data-nosnippet>615</a><span class="comment">// PGI (STMicroelectronics) extensions.
+<a href=#616 id=616 data-nosnippet>616</a>    </span>DW_AT_PGI_lbase = <span class="number">0x3a00</span>,
+<a href=#617 id=617 data-nosnippet>617</a>    DW_AT_PGI_soffset = <span class="number">0x3a01</span>,
+<a href=#618 id=618 data-nosnippet>618</a>    DW_AT_PGI_lstride = <span class="number">0x3a02</span>,
+<a href=#619 id=619 data-nosnippet>619</a>
+<a href=#620 id=620 data-nosnippet>620</a><span class="comment">// Borland extensions.
+<a href=#621 id=621 data-nosnippet>621</a>    </span>DW_AT_BORLAND_property_read = <span class="number">0x3b11</span>,
+<a href=#622 id=622 data-nosnippet>622</a>    DW_AT_BORLAND_property_write = <span class="number">0x3b12</span>,
+<a href=#623 id=623 data-nosnippet>623</a>    DW_AT_BORLAND_property_implements = <span class="number">0x3b13</span>,
+<a href=#624 id=624 data-nosnippet>624</a>    DW_AT_BORLAND_property_index = <span class="number">0x3b14</span>,
+<a href=#625 id=625 data-nosnippet>625</a>    DW_AT_BORLAND_property_default = <span class="number">0x3b15</span>,
+<a href=#626 id=626 data-nosnippet>626</a>    DW_AT_BORLAND_Delphi_unit = <span class="number">0x3b20</span>,
+<a href=#627 id=627 data-nosnippet>627</a>    DW_AT_BORLAND_Delphi_class = <span class="number">0x3b21</span>,
+<a href=#628 id=628 data-nosnippet>628</a>    DW_AT_BORLAND_Delphi_record = <span class="number">0x3b22</span>,
+<a href=#629 id=629 data-nosnippet>629</a>    DW_AT_BORLAND_Delphi_metaclass = <span class="number">0x3b23</span>,
+<a href=#630 id=630 data-nosnippet>630</a>    DW_AT_BORLAND_Delphi_constructor = <span class="number">0x3b24</span>,
+<a href=#631 id=631 data-nosnippet>631</a>    DW_AT_BORLAND_Delphi_destructor = <span class="number">0x3b25</span>,
+<a href=#632 id=632 data-nosnippet>632</a>    DW_AT_BORLAND_Delphi_anonymous_method = <span class="number">0x3b26</span>,
+<a href=#633 id=633 data-nosnippet>633</a>    DW_AT_BORLAND_Delphi_interface = <span class="number">0x3b27</span>,
+<a href=#634 id=634 data-nosnippet>634</a>    DW_AT_BORLAND_Delphi_ABI = <span class="number">0x3b28</span>,
+<a href=#635 id=635 data-nosnippet>635</a>    DW_AT_BORLAND_Delphi_return = <span class="number">0x3b29</span>,
+<a href=#636 id=636 data-nosnippet>636</a>    DW_AT_BORLAND_Delphi_frameptr = <span class="number">0x3b30</span>,
+<a href=#637 id=637 data-nosnippet>637</a>    DW_AT_BORLAND_closure = <span class="number">0x3b31</span>,
+<a href=#638 id=638 data-nosnippet>638</a>
+<a href=#639 id=639 data-nosnippet>639</a><span class="comment">// LLVM project extensions.
+<a href=#640 id=640 data-nosnippet>640</a>    </span>DW_AT_LLVM_include_path = <span class="number">0x3e00</span>,
+<a href=#641 id=641 data-nosnippet>641</a>    DW_AT_LLVM_config_macros = <span class="number">0x3e01</span>,
+<a href=#642 id=642 data-nosnippet>642</a>    DW_AT_LLVM_isysroot = <span class="number">0x3e02</span>,
+<a href=#643 id=643 data-nosnippet>643</a>
+<a href=#644 id=644 data-nosnippet>644</a><span class="comment">// Apple extensions.
+<a href=#645 id=645 data-nosnippet>645</a>    </span>DW_AT_APPLE_optimized = <span class="number">0x3fe1</span>,
+<a href=#646 id=646 data-nosnippet>646</a>    DW_AT_APPLE_flags = <span class="number">0x3fe2</span>,
+<a href=#647 id=647 data-nosnippet>647</a>    DW_AT_APPLE_isa = <span class="number">0x3fe3</span>,
+<a href=#648 id=648 data-nosnippet>648</a>    DW_AT_APPLE_block = <span class="number">0x3fe4</span>,
+<a href=#649 id=649 data-nosnippet>649</a>    DW_AT_APPLE_major_runtime_vers = <span class="number">0x3fe5</span>,
+<a href=#650 id=650 data-nosnippet>650</a>    DW_AT_APPLE_runtime_class = <span class="number">0x3fe6</span>,
+<a href=#651 id=651 data-nosnippet>651</a>    DW_AT_APPLE_omit_frame_ptr = <span class="number">0x3fe7</span>,
+<a href=#652 id=652 data-nosnippet>652</a>    DW_AT_APPLE_property_name = <span class="number">0x3fe8</span>,
+<a href=#653 id=653 data-nosnippet>653</a>    DW_AT_APPLE_property_getter = <span class="number">0x3fe9</span>,
+<a href=#654 id=654 data-nosnippet>654</a>    DW_AT_APPLE_property_setter = <span class="number">0x3fea</span>,
+<a href=#655 id=655 data-nosnippet>655</a>    DW_AT_APPLE_property_attribute = <span class="number">0x3feb</span>,
+<a href=#656 id=656 data-nosnippet>656</a>    DW_AT_APPLE_objc_complete_type = <span class="number">0x3fec</span>,
+<a href=#657 id=657 data-nosnippet>657</a>    DW_AT_APPLE_property = <span class="number">0x3fed
+<a href=#658 id=658 data-nosnippet>658</a></span>});
+<a href=#659 id=659 data-nosnippet>659</a>
+<a href=#660 id=660 data-nosnippet>660</a><span class="macro">dw!</span>(
+<a href=#661 id=661 data-nosnippet>661</a><span class="doccomment">/// The attribute form encodings for DIE attributes.
+<a href=#662 id=662 data-nosnippet>662</a>///
+<a href=#663 id=663 data-nosnippet>663</a>/// See Section 7.5.6, Table 7.6.
+<a href=#664 id=664 data-nosnippet>664</a></span>DwForm(u16) {
+<a href=#665 id=665 data-nosnippet>665</a>    DW_FORM_null = <span class="number">0x00</span>,
+<a href=#666 id=666 data-nosnippet>666</a>
+<a href=#667 id=667 data-nosnippet>667</a>    DW_FORM_addr = <span class="number">0x01</span>,
+<a href=#668 id=668 data-nosnippet>668</a>    DW_FORM_block2 = <span class="number">0x03</span>,
+<a href=#669 id=669 data-nosnippet>669</a>    DW_FORM_block4 = <span class="number">0x04</span>,
+<a href=#670 id=670 data-nosnippet>670</a>    DW_FORM_data2 = <span class="number">0x05</span>,
+<a href=#671 id=671 data-nosnippet>671</a>    DW_FORM_data4 = <span class="number">0x06</span>,
+<a href=#672 id=672 data-nosnippet>672</a>    DW_FORM_data8 = <span class="number">0x07</span>,
+<a href=#673 id=673 data-nosnippet>673</a>    DW_FORM_string = <span class="number">0x08</span>,
+<a href=#674 id=674 data-nosnippet>674</a>    DW_FORM_block = <span class="number">0x09</span>,
+<a href=#675 id=675 data-nosnippet>675</a>    DW_FORM_block1 = <span class="number">0x0a</span>,
+<a href=#676 id=676 data-nosnippet>676</a>    DW_FORM_data1 = <span class="number">0x0b</span>,
+<a href=#677 id=677 data-nosnippet>677</a>    DW_FORM_flag = <span class="number">0x0c</span>,
+<a href=#678 id=678 data-nosnippet>678</a>    DW_FORM_sdata = <span class="number">0x0d</span>,
+<a href=#679 id=679 data-nosnippet>679</a>    DW_FORM_strp = <span class="number">0x0e</span>,
+<a href=#680 id=680 data-nosnippet>680</a>    DW_FORM_udata = <span class="number">0x0f</span>,
+<a href=#681 id=681 data-nosnippet>681</a>    DW_FORM_ref_addr = <span class="number">0x10</span>,
+<a href=#682 id=682 data-nosnippet>682</a>    DW_FORM_ref1 = <span class="number">0x11</span>,
+<a href=#683 id=683 data-nosnippet>683</a>    DW_FORM_ref2 = <span class="number">0x12</span>,
+<a href=#684 id=684 data-nosnippet>684</a>    DW_FORM_ref4 = <span class="number">0x13</span>,
+<a href=#685 id=685 data-nosnippet>685</a>    DW_FORM_ref8 = <span class="number">0x14</span>,
+<a href=#686 id=686 data-nosnippet>686</a>    DW_FORM_ref_udata = <span class="number">0x15</span>,
+<a href=#687 id=687 data-nosnippet>687</a>    DW_FORM_indirect = <span class="number">0x16</span>,
+<a href=#688 id=688 data-nosnippet>688</a>
+<a href=#689 id=689 data-nosnippet>689</a><span class="comment">// DWARF 4.
+<a href=#690 id=690 data-nosnippet>690</a>    </span>DW_FORM_sec_offset = <span class="number">0x17</span>,
+<a href=#691 id=691 data-nosnippet>691</a>    DW_FORM_exprloc = <span class="number">0x18</span>,
+<a href=#692 id=692 data-nosnippet>692</a>    DW_FORM_flag_present = <span class="number">0x19</span>,
+<a href=#693 id=693 data-nosnippet>693</a>    DW_FORM_ref_sig8 = <span class="number">0x20</span>,
+<a href=#694 id=694 data-nosnippet>694</a>
+<a href=#695 id=695 data-nosnippet>695</a><span class="comment">// DWARF 5.
+<a href=#696 id=696 data-nosnippet>696</a>    </span>DW_FORM_strx = <span class="number">0x1a</span>,
+<a href=#697 id=697 data-nosnippet>697</a>    DW_FORM_addrx = <span class="number">0x1b</span>,
+<a href=#698 id=698 data-nosnippet>698</a>    DW_FORM_ref_sup4 = <span class="number">0x1c</span>,
+<a href=#699 id=699 data-nosnippet>699</a>    DW_FORM_strp_sup = <span class="number">0x1d</span>,
+<a href=#700 id=700 data-nosnippet>700</a>    DW_FORM_data16 = <span class="number">0x1e</span>,
+<a href=#701 id=701 data-nosnippet>701</a>    DW_FORM_line_strp = <span class="number">0x1f</span>,
+<a href=#702 id=702 data-nosnippet>702</a>    DW_FORM_implicit_const = <span class="number">0x21</span>,
+<a href=#703 id=703 data-nosnippet>703</a>    DW_FORM_loclistx = <span class="number">0x22</span>,
+<a href=#704 id=704 data-nosnippet>704</a>    DW_FORM_rnglistx = <span class="number">0x23</span>,
+<a href=#705 id=705 data-nosnippet>705</a>    DW_FORM_ref_sup8 = <span class="number">0x24</span>,
+<a href=#706 id=706 data-nosnippet>706</a>    DW_FORM_strx1 = <span class="number">0x25</span>,
+<a href=#707 id=707 data-nosnippet>707</a>    DW_FORM_strx2 = <span class="number">0x26</span>,
+<a href=#708 id=708 data-nosnippet>708</a>    DW_FORM_strx3 = <span class="number">0x27</span>,
+<a href=#709 id=709 data-nosnippet>709</a>    DW_FORM_strx4 = <span class="number">0x28</span>,
+<a href=#710 id=710 data-nosnippet>710</a>    DW_FORM_addrx1 = <span class="number">0x29</span>,
+<a href=#711 id=711 data-nosnippet>711</a>    DW_FORM_addrx2 = <span class="number">0x2a</span>,
+<a href=#712 id=712 data-nosnippet>712</a>    DW_FORM_addrx3 = <span class="number">0x2b</span>,
+<a href=#713 id=713 data-nosnippet>713</a>    DW_FORM_addrx4 = <span class="number">0x2c</span>,
+<a href=#714 id=714 data-nosnippet>714</a>
+<a href=#715 id=715 data-nosnippet>715</a><span class="comment">// Extensions for Fission proposal
+<a href=#716 id=716 data-nosnippet>716</a>    </span>DW_FORM_GNU_addr_index = <span class="number">0x1f01</span>,
+<a href=#717 id=717 data-nosnippet>717</a>    DW_FORM_GNU_str_index = <span class="number">0x1f02</span>,
+<a href=#718 id=718 data-nosnippet>718</a>
+<a href=#719 id=719 data-nosnippet>719</a><span class="comment">// Alternate debug sections proposal (output of "dwz" tool).
+<a href=#720 id=720 data-nosnippet>720</a>    </span>DW_FORM_GNU_ref_alt = <span class="number">0x1f20</span>,
+<a href=#721 id=721 data-nosnippet>721</a>    DW_FORM_GNU_strp_alt = <span class="number">0x1f21
+<a href=#722 id=722 data-nosnippet>722</a></span>});
+<a href=#723 id=723 data-nosnippet>723</a>
+<a href=#724 id=724 data-nosnippet>724</a><span class="macro">dw!</span>(
+<a href=#725 id=725 data-nosnippet>725</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_encoding` attribute.
+<a href=#726 id=726 data-nosnippet>726</a>///
+<a href=#727 id=727 data-nosnippet>727</a>/// See Section 7.8, Table 7.11.
+<a href=#728 id=728 data-nosnippet>728</a></span>DwAte(u8) {
+<a href=#729 id=729 data-nosnippet>729</a>    DW_ATE_address = <span class="number">0x01</span>,
+<a href=#730 id=730 data-nosnippet>730</a>    DW_ATE_boolean = <span class="number">0x02</span>,
+<a href=#731 id=731 data-nosnippet>731</a>    DW_ATE_complex_float = <span class="number">0x03</span>,
+<a href=#732 id=732 data-nosnippet>732</a>    DW_ATE_float = <span class="number">0x04</span>,
+<a href=#733 id=733 data-nosnippet>733</a>    DW_ATE_signed = <span class="number">0x05</span>,
+<a href=#734 id=734 data-nosnippet>734</a>    DW_ATE_signed_char = <span class="number">0x06</span>,
+<a href=#735 id=735 data-nosnippet>735</a>    DW_ATE_unsigned = <span class="number">0x07</span>,
+<a href=#736 id=736 data-nosnippet>736</a>    DW_ATE_unsigned_char = <span class="number">0x08</span>,
+<a href=#737 id=737 data-nosnippet>737</a>
+<a href=#738 id=738 data-nosnippet>738</a><span class="comment">// DWARF 3.
+<a href=#739 id=739 data-nosnippet>739</a>    </span>DW_ATE_imaginary_float = <span class="number">0x09</span>,
+<a href=#740 id=740 data-nosnippet>740</a>    DW_ATE_packed_decimal = <span class="number">0x0a</span>,
+<a href=#741 id=741 data-nosnippet>741</a>    DW_ATE_numeric_string = <span class="number">0x0b</span>,
+<a href=#742 id=742 data-nosnippet>742</a>    DW_ATE_edited = <span class="number">0x0c</span>,
+<a href=#743 id=743 data-nosnippet>743</a>    DW_ATE_signed_fixed = <span class="number">0x0d</span>,
+<a href=#744 id=744 data-nosnippet>744</a>    DW_ATE_unsigned_fixed = <span class="number">0x0e</span>,
+<a href=#745 id=745 data-nosnippet>745</a>    DW_ATE_decimal_float = <span class="number">0x0f </span>,
+<a href=#746 id=746 data-nosnippet>746</a>
+<a href=#747 id=747 data-nosnippet>747</a><span class="comment">// DWARF 4.
+<a href=#748 id=748 data-nosnippet>748</a>    </span>DW_ATE_UTF = <span class="number">0x10</span>,
+<a href=#749 id=749 data-nosnippet>749</a>    DW_ATE_UCS = <span class="number">0x11</span>,
+<a href=#750 id=750 data-nosnippet>750</a>    DW_ATE_ASCII = <span class="number">0x12</span>,
+<a href=#751 id=751 data-nosnippet>751</a>
+<a href=#752 id=752 data-nosnippet>752</a>    DW_ATE_lo_user = <span class="number">0x80</span>,
+<a href=#753 id=753 data-nosnippet>753</a>    DW_ATE_hi_user = <span class="number">0xff</span>,
+<a href=#754 id=754 data-nosnippet>754</a>});
+<a href=#755 id=755 data-nosnippet>755</a>
+<a href=#756 id=756 data-nosnippet>756</a><span class="macro">dw!</span>(
+<a href=#757 id=757 data-nosnippet>757</a><span class="doccomment">/// The encodings of the constants used in location list entries.
+<a href=#758 id=758 data-nosnippet>758</a>///
+<a href=#759 id=759 data-nosnippet>759</a>/// See Section 7.7.3, Table 7.10.
+<a href=#760 id=760 data-nosnippet>760</a></span>DwLle(u8) {
+<a href=#761 id=761 data-nosnippet>761</a>    DW_LLE_end_of_list = <span class="number">0x00</span>,
+<a href=#762 id=762 data-nosnippet>762</a>    DW_LLE_base_addressx = <span class="number">0x01</span>,
+<a href=#763 id=763 data-nosnippet>763</a>    DW_LLE_startx_endx = <span class="number">0x02</span>,
+<a href=#764 id=764 data-nosnippet>764</a>    DW_LLE_startx_length = <span class="number">0x03</span>,
+<a href=#765 id=765 data-nosnippet>765</a>    DW_LLE_offset_pair = <span class="number">0x04</span>,
+<a href=#766 id=766 data-nosnippet>766</a>    DW_LLE_default_location = <span class="number">0x05</span>,
+<a href=#767 id=767 data-nosnippet>767</a>    DW_LLE_base_address = <span class="number">0x06</span>,
+<a href=#768 id=768 data-nosnippet>768</a>    DW_LLE_start_end = <span class="number">0x07</span>,
+<a href=#769 id=769 data-nosnippet>769</a>    DW_LLE_start_length = <span class="number">0x08</span>,
+<a href=#770 id=770 data-nosnippet>770</a>    DW_LLE_GNU_view_pair = <span class="number">0x09</span>,
+<a href=#771 id=771 data-nosnippet>771</a>});
+<a href=#772 id=772 data-nosnippet>772</a>
+<a href=#773 id=773 data-nosnippet>773</a><span class="macro">dw!</span>(
+<a href=#774 id=774 data-nosnippet>774</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_decimal_sign` attribute.
+<a href=#775 id=775 data-nosnippet>775</a>///
+<a href=#776 id=776 data-nosnippet>776</a>/// See Section 7.8, Table 7.12.
+<a href=#777 id=777 data-nosnippet>777</a></span>DwDs(u8) {
+<a href=#778 id=778 data-nosnippet>778</a>    DW_DS_unsigned = <span class="number">0x01</span>,
+<a href=#779 id=779 data-nosnippet>779</a>    DW_DS_leading_overpunch = <span class="number">0x02</span>,
+<a href=#780 id=780 data-nosnippet>780</a>    DW_DS_trailing_overpunch = <span class="number">0x03</span>,
+<a href=#781 id=781 data-nosnippet>781</a>    DW_DS_leading_separate = <span class="number">0x04</span>,
+<a href=#782 id=782 data-nosnippet>782</a>    DW_DS_trailing_separate = <span class="number">0x05</span>,
+<a href=#783 id=783 data-nosnippet>783</a>});
+<a href=#784 id=784 data-nosnippet>784</a>
+<a href=#785 id=785 data-nosnippet>785</a><span class="macro">dw!</span>(
+<a href=#786 id=786 data-nosnippet>786</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_endianity` attribute.
+<a href=#787 id=787 data-nosnippet>787</a>///
+<a href=#788 id=788 data-nosnippet>788</a>/// See Section 7.8, Table 7.13.
+<a href=#789 id=789 data-nosnippet>789</a></span>DwEnd(u8) {
+<a href=#790 id=790 data-nosnippet>790</a>    DW_END_default = <span class="number">0x00</span>,
+<a href=#791 id=791 data-nosnippet>791</a>    DW_END_big = <span class="number">0x01</span>,
+<a href=#792 id=792 data-nosnippet>792</a>    DW_END_little = <span class="number">0x02</span>,
+<a href=#793 id=793 data-nosnippet>793</a>    DW_END_lo_user = <span class="number">0x40</span>,
+<a href=#794 id=794 data-nosnippet>794</a>    DW_END_hi_user = <span class="number">0xff</span>,
+<a href=#795 id=795 data-nosnippet>795</a>});
+<a href=#796 id=796 data-nosnippet>796</a>
+<a href=#797 id=797 data-nosnippet>797</a><span class="macro">dw!</span>(
+<a href=#798 id=798 data-nosnippet>798</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_accessibility` attribute.
+<a href=#799 id=799 data-nosnippet>799</a>///
+<a href=#800 id=800 data-nosnippet>800</a>/// See Section 7.9, Table 7.14.
+<a href=#801 id=801 data-nosnippet>801</a></span>DwAccess(u8) {
+<a href=#802 id=802 data-nosnippet>802</a>    DW_ACCESS_public = <span class="number">0x01</span>,
+<a href=#803 id=803 data-nosnippet>803</a>    DW_ACCESS_protected = <span class="number">0x02</span>,
+<a href=#804 id=804 data-nosnippet>804</a>    DW_ACCESS_private = <span class="number">0x03</span>,
+<a href=#805 id=805 data-nosnippet>805</a>});
+<a href=#806 id=806 data-nosnippet>806</a>
+<a href=#807 id=807 data-nosnippet>807</a><span class="macro">dw!</span>(
+<a href=#808 id=808 data-nosnippet>808</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_visibility` attribute.
+<a href=#809 id=809 data-nosnippet>809</a>///
+<a href=#810 id=810 data-nosnippet>810</a>/// See Section 7.10, Table 7.15.
+<a href=#811 id=811 data-nosnippet>811</a></span>DwVis(u8) {
+<a href=#812 id=812 data-nosnippet>812</a>    DW_VIS_local = <span class="number">0x01</span>,
+<a href=#813 id=813 data-nosnippet>813</a>    DW_VIS_exported = <span class="number">0x02</span>,
+<a href=#814 id=814 data-nosnippet>814</a>    DW_VIS_qualified = <span class="number">0x03</span>,
+<a href=#815 id=815 data-nosnippet>815</a>});
+<a href=#816 id=816 data-nosnippet>816</a>
+<a href=#817 id=817 data-nosnippet>817</a><span class="macro">dw!</span>(
+<a href=#818 id=818 data-nosnippet>818</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_virtuality` attribute.
+<a href=#819 id=819 data-nosnippet>819</a>///
+<a href=#820 id=820 data-nosnippet>820</a>/// See Section 7.11, Table 7.16.
+<a href=#821 id=821 data-nosnippet>821</a></span>DwVirtuality(u8) {
+<a href=#822 id=822 data-nosnippet>822</a>    DW_VIRTUALITY_none = <span class="number">0x00</span>,
+<a href=#823 id=823 data-nosnippet>823</a>    DW_VIRTUALITY_virtual = <span class="number">0x01</span>,
+<a href=#824 id=824 data-nosnippet>824</a>    DW_VIRTUALITY_pure_virtual = <span class="number">0x02</span>,
+<a href=#825 id=825 data-nosnippet>825</a>});
+<a href=#826 id=826 data-nosnippet>826</a>
+<a href=#827 id=827 data-nosnippet>827</a><span class="macro">dw!</span>(
+<a href=#828 id=828 data-nosnippet>828</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_language` attribute.
+<a href=#829 id=829 data-nosnippet>829</a>///
+<a href=#830 id=830 data-nosnippet>830</a>/// See Section 7.12, Table 7.17.
+<a href=#831 id=831 data-nosnippet>831</a></span>DwLang(u16) {
+<a href=#832 id=832 data-nosnippet>832</a>    DW_LANG_C89 = <span class="number">0x0001</span>,
+<a href=#833 id=833 data-nosnippet>833</a>    DW_LANG_C = <span class="number">0x0002</span>,
+<a href=#834 id=834 data-nosnippet>834</a>    DW_LANG_Ada83 = <span class="number">0x0003</span>,
+<a href=#835 id=835 data-nosnippet>835</a>    DW_LANG_C_plus_plus = <span class="number">0x0004</span>,
+<a href=#836 id=836 data-nosnippet>836</a>    DW_LANG_Cobol74 = <span class="number">0x0005</span>,
+<a href=#837 id=837 data-nosnippet>837</a>    DW_LANG_Cobol85 = <span class="number">0x0006</span>,
+<a href=#838 id=838 data-nosnippet>838</a>    DW_LANG_Fortran77 = <span class="number">0x0007</span>,
+<a href=#839 id=839 data-nosnippet>839</a>    DW_LANG_Fortran90 = <span class="number">0x0008</span>,
+<a href=#840 id=840 data-nosnippet>840</a>    DW_LANG_Pascal83 = <span class="number">0x0009</span>,
+<a href=#841 id=841 data-nosnippet>841</a>    DW_LANG_Modula2 = <span class="number">0x000a</span>,
+<a href=#842 id=842 data-nosnippet>842</a>    DW_LANG_Java = <span class="number">0x000b</span>,
+<a href=#843 id=843 data-nosnippet>843</a>    DW_LANG_C99 = <span class="number">0x000c</span>,
+<a href=#844 id=844 data-nosnippet>844</a>    DW_LANG_Ada95 = <span class="number">0x000d</span>,
+<a href=#845 id=845 data-nosnippet>845</a>    DW_LANG_Fortran95 = <span class="number">0x000e</span>,
+<a href=#846 id=846 data-nosnippet>846</a>    DW_LANG_PLI = <span class="number">0x000f</span>,
+<a href=#847 id=847 data-nosnippet>847</a>    DW_LANG_ObjC = <span class="number">0x0010</span>,
+<a href=#848 id=848 data-nosnippet>848</a>    DW_LANG_ObjC_plus_plus = <span class="number">0x0011</span>,
+<a href=#849 id=849 data-nosnippet>849</a>    DW_LANG_UPC = <span class="number">0x0012</span>,
+<a href=#850 id=850 data-nosnippet>850</a>    DW_LANG_D = <span class="number">0x0013</span>,
+<a href=#851 id=851 data-nosnippet>851</a>    DW_LANG_Python = <span class="number">0x0014</span>,
+<a href=#852 id=852 data-nosnippet>852</a>    DW_LANG_OpenCL = <span class="number">0x0015</span>,
+<a href=#853 id=853 data-nosnippet>853</a>    DW_LANG_Go = <span class="number">0x0016</span>,
+<a href=#854 id=854 data-nosnippet>854</a>    DW_LANG_Modula3 = <span class="number">0x0017</span>,
+<a href=#855 id=855 data-nosnippet>855</a>    DW_LANG_Haskell = <span class="number">0x0018</span>,
+<a href=#856 id=856 data-nosnippet>856</a>    DW_LANG_C_plus_plus_03 = <span class="number">0x0019</span>,
+<a href=#857 id=857 data-nosnippet>857</a>    DW_LANG_C_plus_plus_11 = <span class="number">0x001a</span>,
+<a href=#858 id=858 data-nosnippet>858</a>    DW_LANG_OCaml = <span class="number">0x001b</span>,
+<a href=#859 id=859 data-nosnippet>859</a>    DW_LANG_Rust = <span class="number">0x001c</span>,
+<a href=#860 id=860 data-nosnippet>860</a>    DW_LANG_C11 = <span class="number">0x001d</span>,
+<a href=#861 id=861 data-nosnippet>861</a>    DW_LANG_Swift = <span class="number">0x001e</span>,
+<a href=#862 id=862 data-nosnippet>862</a>    DW_LANG_Julia = <span class="number">0x001f</span>,
+<a href=#863 id=863 data-nosnippet>863</a>    DW_LANG_Dylan = <span class="number">0x0020</span>,
+<a href=#864 id=864 data-nosnippet>864</a>    DW_LANG_C_plus_plus_14 = <span class="number">0x0021</span>,
+<a href=#865 id=865 data-nosnippet>865</a>    DW_LANG_Fortran03 = <span class="number">0x0022</span>,
+<a href=#866 id=866 data-nosnippet>866</a>    DW_LANG_Fortran08 = <span class="number">0x0023</span>,
+<a href=#867 id=867 data-nosnippet>867</a>    DW_LANG_RenderScript = <span class="number">0x0024</span>,
+<a href=#868 id=868 data-nosnippet>868</a>    DW_LANG_BLISS = <span class="number">0x0025</span>,
+<a href=#869 id=869 data-nosnippet>869</a>    DW_LANG_Kotlin = <span class="number">0x0026</span>,
+<a href=#870 id=870 data-nosnippet>870</a>    DW_LANG_Zig = <span class="number">0x0027</span>,
+<a href=#871 id=871 data-nosnippet>871</a>    DW_LANG_Crystal = <span class="number">0x0028</span>,
+<a href=#872 id=872 data-nosnippet>872</a>    DW_LANG_C_plus_plus_17 = <span class="number">0x002a</span>,
+<a href=#873 id=873 data-nosnippet>873</a>    DW_LANG_C_plus_plus_20 = <span class="number">0x002b</span>,
+<a href=#874 id=874 data-nosnippet>874</a>    DW_LANG_C17 = <span class="number">0x002c</span>,
+<a href=#875 id=875 data-nosnippet>875</a>    DW_LANG_Fortran18 = <span class="number">0x002d</span>,
+<a href=#876 id=876 data-nosnippet>876</a>    DW_LANG_Ada2005 = <span class="number">0x002e</span>,
+<a href=#877 id=877 data-nosnippet>877</a>    DW_LANG_Ada2012 = <span class="number">0x002f</span>,
+<a href=#878 id=878 data-nosnippet>878</a>
+<a href=#879 id=879 data-nosnippet>879</a>    DW_LANG_lo_user = <span class="number">0x8000</span>,
+<a href=#880 id=880 data-nosnippet>880</a>    DW_LANG_hi_user = <span class="number">0xffff</span>,
+<a href=#881 id=881 data-nosnippet>881</a>
+<a href=#882 id=882 data-nosnippet>882</a>    DW_LANG_Mips_Assembler = <span class="number">0x8001</span>,
+<a href=#883 id=883 data-nosnippet>883</a>    DW_LANG_GOOGLE_RenderScript = <span class="number">0x8e57</span>,
+<a href=#884 id=884 data-nosnippet>884</a>    DW_LANG_SUN_Assembler = <span class="number">0x9001</span>,
+<a href=#885 id=885 data-nosnippet>885</a>    DW_LANG_ALTIUM_Assembler = <span class="number">0x9101</span>,
+<a href=#886 id=886 data-nosnippet>886</a>    DW_LANG_BORLAND_Delphi = <span class="number">0xb000</span>,
+<a href=#887 id=887 data-nosnippet>887</a>});
+<a href=#888 id=888 data-nosnippet>888</a>
+<a href=#889 id=889 data-nosnippet>889</a><span class="kw">impl </span>DwLang {
+<a href=#890 id=890 data-nosnippet>890</a>    <span class="doccomment">/// Get the default DW_AT_lower_bound for this language.
+<a href=#891 id=891 data-nosnippet>891</a>    </span><span class="kw">pub fn </span>default_lower_bound(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;usize&gt; {
+<a href=#892 id=892 data-nosnippet>892</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#893 id=893 data-nosnippet>893</a>            DW_LANG_C89
+<a href=#894 id=894 data-nosnippet>894</a>            | DW_LANG_C
+<a href=#895 id=895 data-nosnippet>895</a>            | DW_LANG_C_plus_plus
+<a href=#896 id=896 data-nosnippet>896</a>            | DW_LANG_Java
+<a href=#897 id=897 data-nosnippet>897</a>            | DW_LANG_C99
+<a href=#898 id=898 data-nosnippet>898</a>            | DW_LANG_ObjC
+<a href=#899 id=899 data-nosnippet>899</a>            | DW_LANG_ObjC_plus_plus
+<a href=#900 id=900 data-nosnippet>900</a>            | DW_LANG_UPC
+<a href=#901 id=901 data-nosnippet>901</a>            | DW_LANG_D
+<a href=#902 id=902 data-nosnippet>902</a>            | DW_LANG_Python
+<a href=#903 id=903 data-nosnippet>903</a>            | DW_LANG_OpenCL
+<a href=#904 id=904 data-nosnippet>904</a>            | DW_LANG_Go
+<a href=#905 id=905 data-nosnippet>905</a>            | DW_LANG_Haskell
+<a href=#906 id=906 data-nosnippet>906</a>            | DW_LANG_C_plus_plus_03
+<a href=#907 id=907 data-nosnippet>907</a>            | DW_LANG_C_plus_plus_11
+<a href=#908 id=908 data-nosnippet>908</a>            | DW_LANG_OCaml
+<a href=#909 id=909 data-nosnippet>909</a>            | DW_LANG_Rust
+<a href=#910 id=910 data-nosnippet>910</a>            | DW_LANG_C11
+<a href=#911 id=911 data-nosnippet>911</a>            | DW_LANG_Swift
+<a href=#912 id=912 data-nosnippet>912</a>            | DW_LANG_Dylan
+<a href=#913 id=913 data-nosnippet>913</a>            | DW_LANG_C_plus_plus_14
+<a href=#914 id=914 data-nosnippet>914</a>            | DW_LANG_RenderScript
+<a href=#915 id=915 data-nosnippet>915</a>            | DW_LANG_BLISS =&gt; <span class="prelude-val">Some</span>(<span class="number">0</span>),
+<a href=#916 id=916 data-nosnippet>916</a>            DW_LANG_Ada83 | DW_LANG_Cobol74 | DW_LANG_Cobol85 | DW_LANG_Fortran77
+<a href=#917 id=917 data-nosnippet>917</a>            | DW_LANG_Fortran90 | DW_LANG_Pascal83 | DW_LANG_Modula2 | DW_LANG_Ada95
+<a href=#918 id=918 data-nosnippet>918</a>            | DW_LANG_Fortran95 | DW_LANG_PLI | DW_LANG_Modula3 | DW_LANG_Julia
+<a href=#919 id=919 data-nosnippet>919</a>            | DW_LANG_Fortran03 | DW_LANG_Fortran08 =&gt; <span class="prelude-val">Some</span>(<span class="number">1</span>),
+<a href=#920 id=920 data-nosnippet>920</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#921 id=921 data-nosnippet>921</a>        }
+<a href=#922 id=922 data-nosnippet>922</a>    }
+<a href=#923 id=923 data-nosnippet>923</a>}
+<a href=#924 id=924 data-nosnippet>924</a>
+<a href=#925 id=925 data-nosnippet>925</a><span class="macro">dw!</span>(
+<a href=#926 id=926 data-nosnippet>926</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_address_class` attribute.
+<a href=#927 id=927 data-nosnippet>927</a>///
+<a href=#928 id=928 data-nosnippet>928</a>/// There is only one value that is common to all target architectures.
+<a href=#929 id=929 data-nosnippet>929</a>/// See Section 7.13.
+<a href=#930 id=930 data-nosnippet>930</a></span>DwAddr(u64) {
+<a href=#931 id=931 data-nosnippet>931</a>    DW_ADDR_none = <span class="number">0x00</span>,
+<a href=#932 id=932 data-nosnippet>932</a>});
+<a href=#933 id=933 data-nosnippet>933</a>
+<a href=#934 id=934 data-nosnippet>934</a><span class="macro">dw!</span>(
+<a href=#935 id=935 data-nosnippet>935</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_identifier_case` attribute.
+<a href=#936 id=936 data-nosnippet>936</a>///
+<a href=#937 id=937 data-nosnippet>937</a>/// See Section 7.14, Table 7.18.
+<a href=#938 id=938 data-nosnippet>938</a></span>DwId(u8) {
+<a href=#939 id=939 data-nosnippet>939</a>    DW_ID_case_sensitive = <span class="number">0x00</span>,
+<a href=#940 id=940 data-nosnippet>940</a>    DW_ID_up_case = <span class="number">0x01</span>,
+<a href=#941 id=941 data-nosnippet>941</a>    DW_ID_down_case = <span class="number">0x02</span>,
+<a href=#942 id=942 data-nosnippet>942</a>    DW_ID_case_insensitive = <span class="number">0x03</span>,
+<a href=#943 id=943 data-nosnippet>943</a>});
+<a href=#944 id=944 data-nosnippet>944</a>
+<a href=#945 id=945 data-nosnippet>945</a><span class="macro">dw!</span>(
+<a href=#946 id=946 data-nosnippet>946</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_calling_convention` attribute.
+<a href=#947 id=947 data-nosnippet>947</a>///
+<a href=#948 id=948 data-nosnippet>948</a>/// See Section 7.15, Table 7.19.
+<a href=#949 id=949 data-nosnippet>949</a></span>DwCc(u8) {
+<a href=#950 id=950 data-nosnippet>950</a>    DW_CC_normal = <span class="number">0x01</span>,
+<a href=#951 id=951 data-nosnippet>951</a>    DW_CC_program = <span class="number">0x02</span>,
+<a href=#952 id=952 data-nosnippet>952</a>    DW_CC_nocall = <span class="number">0x03</span>,
+<a href=#953 id=953 data-nosnippet>953</a>    DW_CC_pass_by_reference = <span class="number">0x04</span>,
+<a href=#954 id=954 data-nosnippet>954</a>    DW_CC_pass_by_value = <span class="number">0x05</span>,
+<a href=#955 id=955 data-nosnippet>955</a>    DW_CC_lo_user = <span class="number">0x40</span>,
+<a href=#956 id=956 data-nosnippet>956</a>    DW_CC_hi_user = <span class="number">0xff</span>,
+<a href=#957 id=957 data-nosnippet>957</a>});
+<a href=#958 id=958 data-nosnippet>958</a>
+<a href=#959 id=959 data-nosnippet>959</a><span class="macro">dw!</span>(
+<a href=#960 id=960 data-nosnippet>960</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_inline` attribute.
+<a href=#961 id=961 data-nosnippet>961</a>///
+<a href=#962 id=962 data-nosnippet>962</a>/// See Section 7.16, Table 7.20.
+<a href=#963 id=963 data-nosnippet>963</a></span>DwInl(u8) {
+<a href=#964 id=964 data-nosnippet>964</a>    DW_INL_not_inlined = <span class="number">0x00</span>,
+<a href=#965 id=965 data-nosnippet>965</a>    DW_INL_inlined = <span class="number">0x01</span>,
+<a href=#966 id=966 data-nosnippet>966</a>    DW_INL_declared_not_inlined = <span class="number">0x02</span>,
+<a href=#967 id=967 data-nosnippet>967</a>    DW_INL_declared_inlined = <span class="number">0x03</span>,
+<a href=#968 id=968 data-nosnippet>968</a>});
+<a href=#969 id=969 data-nosnippet>969</a>
+<a href=#970 id=970 data-nosnippet>970</a><span class="macro">dw!</span>(
+<a href=#971 id=971 data-nosnippet>971</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_ordering` attribute.
+<a href=#972 id=972 data-nosnippet>972</a>///
+<a href=#973 id=973 data-nosnippet>973</a>/// See Section 7.17, Table 7.17.
+<a href=#974 id=974 data-nosnippet>974</a></span>DwOrd(u8) {
+<a href=#975 id=975 data-nosnippet>975</a>    DW_ORD_row_major = <span class="number">0x00</span>,
+<a href=#976 id=976 data-nosnippet>976</a>    DW_ORD_col_major = <span class="number">0x01</span>,
+<a href=#977 id=977 data-nosnippet>977</a>});
+<a href=#978 id=978 data-nosnippet>978</a>
+<a href=#979 id=979 data-nosnippet>979</a><span class="macro">dw!</span>(
+<a href=#980 id=980 data-nosnippet>980</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_discr_list` attribute.
+<a href=#981 id=981 data-nosnippet>981</a>///
+<a href=#982 id=982 data-nosnippet>982</a>/// See Section 7.18, Table 7.22.
+<a href=#983 id=983 data-nosnippet>983</a></span>DwDsc(u8) {
+<a href=#984 id=984 data-nosnippet>984</a>    DW_DSC_label = <span class="number">0x00</span>,
+<a href=#985 id=985 data-nosnippet>985</a>    DW_DSC_range = <span class="number">0x01</span>,
+<a href=#986 id=986 data-nosnippet>986</a>});
+<a href=#987 id=987 data-nosnippet>987</a>
+<a href=#988 id=988 data-nosnippet>988</a><span class="macro">dw!</span>(
+<a href=#989 id=989 data-nosnippet>989</a><span class="doccomment">/// Name index attribute encodings.
+<a href=#990 id=990 data-nosnippet>990</a>///
+<a href=#991 id=991 data-nosnippet>991</a>/// See Section 7.19, Table 7.23.
+<a href=#992 id=992 data-nosnippet>992</a></span>DwIdx(u16) {
+<a href=#993 id=993 data-nosnippet>993</a>    DW_IDX_compile_unit = <span class="number">1</span>,
+<a href=#994 id=994 data-nosnippet>994</a>    DW_IDX_type_unit = <span class="number">2</span>,
+<a href=#995 id=995 data-nosnippet>995</a>    DW_IDX_die_offset = <span class="number">3</span>,
+<a href=#996 id=996 data-nosnippet>996</a>    DW_IDX_parent = <span class="number">4</span>,
+<a href=#997 id=997 data-nosnippet>997</a>    DW_IDX_type_hash = <span class="number">5</span>,
+<a href=#998 id=998 data-nosnippet>998</a>    DW_IDX_lo_user = <span class="number">0x2000</span>,
+<a href=#999 id=999 data-nosnippet>999</a>    DW_IDX_hi_user = <span class="number">0x3fff</span>,
+<a href=#1000 id=1000 data-nosnippet>1000</a>});
+<a href=#1001 id=1001 data-nosnippet>1001</a>
+<a href=#1002 id=1002 data-nosnippet>1002</a><span class="macro">dw!</span>(
+<a href=#1003 id=1003 data-nosnippet>1003</a><span class="doccomment">/// The encodings of the constants used in the `DW_AT_defaulted` attribute.
+<a href=#1004 id=1004 data-nosnippet>1004</a>///
+<a href=#1005 id=1005 data-nosnippet>1005</a>/// See Section 7.20, Table 7.24.
+<a href=#1006 id=1006 data-nosnippet>1006</a></span>DwDefaulted(u8) {
+<a href=#1007 id=1007 data-nosnippet>1007</a>    DW_DEFAULTED_no = <span class="number">0x00</span>,
+<a href=#1008 id=1008 data-nosnippet>1008</a>    DW_DEFAULTED_in_class = <span class="number">0x01</span>,
+<a href=#1009 id=1009 data-nosnippet>1009</a>    DW_DEFAULTED_out_of_class = <span class="number">0x02</span>,
+<a href=#1010 id=1010 data-nosnippet>1010</a>});
+<a href=#1011 id=1011 data-nosnippet>1011</a>
+<a href=#1012 id=1012 data-nosnippet>1012</a><span class="macro">dw!</span>(
+<a href=#1013 id=1013 data-nosnippet>1013</a><span class="doccomment">/// The encodings for the standard opcodes for line number information.
+<a href=#1014 id=1014 data-nosnippet>1014</a>///
+<a href=#1015 id=1015 data-nosnippet>1015</a>/// See Section 7.22, Table 7.25.
+<a href=#1016 id=1016 data-nosnippet>1016</a></span>DwLns(u8) {
+<a href=#1017 id=1017 data-nosnippet>1017</a>    DW_LNS_copy = <span class="number">0x01</span>,
+<a href=#1018 id=1018 data-nosnippet>1018</a>    DW_LNS_advance_pc = <span class="number">0x02</span>,
+<a href=#1019 id=1019 data-nosnippet>1019</a>    DW_LNS_advance_line = <span class="number">0x03</span>,
+<a href=#1020 id=1020 data-nosnippet>1020</a>    DW_LNS_set_file = <span class="number">0x04</span>,
+<a href=#1021 id=1021 data-nosnippet>1021</a>    DW_LNS_set_column = <span class="number">0x05</span>,
+<a href=#1022 id=1022 data-nosnippet>1022</a>    DW_LNS_negate_stmt = <span class="number">0x06</span>,
+<a href=#1023 id=1023 data-nosnippet>1023</a>    DW_LNS_set_basic_block = <span class="number">0x07</span>,
+<a href=#1024 id=1024 data-nosnippet>1024</a>    DW_LNS_const_add_pc = <span class="number">0x08</span>,
+<a href=#1025 id=1025 data-nosnippet>1025</a>    DW_LNS_fixed_advance_pc = <span class="number">0x09</span>,
+<a href=#1026 id=1026 data-nosnippet>1026</a>    DW_LNS_set_prologue_end = <span class="number">0x0a</span>,
+<a href=#1027 id=1027 data-nosnippet>1027</a>    DW_LNS_set_epilogue_begin = <span class="number">0x0b</span>,
+<a href=#1028 id=1028 data-nosnippet>1028</a>    DW_LNS_set_isa = <span class="number">0x0c</span>,
+<a href=#1029 id=1029 data-nosnippet>1029</a>});
+<a href=#1030 id=1030 data-nosnippet>1030</a>
+<a href=#1031 id=1031 data-nosnippet>1031</a><span class="macro">dw!</span>(
+<a href=#1032 id=1032 data-nosnippet>1032</a><span class="doccomment">/// The encodings for the extended opcodes for line number information.
+<a href=#1033 id=1033 data-nosnippet>1033</a>///
+<a href=#1034 id=1034 data-nosnippet>1034</a>/// See Section 7.22, Table 7.26.
+<a href=#1035 id=1035 data-nosnippet>1035</a></span>DwLne(u8) {
+<a href=#1036 id=1036 data-nosnippet>1036</a>    DW_LNE_end_sequence = <span class="number">0x01</span>,
+<a href=#1037 id=1037 data-nosnippet>1037</a>    DW_LNE_set_address = <span class="number">0x02</span>,
+<a href=#1038 id=1038 data-nosnippet>1038</a>    DW_LNE_define_file = <span class="number">0x03</span>,
+<a href=#1039 id=1039 data-nosnippet>1039</a>    DW_LNE_set_discriminator = <span class="number">0x04</span>,
+<a href=#1040 id=1040 data-nosnippet>1040</a>
+<a href=#1041 id=1041 data-nosnippet>1041</a>    DW_LNE_lo_user = <span class="number">0x80</span>,
+<a href=#1042 id=1042 data-nosnippet>1042</a>    DW_LNE_hi_user = <span class="number">0xff</span>,
+<a href=#1043 id=1043 data-nosnippet>1043</a>});
+<a href=#1044 id=1044 data-nosnippet>1044</a>
+<a href=#1045 id=1045 data-nosnippet>1045</a><span class="macro">dw!</span>(
+<a href=#1046 id=1046 data-nosnippet>1046</a><span class="doccomment">/// The encodings for the line number header entry formats.
+<a href=#1047 id=1047 data-nosnippet>1047</a>///
+<a href=#1048 id=1048 data-nosnippet>1048</a>/// See Section 7.22, Table 7.27.
+<a href=#1049 id=1049 data-nosnippet>1049</a></span>DwLnct(u16) {
+<a href=#1050 id=1050 data-nosnippet>1050</a>    DW_LNCT_path = <span class="number">0x1</span>,
+<a href=#1051 id=1051 data-nosnippet>1051</a>    DW_LNCT_directory_index = <span class="number">0x2</span>,
+<a href=#1052 id=1052 data-nosnippet>1052</a>    DW_LNCT_timestamp = <span class="number">0x3</span>,
+<a href=#1053 id=1053 data-nosnippet>1053</a>    DW_LNCT_size = <span class="number">0x4</span>,
+<a href=#1054 id=1054 data-nosnippet>1054</a>    DW_LNCT_MD5 = <span class="number">0x5</span>,
+<a href=#1055 id=1055 data-nosnippet>1055</a>    <span class="comment">// DW_LNCT_source = 0x6,
+<a href=#1056 id=1056 data-nosnippet>1056</a>    </span>DW_LNCT_lo_user = <span class="number">0x2000</span>,
+<a href=#1057 id=1057 data-nosnippet>1057</a>    <span class="comment">// We currently only implement the LLVM embedded source code extension for DWARF v5.
+<a href=#1058 id=1058 data-nosnippet>1058</a>    </span>DW_LNCT_LLVM_source = <span class="number">0x2001</span>,
+<a href=#1059 id=1059 data-nosnippet>1059</a>    DW_LNCT_hi_user = <span class="number">0x3fff</span>,
+<a href=#1060 id=1060 data-nosnippet>1060</a>});
+<a href=#1061 id=1061 data-nosnippet>1061</a>
+<a href=#1062 id=1062 data-nosnippet>1062</a><span class="macro">dw!</span>(
+<a href=#1063 id=1063 data-nosnippet>1063</a><span class="doccomment">/// The encodings for macro information entry types.
+<a href=#1064 id=1064 data-nosnippet>1064</a>///
+<a href=#1065 id=1065 data-nosnippet>1065</a>/// See Section 7.23, Table 7.28.
+<a href=#1066 id=1066 data-nosnippet>1066</a></span>DwMacro(u8) {
+<a href=#1067 id=1067 data-nosnippet>1067</a>    DW_MACRO_define = <span class="number">0x01</span>,
+<a href=#1068 id=1068 data-nosnippet>1068</a>    DW_MACRO_undef = <span class="number">0x02</span>,
+<a href=#1069 id=1069 data-nosnippet>1069</a>    DW_MACRO_start_file = <span class="number">0x03</span>,
+<a href=#1070 id=1070 data-nosnippet>1070</a>    DW_MACRO_end_file = <span class="number">0x04</span>,
+<a href=#1071 id=1071 data-nosnippet>1071</a>    DW_MACRO_define_strp = <span class="number">0x05</span>,
+<a href=#1072 id=1072 data-nosnippet>1072</a>    DW_MACRO_undef_strp = <span class="number">0x06</span>,
+<a href=#1073 id=1073 data-nosnippet>1073</a>    DW_MACRO_import = <span class="number">0x07</span>,
+<a href=#1074 id=1074 data-nosnippet>1074</a>    DW_MACRO_define_sup = <span class="number">0x08</span>,
+<a href=#1075 id=1075 data-nosnippet>1075</a>    DW_MACRO_undef_sup = <span class="number">0x09</span>,
+<a href=#1076 id=1076 data-nosnippet>1076</a>    DW_MACRO_import_sup = <span class="number">0x0a</span>,
+<a href=#1077 id=1077 data-nosnippet>1077</a>    DW_MACRO_define_strx = <span class="number">0x0b</span>,
+<a href=#1078 id=1078 data-nosnippet>1078</a>    DW_MACRO_undef_strx = <span class="number">0x0c</span>,
+<a href=#1079 id=1079 data-nosnippet>1079</a>    DW_MACRO_lo_user = <span class="number">0xe0</span>,
+<a href=#1080 id=1080 data-nosnippet>1080</a>    DW_MACRO_hi_user = <span class="number">0xff</span>,
+<a href=#1081 id=1081 data-nosnippet>1081</a>});
+<a href=#1082 id=1082 data-nosnippet>1082</a>
+<a href=#1083 id=1083 data-nosnippet>1083</a><span class="macro">dw!</span>(
+<a href=#1084 id=1084 data-nosnippet>1084</a><span class="doccomment">/// Range list entry encoding values.
+<a href=#1085 id=1085 data-nosnippet>1085</a>///
+<a href=#1086 id=1086 data-nosnippet>1086</a>/// See Section 7.25, Table 7.30.
+<a href=#1087 id=1087 data-nosnippet>1087</a></span>DwRle(u8) {
+<a href=#1088 id=1088 data-nosnippet>1088</a>    DW_RLE_end_of_list = <span class="number">0x00</span>,
+<a href=#1089 id=1089 data-nosnippet>1089</a>    DW_RLE_base_addressx = <span class="number">0x01</span>,
+<a href=#1090 id=1090 data-nosnippet>1090</a>    DW_RLE_startx_endx = <span class="number">0x02</span>,
+<a href=#1091 id=1091 data-nosnippet>1091</a>    DW_RLE_startx_length = <span class="number">0x03</span>,
+<a href=#1092 id=1092 data-nosnippet>1092</a>    DW_RLE_offset_pair = <span class="number">0x04</span>,
+<a href=#1093 id=1093 data-nosnippet>1093</a>    DW_RLE_base_address = <span class="number">0x05</span>,
+<a href=#1094 id=1094 data-nosnippet>1094</a>    DW_RLE_start_end = <span class="number">0x06</span>,
+<a href=#1095 id=1095 data-nosnippet>1095</a>    DW_RLE_start_length = <span class="number">0x07</span>,
+<a href=#1096 id=1096 data-nosnippet>1096</a>});
+<a href=#1097 id=1097 data-nosnippet>1097</a>
+<a href=#1098 id=1098 data-nosnippet>1098</a><span class="macro">dw!</span>(
+<a href=#1099 id=1099 data-nosnippet>1099</a><span class="doccomment">/// The encodings for DWARF expression operations.
+<a href=#1100 id=1100 data-nosnippet>1100</a>///
+<a href=#1101 id=1101 data-nosnippet>1101</a>/// See Section 7.7.1, Table 7.9.
+<a href=#1102 id=1102 data-nosnippet>1102</a></span>DwOp(u8) {
+<a href=#1103 id=1103 data-nosnippet>1103</a>    DW_OP_addr = <span class="number">0x03</span>,
+<a href=#1104 id=1104 data-nosnippet>1104</a>    DW_OP_deref = <span class="number">0x06</span>,
+<a href=#1105 id=1105 data-nosnippet>1105</a>    DW_OP_const1u = <span class="number">0x08</span>,
+<a href=#1106 id=1106 data-nosnippet>1106</a>    DW_OP_const1s = <span class="number">0x09</span>,
+<a href=#1107 id=1107 data-nosnippet>1107</a>    DW_OP_const2u = <span class="number">0x0a</span>,
+<a href=#1108 id=1108 data-nosnippet>1108</a>    DW_OP_const2s = <span class="number">0x0b</span>,
+<a href=#1109 id=1109 data-nosnippet>1109</a>    DW_OP_const4u = <span class="number">0x0c</span>,
+<a href=#1110 id=1110 data-nosnippet>1110</a>    DW_OP_const4s = <span class="number">0x0d</span>,
+<a href=#1111 id=1111 data-nosnippet>1111</a>    DW_OP_const8u = <span class="number">0x0e</span>,
+<a href=#1112 id=1112 data-nosnippet>1112</a>    DW_OP_const8s = <span class="number">0x0f</span>,
+<a href=#1113 id=1113 data-nosnippet>1113</a>    DW_OP_constu = <span class="number">0x10</span>,
+<a href=#1114 id=1114 data-nosnippet>1114</a>    DW_OP_consts = <span class="number">0x11</span>,
+<a href=#1115 id=1115 data-nosnippet>1115</a>    DW_OP_dup = <span class="number">0x12</span>,
+<a href=#1116 id=1116 data-nosnippet>1116</a>    DW_OP_drop = <span class="number">0x13</span>,
+<a href=#1117 id=1117 data-nosnippet>1117</a>    DW_OP_over = <span class="number">0x14</span>,
+<a href=#1118 id=1118 data-nosnippet>1118</a>    DW_OP_pick = <span class="number">0x15</span>,
+<a href=#1119 id=1119 data-nosnippet>1119</a>    DW_OP_swap = <span class="number">0x16</span>,
+<a href=#1120 id=1120 data-nosnippet>1120</a>    DW_OP_rot = <span class="number">0x17</span>,
+<a href=#1121 id=1121 data-nosnippet>1121</a>    DW_OP_xderef = <span class="number">0x18</span>,
+<a href=#1122 id=1122 data-nosnippet>1122</a>    DW_OP_abs = <span class="number">0x19</span>,
+<a href=#1123 id=1123 data-nosnippet>1123</a>    DW_OP_and = <span class="number">0x1a</span>,
+<a href=#1124 id=1124 data-nosnippet>1124</a>    DW_OP_div = <span class="number">0x1b</span>,
+<a href=#1125 id=1125 data-nosnippet>1125</a>    DW_OP_minus = <span class="number">0x1c</span>,
+<a href=#1126 id=1126 data-nosnippet>1126</a>    DW_OP_mod = <span class="number">0x1d</span>,
+<a href=#1127 id=1127 data-nosnippet>1127</a>    DW_OP_mul = <span class="number">0x1e</span>,
+<a href=#1128 id=1128 data-nosnippet>1128</a>    DW_OP_neg = <span class="number">0x1f</span>,
+<a href=#1129 id=1129 data-nosnippet>1129</a>    DW_OP_not = <span class="number">0x20</span>,
+<a href=#1130 id=1130 data-nosnippet>1130</a>    DW_OP_or = <span class="number">0x21</span>,
+<a href=#1131 id=1131 data-nosnippet>1131</a>    DW_OP_plus = <span class="number">0x22</span>,
+<a href=#1132 id=1132 data-nosnippet>1132</a>    DW_OP_plus_uconst = <span class="number">0x23</span>,
+<a href=#1133 id=1133 data-nosnippet>1133</a>    DW_OP_shl = <span class="number">0x24</span>,
+<a href=#1134 id=1134 data-nosnippet>1134</a>    DW_OP_shr = <span class="number">0x25</span>,
+<a href=#1135 id=1135 data-nosnippet>1135</a>    DW_OP_shra = <span class="number">0x26</span>,
+<a href=#1136 id=1136 data-nosnippet>1136</a>    DW_OP_xor = <span class="number">0x27</span>,
+<a href=#1137 id=1137 data-nosnippet>1137</a>    DW_OP_bra = <span class="number">0x28</span>,
+<a href=#1138 id=1138 data-nosnippet>1138</a>    DW_OP_eq = <span class="number">0x29</span>,
+<a href=#1139 id=1139 data-nosnippet>1139</a>    DW_OP_ge = <span class="number">0x2a</span>,
+<a href=#1140 id=1140 data-nosnippet>1140</a>    DW_OP_gt = <span class="number">0x2b</span>,
+<a href=#1141 id=1141 data-nosnippet>1141</a>    DW_OP_le = <span class="number">0x2c</span>,
+<a href=#1142 id=1142 data-nosnippet>1142</a>    DW_OP_lt = <span class="number">0x2d</span>,
+<a href=#1143 id=1143 data-nosnippet>1143</a>    DW_OP_ne = <span class="number">0x2e</span>,
+<a href=#1144 id=1144 data-nosnippet>1144</a>    DW_OP_skip = <span class="number">0x2f</span>,
+<a href=#1145 id=1145 data-nosnippet>1145</a>    DW_OP_lit0 = <span class="number">0x30</span>,
+<a href=#1146 id=1146 data-nosnippet>1146</a>    DW_OP_lit1 = <span class="number">0x31</span>,
+<a href=#1147 id=1147 data-nosnippet>1147</a>    DW_OP_lit2 = <span class="number">0x32</span>,
+<a href=#1148 id=1148 data-nosnippet>1148</a>    DW_OP_lit3 = <span class="number">0x33</span>,
+<a href=#1149 id=1149 data-nosnippet>1149</a>    DW_OP_lit4 = <span class="number">0x34</span>,
+<a href=#1150 id=1150 data-nosnippet>1150</a>    DW_OP_lit5 = <span class="number">0x35</span>,
+<a href=#1151 id=1151 data-nosnippet>1151</a>    DW_OP_lit6 = <span class="number">0x36</span>,
+<a href=#1152 id=1152 data-nosnippet>1152</a>    DW_OP_lit7 = <span class="number">0x37</span>,
+<a href=#1153 id=1153 data-nosnippet>1153</a>    DW_OP_lit8 = <span class="number">0x38</span>,
+<a href=#1154 id=1154 data-nosnippet>1154</a>    DW_OP_lit9 = <span class="number">0x39</span>,
+<a href=#1155 id=1155 data-nosnippet>1155</a>    DW_OP_lit10 = <span class="number">0x3a</span>,
+<a href=#1156 id=1156 data-nosnippet>1156</a>    DW_OP_lit11 = <span class="number">0x3b</span>,
+<a href=#1157 id=1157 data-nosnippet>1157</a>    DW_OP_lit12 = <span class="number">0x3c</span>,
+<a href=#1158 id=1158 data-nosnippet>1158</a>    DW_OP_lit13 = <span class="number">0x3d</span>,
+<a href=#1159 id=1159 data-nosnippet>1159</a>    DW_OP_lit14 = <span class="number">0x3e</span>,
+<a href=#1160 id=1160 data-nosnippet>1160</a>    DW_OP_lit15 = <span class="number">0x3f</span>,
+<a href=#1161 id=1161 data-nosnippet>1161</a>    DW_OP_lit16 = <span class="number">0x40</span>,
+<a href=#1162 id=1162 data-nosnippet>1162</a>    DW_OP_lit17 = <span class="number">0x41</span>,
+<a href=#1163 id=1163 data-nosnippet>1163</a>    DW_OP_lit18 = <span class="number">0x42</span>,
+<a href=#1164 id=1164 data-nosnippet>1164</a>    DW_OP_lit19 = <span class="number">0x43</span>,
+<a href=#1165 id=1165 data-nosnippet>1165</a>    DW_OP_lit20 = <span class="number">0x44</span>,
+<a href=#1166 id=1166 data-nosnippet>1166</a>    DW_OP_lit21 = <span class="number">0x45</span>,
+<a href=#1167 id=1167 data-nosnippet>1167</a>    DW_OP_lit22 = <span class="number">0x46</span>,
+<a href=#1168 id=1168 data-nosnippet>1168</a>    DW_OP_lit23 = <span class="number">0x47</span>,
+<a href=#1169 id=1169 data-nosnippet>1169</a>    DW_OP_lit24 = <span class="number">0x48</span>,
+<a href=#1170 id=1170 data-nosnippet>1170</a>    DW_OP_lit25 = <span class="number">0x49</span>,
+<a href=#1171 id=1171 data-nosnippet>1171</a>    DW_OP_lit26 = <span class="number">0x4a</span>,
+<a href=#1172 id=1172 data-nosnippet>1172</a>    DW_OP_lit27 = <span class="number">0x4b</span>,
+<a href=#1173 id=1173 data-nosnippet>1173</a>    DW_OP_lit28 = <span class="number">0x4c</span>,
+<a href=#1174 id=1174 data-nosnippet>1174</a>    DW_OP_lit29 = <span class="number">0x4d</span>,
+<a href=#1175 id=1175 data-nosnippet>1175</a>    DW_OP_lit30 = <span class="number">0x4e</span>,
+<a href=#1176 id=1176 data-nosnippet>1176</a>    DW_OP_lit31 = <span class="number">0x4f</span>,
+<a href=#1177 id=1177 data-nosnippet>1177</a>    DW_OP_reg0 = <span class="number">0x50</span>,
+<a href=#1178 id=1178 data-nosnippet>1178</a>    DW_OP_reg1 = <span class="number">0x51</span>,
+<a href=#1179 id=1179 data-nosnippet>1179</a>    DW_OP_reg2 = <span class="number">0x52</span>,
+<a href=#1180 id=1180 data-nosnippet>1180</a>    DW_OP_reg3 = <span class="number">0x53</span>,
+<a href=#1181 id=1181 data-nosnippet>1181</a>    DW_OP_reg4 = <span class="number">0x54</span>,
+<a href=#1182 id=1182 data-nosnippet>1182</a>    DW_OP_reg5 = <span class="number">0x55</span>,
+<a href=#1183 id=1183 data-nosnippet>1183</a>    DW_OP_reg6 = <span class="number">0x56</span>,
+<a href=#1184 id=1184 data-nosnippet>1184</a>    DW_OP_reg7 = <span class="number">0x57</span>,
+<a href=#1185 id=1185 data-nosnippet>1185</a>    DW_OP_reg8 = <span class="number">0x58</span>,
+<a href=#1186 id=1186 data-nosnippet>1186</a>    DW_OP_reg9 = <span class="number">0x59</span>,
+<a href=#1187 id=1187 data-nosnippet>1187</a>    DW_OP_reg10 = <span class="number">0x5a</span>,
+<a href=#1188 id=1188 data-nosnippet>1188</a>    DW_OP_reg11 = <span class="number">0x5b</span>,
+<a href=#1189 id=1189 data-nosnippet>1189</a>    DW_OP_reg12 = <span class="number">0x5c</span>,
+<a href=#1190 id=1190 data-nosnippet>1190</a>    DW_OP_reg13 = <span class="number">0x5d</span>,
+<a href=#1191 id=1191 data-nosnippet>1191</a>    DW_OP_reg14 = <span class="number">0x5e</span>,
+<a href=#1192 id=1192 data-nosnippet>1192</a>    DW_OP_reg15 = <span class="number">0x5f</span>,
+<a href=#1193 id=1193 data-nosnippet>1193</a>    DW_OP_reg16 = <span class="number">0x60</span>,
+<a href=#1194 id=1194 data-nosnippet>1194</a>    DW_OP_reg17 = <span class="number">0x61</span>,
+<a href=#1195 id=1195 data-nosnippet>1195</a>    DW_OP_reg18 = <span class="number">0x62</span>,
+<a href=#1196 id=1196 data-nosnippet>1196</a>    DW_OP_reg19 = <span class="number">0x63</span>,
+<a href=#1197 id=1197 data-nosnippet>1197</a>    DW_OP_reg20 = <span class="number">0x64</span>,
+<a href=#1198 id=1198 data-nosnippet>1198</a>    DW_OP_reg21 = <span class="number">0x65</span>,
+<a href=#1199 id=1199 data-nosnippet>1199</a>    DW_OP_reg22 = <span class="number">0x66</span>,
+<a href=#1200 id=1200 data-nosnippet>1200</a>    DW_OP_reg23 = <span class="number">0x67</span>,
+<a href=#1201 id=1201 data-nosnippet>1201</a>    DW_OP_reg24 = <span class="number">0x68</span>,
+<a href=#1202 id=1202 data-nosnippet>1202</a>    DW_OP_reg25 = <span class="number">0x69</span>,
+<a href=#1203 id=1203 data-nosnippet>1203</a>    DW_OP_reg26 = <span class="number">0x6a</span>,
+<a href=#1204 id=1204 data-nosnippet>1204</a>    DW_OP_reg27 = <span class="number">0x6b</span>,
+<a href=#1205 id=1205 data-nosnippet>1205</a>    DW_OP_reg28 = <span class="number">0x6c</span>,
+<a href=#1206 id=1206 data-nosnippet>1206</a>    DW_OP_reg29 = <span class="number">0x6d</span>,
+<a href=#1207 id=1207 data-nosnippet>1207</a>    DW_OP_reg30 = <span class="number">0x6e</span>,
+<a href=#1208 id=1208 data-nosnippet>1208</a>    DW_OP_reg31 = <span class="number">0x6f</span>,
+<a href=#1209 id=1209 data-nosnippet>1209</a>    DW_OP_breg0 = <span class="number">0x70</span>,
+<a href=#1210 id=1210 data-nosnippet>1210</a>    DW_OP_breg1 = <span class="number">0x71</span>,
+<a href=#1211 id=1211 data-nosnippet>1211</a>    DW_OP_breg2 = <span class="number">0x72</span>,
+<a href=#1212 id=1212 data-nosnippet>1212</a>    DW_OP_breg3 = <span class="number">0x73</span>,
+<a href=#1213 id=1213 data-nosnippet>1213</a>    DW_OP_breg4 = <span class="number">0x74</span>,
+<a href=#1214 id=1214 data-nosnippet>1214</a>    DW_OP_breg5 = <span class="number">0x75</span>,
+<a href=#1215 id=1215 data-nosnippet>1215</a>    DW_OP_breg6 = <span class="number">0x76</span>,
+<a href=#1216 id=1216 data-nosnippet>1216</a>    DW_OP_breg7 = <span class="number">0x77</span>,
+<a href=#1217 id=1217 data-nosnippet>1217</a>    DW_OP_breg8 = <span class="number">0x78</span>,
+<a href=#1218 id=1218 data-nosnippet>1218</a>    DW_OP_breg9 = <span class="number">0x79</span>,
+<a href=#1219 id=1219 data-nosnippet>1219</a>    DW_OP_breg10 = <span class="number">0x7a</span>,
+<a href=#1220 id=1220 data-nosnippet>1220</a>    DW_OP_breg11 = <span class="number">0x7b</span>,
+<a href=#1221 id=1221 data-nosnippet>1221</a>    DW_OP_breg12 = <span class="number">0x7c</span>,
+<a href=#1222 id=1222 data-nosnippet>1222</a>    DW_OP_breg13 = <span class="number">0x7d</span>,
+<a href=#1223 id=1223 data-nosnippet>1223</a>    DW_OP_breg14 = <span class="number">0x7e</span>,
+<a href=#1224 id=1224 data-nosnippet>1224</a>    DW_OP_breg15 = <span class="number">0x7f</span>,
+<a href=#1225 id=1225 data-nosnippet>1225</a>    DW_OP_breg16 = <span class="number">0x80</span>,
+<a href=#1226 id=1226 data-nosnippet>1226</a>    DW_OP_breg17 = <span class="number">0x81</span>,
+<a href=#1227 id=1227 data-nosnippet>1227</a>    DW_OP_breg18 = <span class="number">0x82</span>,
+<a href=#1228 id=1228 data-nosnippet>1228</a>    DW_OP_breg19 = <span class="number">0x83</span>,
+<a href=#1229 id=1229 data-nosnippet>1229</a>    DW_OP_breg20 = <span class="number">0x84</span>,
+<a href=#1230 id=1230 data-nosnippet>1230</a>    DW_OP_breg21 = <span class="number">0x85</span>,
+<a href=#1231 id=1231 data-nosnippet>1231</a>    DW_OP_breg22 = <span class="number">0x86</span>,
+<a href=#1232 id=1232 data-nosnippet>1232</a>    DW_OP_breg23 = <span class="number">0x87</span>,
+<a href=#1233 id=1233 data-nosnippet>1233</a>    DW_OP_breg24 = <span class="number">0x88</span>,
+<a href=#1234 id=1234 data-nosnippet>1234</a>    DW_OP_breg25 = <span class="number">0x89</span>,
+<a href=#1235 id=1235 data-nosnippet>1235</a>    DW_OP_breg26 = <span class="number">0x8a</span>,
+<a href=#1236 id=1236 data-nosnippet>1236</a>    DW_OP_breg27 = <span class="number">0x8b</span>,
+<a href=#1237 id=1237 data-nosnippet>1237</a>    DW_OP_breg28 = <span class="number">0x8c</span>,
+<a href=#1238 id=1238 data-nosnippet>1238</a>    DW_OP_breg29 = <span class="number">0x8d</span>,
+<a href=#1239 id=1239 data-nosnippet>1239</a>    DW_OP_breg30 = <span class="number">0x8e</span>,
+<a href=#1240 id=1240 data-nosnippet>1240</a>    DW_OP_breg31 = <span class="number">0x8f</span>,
+<a href=#1241 id=1241 data-nosnippet>1241</a>    DW_OP_regx = <span class="number">0x90</span>,
+<a href=#1242 id=1242 data-nosnippet>1242</a>    DW_OP_fbreg = <span class="number">0x91</span>,
+<a href=#1243 id=1243 data-nosnippet>1243</a>    DW_OP_bregx = <span class="number">0x92</span>,
+<a href=#1244 id=1244 data-nosnippet>1244</a>    DW_OP_piece = <span class="number">0x93</span>,
+<a href=#1245 id=1245 data-nosnippet>1245</a>    DW_OP_deref_size = <span class="number">0x94</span>,
+<a href=#1246 id=1246 data-nosnippet>1246</a>    DW_OP_xderef_size = <span class="number">0x95</span>,
+<a href=#1247 id=1247 data-nosnippet>1247</a>    DW_OP_nop = <span class="number">0x96</span>,
+<a href=#1248 id=1248 data-nosnippet>1248</a>    DW_OP_push_object_address = <span class="number">0x97</span>,
+<a href=#1249 id=1249 data-nosnippet>1249</a>    DW_OP_call2 = <span class="number">0x98</span>,
+<a href=#1250 id=1250 data-nosnippet>1250</a>    DW_OP_call4 = <span class="number">0x99</span>,
+<a href=#1251 id=1251 data-nosnippet>1251</a>    DW_OP_call_ref = <span class="number">0x9a</span>,
+<a href=#1252 id=1252 data-nosnippet>1252</a>    DW_OP_form_tls_address = <span class="number">0x9b</span>,
+<a href=#1253 id=1253 data-nosnippet>1253</a>    DW_OP_call_frame_cfa = <span class="number">0x9c</span>,
+<a href=#1254 id=1254 data-nosnippet>1254</a>    DW_OP_bit_piece = <span class="number">0x9d</span>,
+<a href=#1255 id=1255 data-nosnippet>1255</a>    DW_OP_implicit_value = <span class="number">0x9e</span>,
+<a href=#1256 id=1256 data-nosnippet>1256</a>    DW_OP_stack_value = <span class="number">0x9f</span>,
+<a href=#1257 id=1257 data-nosnippet>1257</a>    DW_OP_implicit_pointer = <span class="number">0xa0</span>,
+<a href=#1258 id=1258 data-nosnippet>1258</a>    DW_OP_addrx = <span class="number">0xa1</span>,
+<a href=#1259 id=1259 data-nosnippet>1259</a>    DW_OP_constx = <span class="number">0xa2</span>,
+<a href=#1260 id=1260 data-nosnippet>1260</a>    DW_OP_entry_value = <span class="number">0xa3</span>,
+<a href=#1261 id=1261 data-nosnippet>1261</a>    DW_OP_const_type = <span class="number">0xa4</span>,
+<a href=#1262 id=1262 data-nosnippet>1262</a>    DW_OP_regval_type = <span class="number">0xa5</span>,
+<a href=#1263 id=1263 data-nosnippet>1263</a>    DW_OP_deref_type = <span class="number">0xa6</span>,
+<a href=#1264 id=1264 data-nosnippet>1264</a>    DW_OP_xderef_type = <span class="number">0xa7</span>,
+<a href=#1265 id=1265 data-nosnippet>1265</a>    DW_OP_convert = <span class="number">0xa8</span>,
+<a href=#1266 id=1266 data-nosnippet>1266</a>    DW_OP_reinterpret = <span class="number">0xa9</span>,
+<a href=#1267 id=1267 data-nosnippet>1267</a>
+<a href=#1268 id=1268 data-nosnippet>1268</a>    <span class="comment">// GNU extensions
+<a href=#1269 id=1269 data-nosnippet>1269</a>    </span>DW_OP_GNU_push_tls_address = <span class="number">0xe0</span>,
+<a href=#1270 id=1270 data-nosnippet>1270</a>    DW_OP_GNU_implicit_pointer = <span class="number">0xf2</span>,
+<a href=#1271 id=1271 data-nosnippet>1271</a>    DW_OP_GNU_entry_value = <span class="number">0xf3</span>,
+<a href=#1272 id=1272 data-nosnippet>1272</a>    DW_OP_GNU_const_type = <span class="number">0xf4</span>,
+<a href=#1273 id=1273 data-nosnippet>1273</a>    DW_OP_GNU_regval_type = <span class="number">0xf5</span>,
+<a href=#1274 id=1274 data-nosnippet>1274</a>    DW_OP_GNU_deref_type = <span class="number">0xf6</span>,
+<a href=#1275 id=1275 data-nosnippet>1275</a>    DW_OP_GNU_convert = <span class="number">0xf7</span>,
+<a href=#1276 id=1276 data-nosnippet>1276</a>    DW_OP_GNU_reinterpret = <span class="number">0xf9</span>,
+<a href=#1277 id=1277 data-nosnippet>1277</a>    DW_OP_GNU_parameter_ref = <span class="number">0xfa</span>,
+<a href=#1278 id=1278 data-nosnippet>1278</a>    DW_OP_GNU_addr_index = <span class="number">0xfb</span>,
+<a href=#1279 id=1279 data-nosnippet>1279</a>    DW_OP_GNU_const_index = <span class="number">0xfc</span>,
+<a href=#1280 id=1280 data-nosnippet>1280</a>
+<a href=#1281 id=1281 data-nosnippet>1281</a>    <span class="comment">// Wasm extensions
+<a href=#1282 id=1282 data-nosnippet>1282</a>    </span>DW_OP_WASM_location = <span class="number">0xed</span>,
+<a href=#1283 id=1283 data-nosnippet>1283</a>});
+<a href=#1284 id=1284 data-nosnippet>1284</a>
+<a href=#1285 id=1285 data-nosnippet>1285</a><span class="macro">dw!</span>(
+<a href=#1286 id=1286 data-nosnippet>1286</a><span class="doccomment">/// Pointer encoding used by `.eh_frame`.
+<a href=#1287 id=1287 data-nosnippet>1287</a>///
+<a href=#1288 id=1288 data-nosnippet>1288</a>/// The four lower bits describe the
+<a href=#1289 id=1289 data-nosnippet>1289</a>/// format of the pointer, the upper four bits describe how the encoding should
+<a href=#1290 id=1290 data-nosnippet>1290</a>/// be applied.
+<a href=#1291 id=1291 data-nosnippet>1291</a>///
+<a href=#1292 id=1292 data-nosnippet>1292</a>/// Defined in `&lt;https://refspecs.linuxfoundation.org/LSB_4.0.0/LSB-Core-generic/LSB-Core-generic/dwarfext.html&gt;`
+<a href=#1293 id=1293 data-nosnippet>1293</a></span>DwEhPe(u8) {
+<a href=#1294 id=1294 data-nosnippet>1294</a><span class="comment">// Format of pointer encoding.
+<a href=#1295 id=1295 data-nosnippet>1295</a>
+<a href=#1296 id=1296 data-nosnippet>1296</a>// "Unsigned value is encoded using the Little Endian Base 128"
+<a href=#1297 id=1297 data-nosnippet>1297</a>    </span>DW_EH_PE_uleb128 = <span class="number">0x1</span>,
+<a href=#1298 id=1298 data-nosnippet>1298</a><span class="comment">// "A 2 bytes unsigned value."
+<a href=#1299 id=1299 data-nosnippet>1299</a>    </span>DW_EH_PE_udata2 = <span class="number">0x2</span>,
+<a href=#1300 id=1300 data-nosnippet>1300</a><span class="comment">// "A 4 bytes unsigned value."
+<a href=#1301 id=1301 data-nosnippet>1301</a>    </span>DW_EH_PE_udata4 = <span class="number">0x3</span>,
+<a href=#1302 id=1302 data-nosnippet>1302</a><span class="comment">// "An 8 bytes unsigned value."
+<a href=#1303 id=1303 data-nosnippet>1303</a>    </span>DW_EH_PE_udata8 = <span class="number">0x4</span>,
+<a href=#1304 id=1304 data-nosnippet>1304</a><span class="comment">// "Signed value is encoded using the Little Endian Base 128"
+<a href=#1305 id=1305 data-nosnippet>1305</a>    </span>DW_EH_PE_sleb128 = <span class="number">0x9</span>,
+<a href=#1306 id=1306 data-nosnippet>1306</a><span class="comment">// "A 2 bytes signed value."
+<a href=#1307 id=1307 data-nosnippet>1307</a>    </span>DW_EH_PE_sdata2 = <span class="number">0x0a</span>,
+<a href=#1308 id=1308 data-nosnippet>1308</a><span class="comment">// "A 4 bytes signed value."
+<a href=#1309 id=1309 data-nosnippet>1309</a>    </span>DW_EH_PE_sdata4 = <span class="number">0x0b</span>,
+<a href=#1310 id=1310 data-nosnippet>1310</a><span class="comment">// "An 8 bytes signed value."
+<a href=#1311 id=1311 data-nosnippet>1311</a>    </span>DW_EH_PE_sdata8 = <span class="number">0x0c</span>,
+<a href=#1312 id=1312 data-nosnippet>1312</a>
+<a href=#1313 id=1313 data-nosnippet>1313</a><span class="comment">// How the pointer encoding should be applied.
+<a href=#1314 id=1314 data-nosnippet>1314</a>
+<a href=#1315 id=1315 data-nosnippet>1315</a>// `DW_EH_PE_pcrel` pointers are relative to their own location.
+<a href=#1316 id=1316 data-nosnippet>1316</a>    </span>DW_EH_PE_pcrel = <span class="number">0x10</span>,
+<a href=#1317 id=1317 data-nosnippet>1317</a><span class="comment">// "Value is relative to the beginning of the .text section."
+<a href=#1318 id=1318 data-nosnippet>1318</a>    </span>DW_EH_PE_textrel = <span class="number">0x20</span>,
+<a href=#1319 id=1319 data-nosnippet>1319</a><span class="comment">// "Value is relative to the beginning of the .got or .eh_frame_hdr section."
+<a href=#1320 id=1320 data-nosnippet>1320</a>    </span>DW_EH_PE_datarel = <span class="number">0x30</span>,
+<a href=#1321 id=1321 data-nosnippet>1321</a><span class="comment">// "Value is relative to the beginning of the function."
+<a href=#1322 id=1322 data-nosnippet>1322</a>    </span>DW_EH_PE_funcrel = <span class="number">0x40</span>,
+<a href=#1323 id=1323 data-nosnippet>1323</a><span class="comment">// "Value is aligned to an address unit sized boundary."
+<a href=#1324 id=1324 data-nosnippet>1324</a>    </span>DW_EH_PE_aligned = <span class="number">0x50</span>,
+<a href=#1325 id=1325 data-nosnippet>1325</a>
+<a href=#1326 id=1326 data-nosnippet>1326</a><span class="comment">// This bit can be set for any of the above encoding applications. When set,
+<a href=#1327 id=1327 data-nosnippet>1327</a>// the encoded value is the address of the real pointer result, not the
+<a href=#1328 id=1328 data-nosnippet>1328</a>// pointer result itself.
+<a href=#1329 id=1329 data-nosnippet>1329</a>//
+<a href=#1330 id=1330 data-nosnippet>1330</a>// This isn't defined in the DWARF or the `.eh_frame` standards, but is
+<a href=#1331 id=1331 data-nosnippet>1331</a>// generated by both GNU/Linux and macOS tooling.
+<a href=#1332 id=1332 data-nosnippet>1332</a>    </span>DW_EH_PE_indirect = <span class="number">0x80</span>,
+<a href=#1333 id=1333 data-nosnippet>1333</a>
+<a href=#1334 id=1334 data-nosnippet>1334</a><span class="comment">// These constants apply to both the lower and upper bits.
+<a href=#1335 id=1335 data-nosnippet>1335</a>
+<a href=#1336 id=1336 data-nosnippet>1336</a>// "The Value is a literal pointer whose size is determined by the
+<a href=#1337 id=1337 data-nosnippet>1337</a>// architecture."
+<a href=#1338 id=1338 data-nosnippet>1338</a>    </span>DW_EH_PE_absptr = <span class="number">0x0</span>,
+<a href=#1339 id=1339 data-nosnippet>1339</a><span class="comment">// The absence of a pointer and encoding.
+<a href=#1340 id=1340 data-nosnippet>1340</a>    </span>DW_EH_PE_omit = <span class="number">0xff</span>,
+<a href=#1341 id=1341 data-nosnippet>1341</a>});
+<a href=#1342 id=1342 data-nosnippet>1342</a>
+<a href=#1343 id=1343 data-nosnippet>1343</a><span class="kw">const </span>DW_EH_PE_FORMAT_MASK: u8 = <span class="number">0b0000_1111</span>;
+<a href=#1344 id=1344 data-nosnippet>1344</a>
+<a href=#1345 id=1345 data-nosnippet>1345</a><span class="comment">// Ignores indirection bit.
+<a href=#1346 id=1346 data-nosnippet>1346</a></span><span class="kw">const </span>DW_EH_PE_APPLICATION_MASK: u8 = <span class="number">0b0111_0000</span>;
+<a href=#1347 id=1347 data-nosnippet>1347</a>
+<a href=#1348 id=1348 data-nosnippet>1348</a><span class="kw">impl </span>ops::BitOr <span class="kw">for </span>DwEhPe {
+<a href=#1349 id=1349 data-nosnippet>1349</a>    <span class="kw">type </span>Output = DwEhPe;
+<a href=#1350 id=1350 data-nosnippet>1350</a>
+<a href=#1351 id=1351 data-nosnippet>1351</a>    <span class="kw">fn </span>bitor(<span class="self">self</span>, rhs: DwEhPe) -&gt; DwEhPe {
+<a href=#1352 id=1352 data-nosnippet>1352</a>        DwEhPe(<span class="self">self</span>.<span class="number">0 </span>| rhs.<span class="number">0</span>)
+<a href=#1353 id=1353 data-nosnippet>1353</a>    }
+<a href=#1354 id=1354 data-nosnippet>1354</a>}
+<a href=#1355 id=1355 data-nosnippet>1355</a>
+<a href=#1356 id=1356 data-nosnippet>1356</a><span class="kw">impl </span>DwEhPe {
+<a href=#1357 id=1357 data-nosnippet>1357</a>    <span class="doccomment">/// Get the pointer encoding's format.
+<a href=#1358 id=1358 data-nosnippet>1358</a>    </span><span class="attr">#[inline]
+<a href=#1359 id=1359 data-nosnippet>1359</a>    </span><span class="kw">pub fn </span>format(<span class="self">self</span>) -&gt; DwEhPe {
+<a href=#1360 id=1360 data-nosnippet>1360</a>        DwEhPe(<span class="self">self</span>.<span class="number">0 </span>&amp; DW_EH_PE_FORMAT_MASK)
+<a href=#1361 id=1361 data-nosnippet>1361</a>    }
+<a href=#1362 id=1362 data-nosnippet>1362</a>
+<a href=#1363 id=1363 data-nosnippet>1363</a>    <span class="doccomment">/// Get the pointer encoding's application.
+<a href=#1364 id=1364 data-nosnippet>1364</a>    </span><span class="attr">#[inline]
+<a href=#1365 id=1365 data-nosnippet>1365</a>    </span><span class="kw">pub fn </span>application(<span class="self">self</span>) -&gt; DwEhPe {
+<a href=#1366 id=1366 data-nosnippet>1366</a>        DwEhPe(<span class="self">self</span>.<span class="number">0 </span>&amp; DW_EH_PE_APPLICATION_MASK)
+<a href=#1367 id=1367 data-nosnippet>1367</a>    }
+<a href=#1368 id=1368 data-nosnippet>1368</a>
+<a href=#1369 id=1369 data-nosnippet>1369</a>    <span class="doccomment">/// Is this encoding the absent pointer encoding?
+<a href=#1370 id=1370 data-nosnippet>1370</a>    </span><span class="attr">#[inline]
+<a href=#1371 id=1371 data-nosnippet>1371</a>    </span><span class="kw">pub fn </span>is_absent(<span class="self">self</span>) -&gt; bool {
+<a href=#1372 id=1372 data-nosnippet>1372</a>        <span class="self">self </span>== DW_EH_PE_omit
+<a href=#1373 id=1373 data-nosnippet>1373</a>    }
+<a href=#1374 id=1374 data-nosnippet>1374</a>
+<a href=#1375 id=1375 data-nosnippet>1375</a>    <span class="doccomment">/// Is this coding indirect? If so, its encoded value is the address of the
+<a href=#1376 id=1376 data-nosnippet>1376</a>    /// real pointer result, not the pointer result itself.
+<a href=#1377 id=1377 data-nosnippet>1377</a>    </span><span class="attr">#[inline]
+<a href=#1378 id=1378 data-nosnippet>1378</a>    </span><span class="kw">pub fn </span>is_indirect(<span class="self">self</span>) -&gt; bool {
+<a href=#1379 id=1379 data-nosnippet>1379</a>        <span class="self">self</span>.<span class="number">0 </span>&amp; DW_EH_PE_indirect.<span class="number">0 </span>!= <span class="number">0
+<a href=#1380 id=1380 data-nosnippet>1380</a>    </span>}
+<a href=#1381 id=1381 data-nosnippet>1381</a>
+<a href=#1382 id=1382 data-nosnippet>1382</a>    <span class="doccomment">/// Is this a known, valid pointer encoding?
+<a href=#1383 id=1383 data-nosnippet>1383</a>    </span><span class="kw">pub fn </span>is_valid_encoding(<span class="self">self</span>) -&gt; bool {
+<a href=#1384 id=1384 data-nosnippet>1384</a>        <span class="kw">if </span><span class="self">self</span>.is_absent() {
+<a href=#1385 id=1385 data-nosnippet>1385</a>            <span class="kw">return </span><span class="bool-val">true</span>;
+<a href=#1386 id=1386 data-nosnippet>1386</a>        }
+<a href=#1387 id=1387 data-nosnippet>1387</a>
+<a href=#1388 id=1388 data-nosnippet>1388</a>        <span class="kw">match </span><span class="self">self</span>.format() {
+<a href=#1389 id=1389 data-nosnippet>1389</a>            DW_EH_PE_absptr | DW_EH_PE_uleb128 | DW_EH_PE_udata2 | DW_EH_PE_udata4
+<a href=#1390 id=1390 data-nosnippet>1390</a>            | DW_EH_PE_udata8 | DW_EH_PE_sleb128 | DW_EH_PE_sdata2 | DW_EH_PE_sdata4
+<a href=#1391 id=1391 data-nosnippet>1391</a>            | DW_EH_PE_sdata8 =&gt; {}
+<a href=#1392 id=1392 data-nosnippet>1392</a>            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="bool-val">false</span>,
+<a href=#1393 id=1393 data-nosnippet>1393</a>        }
+<a href=#1394 id=1394 data-nosnippet>1394</a>
+<a href=#1395 id=1395 data-nosnippet>1395</a>        <span class="kw">match </span><span class="self">self</span>.application() {
+<a href=#1396 id=1396 data-nosnippet>1396</a>            DW_EH_PE_absptr | DW_EH_PE_pcrel | DW_EH_PE_textrel | DW_EH_PE_datarel
+<a href=#1397 id=1397 data-nosnippet>1397</a>            | DW_EH_PE_funcrel | DW_EH_PE_aligned =&gt; {}
+<a href=#1398 id=1398 data-nosnippet>1398</a>            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="bool-val">false</span>,
+<a href=#1399 id=1399 data-nosnippet>1399</a>        }
+<a href=#1400 id=1400 data-nosnippet>1400</a>
+<a href=#1401 id=1401 data-nosnippet>1401</a>        <span class="bool-val">true
+<a href=#1402 id=1402 data-nosnippet>1402</a>    </span>}
+<a href=#1403 id=1403 data-nosnippet>1403</a>}
+<a href=#1404 id=1404 data-nosnippet>1404</a>
+<a href=#1405 id=1405 data-nosnippet>1405</a><span class="attr">#[cfg(test)]
+<a href=#1406 id=1406 data-nosnippet>1406</a></span><span class="kw">mod </span>tests {
+<a href=#1407 id=1407 data-nosnippet>1407</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#1408 id=1408 data-nosnippet>1408</a>
+<a href=#1409 id=1409 data-nosnippet>1409</a>    <span class="attr">#[test]
+<a href=#1410 id=1410 data-nosnippet>1410</a>    </span><span class="kw">fn </span>test_dw_eh_pe_format() {
+<a href=#1411 id=1411 data-nosnippet>1411</a>        <span class="kw">let </span>encoding = DW_EH_PE_pcrel | DW_EH_PE_uleb128;
+<a href=#1412 id=1412 data-nosnippet>1412</a>        <span class="macro">assert_eq!</span>(encoding.format(), DW_EH_PE_uleb128);
+<a href=#1413 id=1413 data-nosnippet>1413</a>    }
+<a href=#1414 id=1414 data-nosnippet>1414</a>
+<a href=#1415 id=1415 data-nosnippet>1415</a>    <span class="attr">#[test]
+<a href=#1416 id=1416 data-nosnippet>1416</a>    </span><span class="kw">fn </span>test_dw_eh_pe_application() {
+<a href=#1417 id=1417 data-nosnippet>1417</a>        <span class="kw">let </span>encoding = DW_EH_PE_pcrel | DW_EH_PE_uleb128;
+<a href=#1418 id=1418 data-nosnippet>1418</a>        <span class="macro">assert_eq!</span>(encoding.application(), DW_EH_PE_pcrel);
+<a href=#1419 id=1419 data-nosnippet>1419</a>    }
+<a href=#1420 id=1420 data-nosnippet>1420</a>
+<a href=#1421 id=1421 data-nosnippet>1421</a>    <span class="attr">#[test]
+<a href=#1422 id=1422 data-nosnippet>1422</a>    </span><span class="kw">fn </span>test_dw_eh_pe_is_absent() {
+<a href=#1423 id=1423 data-nosnippet>1423</a>        <span class="macro">assert!</span>(!DW_EH_PE_absptr.is_absent());
+<a href=#1424 id=1424 data-nosnippet>1424</a>        <span class="macro">assert!</span>(DW_EH_PE_omit.is_absent());
+<a href=#1425 id=1425 data-nosnippet>1425</a>    }
+<a href=#1426 id=1426 data-nosnippet>1426</a>
+<a href=#1427 id=1427 data-nosnippet>1427</a>    <span class="attr">#[test]
+<a href=#1428 id=1428 data-nosnippet>1428</a>    </span><span class="kw">fn </span>test_dw_eh_pe_is_valid_encoding_ok() {
+<a href=#1429 id=1429 data-nosnippet>1429</a>        <span class="kw">let </span>encoding = DW_EH_PE_uleb128 | DW_EH_PE_pcrel;
+<a href=#1430 id=1430 data-nosnippet>1430</a>        <span class="macro">assert!</span>(encoding.is_valid_encoding());
+<a href=#1431 id=1431 data-nosnippet>1431</a>        <span class="macro">assert!</span>(DW_EH_PE_absptr.is_valid_encoding());
+<a href=#1432 id=1432 data-nosnippet>1432</a>        <span class="macro">assert!</span>(DW_EH_PE_omit.is_valid_encoding());
+<a href=#1433 id=1433 data-nosnippet>1433</a>    }
+<a href=#1434 id=1434 data-nosnippet>1434</a>
+<a href=#1435 id=1435 data-nosnippet>1435</a>    <span class="attr">#[test]
+<a href=#1436 id=1436 data-nosnippet>1436</a>    </span><span class="kw">fn </span>test_dw_eh_pe_is_valid_encoding_bad_format() {
+<a href=#1437 id=1437 data-nosnippet>1437</a>        <span class="kw">let </span>encoding = DwEhPe((DW_EH_PE_sdata8.<span class="number">0 </span>+ <span class="number">1</span>) | DW_EH_PE_pcrel.<span class="number">0</span>);
+<a href=#1438 id=1438 data-nosnippet>1438</a>        <span class="macro">assert!</span>(!encoding.is_valid_encoding());
+<a href=#1439 id=1439 data-nosnippet>1439</a>    }
+<a href=#1440 id=1440 data-nosnippet>1440</a>
+<a href=#1441 id=1441 data-nosnippet>1441</a>    <span class="attr">#[test]
+<a href=#1442 id=1442 data-nosnippet>1442</a>    </span><span class="kw">fn </span>test_dw_eh_pe_is_valid_encoding_bad_application() {
+<a href=#1443 id=1443 data-nosnippet>1443</a>        <span class="kw">let </span>encoding = DwEhPe(DW_EH_PE_sdata8.<span class="number">0 </span>| (DW_EH_PE_aligned.<span class="number">0 </span>+ <span class="number">1</span>));
+<a href=#1444 id=1444 data-nosnippet>1444</a>        <span class="macro">assert!</span>(!encoding.is_valid_encoding());
+<a href=#1445 id=1445 data-nosnippet>1445</a>    }
+<a href=#1446 id=1446 data-nosnippet>1446</a>}</code></pre></div></section></main></body></html>

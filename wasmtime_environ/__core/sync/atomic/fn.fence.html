@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An atomic fence."><title>fence in wasmtime_environ::__core::sync::atomic - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">fence</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#panics" title="Panics">Panics</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>sync::<wbr>atomic</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">wasmtime_environ</a>::<wbr><a href="../../index.html">__core</a>::<wbr><a href="../index.html">sync</a>::<wbr><a href="index.html">atomic</a></div><h1>Function <span class="fn">fence</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.6.0">1.6.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/sync/atomic.rs.html#4075">Source</a> </span></div><pre class="rust item-decl"><code>pub fn fence(order: <a class="enum" href="enum.Ordering.html" title="enum wasmtime_environ::__core::sync::atomic::Ordering">Ordering</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An atomic fence.</p>
+<p>Fences create synchronization between themselves and atomic operations or fences in other
+threads. To achieve this, a fence prevents the compiler and CPU from reordering certain types of
+memory operations around it.</p>
+<p>A fence ‘A’ which has (at least) <a href="enum.Ordering.html#variant.Release" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Release"><code>Release</code></a> ordering semantics, synchronizes
+with a fence ‘B’ with (at least) <a href="enum.Ordering.html#variant.Acquire" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Acquire"><code>Acquire</code></a> semantics, if and only if there
+exist operations X and Y, both operating on some atomic object ‘M’ such
+that A is sequenced before X, Y is sequenced before B and Y observes
+the change to M. This provides a happens-before dependence between A and B.</p>
+<div class="example-wrap"><pre class="language-text"><code>    Thread 1                                          Thread 2
+
+fence(Release);      A --------------
+x.store(3, Relaxed); X ---------    |
+                               |    |
+                               |    |
+                               -------------&gt; Y  if x.load(Relaxed) == 3 {
+                                    |-------&gt; B      fence(Acquire);
+                                                     ...
+                                                 }</code></pre></div>
+<p>Note that in the example above, it is crucial that the accesses to <code>x</code> are atomic. Fences cannot
+be used to establish synchronization among non-atomic accesses in different threads. However,
+thanks to the happens-before relationship between A and B, any non-atomic accesses that
+happen-before A are now also properly synchronized with any non-atomic accesses that
+happen-after B.</p>
+<p>Atomic operations with <a href="enum.Ordering.html#variant.Release" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Release"><code>Release</code></a> or <a href="enum.Ordering.html#variant.Acquire" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Acquire"><code>Acquire</code></a> semantics can also synchronize
+with a fence.</p>
+<p>A fence which has <a href="enum.Ordering.html#variant.SeqCst" title="variant wasmtime_environ::__core::sync::atomic::Ordering::SeqCst"><code>SeqCst</code></a> ordering, in addition to having both <a href="enum.Ordering.html#variant.Acquire" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Acquire"><code>Acquire</code></a>
+and <a href="enum.Ordering.html#variant.Release" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Release"><code>Release</code></a> semantics, participates in the global program order of the
+other <a href="enum.Ordering.html#variant.SeqCst" title="variant wasmtime_environ::__core::sync::atomic::Ordering::SeqCst"><code>SeqCst</code></a> operations and/or fences.</p>
+<p>Accepts <a href="enum.Ordering.html#variant.Acquire" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Acquire"><code>Acquire</code></a>, <a href="enum.Ordering.html#variant.Release" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Release"><code>Release</code></a>, <a href="enum.Ordering.html#variant.AcqRel" title="variant wasmtime_environ::__core::sync::atomic::Ordering::AcqRel"><code>AcqRel</code></a> and <a href="enum.Ordering.html#variant.SeqCst" title="variant wasmtime_environ::__core::sync::atomic::Ordering::SeqCst"><code>SeqCst</code></a> orderings.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Panics if <code>order</code> is <a href="enum.Ordering.html#variant.Relaxed" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Relaxed"><code>Relaxed</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::atomic::AtomicBool;
+<span class="kw">use </span>std::sync::atomic::fence;
+<span class="kw">use </span>std::sync::atomic::Ordering;
+
+<span class="comment">// A mutual exclusion primitive based on spinlock.
+</span><span class="kw">pub struct </span>Mutex {
+    flag: AtomicBool,
+}
+
+<span class="kw">impl </span>Mutex {
+    <span class="kw">pub fn </span>new() -&gt; Mutex {
+        Mutex {
+            flag: AtomicBool::new(<span class="bool-val">false</span>),
+        }
+    }
+
+    <span class="kw">pub fn </span>lock(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="comment">// Wait until the old value is `false`.
+        </span><span class="kw">while </span><span class="self">self
+            </span>.flag
+            .compare_exchange_weak(<span class="bool-val">false</span>, <span class="bool-val">true</span>, Ordering::Relaxed, Ordering::Relaxed)
+            .is_err()
+        {}
+        <span class="comment">// This fence synchronizes-with store in `unlock`.
+        </span>fence(Ordering::Acquire);
+    }
+
+    <span class="kw">pub fn </span>unlock(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.flag.store(<span class="bool-val">false</span>, Ordering::Release);
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

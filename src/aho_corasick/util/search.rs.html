@@ -1,0 +1,1148 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aho-corasick-1.1.3/src/util/search.rs`."><title>search.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="aho_corasick" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">aho_corasick/util/</div>search.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>core::ops::{Range, RangeBounds};
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span><span class="kw">crate</span>::util::primitives::PatternID;
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a><span class="doccomment">/// The configuration and the haystack to use for an Aho-Corasick search.
+<a href=#6 id=6 data-nosnippet>6</a>///
+<a href=#7 id=7 data-nosnippet>7</a>/// When executing a search, there are a few parameters one might want to
+<a href=#8 id=8 data-nosnippet>8</a>/// configure:
+<a href=#9 id=9 data-nosnippet>9</a>///
+<a href=#10 id=10 data-nosnippet>10</a>/// * The haystack to search, provided to the [`Input::new`] constructor. This
+<a href=#11 id=11 data-nosnippet>11</a>/// is the only required parameter.
+<a href=#12 id=12 data-nosnippet>12</a>/// * The span _within_ the haystack to limit a search to. (The default
+<a href=#13 id=13 data-nosnippet>13</a>/// is the entire haystack.) This is configured via [`Input::span`] or
+<a href=#14 id=14 data-nosnippet>14</a>/// [`Input::range`].
+<a href=#15 id=15 data-nosnippet>15</a>/// * Whether to run an unanchored (matches can occur anywhere after the
+<a href=#16 id=16 data-nosnippet>16</a>/// start of the search) or anchored (matches can only occur beginning at
+<a href=#17 id=17 data-nosnippet>17</a>/// the start of the search) search. Unanchored search is the default. This is
+<a href=#18 id=18 data-nosnippet>18</a>/// configured via [`Input::anchored`].
+<a href=#19 id=19 data-nosnippet>19</a>/// * Whether to quit the search as soon as a match has been found, regardless
+<a href=#20 id=20 data-nosnippet>20</a>/// of the [`MatchKind`] that the searcher was built with. This is configured
+<a href=#21 id=21 data-nosnippet>21</a>/// via [`Input::earliest`].
+<a href=#22 id=22 data-nosnippet>22</a>///
+<a href=#23 id=23 data-nosnippet>23</a>/// For most cases, the defaults for all optional parameters are appropriate.
+<a href=#24 id=24 data-nosnippet>24</a>/// The utility of this type is that it keeps the default or common case simple
+<a href=#25 id=25 data-nosnippet>25</a>/// while permitting tweaking parameters in more niche use cases while reusing
+<a href=#26 id=26 data-nosnippet>26</a>/// the same search APIs.
+<a href=#27 id=27 data-nosnippet>27</a>///
+<a href=#28 id=28 data-nosnippet>28</a>/// # Valid bounds and search termination
+<a href=#29 id=29 data-nosnippet>29</a>///
+<a href=#30 id=30 data-nosnippet>30</a>/// An `Input` permits setting the bounds of a search via either
+<a href=#31 id=31 data-nosnippet>31</a>/// [`Input::span`] or [`Input::range`]. The bounds set must be valid, or
+<a href=#32 id=32 data-nosnippet>32</a>/// else a panic will occur. Bounds are valid if and only if:
+<a href=#33 id=33 data-nosnippet>33</a>///
+<a href=#34 id=34 data-nosnippet>34</a>/// * The bounds represent a valid range into the input's haystack.
+<a href=#35 id=35 data-nosnippet>35</a>/// * **or** the end bound is a valid ending bound for the haystack *and*
+<a href=#36 id=36 data-nosnippet>36</a>/// the start bound is exactly one greater than the end bound.
+<a href=#37 id=37 data-nosnippet>37</a>///
+<a href=#38 id=38 data-nosnippet>38</a>/// In the latter case, [`Input::is_done`] will return true and indicates any
+<a href=#39 id=39 data-nosnippet>39</a>/// search receiving such an input should immediately return with no match.
+<a href=#40 id=40 data-nosnippet>40</a>///
+<a href=#41 id=41 data-nosnippet>41</a>/// Other than representing "search is complete," the `Input::span` and
+<a href=#42 id=42 data-nosnippet>42</a>/// `Input::range` APIs are never necessary. Instead, callers can slice the
+<a href=#43 id=43 data-nosnippet>43</a>/// haystack instead, e.g., with `&amp;haystack[start..end]`. With that said, they
+<a href=#44 id=44 data-nosnippet>44</a>/// can be more convenient than slicing because the match positions reported
+<a href=#45 id=45 data-nosnippet>45</a>/// when using `Input::span` or `Input::range` are in terms of the original
+<a href=#46 id=46 data-nosnippet>46</a>/// haystack. If you instead use `&amp;haystack[start..end]`, then you'll need to
+<a href=#47 id=47 data-nosnippet>47</a>/// add `start` to any match position returned in order for it to be a correct
+<a href=#48 id=48 data-nosnippet>48</a>/// index into `haystack`.
+<a href=#49 id=49 data-nosnippet>49</a>///
+<a href=#50 id=50 data-nosnippet>50</a>/// # Example: `&amp;str` and `&amp;[u8]` automatically convert to an `Input`
+<a href=#51 id=51 data-nosnippet>51</a>///
+<a href=#52 id=52 data-nosnippet>52</a>/// There is a `From&lt;&amp;T&gt; for Input` implementation for all `T: AsRef&lt;[u8]&gt;`.
+<a href=#53 id=53 data-nosnippet>53</a>/// Additionally, the [`AhoCorasick`](crate::AhoCorasick) search APIs accept
+<a href=#54 id=54 data-nosnippet>54</a>/// a `Into&lt;Input&gt;`. These two things combined together mean you can provide
+<a href=#55 id=55 data-nosnippet>55</a>/// things like `&amp;str` and `&amp;[u8]` to search APIs when the defaults are
+<a href=#56 id=56 data-nosnippet>56</a>/// suitable, but also an `Input` when they're not. For example:
+<a href=#57 id=57 data-nosnippet>57</a>///
+<a href=#58 id=58 data-nosnippet>58</a>/// ```
+<a href=#59 id=59 data-nosnippet>59</a>/// use aho_corasick::{AhoCorasick, Anchored, Input, Match, StartKind};
+<a href=#60 id=60 data-nosnippet>60</a>///
+<a href=#61 id=61 data-nosnippet>61</a>/// // Build a searcher that supports both unanchored and anchored modes.
+<a href=#62 id=62 data-nosnippet>62</a>/// let ac = AhoCorasick::builder()
+<a href=#63 id=63 data-nosnippet>63</a>///     .start_kind(StartKind::Both)
+<a href=#64 id=64 data-nosnippet>64</a>///     .build(&amp;["abcd", "b"])
+<a href=#65 id=65 data-nosnippet>65</a>///     .unwrap();
+<a href=#66 id=66 data-nosnippet>66</a>/// let haystack = "abcd";
+<a href=#67 id=67 data-nosnippet>67</a>///
+<a href=#68 id=68 data-nosnippet>68</a>/// // A search using default parameters is unanchored. With standard
+<a href=#69 id=69 data-nosnippet>69</a>/// // semantics, this finds `b` first.
+<a href=#70 id=70 data-nosnippet>70</a>/// assert_eq!(
+<a href=#71 id=71 data-nosnippet>71</a>///     Some(Match::must(1, 1..2)),
+<a href=#72 id=72 data-nosnippet>72</a>///     ac.find(haystack),
+<a href=#73 id=73 data-nosnippet>73</a>/// );
+<a href=#74 id=74 data-nosnippet>74</a>/// // Using the same 'find' routine, we can provide an 'Input' explicitly
+<a href=#75 id=75 data-nosnippet>75</a>/// // that is configured to do an anchored search. Since 'b' doesn't start
+<a href=#76 id=76 data-nosnippet>76</a>/// // at the beginning of the search, it is not reported as a match.
+<a href=#77 id=77 data-nosnippet>77</a>/// assert_eq!(
+<a href=#78 id=78 data-nosnippet>78</a>///     Some(Match::must(0, 0..4)),
+<a href=#79 id=79 data-nosnippet>79</a>///     ac.find(Input::new(haystack).anchored(Anchored::Yes)),
+<a href=#80 id=80 data-nosnippet>80</a>/// );
+<a href=#81 id=81 data-nosnippet>81</a>/// ```
+<a href=#82 id=82 data-nosnippet>82</a></span><span class="attr">#[derive(Clone)]
+<a href=#83 id=83 data-nosnippet>83</a></span><span class="kw">pub struct </span>Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#84 id=84 data-nosnippet>84</a>    haystack: <span class="kw-2">&amp;</span><span class="lifetime">'h </span>[u8],
+<a href=#85 id=85 data-nosnippet>85</a>    span: Span,
+<a href=#86 id=86 data-nosnippet>86</a>    anchored: Anchored,
+<a href=#87 id=87 data-nosnippet>87</a>    earliest: bool,
+<a href=#88 id=88 data-nosnippet>88</a>}
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a><span class="kw">impl</span>&lt;<span class="lifetime">'h</span>&gt; Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="doccomment">/// Create a new search configuration for the given haystack.
+<a href=#92 id=92 data-nosnippet>92</a>    </span><span class="attr">#[inline]
+<a href=#93 id=93 data-nosnippet>93</a>    </span><span class="kw">pub fn </span>new&lt;H: <span class="question-mark">?</span>Sized + AsRef&lt;[u8]&gt;&gt;(haystack: <span class="kw-2">&amp;</span><span class="lifetime">'h </span>H) -&gt; Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#94 id=94 data-nosnippet>94</a>        Input {
+<a href=#95 id=95 data-nosnippet>95</a>            haystack: haystack.as_ref(),
+<a href=#96 id=96 data-nosnippet>96</a>            span: Span { start: <span class="number">0</span>, end: haystack.as_ref().len() },
+<a href=#97 id=97 data-nosnippet>97</a>            anchored: Anchored::No,
+<a href=#98 id=98 data-nosnippet>98</a>            earliest: <span class="bool-val">false</span>,
+<a href=#99 id=99 data-nosnippet>99</a>        }
+<a href=#100 id=100 data-nosnippet>100</a>    }
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="doccomment">/// Set the span for this search.
+<a href=#103 id=103 data-nosnippet>103</a>    ///
+<a href=#104 id=104 data-nosnippet>104</a>    /// This routine is generic over how a span is provided. While
+<a href=#105 id=105 data-nosnippet>105</a>    /// a [`Span`] may be given directly, one may also provide a
+<a href=#106 id=106 data-nosnippet>106</a>    /// `std::ops::Range&lt;usize&gt;`. To provide anything supported by range
+<a href=#107 id=107 data-nosnippet>107</a>    /// syntax, use the [`Input::range`] method.
+<a href=#108 id=108 data-nosnippet>108</a>    ///
+<a href=#109 id=109 data-nosnippet>109</a>    /// The default span is the entire haystack.
+<a href=#110 id=110 data-nosnippet>110</a>    ///
+<a href=#111 id=111 data-nosnippet>111</a>    /// Note that [`Input::range`] overrides this method and vice versa.
+<a href=#112 id=112 data-nosnippet>112</a>    ///
+<a href=#113 id=113 data-nosnippet>113</a>    /// # Panics
+<a href=#114 id=114 data-nosnippet>114</a>    ///
+<a href=#115 id=115 data-nosnippet>115</a>    /// This panics if the given span does not correspond to valid bounds in
+<a href=#116 id=116 data-nosnippet>116</a>    /// the haystack or the termination of a search.
+<a href=#117 id=117 data-nosnippet>117</a>    ///
+<a href=#118 id=118 data-nosnippet>118</a>    /// # Example
+<a href=#119 id=119 data-nosnippet>119</a>    ///
+<a href=#120 id=120 data-nosnippet>120</a>    /// This example shows how the span of the search can impact whether a
+<a href=#121 id=121 data-nosnippet>121</a>    /// match is reported or not.
+<a href=#122 id=122 data-nosnippet>122</a>    ///
+<a href=#123 id=123 data-nosnippet>123</a>    /// ```
+<a href=#124 id=124 data-nosnippet>124</a>    /// use aho_corasick::{AhoCorasick, Input, MatchKind};
+<a href=#125 id=125 data-nosnippet>125</a>    ///
+<a href=#126 id=126 data-nosnippet>126</a>    /// let patterns = &amp;["b", "abcd", "abc"];
+<a href=#127 id=127 data-nosnippet>127</a>    /// let haystack = "abcd";
+<a href=#128 id=128 data-nosnippet>128</a>    ///
+<a href=#129 id=129 data-nosnippet>129</a>    /// let ac = AhoCorasick::builder()
+<a href=#130 id=130 data-nosnippet>130</a>    ///     .match_kind(MatchKind::LeftmostFirst)
+<a href=#131 id=131 data-nosnippet>131</a>    ///     .build(patterns)
+<a href=#132 id=132 data-nosnippet>132</a>    ///     .unwrap();
+<a href=#133 id=133 data-nosnippet>133</a>    /// let input = Input::new(haystack).span(0..3);
+<a href=#134 id=134 data-nosnippet>134</a>    /// let mat = ac.try_find(input)?.expect("should have a match");
+<a href=#135 id=135 data-nosnippet>135</a>    /// // Without the span stopping the search early, 'abcd' would be reported
+<a href=#136 id=136 data-nosnippet>136</a>    /// // because it is the correct leftmost-first match.
+<a href=#137 id=137 data-nosnippet>137</a>    /// assert_eq!("abc", &amp;haystack[mat.span()]);
+<a href=#138 id=138 data-nosnippet>138</a>    ///
+<a href=#139 id=139 data-nosnippet>139</a>    /// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#140 id=140 data-nosnippet>140</a>    /// ```
+<a href=#141 id=141 data-nosnippet>141</a>    </span><span class="attr">#[inline]
+<a href=#142 id=142 data-nosnippet>142</a>    </span><span class="kw">pub fn </span>span&lt;S: Into&lt;Span&gt;&gt;(<span class="kw-2">mut </span><span class="self">self</span>, span: S) -&gt; Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#143 id=143 data-nosnippet>143</a>        <span class="self">self</span>.set_span(span);
+<a href=#144 id=144 data-nosnippet>144</a>        <span class="self">self
+<a href=#145 id=145 data-nosnippet>145</a>    </span>}
+<a href=#146 id=146 data-nosnippet>146</a>
+<a href=#147 id=147 data-nosnippet>147</a>    <span class="doccomment">/// Like `Input::span`, but accepts any range instead.
+<a href=#148 id=148 data-nosnippet>148</a>    ///
+<a href=#149 id=149 data-nosnippet>149</a>    /// The default range is the entire haystack.
+<a href=#150 id=150 data-nosnippet>150</a>    ///
+<a href=#151 id=151 data-nosnippet>151</a>    /// Note that [`Input::span`] overrides this method and vice versa.
+<a href=#152 id=152 data-nosnippet>152</a>    ///
+<a href=#153 id=153 data-nosnippet>153</a>    /// # Panics
+<a href=#154 id=154 data-nosnippet>154</a>    ///
+<a href=#155 id=155 data-nosnippet>155</a>    /// This routine will panic if the given range could not be converted
+<a href=#156 id=156 data-nosnippet>156</a>    /// to a valid [`Range`]. For example, this would panic when given
+<a href=#157 id=157 data-nosnippet>157</a>    /// `0..=usize::MAX` since it cannot be represented using a half-open
+<a href=#158 id=158 data-nosnippet>158</a>    /// interval in terms of `usize`.
+<a href=#159 id=159 data-nosnippet>159</a>    ///
+<a href=#160 id=160 data-nosnippet>160</a>    /// This routine also panics if the given range does not correspond to
+<a href=#161 id=161 data-nosnippet>161</a>    /// valid bounds in the haystack or the termination of a search.
+<a href=#162 id=162 data-nosnippet>162</a>    ///
+<a href=#163 id=163 data-nosnippet>163</a>    /// # Example
+<a href=#164 id=164 data-nosnippet>164</a>    ///
+<a href=#165 id=165 data-nosnippet>165</a>    /// ```
+<a href=#166 id=166 data-nosnippet>166</a>    /// use aho_corasick::Input;
+<a href=#167 id=167 data-nosnippet>167</a>    ///
+<a href=#168 id=168 data-nosnippet>168</a>    /// let input = Input::new("foobar");
+<a href=#169 id=169 data-nosnippet>169</a>    /// assert_eq!(0..6, input.get_range());
+<a href=#170 id=170 data-nosnippet>170</a>    ///
+<a href=#171 id=171 data-nosnippet>171</a>    /// let input = Input::new("foobar").range(2..=4);
+<a href=#172 id=172 data-nosnippet>172</a>    /// assert_eq!(2..5, input.get_range());
+<a href=#173 id=173 data-nosnippet>173</a>    /// ```
+<a href=#174 id=174 data-nosnippet>174</a>    </span><span class="attr">#[inline]
+<a href=#175 id=175 data-nosnippet>175</a>    </span><span class="kw">pub fn </span>range&lt;R: RangeBounds&lt;usize&gt;&gt;(<span class="kw-2">mut </span><span class="self">self</span>, range: R) -&gt; Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="self">self</span>.set_range(range);
+<a href=#177 id=177 data-nosnippet>177</a>        <span class="self">self
+<a href=#178 id=178 data-nosnippet>178</a>    </span>}
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="doccomment">/// Sets the anchor mode of a search.
+<a href=#181 id=181 data-nosnippet>181</a>    ///
+<a href=#182 id=182 data-nosnippet>182</a>    /// When a search is anchored (via [`Anchored::Yes`]), a match must begin
+<a href=#183 id=183 data-nosnippet>183</a>    /// at the start of a search. When a search is not anchored (that's
+<a href=#184 id=184 data-nosnippet>184</a>    /// [`Anchored::No`]), searchers will look for a match anywhere in the
+<a href=#185 id=185 data-nosnippet>185</a>    /// haystack.
+<a href=#186 id=186 data-nosnippet>186</a>    ///
+<a href=#187 id=187 data-nosnippet>187</a>    /// By default, the anchored mode is [`Anchored::No`].
+<a href=#188 id=188 data-nosnippet>188</a>    ///
+<a href=#189 id=189 data-nosnippet>189</a>    /// # Support for anchored searches
+<a href=#190 id=190 data-nosnippet>190</a>    ///
+<a href=#191 id=191 data-nosnippet>191</a>    /// Anchored or unanchored searches might not always be available,
+<a href=#192 id=192 data-nosnippet>192</a>    /// depending on the type of searcher used and its configuration:
+<a href=#193 id=193 data-nosnippet>193</a>    ///
+<a href=#194 id=194 data-nosnippet>194</a>    /// * [`noncontiguous::NFA`](crate::nfa::noncontiguous::NFA) always
+<a href=#195 id=195 data-nosnippet>195</a>    /// supports both unanchored and anchored searches.
+<a href=#196 id=196 data-nosnippet>196</a>    /// * [`contiguous::NFA`](crate::nfa::contiguous::NFA) always supports both
+<a href=#197 id=197 data-nosnippet>197</a>    /// unanchored and anchored searches.
+<a href=#198 id=198 data-nosnippet>198</a>    /// * [`dfa::DFA`](crate::dfa::DFA) supports only unanchored
+<a href=#199 id=199 data-nosnippet>199</a>    /// searches by default.
+<a href=#200 id=200 data-nosnippet>200</a>    /// [`dfa::Builder::start_kind`](crate::dfa::Builder::start_kind) can
+<a href=#201 id=201 data-nosnippet>201</a>    /// be used to change the default to supporting both kinds of searches
+<a href=#202 id=202 data-nosnippet>202</a>    /// or even just anchored searches.
+<a href=#203 id=203 data-nosnippet>203</a>    /// * [`AhoCorasick`](crate::AhoCorasick) inherits the same setup as a
+<a href=#204 id=204 data-nosnippet>204</a>    /// `DFA`. Namely, it only supports unanchored searches by default, but
+<a href=#205 id=205 data-nosnippet>205</a>    /// [`AhoCorasickBuilder::start_kind`](crate::AhoCorasickBuilder::start_kind)
+<a href=#206 id=206 data-nosnippet>206</a>    /// can change this.
+<a href=#207 id=207 data-nosnippet>207</a>    ///
+<a href=#208 id=208 data-nosnippet>208</a>    /// If you try to execute a search using a `try_` ("fallible") method with
+<a href=#209 id=209 data-nosnippet>209</a>    /// an unsupported anchor mode, then an error will be returned. For calls
+<a href=#210 id=210 data-nosnippet>210</a>    /// to infallible search methods, a panic will result.
+<a href=#211 id=211 data-nosnippet>211</a>    ///
+<a href=#212 id=212 data-nosnippet>212</a>    /// # Example
+<a href=#213 id=213 data-nosnippet>213</a>    ///
+<a href=#214 id=214 data-nosnippet>214</a>    /// This demonstrates the differences between an anchored search and
+<a href=#215 id=215 data-nosnippet>215</a>    /// an unanchored search. Notice that we build our `AhoCorasick` searcher
+<a href=#216 id=216 data-nosnippet>216</a>    /// with [`StartKind::Both`] so that it supports both unanchored and
+<a href=#217 id=217 data-nosnippet>217</a>    /// anchored searches simultaneously.
+<a href=#218 id=218 data-nosnippet>218</a>    ///
+<a href=#219 id=219 data-nosnippet>219</a>    /// ```
+<a href=#220 id=220 data-nosnippet>220</a>    /// use aho_corasick::{
+<a href=#221 id=221 data-nosnippet>221</a>    ///     AhoCorasick, Anchored, Input, MatchKind, StartKind,
+<a href=#222 id=222 data-nosnippet>222</a>    /// };
+<a href=#223 id=223 data-nosnippet>223</a>    ///
+<a href=#224 id=224 data-nosnippet>224</a>    /// let patterns = &amp;["bcd"];
+<a href=#225 id=225 data-nosnippet>225</a>    /// let haystack = "abcd";
+<a href=#226 id=226 data-nosnippet>226</a>    ///
+<a href=#227 id=227 data-nosnippet>227</a>    /// let ac = AhoCorasick::builder()
+<a href=#228 id=228 data-nosnippet>228</a>    ///     .start_kind(StartKind::Both)
+<a href=#229 id=229 data-nosnippet>229</a>    ///     .build(patterns)
+<a href=#230 id=230 data-nosnippet>230</a>    ///     .unwrap();
+<a href=#231 id=231 data-nosnippet>231</a>    ///
+<a href=#232 id=232 data-nosnippet>232</a>    /// // Note that 'Anchored::No' is the default, so it doesn't need to
+<a href=#233 id=233 data-nosnippet>233</a>    /// // be explicitly specified here.
+<a href=#234 id=234 data-nosnippet>234</a>    /// let input = Input::new(haystack);
+<a href=#235 id=235 data-nosnippet>235</a>    /// let mat = ac.try_find(input)?.expect("should have a match");
+<a href=#236 id=236 data-nosnippet>236</a>    /// assert_eq!("bcd", &amp;haystack[mat.span()]);
+<a href=#237 id=237 data-nosnippet>237</a>    ///
+<a href=#238 id=238 data-nosnippet>238</a>    /// // While 'bcd' occurs in the haystack, it does not begin where our
+<a href=#239 id=239 data-nosnippet>239</a>    /// // search begins, so no match is found.
+<a href=#240 id=240 data-nosnippet>240</a>    /// let input = Input::new(haystack).anchored(Anchored::Yes);
+<a href=#241 id=241 data-nosnippet>241</a>    /// assert_eq!(None, ac.try_find(input)?);
+<a href=#242 id=242 data-nosnippet>242</a>    ///
+<a href=#243 id=243 data-nosnippet>243</a>    /// // However, if we start our search where 'bcd' starts, then we will
+<a href=#244 id=244 data-nosnippet>244</a>    /// // find a match.
+<a href=#245 id=245 data-nosnippet>245</a>    /// let input = Input::new(haystack).range(1..).anchored(Anchored::Yes);
+<a href=#246 id=246 data-nosnippet>246</a>    /// let mat = ac.try_find(input)?.expect("should have a match");
+<a href=#247 id=247 data-nosnippet>247</a>    /// assert_eq!("bcd", &amp;haystack[mat.span()]);
+<a href=#248 id=248 data-nosnippet>248</a>    ///
+<a href=#249 id=249 data-nosnippet>249</a>    /// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#250 id=250 data-nosnippet>250</a>    /// ```
+<a href=#251 id=251 data-nosnippet>251</a>    </span><span class="attr">#[inline]
+<a href=#252 id=252 data-nosnippet>252</a>    </span><span class="kw">pub fn </span>anchored(<span class="kw-2">mut </span><span class="self">self</span>, mode: Anchored) -&gt; Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="self">self</span>.set_anchored(mode);
+<a href=#254 id=254 data-nosnippet>254</a>        <span class="self">self
+<a href=#255 id=255 data-nosnippet>255</a>    </span>}
+<a href=#256 id=256 data-nosnippet>256</a>
+<a href=#257 id=257 data-nosnippet>257</a>    <span class="doccomment">/// Whether to execute an "earliest" search or not.
+<a href=#258 id=258 data-nosnippet>258</a>    ///
+<a href=#259 id=259 data-nosnippet>259</a>    /// When running a non-overlapping search, an "earliest" search will
+<a href=#260 id=260 data-nosnippet>260</a>    /// return the match location as early as possible. For example, given
+<a href=#261 id=261 data-nosnippet>261</a>    /// the patterns `abc` and `b`, and a haystack of `abc`, a normal
+<a href=#262 id=262 data-nosnippet>262</a>    /// leftmost-first search will return `abc` as a match. But an "earliest"
+<a href=#263 id=263 data-nosnippet>263</a>    /// search will return as soon as it is known that a match occurs, which
+<a href=#264 id=264 data-nosnippet>264</a>    /// happens once `b` is seen.
+<a href=#265 id=265 data-nosnippet>265</a>    ///
+<a href=#266 id=266 data-nosnippet>266</a>    /// Note that when using [`MatchKind::Standard`], the "earliest" option
+<a href=#267 id=267 data-nosnippet>267</a>    /// has no effect since standard semantics are already "earliest." Note
+<a href=#268 id=268 data-nosnippet>268</a>    /// also that this has no effect in overlapping searches, since overlapping
+<a href=#269 id=269 data-nosnippet>269</a>    /// searches also use standard semantics and report all possible matches.
+<a href=#270 id=270 data-nosnippet>270</a>    ///
+<a href=#271 id=271 data-nosnippet>271</a>    /// This is disabled by default.
+<a href=#272 id=272 data-nosnippet>272</a>    ///
+<a href=#273 id=273 data-nosnippet>273</a>    /// # Example
+<a href=#274 id=274 data-nosnippet>274</a>    ///
+<a href=#275 id=275 data-nosnippet>275</a>    /// This example shows the difference between "earliest" searching and
+<a href=#276 id=276 data-nosnippet>276</a>    /// normal leftmost searching.
+<a href=#277 id=277 data-nosnippet>277</a>    ///
+<a href=#278 id=278 data-nosnippet>278</a>    /// ```
+<a href=#279 id=279 data-nosnippet>279</a>    /// use aho_corasick::{AhoCorasick, Anchored, Input, MatchKind, StartKind};
+<a href=#280 id=280 data-nosnippet>280</a>    ///
+<a href=#281 id=281 data-nosnippet>281</a>    /// let patterns = &amp;["abc", "b"];
+<a href=#282 id=282 data-nosnippet>282</a>    /// let haystack = "abc";
+<a href=#283 id=283 data-nosnippet>283</a>    ///
+<a href=#284 id=284 data-nosnippet>284</a>    /// let ac = AhoCorasick::builder()
+<a href=#285 id=285 data-nosnippet>285</a>    ///     .match_kind(MatchKind::LeftmostFirst)
+<a href=#286 id=286 data-nosnippet>286</a>    ///     .build(patterns)
+<a href=#287 id=287 data-nosnippet>287</a>    ///     .unwrap();
+<a href=#288 id=288 data-nosnippet>288</a>    ///
+<a href=#289 id=289 data-nosnippet>289</a>    /// // The normal leftmost-first match.
+<a href=#290 id=290 data-nosnippet>290</a>    /// let input = Input::new(haystack);
+<a href=#291 id=291 data-nosnippet>291</a>    /// let mat = ac.try_find(input)?.expect("should have a match");
+<a href=#292 id=292 data-nosnippet>292</a>    /// assert_eq!("abc", &amp;haystack[mat.span()]);
+<a href=#293 id=293 data-nosnippet>293</a>    ///
+<a href=#294 id=294 data-nosnippet>294</a>    /// // The "earliest" possible match, even if it isn't leftmost-first.
+<a href=#295 id=295 data-nosnippet>295</a>    /// let input = Input::new(haystack).earliest(true);
+<a href=#296 id=296 data-nosnippet>296</a>    /// let mat = ac.try_find(input)?.expect("should have a match");
+<a href=#297 id=297 data-nosnippet>297</a>    /// assert_eq!("b", &amp;haystack[mat.span()]);
+<a href=#298 id=298 data-nosnippet>298</a>    ///
+<a href=#299 id=299 data-nosnippet>299</a>    /// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#300 id=300 data-nosnippet>300</a>    /// ```
+<a href=#301 id=301 data-nosnippet>301</a>    </span><span class="attr">#[inline]
+<a href=#302 id=302 data-nosnippet>302</a>    </span><span class="kw">pub fn </span>earliest(<span class="kw-2">mut </span><span class="self">self</span>, yes: bool) -&gt; Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#303 id=303 data-nosnippet>303</a>        <span class="self">self</span>.set_earliest(yes);
+<a href=#304 id=304 data-nosnippet>304</a>        <span class="self">self
+<a href=#305 id=305 data-nosnippet>305</a>    </span>}
+<a href=#306 id=306 data-nosnippet>306</a>
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="doccomment">/// Set the span for this search configuration.
+<a href=#308 id=308 data-nosnippet>308</a>    ///
+<a href=#309 id=309 data-nosnippet>309</a>    /// This is like the [`Input::span`] method, except this mutates the
+<a href=#310 id=310 data-nosnippet>310</a>    /// span in place.
+<a href=#311 id=311 data-nosnippet>311</a>    ///
+<a href=#312 id=312 data-nosnippet>312</a>    /// This routine is generic over how a span is provided. While
+<a href=#313 id=313 data-nosnippet>313</a>    /// a [`Span`] may be given directly, one may also provide a
+<a href=#314 id=314 data-nosnippet>314</a>    /// `std::ops::Range&lt;usize&gt;`.
+<a href=#315 id=315 data-nosnippet>315</a>    ///
+<a href=#316 id=316 data-nosnippet>316</a>    /// # Panics
+<a href=#317 id=317 data-nosnippet>317</a>    ///
+<a href=#318 id=318 data-nosnippet>318</a>    /// This panics if the given span does not correspond to valid bounds in
+<a href=#319 id=319 data-nosnippet>319</a>    /// the haystack or the termination of a search.
+<a href=#320 id=320 data-nosnippet>320</a>    ///
+<a href=#321 id=321 data-nosnippet>321</a>    /// # Example
+<a href=#322 id=322 data-nosnippet>322</a>    ///
+<a href=#323 id=323 data-nosnippet>323</a>    /// ```
+<a href=#324 id=324 data-nosnippet>324</a>    /// use aho_corasick::Input;
+<a href=#325 id=325 data-nosnippet>325</a>    ///
+<a href=#326 id=326 data-nosnippet>326</a>    /// let mut input = Input::new("foobar");
+<a href=#327 id=327 data-nosnippet>327</a>    /// assert_eq!(0..6, input.get_range());
+<a href=#328 id=328 data-nosnippet>328</a>    /// input.set_span(2..4);
+<a href=#329 id=329 data-nosnippet>329</a>    /// assert_eq!(2..4, input.get_range());
+<a href=#330 id=330 data-nosnippet>330</a>    /// ```
+<a href=#331 id=331 data-nosnippet>331</a>    </span><span class="attr">#[inline]
+<a href=#332 id=332 data-nosnippet>332</a>    </span><span class="kw">pub fn </span>set_span&lt;S: Into&lt;Span&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, span: S) {
+<a href=#333 id=333 data-nosnippet>333</a>        <span class="kw">let </span>span = span.into();
+<a href=#334 id=334 data-nosnippet>334</a>        <span class="macro">assert!</span>(
+<a href=#335 id=335 data-nosnippet>335</a>            span.end &lt;= <span class="self">self</span>.haystack.len()
+<a href=#336 id=336 data-nosnippet>336</a>                &amp;&amp; span.start &lt;= span.end.wrapping_add(<span class="number">1</span>),
+<a href=#337 id=337 data-nosnippet>337</a>            <span class="string">"invalid span {:?} for haystack of length {}"</span>,
+<a href=#338 id=338 data-nosnippet>338</a>            span,
+<a href=#339 id=339 data-nosnippet>339</a>            <span class="self">self</span>.haystack.len(),
+<a href=#340 id=340 data-nosnippet>340</a>        );
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="self">self</span>.span = span;
+<a href=#342 id=342 data-nosnippet>342</a>    }
+<a href=#343 id=343 data-nosnippet>343</a>
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="doccomment">/// Set the span for this search configuration given any range.
+<a href=#345 id=345 data-nosnippet>345</a>    ///
+<a href=#346 id=346 data-nosnippet>346</a>    /// This is like the [`Input::range`] method, except this mutates the
+<a href=#347 id=347 data-nosnippet>347</a>    /// span in place.
+<a href=#348 id=348 data-nosnippet>348</a>    ///
+<a href=#349 id=349 data-nosnippet>349</a>    /// # Panics
+<a href=#350 id=350 data-nosnippet>350</a>    ///
+<a href=#351 id=351 data-nosnippet>351</a>    /// This routine will panic if the given range could not be converted
+<a href=#352 id=352 data-nosnippet>352</a>    /// to a valid [`Range`]. For example, this would panic when given
+<a href=#353 id=353 data-nosnippet>353</a>    /// `0..=usize::MAX` since it cannot be represented using a half-open
+<a href=#354 id=354 data-nosnippet>354</a>    /// interval in terms of `usize`.
+<a href=#355 id=355 data-nosnippet>355</a>    ///
+<a href=#356 id=356 data-nosnippet>356</a>    /// This routine also panics if the given range does not correspond to
+<a href=#357 id=357 data-nosnippet>357</a>    /// valid bounds in the haystack or the termination of a search.
+<a href=#358 id=358 data-nosnippet>358</a>    ///
+<a href=#359 id=359 data-nosnippet>359</a>    /// # Example
+<a href=#360 id=360 data-nosnippet>360</a>    ///
+<a href=#361 id=361 data-nosnippet>361</a>    /// ```
+<a href=#362 id=362 data-nosnippet>362</a>    /// use aho_corasick::Input;
+<a href=#363 id=363 data-nosnippet>363</a>    ///
+<a href=#364 id=364 data-nosnippet>364</a>    /// let mut input = Input::new("foobar");
+<a href=#365 id=365 data-nosnippet>365</a>    /// assert_eq!(0..6, input.get_range());
+<a href=#366 id=366 data-nosnippet>366</a>    /// input.set_range(2..=4);
+<a href=#367 id=367 data-nosnippet>367</a>    /// assert_eq!(2..5, input.get_range());
+<a href=#368 id=368 data-nosnippet>368</a>    /// ```
+<a href=#369 id=369 data-nosnippet>369</a>    </span><span class="attr">#[inline]
+<a href=#370 id=370 data-nosnippet>370</a>    </span><span class="kw">pub fn </span>set_range&lt;R: RangeBounds&lt;usize&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, range: R) {
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw">use </span>core::ops::Bound;
+<a href=#372 id=372 data-nosnippet>372</a>
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="comment">// It's a little weird to convert ranges into spans, and then spans
+<a href=#374 id=374 data-nosnippet>374</a>        // back into ranges when we actually slice the haystack. Because
+<a href=#375 id=375 data-nosnippet>375</a>        // of that process, we always represent everything as a half-open
+<a href=#376 id=376 data-nosnippet>376</a>        // internal. Therefore, handling things like m..=n is a little awkward.
+<a href=#377 id=377 data-nosnippet>377</a>        </span><span class="kw">let </span>start = <span class="kw">match </span>range.start_bound() {
+<a href=#378 id=378 data-nosnippet>378</a>            Bound::Included(<span class="kw-2">&amp;</span>i) =&gt; i,
+<a href=#379 id=379 data-nosnippet>379</a>            <span class="comment">// Can this case ever happen? Range syntax doesn't support it...
+<a href=#380 id=380 data-nosnippet>380</a>            </span>Bound::Excluded(<span class="kw-2">&amp;</span>i) =&gt; i.checked_add(<span class="number">1</span>).unwrap(),
+<a href=#381 id=381 data-nosnippet>381</a>            Bound::Unbounded =&gt; <span class="number">0</span>,
+<a href=#382 id=382 data-nosnippet>382</a>        };
+<a href=#383 id=383 data-nosnippet>383</a>        <span class="kw">let </span>end = <span class="kw">match </span>range.end_bound() {
+<a href=#384 id=384 data-nosnippet>384</a>            Bound::Included(<span class="kw-2">&amp;</span>i) =&gt; i.checked_add(<span class="number">1</span>).unwrap(),
+<a href=#385 id=385 data-nosnippet>385</a>            Bound::Excluded(<span class="kw-2">&amp;</span>i) =&gt; i,
+<a href=#386 id=386 data-nosnippet>386</a>            Bound::Unbounded =&gt; <span class="self">self</span>.haystack().len(),
+<a href=#387 id=387 data-nosnippet>387</a>        };
+<a href=#388 id=388 data-nosnippet>388</a>        <span class="self">self</span>.set_span(Span { start, end });
+<a href=#389 id=389 data-nosnippet>389</a>    }
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="doccomment">/// Set the starting offset for the span for this search configuration.
+<a href=#392 id=392 data-nosnippet>392</a>    ///
+<a href=#393 id=393 data-nosnippet>393</a>    /// This is a convenience routine for only mutating the start of a span
+<a href=#394 id=394 data-nosnippet>394</a>    /// without having to set the entire span.
+<a href=#395 id=395 data-nosnippet>395</a>    ///
+<a href=#396 id=396 data-nosnippet>396</a>    /// # Panics
+<a href=#397 id=397 data-nosnippet>397</a>    ///
+<a href=#398 id=398 data-nosnippet>398</a>    /// This panics if the given span does not correspond to valid bounds in
+<a href=#399 id=399 data-nosnippet>399</a>    /// the haystack or the termination of a search.
+<a href=#400 id=400 data-nosnippet>400</a>    ///
+<a href=#401 id=401 data-nosnippet>401</a>    /// # Example
+<a href=#402 id=402 data-nosnippet>402</a>    ///
+<a href=#403 id=403 data-nosnippet>403</a>    /// ```
+<a href=#404 id=404 data-nosnippet>404</a>    /// use aho_corasick::Input;
+<a href=#405 id=405 data-nosnippet>405</a>    ///
+<a href=#406 id=406 data-nosnippet>406</a>    /// let mut input = Input::new("foobar");
+<a href=#407 id=407 data-nosnippet>407</a>    /// assert_eq!(0..6, input.get_range());
+<a href=#408 id=408 data-nosnippet>408</a>    /// input.set_start(5);
+<a href=#409 id=409 data-nosnippet>409</a>    /// assert_eq!(5..6, input.get_range());
+<a href=#410 id=410 data-nosnippet>410</a>    /// ```
+<a href=#411 id=411 data-nosnippet>411</a>    </span><span class="attr">#[inline]
+<a href=#412 id=412 data-nosnippet>412</a>    </span><span class="kw">pub fn </span>set_start(<span class="kw-2">&amp;mut </span><span class="self">self</span>, start: usize) {
+<a href=#413 id=413 data-nosnippet>413</a>        <span class="self">self</span>.set_span(Span { start, ..<span class="self">self</span>.get_span() });
+<a href=#414 id=414 data-nosnippet>414</a>    }
+<a href=#415 id=415 data-nosnippet>415</a>
+<a href=#416 id=416 data-nosnippet>416</a>    <span class="doccomment">/// Set the ending offset for the span for this search configuration.
+<a href=#417 id=417 data-nosnippet>417</a>    ///
+<a href=#418 id=418 data-nosnippet>418</a>    /// This is a convenience routine for only mutating the end of a span
+<a href=#419 id=419 data-nosnippet>419</a>    /// without having to set the entire span.
+<a href=#420 id=420 data-nosnippet>420</a>    ///
+<a href=#421 id=421 data-nosnippet>421</a>    /// # Panics
+<a href=#422 id=422 data-nosnippet>422</a>    ///
+<a href=#423 id=423 data-nosnippet>423</a>    /// This panics if the given span does not correspond to valid bounds in
+<a href=#424 id=424 data-nosnippet>424</a>    /// the haystack or the termination of a search.
+<a href=#425 id=425 data-nosnippet>425</a>    ///
+<a href=#426 id=426 data-nosnippet>426</a>    /// # Example
+<a href=#427 id=427 data-nosnippet>427</a>    ///
+<a href=#428 id=428 data-nosnippet>428</a>    /// ```
+<a href=#429 id=429 data-nosnippet>429</a>    /// use aho_corasick::Input;
+<a href=#430 id=430 data-nosnippet>430</a>    ///
+<a href=#431 id=431 data-nosnippet>431</a>    /// let mut input = Input::new("foobar");
+<a href=#432 id=432 data-nosnippet>432</a>    /// assert_eq!(0..6, input.get_range());
+<a href=#433 id=433 data-nosnippet>433</a>    /// input.set_end(5);
+<a href=#434 id=434 data-nosnippet>434</a>    /// assert_eq!(0..5, input.get_range());
+<a href=#435 id=435 data-nosnippet>435</a>    /// ```
+<a href=#436 id=436 data-nosnippet>436</a>    </span><span class="attr">#[inline]
+<a href=#437 id=437 data-nosnippet>437</a>    </span><span class="kw">pub fn </span>set_end(<span class="kw-2">&amp;mut </span><span class="self">self</span>, end: usize) {
+<a href=#438 id=438 data-nosnippet>438</a>        <span class="self">self</span>.set_span(Span { end, ..<span class="self">self</span>.get_span() });
+<a href=#439 id=439 data-nosnippet>439</a>    }
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a>    <span class="doccomment">/// Set the anchor mode of a search.
+<a href=#442 id=442 data-nosnippet>442</a>    ///
+<a href=#443 id=443 data-nosnippet>443</a>    /// This is like [`Input::anchored`], except it mutates the search
+<a href=#444 id=444 data-nosnippet>444</a>    /// configuration in place.
+<a href=#445 id=445 data-nosnippet>445</a>    ///
+<a href=#446 id=446 data-nosnippet>446</a>    /// # Example
+<a href=#447 id=447 data-nosnippet>447</a>    ///
+<a href=#448 id=448 data-nosnippet>448</a>    /// ```
+<a href=#449 id=449 data-nosnippet>449</a>    /// use aho_corasick::{Anchored, Input};
+<a href=#450 id=450 data-nosnippet>450</a>    ///
+<a href=#451 id=451 data-nosnippet>451</a>    /// let mut input = Input::new("foobar");
+<a href=#452 id=452 data-nosnippet>452</a>    /// assert_eq!(Anchored::No, input.get_anchored());
+<a href=#453 id=453 data-nosnippet>453</a>    ///
+<a href=#454 id=454 data-nosnippet>454</a>    /// input.set_anchored(Anchored::Yes);
+<a href=#455 id=455 data-nosnippet>455</a>    /// assert_eq!(Anchored::Yes, input.get_anchored());
+<a href=#456 id=456 data-nosnippet>456</a>    /// ```
+<a href=#457 id=457 data-nosnippet>457</a>    </span><span class="attr">#[inline]
+<a href=#458 id=458 data-nosnippet>458</a>    </span><span class="kw">pub fn </span>set_anchored(<span class="kw-2">&amp;mut </span><span class="self">self</span>, mode: Anchored) {
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="self">self</span>.anchored = mode;
+<a href=#460 id=460 data-nosnippet>460</a>    }
+<a href=#461 id=461 data-nosnippet>461</a>
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="doccomment">/// Set whether the search should execute in "earliest" mode or not.
+<a href=#463 id=463 data-nosnippet>463</a>    ///
+<a href=#464 id=464 data-nosnippet>464</a>    /// This is like [`Input::earliest`], except it mutates the search
+<a href=#465 id=465 data-nosnippet>465</a>    /// configuration in place.
+<a href=#466 id=466 data-nosnippet>466</a>    ///
+<a href=#467 id=467 data-nosnippet>467</a>    /// # Example
+<a href=#468 id=468 data-nosnippet>468</a>    ///
+<a href=#469 id=469 data-nosnippet>469</a>    /// ```
+<a href=#470 id=470 data-nosnippet>470</a>    /// use aho_corasick::Input;
+<a href=#471 id=471 data-nosnippet>471</a>    ///
+<a href=#472 id=472 data-nosnippet>472</a>    /// let mut input = Input::new("foobar");
+<a href=#473 id=473 data-nosnippet>473</a>    /// assert!(!input.get_earliest());
+<a href=#474 id=474 data-nosnippet>474</a>    /// input.set_earliest(true);
+<a href=#475 id=475 data-nosnippet>475</a>    /// assert!(input.get_earliest());
+<a href=#476 id=476 data-nosnippet>476</a>    /// ```
+<a href=#477 id=477 data-nosnippet>477</a>    </span><span class="attr">#[inline]
+<a href=#478 id=478 data-nosnippet>478</a>    </span><span class="kw">pub fn </span>set_earliest(<span class="kw-2">&amp;mut </span><span class="self">self</span>, yes: bool) {
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="self">self</span>.earliest = yes;
+<a href=#480 id=480 data-nosnippet>480</a>    }
+<a href=#481 id=481 data-nosnippet>481</a>
+<a href=#482 id=482 data-nosnippet>482</a>    <span class="doccomment">/// Return a borrow of the underlying haystack as a slice of bytes.
+<a href=#483 id=483 data-nosnippet>483</a>    ///
+<a href=#484 id=484 data-nosnippet>484</a>    /// # Example
+<a href=#485 id=485 data-nosnippet>485</a>    ///
+<a href=#486 id=486 data-nosnippet>486</a>    /// ```
+<a href=#487 id=487 data-nosnippet>487</a>    /// use aho_corasick::Input;
+<a href=#488 id=488 data-nosnippet>488</a>    ///
+<a href=#489 id=489 data-nosnippet>489</a>    /// let input = Input::new("foobar");
+<a href=#490 id=490 data-nosnippet>490</a>    /// assert_eq!(b"foobar", input.haystack());
+<a href=#491 id=491 data-nosnippet>491</a>    /// ```
+<a href=#492 id=492 data-nosnippet>492</a>    </span><span class="attr">#[inline]
+<a href=#493 id=493 data-nosnippet>493</a>    </span><span class="kw">pub fn </span>haystack(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] {
+<a href=#494 id=494 data-nosnippet>494</a>        <span class="self">self</span>.haystack
+<a href=#495 id=495 data-nosnippet>495</a>    }
+<a href=#496 id=496 data-nosnippet>496</a>
+<a href=#497 id=497 data-nosnippet>497</a>    <span class="doccomment">/// Return the start position of this search.
+<a href=#498 id=498 data-nosnippet>498</a>    ///
+<a href=#499 id=499 data-nosnippet>499</a>    /// This is a convenience routine for `search.get_span().start()`.
+<a href=#500 id=500 data-nosnippet>500</a>    ///
+<a href=#501 id=501 data-nosnippet>501</a>    /// # Example
+<a href=#502 id=502 data-nosnippet>502</a>    ///
+<a href=#503 id=503 data-nosnippet>503</a>    /// ```
+<a href=#504 id=504 data-nosnippet>504</a>    /// use aho_corasick::Input;
+<a href=#505 id=505 data-nosnippet>505</a>    ///
+<a href=#506 id=506 data-nosnippet>506</a>    /// let input = Input::new("foobar");
+<a href=#507 id=507 data-nosnippet>507</a>    /// assert_eq!(0, input.start());
+<a href=#508 id=508 data-nosnippet>508</a>    ///
+<a href=#509 id=509 data-nosnippet>509</a>    /// let input = Input::new("foobar").span(2..4);
+<a href=#510 id=510 data-nosnippet>510</a>    /// assert_eq!(2, input.start());
+<a href=#511 id=511 data-nosnippet>511</a>    /// ```
+<a href=#512 id=512 data-nosnippet>512</a>    </span><span class="attr">#[inline]
+<a href=#513 id=513 data-nosnippet>513</a>    </span><span class="kw">pub fn </span>start(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#514 id=514 data-nosnippet>514</a>        <span class="self">self</span>.get_span().start
+<a href=#515 id=515 data-nosnippet>515</a>    }
+<a href=#516 id=516 data-nosnippet>516</a>
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="doccomment">/// Return the end position of this search.
+<a href=#518 id=518 data-nosnippet>518</a>    ///
+<a href=#519 id=519 data-nosnippet>519</a>    /// This is a convenience routine for `search.get_span().end()`.
+<a href=#520 id=520 data-nosnippet>520</a>    ///
+<a href=#521 id=521 data-nosnippet>521</a>    /// # Example
+<a href=#522 id=522 data-nosnippet>522</a>    ///
+<a href=#523 id=523 data-nosnippet>523</a>    /// ```
+<a href=#524 id=524 data-nosnippet>524</a>    /// use aho_corasick::Input;
+<a href=#525 id=525 data-nosnippet>525</a>    ///
+<a href=#526 id=526 data-nosnippet>526</a>    /// let input = Input::new("foobar");
+<a href=#527 id=527 data-nosnippet>527</a>    /// assert_eq!(6, input.end());
+<a href=#528 id=528 data-nosnippet>528</a>    ///
+<a href=#529 id=529 data-nosnippet>529</a>    /// let input = Input::new("foobar").span(2..4);
+<a href=#530 id=530 data-nosnippet>530</a>    /// assert_eq!(4, input.end());
+<a href=#531 id=531 data-nosnippet>531</a>    /// ```
+<a href=#532 id=532 data-nosnippet>532</a>    </span><span class="attr">#[inline]
+<a href=#533 id=533 data-nosnippet>533</a>    </span><span class="kw">pub fn </span>end(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#534 id=534 data-nosnippet>534</a>        <span class="self">self</span>.get_span().end
+<a href=#535 id=535 data-nosnippet>535</a>    }
+<a href=#536 id=536 data-nosnippet>536</a>
+<a href=#537 id=537 data-nosnippet>537</a>    <span class="doccomment">/// Return the span for this search configuration.
+<a href=#538 id=538 data-nosnippet>538</a>    ///
+<a href=#539 id=539 data-nosnippet>539</a>    /// If one was not explicitly set, then the span corresponds to the entire
+<a href=#540 id=540 data-nosnippet>540</a>    /// range of the haystack.
+<a href=#541 id=541 data-nosnippet>541</a>    ///
+<a href=#542 id=542 data-nosnippet>542</a>    /// # Example
+<a href=#543 id=543 data-nosnippet>543</a>    ///
+<a href=#544 id=544 data-nosnippet>544</a>    /// ```
+<a href=#545 id=545 data-nosnippet>545</a>    /// use aho_corasick::{Input, Span};
+<a href=#546 id=546 data-nosnippet>546</a>    ///
+<a href=#547 id=547 data-nosnippet>547</a>    /// let input = Input::new("foobar");
+<a href=#548 id=548 data-nosnippet>548</a>    /// assert_eq!(Span { start: 0, end: 6 }, input.get_span());
+<a href=#549 id=549 data-nosnippet>549</a>    /// ```
+<a href=#550 id=550 data-nosnippet>550</a>    </span><span class="attr">#[inline]
+<a href=#551 id=551 data-nosnippet>551</a>    </span><span class="kw">pub fn </span>get_span(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Span {
+<a href=#552 id=552 data-nosnippet>552</a>        <span class="self">self</span>.span
+<a href=#553 id=553 data-nosnippet>553</a>    }
+<a href=#554 id=554 data-nosnippet>554</a>
+<a href=#555 id=555 data-nosnippet>555</a>    <span class="doccomment">/// Return the span as a range for this search configuration.
+<a href=#556 id=556 data-nosnippet>556</a>    ///
+<a href=#557 id=557 data-nosnippet>557</a>    /// If one was not explicitly set, then the span corresponds to the entire
+<a href=#558 id=558 data-nosnippet>558</a>    /// range of the haystack.
+<a href=#559 id=559 data-nosnippet>559</a>    ///
+<a href=#560 id=560 data-nosnippet>560</a>    /// # Example
+<a href=#561 id=561 data-nosnippet>561</a>    ///
+<a href=#562 id=562 data-nosnippet>562</a>    /// ```
+<a href=#563 id=563 data-nosnippet>563</a>    /// use aho_corasick::Input;
+<a href=#564 id=564 data-nosnippet>564</a>    ///
+<a href=#565 id=565 data-nosnippet>565</a>    /// let input = Input::new("foobar");
+<a href=#566 id=566 data-nosnippet>566</a>    /// assert_eq!(0..6, input.get_range());
+<a href=#567 id=567 data-nosnippet>567</a>    /// ```
+<a href=#568 id=568 data-nosnippet>568</a>    </span><span class="attr">#[inline]
+<a href=#569 id=569 data-nosnippet>569</a>    </span><span class="kw">pub fn </span>get_range(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Range&lt;usize&gt; {
+<a href=#570 id=570 data-nosnippet>570</a>        <span class="self">self</span>.get_span().range()
+<a href=#571 id=571 data-nosnippet>571</a>    }
+<a href=#572 id=572 data-nosnippet>572</a>
+<a href=#573 id=573 data-nosnippet>573</a>    <span class="doccomment">/// Return the anchored mode for this search configuration.
+<a href=#574 id=574 data-nosnippet>574</a>    ///
+<a href=#575 id=575 data-nosnippet>575</a>    /// If no anchored mode was set, then it defaults to [`Anchored::No`].
+<a href=#576 id=576 data-nosnippet>576</a>    ///
+<a href=#577 id=577 data-nosnippet>577</a>    /// # Example
+<a href=#578 id=578 data-nosnippet>578</a>    ///
+<a href=#579 id=579 data-nosnippet>579</a>    /// ```
+<a href=#580 id=580 data-nosnippet>580</a>    /// use aho_corasick::{Anchored, Input};
+<a href=#581 id=581 data-nosnippet>581</a>    ///
+<a href=#582 id=582 data-nosnippet>582</a>    /// let mut input = Input::new("foobar");
+<a href=#583 id=583 data-nosnippet>583</a>    /// assert_eq!(Anchored::No, input.get_anchored());
+<a href=#584 id=584 data-nosnippet>584</a>    ///
+<a href=#585 id=585 data-nosnippet>585</a>    /// input.set_anchored(Anchored::Yes);
+<a href=#586 id=586 data-nosnippet>586</a>    /// assert_eq!(Anchored::Yes, input.get_anchored());
+<a href=#587 id=587 data-nosnippet>587</a>    /// ```
+<a href=#588 id=588 data-nosnippet>588</a>    </span><span class="attr">#[inline]
+<a href=#589 id=589 data-nosnippet>589</a>    </span><span class="kw">pub fn </span>get_anchored(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Anchored {
+<a href=#590 id=590 data-nosnippet>590</a>        <span class="self">self</span>.anchored
+<a href=#591 id=591 data-nosnippet>591</a>    }
+<a href=#592 id=592 data-nosnippet>592</a>
+<a href=#593 id=593 data-nosnippet>593</a>    <span class="doccomment">/// Return whether this search should execute in "earliest" mode.
+<a href=#594 id=594 data-nosnippet>594</a>    ///
+<a href=#595 id=595 data-nosnippet>595</a>    /// # Example
+<a href=#596 id=596 data-nosnippet>596</a>    ///
+<a href=#597 id=597 data-nosnippet>597</a>    /// ```
+<a href=#598 id=598 data-nosnippet>598</a>    /// use aho_corasick::Input;
+<a href=#599 id=599 data-nosnippet>599</a>    ///
+<a href=#600 id=600 data-nosnippet>600</a>    /// let input = Input::new("foobar");
+<a href=#601 id=601 data-nosnippet>601</a>    /// assert!(!input.get_earliest());
+<a href=#602 id=602 data-nosnippet>602</a>    /// ```
+<a href=#603 id=603 data-nosnippet>603</a>    </span><span class="attr">#[inline]
+<a href=#604 id=604 data-nosnippet>604</a>    </span><span class="kw">pub fn </span>get_earliest(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#605 id=605 data-nosnippet>605</a>        <span class="self">self</span>.earliest
+<a href=#606 id=606 data-nosnippet>606</a>    }
+<a href=#607 id=607 data-nosnippet>607</a>
+<a href=#608 id=608 data-nosnippet>608</a>    <span class="doccomment">/// Return true if this input has been exhausted, which in turn means all
+<a href=#609 id=609 data-nosnippet>609</a>    /// subsequent searches will return no matches.
+<a href=#610 id=610 data-nosnippet>610</a>    ///
+<a href=#611 id=611 data-nosnippet>611</a>    /// This occurs precisely when the start position of this search is greater
+<a href=#612 id=612 data-nosnippet>612</a>    /// than the end position of the search.
+<a href=#613 id=613 data-nosnippet>613</a>    ///
+<a href=#614 id=614 data-nosnippet>614</a>    /// # Example
+<a href=#615 id=615 data-nosnippet>615</a>    ///
+<a href=#616 id=616 data-nosnippet>616</a>    /// ```
+<a href=#617 id=617 data-nosnippet>617</a>    /// use aho_corasick::Input;
+<a href=#618 id=618 data-nosnippet>618</a>    ///
+<a href=#619 id=619 data-nosnippet>619</a>    /// let mut input = Input::new("foobar");
+<a href=#620 id=620 data-nosnippet>620</a>    /// assert!(!input.is_done());
+<a href=#621 id=621 data-nosnippet>621</a>    /// input.set_start(6);
+<a href=#622 id=622 data-nosnippet>622</a>    /// assert!(!input.is_done());
+<a href=#623 id=623 data-nosnippet>623</a>    /// input.set_start(7);
+<a href=#624 id=624 data-nosnippet>624</a>    /// assert!(input.is_done());
+<a href=#625 id=625 data-nosnippet>625</a>    /// ```
+<a href=#626 id=626 data-nosnippet>626</a>    </span><span class="attr">#[inline]
+<a href=#627 id=627 data-nosnippet>627</a>    </span><span class="kw">pub fn </span>is_done(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#628 id=628 data-nosnippet>628</a>        <span class="self">self</span>.get_span().start &gt; <span class="self">self</span>.get_span().end
+<a href=#629 id=629 data-nosnippet>629</a>    }
+<a href=#630 id=630 data-nosnippet>630</a>}
+<a href=#631 id=631 data-nosnippet>631</a>
+<a href=#632 id=632 data-nosnippet>632</a><span class="kw">impl</span>&lt;<span class="lifetime">'h</span>&gt; core::fmt::Debug <span class="kw">for </span>Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#633 id=633 data-nosnippet>633</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>core::fmt::Formatter) -&gt; core::fmt::Result {
+<a href=#634 id=634 data-nosnippet>634</a>        <span class="kw">let </span><span class="kw-2">mut </span>fmter = f.debug_struct(<span class="string">"Input"</span>);
+<a href=#635 id=635 data-nosnippet>635</a>        <span class="kw">match </span>core::str::from_utf8(<span class="self">self</span>.haystack()) {
+<a href=#636 id=636 data-nosnippet>636</a>            <span class="prelude-val">Ok</span>(nice) =&gt; fmter.field(<span class="string">"haystack"</span>, <span class="kw-2">&amp;</span>nice),
+<a href=#637 id=637 data-nosnippet>637</a>            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; fmter.field(<span class="string">"haystack"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.haystack()),
+<a href=#638 id=638 data-nosnippet>638</a>        }
+<a href=#639 id=639 data-nosnippet>639</a>        .field(<span class="string">"span"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.span)
+<a href=#640 id=640 data-nosnippet>640</a>        .field(<span class="string">"anchored"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.anchored)
+<a href=#641 id=641 data-nosnippet>641</a>        .field(<span class="string">"earliest"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.earliest)
+<a href=#642 id=642 data-nosnippet>642</a>        .finish()
+<a href=#643 id=643 data-nosnippet>643</a>    }
+<a href=#644 id=644 data-nosnippet>644</a>}
+<a href=#645 id=645 data-nosnippet>645</a>
+<a href=#646 id=646 data-nosnippet>646</a><span class="kw">impl</span>&lt;<span class="lifetime">'h</span>, H: <span class="question-mark">?</span>Sized + AsRef&lt;[u8]&gt;&gt; From&lt;<span class="kw-2">&amp;</span><span class="lifetime">'h </span>H&gt; <span class="kw">for </span>Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#647 id=647 data-nosnippet>647</a>    <span class="attr">#[inline]
+<a href=#648 id=648 data-nosnippet>648</a>    </span><span class="kw">fn </span>from(haystack: <span class="kw-2">&amp;</span><span class="lifetime">'h </span>H) -&gt; Input&lt;<span class="lifetime">'h</span>&gt; {
+<a href=#649 id=649 data-nosnippet>649</a>        Input::new(haystack)
+<a href=#650 id=650 data-nosnippet>650</a>    }
+<a href=#651 id=651 data-nosnippet>651</a>}
+<a href=#652 id=652 data-nosnippet>652</a>
+<a href=#653 id=653 data-nosnippet>653</a><span class="doccomment">/// A representation of a range in a haystack.
+<a href=#654 id=654 data-nosnippet>654</a>///
+<a href=#655 id=655 data-nosnippet>655</a>/// A span corresponds to the starting and ending _byte offsets_ of a
+<a href=#656 id=656 data-nosnippet>656</a>/// contiguous region of bytes. The starting offset is inclusive while the
+<a href=#657 id=657 data-nosnippet>657</a>/// ending offset is exclusive. That is, a span is a half-open interval.
+<a href=#658 id=658 data-nosnippet>658</a>///
+<a href=#659 id=659 data-nosnippet>659</a>/// A span is used to report the offsets of a match, but it is also used to
+<a href=#660 id=660 data-nosnippet>660</a>/// convey which region of a haystack should be searched via routines like
+<a href=#661 id=661 data-nosnippet>661</a>/// [`Input::span`].
+<a href=#662 id=662 data-nosnippet>662</a>///
+<a href=#663 id=663 data-nosnippet>663</a>/// This is basically equivalent to a `std::ops::Range&lt;usize&gt;`, except this
+<a href=#664 id=664 data-nosnippet>664</a>/// type implements `Copy` which makes it more ergonomic to use in the context
+<a href=#665 id=665 data-nosnippet>665</a>/// of this crate. Indeed, `Span` exists only because `Range&lt;usize&gt;` does
+<a href=#666 id=666 data-nosnippet>666</a>/// not implement `Copy`. Like a range, this implements `Index` for `[u8]`
+<a href=#667 id=667 data-nosnippet>667</a>/// and `str`, and `IndexMut` for `[u8]`. For convenience, this also impls
+<a href=#668 id=668 data-nosnippet>668</a>/// `From&lt;Range&gt;`, which means things like `Span::from(5..10)` work.
+<a href=#669 id=669 data-nosnippet>669</a>///
+<a href=#670 id=670 data-nosnippet>670</a>/// There are no constraints on the values of a span. It is, for example, legal
+<a href=#671 id=671 data-nosnippet>671</a>/// to create a span where `start &gt; end`.
+<a href=#672 id=672 data-nosnippet>672</a></span><span class="attr">#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+<a href=#673 id=673 data-nosnippet>673</a></span><span class="kw">pub struct </span>Span {
+<a href=#674 id=674 data-nosnippet>674</a>    <span class="doccomment">/// The start offset of the span, inclusive.
+<a href=#675 id=675 data-nosnippet>675</a>    </span><span class="kw">pub </span>start: usize,
+<a href=#676 id=676 data-nosnippet>676</a>    <span class="doccomment">/// The end offset of the span, exclusive.
+<a href=#677 id=677 data-nosnippet>677</a>    </span><span class="kw">pub </span>end: usize,
+<a href=#678 id=678 data-nosnippet>678</a>}
+<a href=#679 id=679 data-nosnippet>679</a>
+<a href=#680 id=680 data-nosnippet>680</a><span class="kw">impl </span>Span {
+<a href=#681 id=681 data-nosnippet>681</a>    <span class="doccomment">/// Returns this span as a range.
+<a href=#682 id=682 data-nosnippet>682</a>    </span><span class="attr">#[inline]
+<a href=#683 id=683 data-nosnippet>683</a>    </span><span class="kw">pub fn </span>range(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Range&lt;usize&gt; {
+<a href=#684 id=684 data-nosnippet>684</a>        Range::from(<span class="kw-2">*</span><span class="self">self</span>)
+<a href=#685 id=685 data-nosnippet>685</a>    }
+<a href=#686 id=686 data-nosnippet>686</a>
+<a href=#687 id=687 data-nosnippet>687</a>    <span class="doccomment">/// Returns true when this span is empty. That is, when `start &gt;= end`.
+<a href=#688 id=688 data-nosnippet>688</a>    </span><span class="attr">#[inline]
+<a href=#689 id=689 data-nosnippet>689</a>    </span><span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#690 id=690 data-nosnippet>690</a>        <span class="self">self</span>.start &gt;= <span class="self">self</span>.end
+<a href=#691 id=691 data-nosnippet>691</a>    }
+<a href=#692 id=692 data-nosnippet>692</a>
+<a href=#693 id=693 data-nosnippet>693</a>    <span class="doccomment">/// Returns the length of this span.
+<a href=#694 id=694 data-nosnippet>694</a>    ///
+<a href=#695 id=695 data-nosnippet>695</a>    /// This returns `0` in precisely the cases that `is_empty` returns `true`.
+<a href=#696 id=696 data-nosnippet>696</a>    </span><span class="attr">#[inline]
+<a href=#697 id=697 data-nosnippet>697</a>    </span><span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#698 id=698 data-nosnippet>698</a>        <span class="self">self</span>.end.saturating_sub(<span class="self">self</span>.start)
+<a href=#699 id=699 data-nosnippet>699</a>    }
+<a href=#700 id=700 data-nosnippet>700</a>
+<a href=#701 id=701 data-nosnippet>701</a>    <span class="doccomment">/// Returns true when the given offset is contained within this span.
+<a href=#702 id=702 data-nosnippet>702</a>    ///
+<a href=#703 id=703 data-nosnippet>703</a>    /// Note that an empty span contains no offsets and will always return
+<a href=#704 id=704 data-nosnippet>704</a>    /// false.
+<a href=#705 id=705 data-nosnippet>705</a>    </span><span class="attr">#[inline]
+<a href=#706 id=706 data-nosnippet>706</a>    </span><span class="kw">pub fn </span>contains(<span class="kw-2">&amp;</span><span class="self">self</span>, offset: usize) -&gt; bool {
+<a href=#707 id=707 data-nosnippet>707</a>        !<span class="self">self</span>.is_empty() &amp;&amp; <span class="self">self</span>.start &lt;= offset &amp;&amp; offset &lt;= <span class="self">self</span>.end
+<a href=#708 id=708 data-nosnippet>708</a>    }
+<a href=#709 id=709 data-nosnippet>709</a>
+<a href=#710 id=710 data-nosnippet>710</a>    <span class="doccomment">/// Returns a new span with `offset` added to this span's `start` and `end`
+<a href=#711 id=711 data-nosnippet>711</a>    /// values.
+<a href=#712 id=712 data-nosnippet>712</a>    </span><span class="attr">#[inline]
+<a href=#713 id=713 data-nosnippet>713</a>    </span><span class="kw">pub fn </span>offset(<span class="kw-2">&amp;</span><span class="self">self</span>, offset: usize) -&gt; Span {
+<a href=#714 id=714 data-nosnippet>714</a>        Span { start: <span class="self">self</span>.start + offset, end: <span class="self">self</span>.end + offset }
+<a href=#715 id=715 data-nosnippet>715</a>    }
+<a href=#716 id=716 data-nosnippet>716</a>}
+<a href=#717 id=717 data-nosnippet>717</a>
+<a href=#718 id=718 data-nosnippet>718</a><span class="kw">impl </span>core::fmt::Debug <span class="kw">for </span>Span {
+<a href=#719 id=719 data-nosnippet>719</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>core::fmt::Formatter) -&gt; core::fmt::Result {
+<a href=#720 id=720 data-nosnippet>720</a>        <span class="macro">write!</span>(f, <span class="string">"{}..{}"</span>, <span class="self">self</span>.start, <span class="self">self</span>.end)
+<a href=#721 id=721 data-nosnippet>721</a>    }
+<a href=#722 id=722 data-nosnippet>722</a>}
+<a href=#723 id=723 data-nosnippet>723</a>
+<a href=#724 id=724 data-nosnippet>724</a><span class="kw">impl </span>core::ops::Index&lt;Span&gt; <span class="kw">for </span>[u8] {
+<a href=#725 id=725 data-nosnippet>725</a>    <span class="kw">type </span>Output = [u8];
+<a href=#726 id=726 data-nosnippet>726</a>
+<a href=#727 id=727 data-nosnippet>727</a>    <span class="attr">#[inline]
+<a href=#728 id=728 data-nosnippet>728</a>    </span><span class="kw">fn </span>index(<span class="kw-2">&amp;</span><span class="self">self</span>, index: Span) -&gt; <span class="kw-2">&amp;</span>[u8] {
+<a href=#729 id=729 data-nosnippet>729</a>        <span class="kw-2">&amp;</span><span class="self">self</span>[index.range()]
+<a href=#730 id=730 data-nosnippet>730</a>    }
+<a href=#731 id=731 data-nosnippet>731</a>}
+<a href=#732 id=732 data-nosnippet>732</a>
+<a href=#733 id=733 data-nosnippet>733</a><span class="kw">impl </span>core::ops::IndexMut&lt;Span&gt; <span class="kw">for </span>[u8] {
+<a href=#734 id=734 data-nosnippet>734</a>    <span class="attr">#[inline]
+<a href=#735 id=735 data-nosnippet>735</a>    </span><span class="kw">fn </span>index_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, index: Span) -&gt; <span class="kw-2">&amp;mut </span>[u8] {
+<a href=#736 id=736 data-nosnippet>736</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>[index.range()]
+<a href=#737 id=737 data-nosnippet>737</a>    }
+<a href=#738 id=738 data-nosnippet>738</a>}
+<a href=#739 id=739 data-nosnippet>739</a>
+<a href=#740 id=740 data-nosnippet>740</a><span class="kw">impl </span>core::ops::Index&lt;Span&gt; <span class="kw">for </span>str {
+<a href=#741 id=741 data-nosnippet>741</a>    <span class="kw">type </span>Output = str;
+<a href=#742 id=742 data-nosnippet>742</a>
+<a href=#743 id=743 data-nosnippet>743</a>    <span class="attr">#[inline]
+<a href=#744 id=744 data-nosnippet>744</a>    </span><span class="kw">fn </span>index(<span class="kw-2">&amp;</span><span class="self">self</span>, index: Span) -&gt; <span class="kw-2">&amp;</span>str {
+<a href=#745 id=745 data-nosnippet>745</a>        <span class="kw-2">&amp;</span><span class="self">self</span>[index.range()]
+<a href=#746 id=746 data-nosnippet>746</a>    }
+<a href=#747 id=747 data-nosnippet>747</a>}
+<a href=#748 id=748 data-nosnippet>748</a>
+<a href=#749 id=749 data-nosnippet>749</a><span class="kw">impl </span>From&lt;Range&lt;usize&gt;&gt; <span class="kw">for </span>Span {
+<a href=#750 id=750 data-nosnippet>750</a>    <span class="attr">#[inline]
+<a href=#751 id=751 data-nosnippet>751</a>    </span><span class="kw">fn </span>from(range: Range&lt;usize&gt;) -&gt; Span {
+<a href=#752 id=752 data-nosnippet>752</a>        Span { start: range.start, end: range.end }
+<a href=#753 id=753 data-nosnippet>753</a>    }
+<a href=#754 id=754 data-nosnippet>754</a>}
+<a href=#755 id=755 data-nosnippet>755</a>
+<a href=#756 id=756 data-nosnippet>756</a><span class="kw">impl </span>From&lt;Span&gt; <span class="kw">for </span>Range&lt;usize&gt; {
+<a href=#757 id=757 data-nosnippet>757</a>    <span class="attr">#[inline]
+<a href=#758 id=758 data-nosnippet>758</a>    </span><span class="kw">fn </span>from(span: Span) -&gt; Range&lt;usize&gt; {
+<a href=#759 id=759 data-nosnippet>759</a>        Range { start: span.start, end: span.end }
+<a href=#760 id=760 data-nosnippet>760</a>    }
+<a href=#761 id=761 data-nosnippet>761</a>}
+<a href=#762 id=762 data-nosnippet>762</a>
+<a href=#763 id=763 data-nosnippet>763</a><span class="kw">impl </span>PartialEq&lt;Range&lt;usize&gt;&gt; <span class="kw">for </span>Span {
+<a href=#764 id=764 data-nosnippet>764</a>    <span class="attr">#[inline]
+<a href=#765 id=765 data-nosnippet>765</a>    </span><span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, range: <span class="kw-2">&amp;</span>Range&lt;usize&gt;) -&gt; bool {
+<a href=#766 id=766 data-nosnippet>766</a>        <span class="self">self</span>.start == range.start &amp;&amp; <span class="self">self</span>.end == range.end
+<a href=#767 id=767 data-nosnippet>767</a>    }
+<a href=#768 id=768 data-nosnippet>768</a>}
+<a href=#769 id=769 data-nosnippet>769</a>
+<a href=#770 id=770 data-nosnippet>770</a><span class="kw">impl </span>PartialEq&lt;Span&gt; <span class="kw">for </span>Range&lt;usize&gt; {
+<a href=#771 id=771 data-nosnippet>771</a>    <span class="attr">#[inline]
+<a href=#772 id=772 data-nosnippet>772</a>    </span><span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, span: <span class="kw-2">&amp;</span>Span) -&gt; bool {
+<a href=#773 id=773 data-nosnippet>773</a>        <span class="self">self</span>.start == span.start &amp;&amp; <span class="self">self</span>.end == span.end
+<a href=#774 id=774 data-nosnippet>774</a>    }
+<a href=#775 id=775 data-nosnippet>775</a>}
+<a href=#776 id=776 data-nosnippet>776</a>
+<a href=#777 id=777 data-nosnippet>777</a><span class="doccomment">/// The type of anchored search to perform.
+<a href=#778 id=778 data-nosnippet>778</a>///
+<a href=#779 id=779 data-nosnippet>779</a>/// If an Aho-Corasick searcher does not support the anchored mode selected,
+<a href=#780 id=780 data-nosnippet>780</a>/// then the search will return an error or panic, depending on whether a
+<a href=#781 id=781 data-nosnippet>781</a>/// fallible or an infallible routine was called.
+<a href=#782 id=782 data-nosnippet>782</a></span><span class="attr">#[non_exhaustive]
+<a href=#783 id=783 data-nosnippet>783</a>#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+<a href=#784 id=784 data-nosnippet>784</a></span><span class="kw">pub enum </span>Anchored {
+<a href=#785 id=785 data-nosnippet>785</a>    <span class="doccomment">/// Run an unanchored search. This means a match may occur anywhere at or
+<a href=#786 id=786 data-nosnippet>786</a>    /// after the start position of the search up until the end position of the
+<a href=#787 id=787 data-nosnippet>787</a>    /// search.
+<a href=#788 id=788 data-nosnippet>788</a>    </span>No,
+<a href=#789 id=789 data-nosnippet>789</a>    <span class="doccomment">/// Run an anchored search. This means that a match must begin at the start
+<a href=#790 id=790 data-nosnippet>790</a>    /// position of the search and end before the end position of the search.
+<a href=#791 id=791 data-nosnippet>791</a>    </span>Yes,
+<a href=#792 id=792 data-nosnippet>792</a>}
+<a href=#793 id=793 data-nosnippet>793</a>
+<a href=#794 id=794 data-nosnippet>794</a><span class="kw">impl </span>Anchored {
+<a href=#795 id=795 data-nosnippet>795</a>    <span class="doccomment">/// Returns true if and only if this anchor mode corresponds to an anchored
+<a href=#796 id=796 data-nosnippet>796</a>    /// search.
+<a href=#797 id=797 data-nosnippet>797</a>    ///
+<a href=#798 id=798 data-nosnippet>798</a>    /// # Example
+<a href=#799 id=799 data-nosnippet>799</a>    ///
+<a href=#800 id=800 data-nosnippet>800</a>    /// ```
+<a href=#801 id=801 data-nosnippet>801</a>    /// use aho_corasick::Anchored;
+<a href=#802 id=802 data-nosnippet>802</a>    ///
+<a href=#803 id=803 data-nosnippet>803</a>    /// assert!(!Anchored::No.is_anchored());
+<a href=#804 id=804 data-nosnippet>804</a>    /// assert!(Anchored::Yes.is_anchored());
+<a href=#805 id=805 data-nosnippet>805</a>    /// ```
+<a href=#806 id=806 data-nosnippet>806</a>    </span><span class="attr">#[inline]
+<a href=#807 id=807 data-nosnippet>807</a>    </span><span class="kw">pub fn </span>is_anchored(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#808 id=808 data-nosnippet>808</a>        <span class="macro">matches!</span>(<span class="kw-2">*</span><span class="self">self</span>, Anchored::Yes)
+<a href=#809 id=809 data-nosnippet>809</a>    }
+<a href=#810 id=810 data-nosnippet>810</a>}
+<a href=#811 id=811 data-nosnippet>811</a>
+<a href=#812 id=812 data-nosnippet>812</a><span class="doccomment">/// A representation of a match reported by an Aho-Corasick searcher.
+<a href=#813 id=813 data-nosnippet>813</a>///
+<a href=#814 id=814 data-nosnippet>814</a>/// A match has two essential pieces of information: the [`PatternID`] that
+<a href=#815 id=815 data-nosnippet>815</a>/// matches, and the [`Span`] of the match in a haystack.
+<a href=#816 id=816 data-nosnippet>816</a>///
+<a href=#817 id=817 data-nosnippet>817</a>/// The pattern is identified by an ID, which corresponds to its position
+<a href=#818 id=818 data-nosnippet>818</a>/// (starting from `0`) relative to other patterns used to construct the
+<a href=#819 id=819 data-nosnippet>819</a>/// corresponding searcher. If only a single pattern is provided, then all
+<a href=#820 id=820 data-nosnippet>820</a>/// matches are guaranteed to have a pattern ID of `0`.
+<a href=#821 id=821 data-nosnippet>821</a>///
+<a href=#822 id=822 data-nosnippet>822</a>/// Every match reported by a searcher guarantees that its span has its start
+<a href=#823 id=823 data-nosnippet>823</a>/// offset as less than or equal to its end offset.
+<a href=#824 id=824 data-nosnippet>824</a></span><span class="attr">#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+<a href=#825 id=825 data-nosnippet>825</a></span><span class="kw">pub struct </span>Match {
+<a href=#826 id=826 data-nosnippet>826</a>    <span class="doccomment">/// The pattern ID.
+<a href=#827 id=827 data-nosnippet>827</a>    </span>pattern: PatternID,
+<a href=#828 id=828 data-nosnippet>828</a>    <span class="doccomment">/// The underlying match span.
+<a href=#829 id=829 data-nosnippet>829</a>    </span>span: Span,
+<a href=#830 id=830 data-nosnippet>830</a>}
+<a href=#831 id=831 data-nosnippet>831</a>
+<a href=#832 id=832 data-nosnippet>832</a><span class="kw">impl </span>Match {
+<a href=#833 id=833 data-nosnippet>833</a>    <span class="doccomment">/// Create a new match from a pattern ID and a span.
+<a href=#834 id=834 data-nosnippet>834</a>    ///
+<a href=#835 id=835 data-nosnippet>835</a>    /// This constructor is generic over how a span is provided. While
+<a href=#836 id=836 data-nosnippet>836</a>    /// a [`Span`] may be given directly, one may also provide a
+<a href=#837 id=837 data-nosnippet>837</a>    /// `std::ops::Range&lt;usize&gt;`.
+<a href=#838 id=838 data-nosnippet>838</a>    ///
+<a href=#839 id=839 data-nosnippet>839</a>    /// # Panics
+<a href=#840 id=840 data-nosnippet>840</a>    ///
+<a href=#841 id=841 data-nosnippet>841</a>    /// This panics if `end &lt; start`.
+<a href=#842 id=842 data-nosnippet>842</a>    ///
+<a href=#843 id=843 data-nosnippet>843</a>    /// # Example
+<a href=#844 id=844 data-nosnippet>844</a>    ///
+<a href=#845 id=845 data-nosnippet>845</a>    /// This shows how to create a match for the first pattern in an
+<a href=#846 id=846 data-nosnippet>846</a>    /// Aho-Corasick searcher using convenient range syntax.
+<a href=#847 id=847 data-nosnippet>847</a>    ///
+<a href=#848 id=848 data-nosnippet>848</a>    /// ```
+<a href=#849 id=849 data-nosnippet>849</a>    /// use aho_corasick::{Match, PatternID};
+<a href=#850 id=850 data-nosnippet>850</a>    ///
+<a href=#851 id=851 data-nosnippet>851</a>    /// let m = Match::new(PatternID::ZERO, 5..10);
+<a href=#852 id=852 data-nosnippet>852</a>    /// assert_eq!(0, m.pattern().as_usize());
+<a href=#853 id=853 data-nosnippet>853</a>    /// assert_eq!(5, m.start());
+<a href=#854 id=854 data-nosnippet>854</a>    /// assert_eq!(10, m.end());
+<a href=#855 id=855 data-nosnippet>855</a>    /// ```
+<a href=#856 id=856 data-nosnippet>856</a>    </span><span class="attr">#[inline]
+<a href=#857 id=857 data-nosnippet>857</a>    </span><span class="kw">pub fn </span>new&lt;S: Into&lt;Span&gt;&gt;(pattern: PatternID, span: S) -&gt; Match {
+<a href=#858 id=858 data-nosnippet>858</a>        <span class="kw">let </span>span = span.into();
+<a href=#859 id=859 data-nosnippet>859</a>        <span class="macro">assert!</span>(span.start &lt;= span.end, <span class="string">"invalid match span"</span>);
+<a href=#860 id=860 data-nosnippet>860</a>        Match { pattern, span }
+<a href=#861 id=861 data-nosnippet>861</a>    }
+<a href=#862 id=862 data-nosnippet>862</a>
+<a href=#863 id=863 data-nosnippet>863</a>    <span class="doccomment">/// Create a new match from a pattern ID and a byte offset span.
+<a href=#864 id=864 data-nosnippet>864</a>    ///
+<a href=#865 id=865 data-nosnippet>865</a>    /// This constructor is generic over how a span is provided. While
+<a href=#866 id=866 data-nosnippet>866</a>    /// a [`Span`] may be given directly, one may also provide a
+<a href=#867 id=867 data-nosnippet>867</a>    /// `std::ops::Range&lt;usize&gt;`.
+<a href=#868 id=868 data-nosnippet>868</a>    ///
+<a href=#869 id=869 data-nosnippet>869</a>    /// This is like [`Match::new`], but accepts a `usize` instead of a
+<a href=#870 id=870 data-nosnippet>870</a>    /// [`PatternID`]. This panics if the given `usize` is not representable
+<a href=#871 id=871 data-nosnippet>871</a>    /// as a `PatternID`.
+<a href=#872 id=872 data-nosnippet>872</a>    ///
+<a href=#873 id=873 data-nosnippet>873</a>    /// # Panics
+<a href=#874 id=874 data-nosnippet>874</a>    ///
+<a href=#875 id=875 data-nosnippet>875</a>    /// This panics if `end &lt; start` or if `pattern &gt; PatternID::MAX`.
+<a href=#876 id=876 data-nosnippet>876</a>    ///
+<a href=#877 id=877 data-nosnippet>877</a>    /// # Example
+<a href=#878 id=878 data-nosnippet>878</a>    ///
+<a href=#879 id=879 data-nosnippet>879</a>    /// This shows how to create a match for the third pattern in an
+<a href=#880 id=880 data-nosnippet>880</a>    /// Aho-Corasick searcher using convenient range syntax.
+<a href=#881 id=881 data-nosnippet>881</a>    ///
+<a href=#882 id=882 data-nosnippet>882</a>    /// ```
+<a href=#883 id=883 data-nosnippet>883</a>    /// use aho_corasick::Match;
+<a href=#884 id=884 data-nosnippet>884</a>    ///
+<a href=#885 id=885 data-nosnippet>885</a>    /// let m = Match::must(3, 5..10);
+<a href=#886 id=886 data-nosnippet>886</a>    /// assert_eq!(3, m.pattern().as_usize());
+<a href=#887 id=887 data-nosnippet>887</a>    /// assert_eq!(5, m.start());
+<a href=#888 id=888 data-nosnippet>888</a>    /// assert_eq!(10, m.end());
+<a href=#889 id=889 data-nosnippet>889</a>    /// ```
+<a href=#890 id=890 data-nosnippet>890</a>    </span><span class="attr">#[inline]
+<a href=#891 id=891 data-nosnippet>891</a>    </span><span class="kw">pub fn </span>must&lt;S: Into&lt;Span&gt;&gt;(pattern: usize, span: S) -&gt; Match {
+<a href=#892 id=892 data-nosnippet>892</a>        Match::new(PatternID::must(pattern), span)
+<a href=#893 id=893 data-nosnippet>893</a>    }
+<a href=#894 id=894 data-nosnippet>894</a>
+<a href=#895 id=895 data-nosnippet>895</a>    <span class="doccomment">/// Returns the ID of the pattern that matched.
+<a href=#896 id=896 data-nosnippet>896</a>    ///
+<a href=#897 id=897 data-nosnippet>897</a>    /// The ID of a pattern is derived from the position in which it was
+<a href=#898 id=898 data-nosnippet>898</a>    /// originally inserted into the corresponding searcher. The first pattern
+<a href=#899 id=899 data-nosnippet>899</a>    /// has identifier `0`, and each subsequent pattern is `1`, `2` and so on.
+<a href=#900 id=900 data-nosnippet>900</a>    </span><span class="attr">#[inline]
+<a href=#901 id=901 data-nosnippet>901</a>    </span><span class="kw">pub fn </span>pattern(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PatternID {
+<a href=#902 id=902 data-nosnippet>902</a>        <span class="self">self</span>.pattern
+<a href=#903 id=903 data-nosnippet>903</a>    }
+<a href=#904 id=904 data-nosnippet>904</a>
+<a href=#905 id=905 data-nosnippet>905</a>    <span class="doccomment">/// The starting position of the match.
+<a href=#906 id=906 data-nosnippet>906</a>    ///
+<a href=#907 id=907 data-nosnippet>907</a>    /// This is a convenience routine for `Match::span().start`.
+<a href=#908 id=908 data-nosnippet>908</a>    </span><span class="attr">#[inline]
+<a href=#909 id=909 data-nosnippet>909</a>    </span><span class="kw">pub fn </span>start(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#910 id=910 data-nosnippet>910</a>        <span class="self">self</span>.span().start
+<a href=#911 id=911 data-nosnippet>911</a>    }
+<a href=#912 id=912 data-nosnippet>912</a>
+<a href=#913 id=913 data-nosnippet>913</a>    <span class="doccomment">/// The ending position of the match.
+<a href=#914 id=914 data-nosnippet>914</a>    ///
+<a href=#915 id=915 data-nosnippet>915</a>    /// This is a convenience routine for `Match::span().end`.
+<a href=#916 id=916 data-nosnippet>916</a>    </span><span class="attr">#[inline]
+<a href=#917 id=917 data-nosnippet>917</a>    </span><span class="kw">pub fn </span>end(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#918 id=918 data-nosnippet>918</a>        <span class="self">self</span>.span().end
+<a href=#919 id=919 data-nosnippet>919</a>    }
+<a href=#920 id=920 data-nosnippet>920</a>
+<a href=#921 id=921 data-nosnippet>921</a>    <span class="doccomment">/// Returns the match span as a range.
+<a href=#922 id=922 data-nosnippet>922</a>    ///
+<a href=#923 id=923 data-nosnippet>923</a>    /// This is a convenience routine for `Match::span().range()`.
+<a href=#924 id=924 data-nosnippet>924</a>    </span><span class="attr">#[inline]
+<a href=#925 id=925 data-nosnippet>925</a>    </span><span class="kw">pub fn </span>range(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; core::ops::Range&lt;usize&gt; {
+<a href=#926 id=926 data-nosnippet>926</a>        <span class="self">self</span>.span().range()
+<a href=#927 id=927 data-nosnippet>927</a>    }
+<a href=#928 id=928 data-nosnippet>928</a>
+<a href=#929 id=929 data-nosnippet>929</a>    <span class="doccomment">/// Returns the span for this match.
+<a href=#930 id=930 data-nosnippet>930</a>    </span><span class="attr">#[inline]
+<a href=#931 id=931 data-nosnippet>931</a>    </span><span class="kw">pub fn </span>span(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Span {
+<a href=#932 id=932 data-nosnippet>932</a>        <span class="self">self</span>.span
+<a href=#933 id=933 data-nosnippet>933</a>    }
+<a href=#934 id=934 data-nosnippet>934</a>
+<a href=#935 id=935 data-nosnippet>935</a>    <span class="doccomment">/// Returns true when the span in this match is empty.
+<a href=#936 id=936 data-nosnippet>936</a>    ///
+<a href=#937 id=937 data-nosnippet>937</a>    /// An empty match can only be returned when empty pattern is in the
+<a href=#938 id=938 data-nosnippet>938</a>    /// Aho-Corasick searcher.
+<a href=#939 id=939 data-nosnippet>939</a>    </span><span class="attr">#[inline]
+<a href=#940 id=940 data-nosnippet>940</a>    </span><span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#941 id=941 data-nosnippet>941</a>        <span class="self">self</span>.span().is_empty()
+<a href=#942 id=942 data-nosnippet>942</a>    }
+<a href=#943 id=943 data-nosnippet>943</a>
+<a href=#944 id=944 data-nosnippet>944</a>    <span class="doccomment">/// Returns the length of this match.
+<a href=#945 id=945 data-nosnippet>945</a>    ///
+<a href=#946 id=946 data-nosnippet>946</a>    /// This returns `0` in precisely the cases that `is_empty` returns `true`.
+<a href=#947 id=947 data-nosnippet>947</a>    </span><span class="attr">#[inline]
+<a href=#948 id=948 data-nosnippet>948</a>    </span><span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#949 id=949 data-nosnippet>949</a>        <span class="self">self</span>.span().len()
+<a href=#950 id=950 data-nosnippet>950</a>    }
+<a href=#951 id=951 data-nosnippet>951</a>
+<a href=#952 id=952 data-nosnippet>952</a>    <span class="doccomment">/// Returns a new match with `offset` added to its span's `start` and `end`
+<a href=#953 id=953 data-nosnippet>953</a>    /// values.
+<a href=#954 id=954 data-nosnippet>954</a>    </span><span class="attr">#[inline]
+<a href=#955 id=955 data-nosnippet>955</a>    </span><span class="kw">pub fn </span>offset(<span class="kw-2">&amp;</span><span class="self">self</span>, offset: usize) -&gt; Match {
+<a href=#956 id=956 data-nosnippet>956</a>        Match {
+<a href=#957 id=957 data-nosnippet>957</a>            pattern: <span class="self">self</span>.pattern,
+<a href=#958 id=958 data-nosnippet>958</a>            span: Span {
+<a href=#959 id=959 data-nosnippet>959</a>                start: <span class="self">self</span>.start() + offset,
+<a href=#960 id=960 data-nosnippet>960</a>                end: <span class="self">self</span>.end() + offset,
+<a href=#961 id=961 data-nosnippet>961</a>            },
+<a href=#962 id=962 data-nosnippet>962</a>        }
+<a href=#963 id=963 data-nosnippet>963</a>    }
+<a href=#964 id=964 data-nosnippet>964</a>}
+<a href=#965 id=965 data-nosnippet>965</a>
+<a href=#966 id=966 data-nosnippet>966</a><span class="doccomment">/// A knob for controlling the match semantics of an Aho-Corasick automaton.
+<a href=#967 id=967 data-nosnippet>967</a>///
+<a href=#968 id=968 data-nosnippet>968</a>/// There are two generally different ways that Aho-Corasick automatons can
+<a href=#969 id=969 data-nosnippet>969</a>/// report matches. The first way is the "standard" approach that results from
+<a href=#970 id=970 data-nosnippet>970</a>/// implementing most textbook explanations of Aho-Corasick. The second way is
+<a href=#971 id=971 data-nosnippet>971</a>/// to report only the leftmost non-overlapping matches. The leftmost approach
+<a href=#972 id=972 data-nosnippet>972</a>/// is in turn split into two different ways of resolving ambiguous matches:
+<a href=#973 id=973 data-nosnippet>973</a>/// leftmost-first and leftmost-longest.
+<a href=#974 id=974 data-nosnippet>974</a>///
+<a href=#975 id=975 data-nosnippet>975</a>/// The `Standard` match kind is the default and is the only one that supports
+<a href=#976 id=976 data-nosnippet>976</a>/// overlapping matches and stream searching. (Trying to find overlapping or
+<a href=#977 id=977 data-nosnippet>977</a>/// streaming matches using leftmost match semantics will result in an error in
+<a href=#978 id=978 data-nosnippet>978</a>/// fallible APIs and a panic when using infallibe APIs.) The `Standard` match
+<a href=#979 id=979 data-nosnippet>979</a>/// kind will report matches as they are seen. When searching for overlapping
+<a href=#980 id=980 data-nosnippet>980</a>/// matches, then all possible matches are reported. When searching for
+<a href=#981 id=981 data-nosnippet>981</a>/// non-overlapping matches, the first match seen is reported. For example, for
+<a href=#982 id=982 data-nosnippet>982</a>/// non-overlapping matches, given the patterns `abcd` and `b` and the haystack
+<a href=#983 id=983 data-nosnippet>983</a>/// `abcdef`, only a match for `b` is reported since it is detected first. The
+<a href=#984 id=984 data-nosnippet>984</a>/// `abcd` match is never reported since it overlaps with the `b` match.
+<a href=#985 id=985 data-nosnippet>985</a>///
+<a href=#986 id=986 data-nosnippet>986</a>/// In contrast, the leftmost match kind always prefers the leftmost match
+<a href=#987 id=987 data-nosnippet>987</a>/// among all possible matches. Given the same example as above with `abcd` and
+<a href=#988 id=988 data-nosnippet>988</a>/// `b` as patterns and `abcdef` as the haystack, the leftmost match is `abcd`
+<a href=#989 id=989 data-nosnippet>989</a>/// since it begins before the `b` match, even though the `b` match is detected
+<a href=#990 id=990 data-nosnippet>990</a>/// before the `abcd` match. In this case, the `b` match is not reported at all
+<a href=#991 id=991 data-nosnippet>991</a>/// since it overlaps with the `abcd` match.
+<a href=#992 id=992 data-nosnippet>992</a>///
+<a href=#993 id=993 data-nosnippet>993</a>/// The difference between leftmost-first and leftmost-longest is in how they
+<a href=#994 id=994 data-nosnippet>994</a>/// resolve ambiguous matches when there are multiple leftmost matches to
+<a href=#995 id=995 data-nosnippet>995</a>/// choose from. Leftmost-first always chooses the pattern that was provided
+<a href=#996 id=996 data-nosnippet>996</a>/// earliest, where as leftmost-longest always chooses the longest matching
+<a href=#997 id=997 data-nosnippet>997</a>/// pattern. For example, given the patterns `a` and `ab` and the subject
+<a href=#998 id=998 data-nosnippet>998</a>/// string `ab`, the leftmost-first match is `a` but the leftmost-longest match
+<a href=#999 id=999 data-nosnippet>999</a>/// is `ab`. Conversely, if the patterns were given in reverse order, i.e.,
+<a href=#1000 id=1000 data-nosnippet>1000</a>/// `ab` and `a`, then both the leftmost-first and leftmost-longest matches
+<a href=#1001 id=1001 data-nosnippet>1001</a>/// would be `ab`. Stated differently, the leftmost-first match depends on the
+<a href=#1002 id=1002 data-nosnippet>1002</a>/// order in which the patterns were given to the Aho-Corasick automaton.
+<a href=#1003 id=1003 data-nosnippet>1003</a>/// Because of that, when leftmost-first matching is used, if a pattern `A`
+<a href=#1004 id=1004 data-nosnippet>1004</a>/// that appears before a pattern `B` is a prefix of `B`, then it is impossible
+<a href=#1005 id=1005 data-nosnippet>1005</a>/// to ever observe a match of `B`.
+<a href=#1006 id=1006 data-nosnippet>1006</a>///
+<a href=#1007 id=1007 data-nosnippet>1007</a>/// If you're not sure which match kind to pick, then stick with the standard
+<a href=#1008 id=1008 data-nosnippet>1008</a>/// kind, which is the default. In particular, if you need overlapping or
+<a href=#1009 id=1009 data-nosnippet>1009</a>/// streaming matches, then you _must_ use the standard kind. The leftmost
+<a href=#1010 id=1010 data-nosnippet>1010</a>/// kinds are useful in specific circumstances. For example, leftmost-first can
+<a href=#1011 id=1011 data-nosnippet>1011</a>/// be very useful as a way to implement match priority based on the order of
+<a href=#1012 id=1012 data-nosnippet>1012</a>/// patterns given and leftmost-longest can be useful for dictionary searching
+<a href=#1013 id=1013 data-nosnippet>1013</a>/// such that only the longest matching words are reported.
+<a href=#1014 id=1014 data-nosnippet>1014</a>///
+<a href=#1015 id=1015 data-nosnippet>1015</a>/// # Relationship with regular expression alternations
+<a href=#1016 id=1016 data-nosnippet>1016</a>///
+<a href=#1017 id=1017 data-nosnippet>1017</a>/// Understanding match semantics can be a little tricky, and one easy way
+<a href=#1018 id=1018 data-nosnippet>1018</a>/// to conceptualize non-overlapping matches from an Aho-Corasick automaton
+<a href=#1019 id=1019 data-nosnippet>1019</a>/// is to think about them as a simple alternation of literals in a regular
+<a href=#1020 id=1020 data-nosnippet>1020</a>/// expression. For example, let's say we wanted to match the strings
+<a href=#1021 id=1021 data-nosnippet>1021</a>/// `Sam` and `Samwise`, which would turn into the regex `Sam|Samwise`. It
+<a href=#1022 id=1022 data-nosnippet>1022</a>/// turns out that regular expression engines have two different ways of
+<a href=#1023 id=1023 data-nosnippet>1023</a>/// matching this alternation. The first way, leftmost-longest, is commonly
+<a href=#1024 id=1024 data-nosnippet>1024</a>/// found in POSIX compatible implementations of regular expressions (such as
+<a href=#1025 id=1025 data-nosnippet>1025</a>/// `grep`). The second way, leftmost-first, is commonly found in backtracking
+<a href=#1026 id=1026 data-nosnippet>1026</a>/// implementations such as Perl. (Some regex engines, such as RE2 and Rust's
+<a href=#1027 id=1027 data-nosnippet>1027</a>/// regex engine do not use backtracking, but still implement leftmost-first
+<a href=#1028 id=1028 data-nosnippet>1028</a>/// semantics in an effort to match the behavior of dominant backtracking
+<a href=#1029 id=1029 data-nosnippet>1029</a>/// regex engines such as those found in Perl, Ruby, Python, Javascript and
+<a href=#1030 id=1030 data-nosnippet>1030</a>/// PHP.)
+<a href=#1031 id=1031 data-nosnippet>1031</a>///
+<a href=#1032 id=1032 data-nosnippet>1032</a>/// That is, when matching `Sam|Samwise` against `Samwise`, a POSIX regex
+<a href=#1033 id=1033 data-nosnippet>1033</a>/// will match `Samwise` because it is the longest possible match, but a
+<a href=#1034 id=1034 data-nosnippet>1034</a>/// Perl-like regex will match `Sam` since it appears earlier in the
+<a href=#1035 id=1035 data-nosnippet>1035</a>/// alternation. Indeed, the regex `Sam|Samwise` in a Perl-like regex engine
+<a href=#1036 id=1036 data-nosnippet>1036</a>/// will never match `Samwise` since `Sam` will always have higher priority.
+<a href=#1037 id=1037 data-nosnippet>1037</a>/// Conversely, matching the regex `Samwise|Sam` against `Samwise` will lead to
+<a href=#1038 id=1038 data-nosnippet>1038</a>/// a match of `Samwise` in both POSIX and Perl-like regexes since `Samwise` is
+<a href=#1039 id=1039 data-nosnippet>1039</a>/// still longest match, but it also appears earlier than `Sam`.
+<a href=#1040 id=1040 data-nosnippet>1040</a>///
+<a href=#1041 id=1041 data-nosnippet>1041</a>/// The "standard" match semantics of Aho-Corasick generally don't correspond
+<a href=#1042 id=1042 data-nosnippet>1042</a>/// to the match semantics of any large group of regex implementations, so
+<a href=#1043 id=1043 data-nosnippet>1043</a>/// there's no direct analogy that can be made here. Standard match semantics
+<a href=#1044 id=1044 data-nosnippet>1044</a>/// are generally useful for overlapping matches, or if you just want to see
+<a href=#1045 id=1045 data-nosnippet>1045</a>/// matches as they are detected.
+<a href=#1046 id=1046 data-nosnippet>1046</a>///
+<a href=#1047 id=1047 data-nosnippet>1047</a>/// The main conclusion to draw from this section is that the match semantics
+<a href=#1048 id=1048 data-nosnippet>1048</a>/// can be tweaked to precisely match either Perl-like regex alternations or
+<a href=#1049 id=1049 data-nosnippet>1049</a>/// POSIX regex alternations.
+<a href=#1050 id=1050 data-nosnippet>1050</a></span><span class="attr">#[non_exhaustive]
+<a href=#1051 id=1051 data-nosnippet>1051</a>#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+<a href=#1052 id=1052 data-nosnippet>1052</a></span><span class="kw">pub enum </span>MatchKind {
+<a href=#1053 id=1053 data-nosnippet>1053</a>    <span class="doccomment">/// Use standard match semantics, which support overlapping matches. When
+<a href=#1054 id=1054 data-nosnippet>1054</a>    /// used with non-overlapping matches, matches are reported as they are
+<a href=#1055 id=1055 data-nosnippet>1055</a>    /// seen.
+<a href=#1056 id=1056 data-nosnippet>1056</a>    </span>Standard,
+<a href=#1057 id=1057 data-nosnippet>1057</a>    <span class="doccomment">/// Use leftmost-first match semantics, which reports leftmost matches.
+<a href=#1058 id=1058 data-nosnippet>1058</a>    /// When there are multiple possible leftmost matches, the match
+<a href=#1059 id=1059 data-nosnippet>1059</a>    /// corresponding to the pattern that appeared earlier when constructing
+<a href=#1060 id=1060 data-nosnippet>1060</a>    /// the automaton is reported.
+<a href=#1061 id=1061 data-nosnippet>1061</a>    ///
+<a href=#1062 id=1062 data-nosnippet>1062</a>    /// This does **not** support overlapping matches or stream searching. If
+<a href=#1063 id=1063 data-nosnippet>1063</a>    /// this match kind is used, attempting to find overlapping matches or
+<a href=#1064 id=1064 data-nosnippet>1064</a>    /// stream matches will fail.
+<a href=#1065 id=1065 data-nosnippet>1065</a>    </span>LeftmostFirst,
+<a href=#1066 id=1066 data-nosnippet>1066</a>    <span class="doccomment">/// Use leftmost-longest match semantics, which reports leftmost matches.
+<a href=#1067 id=1067 data-nosnippet>1067</a>    /// When there are multiple possible leftmost matches, the longest match
+<a href=#1068 id=1068 data-nosnippet>1068</a>    /// is chosen.
+<a href=#1069 id=1069 data-nosnippet>1069</a>    ///
+<a href=#1070 id=1070 data-nosnippet>1070</a>    /// This does **not** support overlapping matches or stream searching. If
+<a href=#1071 id=1071 data-nosnippet>1071</a>    /// this match kind is used, attempting to find overlapping matches or
+<a href=#1072 id=1072 data-nosnippet>1072</a>    /// stream matches will fail.
+<a href=#1073 id=1073 data-nosnippet>1073</a>    </span>LeftmostLongest,
+<a href=#1074 id=1074 data-nosnippet>1074</a>}
+<a href=#1075 id=1075 data-nosnippet>1075</a>
+<a href=#1076 id=1076 data-nosnippet>1076</a><span class="doccomment">/// The default match kind is `MatchKind::Standard`.
+<a href=#1077 id=1077 data-nosnippet>1077</a></span><span class="kw">impl </span>Default <span class="kw">for </span>MatchKind {
+<a href=#1078 id=1078 data-nosnippet>1078</a>    <span class="kw">fn </span>default() -&gt; MatchKind {
+<a href=#1079 id=1079 data-nosnippet>1079</a>        MatchKind::Standard
+<a href=#1080 id=1080 data-nosnippet>1080</a>    }
+<a href=#1081 id=1081 data-nosnippet>1081</a>}
+<a href=#1082 id=1082 data-nosnippet>1082</a>
+<a href=#1083 id=1083 data-nosnippet>1083</a><span class="kw">impl </span>MatchKind {
+<a href=#1084 id=1084 data-nosnippet>1084</a>    <span class="attr">#[inline]
+<a href=#1085 id=1085 data-nosnippet>1085</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>is_standard(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#1086 id=1086 data-nosnippet>1086</a>        <span class="macro">matches!</span>(<span class="kw-2">*</span><span class="self">self</span>, MatchKind::Standard)
+<a href=#1087 id=1087 data-nosnippet>1087</a>    }
+<a href=#1088 id=1088 data-nosnippet>1088</a>
+<a href=#1089 id=1089 data-nosnippet>1089</a>    <span class="attr">#[inline]
+<a href=#1090 id=1090 data-nosnippet>1090</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>is_leftmost(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#1091 id=1091 data-nosnippet>1091</a>        <span class="macro">matches!</span>(<span class="kw-2">*</span><span class="self">self</span>, MatchKind::LeftmostFirst | MatchKind::LeftmostLongest)
+<a href=#1092 id=1092 data-nosnippet>1092</a>    }
+<a href=#1093 id=1093 data-nosnippet>1093</a>
+<a href=#1094 id=1094 data-nosnippet>1094</a>    <span class="attr">#[inline]
+<a href=#1095 id=1095 data-nosnippet>1095</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>is_leftmost_first(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#1096 id=1096 data-nosnippet>1096</a>        <span class="macro">matches!</span>(<span class="kw-2">*</span><span class="self">self</span>, MatchKind::LeftmostFirst)
+<a href=#1097 id=1097 data-nosnippet>1097</a>    }
+<a href=#1098 id=1098 data-nosnippet>1098</a>
+<a href=#1099 id=1099 data-nosnippet>1099</a>    <span class="doccomment">/// Convert this match kind into a packed match kind. If this match kind
+<a href=#1100 id=1100 data-nosnippet>1100</a>    /// corresponds to standard semantics, then this returns None, since
+<a href=#1101 id=1101 data-nosnippet>1101</a>    /// packed searching does not support standard semantics.
+<a href=#1102 id=1102 data-nosnippet>1102</a>    </span><span class="attr">#[inline]
+<a href=#1103 id=1103 data-nosnippet>1103</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>as_packed(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::packed::MatchKind&gt; {
+<a href=#1104 id=1104 data-nosnippet>1104</a>        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+<a href=#1105 id=1105 data-nosnippet>1105</a>            MatchKind::Standard =&gt; <span class="prelude-val">None</span>,
+<a href=#1106 id=1106 data-nosnippet>1106</a>            MatchKind::LeftmostFirst =&gt; {
+<a href=#1107 id=1107 data-nosnippet>1107</a>                <span class="prelude-val">Some</span>(<span class="kw">crate</span>::packed::MatchKind::LeftmostFirst)
+<a href=#1108 id=1108 data-nosnippet>1108</a>            }
+<a href=#1109 id=1109 data-nosnippet>1109</a>            MatchKind::LeftmostLongest =&gt; {
+<a href=#1110 id=1110 data-nosnippet>1110</a>                <span class="prelude-val">Some</span>(<span class="kw">crate</span>::packed::MatchKind::LeftmostLongest)
+<a href=#1111 id=1111 data-nosnippet>1111</a>            }
+<a href=#1112 id=1112 data-nosnippet>1112</a>        }
+<a href=#1113 id=1113 data-nosnippet>1113</a>    }
+<a href=#1114 id=1114 data-nosnippet>1114</a>}
+<a href=#1115 id=1115 data-nosnippet>1115</a>
+<a href=#1116 id=1116 data-nosnippet>1116</a><span class="doccomment">/// The kind of anchored starting configurations to support in an Aho-Corasick
+<a href=#1117 id=1117 data-nosnippet>1117</a>/// searcher.
+<a href=#1118 id=1118 data-nosnippet>1118</a>///
+<a href=#1119 id=1119 data-nosnippet>1119</a>/// Depending on which searcher is used internally by
+<a href=#1120 id=1120 data-nosnippet>1120</a>/// [`AhoCorasick`](crate::AhoCorasick), supporting both unanchored
+<a href=#1121 id=1121 data-nosnippet>1121</a>/// and anchored searches can be quite costly. For this reason,
+<a href=#1122 id=1122 data-nosnippet>1122</a>/// [`AhoCorasickBuilder::start_kind`](crate::AhoCorasickBuilder::start_kind)
+<a href=#1123 id=1123 data-nosnippet>1123</a>/// can be used to configure whether your searcher supports unanchored,
+<a href=#1124 id=1124 data-nosnippet>1124</a>/// anchored or both kinds of searches.
+<a href=#1125 id=1125 data-nosnippet>1125</a>///
+<a href=#1126 id=1126 data-nosnippet>1126</a>/// This searcher configuration knob works in concert with the search time
+<a href=#1127 id=1127 data-nosnippet>1127</a>/// configuration [`Input::anchored`]. Namely, if one requests an unsupported
+<a href=#1128 id=1128 data-nosnippet>1128</a>/// anchored mode, then the search will either panic or return an error,
+<a href=#1129 id=1129 data-nosnippet>1129</a>/// depending on whether you're using infallible or fallibe APIs, respectively.
+<a href=#1130 id=1130 data-nosnippet>1130</a>///
+<a href=#1131 id=1131 data-nosnippet>1131</a>/// `AhoCorasick` by default only supports unanchored searches.
+<a href=#1132 id=1132 data-nosnippet>1132</a></span><span class="attr">#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+<a href=#1133 id=1133 data-nosnippet>1133</a></span><span class="kw">pub enum </span>StartKind {
+<a href=#1134 id=1134 data-nosnippet>1134</a>    <span class="doccomment">/// Support both anchored and unanchored searches.
+<a href=#1135 id=1135 data-nosnippet>1135</a>    </span>Both,
+<a href=#1136 id=1136 data-nosnippet>1136</a>    <span class="doccomment">/// Support only unanchored searches. Requesting an anchored search will
+<a href=#1137 id=1137 data-nosnippet>1137</a>    /// return an error in fallible APIs and panic in infallible APIs.
+<a href=#1138 id=1138 data-nosnippet>1138</a>    </span>Unanchored,
+<a href=#1139 id=1139 data-nosnippet>1139</a>    <span class="doccomment">/// Support only anchored searches. Requesting an unanchored search will
+<a href=#1140 id=1140 data-nosnippet>1140</a>    /// return an error in fallible APIs and panic in infallible APIs.
+<a href=#1141 id=1141 data-nosnippet>1141</a>    </span>Anchored,
+<a href=#1142 id=1142 data-nosnippet>1142</a>}
+<a href=#1143 id=1143 data-nosnippet>1143</a>
+<a href=#1144 id=1144 data-nosnippet>1144</a><span class="kw">impl </span>Default <span class="kw">for </span>StartKind {
+<a href=#1145 id=1145 data-nosnippet>1145</a>    <span class="kw">fn </span>default() -&gt; StartKind {
+<a href=#1146 id=1146 data-nosnippet>1146</a>        StartKind::Unanchored
+<a href=#1147 id=1147 data-nosnippet>1147</a>    }
+<a href=#1148 id=1148 data-nosnippet>1148</a>}</code></pre></div></section></main></body></html>

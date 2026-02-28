@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["layer"],"struct":["MetricsLayer","OpenTelemetryLayer","OtelData"],"trait":["OpenTelemetrySpanExt","PreSampledTracer"]};

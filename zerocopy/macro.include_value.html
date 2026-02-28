@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Includes a file and safely transmutes it to a value of an arbitrary type."><title>include_value in zerocopy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zerocopy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zerocopy/index.html">zerocopy</a><span class="version">0.8.26</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">include_<wbr>value</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li><li><a href="#use-in-const-contexts" title="Use in `const` contexts">Use in <code>const</code> contexts</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate zerocopy</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">zerocopy</a></div><h1>Macro <span class="macro">include_value</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/zerocopy/macros.rs.html#845-849">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! include_value {
+    ($file:expr $(,)?) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Includes a file and safely transmutes it to a value of an arbitrary type.</p>
+<p>The file will be included as a byte array, <code>[u8; N]</code>, which will be
+transmuted to another type, <code>T</code>. <code>T</code> is inferred from the calling context,
+and must implement <a href="trait.FromBytes.html" title="trait zerocopy::FromBytes"><code>FromBytes</code></a>.</p>
+<p>The file is located relative to the current file (similarly to how modules
+are found). The provided path is interpreted in a platform-specific way at
+compile time. So, for instance, an invocation with a Windows path containing
+backslashes <code>\</code> would not compile correctly on Unix.</p>
+<p><code>include_value!</code> is ignorant of byte order. For byte order-aware types, see
+the <a href="byteorder/index.html" title="mod zerocopy::byteorder"><code>byteorder</code></a> module.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Assume there are two files in the same directory with the following
+contents:</p>
+<p>File <code>data</code> (no trailing newline):</p>
+<div class="example-wrap"><pre class="language-text"><code>abcd</code></pre></div>
+<p>File <code>main.rs</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::include_value;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>as_u32: u32 = <span class="macro">include_value!</span>(<span class="string">"data"</span>);
+    <span class="macro">assert_eq!</span>(as_u32, u32::from_ne_bytes([<span class="string">b'a'</span>, <span class="string">b'b'</span>, <span class="string">b'c'</span>, <span class="string">b'd'</span>]));
+    <span class="kw">let </span>as_i32: i32 = <span class="macro">include_value!</span>(<span class="string">"data"</span>);
+    <span class="macro">assert_eq!</span>(as_i32, i32::from_ne_bytes([<span class="string">b'a'</span>, <span class="string">b'b'</span>, <span class="string">b'c'</span>, <span class="string">b'd'</span>]));
+}</code></pre></div>
+<h2 id="use-in-const-contexts"><a class="doc-anchor" href="#use-in-const-contexts">§</a>Use in <code>const</code> contexts</h2>
+<p>This macro can be invoked in <code>const</code> contexts.</p>
+</div></details></section></div></main></body></html>

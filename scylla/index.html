@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Async Rust driver for the Scylla database written in Rust. Although optimized for Scylla, the driver is also compatible with Apache Cassandra®."><title>scylla - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="scylla" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../scylla/index.html">scylla</a><span class="version">1.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#documentation-book" title="Documentation book">Documentation book</a></li><li><a href="#other-documentation" title="Other documentation">Other documentation</a></li><li><a href="#driver-overview" title="Driver overview">Driver overview</a><ul><li><a href="#connecting" title="Connecting">Connecting</a></li><li><a href="#making-queries" title="Making queries">Making queries</a></li><li><a href="#receiving-results" title="Receiving results">Receiving results</a></li></ul></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#derives" title="Derive Macros">Derive Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>scylla</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/scylla/lib.rs.html#1-266">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Async Rust driver for the <a href="https://scylladb.com">Scylla</a> database written in Rust.
+Although optimized for Scylla, the driver is also compatible with <a href="https://cassandra.apache.org/">Apache Cassandra®</a>.</p>
+<h2 id="documentation-book"><a class="doc-anchor" href="#documentation-book">§</a>Documentation book</h2>
+<p>The best source to learn about this driver is the <a href="https://rust-driver.docs.scylladb.com/">documentation book</a>.<br />
+This page contains mainly API documentation</p>
+<h2 id="other-documentation"><a class="doc-anchor" href="#other-documentation">§</a>Other documentation</h2>
+<ul>
+<li><a href="https://rust-driver.docs.scylladb.com/">Documentation book</a></li>
+<li><a href="https://github.com/scylladb/scylla-rust-driver/tree/main/examples">Examples</a></li>
+<li><a href="https://docs.scylladb.com">Scylla documentation</a></li>
+<li><a href="https://cassandra.apache.org/doc/latest/">Cassandra® documentation</a></li>
+</ul>
+<h2 id="driver-overview"><a class="doc-anchor" href="#driver-overview">§</a>Driver overview</h2><h4 id="connecting"><a class="doc-anchor" href="#connecting">§</a>Connecting</h4>
+<p>All driver activity revolves around the <a href="client/session/struct.Session.html" title="struct scylla::client::session::Session">Session</a><br />
+<code>Session</code> is created by specifying a few known nodes and connecting to them:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>scylla::client::session::Session;
+<span class="kw">use </span>scylla::client::session_builder::SessionBuilder;
+<span class="kw">use </span>std::error::Error;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>Error&gt;&gt; {
+   <span class="kw">let </span>session: Session = SessionBuilder::new()
+        .known_node(<span class="string">"127.0.0.1:9042"</span>)
+        .known_node(<span class="string">"1.2.3.4:9876"</span>)
+        .build()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+   <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p><code>Session</code> is usually created using the <a href="client/session_builder/type.SessionBuilder.html" title="type scylla::client::session_builder::SessionBuilder">SessionBuilder</a>.<br />
+All configuration options for a <code>Session</code> can be specified while building.</p>
+<h4 id="making-queries"><a class="doc-anchor" href="#making-queries">§</a>Making queries</h4>
+<p>After successfully connecting to the cluster we can make queries.<br />
+The driver supports multiple query types:</p>
+<ul>
+<li><a href="client/session/struct.Session.html#method.query_unpaged" title="method scylla::client::session::Session::query_unpaged">Simple</a></li>
+<li><a href="client/session/struct.Session.html#method.query_iter" title="method scylla::client::session::Session::query_iter">Simple paged</a></li>
+<li><a href="client/session/struct.Session.html#method.execute_unpaged" title="method scylla::client::session::Session::execute_unpaged">Prepared</a> (need to be <a href="client/session/struct.Session.html#method.prepare" title="method scylla::client::session::Session::prepare">prepared</a> before use)</li>
+<li><a href="client/session/struct.Session.html#method.execute_iter" title="method scylla::client::session::Session::execute_iter">Prepared paged</a></li>
+<li><a href="client/session/struct.Session.html#method.batch" title="method scylla::client::session::Session::batch">Batch</a></li>
+</ul>
+<p>To specify options for a single query create the query object and configure it:</p>
+<ul>
+<li>For simple: <a href="statement/unprepared/struct.Statement.html" title="struct scylla::statement::unprepared::Statement"><code>Statement</code></a></li>
+<li>For prepared: <a href="statement/prepared/struct.PreparedStatement.html" title="struct scylla::statement::prepared::PreparedStatement"><code>PreparedStatement</code></a></li>
+<li>For batch: <a href="statement/batch/struct.Batch.html" title="struct scylla::statement::batch::Batch"><code>Batch</code></a></li>
+</ul>
+<p>The easiest way to specify bound values in a query is using a tuple:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Insert an int and text into the table
+</span>session
+    .query_unpaged(
+        <span class="string">"INSERT INTO ks.tab (a, b) VALUES(?, ?)"</span>,
+        (<span class="number">2_i32</span>, <span class="string">"some text"</span>)
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>But the driver will accept anything implementing the trait <a href="derive.SerializeRow.html" title="derive scylla::SerializeRow">SerializeRow</a>.</p>
+<h4 id="receiving-results"><a class="doc-anchor" href="#receiving-results">§</a>Receiving results</h4>
+<p>The easiest way to read rows returned by a query is to cast each row to a tuple of values:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="comment">// Read rows containing an int and text
+// Keep in mind that all results come in one response (no paging is done!),
+// so the memory footprint and latency may be huge!
+// To prevent that, use `Session::query_iter` or `Session::query_single_page`.
+</span><span class="kw">let </span>query_rows = session
+    .query_unpaged(<span class="string">"SELECT a, b FROM ks.tab"</span>, <span class="kw-2">&amp;</span>[])
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.into_rows_result()<span class="question-mark">?</span>;
+
+<span class="kw">for </span>row <span class="kw">in </span>query_rows.rows()<span class="question-mark">? </span>{
+    <span class="comment">// Parse row as int and text \
+    </span><span class="kw">let </span>(int_val, text_val): (i32, <span class="kw-2">&amp;</span>str) = row<span class="question-mark">?</span>;
+}</code></pre></div>
+<p>See the <a href="https://rust-driver.docs.scylladb.com/stable/statements/result.html">book</a> for more receiving methods</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="authentication/index.html" title="mod scylla::authentication">authentication</a></dt><dt><a class="mod" href="client/index.html" title="mod scylla::client">client</a></dt><dd>This module holds entities that represent the whole configurable
+driver’s client of the cluster.
+The following abstractions are involved:</dd><dt><a class="mod" href="cluster/index.html" title="mod scylla::cluster">cluster</a></dt><dd>This module holds entities that represent the cluster as a whole,
+nodes in the cluster (together with a pool of connections),
+the cluster’s state, and logic for ruling out specific nodes.</dd><dt><a class="mod" href="deserialize/index.html" title="mod scylla::deserialize">deserialize</a></dt><dd>Deserializing DB response containing CQL query results.</dd><dt><a class="mod" href="errors/index.html" title="mod scylla::errors">errors</a></dt><dd>This module contains various errors which can be returned by <a href="client/session/struct.Session.html" title="struct scylla::client::session::Session"><code>Session</code></a>.</dd><dt><a class="mod" href="frame/index.html" title="mod scylla::frame">frame</a></dt><dt><a class="mod" href="observability/index.html" title="mod scylla::observability">observability</a></dt><dd>This module holds entities that allow observing and measuring driver’s and cluster’s behaviour.
+This includes:</dd><dt><a class="mod" href="policies/index.html" title="mod scylla::policies">policies</a></dt><dd>This module holds policies, which are entities that allow configuring
+the driver’s behaviour in various aspects. The common feature of all policies
+is that users can implement a policy on their own (because they simply need
+to implement a certain trait), allowing flexible customizability of the driver.</dd><dt><a class="mod" href="response/index.html" title="mod scylla::response">response</a></dt><dd>This module holds entities that represent responses to requests
+sent to the cluster by the driver.
+The following abstractions are involved:</dd><dt><a class="mod" href="routing/index.html" title="mod scylla::routing">routing</a></dt><dd>This module holds entities whose goal is to enable routing requests optimally,
+that is, choosing a target node and a shard such that it is a replica for
+given token.</dd><dt><a class="mod" href="serialize/index.html" title="mod scylla::serialize">serialize</a></dt><dd>Serializing bound values of a query to be sent to the DB.</dd><dt><a class="mod" href="statement/index.html" title="mod scylla::statement">statement</a></dt><dd>This module holds entities representing various kinds of CQL statements,
+together with their execution options.
+The following statements are supported:</dd><dt><a class="mod" href="value/index.html" title="mod scylla::value">value</a></dt></dl><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><dl class="item-table"><dt><a class="derive" href="derive.DeserializeRow.html" title="derive scylla::DeserializeRow">Deserialize<wbr>Row</a></dt><dd>Derive macro for the <a href="./deserialize/row/trait.DeserializeRow.html"><code>DeserializeRow</code></a>
+trait that generates an implementation which deserializes a row with
+a similar layout to the Rust struct.</dd><dt><a class="derive" href="derive.DeserializeValue.html" title="derive scylla::DeserializeValue">Deserialize<wbr>Value</a></dt><dd>Derive macro for the <a href="./deserialize/value/trait.DeserializeValue.html"><code>DeserializeValue</code></a>
+trait that generates an implementation which deserializes a User Defined Type
+with the same layout as the Rust struct.</dd><dt><a class="derive" href="derive.SerializeRow.html" title="derive scylla::SerializeRow">Serialize<wbr>Row</a></dt><dd>Derive macro for the <a href="./serialize/row/trait.SerializeRow.html"><code>SerializeRow</code></a> trait
+which serializes given Rust structure into bind markers for a CQL statement.</dd><dt><a class="derive" href="derive.SerializeValue.html" title="derive scylla::SerializeValue">Serialize<wbr>Value</a></dt><dd>Derive macro for the <a href="./serialize/value/trait.SerializeValue.html"><code>SerializeValue</code></a> trait
+which serializes given Rust structure as a User Defined Type (UDT).</dd></dl><script type="text/json" id="notable-traits-data">{"&[u8]":"<h3>Notable traits for <code>&amp;[<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>]</code></h3><pre><code><div class=\"where\">impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Read.html\" title=\"trait std::io::Read\">Read</a> for &amp;[<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>]</div>","&mut Vec<u8>":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html\" title=\"trait core::alloc::Allocator\">Allocator</a>,</div></div>","Vec<u8>":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html\" title=\"trait core::alloc::Allocator\">Allocator</a>,</div></div>"}</script></section></div></main></body></html>

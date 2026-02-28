@@ -1,0 +1,408 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/opentelemetry-0.30.0/src/trace/tracer.rs`."><title>tracer.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="opentelemetry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">opentelemetry/trace/</div>tracer.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use crate</span>::{
+<a href=#2 id=2 data-nosnippet>2</a>    trace::{Event, Link, Span, SpanKind, Status, TraceContextExt, TraceState},
+<a href=#3 id=3 data-nosnippet>3</a>    Context, KeyValue, SpanId, TraceId,
+<a href=#4 id=4 data-nosnippet>4</a>};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>std::borrow::Cow;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>std::time::SystemTime;
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="doccomment">/// The interface for constructing [`Span`]s.
+<a href=#9 id=9 data-nosnippet>9</a>///
+<a href=#10 id=10 data-nosnippet>10</a>/// ## In Synchronous Code
+<a href=#11 id=11 data-nosnippet>11</a>///
+<a href=#12 id=12 data-nosnippet>12</a>/// Spans can be created and nested manually:
+<a href=#13 id=13 data-nosnippet>13</a>///
+<a href=#14 id=14 data-nosnippet>14</a>/// ```
+<a href=#15 id=15 data-nosnippet>15</a>/// use opentelemetry::{global, trace::{Span, Tracer, TraceContextExt}, Context};
+<a href=#16 id=16 data-nosnippet>16</a>///
+<a href=#17 id=17 data-nosnippet>17</a>/// let tracer = global::tracer("my-component");
+<a href=#18 id=18 data-nosnippet>18</a>///
+<a href=#19 id=19 data-nosnippet>19</a>/// let parent = tracer.start("foo");
+<a href=#20 id=20 data-nosnippet>20</a>/// let parent_cx = Context::current_with_span(parent);
+<a href=#21 id=21 data-nosnippet>21</a>/// let mut child = tracer.start_with_context("bar", &amp;parent_cx);
+<a href=#22 id=22 data-nosnippet>22</a>///
+<a href=#23 id=23 data-nosnippet>23</a>/// // ...
+<a href=#24 id=24 data-nosnippet>24</a>///
+<a href=#25 id=25 data-nosnippet>25</a>/// child.end(); // explicitly end
+<a href=#26 id=26 data-nosnippet>26</a>/// drop(parent_cx) // or implicitly end on drop
+<a href=#27 id=27 data-nosnippet>27</a>/// ```
+<a href=#28 id=28 data-nosnippet>28</a>///
+<a href=#29 id=29 data-nosnippet>29</a>/// Spans can also use the current thread's [`Context`] to track which span is active:
+<a href=#30 id=30 data-nosnippet>30</a>///
+<a href=#31 id=31 data-nosnippet>31</a>/// ```
+<a href=#32 id=32 data-nosnippet>32</a>/// use opentelemetry::{global, trace::{SpanKind, Tracer}};
+<a href=#33 id=33 data-nosnippet>33</a>///
+<a href=#34 id=34 data-nosnippet>34</a>/// let tracer = global::tracer("my-component");
+<a href=#35 id=35 data-nosnippet>35</a>///
+<a href=#36 id=36 data-nosnippet>36</a>/// // Create simple spans with `in_span`
+<a href=#37 id=37 data-nosnippet>37</a>/// tracer.in_span("foo", |_foo_cx| {
+<a href=#38 id=38 data-nosnippet>38</a>///     // parent span is active
+<a href=#39 id=39 data-nosnippet>39</a>///     tracer.in_span("bar", |_bar_cx| {
+<a href=#40 id=40 data-nosnippet>40</a>///         // child span is now the active span and associated with the parent span
+<a href=#41 id=41 data-nosnippet>41</a>///     });
+<a href=#42 id=42 data-nosnippet>42</a>///     // child has ended, parent now the active span again
+<a href=#43 id=43 data-nosnippet>43</a>/// });
+<a href=#44 id=44 data-nosnippet>44</a>/// // parent has ended, no active spans
+<a href=#45 id=45 data-nosnippet>45</a>/// ```
+<a href=#46 id=46 data-nosnippet>46</a>///
+<a href=#47 id=47 data-nosnippet>47</a>/// Spans can also be marked as active, and the resulting guard allows for
+<a href=#48 id=48 data-nosnippet>48</a>/// greater control over when the span is no longer considered active.
+<a href=#49 id=49 data-nosnippet>49</a>///
+<a href=#50 id=50 data-nosnippet>50</a>/// ```
+<a href=#51 id=51 data-nosnippet>51</a>/// use opentelemetry::{global, trace::{Span, Tracer, mark_span_as_active}};
+<a href=#52 id=52 data-nosnippet>52</a>/// let tracer = global::tracer("my-component");
+<a href=#53 id=53 data-nosnippet>53</a>///
+<a href=#54 id=54 data-nosnippet>54</a>/// let parent_span = tracer.start("foo");
+<a href=#55 id=55 data-nosnippet>55</a>/// let parent_active = mark_span_as_active(parent_span);
+<a href=#56 id=56 data-nosnippet>56</a>///
+<a href=#57 id=57 data-nosnippet>57</a>/// {
+<a href=#58 id=58 data-nosnippet>58</a>///     let child = tracer.start("bar");
+<a href=#59 id=59 data-nosnippet>59</a>///     let _child_active = mark_span_as_active(child);
+<a href=#60 id=60 data-nosnippet>60</a>///
+<a href=#61 id=61 data-nosnippet>61</a>///     // do work in the context of the child span...
+<a href=#62 id=62 data-nosnippet>62</a>///
+<a href=#63 id=63 data-nosnippet>63</a>///     // exiting the scope drops the guard, child is no longer active
+<a href=#64 id=64 data-nosnippet>64</a>/// }
+<a href=#65 id=65 data-nosnippet>65</a>/// // Parent is active span again
+<a href=#66 id=66 data-nosnippet>66</a>///
+<a href=#67 id=67 data-nosnippet>67</a>/// // Parent can be dropped manually, or allowed to go out of scope as well.
+<a href=#68 id=68 data-nosnippet>68</a>/// drop(parent_active);
+<a href=#69 id=69 data-nosnippet>69</a>///
+<a href=#70 id=70 data-nosnippet>70</a>/// // no active span
+<a href=#71 id=71 data-nosnippet>71</a>/// ```
+<a href=#72 id=72 data-nosnippet>72</a>///
+<a href=#73 id=73 data-nosnippet>73</a>/// ## In Asynchronous Code
+<a href=#74 id=74 data-nosnippet>74</a>///
+<a href=#75 id=75 data-nosnippet>75</a>/// If you are instrumenting code that make use of [`std::future::Future`] or
+<a href=#76 id=76 data-nosnippet>76</a>/// async/await, be sure to use the [`FutureExt`] trait. This is needed because
+<a href=#77 id=77 data-nosnippet>77</a>/// the following example _will not_ work:
+<a href=#78 id=78 data-nosnippet>78</a>///
+<a href=#79 id=79 data-nosnippet>79</a>/// ```no_run
+<a href=#80 id=80 data-nosnippet>80</a>/// # use opentelemetry::{global, trace::{Tracer, mark_span_as_active}};
+<a href=#81 id=81 data-nosnippet>81</a>/// # let tracer = global::tracer("foo");
+<a href=#82 id=82 data-nosnippet>82</a>/// # let span = tracer.start("foo-span");
+<a href=#83 id=83 data-nosnippet>83</a>/// async {
+<a href=#84 id=84 data-nosnippet>84</a>///     // Does not work
+<a href=#85 id=85 data-nosnippet>85</a>///     let _g = mark_span_as_active(span);
+<a href=#86 id=86 data-nosnippet>86</a>///     // ...
+<a href=#87 id=87 data-nosnippet>87</a>/// };
+<a href=#88 id=88 data-nosnippet>88</a>/// ```
+<a href=#89 id=89 data-nosnippet>89</a>///
+<a href=#90 id=90 data-nosnippet>90</a>/// The context guard `_g` will not exit until the future generated by the
+<a href=#91 id=91 data-nosnippet>91</a>/// `async` block is complete. Since futures can be entered and exited
+<a href=#92 id=92 data-nosnippet>92</a>/// _multiple_ times without them completing, the span remains active for as
+<a href=#93 id=93 data-nosnippet>93</a>/// long as the future exists, rather than only when it is polled, leading to
+<a href=#94 id=94 data-nosnippet>94</a>/// very confusing and incorrect output.
+<a href=#95 id=95 data-nosnippet>95</a>///
+<a href=#96 id=96 data-nosnippet>96</a>/// In order to trace asynchronous code, the [`Future::with_context`] combinator
+<a href=#97 id=97 data-nosnippet>97</a>/// can be used:
+<a href=#98 id=98 data-nosnippet>98</a>///
+<a href=#99 id=99 data-nosnippet>99</a>/// ```
+<a href=#100 id=100 data-nosnippet>100</a>/// # async fn run() -&gt; Result&lt;(), ()&gt; {
+<a href=#101 id=101 data-nosnippet>101</a>/// use opentelemetry::{trace::FutureExt, Context};
+<a href=#102 id=102 data-nosnippet>102</a>/// let cx = Context::current();
+<a href=#103 id=103 data-nosnippet>103</a>///
+<a href=#104 id=104 data-nosnippet>104</a>/// let my_future = async {
+<a href=#105 id=105 data-nosnippet>105</a>///     // ...
+<a href=#106 id=106 data-nosnippet>106</a>/// };
+<a href=#107 id=107 data-nosnippet>107</a>///
+<a href=#108 id=108 data-nosnippet>108</a>/// my_future
+<a href=#109 id=109 data-nosnippet>109</a>///     .with_context(cx)
+<a href=#110 id=110 data-nosnippet>110</a>///     .await;
+<a href=#111 id=111 data-nosnippet>111</a>/// # Ok(())
+<a href=#112 id=112 data-nosnippet>112</a>/// # }
+<a href=#113 id=113 data-nosnippet>113</a>/// ```
+<a href=#114 id=114 data-nosnippet>114</a>///
+<a href=#115 id=115 data-nosnippet>115</a>/// [`Future::with_context`] attaches a context to the future, ensuring that the
+<a href=#116 id=116 data-nosnippet>116</a>/// context's lifetime is as long as the future's.
+<a href=#117 id=117 data-nosnippet>117</a>///
+<a href=#118 id=118 data-nosnippet>118</a>/// [`FutureExt`]: crate::trace::FutureExt
+<a href=#119 id=119 data-nosnippet>119</a>/// [`Future::with_context`]: crate::trace::FutureExt::with_context()
+<a href=#120 id=120 data-nosnippet>120</a>/// [`Context`]: crate::Context
+<a href=#121 id=121 data-nosnippet>121</a></span><span class="kw">pub trait </span>Tracer {
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="doccomment">/// The [`Span`] type used by this tracer.
+<a href=#123 id=123 data-nosnippet>123</a>    </span><span class="kw">type </span>Span: Span;
+<a href=#124 id=124 data-nosnippet>124</a>
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="doccomment">/// Starts a new [`Span`].
+<a href=#126 id=126 data-nosnippet>126</a>    ///
+<a href=#127 id=127 data-nosnippet>127</a>    /// By default the currently active `Span` is set as the new `Span`'s parent.
+<a href=#128 id=128 data-nosnippet>128</a>    ///
+<a href=#129 id=129 data-nosnippet>129</a>    /// Each span has zero or one parent span and zero or more child spans, which
+<a href=#130 id=130 data-nosnippet>130</a>    /// represent causally related operations. A tree of related spans comprises a
+<a href=#131 id=131 data-nosnippet>131</a>    /// trace. A span is said to be a root span if it does not have a parent. Each
+<a href=#132 id=132 data-nosnippet>132</a>    /// trace includes a single root span, which is the shared ancestor of all other
+<a href=#133 id=133 data-nosnippet>133</a>    /// spans in the trace.
+<a href=#134 id=134 data-nosnippet>134</a>    </span><span class="kw">fn </span>start&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, name: T) -&gt; <span class="self">Self</span>::Span
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="kw">where
+<a href=#136 id=136 data-nosnippet>136</a>        </span>T: Into&lt;Cow&lt;<span class="lifetime">'static</span>, str&gt;&gt;,
+<a href=#137 id=137 data-nosnippet>137</a>    {
+<a href=#138 id=138 data-nosnippet>138</a>        Context::map_current(|cx| <span class="self">self</span>.start_with_context(name, cx))
+<a href=#139 id=139 data-nosnippet>139</a>    }
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a>    <span class="doccomment">/// Starts a new [`Span`] with a given context.
+<a href=#142 id=142 data-nosnippet>142</a>    ///
+<a href=#143 id=143 data-nosnippet>143</a>    /// If this context contains a span, the newly created span will be a child of
+<a href=#144 id=144 data-nosnippet>144</a>    /// that span.
+<a href=#145 id=145 data-nosnippet>145</a>    ///
+<a href=#146 id=146 data-nosnippet>146</a>    /// Each span has zero or one parent span and zero or more child spans, which
+<a href=#147 id=147 data-nosnippet>147</a>    /// represent causally related operations. A tree of related spans comprises a
+<a href=#148 id=148 data-nosnippet>148</a>    /// trace. A span is said to be a root span if it does not have a parent. Each
+<a href=#149 id=149 data-nosnippet>149</a>    /// trace includes a single root span, which is the shared ancestor of all other
+<a href=#150 id=150 data-nosnippet>150</a>    /// spans in the trace.
+<a href=#151 id=151 data-nosnippet>151</a>    </span><span class="kw">fn </span>start_with_context&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, name: T, parent_cx: <span class="kw-2">&amp;</span>Context) -&gt; <span class="self">Self</span>::Span
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">where
+<a href=#153 id=153 data-nosnippet>153</a>        </span>T: Into&lt;Cow&lt;<span class="lifetime">'static</span>, str&gt;&gt;,
+<a href=#154 id=154 data-nosnippet>154</a>    {
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="self">self</span>.build_with_context(SpanBuilder::from_name(name), parent_cx)
+<a href=#156 id=156 data-nosnippet>156</a>    }
+<a href=#157 id=157 data-nosnippet>157</a>
+<a href=#158 id=158 data-nosnippet>158</a>    <span class="doccomment">/// Creates a span builder.
+<a href=#159 id=159 data-nosnippet>159</a>    ///
+<a href=#160 id=160 data-nosnippet>160</a>    /// [`SpanBuilder`]s allow you to specify all attributes of a [`Span`] before
+<a href=#161 id=161 data-nosnippet>161</a>    /// the span is started.
+<a href=#162 id=162 data-nosnippet>162</a>    </span><span class="kw">fn </span>span_builder&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, name: T) -&gt; SpanBuilder
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">where
+<a href=#164 id=164 data-nosnippet>164</a>        </span>T: Into&lt;Cow&lt;<span class="lifetime">'static</span>, str&gt;&gt;,
+<a href=#165 id=165 data-nosnippet>165</a>    {
+<a href=#166 id=166 data-nosnippet>166</a>        SpanBuilder::from_name(name)
+<a href=#167 id=167 data-nosnippet>167</a>    }
+<a href=#168 id=168 data-nosnippet>168</a>
+<a href=#169 id=169 data-nosnippet>169</a>    <span class="doccomment">/// Start a [`Span`] from a [`SpanBuilder`].
+<a href=#170 id=170 data-nosnippet>170</a>    </span><span class="kw">fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, builder: SpanBuilder) -&gt; <span class="self">Self</span>::Span {
+<a href=#171 id=171 data-nosnippet>171</a>        Context::map_current(|cx| <span class="self">self</span>.build_with_context(builder, cx))
+<a href=#172 id=172 data-nosnippet>172</a>    }
+<a href=#173 id=173 data-nosnippet>173</a>
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="doccomment">/// Start a span from a [`SpanBuilder`] with a parent context.
+<a href=#175 id=175 data-nosnippet>175</a>    </span><span class="kw">fn </span>build_with_context(<span class="kw-2">&amp;</span><span class="self">self</span>, builder: SpanBuilder, parent_cx: <span class="kw-2">&amp;</span>Context) -&gt; <span class="self">Self</span>::Span;
+<a href=#176 id=176 data-nosnippet>176</a>
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="doccomment">/// Start a new span and execute the given closure with reference to the context
+<a href=#178 id=178 data-nosnippet>178</a>    /// in which the span is active.
+<a href=#179 id=179 data-nosnippet>179</a>    ///
+<a href=#180 id=180 data-nosnippet>180</a>    /// This method starts a new span and sets it as the active span for the given
+<a href=#181 id=181 data-nosnippet>181</a>    /// function. It then executes the body. It ends the span before returning the
+<a href=#182 id=182 data-nosnippet>182</a>    /// execution result.
+<a href=#183 id=183 data-nosnippet>183</a>    ///
+<a href=#184 id=184 data-nosnippet>184</a>    /// # Examples
+<a href=#185 id=185 data-nosnippet>185</a>    ///
+<a href=#186 id=186 data-nosnippet>186</a>    /// ```
+<a href=#187 id=187 data-nosnippet>187</a>    /// use opentelemetry::{global, trace::{Span, Tracer, get_active_span}, KeyValue};
+<a href=#188 id=188 data-nosnippet>188</a>    ///
+<a href=#189 id=189 data-nosnippet>189</a>    /// fn my_function() {
+<a href=#190 id=190 data-nosnippet>190</a>    ///     // start an active span in one function
+<a href=#191 id=191 data-nosnippet>191</a>    ///     global::tracer("my-component").in_span("span-name", |_cx| {
+<a href=#192 id=192 data-nosnippet>192</a>    ///         // anything happening in functions we call can still access the active span...
+<a href=#193 id=193 data-nosnippet>193</a>    ///         my_other_function();
+<a href=#194 id=194 data-nosnippet>194</a>    ///     })
+<a href=#195 id=195 data-nosnippet>195</a>    /// }
+<a href=#196 id=196 data-nosnippet>196</a>    ///
+<a href=#197 id=197 data-nosnippet>197</a>    /// fn my_other_function() {
+<a href=#198 id=198 data-nosnippet>198</a>    ///     // call methods on the current span from
+<a href=#199 id=199 data-nosnippet>199</a>    ///     get_active_span(|span| {
+<a href=#200 id=200 data-nosnippet>200</a>    ///         span.add_event("An event!".to_string(), vec![KeyValue::new("happened", true)]);
+<a href=#201 id=201 data-nosnippet>201</a>    ///     })
+<a href=#202 id=202 data-nosnippet>202</a>    /// }
+<a href=#203 id=203 data-nosnippet>203</a>    /// ```
+<a href=#204 id=204 data-nosnippet>204</a>    </span><span class="kw">fn </span>in_span&lt;T, F, N&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, name: N, f: F) -&gt; T
+<a href=#205 id=205 data-nosnippet>205</a>    <span class="kw">where
+<a href=#206 id=206 data-nosnippet>206</a>        </span>F: FnOnce(Context) -&gt; T,
+<a href=#207 id=207 data-nosnippet>207</a>        N: Into&lt;Cow&lt;<span class="lifetime">'static</span>, str&gt;&gt;,
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="self">Self</span>::Span: Send + Sync + <span class="lifetime">'static</span>,
+<a href=#209 id=209 data-nosnippet>209</a>    {
+<a href=#210 id=210 data-nosnippet>210</a>        <span class="kw">let </span>span = <span class="self">self</span>.start(name);
+<a href=#211 id=211 data-nosnippet>211</a>        <span class="kw">let </span>cx = Context::current_with_span(span);
+<a href=#212 id=212 data-nosnippet>212</a>        <span class="kw">let </span>_guard = cx.clone().attach();
+<a href=#213 id=213 data-nosnippet>213</a>        f(cx)
+<a href=#214 id=214 data-nosnippet>214</a>    }
+<a href=#215 id=215 data-nosnippet>215</a>}
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a><span class="doccomment">/// `SpanBuilder` allows span attributes to be configured before the span
+<a href=#218 id=218 data-nosnippet>218</a>/// has started.
+<a href=#219 id=219 data-nosnippet>219</a>///
+<a href=#220 id=220 data-nosnippet>220</a>/// ```
+<a href=#221 id=221 data-nosnippet>221</a>/// use opentelemetry::{
+<a href=#222 id=222 data-nosnippet>222</a>///     global,
+<a href=#223 id=223 data-nosnippet>223</a>///     trace::{TracerProvider, SpanBuilder, SpanKind, Tracer},
+<a href=#224 id=224 data-nosnippet>224</a>/// };
+<a href=#225 id=225 data-nosnippet>225</a>///
+<a href=#226 id=226 data-nosnippet>226</a>/// let tracer = global::tracer("example-tracer");
+<a href=#227 id=227 data-nosnippet>227</a>///
+<a href=#228 id=228 data-nosnippet>228</a>/// // The builder can be used to create a span directly with the tracer
+<a href=#229 id=229 data-nosnippet>229</a>/// let _span = tracer.build(SpanBuilder {
+<a href=#230 id=230 data-nosnippet>230</a>///     name: "example-span-name".into(),
+<a href=#231 id=231 data-nosnippet>231</a>///     span_kind: Some(SpanKind::Server),
+<a href=#232 id=232 data-nosnippet>232</a>///     ..Default::default()
+<a href=#233 id=233 data-nosnippet>233</a>/// });
+<a href=#234 id=234 data-nosnippet>234</a>///
+<a href=#235 id=235 data-nosnippet>235</a>/// // Or used with builder pattern
+<a href=#236 id=236 data-nosnippet>236</a>/// let _span = tracer
+<a href=#237 id=237 data-nosnippet>237</a>///     .span_builder("example-span-name")
+<a href=#238 id=238 data-nosnippet>238</a>///     .with_kind(SpanKind::Server)
+<a href=#239 id=239 data-nosnippet>239</a>///     .start(&amp;tracer);
+<a href=#240 id=240 data-nosnippet>240</a>/// ```
+<a href=#241 id=241 data-nosnippet>241</a></span><span class="attr">#[derive(Clone, Debug, Default)]
+<a href=#242 id=242 data-nosnippet>242</a></span><span class="kw">pub struct </span>SpanBuilder {
+<a href=#243 id=243 data-nosnippet>243</a>    <span class="doccomment">/// Trace id, useful for integrations with external tracing systems.
+<a href=#244 id=244 data-nosnippet>244</a>    </span><span class="kw">pub </span>trace_id: <span class="prelude-ty">Option</span>&lt;TraceId&gt;,
+<a href=#245 id=245 data-nosnippet>245</a>
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="doccomment">/// Span id, useful for integrations with external tracing systems.
+<a href=#247 id=247 data-nosnippet>247</a>    </span><span class="kw">pub </span>span_id: <span class="prelude-ty">Option</span>&lt;SpanId&gt;,
+<a href=#248 id=248 data-nosnippet>248</a>
+<a href=#249 id=249 data-nosnippet>249</a>    <span class="doccomment">/// Span kind
+<a href=#250 id=250 data-nosnippet>250</a>    </span><span class="kw">pub </span>span_kind: <span class="prelude-ty">Option</span>&lt;SpanKind&gt;,
+<a href=#251 id=251 data-nosnippet>251</a>
+<a href=#252 id=252 data-nosnippet>252</a>    <span class="doccomment">/// Span name
+<a href=#253 id=253 data-nosnippet>253</a>    </span><span class="kw">pub </span>name: Cow&lt;<span class="lifetime">'static</span>, str&gt;,
+<a href=#254 id=254 data-nosnippet>254</a>
+<a href=#255 id=255 data-nosnippet>255</a>    <span class="doccomment">/// Span start time
+<a href=#256 id=256 data-nosnippet>256</a>    </span><span class="kw">pub </span>start_time: <span class="prelude-ty">Option</span>&lt;SystemTime&gt;,
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a>    <span class="doccomment">/// Span end time
+<a href=#259 id=259 data-nosnippet>259</a>    </span><span class="kw">pub </span>end_time: <span class="prelude-ty">Option</span>&lt;SystemTime&gt;,
+<a href=#260 id=260 data-nosnippet>260</a>
+<a href=#261 id=261 data-nosnippet>261</a>    <span class="doccomment">/// Span attributes that are provided at the span creation time.
+<a href=#262 id=262 data-nosnippet>262</a>    /// More attributes can be added afterwards.
+<a href=#263 id=263 data-nosnippet>263</a>    /// Providing duplicate keys will result in multiple attributes
+<a href=#264 id=264 data-nosnippet>264</a>    /// with the same key, as there is no de-duplication performed.
+<a href=#265 id=265 data-nosnippet>265</a>    </span><span class="kw">pub </span>attributes: <span class="prelude-ty">Option</span>&lt;Vec&lt;KeyValue&gt;&gt;,
+<a href=#266 id=266 data-nosnippet>266</a>
+<a href=#267 id=267 data-nosnippet>267</a>    <span class="doccomment">/// Span events
+<a href=#268 id=268 data-nosnippet>268</a>    </span><span class="kw">pub </span>events: <span class="prelude-ty">Option</span>&lt;Vec&lt;Event&gt;&gt;,
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a>    <span class="doccomment">/// Span Links
+<a href=#271 id=271 data-nosnippet>271</a>    </span><span class="kw">pub </span>links: <span class="prelude-ty">Option</span>&lt;Vec&lt;Link&gt;&gt;,
+<a href=#272 id=272 data-nosnippet>272</a>
+<a href=#273 id=273 data-nosnippet>273</a>    <span class="doccomment">/// Span status
+<a href=#274 id=274 data-nosnippet>274</a>    </span><span class="kw">pub </span>status: Status,
+<a href=#275 id=275 data-nosnippet>275</a>
+<a href=#276 id=276 data-nosnippet>276</a>    <span class="doccomment">/// Sampling result
+<a href=#277 id=277 data-nosnippet>277</a>    </span><span class="kw">pub </span>sampling_result: <span class="prelude-ty">Option</span>&lt;SamplingResult&gt;,
+<a href=#278 id=278 data-nosnippet>278</a>}
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a><span class="doccomment">/// SpanBuilder methods
+<a href=#281 id=281 data-nosnippet>281</a></span><span class="kw">impl </span>SpanBuilder {
+<a href=#282 id=282 data-nosnippet>282</a>    <span class="doccomment">/// Create a new span builder from a span name
+<a href=#283 id=283 data-nosnippet>283</a>    </span><span class="kw">pub fn </span>from_name&lt;T: Into&lt;Cow&lt;<span class="lifetime">'static</span>, str&gt;&gt;&gt;(name: T) -&gt; <span class="self">Self </span>{
+<a href=#284 id=284 data-nosnippet>284</a>        SpanBuilder {
+<a href=#285 id=285 data-nosnippet>285</a>            name: name.into(),
+<a href=#286 id=286 data-nosnippet>286</a>            ..Default::default()
+<a href=#287 id=287 data-nosnippet>287</a>        }
+<a href=#288 id=288 data-nosnippet>288</a>    }
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="doccomment">/// Specify trace id to use if no parent context exists
+<a href=#291 id=291 data-nosnippet>291</a>    </span><span class="kw">pub fn </span>with_trace_id(<span class="self">self</span>, trace_id: TraceId) -&gt; <span class="self">Self </span>{
+<a href=#292 id=292 data-nosnippet>292</a>        SpanBuilder {
+<a href=#293 id=293 data-nosnippet>293</a>            trace_id: <span class="prelude-val">Some</span>(trace_id),
+<a href=#294 id=294 data-nosnippet>294</a>            ..<span class="self">self
+<a href=#295 id=295 data-nosnippet>295</a>        </span>}
+<a href=#296 id=296 data-nosnippet>296</a>    }
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="doccomment">/// Assign span id
+<a href=#299 id=299 data-nosnippet>299</a>    </span><span class="kw">pub fn </span>with_span_id(<span class="self">self</span>, span_id: SpanId) -&gt; <span class="self">Self </span>{
+<a href=#300 id=300 data-nosnippet>300</a>        SpanBuilder {
+<a href=#301 id=301 data-nosnippet>301</a>            span_id: <span class="prelude-val">Some</span>(span_id),
+<a href=#302 id=302 data-nosnippet>302</a>            ..<span class="self">self
+<a href=#303 id=303 data-nosnippet>303</a>        </span>}
+<a href=#304 id=304 data-nosnippet>304</a>    }
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a>    <span class="doccomment">/// Assign span kind
+<a href=#307 id=307 data-nosnippet>307</a>    </span><span class="kw">pub fn </span>with_kind(<span class="self">self</span>, span_kind: SpanKind) -&gt; <span class="self">Self </span>{
+<a href=#308 id=308 data-nosnippet>308</a>        SpanBuilder {
+<a href=#309 id=309 data-nosnippet>309</a>            span_kind: <span class="prelude-val">Some</span>(span_kind),
+<a href=#310 id=310 data-nosnippet>310</a>            ..<span class="self">self
+<a href=#311 id=311 data-nosnippet>311</a>        </span>}
+<a href=#312 id=312 data-nosnippet>312</a>    }
+<a href=#313 id=313 data-nosnippet>313</a>
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="doccomment">/// Assign span start time
+<a href=#315 id=315 data-nosnippet>315</a>    </span><span class="kw">pub fn </span>with_start_time&lt;T: Into&lt;SystemTime&gt;&gt;(<span class="self">self</span>, start_time: T) -&gt; <span class="self">Self </span>{
+<a href=#316 id=316 data-nosnippet>316</a>        SpanBuilder {
+<a href=#317 id=317 data-nosnippet>317</a>            start_time: <span class="prelude-val">Some</span>(start_time.into()),
+<a href=#318 id=318 data-nosnippet>318</a>            ..<span class="self">self
+<a href=#319 id=319 data-nosnippet>319</a>        </span>}
+<a href=#320 id=320 data-nosnippet>320</a>    }
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a>    <span class="doccomment">/// Assign span end time
+<a href=#323 id=323 data-nosnippet>323</a>    </span><span class="kw">pub fn </span>with_end_time&lt;T: Into&lt;SystemTime&gt;&gt;(<span class="self">self</span>, end_time: T) -&gt; <span class="self">Self </span>{
+<a href=#324 id=324 data-nosnippet>324</a>        SpanBuilder {
+<a href=#325 id=325 data-nosnippet>325</a>            end_time: <span class="prelude-val">Some</span>(end_time.into()),
+<a href=#326 id=326 data-nosnippet>326</a>            ..<span class="self">self
+<a href=#327 id=327 data-nosnippet>327</a>        </span>}
+<a href=#328 id=328 data-nosnippet>328</a>    }
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>    <span class="doccomment">/// Assign span attributes from an iterable.
+<a href=#331 id=331 data-nosnippet>331</a>    /// Providing duplicate keys will result in multiple attributes
+<a href=#332 id=332 data-nosnippet>332</a>    /// with the same key, as there is no de-duplication performed.    
+<a href=#333 id=333 data-nosnippet>333</a>    </span><span class="kw">pub fn </span>with_attributes&lt;I&gt;(<span class="self">self</span>, attributes: I) -&gt; <span class="self">Self
+<a href=#334 id=334 data-nosnippet>334</a>    </span><span class="kw">where
+<a href=#335 id=335 data-nosnippet>335</a>        </span>I: IntoIterator&lt;Item = KeyValue&gt;,
+<a href=#336 id=336 data-nosnippet>336</a>    {
+<a href=#337 id=337 data-nosnippet>337</a>        SpanBuilder {
+<a href=#338 id=338 data-nosnippet>338</a>            attributes: <span class="prelude-val">Some</span>(attributes.into_iter().collect()),
+<a href=#339 id=339 data-nosnippet>339</a>            ..<span class="self">self
+<a href=#340 id=340 data-nosnippet>340</a>        </span>}
+<a href=#341 id=341 data-nosnippet>341</a>    }
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a>    <span class="doccomment">/// Assign events
+<a href=#344 id=344 data-nosnippet>344</a>    </span><span class="kw">pub fn </span>with_events(<span class="self">self</span>, events: Vec&lt;Event&gt;) -&gt; <span class="self">Self </span>{
+<a href=#345 id=345 data-nosnippet>345</a>        SpanBuilder {
+<a href=#346 id=346 data-nosnippet>346</a>            events: <span class="prelude-val">Some</span>(events),
+<a href=#347 id=347 data-nosnippet>347</a>            ..<span class="self">self
+<a href=#348 id=348 data-nosnippet>348</a>        </span>}
+<a href=#349 id=349 data-nosnippet>349</a>    }
+<a href=#350 id=350 data-nosnippet>350</a>
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="doccomment">/// Assign links
+<a href=#352 id=352 data-nosnippet>352</a>    </span><span class="kw">pub fn </span>with_links(<span class="self">self</span>, <span class="kw-2">mut </span>links: Vec&lt;Link&gt;) -&gt; <span class="self">Self </span>{
+<a href=#353 id=353 data-nosnippet>353</a>        links.retain(|l| l.span_context.is_valid());
+<a href=#354 id=354 data-nosnippet>354</a>        SpanBuilder {
+<a href=#355 id=355 data-nosnippet>355</a>            links: <span class="prelude-val">Some</span>(links),
+<a href=#356 id=356 data-nosnippet>356</a>            ..<span class="self">self
+<a href=#357 id=357 data-nosnippet>357</a>        </span>}
+<a href=#358 id=358 data-nosnippet>358</a>    }
+<a href=#359 id=359 data-nosnippet>359</a>
+<a href=#360 id=360 data-nosnippet>360</a>    <span class="doccomment">/// Assign status code
+<a href=#361 id=361 data-nosnippet>361</a>    </span><span class="kw">pub fn </span>with_status(<span class="self">self</span>, status: Status) -&gt; <span class="self">Self </span>{
+<a href=#362 id=362 data-nosnippet>362</a>        SpanBuilder { status, ..<span class="self">self </span>}
+<a href=#363 id=363 data-nosnippet>363</a>    }
+<a href=#364 id=364 data-nosnippet>364</a>
+<a href=#365 id=365 data-nosnippet>365</a>    <span class="doccomment">/// Assign sampling result
+<a href=#366 id=366 data-nosnippet>366</a>    </span><span class="kw">pub fn </span>with_sampling_result(<span class="self">self</span>, sampling_result: SamplingResult) -&gt; <span class="self">Self </span>{
+<a href=#367 id=367 data-nosnippet>367</a>        SpanBuilder {
+<a href=#368 id=368 data-nosnippet>368</a>            sampling_result: <span class="prelude-val">Some</span>(sampling_result),
+<a href=#369 id=369 data-nosnippet>369</a>            ..<span class="self">self
+<a href=#370 id=370 data-nosnippet>370</a>        </span>}
+<a href=#371 id=371 data-nosnippet>371</a>    }
+<a href=#372 id=372 data-nosnippet>372</a>
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="doccomment">/// Builds a span with the given tracer from this configuration.
+<a href=#374 id=374 data-nosnippet>374</a>    </span><span class="kw">pub fn </span>start&lt;T: Tracer&gt;(<span class="self">self</span>, tracer: <span class="kw-2">&amp;</span>T) -&gt; T::Span {
+<a href=#375 id=375 data-nosnippet>375</a>        Context::map_current(|cx| tracer.build_with_context(<span class="self">self</span>, cx))
+<a href=#376 id=376 data-nosnippet>376</a>    }
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a>    <span class="doccomment">/// Builds a span with the given tracer from this configuration and parent.
+<a href=#379 id=379 data-nosnippet>379</a>    </span><span class="kw">pub fn </span>start_with_context&lt;T: Tracer&gt;(<span class="self">self</span>, tracer: <span class="kw-2">&amp;</span>T, parent_cx: <span class="kw-2">&amp;</span>Context) -&gt; T::Span {
+<a href=#380 id=380 data-nosnippet>380</a>        tracer.build_with_context(<span class="self">self</span>, parent_cx)
+<a href=#381 id=381 data-nosnippet>381</a>    }
+<a href=#382 id=382 data-nosnippet>382</a>}
+<a href=#383 id=383 data-nosnippet>383</a>
+<a href=#384 id=384 data-nosnippet>384</a><span class="doccomment">/// The result of sampling logic for a given span.
+<a href=#385 id=385 data-nosnippet>385</a></span><span class="attr">#[derive(Clone, Debug, PartialEq)]
+<a href=#386 id=386 data-nosnippet>386</a></span><span class="kw">pub struct </span>SamplingResult {
+<a href=#387 id=387 data-nosnippet>387</a>    <span class="doccomment">/// The decision about whether or not to sample.
+<a href=#388 id=388 data-nosnippet>388</a>    </span><span class="kw">pub </span>decision: SamplingDecision,
+<a href=#389 id=389 data-nosnippet>389</a>
+<a href=#390 id=390 data-nosnippet>390</a>    <span class="doccomment">/// Extra attributes to be added to the span by the sampler
+<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="kw">pub </span>attributes: Vec&lt;KeyValue&gt;,
+<a href=#392 id=392 data-nosnippet>392</a>
+<a href=#393 id=393 data-nosnippet>393</a>    <span class="doccomment">/// Trace state from parent context, may be modified by samplers.
+<a href=#394 id=394 data-nosnippet>394</a>    </span><span class="kw">pub </span>trace_state: TraceState,
+<a href=#395 id=395 data-nosnippet>395</a>}
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a><span class="doccomment">/// Decision about whether or not to sample
+<a href=#398 id=398 data-nosnippet>398</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
+<a href=#399 id=399 data-nosnippet>399</a></span><span class="kw">pub enum </span>SamplingDecision {
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="doccomment">/// Span will not be recorded and all events and attributes will be dropped.
+<a href=#401 id=401 data-nosnippet>401</a>    </span>Drop,
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a>    <span class="doccomment">/// Span data wil be recorded, but not exported.
+<a href=#404 id=404 data-nosnippet>404</a>    </span>RecordOnly,
+<a href=#405 id=405 data-nosnippet>405</a>
+<a href=#406 id=406 data-nosnippet>406</a>    <span class="doccomment">/// Span data will be recorded and exported.
+<a href=#407 id=407 data-nosnippet>407</a>    </span>RecordAndSample,
+<a href=#408 id=408 data-nosnippet>408</a>}</code></pre></div></section></main></body></html>

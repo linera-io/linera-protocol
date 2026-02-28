@@ -1,0 +1,606 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.31/src/future/future/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="futures_util" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">futures_util/future/future/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Futures
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! This module contains a number of functions for working with `Future`s,
+<a href=#4 id=4 data-nosnippet>4</a>//! including the `FutureExt` trait which adds methods to `Future` types.
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">use </span>alloc::boxed::Box;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>core::pin::Pin;
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span><span class="kw">crate</span>::fns::{inspect_fn, into_fn, ok_fn, InspectFn, IntoFn, OkFn};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">crate</span>::future::{assert_future, Either};
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span><span class="kw">crate</span>::never::Never;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span><span class="kw">crate</span>::stream::assert_stream;
+<a href=#14 id=14 data-nosnippet>14</a><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#15 id=15 data-nosnippet>15</a></span><span class="kw">use </span>futures_core::future::{BoxFuture, LocalBoxFuture};
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>futures_core::{
+<a href=#17 id=17 data-nosnippet>17</a>    future::Future,
+<a href=#18 id=18 data-nosnippet>18</a>    stream::Stream,
+<a href=#19 id=19 data-nosnippet>19</a>    task::{Context, Poll},
+<a href=#20 id=20 data-nosnippet>20</a>};
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>pin_utils::pin_mut;
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a><span class="comment">// Combinators
+<a href=#24 id=24 data-nosnippet>24</a>
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">mod </span>flatten;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">mod </span>fuse;
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">mod </span>map;
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a><span class="macro">delegate_all!</span>(
+<a href=#30 id=30 data-nosnippet>30</a>    <span class="doccomment">/// Future for the [`flatten`](super::FutureExt::flatten) method.
+<a href=#31 id=31 data-nosnippet>31</a>    </span>Flatten&lt;F&gt;(
+<a href=#32 id=32 data-nosnippet>32</a>        flatten::Flatten&lt;F, &lt;F <span class="kw">as </span>Future&gt;::Output&gt;
+<a href=#33 id=33 data-nosnippet>33</a>    ): Debug + Future + FusedFuture + New[|x: F| flatten::Flatten::new(x)]
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">where </span>F: Future
+<a href=#35 id=35 data-nosnippet>35</a>);
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a><span class="macro">delegate_all!</span>(
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="doccomment">/// Stream for the [`flatten_stream`](FutureExt::flatten_stream) method.
+<a href=#39 id=39 data-nosnippet>39</a>    </span>FlattenStream&lt;F&gt;(
+<a href=#40 id=40 data-nosnippet>40</a>        flatten::Flatten&lt;F, &lt;F <span class="kw">as </span>Future&gt;::Output&gt;
+<a href=#41 id=41 data-nosnippet>41</a>    ): Debug + Sink + Stream + FusedStream + New[|x: F| flatten::Flatten::new(x)]
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">where </span>F: Future
+<a href=#43 id=43 data-nosnippet>43</a>);
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a><span class="attr">#[allow(unreachable_pub)] </span><span class="comment">// https://github.com/rust-lang/rust/issues/57411
+<a href=#46 id=46 data-nosnippet>46</a></span><span class="kw">pub use </span>fuse::Fuse;
+<a href=#47 id=47 data-nosnippet>47</a>
+<a href=#48 id=48 data-nosnippet>48</a><span class="macro">delegate_all!</span>(
+<a href=#49 id=49 data-nosnippet>49</a>    <span class="doccomment">/// Future for the [`map`](super::FutureExt::map) method.
+<a href=#50 id=50 data-nosnippet>50</a>    </span>Map&lt;Fut, F&gt;(
+<a href=#51 id=51 data-nosnippet>51</a>        map::Map&lt;Fut, F&gt;
+<a href=#52 id=52 data-nosnippet>52</a>    ): Debug + Future + FusedFuture + New[|x: Fut, f: F| map::Map::new(x, f)]
+<a href=#53 id=53 data-nosnippet>53</a>);
+<a href=#54 id=54 data-nosnippet>54</a>
+<a href=#55 id=55 data-nosnippet>55</a><span class="macro">delegate_all!</span>(
+<a href=#56 id=56 data-nosnippet>56</a>    <span class="doccomment">/// Stream for the [`into_stream`](FutureExt::into_stream) method.
+<a href=#57 id=57 data-nosnippet>57</a>    </span>IntoStream&lt;F&gt;(
+<a href=#58 id=58 data-nosnippet>58</a>        <span class="kw">crate</span>::stream::Once&lt;F&gt;
+<a href=#59 id=59 data-nosnippet>59</a>    ): Debug + Stream + FusedStream + New[|x: F| <span class="kw">crate</span>::stream::Once::new(x)]
+<a href=#60 id=60 data-nosnippet>60</a>);
+<a href=#61 id=61 data-nosnippet>61</a>
+<a href=#62 id=62 data-nosnippet>62</a><span class="macro">delegate_all!</span>(
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="doccomment">/// Future for the [`map_into`](FutureExt::map_into) combinator.
+<a href=#64 id=64 data-nosnippet>64</a>    </span>MapInto&lt;Fut, T&gt;(
+<a href=#65 id=65 data-nosnippet>65</a>        Map&lt;Fut, IntoFn&lt;T&gt;&gt;
+<a href=#66 id=66 data-nosnippet>66</a>    ): Debug + Future + FusedFuture + New[|x: Fut| Map::new(x, into_fn())]
+<a href=#67 id=67 data-nosnippet>67</a>);
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a><span class="macro">delegate_all!</span>(
+<a href=#70 id=70 data-nosnippet>70</a>    <span class="doccomment">/// Future for the [`then`](FutureExt::then) method.
+<a href=#71 id=71 data-nosnippet>71</a>    </span>Then&lt;Fut1, Fut2, F&gt;(
+<a href=#72 id=72 data-nosnippet>72</a>        flatten::Flatten&lt;Map&lt;Fut1, F&gt;, Fut2&gt;
+<a href=#73 id=73 data-nosnippet>73</a>    ): Debug + Future + FusedFuture + New[|x: Fut1, y: F| flatten::Flatten::new(Map::new(x, y))]
+<a href=#74 id=74 data-nosnippet>74</a>);
+<a href=#75 id=75 data-nosnippet>75</a>
+<a href=#76 id=76 data-nosnippet>76</a><span class="macro">delegate_all!</span>(
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="doccomment">/// Future for the [`inspect`](FutureExt::inspect) method.
+<a href=#78 id=78 data-nosnippet>78</a>    </span>Inspect&lt;Fut, F&gt;(
+<a href=#79 id=79 data-nosnippet>79</a>        map::Map&lt;Fut, InspectFn&lt;F&gt;&gt;
+<a href=#80 id=80 data-nosnippet>80</a>    ): Debug + Future + FusedFuture + New[|x: Fut, f: F| map::Map::new(x, inspect_fn(f))]
+<a href=#81 id=81 data-nosnippet>81</a>);
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a><span class="macro">delegate_all!</span>(
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="doccomment">/// Future for the [`never_error`](super::FutureExt::never_error) combinator.
+<a href=#85 id=85 data-nosnippet>85</a>    </span>NeverError&lt;Fut&gt;(
+<a href=#86 id=86 data-nosnippet>86</a>        Map&lt;Fut, OkFn&lt;Never&gt;&gt;
+<a href=#87 id=87 data-nosnippet>87</a>    ): Debug + Future + FusedFuture + New[|x: Fut| Map::new(x, ok_fn())]
+<a href=#88 id=88 data-nosnippet>88</a>);
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a><span class="macro">delegate_all!</span>(
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="doccomment">/// Future for the [`unit_error`](super::FutureExt::unit_error) combinator.
+<a href=#92 id=92 data-nosnippet>92</a>    </span>UnitError&lt;Fut&gt;(
+<a href=#93 id=93 data-nosnippet>93</a>        Map&lt;Fut, OkFn&lt;()&gt;&gt;
+<a href=#94 id=94 data-nosnippet>94</a>    ): Debug + Future + FusedFuture + New[|x: Fut| Map::new(x, ok_fn())]
+<a href=#95 id=95 data-nosnippet>95</a>);
+<a href=#96 id=96 data-nosnippet>96</a>
+<a href=#97 id=97 data-nosnippet>97</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#98 id=98 data-nosnippet>98</a></span><span class="kw">mod </span>catch_unwind;
+<a href=#99 id=99 data-nosnippet>99</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#100 id=100 data-nosnippet>100</a>#[allow(unreachable_pub)] </span><span class="comment">// https://github.com/rust-lang/rust/issues/57411
+<a href=#101 id=101 data-nosnippet>101</a></span><span class="kw">pub use </span><span class="self">self</span>::catch_unwind::CatchUnwind;
+<a href=#102 id=102 data-nosnippet>102</a>
+<a href=#103 id=103 data-nosnippet>103</a><span class="attr">#[cfg(feature = <span class="string">"channel"</span>)]
+<a href=#104 id=104 data-nosnippet>104</a>#[cfg_attr(docsrs, doc(cfg(feature = <span class="string">"channel"</span>)))]
+<a href=#105 id=105 data-nosnippet>105</a>#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#106 id=106 data-nosnippet>106</a></span><span class="kw">mod </span>remote_handle;
+<a href=#107 id=107 data-nosnippet>107</a><span class="attr">#[cfg(feature = <span class="string">"channel"</span>)]
+<a href=#108 id=108 data-nosnippet>108</a>#[cfg_attr(docsrs, doc(cfg(feature = <span class="string">"channel"</span>)))]
+<a href=#109 id=109 data-nosnippet>109</a>#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#110 id=110 data-nosnippet>110</a>#[allow(unreachable_pub)] </span><span class="comment">// https://github.com/rust-lang/rust/issues/57411
+<a href=#111 id=111 data-nosnippet>111</a></span><span class="kw">pub use </span><span class="self">self</span>::remote_handle::{Remote, RemoteHandle};
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#114 id=114 data-nosnippet>114</a></span><span class="kw">mod </span>shared;
+<a href=#115 id=115 data-nosnippet>115</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#116 id=116 data-nosnippet>116</a>#[allow(unreachable_pub)] </span><span class="comment">// https://github.com/rust-lang/rust/issues/57411
+<a href=#117 id=117 data-nosnippet>117</a></span><span class="kw">pub use </span><span class="self">self</span>::shared::{Shared, WeakShared};
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; FutureExt <span class="kw">for </span>T <span class="kw">where </span>T: Future {}
+<a href=#120 id=120 data-nosnippet>120</a>
+<a href=#121 id=121 data-nosnippet>121</a><span class="doccomment">/// An extension trait for `Future`s that provides a variety of convenient
+<a href=#122 id=122 data-nosnippet>122</a>/// adapters.
+<a href=#123 id=123 data-nosnippet>123</a></span><span class="kw">pub trait </span>FutureExt: Future {
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="doccomment">/// Map this future's output to a different type, returning a new future of
+<a href=#125 id=125 data-nosnippet>125</a>    /// the resulting type.
+<a href=#126 id=126 data-nosnippet>126</a>    ///
+<a href=#127 id=127 data-nosnippet>127</a>    /// This function is similar to the `Option::map` or `Iterator::map` where
+<a href=#128 id=128 data-nosnippet>128</a>    /// it will change the type of the underlying future. This is useful to
+<a href=#129 id=129 data-nosnippet>129</a>    /// chain along a computation once a future has been resolved.
+<a href=#130 id=130 data-nosnippet>130</a>    ///
+<a href=#131 id=131 data-nosnippet>131</a>    /// Note that this function consumes the receiving future and returns a
+<a href=#132 id=132 data-nosnippet>132</a>    /// wrapped version of it, similar to the existing `map` methods in the
+<a href=#133 id=133 data-nosnippet>133</a>    /// standard library.
+<a href=#134 id=134 data-nosnippet>134</a>    ///
+<a href=#135 id=135 data-nosnippet>135</a>    /// # Examples
+<a href=#136 id=136 data-nosnippet>136</a>    ///
+<a href=#137 id=137 data-nosnippet>137</a>    /// ```
+<a href=#138 id=138 data-nosnippet>138</a>    /// # futures::executor::block_on(async {
+<a href=#139 id=139 data-nosnippet>139</a>    /// use futures::future::FutureExt;
+<a href=#140 id=140 data-nosnippet>140</a>    ///
+<a href=#141 id=141 data-nosnippet>141</a>    /// let future = async { 1 };
+<a href=#142 id=142 data-nosnippet>142</a>    /// let new_future = future.map(|x| x + 3);
+<a href=#143 id=143 data-nosnippet>143</a>    /// assert_eq!(new_future.await, 4);
+<a href=#144 id=144 data-nosnippet>144</a>    /// # });
+<a href=#145 id=145 data-nosnippet>145</a>    /// ```
+<a href=#146 id=146 data-nosnippet>146</a>    </span><span class="kw">fn </span>map&lt;U, F&gt;(<span class="self">self</span>, f: F) -&gt; Map&lt;<span class="self">Self</span>, F&gt;
+<a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">where
+<a href=#148 id=148 data-nosnippet>148</a>        </span>F: FnOnce(<span class="self">Self</span>::Output) -&gt; U,
+<a href=#149 id=149 data-nosnippet>149</a>        <span class="self">Self</span>: Sized,
+<a href=#150 id=150 data-nosnippet>150</a>    {
+<a href=#151 id=151 data-nosnippet>151</a>        assert_future::&lt;U, <span class="kw">_</span>&gt;(Map::new(<span class="self">self</span>, f))
+<a href=#152 id=152 data-nosnippet>152</a>    }
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="doccomment">/// Map this future's output to a different type, returning a new future of
+<a href=#155 id=155 data-nosnippet>155</a>    /// the resulting type.
+<a href=#156 id=156 data-nosnippet>156</a>    ///
+<a href=#157 id=157 data-nosnippet>157</a>    /// This function is equivalent to calling `map(Into::into)` but allows naming
+<a href=#158 id=158 data-nosnippet>158</a>    /// the return type.
+<a href=#159 id=159 data-nosnippet>159</a>    </span><span class="kw">fn </span>map_into&lt;U&gt;(<span class="self">self</span>) -&gt; MapInto&lt;<span class="self">Self</span>, U&gt;
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">where
+<a href=#161 id=161 data-nosnippet>161</a>        </span><span class="self">Self</span>::Output: Into&lt;U&gt;,
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="self">Self</span>: Sized,
+<a href=#163 id=163 data-nosnippet>163</a>    {
+<a href=#164 id=164 data-nosnippet>164</a>        assert_future::&lt;U, <span class="kw">_</span>&gt;(MapInto::new(<span class="self">self</span>))
+<a href=#165 id=165 data-nosnippet>165</a>    }
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="doccomment">/// Chain on a computation for when a future finished, passing the result of
+<a href=#168 id=168 data-nosnippet>168</a>    /// the future to the provided closure `f`.
+<a href=#169 id=169 data-nosnippet>169</a>    ///
+<a href=#170 id=170 data-nosnippet>170</a>    /// The returned value of the closure must implement the `Future` trait
+<a href=#171 id=171 data-nosnippet>171</a>    /// and can represent some more work to be done before the composed future
+<a href=#172 id=172 data-nosnippet>172</a>    /// is finished.
+<a href=#173 id=173 data-nosnippet>173</a>    ///
+<a href=#174 id=174 data-nosnippet>174</a>    /// The closure `f` is only run *after* successful completion of the `self`
+<a href=#175 id=175 data-nosnippet>175</a>    /// future.
+<a href=#176 id=176 data-nosnippet>176</a>    ///
+<a href=#177 id=177 data-nosnippet>177</a>    /// Note that this function consumes the receiving future and returns a
+<a href=#178 id=178 data-nosnippet>178</a>    /// wrapped version of it.
+<a href=#179 id=179 data-nosnippet>179</a>    ///
+<a href=#180 id=180 data-nosnippet>180</a>    /// # Examples
+<a href=#181 id=181 data-nosnippet>181</a>    ///
+<a href=#182 id=182 data-nosnippet>182</a>    /// ```
+<a href=#183 id=183 data-nosnippet>183</a>    /// # futures::executor::block_on(async {
+<a href=#184 id=184 data-nosnippet>184</a>    /// use futures::future::FutureExt;
+<a href=#185 id=185 data-nosnippet>185</a>    ///
+<a href=#186 id=186 data-nosnippet>186</a>    /// let future_of_1 = async { 1 };
+<a href=#187 id=187 data-nosnippet>187</a>    /// let future_of_4 = future_of_1.then(|x| async move { x + 3 });
+<a href=#188 id=188 data-nosnippet>188</a>    /// assert_eq!(future_of_4.await, 4);
+<a href=#189 id=189 data-nosnippet>189</a>    /// # });
+<a href=#190 id=190 data-nosnippet>190</a>    /// ```
+<a href=#191 id=191 data-nosnippet>191</a>    </span><span class="kw">fn </span>then&lt;Fut, F&gt;(<span class="self">self</span>, f: F) -&gt; Then&lt;<span class="self">Self</span>, Fut, F&gt;
+<a href=#192 id=192 data-nosnippet>192</a>    <span class="kw">where
+<a href=#193 id=193 data-nosnippet>193</a>        </span>F: FnOnce(<span class="self">Self</span>::Output) -&gt; Fut,
+<a href=#194 id=194 data-nosnippet>194</a>        Fut: Future,
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="self">Self</span>: Sized,
+<a href=#196 id=196 data-nosnippet>196</a>    {
+<a href=#197 id=197 data-nosnippet>197</a>        assert_future::&lt;Fut::Output, <span class="kw">_</span>&gt;(Then::new(<span class="self">self</span>, f))
+<a href=#198 id=198 data-nosnippet>198</a>    }
+<a href=#199 id=199 data-nosnippet>199</a>
+<a href=#200 id=200 data-nosnippet>200</a>    <span class="doccomment">/// Wrap this future in an `Either` future, making it the left-hand variant
+<a href=#201 id=201 data-nosnippet>201</a>    /// of that `Either`.
+<a href=#202 id=202 data-nosnippet>202</a>    ///
+<a href=#203 id=203 data-nosnippet>203</a>    /// This can be used in combination with the `right_future` method to write `if`
+<a href=#204 id=204 data-nosnippet>204</a>    /// statements that evaluate to different futures in different branches.
+<a href=#205 id=205 data-nosnippet>205</a>    ///
+<a href=#206 id=206 data-nosnippet>206</a>    /// # Examples
+<a href=#207 id=207 data-nosnippet>207</a>    ///
+<a href=#208 id=208 data-nosnippet>208</a>    /// ```
+<a href=#209 id=209 data-nosnippet>209</a>    /// # futures::executor::block_on(async {
+<a href=#210 id=210 data-nosnippet>210</a>    /// use futures::future::FutureExt;
+<a href=#211 id=211 data-nosnippet>211</a>    ///
+<a href=#212 id=212 data-nosnippet>212</a>    /// let x = 6;
+<a href=#213 id=213 data-nosnippet>213</a>    /// let future = if x &lt; 10 {
+<a href=#214 id=214 data-nosnippet>214</a>    ///     async { true }.left_future()
+<a href=#215 id=215 data-nosnippet>215</a>    /// } else {
+<a href=#216 id=216 data-nosnippet>216</a>    ///     async { false }.right_future()
+<a href=#217 id=217 data-nosnippet>217</a>    /// };
+<a href=#218 id=218 data-nosnippet>218</a>    ///
+<a href=#219 id=219 data-nosnippet>219</a>    /// assert_eq!(future.await, true);
+<a href=#220 id=220 data-nosnippet>220</a>    /// # });
+<a href=#221 id=221 data-nosnippet>221</a>    /// ```
+<a href=#222 id=222 data-nosnippet>222</a>    </span><span class="kw">fn </span>left_future&lt;B&gt;(<span class="self">self</span>) -&gt; Either&lt;<span class="self">Self</span>, B&gt;
+<a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">where
+<a href=#224 id=224 data-nosnippet>224</a>        </span>B: Future&lt;Output = <span class="self">Self</span>::Output&gt;,
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="self">Self</span>: Sized,
+<a href=#226 id=226 data-nosnippet>226</a>    {
+<a href=#227 id=227 data-nosnippet>227</a>        assert_future::&lt;<span class="self">Self</span>::Output, <span class="kw">_</span>&gt;(Either::Left(<span class="self">self</span>))
+<a href=#228 id=228 data-nosnippet>228</a>    }
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>    <span class="doccomment">/// Wrap this future in an `Either` future, making it the right-hand variant
+<a href=#231 id=231 data-nosnippet>231</a>    /// of that `Either`.
+<a href=#232 id=232 data-nosnippet>232</a>    ///
+<a href=#233 id=233 data-nosnippet>233</a>    /// This can be used in combination with the `left_future` method to write `if`
+<a href=#234 id=234 data-nosnippet>234</a>    /// statements that evaluate to different futures in different branches.
+<a href=#235 id=235 data-nosnippet>235</a>    ///
+<a href=#236 id=236 data-nosnippet>236</a>    /// # Examples
+<a href=#237 id=237 data-nosnippet>237</a>    ///
+<a href=#238 id=238 data-nosnippet>238</a>    /// ```
+<a href=#239 id=239 data-nosnippet>239</a>    /// # futures::executor::block_on(async {
+<a href=#240 id=240 data-nosnippet>240</a>    /// use futures::future::FutureExt;
+<a href=#241 id=241 data-nosnippet>241</a>    ///
+<a href=#242 id=242 data-nosnippet>242</a>    /// let x = 6;
+<a href=#243 id=243 data-nosnippet>243</a>    /// let future = if x &gt; 10 {
+<a href=#244 id=244 data-nosnippet>244</a>    ///     async { true }.left_future()
+<a href=#245 id=245 data-nosnippet>245</a>    /// } else {
+<a href=#246 id=246 data-nosnippet>246</a>    ///     async { false }.right_future()
+<a href=#247 id=247 data-nosnippet>247</a>    /// };
+<a href=#248 id=248 data-nosnippet>248</a>    ///
+<a href=#249 id=249 data-nosnippet>249</a>    /// assert_eq!(future.await, false);
+<a href=#250 id=250 data-nosnippet>250</a>    /// # });
+<a href=#251 id=251 data-nosnippet>251</a>    /// ```
+<a href=#252 id=252 data-nosnippet>252</a>    </span><span class="kw">fn </span>right_future&lt;A&gt;(<span class="self">self</span>) -&gt; Either&lt;A, <span class="self">Self</span>&gt;
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="kw">where
+<a href=#254 id=254 data-nosnippet>254</a>        </span>A: Future&lt;Output = <span class="self">Self</span>::Output&gt;,
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="self">Self</span>: Sized,
+<a href=#256 id=256 data-nosnippet>256</a>    {
+<a href=#257 id=257 data-nosnippet>257</a>        assert_future::&lt;<span class="self">Self</span>::Output, <span class="kw">_</span>&gt;(Either::Right(<span class="self">self</span>))
+<a href=#258 id=258 data-nosnippet>258</a>    }
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>    <span class="doccomment">/// Convert this future into a single element stream.
+<a href=#261 id=261 data-nosnippet>261</a>    ///
+<a href=#262 id=262 data-nosnippet>262</a>    /// The returned stream contains single success if this future resolves to
+<a href=#263 id=263 data-nosnippet>263</a>    /// success or single error if this future resolves into error.
+<a href=#264 id=264 data-nosnippet>264</a>    ///
+<a href=#265 id=265 data-nosnippet>265</a>    /// # Examples
+<a href=#266 id=266 data-nosnippet>266</a>    ///
+<a href=#267 id=267 data-nosnippet>267</a>    /// ```
+<a href=#268 id=268 data-nosnippet>268</a>    /// # futures::executor::block_on(async {
+<a href=#269 id=269 data-nosnippet>269</a>    /// use futures::future::FutureExt;
+<a href=#270 id=270 data-nosnippet>270</a>    /// use futures::stream::StreamExt;
+<a href=#271 id=271 data-nosnippet>271</a>    ///
+<a href=#272 id=272 data-nosnippet>272</a>    /// let future = async { 17 };
+<a href=#273 id=273 data-nosnippet>273</a>    /// let stream = future.into_stream();
+<a href=#274 id=274 data-nosnippet>274</a>    /// let collected: Vec&lt;_&gt; = stream.collect().await;
+<a href=#275 id=275 data-nosnippet>275</a>    /// assert_eq!(collected, vec![17]);
+<a href=#276 id=276 data-nosnippet>276</a>    /// # });
+<a href=#277 id=277 data-nosnippet>277</a>    /// ```
+<a href=#278 id=278 data-nosnippet>278</a>    </span><span class="kw">fn </span>into_stream(<span class="self">self</span>) -&gt; IntoStream&lt;<span class="self">Self</span>&gt;
+<a href=#279 id=279 data-nosnippet>279</a>    <span class="kw">where
+<a href=#280 id=280 data-nosnippet>280</a>        </span><span class="self">Self</span>: Sized,
+<a href=#281 id=281 data-nosnippet>281</a>    {
+<a href=#282 id=282 data-nosnippet>282</a>        assert_stream::&lt;<span class="self">Self</span>::Output, <span class="kw">_</span>&gt;(IntoStream::new(<span class="self">self</span>))
+<a href=#283 id=283 data-nosnippet>283</a>    }
+<a href=#284 id=284 data-nosnippet>284</a>
+<a href=#285 id=285 data-nosnippet>285</a>    <span class="doccomment">/// Flatten the execution of this future when the output of this
+<a href=#286 id=286 data-nosnippet>286</a>    /// future is itself another future.
+<a href=#287 id=287 data-nosnippet>287</a>    ///
+<a href=#288 id=288 data-nosnippet>288</a>    /// This can be useful when combining futures together to flatten the
+<a href=#289 id=289 data-nosnippet>289</a>    /// computation out the final result.
+<a href=#290 id=290 data-nosnippet>290</a>    ///
+<a href=#291 id=291 data-nosnippet>291</a>    /// This method is roughly equivalent to `self.then(|x| x)`.
+<a href=#292 id=292 data-nosnippet>292</a>    ///
+<a href=#293 id=293 data-nosnippet>293</a>    /// Note that this function consumes the receiving future and returns a
+<a href=#294 id=294 data-nosnippet>294</a>    /// wrapped version of it.
+<a href=#295 id=295 data-nosnippet>295</a>    ///
+<a href=#296 id=296 data-nosnippet>296</a>    /// # Examples
+<a href=#297 id=297 data-nosnippet>297</a>    ///
+<a href=#298 id=298 data-nosnippet>298</a>    /// ```
+<a href=#299 id=299 data-nosnippet>299</a>    /// # futures::executor::block_on(async {
+<a href=#300 id=300 data-nosnippet>300</a>    /// use futures::future::FutureExt;
+<a href=#301 id=301 data-nosnippet>301</a>    ///
+<a href=#302 id=302 data-nosnippet>302</a>    /// let nested_future = async { async { 1 } };
+<a href=#303 id=303 data-nosnippet>303</a>    /// let future = nested_future.flatten();
+<a href=#304 id=304 data-nosnippet>304</a>    /// assert_eq!(future.await, 1);
+<a href=#305 id=305 data-nosnippet>305</a>    /// # });
+<a href=#306 id=306 data-nosnippet>306</a>    /// ```
+<a href=#307 id=307 data-nosnippet>307</a>    </span><span class="kw">fn </span>flatten(<span class="self">self</span>) -&gt; Flatten&lt;<span class="self">Self</span>&gt;
+<a href=#308 id=308 data-nosnippet>308</a>    <span class="kw">where
+<a href=#309 id=309 data-nosnippet>309</a>        </span><span class="self">Self</span>::Output: Future,
+<a href=#310 id=310 data-nosnippet>310</a>        <span class="self">Self</span>: Sized,
+<a href=#311 id=311 data-nosnippet>311</a>    {
+<a href=#312 id=312 data-nosnippet>312</a>        <span class="kw">let </span>f = Flatten::new(<span class="self">self</span>);
+<a href=#313 id=313 data-nosnippet>313</a>        assert_future::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>Future&gt;::Output <span class="kw">as </span>Future&gt;::Output, <span class="kw">_</span>&gt;(f)
+<a href=#314 id=314 data-nosnippet>314</a>    }
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a>    <span class="doccomment">/// Flatten the execution of this future when the successful result of this
+<a href=#317 id=317 data-nosnippet>317</a>    /// future is a stream.
+<a href=#318 id=318 data-nosnippet>318</a>    ///
+<a href=#319 id=319 data-nosnippet>319</a>    /// This can be useful when stream initialization is deferred, and it is
+<a href=#320 id=320 data-nosnippet>320</a>    /// convenient to work with that stream as if stream was available at the
+<a href=#321 id=321 data-nosnippet>321</a>    /// call site.
+<a href=#322 id=322 data-nosnippet>322</a>    ///
+<a href=#323 id=323 data-nosnippet>323</a>    /// Note that this function consumes this future and returns a wrapped
+<a href=#324 id=324 data-nosnippet>324</a>    /// version of it.
+<a href=#325 id=325 data-nosnippet>325</a>    ///
+<a href=#326 id=326 data-nosnippet>326</a>    /// # Examples
+<a href=#327 id=327 data-nosnippet>327</a>    ///
+<a href=#328 id=328 data-nosnippet>328</a>    /// ```
+<a href=#329 id=329 data-nosnippet>329</a>    /// # futures::executor::block_on(async {
+<a href=#330 id=330 data-nosnippet>330</a>    /// use futures::future::FutureExt;
+<a href=#331 id=331 data-nosnippet>331</a>    /// use futures::stream::{self, StreamExt};
+<a href=#332 id=332 data-nosnippet>332</a>    ///
+<a href=#333 id=333 data-nosnippet>333</a>    /// let stream_items = vec![17, 18, 19];
+<a href=#334 id=334 data-nosnippet>334</a>    /// let future_of_a_stream = async { stream::iter(stream_items) };
+<a href=#335 id=335 data-nosnippet>335</a>    ///
+<a href=#336 id=336 data-nosnippet>336</a>    /// let stream = future_of_a_stream.flatten_stream();
+<a href=#337 id=337 data-nosnippet>337</a>    /// let list: Vec&lt;_&gt; = stream.collect().await;
+<a href=#338 id=338 data-nosnippet>338</a>    /// assert_eq!(list, vec![17, 18, 19]);
+<a href=#339 id=339 data-nosnippet>339</a>    /// # });
+<a href=#340 id=340 data-nosnippet>340</a>    /// ```
+<a href=#341 id=341 data-nosnippet>341</a>    </span><span class="kw">fn </span>flatten_stream(<span class="self">self</span>) -&gt; FlattenStream&lt;<span class="self">Self</span>&gt;
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="kw">where
+<a href=#343 id=343 data-nosnippet>343</a>        </span><span class="self">Self</span>::Output: Stream,
+<a href=#344 id=344 data-nosnippet>344</a>        <span class="self">Self</span>: Sized,
+<a href=#345 id=345 data-nosnippet>345</a>    {
+<a href=#346 id=346 data-nosnippet>346</a>        assert_stream::&lt;&lt;<span class="self">Self</span>::Output <span class="kw">as </span>Stream&gt;::Item, <span class="kw">_</span>&gt;(FlattenStream::new(<span class="self">self</span>))
+<a href=#347 id=347 data-nosnippet>347</a>    }
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a>    <span class="doccomment">/// Fuse a future such that `poll` will never again be called once it has
+<a href=#350 id=350 data-nosnippet>350</a>    /// completed. This method can be used to turn any `Future` into a
+<a href=#351 id=351 data-nosnippet>351</a>    /// `FusedFuture`.
+<a href=#352 id=352 data-nosnippet>352</a>    ///
+<a href=#353 id=353 data-nosnippet>353</a>    /// Normally, once a future has returned `Poll::Ready` from `poll`,
+<a href=#354 id=354 data-nosnippet>354</a>    /// any further calls could exhibit bad behavior such as blocking
+<a href=#355 id=355 data-nosnippet>355</a>    /// forever, panicking, never returning, etc. If it is known that `poll`
+<a href=#356 id=356 data-nosnippet>356</a>    /// may be called too often then this method can be used to ensure that it
+<a href=#357 id=357 data-nosnippet>357</a>    /// has defined semantics.
+<a href=#358 id=358 data-nosnippet>358</a>    ///
+<a href=#359 id=359 data-nosnippet>359</a>    /// If a `fuse`d future is `poll`ed after having returned `Poll::Ready`
+<a href=#360 id=360 data-nosnippet>360</a>    /// previously, it will return `Poll::Pending`, from `poll` again (and will
+<a href=#361 id=361 data-nosnippet>361</a>    /// continue to do so for all future calls to `poll`).
+<a href=#362 id=362 data-nosnippet>362</a>    ///
+<a href=#363 id=363 data-nosnippet>363</a>    /// This combinator will drop the underlying future as soon as it has been
+<a href=#364 id=364 data-nosnippet>364</a>    /// completed to ensure resources are reclaimed as soon as possible.
+<a href=#365 id=365 data-nosnippet>365</a>    </span><span class="kw">fn </span>fuse(<span class="self">self</span>) -&gt; Fuse&lt;<span class="self">Self</span>&gt;
+<a href=#366 id=366 data-nosnippet>366</a>    <span class="kw">where
+<a href=#367 id=367 data-nosnippet>367</a>        </span><span class="self">Self</span>: Sized,
+<a href=#368 id=368 data-nosnippet>368</a>    {
+<a href=#369 id=369 data-nosnippet>369</a>        <span class="kw">let </span>f = Fuse::new(<span class="self">self</span>);
+<a href=#370 id=370 data-nosnippet>370</a>        assert_future::&lt;<span class="self">Self</span>::Output, <span class="kw">_</span>&gt;(f)
+<a href=#371 id=371 data-nosnippet>371</a>    }
+<a href=#372 id=372 data-nosnippet>372</a>
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="doccomment">/// Do something with the output of a future before passing it on.
+<a href=#374 id=374 data-nosnippet>374</a>    ///
+<a href=#375 id=375 data-nosnippet>375</a>    /// When using futures, you'll often chain several of them together.  While
+<a href=#376 id=376 data-nosnippet>376</a>    /// working on such code, you might want to check out what's happening at
+<a href=#377 id=377 data-nosnippet>377</a>    /// various parts in the pipeline, without consuming the intermediate
+<a href=#378 id=378 data-nosnippet>378</a>    /// value. To do that, insert a call to `inspect`.
+<a href=#379 id=379 data-nosnippet>379</a>    ///
+<a href=#380 id=380 data-nosnippet>380</a>    /// # Examples
+<a href=#381 id=381 data-nosnippet>381</a>    ///
+<a href=#382 id=382 data-nosnippet>382</a>    /// ```
+<a href=#383 id=383 data-nosnippet>383</a>    /// # futures::executor::block_on(async {
+<a href=#384 id=384 data-nosnippet>384</a>    /// use futures::future::FutureExt;
+<a href=#385 id=385 data-nosnippet>385</a>    ///
+<a href=#386 id=386 data-nosnippet>386</a>    /// let future = async { 1 };
+<a href=#387 id=387 data-nosnippet>387</a>    /// let new_future = future.inspect(|&amp;x| println!("about to resolve: {}", x));
+<a href=#388 id=388 data-nosnippet>388</a>    /// assert_eq!(new_future.await, 1);
+<a href=#389 id=389 data-nosnippet>389</a>    /// # });
+<a href=#390 id=390 data-nosnippet>390</a>    /// ```
+<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="kw">fn </span>inspect&lt;F&gt;(<span class="self">self</span>, f: F) -&gt; Inspect&lt;<span class="self">Self</span>, F&gt;
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="kw">where
+<a href=#393 id=393 data-nosnippet>393</a>        </span>F: FnOnce(<span class="kw-2">&amp;</span><span class="self">Self</span>::Output),
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="self">Self</span>: Sized,
+<a href=#395 id=395 data-nosnippet>395</a>    {
+<a href=#396 id=396 data-nosnippet>396</a>        assert_future::&lt;<span class="self">Self</span>::Output, <span class="kw">_</span>&gt;(Inspect::new(<span class="self">self</span>, f))
+<a href=#397 id=397 data-nosnippet>397</a>    }
+<a href=#398 id=398 data-nosnippet>398</a>
+<a href=#399 id=399 data-nosnippet>399</a>    <span class="doccomment">/// Catches unwinding panics while polling the future.
+<a href=#400 id=400 data-nosnippet>400</a>    ///
+<a href=#401 id=401 data-nosnippet>401</a>    /// In general, panics within a future can propagate all the way out to the
+<a href=#402 id=402 data-nosnippet>402</a>    /// task level. This combinator makes it possible to halt unwinding within
+<a href=#403 id=403 data-nosnippet>403</a>    /// the future itself. It's most commonly used within task executors. It's
+<a href=#404 id=404 data-nosnippet>404</a>    /// not recommended to use this for error handling.
+<a href=#405 id=405 data-nosnippet>405</a>    ///
+<a href=#406 id=406 data-nosnippet>406</a>    /// Note that this method requires the `UnwindSafe` bound from the standard
+<a href=#407 id=407 data-nosnippet>407</a>    /// library. This isn't always applied automatically, and the standard
+<a href=#408 id=408 data-nosnippet>408</a>    /// library provides an `AssertUnwindSafe` wrapper type to apply it
+<a href=#409 id=409 data-nosnippet>409</a>    /// after-the fact. To assist using this method, the `Future` trait is also
+<a href=#410 id=410 data-nosnippet>410</a>    /// implemented for `AssertUnwindSafe&lt;F&gt;` where `F` implements `Future`.
+<a href=#411 id=411 data-nosnippet>411</a>    ///
+<a href=#412 id=412 data-nosnippet>412</a>    /// This method is only available when the `std` feature of this
+<a href=#413 id=413 data-nosnippet>413</a>    /// library is activated, and it is activated by default.
+<a href=#414 id=414 data-nosnippet>414</a>    ///
+<a href=#415 id=415 data-nosnippet>415</a>    /// # Examples
+<a href=#416 id=416 data-nosnippet>416</a>    ///
+<a href=#417 id=417 data-nosnippet>417</a>    /// ```
+<a href=#418 id=418 data-nosnippet>418</a>    /// # futures::executor::block_on(async {
+<a href=#419 id=419 data-nosnippet>419</a>    /// use futures::future::{self, FutureExt, Ready};
+<a href=#420 id=420 data-nosnippet>420</a>    ///
+<a href=#421 id=421 data-nosnippet>421</a>    /// let future = future::ready(2);
+<a href=#422 id=422 data-nosnippet>422</a>    /// assert!(future.catch_unwind().await.is_ok());
+<a href=#423 id=423 data-nosnippet>423</a>    ///
+<a href=#424 id=424 data-nosnippet>424</a>    /// let future = future::lazy(|_| -&gt; Ready&lt;i32&gt; {
+<a href=#425 id=425 data-nosnippet>425</a>    ///     unimplemented!()
+<a href=#426 id=426 data-nosnippet>426</a>    /// });
+<a href=#427 id=427 data-nosnippet>427</a>    /// assert!(future.catch_unwind().await.is_err());
+<a href=#428 id=428 data-nosnippet>428</a>    /// # });
+<a href=#429 id=429 data-nosnippet>429</a>    /// ```
+<a href=#430 id=430 data-nosnippet>430</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#431 id=431 data-nosnippet>431</a>    </span><span class="kw">fn </span>catch_unwind(<span class="self">self</span>) -&gt; CatchUnwind&lt;<span class="self">Self</span>&gt;
+<a href=#432 id=432 data-nosnippet>432</a>    <span class="kw">where
+<a href=#433 id=433 data-nosnippet>433</a>        </span><span class="self">Self</span>: Sized + ::std::panic::UnwindSafe,
+<a href=#434 id=434 data-nosnippet>434</a>    {
+<a href=#435 id=435 data-nosnippet>435</a>        assert_future::&lt;<span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output, Box&lt;<span class="kw">dyn </span>std::any::Any + Send&gt;&gt;, <span class="kw">_</span>&gt;(CatchUnwind::new(
+<a href=#436 id=436 data-nosnippet>436</a>            <span class="self">self</span>,
+<a href=#437 id=437 data-nosnippet>437</a>        ))
+<a href=#438 id=438 data-nosnippet>438</a>    }
+<a href=#439 id=439 data-nosnippet>439</a>
+<a href=#440 id=440 data-nosnippet>440</a>    <span class="doccomment">/// Create a cloneable handle to this future where all handles will resolve
+<a href=#441 id=441 data-nosnippet>441</a>    /// to the same result.
+<a href=#442 id=442 data-nosnippet>442</a>    ///
+<a href=#443 id=443 data-nosnippet>443</a>    /// The `shared` combinator method provides a method to convert any future
+<a href=#444 id=444 data-nosnippet>444</a>    /// into a cloneable future. It enables a future to be polled by multiple
+<a href=#445 id=445 data-nosnippet>445</a>    /// threads.
+<a href=#446 id=446 data-nosnippet>446</a>    ///
+<a href=#447 id=447 data-nosnippet>447</a>    /// This method is only available when the `std` feature of this
+<a href=#448 id=448 data-nosnippet>448</a>    /// library is activated, and it is activated by default.
+<a href=#449 id=449 data-nosnippet>449</a>    ///
+<a href=#450 id=450 data-nosnippet>450</a>    /// # Examples
+<a href=#451 id=451 data-nosnippet>451</a>    ///
+<a href=#452 id=452 data-nosnippet>452</a>    /// ```
+<a href=#453 id=453 data-nosnippet>453</a>    /// # futures::executor::block_on(async {
+<a href=#454 id=454 data-nosnippet>454</a>    /// use futures::future::FutureExt;
+<a href=#455 id=455 data-nosnippet>455</a>    ///
+<a href=#456 id=456 data-nosnippet>456</a>    /// let future = async { 6 };
+<a href=#457 id=457 data-nosnippet>457</a>    /// let shared1 = future.shared();
+<a href=#458 id=458 data-nosnippet>458</a>    /// let shared2 = shared1.clone();
+<a href=#459 id=459 data-nosnippet>459</a>    ///
+<a href=#460 id=460 data-nosnippet>460</a>    /// assert_eq!(6, shared1.await);
+<a href=#461 id=461 data-nosnippet>461</a>    /// assert_eq!(6, shared2.await);
+<a href=#462 id=462 data-nosnippet>462</a>    /// # });
+<a href=#463 id=463 data-nosnippet>463</a>    /// ```
+<a href=#464 id=464 data-nosnippet>464</a>    ///
+<a href=#465 id=465 data-nosnippet>465</a>    /// ```
+<a href=#466 id=466 data-nosnippet>466</a>    /// # futures::executor::block_on(async {
+<a href=#467 id=467 data-nosnippet>467</a>    /// use futures::future::FutureExt;
+<a href=#468 id=468 data-nosnippet>468</a>    /// use futures::executor::block_on;
+<a href=#469 id=469 data-nosnippet>469</a>    /// use std::thread;
+<a href=#470 id=470 data-nosnippet>470</a>    ///
+<a href=#471 id=471 data-nosnippet>471</a>    /// let future = async { 6 };
+<a href=#472 id=472 data-nosnippet>472</a>    /// let shared1 = future.shared();
+<a href=#473 id=473 data-nosnippet>473</a>    /// let shared2 = shared1.clone();
+<a href=#474 id=474 data-nosnippet>474</a>    /// let join_handle = thread::spawn(move || {
+<a href=#475 id=475 data-nosnippet>475</a>    ///     assert_eq!(6, block_on(shared2));
+<a href=#476 id=476 data-nosnippet>476</a>    /// });
+<a href=#477 id=477 data-nosnippet>477</a>    /// assert_eq!(6, shared1.await);
+<a href=#478 id=478 data-nosnippet>478</a>    /// join_handle.join().unwrap();
+<a href=#479 id=479 data-nosnippet>479</a>    /// # });
+<a href=#480 id=480 data-nosnippet>480</a>    /// ```
+<a href=#481 id=481 data-nosnippet>481</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#482 id=482 data-nosnippet>482</a>    </span><span class="kw">fn </span>shared(<span class="self">self</span>) -&gt; Shared&lt;<span class="self">Self</span>&gt;
+<a href=#483 id=483 data-nosnippet>483</a>    <span class="kw">where
+<a href=#484 id=484 data-nosnippet>484</a>        </span><span class="self">Self</span>: Sized,
+<a href=#485 id=485 data-nosnippet>485</a>        <span class="self">Self</span>::Output: Clone,
+<a href=#486 id=486 data-nosnippet>486</a>    {
+<a href=#487 id=487 data-nosnippet>487</a>        assert_future::&lt;<span class="self">Self</span>::Output, <span class="kw">_</span>&gt;(Shared::new(<span class="self">self</span>))
+<a href=#488 id=488 data-nosnippet>488</a>    }
+<a href=#489 id=489 data-nosnippet>489</a>
+<a href=#490 id=490 data-nosnippet>490</a>    <span class="doccomment">/// Turn this future into a future that yields `()` on completion and sends
+<a href=#491 id=491 data-nosnippet>491</a>    /// its output to another future on a separate task.
+<a href=#492 id=492 data-nosnippet>492</a>    ///
+<a href=#493 id=493 data-nosnippet>493</a>    /// This can be used with spawning executors to easily retrieve the result
+<a href=#494 id=494 data-nosnippet>494</a>    /// of a future executing on a separate task or thread.
+<a href=#495 id=495 data-nosnippet>495</a>    ///
+<a href=#496 id=496 data-nosnippet>496</a>    /// This method is only available when the `std` feature of this
+<a href=#497 id=497 data-nosnippet>497</a>    /// library is activated, and it is activated by default.
+<a href=#498 id=498 data-nosnippet>498</a>    </span><span class="attr">#[cfg(feature = <span class="string">"channel"</span>)]
+<a href=#499 id=499 data-nosnippet>499</a>    #[cfg_attr(docsrs, doc(cfg(feature = <span class="string">"channel"</span>)))]
+<a href=#500 id=500 data-nosnippet>500</a>    #[cfg(feature = <span class="string">"std"</span>)]
+<a href=#501 id=501 data-nosnippet>501</a>    </span><span class="kw">fn </span>remote_handle(<span class="self">self</span>) -&gt; (Remote&lt;<span class="self">Self</span>&gt;, RemoteHandle&lt;<span class="self">Self</span>::Output&gt;)
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">where
+<a href=#503 id=503 data-nosnippet>503</a>        </span><span class="self">Self</span>: Sized,
+<a href=#504 id=504 data-nosnippet>504</a>    {
+<a href=#505 id=505 data-nosnippet>505</a>        <span class="kw">let </span>(wrapped, handle) = remote_handle::remote_handle(<span class="self">self</span>);
+<a href=#506 id=506 data-nosnippet>506</a>        (assert_future::&lt;(), <span class="kw">_</span>&gt;(wrapped), handle)
+<a href=#507 id=507 data-nosnippet>507</a>    }
+<a href=#508 id=508 data-nosnippet>508</a>
+<a href=#509 id=509 data-nosnippet>509</a>    <span class="doccomment">/// Wrap the future in a Box, pinning it.
+<a href=#510 id=510 data-nosnippet>510</a>    ///
+<a href=#511 id=511 data-nosnippet>511</a>    /// This method is only available when the `std` or `alloc` feature of this
+<a href=#512 id=512 data-nosnippet>512</a>    /// library is activated, and it is activated by default.
+<a href=#513 id=513 data-nosnippet>513</a>    </span><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#514 id=514 data-nosnippet>514</a>    </span><span class="kw">fn </span>boxed&lt;<span class="lifetime">'a</span>&gt;(<span class="self">self</span>) -&gt; BoxFuture&lt;<span class="lifetime">'a</span>, <span class="self">Self</span>::Output&gt;
+<a href=#515 id=515 data-nosnippet>515</a>    <span class="kw">where
+<a href=#516 id=516 data-nosnippet>516</a>        </span><span class="self">Self</span>: Sized + Send + <span class="lifetime">'a</span>,
+<a href=#517 id=517 data-nosnippet>517</a>    {
+<a href=#518 id=518 data-nosnippet>518</a>        assert_future::&lt;<span class="self">Self</span>::Output, <span class="kw">_</span>&gt;(Box::pin(<span class="self">self</span>))
+<a href=#519 id=519 data-nosnippet>519</a>    }
+<a href=#520 id=520 data-nosnippet>520</a>
+<a href=#521 id=521 data-nosnippet>521</a>    <span class="doccomment">/// Wrap the future in a Box, pinning it.
+<a href=#522 id=522 data-nosnippet>522</a>    ///
+<a href=#523 id=523 data-nosnippet>523</a>    /// Similar to `boxed`, but without the `Send` requirement.
+<a href=#524 id=524 data-nosnippet>524</a>    ///
+<a href=#525 id=525 data-nosnippet>525</a>    /// This method is only available when the `std` or `alloc` feature of this
+<a href=#526 id=526 data-nosnippet>526</a>    /// library is activated, and it is activated by default.
+<a href=#527 id=527 data-nosnippet>527</a>    </span><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#528 id=528 data-nosnippet>528</a>    </span><span class="kw">fn </span>boxed_local&lt;<span class="lifetime">'a</span>&gt;(<span class="self">self</span>) -&gt; LocalBoxFuture&lt;<span class="lifetime">'a</span>, <span class="self">Self</span>::Output&gt;
+<a href=#529 id=529 data-nosnippet>529</a>    <span class="kw">where
+<a href=#530 id=530 data-nosnippet>530</a>        </span><span class="self">Self</span>: Sized + <span class="lifetime">'a</span>,
+<a href=#531 id=531 data-nosnippet>531</a>    {
+<a href=#532 id=532 data-nosnippet>532</a>        assert_future::&lt;<span class="self">Self</span>::Output, <span class="kw">_</span>&gt;(Box::pin(<span class="self">self</span>))
+<a href=#533 id=533 data-nosnippet>533</a>    }
+<a href=#534 id=534 data-nosnippet>534</a>
+<a href=#535 id=535 data-nosnippet>535</a>    <span class="doccomment">/// Turns a [`Future&lt;Output = T&gt;`](Future) into a
+<a href=#536 id=536 data-nosnippet>536</a>    /// [`TryFuture&lt;Ok = T, Error = ()`&gt;](futures_core::future::TryFuture).
+<a href=#537 id=537 data-nosnippet>537</a>    </span><span class="kw">fn </span>unit_error(<span class="self">self</span>) -&gt; UnitError&lt;<span class="self">Self</span>&gt;
+<a href=#538 id=538 data-nosnippet>538</a>    <span class="kw">where
+<a href=#539 id=539 data-nosnippet>539</a>        </span><span class="self">Self</span>: Sized,
+<a href=#540 id=540 data-nosnippet>540</a>    {
+<a href=#541 id=541 data-nosnippet>541</a>        assert_future::&lt;<span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output, ()&gt;, <span class="kw">_</span>&gt;(UnitError::new(<span class="self">self</span>))
+<a href=#542 id=542 data-nosnippet>542</a>    }
+<a href=#543 id=543 data-nosnippet>543</a>
+<a href=#544 id=544 data-nosnippet>544</a>    <span class="doccomment">/// Turns a [`Future&lt;Output = T&gt;`](Future) into a
+<a href=#545 id=545 data-nosnippet>545</a>    /// [`TryFuture&lt;Ok = T, Error = Never`&gt;](futures_core::future::TryFuture).
+<a href=#546 id=546 data-nosnippet>546</a>    </span><span class="kw">fn </span>never_error(<span class="self">self</span>) -&gt; NeverError&lt;<span class="self">Self</span>&gt;
+<a href=#547 id=547 data-nosnippet>547</a>    <span class="kw">where
+<a href=#548 id=548 data-nosnippet>548</a>        </span><span class="self">Self</span>: Sized,
+<a href=#549 id=549 data-nosnippet>549</a>    {
+<a href=#550 id=550 data-nosnippet>550</a>        assert_future::&lt;<span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output, Never&gt;, <span class="kw">_</span>&gt;(NeverError::new(<span class="self">self</span>))
+<a href=#551 id=551 data-nosnippet>551</a>    }
+<a href=#552 id=552 data-nosnippet>552</a>
+<a href=#553 id=553 data-nosnippet>553</a>    <span class="doccomment">/// A convenience for calling `Future::poll` on `Unpin` future types.
+<a href=#554 id=554 data-nosnippet>554</a>    </span><span class="kw">fn </span>poll_unpin(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt;
+<a href=#555 id=555 data-nosnippet>555</a>    <span class="kw">where
+<a href=#556 id=556 data-nosnippet>556</a>        </span><span class="self">Self</span>: Unpin,
+<a href=#557 id=557 data-nosnippet>557</a>    {
+<a href=#558 id=558 data-nosnippet>558</a>        Pin::new(<span class="self">self</span>).poll(cx)
+<a href=#559 id=559 data-nosnippet>559</a>    }
+<a href=#560 id=560 data-nosnippet>560</a>
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="doccomment">/// Evaluates and consumes the future, returning the resulting output if
+<a href=#562 id=562 data-nosnippet>562</a>    /// the future is ready after the first call to `Future::poll`.
+<a href=#563 id=563 data-nosnippet>563</a>    ///
+<a href=#564 id=564 data-nosnippet>564</a>    /// If `poll` instead returns `Poll::Pending`, `None` is returned.
+<a href=#565 id=565 data-nosnippet>565</a>    ///
+<a href=#566 id=566 data-nosnippet>566</a>    /// This method is useful in cases where immediacy is more important than
+<a href=#567 id=567 data-nosnippet>567</a>    /// waiting for a result. It is also convenient for quickly obtaining
+<a href=#568 id=568 data-nosnippet>568</a>    /// the value of a future that is known to always resolve immediately.
+<a href=#569 id=569 data-nosnippet>569</a>    ///
+<a href=#570 id=570 data-nosnippet>570</a>    /// # Examples
+<a href=#571 id=571 data-nosnippet>571</a>    ///
+<a href=#572 id=572 data-nosnippet>572</a>    /// ```
+<a href=#573 id=573 data-nosnippet>573</a>    /// # use futures::prelude::*;
+<a href=#574 id=574 data-nosnippet>574</a>    /// use futures::{future::ready, future::pending};
+<a href=#575 id=575 data-nosnippet>575</a>    /// let future_ready = ready("foobar");
+<a href=#576 id=576 data-nosnippet>576</a>    /// let future_pending = pending::&lt;&amp;'static str&gt;();
+<a href=#577 id=577 data-nosnippet>577</a>    ///
+<a href=#578 id=578 data-nosnippet>578</a>    /// assert_eq!(future_ready.now_or_never(), Some("foobar"));
+<a href=#579 id=579 data-nosnippet>579</a>    /// assert_eq!(future_pending.now_or_never(), None);
+<a href=#580 id=580 data-nosnippet>580</a>    /// ```
+<a href=#581 id=581 data-nosnippet>581</a>    ///
+<a href=#582 id=582 data-nosnippet>582</a>    /// In cases where it is absolutely known that a future should always
+<a href=#583 id=583 data-nosnippet>583</a>    /// resolve immediately and never return `Poll::Pending`, this method can
+<a href=#584 id=584 data-nosnippet>584</a>    /// be combined with `expect()`:
+<a href=#585 id=585 data-nosnippet>585</a>    ///
+<a href=#586 id=586 data-nosnippet>586</a>    /// ```
+<a href=#587 id=587 data-nosnippet>587</a>    /// # use futures::{prelude::*, future::ready};
+<a href=#588 id=588 data-nosnippet>588</a>    /// let future_ready = ready("foobar");
+<a href=#589 id=589 data-nosnippet>589</a>    ///
+<a href=#590 id=590 data-nosnippet>590</a>    /// assert_eq!(future_ready.now_or_never().expect("Future not ready"), "foobar");
+<a href=#591 id=591 data-nosnippet>591</a>    /// ```
+<a href=#592 id=592 data-nosnippet>592</a>    </span><span class="kw">fn </span>now_or_never(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Output&gt;
+<a href=#593 id=593 data-nosnippet>593</a>    <span class="kw">where
+<a href=#594 id=594 data-nosnippet>594</a>        </span><span class="self">Self</span>: Sized,
+<a href=#595 id=595 data-nosnippet>595</a>    {
+<a href=#596 id=596 data-nosnippet>596</a>        <span class="kw">let </span>noop_waker = <span class="kw">crate</span>::task::noop_waker();
+<a href=#597 id=597 data-nosnippet>597</a>        <span class="kw">let </span><span class="kw-2">mut </span>cx = Context::from_waker(<span class="kw-2">&amp;</span>noop_waker);
+<a href=#598 id=598 data-nosnippet>598</a>
+<a href=#599 id=599 data-nosnippet>599</a>        <span class="kw">let </span>this = <span class="self">self</span>;
+<a href=#600 id=600 data-nosnippet>600</a>        <span class="macro">pin_mut!</span>(this);
+<a href=#601 id=601 data-nosnippet>601</a>        <span class="kw">match </span>this.poll(<span class="kw-2">&amp;mut </span>cx) {
+<a href=#602 id=602 data-nosnippet>602</a>            Poll::Ready(x) =&gt; <span class="prelude-val">Some</span>(x),
+<a href=#603 id=603 data-nosnippet>603</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#604 id=604 data-nosnippet>604</a>        }
+<a href=#605 id=605 data-nosnippet>605</a>    }
+<a href=#606 id=606 data-nosnippet>606</a>}</code></pre></div></section></main></body></html>

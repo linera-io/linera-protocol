@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DefaultResolver","Endpoint","EndpointFuture","InvalidParams","Params","ParamsBuilder","SharedEndpointResolver"],"trait":["ResolveEndpoint"]};

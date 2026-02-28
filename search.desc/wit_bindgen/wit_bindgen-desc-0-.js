@@ -1,0 +1,1 @@
+searchState.loadedDescShard("wit_bindgen", 0, "Bindings generation support for Rust with the Component …\nGenerate bindings for an input WIT document.")

@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Moves `src` into the pointed `dst`, returning the previous `dst` value."><title>replace in wasmtime_environ::__core::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">replace</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#safety" title="Safety">Safety</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>ptr</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">ptr</a></div><h1>Function <span class="fn">replace</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.6.0, const since 1.83.0">1.6.0 (const: 1.83.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/ptr/mod.rs.html#1212">Source</a> </span></div><pre class="rust item-decl"><code>pub const unsafe fn replace&lt;T&gt;(dst: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html">*mut T</a>, src: T) -&gt; T</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Moves <code>src</code> into the pointed <code>dst</code>, returning the previous <code>dst</code> value.</p>
+<p>Neither value is dropped.</p>
+<p>This function is semantically equivalent to <a href="../mem/fn.replace.html" title="fn wasmtime_environ::__core::mem::replace"><code>mem::replace</code></a> except that it
+operates on raw pointers instead of references. When references are
+available, <a href="../mem/fn.replace.html" title="fn wasmtime_environ::__core::mem::replace"><code>mem::replace</code></a> should be preferred.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li>
+<p><code>dst</code> must be <a href="index.html#safety" title="mod wasmtime_environ::__core::ptr">valid</a> for both reads and writes.</p>
+</li>
+<li>
+<p><code>dst</code> must be properly aligned.</p>
+</li>
+<li>
+<p><code>dst</code> must point to a properly initialized value of type <code>T</code>.</p>
+</li>
+</ul>
+<p>Note that even if <code>T</code> has size <code>0</code>, the pointer must be properly aligned.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rust = <span class="macro">vec!</span>[<span class="string">'b'</span>, <span class="string">'u'</span>, <span class="string">'s'</span>, <span class="string">'t'</span>];
+
+<span class="comment">// `mem::replace` would have the same effect without requiring the unsafe
+// block.
+</span><span class="kw">let </span>b = <span class="kw">unsafe </span>{
+    ptr::replace(<span class="kw-2">&amp;mut </span>rust[<span class="number">0</span>], <span class="string">'r'</span>)
+};
+
+<span class="macro">assert_eq!</span>(b, <span class="string">'b'</span>);
+<span class="macro">assert_eq!</span>(rust, <span class="kw-2">&amp;</span>[<span class="string">'r'</span>, <span class="string">'u'</span>, <span class="string">'s'</span>, <span class="string">'t'</span>]);</code></pre></div>
+</div></details></section></div></main></body></html>

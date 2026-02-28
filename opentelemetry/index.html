@@ -1,0 +1,183 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implements the `API` component of OpenTelemetry."><title>opentelemetry - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="opentelemetry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../opentelemetry/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../opentelemetry/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt="logo"></a><h2><a href="../opentelemetry/index.html">opentelemetry</a><span class="version">0.30.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#getting-started-with-traces" title="Getting Started with Traces">Getting Started with Traces</a></li><li><a href="#getting-started-with-metrics" title="Getting Started with Metrics">Getting Started with Metrics</a><ul><li><a href="#how-metrics-work-in-opentelemetry" title="How Metrics work in OpenTelemetry">How Metrics work in OpenTelemetry</a></li><li><a href="#choosing-the-right-instrument" title="Choosing the Right Instrument">Choosing the Right Instrument</a></li><li><a href="#best-practices" title="Best Practices">Best Practices</a></li><li><a href="#example-usage" title="Example Usage">Example Usage</a></li></ul></li><li><a href="#getting-started-with-logs" title="Getting Started with Logs">Getting Started with Logs</a></li><li><a href="#crate-feature-flags" title="Crate Feature Flags">Crate Feature Flags</a></li><li><a href="#related-crates" title="Related Crates">Related Crates</a></li><li><a href="#supported-rust-versions" title="Supported Rust Versions">Supported Rust Versions</a></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>opentelemetry</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/opentelemetry/lib.rs.html#1-307">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implements the <a href="https://opentelemetry.io/docs/specs/otel/overview/#api"><code>API</code></a> component of <a href="https://opentelemetry.io/docs/what-is-opentelemetry/">OpenTelemetry</a>.</p>
+<p><em><a href="#supported-rust-versions">Supported Rust Versions</a></em></p>
+<h2 id="getting-started-with-traces"><a class="doc-anchor" href="#getting-started-with-traces">§</a>Getting Started with Traces</h2>
+<p>The <a href="trace/index.html" title="mod opentelemetry::trace"><code>trace</code></a> module includes types for tracking the progression of a single
+request while it is handled by services that make up an application. A trace
+is a tree of <a href="trace/trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>s which are objects that represent the work being done
+by individual services or components involved in a request as it flows
+through a system.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, trace::{Span, Tracer}, KeyValue};
+
+<span class="comment">// get a tracer from a provider
+</span><span class="kw">let </span>tracer = global::tracer(<span class="string">"my_service"</span>);
+
+<span class="comment">// start a new span
+</span><span class="kw">let </span><span class="kw-2">mut </span>span = tracer.start(<span class="string">"my_span"</span>);
+
+<span class="comment">// set some attributes
+</span>span.set_attribute(KeyValue::new(<span class="string">"http.client_ip"</span>, <span class="string">"83.164.160.102"</span>));
+
+<span class="comment">// perform some more work...
+
+// end or drop the span to export
+</span>span.end();</code></pre></div>
+<p>See the <a href="https://github.com/open-telemetry/opentelemetry-rust/tree/main/examples">examples</a> directory for different integration patterns.</p>
+<p>See the <a href="trace/index.html" title="mod opentelemetry::trace"><code>trace</code></a> module docs for more information on creating and managing
+spans.</p>
+<h2 id="getting-started-with-metrics"><a class="doc-anchor" href="#getting-started-with-metrics">§</a>Getting Started with Metrics</h2>
+<p>The <a href="metrics/index.html" title="mod opentelemetry::metrics"><code>metrics</code></a> module provides types for recording measurements about a
+service at runtime. Below are the key steps to report measurements using
+OpenTelemetry Metrics:</p>
+<ol>
+<li><strong>Obtain a Meter:</strong> Get a <code>Meter</code> from a <code>MeterProvider</code>.</li>
+<li><strong>Create Instruments:</strong> Use the <code>Meter</code> to create one or more instruments
+(e.g., counters, histograms).</li>
+<li><strong>Record Measurements:</strong> Use the instruments to record measurement values
+along with optional attributes.</li>
+</ol>
+<h3 id="how-metrics-work-in-opentelemetry"><a class="doc-anchor" href="#how-metrics-work-in-opentelemetry">§</a>How Metrics work in OpenTelemetry</h3>
+<p>In OpenTelemetry, raw measurements recorded using instruments are
+<strong>aggregated in memory</strong> to form metrics. These aggregated metrics are
+periodically exported by the <a href="https://crates.io/crates/opentelemetry_sdk"><code>opentelemetry_sdk</code></a> at fixed intervals (e.g.,
+every 60 seconds) via exporters such as <a href="https://crates.io/crates/opentelemetry_stdout"><code>opentelemetry-stdout</code></a> or
+<a href="https://crates.io/crates/opentelemetry-otlp"><code>opentelemetry-otlp</code></a>. This reduces reporting overhead while ensuring
+up-to-date data. The aggregation strategy and export interval can be
+customized in the <a href="https://crates.io/crates/opentelemetry_sdk"><code>opentelemetry_sdk</code></a> based on your use case.</p>
+<h3 id="choosing-the-right-instrument"><a class="doc-anchor" href="#choosing-the-right-instrument">§</a>Choosing the Right Instrument</h3>
+<p>Selecting the correct instrument is critical for accurately representing
+your metrics data:</p>
+<ul>
+<li>Use <strong>Counters</strong> for values that only increase, such as the number of
+requests served or errors encountered.</li>
+<li>Use <strong>UpDownCounters</strong> for values that can increase or decrease, such as
+the number of active connections, number of items in a queue etc.</li>
+<li><strong>Gauges:</strong> Use for values that can go up or down and represent the
+current state, such as CPU usage, temperature etc.</li>
+<li>Use <strong>Histograms</strong> for measuring the distribution of a value, such as
+response times or payload sizes.</li>
+</ul>
+<h4 id="observable-instruments"><a class="doc-anchor" href="#observable-instruments">§</a>Observable Instruments</h4>
+<p>Counters, UpDownCounters, and Gauges have Observable variants that allow
+values to be reported through a callback function. Observable instruments
+are ideal when the metric value is managed elsewhere and needs to be
+observed by OpenTelemetry instrumentation. The callbacks are automatically
+invoked by the OpenTelemetry SDK before every export (e.g., every 60
+seconds).</p>
+<p>For example:</p>
+<ul>
+<li>An <strong>ObservableCounter</strong> can monitor the number of page faults in a
+process as reported by the operating system.</li>
+<li>An <strong>ObservableUpDownCounter</strong> can monitor the size of an in-memory queue
+by reporting the size using queue’s len() method within the callback
+function.</li>
+<li>An <strong>ObservableGauge</strong> can monitor the CPU temperature by using
+temperature sensor APIs within the callback function.</li>
+</ul>
+<p>For detailed guidance, refer to <a href="https://opentelemetry.io/docs/specs/otel/metrics/supplementary-guidelines/#instrument-selection">OpenTelemetry Metrics API - Instrumentation
+Guidance</a>.</p>
+<h3 id="best-practices"><a class="doc-anchor" href="#best-practices">§</a>Best Practices</h3>
+<ul>
+<li><strong>Re-use Instruments:</strong> Instruments are designed for
+reuse. Avoid creating new instruments repeatedly.</li>
+<li><strong>Clone for Sharing:</strong> If the same instrument needs to be used across
+multiple parts of your code, you can safely clone it to share.</li>
+</ul>
+<h3 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example Usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, KeyValue};
+
+<span class="comment">// Get a meter from a provider.
+</span><span class="kw">let </span>meter = global::meter(<span class="string">"my_service"</span>);
+
+<span class="comment">// Create an instrument (in this case, a Counter).
+</span><span class="kw">let </span>counter = meter.u64_counter(<span class="string">"request.count"</span>).build();
+
+<span class="comment">// Record a measurement by passing the value and a set of attributes.
+</span>counter.add(<span class="number">1</span>, <span class="kw-2">&amp;</span>[KeyValue::new(<span class="string">"http.client_ip"</span>, <span class="string">"83.164.160.102"</span>)]);
+
+<span class="comment">// Create an ObservableCounter and register a callback that reports the measurement.
+</span><span class="kw">let </span>_observable_counter = meter
+.u64_observable_counter(<span class="string">"bytes_received"</span>)
+.with_callback(|observer| {
+    observer.observe(
+        <span class="number">100</span>,
+        <span class="kw-2">&amp;</span>[
+            KeyValue::new(<span class="string">"protocol"</span>, <span class="string">"udp"</span>),
+        ],
+    )
+})
+.build();</code></pre></div>
+<p>See the
+<a href="https://github.com/open-telemetry/opentelemetry-rust/tree/main/examples/metrics-basic">examples</a>
+directory that show a runnable example with all type of instruments.</p>
+<p>See the <a href="metrics/index.html" title="mod opentelemetry::metrics"><code>metrics</code></a> module docs for more information on creating and
+managing instruments.</p>
+<h2 id="getting-started-with-logs"><a class="doc-anchor" href="#getting-started-with-logs">§</a>Getting Started with Logs</h2>
+<p>The <a href="logs/index.html" title="mod opentelemetry::logs"><code>logs</code></a> module contains the Logs Bridge API. It is not intended to be
+called by application developers directly. It is provided for logging
+library authors to build log appenders, that bridges existing logging
+systems with OpenTelemetry. Bridges for
+<a href="https://crates.io/crates/log"><code>log</code></a> and
+<a href="https://crates.io/crates/tracing"><code>tracing</code></a> libraries are provided via
+the
+<a href="https://crates.io/crates/opentelemetry-appender-log"><code>opentelemetry-appender-log</code></a>
+and
+<a href="https://crates.io/crates/opentelemetry-appender-tracing"><code>opentelemetry-appender-tracing</code></a>
+crates.</p>
+<h2 id="crate-feature-flags"><a class="doc-anchor" href="#crate-feature-flags">§</a>Crate Feature Flags</h2>
+<p>The following core crate feature flags are available:</p>
+<ul>
+<li><code>trace</code>: Includes the trace API.</li>
+<li><code>metrics</code>: Includes the metrics API.</li>
+<li><code>logs</code>: Includes the logs bridge API.</li>
+<li><code>internal-logs</code>: Includes internal logging for the OpenTelemetry library via <code>tracing</code>.</li>
+</ul>
+<p>The default feature flags are [“trace”, “metrics”, “logs”, “internal-logs”].</p>
+<p>The following feature flags provides additional configuration for <code>logs</code>:</p>
+<ul>
+<li><code>spec_unstable_logs_enabled</code>: Allow users to control the log level</li>
+</ul>
+<p>The following feature flags enable APIs defined in OpenTelemetry specification that is in experimental phase:</p>
+<ul>
+<li><code>otel_unstable</code>: Includes unstable APIs. There are no features behind this flag at the moment.</li>
+</ul>
+<h2 id="related-crates"><a class="doc-anchor" href="#related-crates">§</a>Related Crates</h2>
+<p>In addition to <code>opentelemetry</code>, the <a href="https://github.com/open-telemetry/opentelemetry-rust"><code>open-telemetry/opentelemetry-rust</code></a>
+repository contains several additional crates designed to be used with the
+<code>opentelemetry</code> ecosystem. This includes exporters, samplers, as well as
+utility and adapter crates to assist in propagating context and
+instrumenting applications.</p>
+<p>In particular, the following crates are likely to be of interest:</p>
+<ul>
+<li><a href="https://crates.io/crates/opentelemetry_sdk"><code>opentelemetry_sdk</code></a> provides the OpenTelemetry SDK used to configure providers.</li>
+<li><a href="https://crates.io/crates/opentelemetry-http"><code>opentelemetry-http</code></a> provides an interface for injecting and extracting
+trace information from <a href="https://crates.io/crates/http"><code>http</code></a> headers.</li>
+<li><a href="https://crates.io/crates/opentelemetry-otlp"><code>opentelemetry-otlp</code></a> exporter for sending telemetry in the
+OTLP format.</li>
+<li><a href="https://crates.io/crates/opentelemetry_stdout"><code>opentelemetry-stdout</code></a> provides ability to output telemetry to stdout,
+primarily used for learning/debugging purposes.</li>
+<li><a href="https://crates.io/crates/opentelemetry-prometheus"><code>opentelemetry-prometheus</code></a> provides a pipeline and exporter for sending
+metrics information to <a href="https://prometheus.io"><code>Prometheus</code></a>.</li>
+<li><a href="https://crates.io/crates/opentelemetry-zipkin"><code>opentelemetry-zipkin</code></a> provides a pipeline and exporter for sending
+trace information to <a href="https://zipkin.io"><code>Zipkin</code></a>.</li>
+</ul>
+<p>In addition, there are several other useful crates in the <a href="https://github.com/open-telemetry/opentelemetry-rust-contrib">OTel Rust
+Contrib
+repo</a>. A lot
+of crates maintained outside OpenTelemetry owned repos can be found in the
+<a href="https://opentelemetry.io/ecosystem/registry/?language=rust">OpenTelemetry
+Registry</a>.</p>
+<h2 id="supported-rust-versions"><a class="doc-anchor" href="#supported-rust-versions">§</a>Supported Rust Versions</h2>
+<p>OpenTelemetry is built against the latest stable release. The minimum
+supported version is 1.70. The current OpenTelemetry version is not
+guaranteed to build on Rust versions earlier than the minimum supported
+version.</p>
+<p>The current stable Rust compiler and the three most recent minor versions
+before it will always be supported. For example, if the current stable
+compiler version is 1.49, the minimum supported version will not be
+increased past 1.46, three minor versions prior. Increasing the minimum
+supported compiler version is not considered a semver breaking change as
+long as doing so complies with this policy.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.Context"><code>pub use context::<a class="struct" href="context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>;</code></dt><dt id="reexport.ContextGuard"><code>pub use context::<a class="struct" href="context/struct.ContextGuard.html" title="struct opentelemetry::context::ContextGuard">ContextGuard</a>;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="baggage/index.html" title="mod opentelemetry::baggage">baggage</a></dt><dd>Primitives for sending name/value data across system boundaries.</dd><dt><a class="mod" href="context/index.html" title="mod opentelemetry::context">context</a></dt><dd>Execution-scoped context propagation.</dd><dt><a class="mod" href="global/index.html" title="mod opentelemetry::global">global</a></dt><dd>Utilities for working with global telemetry primitives</dd><dt><a class="mod" href="logs/index.html" title="mod opentelemetry::logs">logs</a></dt><dd>OpenTelemetry Logs Bridge API</dd><dt><a class="mod" href="metrics/index.html" title="mod opentelemetry::metrics">metrics</a></dt><dd>OpenTelemetry Metrics API</dd><dt><a class="mod" href="propagation/index.html" title="mod opentelemetry::propagation">propagation</a></dt><dd>OpenTelemetry Propagator interface</dd><dt><a class="mod" href="trace/index.html" title="mod opentelemetry::trace">trace</a></dt><dd>API for tracing applications and libraries.</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.otel_debug.html" title="macro opentelemetry::otel_debug">otel_<wbr>debug</a></dt><dd>Macro for logging debug messages in OpenTelemetry.</dd><dt><a class="macro" href="macro.otel_error.html" title="macro opentelemetry::otel_error">otel_<wbr>error</a></dt><dd>Macro for logging error messages in OpenTelemetry.</dd><dt><a class="macro" href="macro.otel_info.html" title="macro opentelemetry::otel_info">otel_<wbr>info</a></dt><dd><strong>Note</strong>: These macros (<code>otel_info!</code>, <code>otel_warn!</code>, <code>otel_debug!</code>, and <code>otel_error!</code>) are intended to be used
+<strong>internally within OpenTelemetry code</strong> or for <strong>custom exporters, processors and other plugins</strong>. They are not designed
+for general application logging and should not be used for that purpose.</dd><dt><a class="macro" href="macro.otel_warn.html" title="macro opentelemetry::otel_warn">otel_<wbr>warn</a></dt><dd>Macro for logging warning messages in OpenTelemetry.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.InstrumentationScope.html" title="struct opentelemetry::InstrumentationScope">Instrumentation<wbr>Scope</a></dt><dd>Information about a library or crate providing instrumentation.</dd><dt><a class="struct" href="struct.InstrumentationScopeBuilder.html" title="struct opentelemetry::InstrumentationScopeBuilder">Instrumentation<wbr>Scope<wbr>Builder</a></dt><dd>Configuration options for <a href="struct.InstrumentationScope.html" title="struct opentelemetry::InstrumentationScope">InstrumentationScope</a>.</dd><dt><a class="struct" href="struct.Key.html" title="struct opentelemetry::Key">Key</a></dt><dd>The key part of attribute <a href="struct.KeyValue.html" title="struct opentelemetry::KeyValue">KeyValue</a> pairs.</dd><dt><a class="struct" href="struct.KeyValue.html" title="struct opentelemetry::KeyValue">KeyValue</a></dt><dd>A key-value pair describing an attribute.</dd><dt><a class="struct" href="struct.SpanId.html" title="struct opentelemetry::SpanId">SpanId</a></dt><dd>An 8-byte value which identifies a given span.</dd><dt><a class="struct" href="struct.StringValue.html" title="struct opentelemetry::StringValue">String<wbr>Value</a></dt><dd>Wrapper for string-like values</dd><dt><a class="struct" href="struct.TraceFlags.html" title="struct opentelemetry::TraceFlags">Trace<wbr>Flags</a></dt><dd>Flags that can be set on a <code>SpanContext</code>.</dd><dt><a class="struct" href="struct.TraceId.html" title="struct opentelemetry::TraceId">TraceId</a></dt><dd>A 16-byte value which identifies a given trace.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Array.html" title="enum opentelemetry::Array">Array</a></dt><dd>A <a href="enum.Value.html#variant.Array" title="variant opentelemetry::Value::Array">Value::Array</a> containing homogeneous values.</dd><dt><a class="enum" href="enum.Value.html" title="enum opentelemetry::Value">Value</a></dt><dd>The value part of attribute <a href="struct.KeyValue.html" title="struct opentelemetry::KeyValue">KeyValue</a> pairs.</dd></dl></section></div></main></body></html>

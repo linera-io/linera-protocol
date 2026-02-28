@@ -1,0 +1,255 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Middleware that adds high level tracing to a `Service`."><title>tower_http::trace - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tower_http" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tower_http/index.html">tower_<wbr>http</a><span class="version">0.6.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module trace</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li><li><a href="#customization" title="Customization">Customization</a><ul><li><a href="#disabling-something" title="Disabling something">Disabling something</a></li></ul></li><li><a href="#when-the-callbacks-are-called" title="When the callbacks are called">When the callbacks are called</a><ul><li><a href="#on_request" title="`on_request`"><code>on_request</code></a></li><li><a href="#on_response" title="`on_response`"><code>on_response</code></a></li><li><a href="#on_body_chunk" title="`on_body_chunk`"><code>on_body_chunk</code></a></li><li><a href="#on_eos" title="`on_eos`"><code>on_eos</code></a></li><li><a href="#on_failure" title="`on_failure`"><code>on_failure</code></a></li></ul></li><li><a href="#recording-fields-on-the-span" title="Recording fields on the span">Recording fields on the span</a></li><li><a href="#providing-classifiers" title="Providing classifiers">Providing classifiers</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate tower_<wbr>http</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">tower_http</a></div><h1>Module <span>trace</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/tower_http/trace/mod.rs.html#1-635">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Middleware that adds high level <a href="https://crates.io/crates/tracing">tracing</a> to a <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Adding tracing to your service can be as simple as:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::{Request, Response};
+<span class="kw">use </span>tower::{ServiceBuilder, ServiceExt, Service};
+<span class="kw">use </span>tower_http::trace::TraceLayer;
+<span class="kw">use </span>std::convert::Infallible;
+<span class="kw">use </span>http_body_util::Full;
+<span class="kw">use </span>bytes::Bytes;
+
+<span class="kw">async fn </span>handle(request: Request&lt;Full&lt;Bytes&gt;&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;Full&lt;Bytes&gt;&gt;, Infallible&gt; {
+    <span class="prelude-val">Ok</span>(Response::new(Full::default()))
+}
+
+<span class="comment">// Setup tracing
+</span>tracing_subscriber::fmt::init();
+
+<span class="kw">let </span><span class="kw-2">mut </span>service = ServiceBuilder::new()
+    .layer(TraceLayer::new_for_http())
+    .service_fn(handle);
+
+<span class="kw">let </span>request = Request::new(Full::from(<span class="string">"foo"</span>));
+
+<span class="kw">let </span>response = service
+    .ready()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.call(request)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>If you run this application with <code>RUST_LOG=tower_http=trace cargo run</code> you should see logs like:</p>
+<div class="example-wrap"><pre class="language-text"><code>Mar 05 20:50:28.523 DEBUG request{method=GET path=&quot;/foo&quot;}: tower_http::trace::on_request: started processing request
+Mar 05 20:50:28.524 DEBUG request{method=GET path=&quot;/foo&quot;}: tower_http::trace::on_response: finished processing request latency=1 ms status=200</code></pre></div><h2 id="customization"><a class="doc-anchor" href="#customization">§</a>Customization</h2>
+<p><a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a> comes with good defaults but also supports customizing many aspects of the output.</p>
+<p>The default behaviour supports some customization:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::{Request, Response, HeaderMap, StatusCode};
+<span class="kw">use </span>http_body_util::Full;
+<span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>tower::ServiceBuilder;
+<span class="kw">use </span>tracing::Level;
+<span class="kw">use </span>tower_http::{
+    LatencyUnit,
+    trace::{TraceLayer, DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse},
+};
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">let </span>service = ServiceBuilder::new()
+    .layer(
+        TraceLayer::new_for_http()
+            .make_span_with(
+                DefaultMakeSpan::new().include_headers(<span class="bool-val">true</span>)
+            )
+            .on_request(
+                DefaultOnRequest::new().level(Level::INFO)
+            )
+            .on_response(
+                DefaultOnResponse::new()
+                    .level(Level::INFO)
+                    .latency_unit(LatencyUnit::Micros)
+            )
+            <span class="comment">// on so on for `on_eos`, `on_body_chunk`, and `on_failure`
+    </span>)
+    .service_fn(handle);</code></pre></div>
+<p>However for maximum control you can provide callbacks:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::{Request, Response, HeaderMap, StatusCode};
+<span class="kw">use </span>http_body_util::Full;
+<span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>tower::ServiceBuilder;
+<span class="kw">use </span>tower_http::{classify::ServerErrorsFailureClass, trace::TraceLayer};
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>tracing::Span;
+
+<span class="kw">let </span>service = ServiceBuilder::new()
+    .layer(
+        TraceLayer::new_for_http()
+            .make_span_with(|request: <span class="kw-2">&amp;</span>Request&lt;Full&lt;Bytes&gt;&gt;| {
+                <span class="macro">tracing::debug_span!</span>(<span class="string">"http-request"</span>)
+            })
+            .on_request(|request: <span class="kw-2">&amp;</span>Request&lt;Full&lt;Bytes&gt;&gt;, _span: <span class="kw-2">&amp;</span>Span| {
+                <span class="macro">tracing::debug!</span>(<span class="string">"started {} {}"</span>, request.method(), request.uri().path())
+            })
+            .on_response(|response: <span class="kw-2">&amp;</span>Response&lt;Full&lt;Bytes&gt;&gt;, latency: Duration, _span: <span class="kw-2">&amp;</span>Span| {
+                <span class="macro">tracing::debug!</span>(<span class="string">"response generated in {:?}"</span>, latency)
+            })
+            .on_body_chunk(|chunk: <span class="kw-2">&amp;</span>Bytes, latency: Duration, _span: <span class="kw-2">&amp;</span>Span| {
+                <span class="macro">tracing::debug!</span>(<span class="string">"sending {} bytes"</span>, chunk.len())
+            })
+            .on_eos(|trailers: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>HeaderMap&gt;, stream_duration: Duration, _span: <span class="kw-2">&amp;</span>Span| {
+                <span class="macro">tracing::debug!</span>(<span class="string">"stream closed after {:?}"</span>, stream_duration)
+            })
+            .on_failure(|error: ServerErrorsFailureClass, latency: Duration, _span: <span class="kw-2">&amp;</span>Span| {
+                <span class="macro">tracing::debug!</span>(<span class="string">"something went wrong"</span>)
+            })
+    )
+    .service_fn(handle);</code></pre></div>
+<h3 id="disabling-something"><a class="doc-anchor" href="#disabling-something">§</a>Disabling something</h3>
+<p>Setting the behaviour to <code>()</code> will be disable that particular step:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::StatusCode;
+<span class="kw">use </span>tower::ServiceBuilder;
+<span class="kw">use </span>tower_http::{classify::ServerErrorsFailureClass, trace::TraceLayer};
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>tracing::Span;
+
+<span class="kw">let </span>service = ServiceBuilder::new()
+    .layer(
+        <span class="comment">// This configuration will only emit events on failures
+        </span>TraceLayer::new_for_http()
+            .on_request(())
+            .on_response(())
+            .on_body_chunk(())
+            .on_eos(())
+            .on_failure(|error: ServerErrorsFailureClass, latency: Duration, _span: <span class="kw-2">&amp;</span>Span| {
+                <span class="macro">tracing::debug!</span>(<span class="string">"something went wrong"</span>)
+            })
+    )
+    .service_fn(handle);</code></pre></div>
+<h2 id="when-the-callbacks-are-called"><a class="doc-anchor" href="#when-the-callbacks-are-called">§</a>When the callbacks are called</h2><h4 id="on_request"><a class="doc-anchor" href="#on_request">§</a><code>on_request</code></h4>
+<p>The <code>on_request</code> callback is called when the request arrives at the
+middleware in <a href="../../tower_service/trait.Service.html#tymethod.call" title="method tower_service::Service::call"><code>Service::call</code></a> just prior to passing the request to the
+inner service.</p>
+<h4 id="on_response"><a class="doc-anchor" href="#on_response">§</a><code>on_response</code></h4>
+<p>The <code>on_response</code> callback is called when the inner service’s response
+future completes with <code>Ok(response)</code> regardless if the response is
+classified as a success or a failure.</p>
+<p>For example if you’re using <a href="../classify/struct.ServerErrorsAsFailures.html" title="struct tower_http::classify::ServerErrorsAsFailures"><code>ServerErrorsAsFailures</code></a> as your classifier
+and the inner service responds with <code>500 Internal Server Error</code> then the
+<code>on_response</code> callback is still called. <code>on_failure</code> would <em>also</em> be called
+in this case since the response was classified as a failure.</p>
+<h4 id="on_body_chunk"><a class="doc-anchor" href="#on_body_chunk">§</a><code>on_body_chunk</code></h4>
+<p>The <code>on_body_chunk</code> callback is called when the response body produces a new
+chunk, that is when <a href="../../http_body/trait.Body.html#tymethod.poll_frame" title="method http_body::Body::poll_frame"><code>Body::poll_frame</code></a> returns a data frame.</p>
+<p><code>on_body_chunk</code> is called even if the chunk is empty.</p>
+<h4 id="on_eos"><a class="doc-anchor" href="#on_eos">§</a><code>on_eos</code></h4>
+<p>The <code>on_eos</code> callback is called when a streaming response body ends, that is
+when <a href="../../http_body/trait.Body.html#tymethod.poll_frame" title="method http_body::Body::poll_frame"><code>Body::poll_frame</code></a> returns a trailers frame.</p>
+<p><code>on_eos</code> is called even if the trailers produced are <code>None</code>.</p>
+<h4 id="on_failure"><a class="doc-anchor" href="#on_failure">§</a><code>on_failure</code></h4>
+<p>The <code>on_failure</code> callback is called when:</p>
+<ul>
+<li>The inner <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a>’s response future resolves to an error.</li>
+<li>A response is classified as a failure.</li>
+<li><a href="../../http_body/trait.Body.html#tymethod.poll_frame" title="method http_body::Body::poll_frame"><code>Body::poll_frame</code></a> returns an error.</li>
+<li>An end-of-stream is classified as a failure.</li>
+</ul>
+<h2 id="recording-fields-on-the-span"><a class="doc-anchor" href="#recording-fields-on-the-span">§</a>Recording fields on the span</h2>
+<p>All callbacks receive a reference to the <a href="https://crates.io/crates/tracing">tracing</a> <a href="../../tracing/span/struct.Span.html" title="struct tracing::span::Span"><code>Span</code></a>, corresponding to this request,
+produced by the closure passed to <a href="struct.TraceLayer.html#method.make_span_with" title="method tower_http::trace::TraceLayer::make_span_with"><code>TraceLayer::make_span_with</code></a>. It can be used to <a href="https://docs.rs/tracing/latest/tracing/span/struct.Span.html#method.record">record
+field values</a> that weren’t known when the span was created.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::{Request, Response, HeaderMap, StatusCode};
+<span class="kw">use </span>http_body_util::Full;
+<span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>tower::ServiceBuilder;
+<span class="kw">use </span>tower_http::trace::TraceLayer;
+<span class="kw">use </span>tracing::Span;
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">let </span>service = ServiceBuilder::new()
+    .layer(
+        TraceLayer::new_for_http()
+            .make_span_with(|request: <span class="kw-2">&amp;</span>Request&lt;Full&lt;Bytes&gt;&gt;| {
+                <span class="macro">tracing::debug_span!</span>(
+                    <span class="string">"http-request"</span>,
+                    status_code = tracing::field::Empty,
+                )
+            })
+            .on_response(|response: <span class="kw-2">&amp;</span>Response&lt;Full&lt;Bytes&gt;&gt;, _latency: Duration, span: <span class="kw-2">&amp;</span>Span| {
+                span.record(<span class="string">"status_code"</span>, <span class="kw-2">&amp;</span>tracing::field::display(response.status()));
+
+                <span class="macro">tracing::debug!</span>(<span class="string">"response generated"</span>)
+            })
+    )
+    .service_fn(handle);</code></pre></div>
+<h2 id="providing-classifiers"><a class="doc-anchor" href="#providing-classifiers">§</a>Providing classifiers</h2>
+<p>Tracing requires determining if a response is a success or failure. <a href="../classify/trait.MakeClassifier.html" title="trait tower_http::classify::MakeClassifier"><code>MakeClassifier</code></a> is used
+to create a classifier for the incoming request. See the docs for <a href="../classify/trait.MakeClassifier.html" title="trait tower_http::classify::MakeClassifier"><code>MakeClassifier</code></a> and
+<a href="../classify/trait.ClassifyResponse.html" title="trait tower_http::classify::ClassifyResponse"><code>ClassifyResponse</code></a> for more details on classification.</p>
+<p>A <a href="../classify/trait.MakeClassifier.html" title="trait tower_http::classify::MakeClassifier"><code>MakeClassifier</code></a> can be provided when creating a <a href="struct.TraceLayer.html" title="struct tower_http::trace::TraceLayer"><code>TraceLayer</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::{Request, Response};
+<span class="kw">use </span>http_body_util::Full;
+<span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>tower::ServiceBuilder;
+<span class="kw">use </span>tower_http::{
+    trace::TraceLayer,
+    classify::{
+        MakeClassifier, ClassifyResponse, ClassifiedResponse, NeverClassifyEos,
+        SharedClassifier,
+    },
+};
+<span class="kw">use </span>std::convert::Infallible;
+
+<span class="comment">// Our `MakeClassifier` that always crates `MyClassifier` classifiers.
+</span><span class="attr">#[derive(Copy, Clone)]
+</span><span class="kw">struct </span>MyMakeClassify;
+
+<span class="kw">impl </span>MakeClassifier <span class="kw">for </span>MyMakeClassify {
+    <span class="kw">type </span>Classifier = MyClassifier;
+    <span class="kw">type </span>FailureClass = <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
+    <span class="kw">type </span>ClassifyEos = NeverClassifyEos&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;;
+
+    <span class="kw">fn </span>make_classifier&lt;B&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, req: <span class="kw-2">&amp;</span>Request&lt;B&gt;) -&gt; <span class="self">Self</span>::Classifier {
+        MyClassifier
+    }
+}
+
+<span class="comment">// A classifier that classifies failures as `"something went wrong..."`.
+</span><span class="attr">#[derive(Copy, Clone)]
+</span><span class="kw">struct </span>MyClassifier;
+
+<span class="kw">impl </span>ClassifyResponse <span class="kw">for </span>MyClassifier {
+    <span class="kw">type </span>FailureClass = <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
+    <span class="kw">type </span>ClassifyEos = NeverClassifyEos&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;;
+
+    <span class="kw">fn </span>classify_response&lt;B&gt;(
+        <span class="self">self</span>,
+        res: <span class="kw-2">&amp;</span>Response&lt;B&gt;
+    ) -&gt; ClassifiedResponse&lt;<span class="self">Self</span>::FailureClass, <span class="self">Self</span>::ClassifyEos&gt; {
+        <span class="comment">// Classify based on the status code.
+        </span><span class="kw">if </span>res.status().is_server_error() {
+            ClassifiedResponse::Ready(<span class="prelude-val">Err</span>(<span class="string">"something went wrong..."</span>))
+        } <span class="kw">else </span>{
+            ClassifiedResponse::Ready(<span class="prelude-val">Ok</span>(()))
+        }
+    }
+
+    <span class="kw">fn </span>classify_error&lt;E&gt;(<span class="self">self</span>, error: <span class="kw-2">&amp;</span>E) -&gt; <span class="self">Self</span>::FailureClass
+    <span class="kw">where
+        </span>E: std::fmt::Display + <span class="lifetime">'static</span>,
+    {
+        <span class="string">"something went wrong..."
+    </span>}
+}
+
+<span class="kw">let </span>service = ServiceBuilder::new()
+    <span class="comment">// Create a trace layer that uses our classifier.
+    </span>.layer(TraceLayer::new(MyMakeClassify))
+    .service_fn(handle);
+
+<span class="comment">// Since `MyClassifier` is `Clone` we can also use `SharedClassifier`
+// to avoid having to define a separate `MakeClassifier`.
+</span><span class="kw">let </span>service = ServiceBuilder::new()
+    .layer(TraceLayer::new(SharedClassifier::new(MyClassifier)))
+    .service_fn(handle);</code></pre></div>
+<p><a href="struct.TraceLayer.html" title="struct tower_http::trace::TraceLayer"><code>TraceLayer</code></a> comes with convenience methods for using common classifiers:</p>
+<ul>
+<li><a href="struct.TraceLayer.html#method.new_for_http" title="associated function tower_http::trace::TraceLayer::new_for_http"><code>TraceLayer::new_for_http</code></a> classifies based on the status code. It doesn’t consider
+streaming responses.</li>
+<li><a href="struct.TraceLayer.html#method.new_for_grpc" title="associated function tower_http::trace::TraceLayer::new_for_grpc"><code>TraceLayer::new_for_grpc</code></a> classifies based on the gRPC protocol and supports streaming
+responses.</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.DefaultMakeSpan.html" title="struct tower_http::trace::DefaultMakeSpan">Default<wbr>Make<wbr>Span</a></dt><dd>The default way <a href="../../tracing/span/struct.Span.html" title="struct tracing::span::Span"><code>Span</code></a>s will be created for <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a>.</dd><dt><a class="struct" href="struct.DefaultOnBodyChunk.html" title="struct tower_http::trace::DefaultOnBodyChunk">Default<wbr>OnBody<wbr>Chunk</a></dt><dd>The default <a href="trait.OnBodyChunk.html" title="trait tower_http::trace::OnBodyChunk"><code>OnBodyChunk</code></a> implementation used by <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a>.</dd><dt><a class="struct" href="struct.DefaultOnEos.html" title="struct tower_http::trace::DefaultOnEos">Default<wbr>OnEos</a></dt><dd>The default <a href="trait.OnEos.html" title="trait tower_http::trace::OnEos"><code>OnEos</code></a> implementation used by <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a>.</dd><dt><a class="struct" href="struct.DefaultOnFailure.html" title="struct tower_http::trace::DefaultOnFailure">Default<wbr>OnFailure</a></dt><dd>The default <a href="trait.OnFailure.html" title="trait tower_http::trace::OnFailure"><code>OnFailure</code></a> implementation used by <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a>.</dd><dt><a class="struct" href="struct.DefaultOnRequest.html" title="struct tower_http::trace::DefaultOnRequest">Default<wbr>OnRequest</a></dt><dd>The default <a href="trait.OnRequest.html" title="trait tower_http::trace::OnRequest"><code>OnRequest</code></a> implementation used by <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a>.</dd><dt><a class="struct" href="struct.DefaultOnResponse.html" title="struct tower_http::trace::DefaultOnResponse">Default<wbr>OnResponse</a></dt><dd>The default <a href="trait.OnResponse.html" title="trait tower_http::trace::OnResponse"><code>OnResponse</code></a> implementation used by <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a>.</dd><dt><a class="struct" href="struct.ResponseBody.html" title="struct tower_http::trace::ResponseBody">Response<wbr>Body</a></dt><dd>Response body for <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a>.</dd><dt><a class="struct" href="struct.ResponseFuture.html" title="struct tower_http::trace::ResponseFuture">Response<wbr>Future</a></dt><dd>Response future for <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a>.</dd><dt><a class="struct" href="struct.Trace.html" title="struct tower_http::trace::Trace">Trace</a></dt><dd>Middleware that adds high level <a href="https://crates.io/crates/tracing">tracing</a> to a <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a>.</dd><dt><a class="struct" href="struct.TraceLayer.html" title="struct tower_http::trace::TraceLayer">Trace<wbr>Layer</a></dt><dd><a href="../../tower_layer/trait.Layer.html" title="trait tower_layer::Layer"><code>Layer</code></a> that adds high level <a href="https://crates.io/crates/tracing">tracing</a> to a <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a>.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.MakeSpan.html" title="trait tower_http::trace::MakeSpan">Make<wbr>Span</a></dt><dd>Trait used to generate <a href="../../tracing/span/struct.Span.html" title="struct tracing::span::Span"><code>Span</code></a>s from requests. <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a> wraps all request handling in this
+span.</dd><dt><a class="trait" href="trait.OnBodyChunk.html" title="trait tower_http::trace::OnBodyChunk">OnBody<wbr>Chunk</a></dt><dd>Trait used to tell <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a> what to do when a body chunk has been sent.</dd><dt><a class="trait" href="trait.OnEos.html" title="trait tower_http::trace::OnEos">OnEos</a></dt><dd>Trait used to tell <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a> what to do when a stream closes.</dd><dt><a class="trait" href="trait.OnFailure.html" title="trait tower_http::trace::OnFailure">OnFailure</a></dt><dd>Trait used to tell <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a> what to do when a request fails.</dd><dt><a class="trait" href="trait.OnRequest.html" title="trait tower_http::trace::OnRequest">OnRequest</a></dt><dd>Trait used to tell <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a> what to do when a request is received.</dd><dt><a class="trait" href="trait.OnResponse.html" title="trait tower_http::trace::OnResponse">OnResponse</a></dt><dd>Trait used to tell <a href="struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a> what to do when a response has been produced.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.GrpcMakeClassifier.html" title="type tower_http::trace::GrpcMakeClassifier">Grpc<wbr>Make<wbr>Classifier</a></dt><dd>MakeClassifier for gRPC requests.</dd><dt><a class="type" href="type.HttpMakeClassifier.html" title="type tower_http::trace::HttpMakeClassifier">Http<wbr>Make<wbr>Classifier</a></dt><dd>MakeClassifier for HTTP requests.</dd></dl></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["empty_db","in_memory_db","states","try_commit"],"struct":["ArcUpgradeError","EmptyDBTyped","WrapDatabaseRef"],"trait":["DBErrorMarker","Database","DatabaseCommit","DatabaseRef","TryDatabaseCommit"],"type":["EmptyDB"]};

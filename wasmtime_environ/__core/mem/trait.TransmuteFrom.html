@@ -1,0 +1,92 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Marks that `Src` is transmutable into `Self`."><title>TransmuteFrom in wasmtime_environ::__core::mem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Transmute<wbr>From</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#implementation" title="Implementation">Implementation</a></li><li><a href="#safety" title="Safety">Safety</a></li><li><a href="#caveats" title="Caveats">Caveats</a><ul><li><a href="#portability" title="Portability">Portability</a></li><li><a href="#stability" title="Stability">Stability</a></li></ul></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.transmute" title="transmute">transmute</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>mem</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">mem</a></div><h1>Trait <span class="trait">TransmuteFrom</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/mem/transmutability.rs.html#90">Source</a> </span></div><pre class="rust item-decl"><code>pub unsafe trait TransmuteFrom&lt;Src, const ASSUME: <a class="struct" href="struct.Assume.html" title="struct wasmtime_environ::__core::mem::Assume">Assume</a> = core::::mem::transmutability::TransmuteFrom::{constant#0}&gt;<div class="where">where
+    Src: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div>{
+    // Provided method
+    unsafe fn <a href="#method.transmute" class="fn">transmute</a>(src: Src) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a></span> { ... }
+}</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>transmutability</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Marks that <code>Src</code> is transmutable into <code>Self</code>.</p>
+<h2 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h2>
+<p>This trait cannot be implemented explicitly. It is implemented on-the-fly by
+the compiler for all types <code>Src</code> and <code>Self</code> such that, given a set of safety
+obligations on the programmer (see <a href="struct.Assume.html" title="struct wasmtime_environ::__core::mem::Assume"><code>Assume</code></a>), the compiler has proved that
+the bits of a value of type <code>Src</code> can be soundly reinterpreted as a <code>Self</code>.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>If <code>Dst: TransmuteFrom&lt;Src, ASSUMPTIONS&gt;</code>, the compiler guarantees that
+<code>Src</code> is soundly <em>union-transmutable</em> into a value of type <code>Dst</code>, provided
+that the programmer has guaranteed that the given <a href="struct.Assume.html" title="struct wasmtime_environ::__core::mem::Assume"><code>ASSUMPTIONS</code></a>
+are satisfied.</p>
+<p>A union-transmute is any bit-reinterpretation conversion in the form of:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub unsafe fn </span>transmute_via_union&lt;Src, Dst&gt;(src: Src) -&gt; Dst {
+    <span class="kw">use </span>core::mem::ManuallyDrop;
+
+    <span class="attr">#[repr(C)]
+    </span><span class="kw">union </span>Transmute&lt;Src, Dst&gt; {
+        src: ManuallyDrop&lt;Src&gt;,
+        dst: ManuallyDrop&lt;Dst&gt;,
+    }
+
+    <span class="kw">let </span>transmute = Transmute {
+        src: ManuallyDrop::new(src),
+    };
+
+    <span class="kw">let </span>dst = transmute.dst;
+
+    ManuallyDrop::into_inner(dst)
+}</code></pre></div>
+<p>Note that this construction is more permissive than
+<a href="fn.transmute_copy.html" title="fn wasmtime_environ::__core::mem::transmute_copy"><code>mem::transmute_copy</code></a>; union-transmutes permit
+conversions that extend the bits of <code>Src</code> with trailing padding to fill
+trailing uninitialized bytes of <code>Self</code>; e.g.:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(transmutability)]
+
+</span><span class="kw">use </span>core::mem::{Assume, TransmuteFrom};
+
+<span class="kw">let </span>src = <span class="number">42u8</span>; <span class="comment">// size = 1
+
+</span><span class="attr">#[repr(C, align(<span class="number">2</span>))]
+</span><span class="kw">struct </span>Dst(u8); <span class="comment">// size = 2
+</span><span class="kw">let _ </span>= <span class="kw">unsafe </span>{
+    &lt;Dst <span class="kw">as </span>TransmuteFrom&lt;u8, { Assume::SAFETY }&gt;&gt;::transmute(src)
+};</code></pre></div>
+<h2 id="caveats"><a class="doc-anchor" href="#caveats">§</a>Caveats</h2><h3 id="portability"><a class="doc-anchor" href="#portability">§</a>Portability</h3>
+<p>Implementations of this trait do not provide any guarantee of portability
+across toolchains, targets or compilations. This trait may be implemented
+for certain combinations of <code>Src</code>, <code>Self</code> and <code>ASSUME</code> on some toolchains,
+targets or compilations, but not others. For example, if the layouts of
+<code>Src</code> or <code>Self</code> are non-deterministic, the presence or absence of an
+implementation of this trait may also be non-deterministic. Even if <code>Src</code>
+and <code>Self</code> have deterministic layouts (e.g., they are <code>repr(C)</code> structs),
+Rust does not specify the alignments of its primitive integer types, and
+layouts that involve these types may vary across toolchains, targets or
+compilations.</p>
+<h3 id="stability"><a class="doc-anchor" href="#stability">§</a>Stability</h3>
+<p>Implementations of this trait do not provide any guarantee of SemVer
+stability across the crate versions that define the <code>Src</code> and <code>Self</code> types.
+If SemVer stability is crucial to your application, you must consult the
+documentation of <code>Src</code> and <code>Self</code>s’ defining crates. Note that the presence
+of <code>repr(C)</code>, alone, does not carry a safety invariant of SemVer stability.
+Furthermore, stability does not imply portability. For example, the size of
+<code>usize</code> is stable, but not portable.</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.transmute" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/mem/transmutability.rs.html#115-118">Source</a><h4 class="code-header">unsafe fn <a href="#method.transmute" class="fn">transmute</a>(src: Src) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>transmutability</code>)</span></div></span></summary><div class="docblock"><p>Transmutes a <code>Src</code> value into a <code>Self</code>.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<p>The safety obligations of the caller depend on the value of <code>ASSUME</code>:</p>
+<ul>
+<li>If <a href="struct.Assume.html#structfield.alignment" title="field wasmtime_environ::__core::mem::Assume::alignment"><code>ASSUME.alignment</code></a>, the caller must guarantee
+that the addresses of references in the returned <code>Self</code> satisfy the
+alignment requirements of their referent types.</li>
+<li>If <a href="struct.Assume.html#structfield.lifetimes" title="field wasmtime_environ::__core::mem::Assume::lifetimes"><code>ASSUME.lifetimes</code></a>, the caller must guarantee
+that references in the returned <code>Self</code> will not outlive their
+referents.</li>
+<li>If <a href="struct.Assume.html#structfield.safety" title="field wasmtime_environ::__core::mem::Assume::safety"><code>ASSUME.safety</code></a>, the returned value might not
+satisfy the library safety invariants of <code>Self</code>, and the caller must
+guarantee that undefined behavior does not arise from uses of the
+returned value.</li>
+<li>If <a href="struct.Assume.html#structfield.validity" title="field wasmtime_environ::__core::mem::Assume::validity"><code>ASSUME.validity</code></a>, the caller must guarantee
+that <code>src</code> is a bit-valid instance of <code>Self</code>.</li>
+</ul>
+<p>When satisfying the above obligations (if any), the caller must <em>not</em>
+assume that this trait provides any inherent guarantee of layout
+<a href="#portability">portability</a> or <a href="#stability">stability</a>.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../trait.impl/core/mem/transmutability/trait.TransmuteFrom.js" async></script></section></div></main></body></html>

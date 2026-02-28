@@ -1,0 +1,25 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Testing tool that compares produced tokens."><title>parses_to in pest - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/pest-parser/pest/master/pest-logo.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../pest/index.html"><img src="https://raw.githubusercontent.com/pest-parser/pest/master/pest-logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../pest/index.html"><img src="https://raw.githubusercontent.com/pest-parser/pest/master/pest-logo.svg" alt="logo"></a><h2><a href="../pest/index.html">pest</a><span class="version">2.8.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">parses_<wbr>to</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate pest</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">pest</a></div><h1>Macro <span class="macro">parses_to</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/pest/macros.rs.html#191-231">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! parses_to {
+    ( parser: $parser:ident, input: $string:expr, rule: $rules:tt :: $rule:tt,
+      tokens: [ $( $names:ident $calls:tt ),* $(,)* ] ) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Testing tool that compares produced tokens.</p>
+<p>This macro takes several arguments:</p>
+<ul>
+<li><code>parser</code> - name of the data structure implementing <code>Parser</code></li>
+<li><code>input</code> - input to be tested against</li>
+<li><code>rule</code> - <code>Rule</code> which will be run</li>
+<li><code>tokens</code> - token pairs of the form <code>name(start_pos, end_pos, [nested_child_tokens])</code></li>
+</ul>
+<p><em>Note:</em> <code>start_pos</code> and <code>end_pos</code> are byte positions.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">parses_to!</span> {
+    parser: AbcParser,
+    input:  <span class="string">"abcde"</span>,
+    rule:   Rule::a,
+    tokens: [
+        a(<span class="number">0</span>, <span class="number">3</span>, [
+            b(<span class="number">1</span>, <span class="number">2</span>)
+        ]),
+        c(<span class="number">4</span>, <span class="number">5</span>)
+    ]
+};</code></pre></div>
+</div></details></section></div></main></body></html>

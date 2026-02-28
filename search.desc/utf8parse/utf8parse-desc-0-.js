@@ -1,0 +1,1 @@
+searchState.loadedDescShard("utf8parse", 0, "A table-driven UTF-8 Parser\nA parser for Utf8 Characters\nHandles codepoint and invalid sequence events from the …\nAdvance the parser\nCalled whenever a codepoint is parsed successfully\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalled when an invalid_sequence is detected\nCreate a new Parser")

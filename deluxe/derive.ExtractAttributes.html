@@ -1,0 +1,23 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generates `ExtractAttributes` for a struct or enum."><title>ExtractAttributes in deluxe - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="deluxe" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../deluxe/index.html">deluxe</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">deluxe</a></div><h1>Derive Macro <span class="derive">ExtractAttributes</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/deluxe_macros/lib.rs.html#34">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(ExtractAttributes)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[deluxe]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generates <a href="deluxe_core::ExtractAttributes"><code>ExtractAttributes</code></a> for a struct or enum.</p>
+<p>This macro is identical to <a href="derive.ParseAttributes.html" title="derive deluxe::ParseAttributes"><code>ParseAttributes</code></a>, except for the following differences:</p>
+<ul>
+<li>
+<p>The generated <a href="deluxe_core::ExtractAttributes::extract_attributes"><code>extract_attributes</code></a>
+function will remove any attributes matching the paths listed in
+<a href="derive.ParseAttributes.html#deluxeattributes" title="derive deluxe::ParseAttributes"><code>#[deluxe(attributes(...))]</code></a>.</p>
+</li>
+<li>
+<p>Reference types for <a href="derive.ParseAttributes.html#deluxecontainer" title="derive deluxe::ParseAttributes"><code>#[deluxe(container)]</code></a> fields will not
+work. The container type must be an owned type or an [<code>Option</code>], and the container will
+always be <a href="Clone::clone"><code>clone</code></a>d into the field. The cloning will happen after the
+attributes have been extracted. Using the <code>lifetime</code> parameter for custom container types
+will also not work.</p>
+</li>
+</ul>
+<p>See the <a href="derive.ParseAttributes.html" title="derive deluxe::ParseAttributes"><code>ParseAttributes</code></a> and <a href="derive.ParseMetaItem.html" title="derive deluxe::ParseMetaItem"><code>ParseMetaItem</code></a> documentation for all other details.</p>
+</div></details></section></div></main></body></html>

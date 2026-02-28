@@ -1,0 +1,169 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A fast and ergonomic concurrent hash-table for read-heavy workloads."><title>papaya - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="papaya" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../papaya/index.html">papaya</a><span class="version">0.1.9</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#features" title="Features">Features</a></li><li><a href="#overview" title="Overview">Overview</a></li><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#consistency" title="Consistency">Consistency</a></li><li><a href="#atomic-operations" title="Atomic Operations">Atomic Operations</a></li><li><a href="#async-support" title="Async Support">Async Support</a></li><li><a href="#advanced-lifetimes" title="Advanced Lifetimes">Advanced Lifetimes</a></li><li><a href="#performance" title="Performance">Performance</a></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>papaya</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/papaya/lib.rs.html#1-241">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A fast and ergonomic concurrent hash-table for read-heavy workloads.</p>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<ul>
+<li>An ergonomic lock-free API — no more deadlocks!</li>
+<li>Powerful atomic operations.</li>
+<li>Seamless usage in async contexts.</li>
+<li>Extremely scalable, low-latency reads (see <a href="#performance">performance</a>).</li>
+<li>Predictable latency across all operations.</li>
+<li>Efficient memory usage, with garbage collection powered by <a href="../seize/index.html" title="mod seize"><code>seize</code></a>.</li>
+</ul>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>The top-level crate documentation is organized as follows:</p>
+<ul>
+<li><a href="#usage">Usage</a> shows how to interact with the concurrent <code>HashMap</code>.</li>
+<li><a href="#consistency">Consistency</a> describes the guarantees of concurrent operations.</li>
+<li><a href="#atomic-operations">Atomic Operations</a> shows how to perform dynamic operations atomically.</li>
+<li><a href="#async-support">Async Support</a> shows how to use the map in an async context.</li>
+<li><a href="#advanced-lifetimes">Advanced Lifetimes</a> explains how to use guards when working with nested types.</li>
+<li><a href="#performance">Performance</a> provides details of expected performance characteristics.</li>
+</ul>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p><code>papaya</code> aims to provide an ergonomic API without sacrificing performance. <a href="struct.HashMap.html" title="struct papaya::HashMap"><code>HashMap</code></a> exposes a lock-free API, enabling it to hand out direct references to objects in the map without the need for wrapper types that are clunky and prone to deadlocks. However, you can’t hold on to references forever due to concurrent removals. Because of this, the <code>HashMap</code> API is structured around <em>pinning</em>. Through a pin you can access the map just like a standard <code>HashMap</code>. A pin is similar to a lock guard, so any references that are returned will be tied to the lifetime of the guard. Unlike a lock however, pinning is cheap and can never cause deadlocks.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>papaya::HashMap;
+
+<span class="comment">// Create a map.
+</span><span class="kw">let </span>map = HashMap::new();
+
+<span class="comment">// Pin the map.
+</span><span class="kw">let </span>map = map.pin();
+
+<span class="comment">// Use the map as normal.
+</span>map.insert(<span class="string">'A'</span>, <span class="number">1</span>);
+<span class="macro">assert_eq!</span>(map.get(<span class="kw-2">&amp;</span><span class="string">'A'</span>), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="number">1</span>));
+<span class="macro">assert_eq!</span>(map.len(), <span class="number">1</span>);</code></pre></div>
+<p>As expected of a concurrent <code>HashMap</code>, all operations take a shared reference. This allows the map to be freely pinned and accessed from multiple threads:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>papaya::HashMap;
+
+<span class="comment">// Use a map from multiple threads.
+</span><span class="kw">let </span>map = HashMap::new();
+std::thread::scope(|s| {
+    <span class="comment">// Insert some values.
+    </span>s.spawn(|| {
+        <span class="kw">let </span>map = map.pin();
+        <span class="kw">for </span>i <span class="kw">in </span><span class="string">'A'</span>..=<span class="string">'Z' </span>{
+            map.insert(i, <span class="number">1</span>);
+        }
+    });
+
+    <span class="comment">// Remove the values.
+    </span>s.spawn(|| {
+        <span class="kw">let </span>map = map.pin();
+        <span class="kw">for </span>i <span class="kw">in </span><span class="string">'A'</span>..=<span class="string">'Z' </span>{
+            map.remove(<span class="kw-2">&amp;</span>i);
+        }
+    });
+
+    <span class="comment">// Read the values.
+    </span>s.spawn(|| {
+        <span class="kw">for </span>(key, value) <span class="kw">in </span>map.pin().iter() {
+            <span class="macro">println!</span>(<span class="string">"{key}: {value}"</span>);
+        }
+    });
+});</code></pre></div>
+<p>It is important to note that as long as you are holding on to a guard, you are preventing the map from performing garbage collection. Pinning and unpinning the table is relatively cheap but not free, similar to the cost of locking and unlocking an uncontended or lightly contended <code>Mutex</code>. Thus guard reuse is encouraged, within reason. See the <a href="../seize/index.html" title="mod seize"><code>seize</code></a> crate for advanced usage and specifics of the garbage collection algorithm.</p>
+<h2 id="consistency"><a class="doc-anchor" href="#consistency">§</a>Consistency</h2>
+<p>Due to the concurrent nature of the map, read and write operations may overlap in time. There is no support for locking the entire table nor individual keys to prevent concurrent access, except through external fine-grained locking. As such, read operations (such as <code>get</code>) reflect the results of the <em>most-recent</em> write. More formally, a read establishes a <em>happens-before</em> relationship with the corresponding write.</p>
+<p>Aggregate operations, such as iterators, rely on a weak snapshot of the table and return results reflecting the state of the table at or some point after the creation of the iterator. This means that they may, but are not guaranteed to, reflect concurrent modifications to the table that occur during iteration. Similarly, operations such as <code>clear</code> and <code>clone</code> rely on iteration and may not produce “perfect” results if the map is being concurrently modified.</p>
+<p>Note that to obtain a stable snapshot of the table, aggregate table operations require completing any in-progress resizes. If you rely heavily on iteration or similar operations you should consider configuring <a href="enum.ResizeMode.html#variant.Blocking" title="variant papaya::ResizeMode::Blocking"><code>ResizeMode::Blocking</code></a>.</p>
+<h2 id="atomic-operations"><a class="doc-anchor" href="#atomic-operations">§</a>Atomic Operations</h2>
+<p>As mentioned above, <code>papaya</code> does not support locking keys to prevent access, which makes performing complex operations more challenging. Instead, <code>papaya</code> exposes a number of atomic operations. The most basic of these is <a href="struct.HashMap.html#method.update" title="method papaya::HashMap::update"><code>HashMap::update</code></a>, which can be used to update an existing value in the map using a closure:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>map = papaya::HashMap::new();
+map.pin().insert(<span class="string">"poneyland"</span>, <span class="number">42</span>);
+<span class="macro">assert_eq!</span>(map.pin().update(<span class="string">"poneyland"</span>, |e| e + <span class="number">1</span>), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="number">43</span>));</code></pre></div>
+<p>Note that in the event that the entry is concurrently modified during an <code>update</code>, the closure may be called multiple times to retry the operation. For this reason, update operations are intended to be quick and <em>pure</em>, as they may be retried or internally memoized.</p>
+<p><code>papaya</code> also exposes more powerful atomic operations that serve as a replacement for the <a href="https://doc.rust-lang.org/1.86.0/std/collections/hash/map/enum.Entry.html" title="enum std::collections::hash::map::Entry">standard entry API</a>. These include:</p>
+<ul>
+<li><a href="struct.HashMap.html#method.update" title="method papaya::HashMap::update"><code>HashMap::update</code></a></li>
+<li><a href="struct.HashMap.html#method.update_or_insert" title="method papaya::HashMap::update_or_insert"><code>HashMap::update_or_insert</code></a></li>
+<li><a href="struct.HashMap.html#method.update_or_insert_with" title="method papaya::HashMap::update_or_insert_with"><code>HashMap::update_or_insert_with</code></a></li>
+<li><a href="struct.HashMap.html#method.get_or_insert" title="method papaya::HashMap::get_or_insert"><code>HashMap::get_or_insert</code></a></li>
+<li><a href="struct.HashMap.html#method.get_or_insert_with" title="method papaya::HashMap::get_or_insert_with"><code>HashMap::get_or_insert_with</code></a></li>
+<li><a href="struct.HashMap.html#method.compute" title="method papaya::HashMap::compute"><code>HashMap::compute</code></a></li>
+</ul>
+<p>For example, with a standard <code>HashMap</code>, <code>Entry::and_modify</code> is often paired with <code>Entry::or_insert</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::collections::HashMap;
+
+<span class="kw">let </span><span class="kw-2">mut </span>map = HashMap::new();
+<span class="comment">// Insert `poneyland` with the value `42` if it doesn't exist,
+// otherwise increment it's value.
+</span>map.entry(<span class="string">"poneyland"</span>)
+   .and_modify(|e| { <span class="kw-2">*</span>e += <span class="number">1 </span>})
+   .or_insert(<span class="number">42</span>);</code></pre></div>
+<p>However, implementing this with a concurrent <code>HashMap</code> is tricky as the entry may be modified in-between operations. Instead, you can write the above operation using <a href="struct.HashMap.html#method.update_or_insert" title="method papaya::HashMap::update_or_insert"><code>HashMap::update_or_insert</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>papaya::HashMap;
+
+<span class="kw">let </span>map = HashMap::new();
+<span class="comment">// Insert `poneyland` with the value `42` if it doesn't exist,
+// otherwise increment it's value.
+</span>map.pin().update_or_insert(<span class="string">"poneyland"</span>, |e| e + <span class="number">1</span>, <span class="number">42</span>);</code></pre></div>
+<p>Atomic operations are extremely powerful but also easy to misuse. They may be less efficient than update mechanisms tailored for the specific type of data in the map. For example, concurrent counters should avoid using <code>update</code> and instead use <code>AtomicUsize</code>. Entries that are frequently modified may also benefit from fine-grained locking.</p>
+<h2 id="async-support"><a class="doc-anchor" href="#async-support">§</a>Async Support</h2>
+<p>By default, a pinned map guard does not implement <code>Send</code> as it is tied to the current thread, similar to a lock guard. This leads to an issue in work-stealing schedulers as guards are not valid across <code>.await</code> points.</p>
+<p>To overcome this, you can use an <em>owned</em> guard.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>papaya::HashMap;
+
+<span class="kw">async fn </span>run(map: Arc&lt;HashMap&lt;i32, String&gt;&gt;) {
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="comment">// Pin the map with an owned guard.
+        </span><span class="kw">let </span>map = map.pin_owned();
+
+        <span class="comment">// Hold references across await points.
+        </span><span class="kw">let </span>value = map.get(<span class="kw-2">&amp;</span><span class="number">37</span>);
+        tokio::fs::write(<span class="string">"db.txt"</span>, <span class="macro">format!</span>(<span class="string">"{value:?}"</span>)).<span class="kw">await</span>;
+        <span class="macro">println!</span>(<span class="string">"{value:?}"</span>);
+    });
+}</code></pre></div>
+<p>Note that owned guards are more expensive to create than regular guards, so they should only be used if necessary. In the above example, you could instead drop the reference and call <code>get</code> a second time after the asynchronous call. A more fitting example involves asynchronous iteration:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>papaya::HashMap;
+
+<span class="kw">async fn </span>run(map: Arc&lt;HashMap&lt;i32, String&gt;&gt;) {
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">for </span>(key, value) <span class="kw">in </span>map.pin_owned().iter() {
+            tokio::fs::write(<span class="string">"db.txt"</span>, <span class="macro">format!</span>(<span class="string">"{key}: {value}\n"</span>)).<span class="kw">await</span>;
+        }
+    });
+}</code></pre></div>
+<h2 id="advanced-lifetimes"><a class="doc-anchor" href="#advanced-lifetimes">§</a>Advanced Lifetimes</h2>
+<p>You may run into issues when you try to return a reference to a map contained within an outer type. For example:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">pub struct </span>Metrics {
+    map: papaya::HashMap&lt;String, Vec&lt;u64&gt;&gt;
+}
+
+<span class="kw">impl </span>Metrics {
+    <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u64]&gt; {
+        <span class="comment">// error[E0515]: cannot return value referencing temporary value
+        </span><span class="prelude-val">Some</span>(<span class="self">self</span>.map.pin().get(name)<span class="question-mark">?</span>.as_slice())
+    }
+}</code></pre></div>
+<p>The solution is to accept a guard in the method directly, tying the lifetime to the caller’s stack frame:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>papaya::Guard;
+
+<span class="kw">pub struct </span>Metrics {
+    map: papaya::HashMap&lt;String, Vec&lt;u64&gt;&gt;
+}
+
+<span class="kw">impl </span>Metrics {
+    <span class="kw">pub fn </span>guard(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Guard + <span class="lifetime">'_ </span>{
+        <span class="self">self</span>.map.guard()
+    }
+
+    <span class="kw">pub fn </span>get&lt;<span class="lifetime">'guard</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str, guard: <span class="kw-2">&amp;</span><span class="lifetime">'guard </span><span class="kw">impl </span>Guard) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'guard </span>[u64]&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.map.get(name, guard)<span class="question-mark">?</span>.as_slice())
+    }
+}</code></pre></div>
+<p>The <code>Guard</code> trait supports both local and owned guards. Note the <code>'guard</code> lifetime that ties the guard to the returned reference. No wrapper types or guard mapping is necessary.</p>
+<h2 id="performance"><a class="doc-anchor" href="#performance">§</a>Performance</h2>
+<p><code>papaya</code> is built with read-heavy workloads in mind. As such, read operations are extremely high throughput and provide consistent performance that scales with concurrency, meaning <code>papaya</code> will excel in workloads where reads are more common than writes. In write heavy workloads, <code>papaya</code> will still provide competitive performance despite not being it’s primary use case. See the <a href="https://github.com/ibraheemdev/papaya/blob/master/BENCHMARKS.md">benchmarks</a> for details.</p>
+<p><code>papaya</code> aims to provide predictable and consistent latency across all operations. Most operations are lock-free, and those that aren’t only block under rare and constrained conditions. <code>papaya</code> also features <a href="enum.ResizeMode.html" title="enum papaya::ResizeMode">incremental resizing</a>. Predictable latency is an important part of performance that doesn’t often show up in benchmarks, but has significant implications for real-world usage.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.HashMap.html" title="struct papaya::HashMap">HashMap</a></dt><dd>A concurrent hash table.</dd><dt><a class="struct" href="struct.HashMapBuilder.html" title="struct papaya::HashMapBuilder">Hash<wbr>MapBuilder</a></dt><dd>A builder for a <a href="struct.HashMap.html" title="struct papaya::HashMap"><code>HashMap</code></a>.</dd><dt><a class="struct" href="struct.HashMapRef.html" title="struct papaya::HashMapRef">Hash<wbr>MapRef</a></dt><dd>A pinned reference to a <a href="struct.HashMap.html" title="struct papaya::HashMap"><code>HashMap</code></a>.</dd><dt><a class="struct" href="struct.HashSet.html" title="struct papaya::HashSet">HashSet</a></dt><dd>A concurrent hash set.</dd><dt><a class="struct" href="struct.HashSetBuilder.html" title="struct papaya::HashSetBuilder">Hash<wbr>SetBuilder</a></dt><dd>A builder for a <a href="struct.HashSet.html" title="struct papaya::HashSet"><code>HashSet</code></a>.</dd><dt><a class="struct" href="struct.HashSetRef.html" title="struct papaya::HashSetRef">Hash<wbr>SetRef</a></dt><dd>A pinned reference to a <a href="struct.HashSet.html" title="struct papaya::HashSet"><code>HashSet</code></a>.</dd><dt><a class="struct" href="struct.Iter.html" title="struct papaya::Iter">Iter</a></dt><dd>An iterator over a map’s entries.</dd><dt><a class="struct" href="struct.Keys.html" title="struct papaya::Keys">Keys</a></dt><dd>An iterator over a map’s keys.</dd><dt><a class="struct" href="struct.LocalGuard.html" title="struct papaya::LocalGuard">Local<wbr>Guard</a></dt><dd>A guard that keeps the current thread marked as active.</dd><dt><a class="struct" href="struct.OccupiedError.html" title="struct papaya::OccupiedError">Occupied<wbr>Error</a></dt><dd>An error returned by <a href="struct.HashMap.html#method.try_insert" title="method papaya::HashMap::try_insert"><code>try_insert</code></a> when the key already exists.</dd><dt><a class="struct" href="struct.OwnedGuard.html" title="struct papaya::OwnedGuard">Owned<wbr>Guard</a></dt><dd>A guard that protects objects for it’s lifetime, independent of the current
+thread.</dd><dt><a class="struct" href="struct.Values.html" title="struct papaya::Values">Values</a></dt><dd>An iterator over a map’s values.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Compute.html" title="enum papaya::Compute">Compute</a></dt><dd>The result of a <a href="struct.HashMap.html#method.compute" title="method papaya::HashMap::compute"><code>compute</code></a> operation.</dd><dt><a class="enum" href="enum.Operation.html" title="enum papaya::Operation">Operation</a></dt><dd>An operation to perform on given entry in a <a href="struct.HashMap.html" title="struct papaya::HashMap"><code>HashMap</code></a>.</dd><dt><a class="enum" href="enum.ResizeMode.html" title="enum papaya::ResizeMode">Resize<wbr>Mode</a></dt><dd>Resize behavior for a <a href="struct.HashMap.html" title="struct papaya::HashMap"><code>HashMap</code></a>.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Equivalent.html" title="trait papaya::Equivalent">Equivalent</a></dt><dd>Key equivalence trait.</dd><dt><a class="trait" href="trait.Guard.html" title="trait papaya::Guard">Guard</a></dt><dd>A guard that enables protected loads of concurrent objects.</dd></dl></section></div></main></body></html>

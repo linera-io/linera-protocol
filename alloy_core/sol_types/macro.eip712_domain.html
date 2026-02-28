@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Convenience macro to instantiate an EIP-712 domain."><title>eip712_domain in alloy_core::sol_types - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="alloy_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../alloy_core/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../alloy_core/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../../alloy_core/index.html">alloy_<wbr>core</a><span class="version">1.3.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">eip712_<wbr>domain</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In alloy_<wbr>core::<wbr>sol_<wbr>types</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">alloy_core</a>::<wbr><a href="index.html">sol_types</a></div><h1>Macro <span class="macro">eip712_domain</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/alloy_sol_types/eip712.rs.html#200">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! eip712_domain {
+    (@opt) =&gt; { ... };
+    (@opt $e:expr) =&gt; { ... };
+    (@cow) =&gt; { ... };
+    (@cow $l:literal) =&gt; { ... };
+    (@cow $e:expr) =&gt; { ... };
+    (
+        $(name: $name:expr,)?
+        $(version: $version:expr,)?
+        $(chain_id: $chain_id:expr,)?
+        $(verifying_contract: $verifying_contract:expr,)?
+        $(salt: $salt:expr)?
+        $(,)?
+    ) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Convenience macro to instantiate an <a href="../dyn_abi/struct.Eip712Domain.html" title="struct alloy_core::dyn_abi::Eip712Domain">EIP-712 domain</a>.</p>
+<p>This macro allows you to instantiate an <a href="../dyn_abi/struct.Eip712Domain.html" title="struct alloy_core::dyn_abi::Eip712Domain">EIP-712 domain</a>
+struct without manually writing <code>None</code> for unused fields.</p>
+<p>It may be used to declare a domain with any combination of fields. Each
+field must be labeled with the name of the field, and the fields must be in
+order. The fields for the domain are:</p>
+<ul>
+<li><code>name</code></li>
+<li><code>version</code></li>
+<li><code>chain_id</code></li>
+<li><code>verifying_contract</code></li>
+<li><code>salt</code></li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">const </span>MY_DOMAIN: Eip712Domain = <span class="macro">eip712_domain!</span> {
+    name: <span class="string">"MyCoolProtocol"</span>,
+};
+
+<span class="kw">let </span>dynamic_name = String::from(<span class="string">"MyCoolProtocol"</span>);
+<span class="kw">let </span>my_other_domain: Eip712Domain = <span class="macro">eip712_domain!</span> {
+    name: dynamic_name,
+    version: <span class="string">"1.0.0"</span>,
+    salt: keccak256(<span class="string">"my domain salt"</span>),
+};</code></pre></div>
+</div></details></section></div></main></body></html>

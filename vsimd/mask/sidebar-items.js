@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["mask8x16_all","mask8x16_any","mask8x32_all","mask8x32_any","u8x16_highbit_all","u8x16_highbit_any","u8x32_highbit_all","u8x32_highbit_any"]};

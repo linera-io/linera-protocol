@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Design of BLS12-381"><title>sp1_bls12_381::notes::design - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sp1_bls12_381" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../sp1_bls12_381/index.html">sp1_<wbr>bls12_<wbr>381</a><span class="version">0.8.0-sp1-5.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module design</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#design-of-bls12-381" title="Design of BLS12-381">Design of BLS12-381</a><ul><li><a href="#fixed-generators" title="Fixed Generators">Fixed Generators</a></li><li><a href="#nontrivial-third-root-of-unity" title="Nontrivial third root of unity">Nontrivial third root of unity</a></li><li><a href="#psi" title="Psi">Psi</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In sp1_<wbr>bls12_<wbr>381::<wbr>notes</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">sp1_bls12_381</a>::<wbr><a href="../index.html">notes</a></div><h1>Module <span>design</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/sp1_bls12_381/notes/design.rs.html#1-108">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="design-of-bls12-381"><a class="doc-anchor" href="#design-of-bls12-381">§</a>Design of BLS12-381</h2><h3 id="fixed-generators"><a class="doc-anchor" href="#fixed-generators">§</a>Fixed Generators</h3>
+<p>Although any generator produced by hashing to $\mathbb{G}_1$ or $\mathbb{G}_2$ is
+safe to use in a cryptographic protocol, we specify some simple, fixed generators.</p>
+<p>In order to derive these generators, we select the lexicographically smallest
+valid $x$-coordinate and the lexicographically smallest corresponding $y$-coordinate,
+and then scale the resulting point by the cofactor, such that the result is not the
+identity. This results in the following fixed generators:</p>
+<ol>
+<li>$\mathbb{G}_1$
+<ul>
+<li>$x = 3685416753713387016781088315183077757961620795782546409894578378688607592378376318836054947676345821548104185464507$</li>
+<li>$y = 1339506544944476473020471379941921221584933875938349620426543736416511423956333506472724655353366534992391756441569$</li>
+</ul>
+</li>
+<li>$\mathbb{G}_2$
+<ul>
+<li>$x = 352701069587466618187139116011060144890029952792775240219908644239793785735715026873347600343865175952761926303160 + 3059144344244213709971259814753781636986470325476647558659373206291635324768958432433509563104347017837885763365758 u$</li>
+<li>$y = 1985150602287291935568054521177171638300868978215655730859378665066344726373823718423869104263333984641494340347905 + 927553665492332455747201965776037880757740193453592970025027978793976877002675564980949289727957565575433344219582 u$</li>
+</ul>
+</li>
+</ol>
+<p>This can be derived using the following sage script:</p>
+<div class="example-wrap"><pre class="language-text"><code>param = -0xd201000000010000
+def r(x):
+    return (x**4) - (x**2) + 1
+def q(x):
+    return (((x - 1) ** 2) * ((x**4) - (x**2) + 1) // 3) + x
+def g1_h(x):
+    return ((x-1)**2) // 3
+def g2_h(x):
+    return ((x**8) - (4 * (x**7)) + (5 * (x**6)) - (4 * (x**4)) + (6 * (x**3)) - (4 * (x**2)) - (4*x) + 13) // 9
+q = q(param)
+r = r(param)
+Fq = GF(q)
+ec = EllipticCurve(Fq, [0, 4])
+def psqrt(v):
+    assert(not v.is_zero())
+    a = sqrt(v)
+    b = -a
+    if a &lt; b:
+        return a
+    else:
+        return b
+for x in range(0,100):
+    rhs = Fq(x)^3 + 4
+    if rhs.is_square():
+        y = psqrt(rhs)
+        p = ec(x, y) * g1_h(param)
+        if (not p.is_zero()) and (p * r).is_zero():
+            print(&quot;g1 generator: {}&quot;.format(p))
+            break
+Fq2.&lt;i&gt; = GF(q^2, modulus=[1, 0, 1])
+ec2 = EllipticCurve(Fq2, [0, (4 * (1 + i))])
+assert(ec2.order() == (r * g2_h(param)))
+for x in range(0,100):
+    rhs = (Fq2(x))^3 + (4 * (1 + i))
+    if rhs.is_square():
+        y = psqrt(rhs)
+        p = ec2(Fq2(x), y) * g2_h(param)
+        if not p.is_zero() and (p * r).is_zero():
+            print(&quot;g2 generator: {}&quot;.format(p))
+            break</code></pre></div><h3 id="nontrivial-third-root-of-unity"><a class="doc-anchor" href="#nontrivial-third-root-of-unity">§</a>Nontrivial third root of unity</h3>
+<p>To use the fast subgroup check algorithm for $\mathbb{G_1}$ from https://eprint.iacr.org/2019/814.pdf and
+https://eprint.iacr.org/2021/1130, it is necessary to find a nontrivial cube root of
+unity β in Fp to define the endomorphism:
+$$(x, y) \rightarrow (\beta x, y)$$
+which is equivalent to
+$$P \rightarrow \lambda P$$
+where $\lambda$, a nontrivial cube root of unity in Fr, satisfies $\lambda^2 + \lambda +1 = 0 \pmod{r}.</p>
+<p>$$\beta = 793479390729215512621379701633421447060886740281060493010456487427281649075476305620758731620350$$
+can be derived using the following sage commands after running the above sage script:</p>
+<div class="example-wrap"><pre class="language-text"><code># Prints the given field element in Montgomery form.
+def print_fq(a):
+    R = 1 &lt;&lt; 384
+    tmp = ZZ(Fq(a*R))
+    while tmp &gt; 0:
+        print(&quot;0x{:_x}, &quot;.format(tmp % (1 &lt;&lt; 64)))
+        tmp &gt;&gt;= 64
+β = (Fq.multiplicative_generator() ** ((q-1)/3))
+print_fq(β)</code></pre></div><h3 id="psi"><a class="doc-anchor" href="#psi">§</a>Psi</h3>
+<p>To use the fast subgroup check algorithm for $\mathbb{G_2}$ from https://eprint.iacr.org/2019/814.pdf and
+https://eprint.iacr.org/2021/1130, it is necessary to find the endomorphism:</p>
+<p>$$(x, y, z) \rightarrow (x^q \psi_x, y^q \psi_y, z^q)$$</p>
+<p>where:</p>
+<ol>
+<li>$\psi_x = 1 / ((i+1) ^ ((q-1)/3)) \in \mathbb{F}_{q^2}$, and</li>
+<li>$\psi_y = 1 / ((i+1) ^ ((q-1)/2)) \in \mathbb{F}_{q^2}$</li>
+</ol>
+<p>can be derived using the following sage commands after running the above script and commands:</p>
+<div class="example-wrap"><pre class="language-text"><code>psi_x = (1/((i+1)**((q-1)/3)))
+psi_y = (1/((i+1)**((q-1)/2)))
+print_fq(psi_x.polynomial().coefficients()[0])
+print_fq(psi_y.polynomial().coefficients()[0])
+print_fq(psi_y.polynomial().coefficients()[1])</code></pre></div></div></details></section></div></main></body></html>

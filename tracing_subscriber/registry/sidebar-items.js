@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Data","Extensions","ExtensionsMut","Registry","Scope","ScopeFromRoot","SpanRef"],"trait":["LookupSpan","SpanData"]};

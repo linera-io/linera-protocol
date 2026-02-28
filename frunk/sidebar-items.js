@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["Generic","LabelledGeneric"],"macro":["Coprod","HList","field","hlist","hlist_pat","poly_fn"],"mod":["coproduct","generic","hlist","indices","labelled","monoid","path","prelude","semigroup","traits","validated"]};

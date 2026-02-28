@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SCHEME_ID"],"struct":["SigV4AuthScheme","SigV4Signer"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BatchStatement","BatchType"],"struct":["Batch"]};

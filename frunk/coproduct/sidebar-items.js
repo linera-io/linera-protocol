@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CNil","Coproduct"],"trait":["CoprodInjector","CoprodUninjector","CoproductEmbedder","CoproductFoldable","CoproductMappable","CoproductSelector","CoproductSubsetter","CoproductTaker"]};

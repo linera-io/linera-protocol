@@ -1,0 +1,251 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="getrandom: system’s random number generator"><title>getrandom - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="getrandom" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../getrandom/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../getrandom/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt="logo"></a><h2><a href="../getrandom/index.html">getrandom</a><span class="version">0.3.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#getrandom-systems-random-number-generator" title="getrandom: system’s random number generator">getrandom: system’s random number generator</a><ul><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#supported-targets" title="Supported targets">Supported targets</a></li><li><a href="#error-handling" title="Error handling">Error handling</a></li><li><a href="#panic-handling" title="Panic handling">Panic handling</a></li><li><a href="#sanitizer-support" title="Sanitizer support">Sanitizer support</a></li><li><a href="#minimum-supported-rust-version" title="Minimum Supported Rust Version">Minimum Supported Rust Version</a></li><li><a href="#license" title="License">License</a></li></ul></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>getrandom</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/getrandom/lib.rs.html#2-143">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="getrandom-systems-random-number-generator"><a class="doc-anchor" href="#getrandom-systems-random-number-generator">§</a>getrandom: system’s random number generator</h2>
+<p><a href="https://github.com/rust-random/getrandom/actions?query=branch:master"><img src="https://github.com/rust-random/getrandom/actions/workflows/tests.yml/badge.svg?branch=master" alt="Build Status" /></a>
+<a href="https://crates.io/crates/getrandom"><img src="https://img.shields.io/crates/v/getrandom" alt="Crate" /></a>
+<a href="https://docs.rs/getrandom"><img src="https://docs.rs/getrandom/badge.svg" alt="Documentation" /></a>
+<a href="https://deps.rs/repo/github/rust-random/getrandom"><img src="https://deps.rs/repo/github/rust-random/getrandom/status.svg" alt="Dependency Status" /></a>
+<a href="https://crates.io/crates/getrandom"><img src="https://img.shields.io/crates/d/getrandom" alt="Downloads" /></a>
+<a href="https://github.com/rust-random/getrandom/blob/master/LICENSE-MIT"><img src="https://img.shields.io/crates/l/getrandom" alt="License" /></a></p>
+<p><code>getrandom</code> is a Rust library for retrieving random data from (operating) system sources.</p>
+<p>It is assumed that the system always provides high-quality, cryptographically secure random
+data, ideally backed by hardware entropy sources. This crate derives its name from
+the Linux <code>getrandom</code> syscall but is cross-platform, roughly supporting the same set
+of platforms as Rust’s <code>std</code> library.</p>
+<p>This is a low-level API. Most users should prefer using a higher-level random-number
+library like <a href="https://crates.io/crates/rand"><code>rand</code></a>.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>Add the <code>getrandom</code> dependency to your <code>Cargo.toml</code> file:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+getrandom = &quot;0.3&quot;</code></pre></div>
+<p>Then invoke the <code>fill</code> function on a byte buffer to fill it with random data:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>get_random_u128() -&gt; <span class="prelude-ty">Result</span>&lt;u128, getrandom::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">16</span>];
+    getrandom::fill(<span class="kw-2">&amp;mut </span>buf)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(u128::from_ne_bytes(buf))
+}</code></pre></div>
+<h3 id="supported-targets"><a class="doc-anchor" href="#supported-targets">§</a>Supported targets</h3><div><table><thead><tr><th>Target</th><th>Target Triple</th><th>Implementation</th></tr></thead><tbody>
+<tr><td>Linux, Android</td><td><code>*‑linux‑*</code></td><td><a href="https://manned.org/getrandom.2"><code>getrandom</code></a> system call if available, otherwise <a href="https://manned.org/urandom.4"><code>/dev/urandom</code></a> after successfully polling <code>/dev/random</code></td></tr>
+<tr><td>Windows 10+</td><td><code>*‑windows‑*</code></td><td><a href="https://learn.microsoft.com/en-us/windows/win32/seccng/processprng"><code>ProcessPrng</code></a> on Rust 1.78+, <a href="https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-rtlgenrandom"><code>RtlGenRandom</code></a> otherwise</td></tr>
+<tr><td>Windows 7, 8</td><td><code>*-win7‑windows‑*</code></td><td><a href="https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-rtlgenrandom"><code>RtlGenRandom</code></a></td></tr>
+<tr><td>macOS</td><td><code>*‑apple‑darwin</code></td><td><a href="https://www.unix.com/man-page/mojave/2/getentropy/"><code>getentropy</code></a></td></tr>
+<tr><td>iOS, tvOS, watchOS</td><td><code>*‑apple‑{ios,tvos,watchos}</code></td><td><a href="https://opensource.apple.com/source/CommonCrypto/CommonCrypto-60074/include/CommonRandom.h.auto.html"><code>CCRandomGenerateBytes</code></a></td></tr>
+<tr><td>FreeBSD</td><td><code>*‑freebsd</code></td><td><a href="https://www.freebsd.org/cgi/man.cgi?query=getrandom&amp;manpath=FreeBSD+12.0-stable"><code>getrandom</code></a></td></tr>
+<tr><td>OpenBSD</td><td><code>*‑openbsd</code></td><td><a href="https://man.openbsd.org/getentropy.2"><code>getentropy</code></a></td></tr>
+<tr><td>NetBSD</td><td><code>*‑netbsd</code></td><td><a href="https://man.netbsd.org/getrandom.2"><code>getrandom</code></a> if available, otherwise <a href="https://man.netbsd.org/sysctl.7"><code>kern.arandom</code></a></td></tr>
+<tr><td>Dragonfly BSD</td><td><code>*‑dragonfly</code></td><td><a href="https://leaf.dragonflybsd.org/cgi/web-man?command=getrandom"><code>getrandom</code></a></td></tr>
+<tr><td>Solaris</td><td><code>*‑solaris</code></td><td><a href="https://docs.oracle.com/cd/E88353_01/html/E37841/getrandom-2.html"><code>getrandom</code></a> with <code>GRND_RANDOM</code></td></tr>
+<tr><td>illumos</td><td><code>*‑illumos</code></td><td><a href="https://illumos.org/man/2/getrandom"><code>getrandom</code></a></td></tr>
+<tr><td>Fuchsia OS</td><td><code>*‑fuchsia</code></td><td><a href="https://fuchsia.dev/fuchsia-src/zircon/syscalls/cprng_draw"><code>cprng_draw</code></a></td></tr>
+<tr><td>Redox</td><td><code>*‑redox</code></td><td><code>/dev/urandom</code></td></tr>
+<tr><td>Haiku</td><td><code>*‑haiku</code></td><td><code>/dev/urandom</code> (identical to <code>/dev/random</code>)</td></tr>
+<tr><td>Hermit</td><td><code>*-hermit</code></td><td><a href="https://github.com/hermit-os/kernel/blob/315f58ff5efc81d9bf0618af85a59963ff55f8b1/src/syscalls/entropy.rs#L47-L55"><code>sys_read_entropy</code></a></td></tr>
+<tr><td>Hurd</td><td><code>*-hurd-*</code></td><td><a href="https://www.gnu.org/software/libc/manual/html_mono/libc.html#index-getrandom"><code>getrandom</code></a></td></tr>
+<tr><td>SGX</td><td><code>x86_64‑*‑sgx</code></td><td><a href="https://software.intel.com/en-us/articles/intel-digital-random-number-generator-drng-software-implementation-guide"><code>RDRAND</code></a></td></tr>
+<tr><td>VxWorks</td><td><code>*‑wrs‑vxworks‑*</code></td><td><code>randABytes</code> after checking entropy pool initialization with <code>randSecure</code></td></tr>
+<tr><td>Emscripten</td><td><code>*‑emscripten</code></td><td><a href="https://github.com/emscripten-core/emscripten/pull/12240"><code>getentropy</code></a></td></tr>
+<tr><td>WASI 0.1</td><td><code>wasm32‑wasip1</code></td><td><a href="https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/docs.md#-random_getbuf-pointeru8-buf_len-size---errno"><code>random_get</code></a></td></tr>
+<tr><td>WASI 0.2</td><td><code>wasm32‑wasip2</code></td><td><a href="https://github.com/WebAssembly/WASI/blob/v0.2.1/wasip2/random/random.wit#L23-L28"><code>get-random-u64</code></a></td></tr>
+<tr><td>SOLID</td><td><code>*-kmc-solid_*</code></td><td><code>SOLID_RNG_SampleRandomBytes</code></td></tr>
+<tr><td>Nintendo 3DS</td><td><code>*-nintendo-3ds</code></td><td><a href="https://github.com/rust3ds/shim-3ds/commit/b01d2568836dea2a65d05d662f8e5f805c64389d"><code>getrandom</code></a></td></tr>
+<tr><td>ESP-IDF</td><td><code>*‑espidf</code></td><td><a href="https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/random.html#functions"><code>esp_fill_random</code></a> WARNING: see “Early Boot” section below</td></tr>
+<tr><td>PS Vita</td><td><code>*-vita-*</code></td><td><a href="https://github.com/vitasdk/newlib/blob/2d869fe47aaf02b8e52d04e9a2b79d5b210fd016/newlib/libc/sys/vita/getentropy.c"><code>getentropy</code></a></td></tr>
+<tr><td>QNX Neutrino</td><td><code>*‑nto-qnx*</code></td><td><a href="https://www.qnx.com/developers/docs/7.1/index.html#com.qnx.doc.neutrino.utilities/topic/r/random.html"><code>/dev/urandom</code></a> (identical to <code>/dev/random</code>)</td></tr>
+<tr><td>AIX</td><td><code>*-ibm-aix</code></td><td><a href="https://www.ibm.com/docs/en/aix/7.3?topic=files-random-urandom-devices"><code>/dev/urandom</code></a></td></tr>
+<tr><td>Cygwin</td><td><code>*-cygwin</code></td><td><a href="https://github.com/cygwin/cygwin/blob/main/winsup/cygwin/libc/getentropy.cc"><code>getrandom</code></a> (based on <a href="https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-rtlgenrandom"><code>RtlGenRandom</code></a>)</td></tr>
+</tbody></table>
+</div>
+<p>Pull Requests that add support for new targets to <code>getrandom</code> are always welcome.</p>
+<h4 id="opt-in-backends"><a class="doc-anchor" href="#opt-in-backends">§</a>Opt-in backends</h4>
+<p><code>getrandom</code> also provides optional (opt-in) backends, which allow users to customize the source
+of randomness based on their specific needs:</p>
+<div><table><thead><tr><th>Backend name</th><th>Target</th><th>Target Triple</th><th>Implementation</th></tr></thead><tbody>
+<tr><td><code>linux_getrandom</code></td><td>Linux, Android</td><td><code>*‑linux‑*</code></td><td><a href="https://manned.org/getrandom.2"><code>getrandom</code></a> system call (without <code>/dev/urandom</code> fallback). Bumps minimum supported Linux kernel version to 3.17 and Android API level to 23 (Marshmallow).</td></tr>
+<tr><td><code>linux_raw</code></td><td>Linux, Android</td><td><code>*‑linux‑*</code></td><td>Same as <code>linux_getrandom</code>, but uses raw <code>asm!</code>-based syscalls instead of <code>libc</code>.</td></tr>
+<tr><td><code>rdrand</code></td><td>x86, x86-64</td><td><code>x86_64-*</code>, <code>i686-*</code></td><td><a href="https://software.intel.com/en-us/articles/intel-digital-random-number-generator-drng-software-implementation-guide"><code>RDRAND</code></a> instruction</td></tr>
+<tr><td><code>rndr</code></td><td>AArch64</td><td><code>aarch64-*</code></td><td><a href="https://developer.arm.com/documentation/ddi0601/2024-06/AArch64-Registers/RNDR--Random-Number"><code>RNDR</code></a> register</td></tr>
+<tr><td><code>wasm_js</code></td><td>Web Browser, Node.js</td><td><code>wasm32‑unknown‑unknown</code>, <code>wasm32v1-none</code></td><td><a href="https://www.w3.org/TR/WebCryptoAPI/#Crypto-method-getRandomValues"><code>Crypto.getRandomValues</code></a>. Requires feature <code>wasm_js</code> (<a href="#webassembly-support">see below</a>).</td></tr>
+<tr><td><code>efi_rng</code></td><td>UEFI</td><td><code>*-unknown‑uefi</code></td><td><a href="https://uefi.org/specs/UEFI/2.10/37_Secure_Technologies.html#efi-rng-protocol"><code>EFI_RNG_PROTOCOL</code></a> with <code>EFI_RNG_ALGORITHM_RAW</code> (requires <code>std</code> and Nigthly compiler)</td></tr>
+<tr><td><code>custom</code></td><td>All targets</td><td><code>*</code></td><td>User-provided custom implementation (see <a href="#custom-backend">custom backend</a>)</td></tr>
+</tbody></table>
+</div>
+<p>Opt-in backends can be enabled using the <code>getrandom_backend</code> configuration flag.
+The flag can be set either by specifying the <code>rustflags</code> field in <a href="https://doc.rust-lang.org/cargo/reference/config.html"><code>.cargo/config.toml</code></a>:</p>
+<div class="example-wrap"><pre class="language-toml"><code># It&#39;s recommended to set the flag on a per-target basis:
+[target.wasm32-unknown-unknown]
+rustflags = [&#39;--cfg&#39;, &#39;getrandom_backend=&quot;wasm_js&quot;&#39;]</code></pre></div>
+<p>Or by using the <code>RUSTFLAGS</code> environment variable:</p>
+<div class="example-wrap"><pre class="language-sh"><code>RUSTFLAGS=&#39;--cfg getrandom_backend=&quot;linux_getrandom&quot;&#39; cargo build</code></pre></div>
+<p>Enabling an opt-in backend will replace the backend used by default. Doing this for
+an incorrect target (e.g. using <code>linux_getrandom</code> while compiling for a Windows target)
+will result in a compilation error. Be extremely careful while using opt-in backends,
+as incorrect configuration may result in vulnerable applications or applications
+that always panic.</p>
+<p>Note that using an opt-in backend in a library (e.g. for tests or benchmarks)
+WILL NOT have any effect on its downstream users.</p>
+<h4 id="raw-linux-syscall-support"><a class="doc-anchor" href="#raw-linux-syscall-support">§</a>Raw Linux syscall support</h4>
+<p>Currently the <code>linux_raw</code> backend supports only targets with stabilized <code>asm!</code> macro,
+i.e. <code>arm</code>, <code>aarch64</code>, <code>loongarch64</code>, <code>riscv32</code>, <code>riscv64</code>, <code>s390x</code>, <code>x86</code>, and <code>x86_64</code>.</p>
+<p>Note that the raw syscall backend may be slower than backends based on <code>libc::getrandom</code>,
+e.g. it does not implement vDSO optimizations and on <code>x86</code> it uses the infamously slow
+<code>int 0x80</code> instruction to perform syscall.</p>
+<h4 id="webassembly-support"><a class="doc-anchor" href="#webassembly-support">§</a>WebAssembly support</h4>
+<p>This crate fully supports the <a href="https://github.com/WebAssembly/WASI">WASI</a> and <a href="https://emscripten.org">Emscripten</a> targets. However,
+the <code>wasm32-unknown-unknown</code> target (i.e. the target used by <code>wasm-pack</code>)
+is not automatically supported since, from the target name alone, we cannot deduce
+which JavaScript interface should be used (or if JavaScript is available at all).</p>
+<p>To enable <code>getrandom</code>’s functionality on <code>wasm32-unknown-unknown</code> using the Web
+Crypto methods <a href="#opt-in-backends">described above</a> via <a href="https://github.com/rustwasm/wasm-bindgen"><code>wasm-bindgen</code></a>, do
+<em>both</em> of the following:</p>
+<ul>
+<li>Use the <code>wasm_js</code> feature flag, i.e.
+<code>getrandom = { version = "0.3", features = ["wasm_js"] }</code>.
+On its own, this only makes the backend available. (As a side effect this
+will make your <code>Cargo.lock</code> significantly larger if you are not already
+using <a href="https://github.com/rustwasm/wasm-bindgen"><code>wasm-bindgen</code></a>, but otherwise enabling this feature is harmless.)</li>
+<li>Set <code>RUSTFLAGS='--cfg getrandom_backend="wasm_js"'</code> (<a href="#opt-in-backends">see above</a>).</li>
+</ul>
+<p>This backend supports both web browsers (main window and Web Workers)
+and Node.js (v19 or later) environments.</p>
+<p>WARNING: It is highly recommended to enable the <code>wasm_js</code> feature only for
+binary crates and tests, i.e. avoid unconditionally enabling it in library crates.</p>
+<h4 id="custom-backend"><a class="doc-anchor" href="#custom-backend">§</a>Custom backend</h4>
+<p>If this crate does not support your target out of the box or you have to use
+a non-default entropy source, then you can provide a custom implementation.
+You need to enable the custom backend as described in the
+<a href="#opt-in-backends">opt-in backends</a> section.</p>
+<p>Next, you need to define an <code>extern</code> function with the following signature:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>getrandom::Error;
+
+<span class="attr">#[no_mangle]
+</span><span class="kw">unsafe extern </span><span class="string">"Rust" </span><span class="kw">fn </span>__getrandom_v03_custom(
+    dest: <span class="kw-2">*mut </span>u8,
+    len: usize,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="macro">todo!</span>()
+}</code></pre></div>
+<p>This function should, ideally, be defined in the root crate of your project,
+e.g. in your <code>main.rs</code>. This function MUST be defined only once for your
+project, i.e. upstream library crates SHOULD NOT define it outside of
+tests and benchmarks. Improper configuration of this backend may result
+in linking errors.</p>
+<p>The function accepts a pointer to a buffer that should be filled with random
+data and its length in bytes. Note that the buffer MAY be uninitialized.
+On success, the function should return <code>Ok(())</code> and fully fill the input buffer;
+otherwise, it should return an error value.</p>
+<p>While wrapping functions which work with byte slices you should fully initialize
+the buffer before passing it to the function:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>getrandom::Error;
+
+<span class="kw">fn </span>my_entropy_source(buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;(), getrandom::Error&gt; {
+    <span class="comment">// ...
+    </span><span class="prelude-val">Ok</span>(())
+}
+
+<span class="attr">#[no_mangle]
+</span><span class="kw">unsafe extern </span><span class="string">"Rust" </span><span class="kw">fn </span>__getrandom_v03_custom(
+    dest: <span class="kw-2">*mut </span>u8,
+    len: usize,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="kw">let </span>buf = <span class="kw">unsafe </span>{
+        <span class="comment">// fill the buffer with zeros
+        </span>core::ptr::write_bytes(dest, <span class="number">0</span>, len);
+        <span class="comment">// create mutable byte slice
+        </span>core::slice::from_raw_parts_mut(dest, len)
+    };
+    my_entropy_source(buf)
+}</code></pre></div>
+<p>If you are confident that <code>getrandom</code> is not used in your project, but
+it gets pulled nevertheless by one of your dependencies, then you can
+use the following custom backend, which always returns the “unsupported” error:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>getrandom::Error;
+
+<span class="attr">#[no_mangle]
+</span><span class="kw">unsafe extern </span><span class="string">"Rust" </span><span class="kw">fn </span>__getrandom_v03_custom(
+    dest: <span class="kw-2">*mut </span>u8,
+    len: usize,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="prelude-val">Err</span>(Error::UNSUPPORTED)
+}</code></pre></div>
+<h4 id="platform-support"><a class="doc-anchor" href="#platform-support">§</a>Platform Support</h4>
+<p>This crate generally supports the same operating system and platform versions
+that the Rust standard library does. Additional targets may be supported using
+the opt-in custom backend.</p>
+<p>This means that as Rust drops support for old versions of operating systems
+(such as old Linux kernel versions, Android API levels, etc.) in stable releases,
+<code>getrandom</code> may create new patch releases that remove support for
+outdated platform versions.</p>
+<h4 id="devurandom-fallback-on-linux-and-android"><a class="doc-anchor" href="#devurandom-fallback-on-linux-and-android">§</a><code>/dev/urandom</code> fallback on Linux and Android</h4>
+<p>On Linux targets, the <code>/dev/urandom</code> fallback is present only if either <code>target_env</code>
+is <code>musl</code>, or <code>target_arch</code> is one of the following: <code>aarch64</code>, <code>arm</code>, <code>powerpc</code>,
+<code>powerpc64</code>, <code>s390x</code>, <code>x86</code>, <code>x86_64</code>. Other supported targets <a href="https://doc.rust-lang.org/stable/rustc/platform-support.html">require</a>
+kernel versions that support the <code>getrandom</code> system call, so the fallback is not needed.</p>
+<p>On Android targets the fallback is present only for the following <code>target_arch</code>es:
+<code>aarch64</code>, <code>arm</code>, <code>x86</code>, <code>x86_64</code>. Other <code>target_arch</code>es (e.g. RISC-V) require
+sufficiently high API levels.</p>
+<p>The fallback can be disabled by enabling the <code>linux_getrandom</code> opt-in backend.
+Note that doing so will bump minimum supported Linux kernel version to 3.17
+and Android API level to 23 (Marshmallow).</p>
+<h4 id="early-boot"><a class="doc-anchor" href="#early-boot">§</a>Early boot</h4>
+<p>Sometimes, early in the boot process, the OS has not collected enough
+entropy to securely seed its RNG. This is especially common on virtual
+machines, where standard “random” events are hard to come by.</p>
+<p>Some operating system interfaces always block until the RNG is securely
+seeded. This can take anywhere from a few seconds to more than a minute.
+A few (Linux, NetBSD and Solaris) offer a choice between blocking and
+getting an error; in these cases, we always choose to block.</p>
+<p>On Linux (when the <code>getrandom</code> system call is not available), reading from
+<code>/dev/urandom</code> never blocks, even when the OS hasn’t collected enough
+entropy yet. To avoid returning low-entropy bytes, we first poll
+<code>/dev/random</code> and only switch to <code>/dev/urandom</code> once this has succeeded.</p>
+<p>On OpenBSD, this kind of entropy accounting isn’t available, and on
+NetBSD, blocking on it is discouraged. On these platforms, nonblocking
+interfaces are used, even when reliable entropy may not be available.
+On the platforms where it is used, the reliability of entropy accounting
+itself isn’t free from controversy. This library provides randomness
+sourced according to the platform’s best practices, but each platform has
+its own limits on the grade of randomness it can promise in environments
+with few sources of entropy.</p>
+<p>On ESP-IDF, if <code>esp_fill_random</code> is used before enabling WiFi, BT, or the
+voltage noise entropy source (SAR ADC), the Hardware RNG will only be seeded
+via RC_FAST_CLK. This can occur during early boot unless
+<code>bootloader_random_enable()</code> is called. For more information see the
+<a href="https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/random.html">ESP-IDF RNG Docs</a> or the
+<a href="https://www.espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf#rng">RNG section of the ESP32 Technical Reference Manual</a>.</p>
+<h3 id="error-handling"><a class="doc-anchor" href="#error-handling">§</a>Error handling</h3>
+<p>We always prioritize failure over returning known insecure “random” bytes.
+Generally, on supported platforms, failure is highly unlikely, though not
+impossible. If an error does occur, it is likely that it will occur
+on every call to <code>getrandom</code>. Therefore, after the first successful call,
+one can be reasonably confident that no errors will occur.</p>
+<h3 id="panic-handling"><a class="doc-anchor" href="#panic-handling">§</a>Panic handling</h3>
+<p>We strive to eliminate all potential panics from our backend implementations.
+In other words, when compiled with optimizations enabled, the generated
+binary code for <code>getrandom</code> functions should not contain any panic branches.
+Even if the platform misbehaves and returns an unexpected result,
+our code should correctly handle it and return an error, e.g.
+<a href="struct.Error.html#associatedconstant.UNEXPECTED" title="associated constant getrandom::Error::UNEXPECTED"><code>Error::UNEXPECTED</code></a>.</p>
+<h3 id="sanitizer-support"><a class="doc-anchor" href="#sanitizer-support">§</a>Sanitizer support</h3>
+<p>If your code uses <a href="fn.fill_uninit.html" title="fn getrandom::fill_uninit"><code>fill_uninit</code></a> and you enable
+<a href="https://doc.rust-lang.org/beta/unstable-book/compiler-flags/sanitizer.html#memorysanitizer">MemorySanitizer</a>
+(i.e. <code>-Zsanitizer=memory</code>), we will automatically handle unpoisoning
+of the destination buffer filled by <code>fill_uninit</code>.</p>
+<p>You can run sanitizer tests for your crate dependent on <code>getrandom</code> like this:</p>
+<div class="example-wrap"><pre class="language-sh"><code>RUSTFLAGS=&quot;-Zsanitizer=memory&quot; cargo test -Zbuild-std --target=x86_64-unknown-linux-gnu</code></pre></div><h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>This crate requires Rust 1.63 or later.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>The <code>getrandom</code> library is distributed under either of</p>
+<ul>
+<li><a href="https://github.com/rust-random/getrandom/blob/master/LICENSE-APACHE">Apache License, Version 2.0</a></li>
+<li><a href="https://github.com/rust-random/getrandom/blob/master/LICENSE-MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Error.html" title="struct getrandom::Error">Error</a></dt><dd>A small and <code>no_std</code> compatible error type</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.fill.html" title="fn getrandom::fill">fill</a></dt><dd>Fill <code>dest</code> with random bytes from the system’s preferred random number source.</dd><dt><a class="fn" href="fn.fill_uninit.html" title="fn getrandom::fill_uninit">fill_<wbr>uninit</a></dt><dd>Fill potentially uninitialized buffer <code>dest</code> with random bytes from
+the system’s preferred random number source and return a mutable
+reference to those bytes.</dd><dt><a class="fn" href="fn.u32.html" title="fn getrandom::u32">u32</a></dt><dd>Get random <code>u32</code> from the system’s preferred random number source.</dd><dt><a class="fn" href="fn.u64.html" title="fn getrandom::u64">u64</a></dt><dd>Get random <code>u64</code> from the system’s preferred random number source.</dd></dl></section></div></main></body></html>

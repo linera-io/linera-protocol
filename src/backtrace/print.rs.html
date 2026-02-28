@@ -1,0 +1,310 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/backtrace-0.3.75/src/print.rs`."><title>print.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="backtrace" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">backtrace/</div>print.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#2 id=2 data-nosnippet>2</a></span><span class="kw">use super</span>::{BacktraceFrame, BacktraceSymbol};
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use super</span>::{BytesOrWideString, Frame, SymbolName};
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>core::ffi::c_void;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>core::fmt;
+<a href=#6 id=6 data-nosnippet>6</a>
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">const </span>HEX_WIDTH: usize = <span class="number">2 </span>+ <span class="number">2 </span>* core::mem::size_of::&lt;usize&gt;();
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a><span class="attr">#[cfg(target_os = <span class="string">"fuchsia"</span>)]
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">mod </span>fuchsia;
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a><span class="doccomment">/// A formatter for backtraces.
+<a href=#13 id=13 data-nosnippet>13</a>///
+<a href=#14 id=14 data-nosnippet>14</a>/// This type can be used to print a backtrace regardless of where the backtrace
+<a href=#15 id=15 data-nosnippet>15</a>/// itself comes from. If you have a `Backtrace` type then its `Debug`
+<a href=#16 id=16 data-nosnippet>16</a>/// implementation already uses this printing format.
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">pub struct </span>BacktraceFmt&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt; {
+<a href=#18 id=18 data-nosnippet>18</a>    fmt: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>fmt::Formatter&lt;<span class="lifetime">'b</span>&gt;,
+<a href=#19 id=19 data-nosnippet>19</a>    frame_index: usize,
+<a href=#20 id=20 data-nosnippet>20</a>    format: PrintFmt,
+<a href=#21 id=21 data-nosnippet>21</a>    print_path:
+<a href=#22 id=22 data-nosnippet>22</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>(<span class="kw">dyn </span>FnMut(<span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;, BytesOrWideString&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result + <span class="lifetime">'b</span>),
+<a href=#23 id=23 data-nosnippet>23</a>}
+<a href=#24 id=24 data-nosnippet>24</a>
+<a href=#25 id=25 data-nosnippet>25</a><span class="doccomment">/// The styles of printing that we can print
+<a href=#26 id=26 data-nosnippet>26</a></span><span class="attr">#[derive(Copy, Clone, Eq, PartialEq)]
+<a href=#27 id=27 data-nosnippet>27</a>#[non_exhaustive]
+<a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">pub enum </span>PrintFmt {
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="doccomment">/// Prints a terser backtrace which ideally only contains relevant information
+<a href=#30 id=30 data-nosnippet>30</a>    </span>Short,
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="doccomment">/// Prints a backtrace that contains all possible information
+<a href=#32 id=32 data-nosnippet>32</a>    </span>Full,
+<a href=#33 id=33 data-nosnippet>33</a>}
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt; BacktraceFmt&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt; {
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="doccomment">/// Create a new `BacktraceFmt` which will write output to the provided
+<a href=#37 id=37 data-nosnippet>37</a>    /// `fmt`.
+<a href=#38 id=38 data-nosnippet>38</a>    ///
+<a href=#39 id=39 data-nosnippet>39</a>    /// The `format` argument will control the style in which the backtrace is
+<a href=#40 id=40 data-nosnippet>40</a>    /// printed, and the `print_path` argument will be used to print the
+<a href=#41 id=41 data-nosnippet>41</a>    /// `BytesOrWideString` instances of filenames. This type itself doesn't do
+<a href=#42 id=42 data-nosnippet>42</a>    /// any printing of filenames, but this callback is required to do so.
+<a href=#43 id=43 data-nosnippet>43</a>    </span><span class="kw">pub fn </span>new(
+<a href=#44 id=44 data-nosnippet>44</a>        fmt: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>fmt::Formatter&lt;<span class="lifetime">'b</span>&gt;,
+<a href=#45 id=45 data-nosnippet>45</a>        format: PrintFmt,
+<a href=#46 id=46 data-nosnippet>46</a>        print_path: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>(<span class="kw">dyn </span>FnMut(<span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;, BytesOrWideString&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result
+<a href=#47 id=47 data-nosnippet>47</a>                     + <span class="lifetime">'b</span>),
+<a href=#48 id=48 data-nosnippet>48</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#49 id=49 data-nosnippet>49</a>        BacktraceFmt {
+<a href=#50 id=50 data-nosnippet>50</a>            fmt,
+<a href=#51 id=51 data-nosnippet>51</a>            frame_index: <span class="number">0</span>,
+<a href=#52 id=52 data-nosnippet>52</a>            format,
+<a href=#53 id=53 data-nosnippet>53</a>            print_path,
+<a href=#54 id=54 data-nosnippet>54</a>        }
+<a href=#55 id=55 data-nosnippet>55</a>    }
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="doccomment">/// Prints a preamble for the backtrace about to be printed.
+<a href=#58 id=58 data-nosnippet>58</a>    ///
+<a href=#59 id=59 data-nosnippet>59</a>    /// This is required on some platforms for backtraces to be fully
+<a href=#60 id=60 data-nosnippet>60</a>    /// symbolicated later, and otherwise this should just be the first method
+<a href=#61 id=61 data-nosnippet>61</a>    /// you call after creating a `BacktraceFmt`.
+<a href=#62 id=62 data-nosnippet>62</a>    </span><span class="kw">pub fn </span>add_context(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; fmt::Result {
+<a href=#63 id=63 data-nosnippet>63</a>        <span class="attr">#[cfg(target_os = <span class="string">"fuchsia"</span>)]
+<a href=#64 id=64 data-nosnippet>64</a>        </span>fuchsia::print_dso_context(<span class="self">self</span>.fmt)<span class="question-mark">?</span>;
+<a href=#65 id=65 data-nosnippet>65</a>        <span class="prelude-val">Ok</span>(())
+<a href=#66 id=66 data-nosnippet>66</a>    }
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="doccomment">/// Adds a frame to the backtrace output.
+<a href=#69 id=69 data-nosnippet>69</a>    ///
+<a href=#70 id=70 data-nosnippet>70</a>    /// This commit returns an RAII instance of a `BacktraceFrameFmt` which can be used
+<a href=#71 id=71 data-nosnippet>71</a>    /// to actually print a frame, and on destruction it will increment the
+<a href=#72 id=72 data-nosnippet>72</a>    /// frame counter.
+<a href=#73 id=73 data-nosnippet>73</a>    </span><span class="kw">pub fn </span>frame(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; BacktraceFrameFmt&lt;<span class="lifetime">'_</span>, <span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt; {
+<a href=#74 id=74 data-nosnippet>74</a>        BacktraceFrameFmt {
+<a href=#75 id=75 data-nosnippet>75</a>            fmt: <span class="self">self</span>,
+<a href=#76 id=76 data-nosnippet>76</a>            symbol_index: <span class="number">0</span>,
+<a href=#77 id=77 data-nosnippet>77</a>        }
+<a href=#78 id=78 data-nosnippet>78</a>    }
+<a href=#79 id=79 data-nosnippet>79</a>
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="doccomment">/// Completes the backtrace output.
+<a href=#81 id=81 data-nosnippet>81</a>    ///
+<a href=#82 id=82 data-nosnippet>82</a>    /// This is currently a no-op but is added for future compatibility with
+<a href=#83 id=83 data-nosnippet>83</a>    /// backtrace formats.
+<a href=#84 id=84 data-nosnippet>84</a>    </span><span class="kw">pub fn </span>finish(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; fmt::Result {
+<a href=#85 id=85 data-nosnippet>85</a>        <span class="attr">#[cfg(target_os = <span class="string">"fuchsia"</span>)]
+<a href=#86 id=86 data-nosnippet>86</a>        </span>fuchsia::finish_context(<span class="self">self</span>.fmt)<span class="question-mark">?</span>;
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="prelude-val">Ok</span>(())
+<a href=#88 id=88 data-nosnippet>88</a>    }
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="doccomment">/// Inserts a message in the backtrace output.
+<a href=#91 id=91 data-nosnippet>91</a>    ///
+<a href=#92 id=92 data-nosnippet>92</a>    /// This allows information to be inserted between frames,
+<a href=#93 id=93 data-nosnippet>93</a>    /// and won't increment the `frame_index` unlike the `frame`
+<a href=#94 id=94 data-nosnippet>94</a>    /// method.
+<a href=#95 id=95 data-nosnippet>95</a>    </span><span class="kw">pub fn </span>message(<span class="kw-2">&amp;mut </span><span class="self">self</span>, msg: <span class="kw-2">&amp;</span>str) -&gt; fmt::Result {
+<a href=#96 id=96 data-nosnippet>96</a>        <span class="self">self</span>.fmt.write_str(msg)
+<a href=#97 id=97 data-nosnippet>97</a>    }
+<a href=#98 id=98 data-nosnippet>98</a>
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="doccomment">/// Return the inner formatter.
+<a href=#100 id=100 data-nosnippet>100</a>    ///
+<a href=#101 id=101 data-nosnippet>101</a>    /// This is used for writing custom information between frames with `write!` and `writeln!`,
+<a href=#102 id=102 data-nosnippet>102</a>    /// and won't increment the `frame_index` unlike the `frame` method.
+<a href=#103 id=103 data-nosnippet>103</a>    </span><span class="kw">pub fn </span>formatter(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'b</span>&gt; {
+<a href=#104 id=104 data-nosnippet>104</a>        <span class="self">self</span>.fmt
+<a href=#105 id=105 data-nosnippet>105</a>    }
+<a href=#106 id=106 data-nosnippet>106</a>}
+<a href=#107 id=107 data-nosnippet>107</a>
+<a href=#108 id=108 data-nosnippet>108</a><span class="doccomment">/// A formatter for just one frame of a backtrace.
+<a href=#109 id=109 data-nosnippet>109</a>///
+<a href=#110 id=110 data-nosnippet>110</a>/// This type is created by the `BacktraceFmt::frame` function.
+<a href=#111 id=111 data-nosnippet>111</a></span><span class="kw">pub struct </span>BacktraceFrameFmt&lt;<span class="lifetime">'fmt</span>, <span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt; {
+<a href=#112 id=112 data-nosnippet>112</a>    fmt: <span class="kw-2">&amp;</span><span class="lifetime">'fmt </span><span class="kw-2">mut </span>BacktraceFmt&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt;,
+<a href=#113 id=113 data-nosnippet>113</a>    symbol_index: usize,
+<a href=#114 id=114 data-nosnippet>114</a>}
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a><span class="kw">impl </span>BacktraceFrameFmt&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt; {
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="doccomment">/// Prints a `BacktraceFrame` with this frame formatter.
+<a href=#118 id=118 data-nosnippet>118</a>    ///
+<a href=#119 id=119 data-nosnippet>119</a>    /// This will recursively print all `BacktraceSymbol` instances within the
+<a href=#120 id=120 data-nosnippet>120</a>    /// `BacktraceFrame`.
+<a href=#121 id=121 data-nosnippet>121</a>    ///
+<a href=#122 id=122 data-nosnippet>122</a>    /// # Required features
+<a href=#123 id=123 data-nosnippet>123</a>    ///
+<a href=#124 id=124 data-nosnippet>124</a>    /// This function requires the `std` feature of the `backtrace` crate to be
+<a href=#125 id=125 data-nosnippet>125</a>    /// enabled, and the `std` feature is enabled by default.
+<a href=#126 id=126 data-nosnippet>126</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#127 id=127 data-nosnippet>127</a>    </span><span class="kw">pub fn </span>backtrace_frame(<span class="kw-2">&amp;mut </span><span class="self">self</span>, frame: <span class="kw-2">&amp;</span>BacktraceFrame) -&gt; fmt::Result {
+<a href=#128 id=128 data-nosnippet>128</a>        <span class="kw">let </span>symbols = frame.symbols();
+<a href=#129 id=129 data-nosnippet>129</a>        <span class="kw">for </span>symbol <span class="kw">in </span>symbols {
+<a href=#130 id=130 data-nosnippet>130</a>            <span class="self">self</span>.backtrace_symbol(frame, symbol)<span class="question-mark">?</span>;
+<a href=#131 id=131 data-nosnippet>131</a>        }
+<a href=#132 id=132 data-nosnippet>132</a>        <span class="kw">if </span>symbols.is_empty() {
+<a href=#133 id=133 data-nosnippet>133</a>            <span class="self">self</span>.print_raw(frame.ip(), <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+<a href=#134 id=134 data-nosnippet>134</a>        }
+<a href=#135 id=135 data-nosnippet>135</a>        <span class="prelude-val">Ok</span>(())
+<a href=#136 id=136 data-nosnippet>136</a>    }
+<a href=#137 id=137 data-nosnippet>137</a>
+<a href=#138 id=138 data-nosnippet>138</a>    <span class="doccomment">/// Prints a `BacktraceSymbol` within a `BacktraceFrame`.
+<a href=#139 id=139 data-nosnippet>139</a>    ///
+<a href=#140 id=140 data-nosnippet>140</a>    /// # Required features
+<a href=#141 id=141 data-nosnippet>141</a>    ///
+<a href=#142 id=142 data-nosnippet>142</a>    /// This function requires the `std` feature of the `backtrace` crate to be
+<a href=#143 id=143 data-nosnippet>143</a>    /// enabled, and the `std` feature is enabled by default.
+<a href=#144 id=144 data-nosnippet>144</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#145 id=145 data-nosnippet>145</a>    </span><span class="kw">pub fn </span>backtrace_symbol(
+<a href=#146 id=146 data-nosnippet>146</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#147 id=147 data-nosnippet>147</a>        frame: <span class="kw-2">&amp;</span>BacktraceFrame,
+<a href=#148 id=148 data-nosnippet>148</a>        symbol: <span class="kw-2">&amp;</span>BacktraceSymbol,
+<a href=#149 id=149 data-nosnippet>149</a>    ) -&gt; fmt::Result {
+<a href=#150 id=150 data-nosnippet>150</a>        <span class="self">self</span>.print_raw_with_column(
+<a href=#151 id=151 data-nosnippet>151</a>            frame.ip(),
+<a href=#152 id=152 data-nosnippet>152</a>            symbol.name(),
+<a href=#153 id=153 data-nosnippet>153</a>            <span class="comment">// TODO: this isn't great that we don't end up printing anything
+<a href=#154 id=154 data-nosnippet>154</a>            // with non-utf8 filenames. Thankfully almost everything is utf8 so
+<a href=#155 id=155 data-nosnippet>155</a>            // this shouldn't be too bad.
+<a href=#156 id=156 data-nosnippet>156</a>            </span>symbol
+<a href=#157 id=157 data-nosnippet>157</a>                .filename()
+<a href=#158 id=158 data-nosnippet>158</a>                .and_then(|p| <span class="prelude-val">Some</span>(BytesOrWideString::Bytes(p.to_str()<span class="question-mark">?</span>.as_bytes()))),
+<a href=#159 id=159 data-nosnippet>159</a>            symbol.lineno(),
+<a href=#160 id=160 data-nosnippet>160</a>            symbol.colno(),
+<a href=#161 id=161 data-nosnippet>161</a>        )<span class="question-mark">?</span>;
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="prelude-val">Ok</span>(())
+<a href=#163 id=163 data-nosnippet>163</a>    }
+<a href=#164 id=164 data-nosnippet>164</a>
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="doccomment">/// Prints a raw traced `Frame` and `Symbol`, typically from within the raw
+<a href=#166 id=166 data-nosnippet>166</a>    /// callbacks of this crate.
+<a href=#167 id=167 data-nosnippet>167</a>    </span><span class="kw">pub fn </span>symbol(<span class="kw-2">&amp;mut </span><span class="self">self</span>, frame: <span class="kw-2">&amp;</span>Frame, symbol: <span class="kw-2">&amp;</span><span class="kw">super</span>::Symbol) -&gt; fmt::Result {
+<a href=#168 id=168 data-nosnippet>168</a>        <span class="self">self</span>.print_raw_with_column(
+<a href=#169 id=169 data-nosnippet>169</a>            frame.ip(),
+<a href=#170 id=170 data-nosnippet>170</a>            symbol.name(),
+<a href=#171 id=171 data-nosnippet>171</a>            symbol.filename_raw(),
+<a href=#172 id=172 data-nosnippet>172</a>            symbol.lineno(),
+<a href=#173 id=173 data-nosnippet>173</a>            symbol.colno(),
+<a href=#174 id=174 data-nosnippet>174</a>        )<span class="question-mark">?</span>;
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="prelude-val">Ok</span>(())
+<a href=#176 id=176 data-nosnippet>176</a>    }
+<a href=#177 id=177 data-nosnippet>177</a>
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="doccomment">/// Adds a raw frame to the backtrace output.
+<a href=#179 id=179 data-nosnippet>179</a>    ///
+<a href=#180 id=180 data-nosnippet>180</a>    /// This method, unlike the previous, takes the raw arguments in case
+<a href=#181 id=181 data-nosnippet>181</a>    /// they're being source from different locations. Note that this may be
+<a href=#182 id=182 data-nosnippet>182</a>    /// called multiple times for one frame.
+<a href=#183 id=183 data-nosnippet>183</a>    </span><span class="kw">pub fn </span>print_raw(
+<a href=#184 id=184 data-nosnippet>184</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#185 id=185 data-nosnippet>185</a>        frame_ip: <span class="kw-2">*mut </span>c_void,
+<a href=#186 id=186 data-nosnippet>186</a>        symbol_name: <span class="prelude-ty">Option</span>&lt;SymbolName&lt;<span class="lifetime">'_</span>&gt;&gt;,
+<a href=#187 id=187 data-nosnippet>187</a>        filename: <span class="prelude-ty">Option</span>&lt;BytesOrWideString&lt;<span class="lifetime">'_</span>&gt;&gt;,
+<a href=#188 id=188 data-nosnippet>188</a>        lineno: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#189 id=189 data-nosnippet>189</a>    ) -&gt; fmt::Result {
+<a href=#190 id=190 data-nosnippet>190</a>        <span class="self">self</span>.print_raw_with_column(frame_ip, symbol_name, filename, lineno, <span class="prelude-val">None</span>)
+<a href=#191 id=191 data-nosnippet>191</a>    }
+<a href=#192 id=192 data-nosnippet>192</a>
+<a href=#193 id=193 data-nosnippet>193</a>    <span class="doccomment">/// Adds a raw frame to the backtrace output, including column information.
+<a href=#194 id=194 data-nosnippet>194</a>    ///
+<a href=#195 id=195 data-nosnippet>195</a>    /// This method, like the previous, takes the raw arguments in case
+<a href=#196 id=196 data-nosnippet>196</a>    /// they're being source from different locations. Note that this may be
+<a href=#197 id=197 data-nosnippet>197</a>    /// called multiple times for one frame.
+<a href=#198 id=198 data-nosnippet>198</a>    </span><span class="kw">pub fn </span>print_raw_with_column(
+<a href=#199 id=199 data-nosnippet>199</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#200 id=200 data-nosnippet>200</a>        frame_ip: <span class="kw-2">*mut </span>c_void,
+<a href=#201 id=201 data-nosnippet>201</a>        symbol_name: <span class="prelude-ty">Option</span>&lt;SymbolName&lt;<span class="lifetime">'_</span>&gt;&gt;,
+<a href=#202 id=202 data-nosnippet>202</a>        filename: <span class="prelude-ty">Option</span>&lt;BytesOrWideString&lt;<span class="lifetime">'_</span>&gt;&gt;,
+<a href=#203 id=203 data-nosnippet>203</a>        lineno: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#204 id=204 data-nosnippet>204</a>        colno: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#205 id=205 data-nosnippet>205</a>    ) -&gt; fmt::Result {
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="comment">// Fuchsia is unable to symbolize within a process so it has a special
+<a href=#207 id=207 data-nosnippet>207</a>        // format which can be used to symbolize later. Print that instead of
+<a href=#208 id=208 data-nosnippet>208</a>        // printing addresses in our own format here.
+<a href=#209 id=209 data-nosnippet>209</a>        </span><span class="kw">if </span><span class="macro">cfg!</span>(target_os = <span class="string">"fuchsia"</span>) {
+<a href=#210 id=210 data-nosnippet>210</a>            <span class="self">self</span>.print_raw_fuchsia(frame_ip)<span class="question-mark">?</span>;
+<a href=#211 id=211 data-nosnippet>211</a>        } <span class="kw">else </span>{
+<a href=#212 id=212 data-nosnippet>212</a>            <span class="self">self</span>.print_raw_generic(frame_ip, symbol_name, filename, lineno, colno)<span class="question-mark">?</span>;
+<a href=#213 id=213 data-nosnippet>213</a>        }
+<a href=#214 id=214 data-nosnippet>214</a>        <span class="self">self</span>.symbol_index += <span class="number">1</span>;
+<a href=#215 id=215 data-nosnippet>215</a>        <span class="prelude-val">Ok</span>(())
+<a href=#216 id=216 data-nosnippet>216</a>    }
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a>    <span class="attr">#[allow(unused_mut)]
+<a href=#219 id=219 data-nosnippet>219</a>    </span><span class="kw">fn </span>print_raw_generic(
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#221 id=221 data-nosnippet>221</a>        frame_ip: <span class="kw-2">*mut </span>c_void,
+<a href=#222 id=222 data-nosnippet>222</a>        symbol_name: <span class="prelude-ty">Option</span>&lt;SymbolName&lt;<span class="lifetime">'_</span>&gt;&gt;,
+<a href=#223 id=223 data-nosnippet>223</a>        filename: <span class="prelude-ty">Option</span>&lt;BytesOrWideString&lt;<span class="lifetime">'_</span>&gt;&gt;,
+<a href=#224 id=224 data-nosnippet>224</a>        lineno: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#225 id=225 data-nosnippet>225</a>        colno: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#226 id=226 data-nosnippet>226</a>    ) -&gt; fmt::Result {
+<a href=#227 id=227 data-nosnippet>227</a>        <span class="comment">// No need to print "null" frames, it basically just means that the
+<a href=#228 id=228 data-nosnippet>228</a>        // system backtrace was a bit eager to trace back super far.
+<a href=#229 id=229 data-nosnippet>229</a>        </span><span class="kw">if let </span>PrintFmt::Short = <span class="self">self</span>.fmt.format {
+<a href=#230 id=230 data-nosnippet>230</a>            <span class="kw">if </span>frame_ip.is_null() {
+<a href=#231 id=231 data-nosnippet>231</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#232 id=232 data-nosnippet>232</a>            }
+<a href=#233 id=233 data-nosnippet>233</a>        }
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="comment">// Print the index of the frame as well as the optional instruction
+<a href=#236 id=236 data-nosnippet>236</a>        // pointer of the frame. If we're beyond the first symbol of this frame
+<a href=#237 id=237 data-nosnippet>237</a>        // though we just print appropriate whitespace.
+<a href=#238 id=238 data-nosnippet>238</a>        </span><span class="kw">if </span><span class="self">self</span>.symbol_index == <span class="number">0 </span>{
+<a href=#239 id=239 data-nosnippet>239</a>            <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"{:4}: "</span>, <span class="self">self</span>.fmt.frame_index)<span class="question-mark">?</span>;
+<a href=#240 id=240 data-nosnippet>240</a>            <span class="kw">if let </span>PrintFmt::Full = <span class="self">self</span>.fmt.format {
+<a href=#241 id=241 data-nosnippet>241</a>                <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"{frame_ip:HEX_WIDTH$?} - "</span>)<span class="question-mark">?</span>;
+<a href=#242 id=242 data-nosnippet>242</a>            }
+<a href=#243 id=243 data-nosnippet>243</a>        } <span class="kw">else </span>{
+<a href=#244 id=244 data-nosnippet>244</a>            <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"      "</span>)<span class="question-mark">?</span>;
+<a href=#245 id=245 data-nosnippet>245</a>            <span class="kw">if let </span>PrintFmt::Full = <span class="self">self</span>.fmt.format {
+<a href=#246 id=246 data-nosnippet>246</a>                <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"{:1$}"</span>, <span class="string">""</span>, HEX_WIDTH + <span class="number">3</span>)<span class="question-mark">?</span>;
+<a href=#247 id=247 data-nosnippet>247</a>            }
+<a href=#248 id=248 data-nosnippet>248</a>        }
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>        <span class="comment">// Next up write out the symbol name, using the alternate formatting for
+<a href=#251 id=251 data-nosnippet>251</a>        // more information if we're a full backtrace. Here we also handle
+<a href=#252 id=252 data-nosnippet>252</a>        // symbols which don't have a name,
+<a href=#253 id=253 data-nosnippet>253</a>        </span><span class="kw">match </span>(symbol_name, <span class="kw-2">&amp;</span><span class="self">self</span>.fmt.format) {
+<a href=#254 id=254 data-nosnippet>254</a>            (<span class="prelude-val">Some</span>(name), PrintFmt::Short) =&gt; <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"{name:#}"</span>)<span class="question-mark">?</span>,
+<a href=#255 id=255 data-nosnippet>255</a>            (<span class="prelude-val">Some</span>(name), PrintFmt::Full) =&gt; <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"{name}"</span>)<span class="question-mark">?</span>,
+<a href=#256 id=256 data-nosnippet>256</a>            (<span class="prelude-val">None</span>, <span class="kw">_</span>) =&gt; <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"&lt;unknown&gt;"</span>)<span class="question-mark">?</span>,
+<a href=#257 id=257 data-nosnippet>257</a>        }
+<a href=#258 id=258 data-nosnippet>258</a>        <span class="self">self</span>.fmt.fmt.write_str(<span class="string">"\n"</span>)<span class="question-mark">?</span>;
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>        <span class="comment">// And last up, print out the filename/line number if they're available.
+<a href=#261 id=261 data-nosnippet>261</a>        </span><span class="kw">if let </span>(<span class="prelude-val">Some</span>(file), <span class="prelude-val">Some</span>(line)) = (filename, lineno) {
+<a href=#262 id=262 data-nosnippet>262</a>            <span class="self">self</span>.print_fileline(file, line, colno)<span class="question-mark">?</span>;
+<a href=#263 id=263 data-nosnippet>263</a>        }
+<a href=#264 id=264 data-nosnippet>264</a>
+<a href=#265 id=265 data-nosnippet>265</a>        <span class="prelude-val">Ok</span>(())
+<a href=#266 id=266 data-nosnippet>266</a>    }
+<a href=#267 id=267 data-nosnippet>267</a>
+<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">fn </span>print_fileline(
+<a href=#269 id=269 data-nosnippet>269</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#270 id=270 data-nosnippet>270</a>        file: BytesOrWideString&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#271 id=271 data-nosnippet>271</a>        line: u32,
+<a href=#272 id=272 data-nosnippet>272</a>        colno: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#273 id=273 data-nosnippet>273</a>    ) -&gt; fmt::Result {
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="comment">// Filename/line are printed on lines under the symbol name, so print
+<a href=#275 id=275 data-nosnippet>275</a>        // some appropriate whitespace to sort of right-align ourselves.
+<a href=#276 id=276 data-nosnippet>276</a>        </span><span class="kw">if let </span>PrintFmt::Full = <span class="self">self</span>.fmt.format {
+<a href=#277 id=277 data-nosnippet>277</a>            <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"{:1$}"</span>, <span class="string">""</span>, HEX_WIDTH)<span class="question-mark">?</span>;
+<a href=#278 id=278 data-nosnippet>278</a>        }
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"             at "</span>)<span class="question-mark">?</span>;
+<a href=#280 id=280 data-nosnippet>280</a>
+<a href=#281 id=281 data-nosnippet>281</a>        <span class="comment">// Delegate to our internal callback to print the filename and then
+<a href=#282 id=282 data-nosnippet>282</a>        // print out the line number.
+<a href=#283 id=283 data-nosnippet>283</a>        </span>(<span class="self">self</span>.fmt.print_path)(<span class="self">self</span>.fmt.fmt, file)<span class="question-mark">?</span>;
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">":{line}"</span>)<span class="question-mark">?</span>;
+<a href=#285 id=285 data-nosnippet>285</a>
+<a href=#286 id=286 data-nosnippet>286</a>        <span class="comment">// Add column number, if available.
+<a href=#287 id=287 data-nosnippet>287</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(colno) = colno {
+<a href=#288 id=288 data-nosnippet>288</a>            <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">":{colno}"</span>)<span class="question-mark">?</span>;
+<a href=#289 id=289 data-nosnippet>289</a>        }
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="macro">writeln!</span>(<span class="self">self</span>.fmt.fmt)<span class="question-mark">?</span>;
+<a href=#292 id=292 data-nosnippet>292</a>        <span class="prelude-val">Ok</span>(())
+<a href=#293 id=293 data-nosnippet>293</a>    }
+<a href=#294 id=294 data-nosnippet>294</a>
+<a href=#295 id=295 data-nosnippet>295</a>    <span class="kw">fn </span>print_raw_fuchsia(<span class="kw-2">&amp;mut </span><span class="self">self</span>, frame_ip: <span class="kw-2">*mut </span>c_void) -&gt; fmt::Result {
+<a href=#296 id=296 data-nosnippet>296</a>        <span class="comment">// We only care about the first symbol of a frame
+<a href=#297 id=297 data-nosnippet>297</a>        </span><span class="kw">if </span><span class="self">self</span>.symbol_index == <span class="number">0 </span>{
+<a href=#298 id=298 data-nosnippet>298</a>            <span class="self">self</span>.fmt.fmt.write_str(<span class="string">"{{{bt:"</span>)<span class="question-mark">?</span>;
+<a href=#299 id=299 data-nosnippet>299</a>            <span class="macro">write!</span>(<span class="self">self</span>.fmt.fmt, <span class="string">"{}:{:?}"</span>, <span class="self">self</span>.fmt.frame_index, frame_ip)<span class="question-mark">?</span>;
+<a href=#300 id=300 data-nosnippet>300</a>            <span class="self">self</span>.fmt.fmt.write_str(<span class="string">"}}}\n"</span>)<span class="question-mark">?</span>;
+<a href=#301 id=301 data-nosnippet>301</a>        }
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="prelude-val">Ok</span>(())
+<a href=#303 id=303 data-nosnippet>303</a>    }
+<a href=#304 id=304 data-nosnippet>304</a>}
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a><span class="kw">impl </span>Drop <span class="kw">for </span>BacktraceFrameFmt&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt; {
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#308 id=308 data-nosnippet>308</a>        <span class="self">self</span>.fmt.frame_index += <span class="number">1</span>;
+<a href=#309 id=309 data-nosnippet>309</a>    }
+<a href=#310 id=310 data-nosnippet>310</a>}</code></pre></div></section></main></body></html>

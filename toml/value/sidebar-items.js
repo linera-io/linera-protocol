@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Offset","Value"],"struct":["Date","Datetime","DatetimeParseError","Time"],"trait":["Index"],"type":["Array"]};

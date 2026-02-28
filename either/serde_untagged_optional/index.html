@@ -1,0 +1,29 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Untagged serialization/deserialization support for Option&#60;Either&#60;L, R&#62;&#62;."><title>either::serde_untagged_optional - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="either" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../either/index.html">either</a><span class="version">1.15.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module serde_<wbr>untagged_<wbr>optional</a></h2><h3><a href="#functions">Module Items</a></h3><ul class="block"><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate either</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">either</a></div><h1>Module <span>serde_untagged_optional</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/either/serde_untagged_optional.rs.html#1-74">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Untagged serialization/deserialization support for Option&lt;Either&lt;L, R&gt;&gt;.</p>
+<p><code>Either</code> uses default, externally-tagged representation.
+However, sometimes it is useful to support several alternative types.
+For example, we may have a field which is generally Map&lt;String, i32&gt;
+but in typical cases Vec<String> would suffice, too.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>either::Either;
+<span class="kw">use </span>std::collections::HashMap;
+
+<span class="attr">#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(transparent)]
+</span><span class="kw">struct </span>IntOrString {
+    <span class="attr">#[serde(with = <span class="string">"either::serde_untagged_optional"</span>)]
+    </span>inner: <span class="prelude-ty">Option</span>&lt;Either&lt;Vec&lt;String&gt;, HashMap&lt;String, i32&gt;&gt;&gt;
+};
+
+<span class="comment">// serialization
+</span><span class="kw">let </span>data = IntOrString {
+    inner: <span class="prelude-val">Some</span>(Either::Left(<span class="macro">vec!</span>[<span class="string">"Hello"</span>.to_string()]))
+};
+<span class="comment">// notice: no tags are emitted.
+</span><span class="macro">assert_eq!</span>(serde_json::to_string(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>, <span class="string">r#"["Hello"]"#</span>);
+
+<span class="comment">// deserialization
+</span><span class="kw">let </span>data: IntOrString = serde_json::from_str(
+    <span class="string">r#"{"a": 0, "b": 14}"#
+</span>)<span class="question-mark">?</span>;
+<span class="macro">println!</span>(<span class="string">"found {:?}"</span>, data);</code></pre></div>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.deserialize.html" title="fn either::serde_untagged_optional::deserialize">deserialize</a></dt><dt><a class="fn" href="fn.serialize.html" title="fn either::serde_untagged_optional::serialize">serialize</a></dt></dl></section></div></main></body></html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/minimal-lexical-0.2.1/src/lemire.rs`."><title>lemire.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="minimal_lexical" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">minimal_lexical/</div>lemire.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Implementation of the Eisel-Lemire algorithm.
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! This is adapted from [fast-float-rust](https://github.com/aldanor/fast-float-rust),
+<a href=#4 id=4 data-nosnippet>4</a>//! a port of [fast_float](https://github.com/fastfloat/fast_float) to Rust.
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="attr">#![cfg(not(feature = <span class="string">"compact"</span>))]
+<a href=#7 id=7 data-nosnippet>7</a>#![doc(hidden)]
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">use </span><span class="kw">crate</span>::extended_float::ExtendedFloat;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span><span class="kw">crate</span>::num::Float;
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">crate</span>::number::Number;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span><span class="kw">crate</span>::table::{LARGEST_POWER_OF_FIVE, POWER_OF_FIVE_128, SMALLEST_POWER_OF_FIVE};
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a><span class="doccomment">/// Ensure truncation of digits doesn't affect our computation, by doing 2 passes.
+<a href=#15 id=15 data-nosnippet>15</a></span><span class="attr">#[inline]
+<a href=#16 id=16 data-nosnippet>16</a></span><span class="kw">pub fn </span>lemire&lt;F: Float&gt;(num: <span class="kw-2">&amp;</span>Number) -&gt; ExtendedFloat {
+<a href=#17 id=17 data-nosnippet>17</a>    <span class="comment">// If significant digits were truncated, then we can have rounding error
+<a href=#18 id=18 data-nosnippet>18</a>    // only if `mantissa + 1` produces a different result. We also avoid
+<a href=#19 id=19 data-nosnippet>19</a>    // redundantly using the Eisel-Lemire algorithm if it was unable to
+<a href=#20 id=20 data-nosnippet>20</a>    // correctly round on the first pass.
+<a href=#21 id=21 data-nosnippet>21</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>fp = compute_float::&lt;F&gt;(num.exponent, num.mantissa);
+<a href=#22 id=22 data-nosnippet>22</a>    <span class="kw">if </span>num.many_digits &amp;&amp; fp.exp &gt;= <span class="number">0 </span>&amp;&amp; fp != compute_float::&lt;F&gt;(num.exponent, num.mantissa + <span class="number">1</span>) {
+<a href=#23 id=23 data-nosnippet>23</a>        <span class="comment">// Need to re-calculate, since the previous values are rounded
+<a href=#24 id=24 data-nosnippet>24</a>        // when the slow path algorithm expects a normalized extended float.
+<a href=#25 id=25 data-nosnippet>25</a>        </span>fp = compute_error::&lt;F&gt;(num.exponent, num.mantissa);
+<a href=#26 id=26 data-nosnippet>26</a>    }
+<a href=#27 id=27 data-nosnippet>27</a>    fp
+<a href=#28 id=28 data-nosnippet>28</a>}
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a><span class="doccomment">/// Compute a float using an extended-precision representation.
+<a href=#31 id=31 data-nosnippet>31</a>///
+<a href=#32 id=32 data-nosnippet>32</a>/// Fast conversion of a the significant digits and decimal exponent
+<a href=#33 id=33 data-nosnippet>33</a>/// a float to a extended representation with a binary float. This
+<a href=#34 id=34 data-nosnippet>34</a>/// algorithm will accurately parse the vast majority of cases,
+<a href=#35 id=35 data-nosnippet>35</a>/// and uses a 128-bit representation (with a fallback 192-bit
+<a href=#36 id=36 data-nosnippet>36</a>/// representation).
+<a href=#37 id=37 data-nosnippet>37</a>///
+<a href=#38 id=38 data-nosnippet>38</a>/// This algorithm scales the exponent by the decimal exponent
+<a href=#39 id=39 data-nosnippet>39</a>/// using pre-computed powers-of-5, and calculates if the
+<a href=#40 id=40 data-nosnippet>40</a>/// representation can be unambiguously rounded to the nearest
+<a href=#41 id=41 data-nosnippet>41</a>/// machine float. Near-halfway cases are not handled here,
+<a href=#42 id=42 data-nosnippet>42</a>/// and are represented by a negative, biased binary exponent.
+<a href=#43 id=43 data-nosnippet>43</a>///
+<a href=#44 id=44 data-nosnippet>44</a>/// The algorithm is described in detail in "Daniel Lemire, Number Parsing
+<a href=#45 id=45 data-nosnippet>45</a>/// at a Gigabyte per Second" in section 5, "Fast Algorithm", and
+<a href=#46 id=46 data-nosnippet>46</a>/// section 6, "Exact Numbers And Ties", available online:
+<a href=#47 id=47 data-nosnippet>47</a>/// &lt;https://arxiv.org/abs/2101.11408.pdf&gt;.
+<a href=#48 id=48 data-nosnippet>48</a></span><span class="kw">pub fn </span>compute_float&lt;F: Float&gt;(q: i32, <span class="kw-2">mut </span>w: u64) -&gt; ExtendedFloat {
+<a href=#49 id=49 data-nosnippet>49</a>    <span class="kw">let </span>fp_zero = ExtendedFloat {
+<a href=#50 id=50 data-nosnippet>50</a>        mant: <span class="number">0</span>,
+<a href=#51 id=51 data-nosnippet>51</a>        exp: <span class="number">0</span>,
+<a href=#52 id=52 data-nosnippet>52</a>    };
+<a href=#53 id=53 data-nosnippet>53</a>    <span class="kw">let </span>fp_inf = ExtendedFloat {
+<a href=#54 id=54 data-nosnippet>54</a>        mant: <span class="number">0</span>,
+<a href=#55 id=55 data-nosnippet>55</a>        exp: F::INFINITE_POWER,
+<a href=#56 id=56 data-nosnippet>56</a>    };
+<a href=#57 id=57 data-nosnippet>57</a>
+<a href=#58 id=58 data-nosnippet>58</a>    <span class="comment">// Short-circuit if the value can only be a literal 0 or infinity.
+<a href=#59 id=59 data-nosnippet>59</a>    </span><span class="kw">if </span>w == <span class="number">0 </span>|| q &lt; F::SMALLEST_POWER_OF_TEN {
+<a href=#60 id=60 data-nosnippet>60</a>        <span class="kw">return </span>fp_zero;
+<a href=#61 id=61 data-nosnippet>61</a>    } <span class="kw">else if </span>q &gt; F::LARGEST_POWER_OF_TEN {
+<a href=#62 id=62 data-nosnippet>62</a>        <span class="kw">return </span>fp_inf;
+<a href=#63 id=63 data-nosnippet>63</a>    }
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="comment">// Normalize our significant digits, so the most-significant bit is set.
+<a href=#65 id=65 data-nosnippet>65</a>    </span><span class="kw">let </span>lz = w.leading_zeros() <span class="kw">as </span>i32;
+<a href=#66 id=66 data-nosnippet>66</a>    w &lt;&lt;= lz;
+<a href=#67 id=67 data-nosnippet>67</a>    <span class="kw">let </span>(lo, hi) = compute_product_approx(q, w, F::MANTISSA_SIZE <span class="kw">as </span>usize + <span class="number">3</span>);
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="kw">if </span>lo == <span class="number">0xFFFF_FFFF_FFFF_FFFF </span>{
+<a href=#69 id=69 data-nosnippet>69</a>        <span class="comment">// If we have failed to approximate w x 5^-q with our 128-bit value.
+<a href=#70 id=70 data-nosnippet>70</a>        // Since the addition of 1 could lead to an overflow which could then
+<a href=#71 id=71 data-nosnippet>71</a>        // round up over the half-way point, this can lead to improper rounding
+<a href=#72 id=72 data-nosnippet>72</a>        // of a float.
+<a href=#73 id=73 data-nosnippet>73</a>        //
+<a href=#74 id=74 data-nosnippet>74</a>        // However, this can only occur if q ∈ [-27, 55]. The upper bound of q
+<a href=#75 id=75 data-nosnippet>75</a>        // is 55 because 5^55 &lt; 2^128, however, this can only happen if 5^q &gt; 2^64,
+<a href=#76 id=76 data-nosnippet>76</a>        // since otherwise the product can be represented in 64-bits, producing
+<a href=#77 id=77 data-nosnippet>77</a>        // an exact result. For negative exponents, rounding-to-even can
+<a href=#78 id=78 data-nosnippet>78</a>        // only occur if 5^-q &lt; 2^64.
+<a href=#79 id=79 data-nosnippet>79</a>        //
+<a href=#80 id=80 data-nosnippet>80</a>        // For detailed explanations of rounding for negative exponents, see
+<a href=#81 id=81 data-nosnippet>81</a>        // &lt;https://arxiv.org/pdf/2101.11408.pdf#section.9.1&gt;. For detailed
+<a href=#82 id=82 data-nosnippet>82</a>        // explanations of rounding for positive exponents, see
+<a href=#83 id=83 data-nosnippet>83</a>        // &lt;https://arxiv.org/pdf/2101.11408.pdf#section.8&gt;.
+<a href=#84 id=84 data-nosnippet>84</a>        </span><span class="kw">let </span>inside_safe_exponent = (q &gt;= -<span class="number">27</span>) &amp;&amp; (q &lt;= <span class="number">55</span>);
+<a href=#85 id=85 data-nosnippet>85</a>        <span class="kw">if </span>!inside_safe_exponent {
+<a href=#86 id=86 data-nosnippet>86</a>            <span class="kw">return </span>compute_error_scaled::&lt;F&gt;(q, hi, lz);
+<a href=#87 id=87 data-nosnippet>87</a>        }
+<a href=#88 id=88 data-nosnippet>88</a>    }
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">let </span>upperbit = (hi &gt;&gt; <span class="number">63</span>) <span class="kw">as </span>i32;
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span><span class="kw-2">mut </span>mantissa = hi &gt;&gt; (upperbit + <span class="number">64 </span>- F::MANTISSA_SIZE - <span class="number">3</span>);
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">let </span><span class="kw-2">mut </span>power2 = power(q) + upperbit - lz - F::MINIMUM_EXPONENT;
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">if </span>power2 &lt;= <span class="number">0 </span>{
+<a href=#93 id=93 data-nosnippet>93</a>        <span class="kw">if </span>-power2 + <span class="number">1 </span>&gt;= <span class="number">64 </span>{
+<a href=#94 id=94 data-nosnippet>94</a>            <span class="comment">// Have more than 64 bits below the minimum exponent, must be 0.
+<a href=#95 id=95 data-nosnippet>95</a>            </span><span class="kw">return </span>fp_zero;
+<a href=#96 id=96 data-nosnippet>96</a>        }
+<a href=#97 id=97 data-nosnippet>97</a>        <span class="comment">// Have a subnormal value.
+<a href=#98 id=98 data-nosnippet>98</a>        </span>mantissa &gt;&gt;= -power2 + <span class="number">1</span>;
+<a href=#99 id=99 data-nosnippet>99</a>        mantissa += mantissa &amp; <span class="number">1</span>;
+<a href=#100 id=100 data-nosnippet>100</a>        mantissa &gt;&gt;= <span class="number">1</span>;
+<a href=#101 id=101 data-nosnippet>101</a>        power2 = (mantissa &gt;= (<span class="number">1_u64 </span>&lt;&lt; F::MANTISSA_SIZE)) <span class="kw">as </span>i32;
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">return </span>ExtendedFloat {
+<a href=#103 id=103 data-nosnippet>103</a>            mant: mantissa,
+<a href=#104 id=104 data-nosnippet>104</a>            exp: power2,
+<a href=#105 id=105 data-nosnippet>105</a>        };
+<a href=#106 id=106 data-nosnippet>106</a>    }
+<a href=#107 id=107 data-nosnippet>107</a>    <span class="comment">// Need to handle rounding ties. Normally, we need to round up,
+<a href=#108 id=108 data-nosnippet>108</a>    // but if we fall right in between and and we have an even basis, we
+<a href=#109 id=109 data-nosnippet>109</a>    // need to round down.
+<a href=#110 id=110 data-nosnippet>110</a>    //
+<a href=#111 id=111 data-nosnippet>111</a>    // This will only occur if:
+<a href=#112 id=112 data-nosnippet>112</a>    //  1. The lower 64 bits of the 128-bit representation is 0.
+<a href=#113 id=113 data-nosnippet>113</a>    //      IE, 5^q fits in single 64-bit word.
+<a href=#114 id=114 data-nosnippet>114</a>    //  2. The least-significant bit prior to truncated mantissa is odd.
+<a href=#115 id=115 data-nosnippet>115</a>    //  3. All the bits truncated when shifting to mantissa bits + 1 are 0.
+<a href=#116 id=116 data-nosnippet>116</a>    //
+<a href=#117 id=117 data-nosnippet>117</a>    // Or, we may fall between two floats: we are exactly halfway.
+<a href=#118 id=118 data-nosnippet>118</a>    </span><span class="kw">if </span>lo &lt;= <span class="number">1
+<a href=#119 id=119 data-nosnippet>119</a>        </span>&amp;&amp; q &gt;= F::MIN_EXPONENT_ROUND_TO_EVEN
+<a href=#120 id=120 data-nosnippet>120</a>        &amp;&amp; q &lt;= F::MAX_EXPONENT_ROUND_TO_EVEN
+<a href=#121 id=121 data-nosnippet>121</a>        &amp;&amp; mantissa &amp; <span class="number">3 </span>== <span class="number">1
+<a href=#122 id=122 data-nosnippet>122</a>        </span>&amp;&amp; (mantissa &lt;&lt; (upperbit + <span class="number">64 </span>- F::MANTISSA_SIZE - <span class="number">3</span>)) == hi
+<a href=#123 id=123 data-nosnippet>123</a>    {
+<a href=#124 id=124 data-nosnippet>124</a>        <span class="comment">// Zero the lowest bit, so we don't round up.
+<a href=#125 id=125 data-nosnippet>125</a>        </span>mantissa &amp;= !<span class="number">1_u64</span>;
+<a href=#126 id=126 data-nosnippet>126</a>    }
+<a href=#127 id=127 data-nosnippet>127</a>    <span class="comment">// Round-to-even, then shift the significant digits into place.
+<a href=#128 id=128 data-nosnippet>128</a>    </span>mantissa += mantissa &amp; <span class="number">1</span>;
+<a href=#129 id=129 data-nosnippet>129</a>    mantissa &gt;&gt;= <span class="number">1</span>;
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">if </span>mantissa &gt;= (<span class="number">2_u64 </span>&lt;&lt; F::MANTISSA_SIZE) {
+<a href=#131 id=131 data-nosnippet>131</a>        <span class="comment">// Rounding up overflowed, so the carry bit is set. Set the
+<a href=#132 id=132 data-nosnippet>132</a>        // mantissa to 1 (only the implicit, hidden bit is set) and
+<a href=#133 id=133 data-nosnippet>133</a>        // increase the exponent.
+<a href=#134 id=134 data-nosnippet>134</a>        </span>mantissa = <span class="number">1_u64 </span>&lt;&lt; F::MANTISSA_SIZE;
+<a href=#135 id=135 data-nosnippet>135</a>        power2 += <span class="number">1</span>;
+<a href=#136 id=136 data-nosnippet>136</a>    }
+<a href=#137 id=137 data-nosnippet>137</a>    <span class="comment">// Zero out the hidden bit.
+<a href=#138 id=138 data-nosnippet>138</a>    </span>mantissa &amp;= !(<span class="number">1_u64 </span>&lt;&lt; F::MANTISSA_SIZE);
+<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">if </span>power2 &gt;= F::INFINITE_POWER {
+<a href=#140 id=140 data-nosnippet>140</a>        <span class="comment">// Exponent is above largest normal value, must be infinite.
+<a href=#141 id=141 data-nosnippet>141</a>        </span><span class="kw">return </span>fp_inf;
+<a href=#142 id=142 data-nosnippet>142</a>    }
+<a href=#143 id=143 data-nosnippet>143</a>    ExtendedFloat {
+<a href=#144 id=144 data-nosnippet>144</a>        mant: mantissa,
+<a href=#145 id=145 data-nosnippet>145</a>        exp: power2,
+<a href=#146 id=146 data-nosnippet>146</a>    }
+<a href=#147 id=147 data-nosnippet>147</a>}
+<a href=#148 id=148 data-nosnippet>148</a>
+<a href=#149 id=149 data-nosnippet>149</a><span class="doccomment">/// Fallback algorithm to calculate the non-rounded representation.
+<a href=#150 id=150 data-nosnippet>150</a>/// This calculates the extended representation, and then normalizes
+<a href=#151 id=151 data-nosnippet>151</a>/// the resulting representation, so the high bit is set.
+<a href=#152 id=152 data-nosnippet>152</a></span><span class="attr">#[inline]
+<a href=#153 id=153 data-nosnippet>153</a></span><span class="kw">pub fn </span>compute_error&lt;F: Float&gt;(q: i32, <span class="kw-2">mut </span>w: u64) -&gt; ExtendedFloat {
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="kw">let </span>lz = w.leading_zeros() <span class="kw">as </span>i32;
+<a href=#155 id=155 data-nosnippet>155</a>    w &lt;&lt;= lz;
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">let </span>hi = compute_product_approx(q, w, F::MANTISSA_SIZE <span class="kw">as </span>usize + <span class="number">3</span>).<span class="number">1</span>;
+<a href=#157 id=157 data-nosnippet>157</a>    compute_error_scaled::&lt;F&gt;(q, hi, lz)
+<a href=#158 id=158 data-nosnippet>158</a>}
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a><span class="doccomment">/// Compute the error from a mantissa scaled to the exponent.
+<a href=#161 id=161 data-nosnippet>161</a></span><span class="attr">#[inline]
+<a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">pub fn </span>compute_error_scaled&lt;F: Float&gt;(q: i32, <span class="kw-2">mut </span>w: u64, lz: i32) -&gt; ExtendedFloat {
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="comment">// Want to normalize the float, but this is faster than ctlz on most architectures.
+<a href=#164 id=164 data-nosnippet>164</a>    </span><span class="kw">let </span>hilz = (w &gt;&gt; <span class="number">63</span>) <span class="kw">as </span>i32 ^ <span class="number">1</span>;
+<a href=#165 id=165 data-nosnippet>165</a>    w &lt;&lt;= hilz;
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">let </span>power2 = power(q <span class="kw">as </span>i32) + F::EXPONENT_BIAS - hilz - lz - <span class="number">62</span>;
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a>    ExtendedFloat {
+<a href=#169 id=169 data-nosnippet>169</a>        mant: w,
+<a href=#170 id=170 data-nosnippet>170</a>        exp: power2 + F::INVALID_FP,
+<a href=#171 id=171 data-nosnippet>171</a>    }
+<a href=#172 id=172 data-nosnippet>172</a>}
+<a href=#173 id=173 data-nosnippet>173</a>
+<a href=#174 id=174 data-nosnippet>174</a><span class="doccomment">/// Calculate a base 2 exponent from a decimal exponent.
+<a href=#175 id=175 data-nosnippet>175</a>/// This uses a pre-computed integer approximation for
+<a href=#176 id=176 data-nosnippet>176</a>/// log2(10), where 217706 / 2^16 is accurate for the
+<a href=#177 id=177 data-nosnippet>177</a>/// entire range of non-finite decimal exponents.
+<a href=#178 id=178 data-nosnippet>178</a></span><span class="attr">#[inline]
+<a href=#179 id=179 data-nosnippet>179</a></span><span class="kw">fn </span>power(q: i32) -&gt; i32 {
+<a href=#180 id=180 data-nosnippet>180</a>    (q.wrapping_mul(<span class="number">152_170 </span>+ <span class="number">65536</span>) &gt;&gt; <span class="number">16</span>) + <span class="number">63
+<a href=#181 id=181 data-nosnippet>181</a></span>}
+<a href=#182 id=182 data-nosnippet>182</a>
+<a href=#183 id=183 data-nosnippet>183</a><span class="attr">#[inline]
+<a href=#184 id=184 data-nosnippet>184</a></span><span class="kw">fn </span>full_multiplication(a: u64, b: u64) -&gt; (u64, u64) {
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="kw">let </span>r = (a <span class="kw">as </span>u128) * (b <span class="kw">as </span>u128);
+<a href=#186 id=186 data-nosnippet>186</a>    (r <span class="kw">as </span>u64, (r &gt;&gt; <span class="number">64</span>) <span class="kw">as </span>u64)
+<a href=#187 id=187 data-nosnippet>187</a>}
+<a href=#188 id=188 data-nosnippet>188</a>
+<a href=#189 id=189 data-nosnippet>189</a><span class="comment">// This will compute or rather approximate w * 5**q and return a pair of 64-bit words
+<a href=#190 id=190 data-nosnippet>190</a>// approximating the result, with the "high" part corresponding to the most significant
+<a href=#191 id=191 data-nosnippet>191</a>// bits and the low part corresponding to the least significant bits.
+<a href=#192 id=192 data-nosnippet>192</a></span><span class="kw">fn </span>compute_product_approx(q: i32, w: u64, precision: usize) -&gt; (u64, u64) {
+<a href=#193 id=193 data-nosnippet>193</a>    <span class="macro">debug_assert!</span>(q &gt;= SMALLEST_POWER_OF_FIVE);
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="macro">debug_assert!</span>(q &lt;= LARGEST_POWER_OF_FIVE);
+<a href=#195 id=195 data-nosnippet>195</a>    <span class="macro">debug_assert!</span>(precision &lt;= <span class="number">64</span>);
+<a href=#196 id=196 data-nosnippet>196</a>
+<a href=#197 id=197 data-nosnippet>197</a>    <span class="kw">let </span>mask = <span class="kw">if </span>precision &lt; <span class="number">64 </span>{
+<a href=#198 id=198 data-nosnippet>198</a>        <span class="number">0xFFFF_FFFF_FFFF_FFFF_u64 </span>&gt;&gt; precision
+<a href=#199 id=199 data-nosnippet>199</a>    } <span class="kw">else </span>{
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="number">0xFFFF_FFFF_FFFF_FFFF_u64
+<a href=#201 id=201 data-nosnippet>201</a>    </span>};
+<a href=#202 id=202 data-nosnippet>202</a>
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="comment">// 5^q &lt; 2^64, then the multiplication always provides an exact value.
+<a href=#204 id=204 data-nosnippet>204</a>    // That means whenever we need to round ties to even, we always have
+<a href=#205 id=205 data-nosnippet>205</a>    // an exact value.
+<a href=#206 id=206 data-nosnippet>206</a>    </span><span class="kw">let </span>index = (q - SMALLEST_POWER_OF_FIVE) <span class="kw">as </span>usize;
+<a href=#207 id=207 data-nosnippet>207</a>    <span class="kw">let </span>(lo5, hi5) = POWER_OF_FIVE_128[index];
+<a href=#208 id=208 data-nosnippet>208</a>    <span class="comment">// Only need one multiplication as long as there is 1 zero but
+<a href=#209 id=209 data-nosnippet>209</a>    // in the explicit mantissa bits, +1 for the hidden bit, +1 to
+<a href=#210 id=210 data-nosnippet>210</a>    // determine the rounding direction, +1 for if the computed
+<a href=#211 id=211 data-nosnippet>211</a>    // product has a leading zero.
+<a href=#212 id=212 data-nosnippet>212</a>    </span><span class="kw">let </span>(<span class="kw-2">mut </span>first_lo, <span class="kw-2">mut </span>first_hi) = full_multiplication(w, lo5);
+<a href=#213 id=213 data-nosnippet>213</a>    <span class="kw">if </span>first_hi &amp; mask == mask {
+<a href=#214 id=214 data-nosnippet>214</a>        <span class="comment">// Need to do a second multiplication to get better precision
+<a href=#215 id=215 data-nosnippet>215</a>        // for the lower product. This will always be exact
+<a href=#216 id=216 data-nosnippet>216</a>        // where q is &lt; 55, since 5^55 &lt; 2^128. If this wraps,
+<a href=#217 id=217 data-nosnippet>217</a>        // then we need to need to round up the hi product.
+<a href=#218 id=218 data-nosnippet>218</a>        </span><span class="kw">let </span>(<span class="kw">_</span>, second_hi) = full_multiplication(w, hi5);
+<a href=#219 id=219 data-nosnippet>219</a>        first_lo = first_lo.wrapping_add(second_hi);
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw">if </span>second_hi &gt; first_lo {
+<a href=#221 id=221 data-nosnippet>221</a>            first_hi += <span class="number">1</span>;
+<a href=#222 id=222 data-nosnippet>222</a>        }
+<a href=#223 id=223 data-nosnippet>223</a>    }
+<a href=#224 id=224 data-nosnippet>224</a>    (first_lo, first_hi)
+<a href=#225 id=225 data-nosnippet>225</a>}</code></pre></div></section></main></body></html>

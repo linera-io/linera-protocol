@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["GroupVersion","GroupVersionKind","GroupVersionResource","ParseGroupVersionError"]};

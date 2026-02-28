@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Safely transmutes a mutable reference of one type to a mutable reference of another type of the same size and compatible alignment."><title>transmute_mut in zerocopy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zerocopy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zerocopy/index.html">zerocopy</a><span class="version">0.8.26</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">transmute_<wbr>mut</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#size-compatibility" title="Size compatibility">Size compatibility</a></li><li><a href="#errors" title="Errors">Errors</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate zerocopy</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">zerocopy</a></div><h1>Macro <span class="macro">transmute_mut</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/zerocopy/macros.rs.html#491-508">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! transmute_mut {
+    ($e:expr) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Safely transmutes a mutable reference of one type to a mutable reference of
+another type of the same size and compatible alignment.</p>
+<p>This macro behaves like an invocation of this function:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">const fn </span>transmute_mut&lt;<span class="lifetime">'src</span>, <span class="lifetime">'dst</span>, Src, Dst&gt;(src: <span class="kw-2">&amp;</span><span class="lifetime">'src </span><span class="kw-2">mut </span>Src) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'dst </span><span class="kw-2">mut </span>Dst
+<span class="kw">where
+    </span><span class="lifetime">'src</span>: <span class="lifetime">'dst</span>,
+    Src: FromBytes + IntoBytes,
+    Dst: FromBytes + IntoBytes,
+    align_of::&lt;Src&gt;() &gt;= align_of::&lt;Dst&gt;(),
+    size_compatible::&lt;Src, Dst&gt;(),
+{
+    ...
+}</code></pre></div>
+<p>The types <code>Src</code> and <code>Dst</code> are inferred from the calling context; they cannot
+be explicitly specified in the macro invocation.</p>
+<h2 id="size-compatibility"><a class="doc-anchor" href="#size-compatibility">§</a>Size compatibility</h2>
+<p><code>transmute_mut!</code> supports transmuting between <code>Sized</code> types or between
+unsized (i.e., <code>?Sized</code>) types. It supports any transmutation that preserves
+the number of bytes of the referent, even if doing so requires updating the
+metadata stored in an unsized “fat” reference:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>src: <span class="kw-2">&amp;mut </span>[[u8; <span class="number">2</span>]] = <span class="kw-2">&amp;mut </span>[[<span class="number">0</span>, <span class="number">1</span>], [<span class="number">2</span>, <span class="number">3</span>]][..];
+<span class="kw">let </span>dst: <span class="kw-2">&amp;mut </span>[u8] = <span class="macro">transmute_mut!</span>(src);
+
+<span class="macro">assert_eq!</span>(dst.len(), <span class="number">4</span>);
+<span class="macro">assert_eq!</span>(dst, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);
+<span class="kw">let </span>dst_size = size_of_val(dst);
+<span class="macro">assert_eq!</span>(src.len(), <span class="number">2</span>);
+<span class="macro">assert_eq!</span>(size_of_val(src), dst_size);</code></pre></div>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<p>Violations of the alignment and size compatibility checks are detected
+<em>after</em> the compiler performs monomorphization. This has two important
+consequences.</p>
+<p>First, it means that generic code will <em>never</em> fail these conditions:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>transmute_mut&lt;Src, Dst&gt;(src: <span class="kw-2">&amp;mut </span>Src) -&gt; <span class="kw-2">&amp;mut </span>Dst
+<span class="kw">where
+    </span>Src: FromBytes + IntoBytes,
+    Dst: FromBytes + IntoBytes,
+{
+    <span class="macro">transmute_mut!</span>(src)
+}</code></pre></div>
+<p>Instead, failures will only be detected once generic code is instantiated
+with concrete types:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>src: <span class="kw-2">&amp;mut </span>u16 = <span class="kw-2">&amp;mut </span><span class="number">0</span>;
+<span class="kw">let </span>dst: <span class="kw-2">&amp;mut </span>u8 = transmute_mut(src);</code></pre></div>
+<p>Second, the fact that violations are detected after monomorphization means
+that <code>cargo check</code> will usually not detect errors, even when types are
+concrete. Instead, <code>cargo build</code> must be used to detect such errors.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Transmuting between <code>Sized</code> types:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>one_dimensional: [u8; <span class="number">8</span>] = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>];
+
+<span class="kw">let </span>two_dimensional: <span class="kw-2">&amp;mut </span>[[u8; <span class="number">4</span>]; <span class="number">2</span>] = <span class="macro">transmute_mut!</span>(<span class="kw-2">&amp;mut </span>one_dimensional);
+
+<span class="macro">assert_eq!</span>(two_dimensional, <span class="kw-2">&amp;</span>[[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], [<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>]]);
+
+two_dimensional.reverse();
+
+<span class="macro">assert_eq!</span>(one_dimensional, [<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);</code></pre></div>
+<p>Transmuting between unsized types:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(KnownLayout, FromBytes, IntoBytes, Immutable)]
+#[repr(C)]
+</span><span class="kw">struct </span>SliceDst&lt;T, U&gt; {
+    t: T,
+    u: [U],
+}
+
+<span class="kw">type </span>Src = SliceDst&lt;u32, u16&gt;;
+<span class="kw">type </span>Dst = SliceDst&lt;u16, u8&gt;;
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>];
+<span class="kw">let </span>src = Src::mut_from_bytes(<span class="kw-2">&amp;mut </span>bytes[..]).unwrap();
+<span class="kw">let </span>dst: <span class="kw-2">&amp;mut </span>Dst = <span class="macro">transmute_mut!</span>(src);
+
+<span class="macro">assert_eq!</span>(dst.t.as_bytes(), [<span class="number">0</span>, <span class="number">1</span>]);
+<span class="macro">assert_eq!</span>(dst.u, [<span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>]);
+
+<span class="macro">assert_eq!</span>(src.t.as_bytes(), [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);
+<span class="macro">assert_eq!</span>(src.u.len(), <span class="number">2</span>);
+<span class="macro">assert_eq!</span>(src.u.as_bytes(), [<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>]);
+</code></pre></div>
+</div></details></section></div></main></body></html>

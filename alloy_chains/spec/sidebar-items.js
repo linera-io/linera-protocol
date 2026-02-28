@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Chain","Chains"]};

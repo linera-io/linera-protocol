@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Alignment","Attribute","Color","Key","TermFamily","TermTarget"],"fn":["colors_enabled","colors_enabled_stderr","measure_text_width","pad_str","pad_str_with","set_colors_enabled","set_colors_enabled_stderr","style","truncate_str","user_attended","user_attended_stderr"],"struct":["Emoji","Style","StyledObject","Term","TermFeatures"]};

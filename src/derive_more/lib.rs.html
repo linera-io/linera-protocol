@@ -1,0 +1,463 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-2.0.1/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="derive_more" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">derive_more/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// These links overwrite the ones in `README.md`
+<a href=#2 id=2 data-nosnippet>2</a>// to become proper intra-doc links in Rust docs.
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="doccomment">//! [`From`]: macro@crate::From
+<a href=#4 id=4 data-nosnippet>4</a>//! [`Into`]: macro@crate::Into
+<a href=#5 id=5 data-nosnippet>5</a>//! [`FromStr`]: macro@crate::FromStr
+<a href=#6 id=6 data-nosnippet>6</a>//! [`TryFrom`]: macro@crate::TryFrom
+<a href=#7 id=7 data-nosnippet>7</a>//! [`TryInto`]: macro@crate::TryInto
+<a href=#8 id=8 data-nosnippet>8</a>//! [`IntoIterator`]: macro@crate::IntoIterator
+<a href=#9 id=9 data-nosnippet>9</a>//! [`AsRef`]: macro@crate::AsRef
+<a href=#10 id=10 data-nosnippet>10</a>//!
+<a href=#11 id=11 data-nosnippet>11</a>//! [`Debug`]: macro@crate::Debug
+<a href=#12 id=12 data-nosnippet>12</a>//! [`Display`-like]: macro@crate::Display
+<a href=#13 id=13 data-nosnippet>13</a>//!
+<a href=#14 id=14 data-nosnippet>14</a>//! [`Error`]: macro@crate::Error
+<a href=#15 id=15 data-nosnippet>15</a>//!
+<a href=#16 id=16 data-nosnippet>16</a>//! [`Index`]: macro@crate::Index
+<a href=#17 id=17 data-nosnippet>17</a>//! [`Deref`]: macro@crate::Deref
+<a href=#18 id=18 data-nosnippet>18</a>//! [`Not`-like]: macro@crate::Not
+<a href=#19 id=19 data-nosnippet>19</a>//! [`Add`-like]: macro@crate::Add
+<a href=#20 id=20 data-nosnippet>20</a>//! [`Mul`-like]: macro@crate::Mul
+<a href=#21 id=21 data-nosnippet>21</a>//! [`Sum`-like]: macro@crate::Sum
+<a href=#22 id=22 data-nosnippet>22</a>//! [`IndexMut`]: macro@crate::IndexMut
+<a href=#23 id=23 data-nosnippet>23</a>//! [`DerefMut`]: macro@crate::DerefMut
+<a href=#24 id=24 data-nosnippet>24</a>//! [`AddAssign`-like]: macro@crate::AddAssign
+<a href=#25 id=25 data-nosnippet>25</a>//! [`MulAssign`-like]: macro@crate::MulAssign
+<a href=#26 id=26 data-nosnippet>26</a>//!
+<a href=#27 id=27 data-nosnippet>27</a>//! [`Constructor`]: macro@crate::Constructor
+<a href=#28 id=28 data-nosnippet>28</a>//! [`IsVariant`]: macro@crate::IsVariant
+<a href=#29 id=29 data-nosnippet>29</a>//! [`Unwrap`]: macro@crate::Unwrap
+<a href=#30 id=30 data-nosnippet>30</a>//! [`TryUnwrap`]: macro@crate::TryUnwrap
+<a href=#31 id=31 data-nosnippet>31</a>
+<a href=#32 id=32 data-nosnippet>32</a></span><span class="comment">// The README includes doctests requiring these features. To make sure that
+<a href=#33 id=33 data-nosnippet>33</a>// tests pass when not all features are provided we exclude it when the
+<a href=#34 id=34 data-nosnippet>34</a>// required features are not available.
+<a href=#35 id=35 data-nosnippet>35</a></span><span class="attr">#![cfg_attr(
+<a href=#36 id=36 data-nosnippet>36</a>    all(
+<a href=#37 id=37 data-nosnippet>37</a>        feature = <span class="string">"add"</span>,
+<a href=#38 id=38 data-nosnippet>38</a>        feature = <span class="string">"display"</span>,
+<a href=#39 id=39 data-nosnippet>39</a>        feature = <span class="string">"from"</span>,
+<a href=#40 id=40 data-nosnippet>40</a>        feature = <span class="string">"into"
+<a href=#41 id=41 data-nosnippet>41</a>    </span>),
+<a href=#42 id=42 data-nosnippet>42</a>    doc = <span class="macro">include_str!</span>(<span class="string">"../README.md"</span>)
+<a href=#43 id=43 data-nosnippet>43</a>)]
+<a href=#44 id=44 data-nosnippet>44</a>#![cfg_attr(not(feature = <span class="string">"std"</span>), no_std)]
+<a href=#45 id=45 data-nosnippet>45</a>#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+<a href=#46 id=46 data-nosnippet>46</a>#![cfg_attr(any(not(docsrs), ci), deny(rustdoc::all))]
+<a href=#47 id=47 data-nosnippet>47</a>#![forbid(non_ascii_idents, unsafe_code)]
+<a href=#48 id=48 data-nosnippet>48</a>#![warn(clippy::nonstandard_macro_braces)]
+<a href=#49 id=49 data-nosnippet>49</a>
+<a href=#50 id=50 data-nosnippet>50</a></span><span class="comment">// For macro expansion internals only.
+<a href=#51 id=51 data-nosnippet>51</a>// Ensures better hygiene in case a local crate `core` is present in workspace of the user code,
+<a href=#52 id=52 data-nosnippet>52</a>// or some other crate is renamed as `core`.
+<a href=#53 id=53 data-nosnippet>53</a></span><span class="attr">#[doc(hidden)]
+<a href=#54 id=54 data-nosnippet>54</a></span><span class="kw">pub use </span>core;
+<a href=#55 id=55 data-nosnippet>55</a>
+<a href=#56 id=56 data-nosnippet>56</a><span class="comment">// Not public, but exported API. For macro expansion internals only.
+<a href=#57 id=57 data-nosnippet>57</a></span><span class="attr">#[doc(hidden)]
+<a href=#58 id=58 data-nosnippet>58</a></span><span class="kw">pub mod </span>__private {
+<a href=#59 id=59 data-nosnippet>59</a>    <span class="attr">#[cfg(feature = <span class="string">"as_ref"</span>)]
+<a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">pub use crate</span>::r#as::{Conv, ExtractRef};
+<a href=#61 id=61 data-nosnippet>61</a>
+<a href=#62 id=62 data-nosnippet>62</a>    <span class="attr">#[cfg(feature = <span class="string">"debug"</span>)]
+<a href=#63 id=63 data-nosnippet>63</a>    </span><span class="kw">pub use </span><span class="kw">crate</span>::fmt::{debug_tuple, DebugTuple};
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="attr">#[cfg(feature = <span class="string">"error"</span>)]
+<a href=#66 id=66 data-nosnippet>66</a>    </span><span class="kw">pub use </span><span class="kw">crate</span>::vendor::thiserror::aserror::AsDynError;
+<a href=#67 id=67 data-nosnippet>67</a>}
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a><span class="comment">// The modules containing error types and other helpers.
+<a href=#70 id=70 data-nosnippet>70</a>
+<a href=#71 id=71 data-nosnippet>71</a></span><span class="attr">#[cfg(feature = <span class="string">"add"</span>)]
+<a href=#72 id=72 data-nosnippet>72</a></span><span class="kw">mod </span>add;
+<a href=#73 id=73 data-nosnippet>73</a><span class="attr">#[cfg(feature = <span class="string">"add"</span>)]
+<a href=#74 id=74 data-nosnippet>74</a></span><span class="kw">pub use </span><span class="kw">crate</span>::add::{BinaryError, WrongVariantError};
+<a href=#75 id=75 data-nosnippet>75</a>
+<a href=#76 id=76 data-nosnippet>76</a><span class="attr">#[cfg(any(feature = <span class="string">"add"</span>, feature = <span class="string">"not"</span>))]
+<a href=#77 id=77 data-nosnippet>77</a></span><span class="kw">mod </span>ops;
+<a href=#78 id=78 data-nosnippet>78</a><span class="attr">#[cfg(any(feature = <span class="string">"add"</span>, feature = <span class="string">"not"</span>))]
+<a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub use </span><span class="kw">crate</span>::ops::UnitError;
+<a href=#80 id=80 data-nosnippet>80</a>
+<a href=#81 id=81 data-nosnippet>81</a><span class="attr">#[cfg(feature = <span class="string">"as_ref"</span>)]
+<a href=#82 id=82 data-nosnippet>82</a></span><span class="kw">mod </span>r#as;
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a><span class="attr">#[cfg(feature = <span class="string">"debug"</span>)]
+<a href=#85 id=85 data-nosnippet>85</a></span><span class="kw">mod </span>fmt;
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a><span class="attr">#[cfg(feature = <span class="string">"error"</span>)]
+<a href=#88 id=88 data-nosnippet>88</a></span><span class="kw">mod </span>vendor;
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a><span class="attr">#[cfg(feature = <span class="string">"from_str"</span>)]
+<a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">mod </span>r#str;
+<a href=#92 id=92 data-nosnippet>92</a><span class="attr">#[cfg(feature = <span class="string">"from_str"</span>)]
+<a href=#93 id=93 data-nosnippet>93</a>#[doc(inline)]
+<a href=#94 id=94 data-nosnippet>94</a></span><span class="kw">pub use crate</span>::r#str::FromStrError;
+<a href=#95 id=95 data-nosnippet>95</a>
+<a href=#96 id=96 data-nosnippet>96</a><span class="attr">#[cfg(any(feature = <span class="string">"try_into"</span>, feature = <span class="string">"try_from"</span>))]
+<a href=#97 id=97 data-nosnippet>97</a></span><span class="kw">mod </span>convert;
+<a href=#98 id=98 data-nosnippet>98</a><span class="attr">#[cfg(feature = <span class="string">"try_from"</span>)]
+<a href=#99 id=99 data-nosnippet>99</a>#[doc(inline)]
+<a href=#100 id=100 data-nosnippet>100</a></span><span class="kw">pub use </span><span class="kw">crate</span>::convert::TryFromReprError;
+<a href=#101 id=101 data-nosnippet>101</a><span class="attr">#[cfg(feature = <span class="string">"try_into"</span>)]
+<a href=#102 id=102 data-nosnippet>102</a>#[doc(inline)]
+<a href=#103 id=103 data-nosnippet>103</a></span><span class="kw">pub use </span><span class="kw">crate</span>::convert::TryIntoError;
+<a href=#104 id=104 data-nosnippet>104</a>
+<a href=#105 id=105 data-nosnippet>105</a><span class="attr">#[cfg(feature = <span class="string">"try_unwrap"</span>)]
+<a href=#106 id=106 data-nosnippet>106</a></span><span class="kw">mod </span>try_unwrap;
+<a href=#107 id=107 data-nosnippet>107</a><span class="attr">#[cfg(feature = <span class="string">"try_unwrap"</span>)]
+<a href=#108 id=108 data-nosnippet>108</a>#[doc(inline)]
+<a href=#109 id=109 data-nosnippet>109</a></span><span class="kw">pub use </span><span class="kw">crate</span>::try_unwrap::TryUnwrapError;
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a><span class="comment">// This can be unused if no feature is enabled. We already error in that case, but this warning
+<a href=#112 id=112 data-nosnippet>112</a>// distracts from that error. So we suppress the warning.
+<a href=#113 id=113 data-nosnippet>113</a></span><span class="attr">#[allow(unused_imports)]
+<a href=#114 id=114 data-nosnippet>114</a>#[doc(inline)]
+<a href=#115 id=115 data-nosnippet>115</a></span><span class="kw">pub use </span>derive_more_impl::<span class="kw-2">*</span>;
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a><span class="doccomment">/// Module containing derive definitions only, without their corresponding traits.
+<a href=#118 id=118 data-nosnippet>118</a>///
+<a href=#119 id=119 data-nosnippet>119</a>/// Use it in your import paths, if you don't want to import traits, but only macros.
+<a href=#120 id=120 data-nosnippet>120</a></span><span class="kw">pub mod </span>derive {
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="comment">// This can be unused if no feature is enabled. We already error in that case, but this warning
+<a href=#122 id=122 data-nosnippet>122</a>    // distracts from that error. So we suppress the warning.
+<a href=#123 id=123 data-nosnippet>123</a>    </span><span class="attr">#[allow(unused_imports)]
+<a href=#124 id=124 data-nosnippet>124</a>    #[doc(inline)]
+<a href=#125 id=125 data-nosnippet>125</a>    </span><span class="kw">pub use </span>derive_more_impl::<span class="kw-2">*</span>;
+<a href=#126 id=126 data-nosnippet>126</a>}
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a><span class="doccomment">/// Module containing derive definitions with their corresponding traits along.
+<a href=#129 id=129 data-nosnippet>129</a>///
+<a href=#130 id=130 data-nosnippet>130</a>/// Use it in your import paths, if you do want to import derives along with their traits.
+<a href=#131 id=131 data-nosnippet>131</a></span><span class="kw">pub mod </span>with_trait {
+<a href=#132 id=132 data-nosnippet>132</a>    <span class="comment">// When re-exporting traits from `std` we need to do a pretty crazy trick, because we ONLY want
+<a href=#133 id=133 data-nosnippet>133</a>    // to re-export the traits and not derives that are called the same in the `std` module, because
+<a href=#134 id=134 data-nosnippet>134</a>    // those would conflict with our own ones. The way we do this is by first importing both the
+<a href=#135 id=135 data-nosnippet>135</a>    // trait and possible derive into a separate module and re-export them. Then, we wildcard-import
+<a href=#136 id=136 data-nosnippet>136</a>    // all the things from that module into the main module, but we also import our own derive by
+<a href=#137 id=137 data-nosnippet>137</a>    // its exact name. Due to the way wildcard imports work in Rust, that results in our own derive
+<a href=#138 id=138 data-nosnippet>138</a>    // taking precedence over any derive from `std`. For some reason the named re-export of our own
+<a href=#139 id=139 data-nosnippet>139</a>    // derive cannot be in this (or really any) macro too. It will somehow still consider it a
+<a href=#140 id=140 data-nosnippet>140</a>    // wildcard then and will result in this warning `ambiguous_glob_reexports`, and not actually
+<a href=#141 id=141 data-nosnippet>141</a>    // exporting of our derive.
+<a href=#142 id=142 data-nosnippet>142</a>    </span><span class="macro">macro_rules!</span> re_export_traits((
+<a href=#143 id=143 data-nosnippet>143</a>        <span class="macro-nonterminal">$feature</span>:literal, <span class="macro-nonterminal">$new_module_name</span>:ident, <span class="macro-nonterminal">$module</span>:path $(, <span class="macro-nonterminal">$traits</span>:ident)* $(,)<span class="question-mark">?</span>) =&gt; {
+<a href=#144 id=144 data-nosnippet>144</a>            <span class="attr">#[cfg(all(feature = <span class="macro-nonterminal">$feature</span>, any(not(docsrs), ci)))]
+<a href=#145 id=145 data-nosnippet>145</a>            </span><span class="kw">mod </span><span class="macro-nonterminal">$new_module_name </span>{
+<a href=#146 id=146 data-nosnippet>146</a>                <span class="attr">#[doc(hidden)]
+<a href=#147 id=147 data-nosnippet>147</a>                </span><span class="kw">pub use </span><span class="macro-nonterminal">$module</span>::{$(<span class="macro-nonterminal">$traits</span>),<span class="kw-2">*</span>};
+<a href=#148 id=148 data-nosnippet>148</a>            }
+<a href=#149 id=149 data-nosnippet>149</a>
+<a href=#150 id=150 data-nosnippet>150</a>            <span class="attr">#[cfg(all(feature = <span class="macro-nonterminal">$feature</span>, any(not(docsrs), ci)))]
+<a href=#151 id=151 data-nosnippet>151</a>            #[doc(hidden)]
+<a href=#152 id=152 data-nosnippet>152</a>            </span><span class="kw">pub use </span><span class="kw">crate</span>::with_trait::all_traits_and_derives::<span class="macro-nonterminal">$new_module_name</span>::<span class="kw-2">*</span>;
+<a href=#153 id=153 data-nosnippet>153</a>        }
+<a href=#154 id=154 data-nosnippet>154</a>    );
+<a href=#155 id=155 data-nosnippet>155</a>
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">mod </span>all_traits_and_derives {
+<a href=#157 id=157 data-nosnippet>157</a>        <span class="macro">re_export_traits!</span>(
+<a href=#158 id=158 data-nosnippet>158</a>            <span class="string">"add"</span>,
+<a href=#159 id=159 data-nosnippet>159</a>            add_traits,
+<a href=#160 id=160 data-nosnippet>160</a>            core::ops,
+<a href=#161 id=161 data-nosnippet>161</a>            Add,
+<a href=#162 id=162 data-nosnippet>162</a>            BitAnd,
+<a href=#163 id=163 data-nosnippet>163</a>            BitOr,
+<a href=#164 id=164 data-nosnippet>164</a>            BitXor,
+<a href=#165 id=165 data-nosnippet>165</a>            Sub,
+<a href=#166 id=166 data-nosnippet>166</a>        );
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="macro">re_export_traits!</span>(
+<a href=#168 id=168 data-nosnippet>168</a>            <span class="string">"add_assign"</span>,
+<a href=#169 id=169 data-nosnippet>169</a>            add_assign_traits,
+<a href=#170 id=170 data-nosnippet>170</a>            core::ops,
+<a href=#171 id=171 data-nosnippet>171</a>            AddAssign,
+<a href=#172 id=172 data-nosnippet>172</a>            BitAndAssign,
+<a href=#173 id=173 data-nosnippet>173</a>            BitOrAssign,
+<a href=#174 id=174 data-nosnippet>174</a>            BitXorAssign,
+<a href=#175 id=175 data-nosnippet>175</a>            SubAssign,
+<a href=#176 id=176 data-nosnippet>176</a>        );
+<a href=#177 id=177 data-nosnippet>177</a>        <span class="macro">re_export_traits!</span>(<span class="string">"as_ref"</span>, as_ref_traits, core::convert, AsMut, AsRef);
+<a href=#178 id=178 data-nosnippet>178</a>        <span class="macro">re_export_traits!</span>(<span class="string">"debug"</span>, debug_traits, core::fmt, Debug);
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="macro">re_export_traits!</span>(<span class="string">"deref"</span>, deref_traits, core::ops, Deref);
+<a href=#180 id=180 data-nosnippet>180</a>        <span class="macro">re_export_traits!</span>(<span class="string">"deref_mut"</span>, deref_mut_traits, core::ops, DerefMut);
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="macro">re_export_traits!</span>(
+<a href=#182 id=182 data-nosnippet>182</a>            <span class="string">"display"</span>,
+<a href=#183 id=183 data-nosnippet>183</a>            display_traits,
+<a href=#184 id=184 data-nosnippet>184</a>            core::fmt,
+<a href=#185 id=185 data-nosnippet>185</a>            Binary,
+<a href=#186 id=186 data-nosnippet>186</a>            Display,
+<a href=#187 id=187 data-nosnippet>187</a>            LowerExp,
+<a href=#188 id=188 data-nosnippet>188</a>            LowerHex,
+<a href=#189 id=189 data-nosnippet>189</a>            Octal,
+<a href=#190 id=190 data-nosnippet>190</a>            Pointer,
+<a href=#191 id=191 data-nosnippet>191</a>            UpperExp,
+<a href=#192 id=192 data-nosnippet>192</a>            UpperHex,
+<a href=#193 id=193 data-nosnippet>193</a>        );
+<a href=#194 id=194 data-nosnippet>194</a>
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="attr">#[cfg(not(feature = <span class="string">"std"</span>))]
+<a href=#196 id=196 data-nosnippet>196</a>        </span><span class="macro">re_export_traits!</span>(<span class="string">"error"</span>, error_traits, core::error, Error);
+<a href=#197 id=197 data-nosnippet>197</a>        <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#198 id=198 data-nosnippet>198</a>        </span><span class="macro">re_export_traits!</span>(<span class="string">"error"</span>, error_traits, std::error, Error);
+<a href=#199 id=199 data-nosnippet>199</a>
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="macro">re_export_traits!</span>(<span class="string">"from"</span>, from_traits, core::convert, From);
+<a href=#201 id=201 data-nosnippet>201</a>
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="macro">re_export_traits!</span>(<span class="string">"from_str"</span>, from_str_traits, core::str, FromStr);
+<a href=#203 id=203 data-nosnippet>203</a>
+<a href=#204 id=204 data-nosnippet>204</a>        <span class="macro">re_export_traits!</span>(<span class="string">"index"</span>, index_traits, core::ops, Index);
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="macro">re_export_traits!</span>(<span class="string">"index_mut"</span>, index_mut_traits, core::ops, IndexMut);
+<a href=#207 id=207 data-nosnippet>207</a>
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="macro">re_export_traits!</span>(<span class="string">"into"</span>, into_traits, core::convert, Into);
+<a href=#209 id=209 data-nosnippet>209</a>
+<a href=#210 id=210 data-nosnippet>210</a>        <span class="macro">re_export_traits!</span>(
+<a href=#211 id=211 data-nosnippet>211</a>            <span class="string">"into_iterator"</span>,
+<a href=#212 id=212 data-nosnippet>212</a>            into_iterator_traits,
+<a href=#213 id=213 data-nosnippet>213</a>            core::iter,
+<a href=#214 id=214 data-nosnippet>214</a>            IntoIterator,
+<a href=#215 id=215 data-nosnippet>215</a>        );
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="macro">re_export_traits!</span>(<span class="string">"mul"</span>, mul_traits, core::ops, Div, Mul, Rem, Shl, Shr);
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a>        <span class="attr">#[cfg(feature = <span class="string">"mul_assign"</span>)]
+<a href=#220 id=220 data-nosnippet>220</a>        </span><span class="macro">re_export_traits!</span>(
+<a href=#221 id=221 data-nosnippet>221</a>            <span class="string">"mul_assign"</span>,
+<a href=#222 id=222 data-nosnippet>222</a>            mul_assign_traits,
+<a href=#223 id=223 data-nosnippet>223</a>            core::ops,
+<a href=#224 id=224 data-nosnippet>224</a>            DivAssign,
+<a href=#225 id=225 data-nosnippet>225</a>            MulAssign,
+<a href=#226 id=226 data-nosnippet>226</a>            RemAssign,
+<a href=#227 id=227 data-nosnippet>227</a>            ShlAssign,
+<a href=#228 id=228 data-nosnippet>228</a>            ShrAssign,
+<a href=#229 id=229 data-nosnippet>229</a>        );
+<a href=#230 id=230 data-nosnippet>230</a>
+<a href=#231 id=231 data-nosnippet>231</a>        <span class="macro">re_export_traits!</span>(<span class="string">"not"</span>, not_traits, core::ops, Neg, Not);
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a>        <span class="macro">re_export_traits!</span>(<span class="string">"sum"</span>, sum_traits, core::iter, Product, Sum);
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="macro">re_export_traits!</span>(<span class="string">"try_from"</span>, try_from_traits, core::convert, TryFrom);
+<a href=#236 id=236 data-nosnippet>236</a>
+<a href=#237 id=237 data-nosnippet>237</a>        <span class="macro">re_export_traits!</span>(<span class="string">"try_into"</span>, try_into_traits, core::convert, TryInto);
+<a href=#238 id=238 data-nosnippet>238</a>
+<a href=#239 id=239 data-nosnippet>239</a>        <span class="comment">// Now re-export our own derives by their exact name to overwrite any derives that the trait
+<a href=#240 id=240 data-nosnippet>240</a>        // re-exporting might inadvertently pull into scope.
+<a href=#241 id=241 data-nosnippet>241</a>        </span><span class="attr">#[cfg(feature = <span class="string">"add"</span>)]
+<a href=#242 id=242 data-nosnippet>242</a>        </span><span class="kw">pub use </span>derive_more_impl::{Add, BitAnd, BitOr, BitXor, Sub};
+<a href=#243 id=243 data-nosnippet>243</a>
+<a href=#244 id=244 data-nosnippet>244</a>        <span class="attr">#[cfg(feature = <span class="string">"add_assign"</span>)]
+<a href=#245 id=245 data-nosnippet>245</a>        </span><span class="kw">pub use </span>derive_more_impl::{
+<a href=#246 id=246 data-nosnippet>246</a>            AddAssign, BitAndAssign, BitOrAssign, BitXorAssign, SubAssign,
+<a href=#247 id=247 data-nosnippet>247</a>        };
+<a href=#248 id=248 data-nosnippet>248</a>
+<a href=#249 id=249 data-nosnippet>249</a>        <span class="attr">#[cfg(feature = <span class="string">"as_ref"</span>)]
+<a href=#250 id=250 data-nosnippet>250</a>        </span><span class="kw">pub use </span>derive_more_impl::{AsMut, AsRef};
+<a href=#251 id=251 data-nosnippet>251</a>
+<a href=#252 id=252 data-nosnippet>252</a>        <span class="attr">#[cfg(feature = <span class="string">"constructor"</span>)]
+<a href=#253 id=253 data-nosnippet>253</a>        </span><span class="kw">pub use </span>derive_more_impl::Constructor;
+<a href=#254 id=254 data-nosnippet>254</a>
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="attr">#[cfg(feature = <span class="string">"debug"</span>)]
+<a href=#256 id=256 data-nosnippet>256</a>        </span><span class="kw">pub use </span>derive_more_impl::Debug;
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a>        <span class="attr">#[cfg(feature = <span class="string">"deref"</span>)]
+<a href=#259 id=259 data-nosnippet>259</a>        </span><span class="kw">pub use </span>derive_more_impl::Deref;
+<a href=#260 id=260 data-nosnippet>260</a>
+<a href=#261 id=261 data-nosnippet>261</a>        <span class="attr">#[cfg(feature = <span class="string">"deref_mut"</span>)]
+<a href=#262 id=262 data-nosnippet>262</a>        </span><span class="kw">pub use </span>derive_more_impl::DerefMut;
+<a href=#263 id=263 data-nosnippet>263</a>
+<a href=#264 id=264 data-nosnippet>264</a>        <span class="attr">#[cfg(feature = <span class="string">"display"</span>)]
+<a href=#265 id=265 data-nosnippet>265</a>        </span><span class="kw">pub use </span>derive_more_impl::{
+<a href=#266 id=266 data-nosnippet>266</a>            Binary, Display, LowerExp, LowerHex, Octal, Pointer, UpperExp, UpperHex,
+<a href=#267 id=267 data-nosnippet>267</a>        };
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a>        <span class="attr">#[cfg(feature = <span class="string">"error"</span>)]
+<a href=#270 id=270 data-nosnippet>270</a>        </span><span class="kw">pub use </span>derive_more_impl::Error;
+<a href=#271 id=271 data-nosnippet>271</a>
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="attr">#[cfg(feature = <span class="string">"from"</span>)]
+<a href=#273 id=273 data-nosnippet>273</a>        </span><span class="kw">pub use </span>derive_more_impl::From;
+<a href=#274 id=274 data-nosnippet>274</a>
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="attr">#[cfg(feature = <span class="string">"from_str"</span>)]
+<a href=#276 id=276 data-nosnippet>276</a>        </span><span class="kw">pub use </span>derive_more_impl::FromStr;
+<a href=#277 id=277 data-nosnippet>277</a>
+<a href=#278 id=278 data-nosnippet>278</a>        <span class="attr">#[cfg(feature = <span class="string">"index"</span>)]
+<a href=#279 id=279 data-nosnippet>279</a>        </span><span class="kw">pub use </span>derive_more_impl::Index;
+<a href=#280 id=280 data-nosnippet>280</a>
+<a href=#281 id=281 data-nosnippet>281</a>        <span class="attr">#[cfg(feature = <span class="string">"index_mut"</span>)]
+<a href=#282 id=282 data-nosnippet>282</a>        </span><span class="kw">pub use </span>derive_more_impl::IndexMut;
+<a href=#283 id=283 data-nosnippet>283</a>
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="attr">#[cfg(feature = <span class="string">"into"</span>)]
+<a href=#285 id=285 data-nosnippet>285</a>        </span><span class="kw">pub use </span>derive_more_impl::Into;
+<a href=#286 id=286 data-nosnippet>286</a>
+<a href=#287 id=287 data-nosnippet>287</a>        <span class="attr">#[cfg(feature = <span class="string">"into_iterator"</span>)]
+<a href=#288 id=288 data-nosnippet>288</a>        </span><span class="kw">pub use </span>derive_more_impl::IntoIterator;
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a>        <span class="attr">#[cfg(feature = <span class="string">"is_variant"</span>)]
+<a href=#291 id=291 data-nosnippet>291</a>        </span><span class="kw">pub use </span>derive_more_impl::IsVariant;
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a>        <span class="attr">#[cfg(feature = <span class="string">"mul"</span>)]
+<a href=#294 id=294 data-nosnippet>294</a>        </span><span class="kw">pub use </span>derive_more_impl::{Div, Mul, Rem, Shl, Shr};
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a>        <span class="attr">#[cfg(feature = <span class="string">"mul_assign"</span>)]
+<a href=#297 id=297 data-nosnippet>297</a>        </span><span class="kw">pub use </span>derive_more_impl::{
+<a href=#298 id=298 data-nosnippet>298</a>            DivAssign, MulAssign, RemAssign, ShlAssign, ShrAssign,
+<a href=#299 id=299 data-nosnippet>299</a>        };
+<a href=#300 id=300 data-nosnippet>300</a>
+<a href=#301 id=301 data-nosnippet>301</a>        <span class="attr">#[cfg(feature = <span class="string">"not"</span>)]
+<a href=#302 id=302 data-nosnippet>302</a>        </span><span class="kw">pub use </span>derive_more_impl::{Neg, Not};
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a>        <span class="attr">#[cfg(feature = <span class="string">"sum"</span>)]
+<a href=#305 id=305 data-nosnippet>305</a>        </span><span class="kw">pub use </span>derive_more_impl::{Product, Sum};
+<a href=#306 id=306 data-nosnippet>306</a>
+<a href=#307 id=307 data-nosnippet>307</a>        <span class="attr">#[cfg(feature = <span class="string">"try_from"</span>)]
+<a href=#308 id=308 data-nosnippet>308</a>        </span><span class="kw">pub use </span>derive_more_impl::TryFrom;
+<a href=#309 id=309 data-nosnippet>309</a>
+<a href=#310 id=310 data-nosnippet>310</a>        <span class="attr">#[cfg(feature = <span class="string">"try_into"</span>)]
+<a href=#311 id=311 data-nosnippet>311</a>        </span><span class="kw">pub use </span>derive_more_impl::TryInto;
+<a href=#312 id=312 data-nosnippet>312</a>
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="attr">#[cfg(feature = <span class="string">"try_unwrap"</span>)]
+<a href=#314 id=314 data-nosnippet>314</a>        </span><span class="kw">pub use </span>derive_more_impl::TryUnwrap;
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="attr">#[cfg(feature = <span class="string">"unwrap"</span>)]
+<a href=#317 id=317 data-nosnippet>317</a>        </span><span class="kw">pub use </span>derive_more_impl::Unwrap;
+<a href=#318 id=318 data-nosnippet>318</a>    }
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a>    <span class="comment">// Now re-export our own derives and the std traits by their exact name to make rust-analyzer
+<a href=#321 id=321 data-nosnippet>321</a>    // recognize the #[doc(hidden)] flag.
+<a href=#322 id=322 data-nosnippet>322</a>    // See issues:
+<a href=#323 id=323 data-nosnippet>323</a>    // 1. https://github.com/rust-lang/rust-analyzer/issues/11698
+<a href=#324 id=324 data-nosnippet>324</a>    // 2. https://github.com/rust-lang/rust-analyzer/issues/14079
+<a href=#325 id=325 data-nosnippet>325</a>    </span><span class="attr">#[cfg(feature = <span class="string">"add"</span>)]
+<a href=#326 id=326 data-nosnippet>326</a>    #[doc(hidden)]
+<a href=#327 id=327 data-nosnippet>327</a>    </span><span class="kw">pub use </span>all_traits_and_derives::{Add, BitAnd, BitOr, BitXor, Sub};
+<a href=#328 id=328 data-nosnippet>328</a>
+<a href=#329 id=329 data-nosnippet>329</a>    <span class="attr">#[cfg(feature = <span class="string">"add_assign"</span>)]
+<a href=#330 id=330 data-nosnippet>330</a>    #[doc(hidden)]
+<a href=#331 id=331 data-nosnippet>331</a>    </span><span class="kw">pub use </span>all_traits_and_derives::{
+<a href=#332 id=332 data-nosnippet>332</a>        AddAssign, BitAndAssign, BitOrAssign, BitXorAssign, SubAssign,
+<a href=#333 id=333 data-nosnippet>333</a>    };
+<a href=#334 id=334 data-nosnippet>334</a>
+<a href=#335 id=335 data-nosnippet>335</a>    <span class="attr">#[cfg(feature = <span class="string">"as_ref"</span>)]
+<a href=#336 id=336 data-nosnippet>336</a>    #[doc(hidden)]
+<a href=#337 id=337 data-nosnippet>337</a>    </span><span class="kw">pub use </span>all_traits_and_derives::{AsMut, AsRef};
+<a href=#338 id=338 data-nosnippet>338</a>
+<a href=#339 id=339 data-nosnippet>339</a>    <span class="attr">#[cfg(feature = <span class="string">"constructor"</span>)]
+<a href=#340 id=340 data-nosnippet>340</a>    #[doc(hidden)]
+<a href=#341 id=341 data-nosnippet>341</a>    </span><span class="kw">pub use </span>all_traits_and_derives::Constructor;
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a>    <span class="attr">#[cfg(feature = <span class="string">"debug"</span>)]
+<a href=#344 id=344 data-nosnippet>344</a>    #[doc(hidden)]
+<a href=#345 id=345 data-nosnippet>345</a>    </span><span class="kw">pub use </span>all_traits_and_derives::Debug;
+<a href=#346 id=346 data-nosnippet>346</a>
+<a href=#347 id=347 data-nosnippet>347</a>    <span class="attr">#[cfg(feature = <span class="string">"deref"</span>)]
+<a href=#348 id=348 data-nosnippet>348</a>    #[doc(hidden)]
+<a href=#349 id=349 data-nosnippet>349</a>    </span><span class="kw">pub use </span>all_traits_and_derives::Deref;
+<a href=#350 id=350 data-nosnippet>350</a>
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="attr">#[cfg(feature = <span class="string">"deref_mut"</span>)]
+<a href=#352 id=352 data-nosnippet>352</a>    #[doc(hidden)]
+<a href=#353 id=353 data-nosnippet>353</a>    </span><span class="kw">pub use </span>all_traits_and_derives::DerefMut;
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a>    <span class="attr">#[cfg(feature = <span class="string">"display"</span>)]
+<a href=#356 id=356 data-nosnippet>356</a>    #[doc(hidden)]
+<a href=#357 id=357 data-nosnippet>357</a>    </span><span class="kw">pub use </span>all_traits_and_derives::{
+<a href=#358 id=358 data-nosnippet>358</a>        Binary, Display, LowerExp, LowerHex, Octal, Pointer, UpperExp, UpperHex,
+<a href=#359 id=359 data-nosnippet>359</a>    };
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="attr">#[cfg(feature = <span class="string">"error"</span>)]
+<a href=#362 id=362 data-nosnippet>362</a>    #[doc(hidden)]
+<a href=#363 id=363 data-nosnippet>363</a>    </span><span class="kw">pub use </span>all_traits_and_derives::Error;
+<a href=#364 id=364 data-nosnippet>364</a>
+<a href=#365 id=365 data-nosnippet>365</a>    <span class="attr">#[cfg(feature = <span class="string">"from"</span>)]
+<a href=#366 id=366 data-nosnippet>366</a>    #[doc(hidden)]
+<a href=#367 id=367 data-nosnippet>367</a>    </span><span class="kw">pub use </span>all_traits_and_derives::From;
+<a href=#368 id=368 data-nosnippet>368</a>
+<a href=#369 id=369 data-nosnippet>369</a>    <span class="attr">#[cfg(feature = <span class="string">"from_str"</span>)]
+<a href=#370 id=370 data-nosnippet>370</a>    #[doc(hidden)]
+<a href=#371 id=371 data-nosnippet>371</a>    </span><span class="kw">pub use </span>all_traits_and_derives::FromStr;
+<a href=#372 id=372 data-nosnippet>372</a>
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="attr">#[cfg(feature = <span class="string">"index"</span>)]
+<a href=#374 id=374 data-nosnippet>374</a>    #[doc(hidden)]
+<a href=#375 id=375 data-nosnippet>375</a>    </span><span class="kw">pub use </span>all_traits_and_derives::Index;
+<a href=#376 id=376 data-nosnippet>376</a>
+<a href=#377 id=377 data-nosnippet>377</a>    <span class="attr">#[cfg(feature = <span class="string">"index_mut"</span>)]
+<a href=#378 id=378 data-nosnippet>378</a>    #[doc(hidden)]
+<a href=#379 id=379 data-nosnippet>379</a>    </span><span class="kw">pub use </span>all_traits_and_derives::IndexMut;
+<a href=#380 id=380 data-nosnippet>380</a>
+<a href=#381 id=381 data-nosnippet>381</a>    <span class="attr">#[cfg(feature = <span class="string">"into"</span>)]
+<a href=#382 id=382 data-nosnippet>382</a>    #[doc(hidden)]
+<a href=#383 id=383 data-nosnippet>383</a>    </span><span class="kw">pub use </span>all_traits_and_derives::Into;
+<a href=#384 id=384 data-nosnippet>384</a>
+<a href=#385 id=385 data-nosnippet>385</a>    <span class="attr">#[cfg(feature = <span class="string">"into_iterator"</span>)]
+<a href=#386 id=386 data-nosnippet>386</a>    #[doc(hidden)]
+<a href=#387 id=387 data-nosnippet>387</a>    </span><span class="kw">pub use </span>all_traits_and_derives::IntoIterator;
+<a href=#388 id=388 data-nosnippet>388</a>
+<a href=#389 id=389 data-nosnippet>389</a>    <span class="attr">#[cfg(feature = <span class="string">"is_variant"</span>)]
+<a href=#390 id=390 data-nosnippet>390</a>    #[doc(hidden)]
+<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="kw">pub use </span>all_traits_and_derives::IsVariant;
+<a href=#392 id=392 data-nosnippet>392</a>
+<a href=#393 id=393 data-nosnippet>393</a>    <span class="attr">#[cfg(feature = <span class="string">"mul"</span>)]
+<a href=#394 id=394 data-nosnippet>394</a>    #[doc(hidden)]
+<a href=#395 id=395 data-nosnippet>395</a>    </span><span class="kw">pub use </span>all_traits_and_derives::{Div, Mul, Rem, Shl, Shr};
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="attr">#[cfg(feature = <span class="string">"mul_assign"</span>)]
+<a href=#398 id=398 data-nosnippet>398</a>    #[doc(hidden)]
+<a href=#399 id=399 data-nosnippet>399</a>    </span><span class="kw">pub use </span>all_traits_and_derives::{
+<a href=#400 id=400 data-nosnippet>400</a>        DivAssign, MulAssign, RemAssign, ShlAssign, ShrAssign,
+<a href=#401 id=401 data-nosnippet>401</a>    };
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a>    <span class="attr">#[cfg(feature = <span class="string">"not"</span>)]
+<a href=#404 id=404 data-nosnippet>404</a>    #[doc(hidden)]
+<a href=#405 id=405 data-nosnippet>405</a>    </span><span class="kw">pub use </span>all_traits_and_derives::{Neg, Not};
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a>    <span class="attr">#[cfg(feature = <span class="string">"sum"</span>)]
+<a href=#408 id=408 data-nosnippet>408</a>    #[doc(hidden)]
+<a href=#409 id=409 data-nosnippet>409</a>    </span><span class="kw">pub use </span>all_traits_and_derives::{Product, Sum};
+<a href=#410 id=410 data-nosnippet>410</a>
+<a href=#411 id=411 data-nosnippet>411</a>    <span class="attr">#[cfg(feature = <span class="string">"try_from"</span>)]
+<a href=#412 id=412 data-nosnippet>412</a>    #[doc(hidden)]
+<a href=#413 id=413 data-nosnippet>413</a>    </span><span class="kw">pub use </span>all_traits_and_derives::TryFrom;
+<a href=#414 id=414 data-nosnippet>414</a>
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="attr">#[cfg(feature = <span class="string">"try_into"</span>)]
+<a href=#416 id=416 data-nosnippet>416</a>    #[doc(hidden)]
+<a href=#417 id=417 data-nosnippet>417</a>    </span><span class="kw">pub use </span>all_traits_and_derives::TryInto;
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="attr">#[cfg(feature = <span class="string">"try_unwrap"</span>)]
+<a href=#420 id=420 data-nosnippet>420</a>    #[doc(hidden)]
+<a href=#421 id=421 data-nosnippet>421</a>    </span><span class="kw">pub use </span>all_traits_and_derives::TryUnwrap;
+<a href=#422 id=422 data-nosnippet>422</a>
+<a href=#423 id=423 data-nosnippet>423</a>    <span class="attr">#[cfg(feature = <span class="string">"unwrap"</span>)]
+<a href=#424 id=424 data-nosnippet>424</a>    #[doc(hidden)]
+<a href=#425 id=425 data-nosnippet>425</a>    </span><span class="kw">pub use </span>all_traits_and_derives::Unwrap;
+<a href=#426 id=426 data-nosnippet>426</a>
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="comment">// Re-export the derive macros again to show docs for our derives (but not for traits). This is
+<a href=#428 id=428 data-nosnippet>428</a>    // done using a glob import to not hit E0252.
+<a href=#429 id=429 data-nosnippet>429</a>    </span><span class="attr">#[allow(unused_imports)]
+<a href=#430 id=430 data-nosnippet>430</a>    </span><span class="kw">pub use </span>derive_more_impl::<span class="kw-2">*</span>;
+<a href=#431 id=431 data-nosnippet>431</a>}
+<a href=#432 id=432 data-nosnippet>432</a>
+<a href=#433 id=433 data-nosnippet>433</a><span class="comment">// Check if any feature is enabled
+<a href=#434 id=434 data-nosnippet>434</a></span><span class="attr">#[cfg(not(any(
+<a href=#435 id=435 data-nosnippet>435</a>    feature = <span class="string">"full"</span>,
+<a href=#436 id=436 data-nosnippet>436</a>    feature = <span class="string">"add"</span>,
+<a href=#437 id=437 data-nosnippet>437</a>    feature = <span class="string">"add_assign"</span>,
+<a href=#438 id=438 data-nosnippet>438</a>    feature = <span class="string">"as_ref"</span>,
+<a href=#439 id=439 data-nosnippet>439</a>    feature = <span class="string">"constructor"</span>,
+<a href=#440 id=440 data-nosnippet>440</a>    feature = <span class="string">"debug"</span>,
+<a href=#441 id=441 data-nosnippet>441</a>    feature = <span class="string">"deref"</span>,
+<a href=#442 id=442 data-nosnippet>442</a>    feature = <span class="string">"deref_mut"</span>,
+<a href=#443 id=443 data-nosnippet>443</a>    feature = <span class="string">"display"</span>,
+<a href=#444 id=444 data-nosnippet>444</a>    feature = <span class="string">"error"</span>,
+<a href=#445 id=445 data-nosnippet>445</a>    feature = <span class="string">"from"</span>,
+<a href=#446 id=446 data-nosnippet>446</a>    feature = <span class="string">"from_str"</span>,
+<a href=#447 id=447 data-nosnippet>447</a>    feature = <span class="string">"index"</span>,
+<a href=#448 id=448 data-nosnippet>448</a>    feature = <span class="string">"index_mut"</span>,
+<a href=#449 id=449 data-nosnippet>449</a>    feature = <span class="string">"into"</span>,
+<a href=#450 id=450 data-nosnippet>450</a>    feature = <span class="string">"into_iterator"</span>,
+<a href=#451 id=451 data-nosnippet>451</a>    feature = <span class="string">"is_variant"</span>,
+<a href=#452 id=452 data-nosnippet>452</a>    feature = <span class="string">"mul"</span>,
+<a href=#453 id=453 data-nosnippet>453</a>    feature = <span class="string">"mul_assign"</span>,
+<a href=#454 id=454 data-nosnippet>454</a>    feature = <span class="string">"not"</span>,
+<a href=#455 id=455 data-nosnippet>455</a>    feature = <span class="string">"sum"</span>,
+<a href=#456 id=456 data-nosnippet>456</a>    feature = <span class="string">"try_from"</span>,
+<a href=#457 id=457 data-nosnippet>457</a>    feature = <span class="string">"try_into"</span>,
+<a href=#458 id=458 data-nosnippet>458</a>    feature = <span class="string">"try_unwrap"</span>,
+<a href=#459 id=459 data-nosnippet>459</a>    feature = <span class="string">"unwrap"</span>,
+<a href=#460 id=460 data-nosnippet>460</a>)))]
+<a href=#461 id=461 data-nosnippet>461</a></span><span class="macro">compile_error!</span>(
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="string">"at least one derive feature must be enabled (or the \"full\" feature enabling all the derives)"
+<a href=#463 id=463 data-nosnippet>463</a></span>);</code></pre></div></section></main></body></html>

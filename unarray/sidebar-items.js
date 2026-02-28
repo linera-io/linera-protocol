@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_array","build_array_option","build_array_result","mark_initialized","uninit_buf"],"struct":["ArrayFromIter"],"trait":["UnarrayArrayExt"]};

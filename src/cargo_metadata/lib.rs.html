@@ -1,0 +1,946 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cargo_metadata-0.18.1/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="cargo_metadata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cargo_metadata/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(missing_docs)]
+<a href=#2 id=2 data-nosnippet>2</a></span><span class="doccomment">//! Structured access to the output of `cargo metadata` and `cargo --message-format=json`.
+<a href=#3 id=3 data-nosnippet>3</a>//! Usually used from within a `cargo-*` executable
+<a href=#4 id=4 data-nosnippet>4</a>//!
+<a href=#5 id=5 data-nosnippet>5</a>//! See the [cargo book](https://doc.rust-lang.org/cargo/index.html) for
+<a href=#6 id=6 data-nosnippet>6</a>//! details on cargo itself.
+<a href=#7 id=7 data-nosnippet>7</a>//!
+<a href=#8 id=8 data-nosnippet>8</a>//! ## Examples
+<a href=#9 id=9 data-nosnippet>9</a>//!
+<a href=#10 id=10 data-nosnippet>10</a>//! ```rust
+<a href=#11 id=11 data-nosnippet>11</a>//! # extern crate cargo_metadata;
+<a href=#12 id=12 data-nosnippet>12</a>//! # use std::path::Path;
+<a href=#13 id=13 data-nosnippet>13</a>//! let mut args = std::env::args().skip_while(|val| !val.starts_with("--manifest-path"));
+<a href=#14 id=14 data-nosnippet>14</a>//!
+<a href=#15 id=15 data-nosnippet>15</a>//! let mut cmd = cargo_metadata::MetadataCommand::new();
+<a href=#16 id=16 data-nosnippet>16</a>//! let manifest_path = match args.next() {
+<a href=#17 id=17 data-nosnippet>17</a>//!     Some(ref p) if p == "--manifest-path" =&gt; {
+<a href=#18 id=18 data-nosnippet>18</a>//!         cmd.manifest_path(args.next().unwrap());
+<a href=#19 id=19 data-nosnippet>19</a>//!     }
+<a href=#20 id=20 data-nosnippet>20</a>//!     Some(p) =&gt; {
+<a href=#21 id=21 data-nosnippet>21</a>//!         cmd.manifest_path(p.trim_start_matches("--manifest-path="));
+<a href=#22 id=22 data-nosnippet>22</a>//!     }
+<a href=#23 id=23 data-nosnippet>23</a>//!     None =&gt; {}
+<a href=#24 id=24 data-nosnippet>24</a>//! };
+<a href=#25 id=25 data-nosnippet>25</a>//!
+<a href=#26 id=26 data-nosnippet>26</a>//! let _metadata = cmd.exec().unwrap();
+<a href=#27 id=27 data-nosnippet>27</a>//! ```
+<a href=#28 id=28 data-nosnippet>28</a>//!
+<a href=#29 id=29 data-nosnippet>29</a>//! Pass features flags
+<a href=#30 id=30 data-nosnippet>30</a>//!
+<a href=#31 id=31 data-nosnippet>31</a>//! ```rust
+<a href=#32 id=32 data-nosnippet>32</a>//! # // This should be kept in sync with the equivalent example in the readme.
+<a href=#33 id=33 data-nosnippet>33</a>//! # extern crate cargo_metadata;
+<a href=#34 id=34 data-nosnippet>34</a>//! # use std::path::Path;
+<a href=#35 id=35 data-nosnippet>35</a>//! # fn main() {
+<a href=#36 id=36 data-nosnippet>36</a>//! use cargo_metadata::{MetadataCommand, CargoOpt};
+<a href=#37 id=37 data-nosnippet>37</a>//!
+<a href=#38 id=38 data-nosnippet>38</a>//! let _metadata = MetadataCommand::new()
+<a href=#39 id=39 data-nosnippet>39</a>//!     .manifest_path("./Cargo.toml")
+<a href=#40 id=40 data-nosnippet>40</a>//!     .features(CargoOpt::AllFeatures)
+<a href=#41 id=41 data-nosnippet>41</a>//!     .exec()
+<a href=#42 id=42 data-nosnippet>42</a>//!     .unwrap();
+<a href=#43 id=43 data-nosnippet>43</a>//! # }
+<a href=#44 id=44 data-nosnippet>44</a>//! ```
+<a href=#45 id=45 data-nosnippet>45</a>//!
+<a href=#46 id=46 data-nosnippet>46</a>//! Parse message-format output:
+<a href=#47 id=47 data-nosnippet>47</a>//!
+<a href=#48 id=48 data-nosnippet>48</a>//! ```
+<a href=#49 id=49 data-nosnippet>49</a>//! # extern crate cargo_metadata;
+<a href=#50 id=50 data-nosnippet>50</a>//! use std::process::{Stdio, Command};
+<a href=#51 id=51 data-nosnippet>51</a>//! use cargo_metadata::Message;
+<a href=#52 id=52 data-nosnippet>52</a>//!
+<a href=#53 id=53 data-nosnippet>53</a>//! let mut command = Command::new("cargo")
+<a href=#54 id=54 data-nosnippet>54</a>//!     .args(&amp;["build", "--message-format=json-render-diagnostics"])
+<a href=#55 id=55 data-nosnippet>55</a>//!     .stdout(Stdio::piped())
+<a href=#56 id=56 data-nosnippet>56</a>//!     .spawn()
+<a href=#57 id=57 data-nosnippet>57</a>//!     .unwrap();
+<a href=#58 id=58 data-nosnippet>58</a>//!
+<a href=#59 id=59 data-nosnippet>59</a>//! let reader = std::io::BufReader::new(command.stdout.take().unwrap());
+<a href=#60 id=60 data-nosnippet>60</a>//! for message in cargo_metadata::Message::parse_stream(reader) {
+<a href=#61 id=61 data-nosnippet>61</a>//!     match message.unwrap() {
+<a href=#62 id=62 data-nosnippet>62</a>//!         Message::CompilerMessage(msg) =&gt; {
+<a href=#63 id=63 data-nosnippet>63</a>//!             println!("{:?}", msg);
+<a href=#64 id=64 data-nosnippet>64</a>//!         },
+<a href=#65 id=65 data-nosnippet>65</a>//!         Message::CompilerArtifact(artifact) =&gt; {
+<a href=#66 id=66 data-nosnippet>66</a>//!             println!("{:?}", artifact);
+<a href=#67 id=67 data-nosnippet>67</a>//!         },
+<a href=#68 id=68 data-nosnippet>68</a>//!         Message::BuildScriptExecuted(script) =&gt; {
+<a href=#69 id=69 data-nosnippet>69</a>//!             println!("{:?}", script);
+<a href=#70 id=70 data-nosnippet>70</a>//!         },
+<a href=#71 id=71 data-nosnippet>71</a>//!         Message::BuildFinished(finished) =&gt; {
+<a href=#72 id=72 data-nosnippet>72</a>//!             println!("{:?}", finished);
+<a href=#73 id=73 data-nosnippet>73</a>//!         },
+<a href=#74 id=74 data-nosnippet>74</a>//!         _ =&gt; () // Unknown message
+<a href=#75 id=75 data-nosnippet>75</a>//!     }
+<a href=#76 id=76 data-nosnippet>76</a>//! }
+<a href=#77 id=77 data-nosnippet>77</a>//!
+<a href=#78 id=78 data-nosnippet>78</a>//! let output = command.wait().expect("Couldn't get cargo's exit status");
+<a href=#79 id=79 data-nosnippet>79</a>//! ```
+<a href=#80 id=80 data-nosnippet>80</a>
+<a href=#81 id=81 data-nosnippet>81</a></span><span class="kw">use </span>camino::Utf8PathBuf;
+<a href=#82 id=82 data-nosnippet>82</a><span class="attr">#[cfg(feature = <span class="string">"builder"</span>)]
+<a href=#83 id=83 data-nosnippet>83</a></span><span class="kw">use </span>derive_builder::Builder;
+<a href=#84 id=84 data-nosnippet>84</a><span class="kw">use </span>std::collections::BTreeMap;
+<a href=#85 id=85 data-nosnippet>85</a><span class="kw">use </span>std::env;
+<a href=#86 id=86 data-nosnippet>86</a><span class="kw">use </span>std::ffi::OsString;
+<a href=#87 id=87 data-nosnippet>87</a><span class="kw">use </span>std::fmt;
+<a href=#88 id=88 data-nosnippet>88</a><span class="kw">use </span>std::hash::Hash;
+<a href=#89 id=89 data-nosnippet>89</a><span class="kw">use </span>std::path::PathBuf;
+<a href=#90 id=90 data-nosnippet>90</a><span class="kw">use </span>std::process::{Command, Stdio};
+<a href=#91 id=91 data-nosnippet>91</a><span class="kw">use </span>std::str::from_utf8;
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a><span class="kw">pub use </span>camino;
+<a href=#94 id=94 data-nosnippet>94</a><span class="kw">pub use </span>semver;
+<a href=#95 id=95 data-nosnippet>95</a><span class="kw">use </span>semver::Version;
+<a href=#96 id=96 data-nosnippet>96</a>
+<a href=#97 id=97 data-nosnippet>97</a><span class="attr">#[cfg(feature = <span class="string">"builder"</span>)]
+<a href=#98 id=98 data-nosnippet>98</a></span><span class="kw">pub use </span>dependency::DependencyBuilder;
+<a href=#99 id=99 data-nosnippet>99</a><span class="kw">pub use </span>dependency::{Dependency, DependencyKind};
+<a href=#100 id=100 data-nosnippet>100</a><span class="kw">use </span>diagnostic::Diagnostic;
+<a href=#101 id=101 data-nosnippet>101</a><span class="kw">pub use </span>errors::{Error, <span class="prelude-ty">Result</span>};
+<a href=#102 id=102 data-nosnippet>102</a><span class="attr">#[cfg(feature = <span class="string">"unstable"</span>)]
+<a href=#103 id=103 data-nosnippet>103</a></span><span class="kw">pub use </span>libtest::TestMessage;
+<a href=#104 id=104 data-nosnippet>104</a><span class="attr">#[allow(deprecated)]
+<a href=#105 id=105 data-nosnippet>105</a></span><span class="kw">pub use </span>messages::parse_messages;
+<a href=#106 id=106 data-nosnippet>106</a><span class="kw">pub use </span>messages::{
+<a href=#107 id=107 data-nosnippet>107</a>    Artifact, ArtifactDebuginfo, ArtifactProfile, BuildFinished, BuildScript, CompilerMessage,
+<a href=#108 id=108 data-nosnippet>108</a>    Message, MessageIter,
+<a href=#109 id=109 data-nosnippet>109</a>};
+<a href=#110 id=110 data-nosnippet>110</a><span class="attr">#[cfg(feature = <span class="string">"builder"</span>)]
+<a href=#111 id=111 data-nosnippet>111</a></span><span class="kw">pub use </span>messages::{
+<a href=#112 id=112 data-nosnippet>112</a>    ArtifactBuilder, ArtifactProfileBuilder, BuildFinishedBuilder, BuildScriptBuilder,
+<a href=#113 id=113 data-nosnippet>113</a>    CompilerMessageBuilder,
+<a href=#114 id=114 data-nosnippet>114</a>};
+<a href=#115 id=115 data-nosnippet>115</a><span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize};
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a><span class="kw">mod </span>dependency;
+<a href=#118 id=118 data-nosnippet>118</a><span class="kw">pub mod </span>diagnostic;
+<a href=#119 id=119 data-nosnippet>119</a><span class="kw">mod </span>errors;
+<a href=#120 id=120 data-nosnippet>120</a><span class="attr">#[cfg(feature = <span class="string">"unstable"</span>)]
+<a href=#121 id=121 data-nosnippet>121</a></span><span class="kw">pub mod </span>libtest;
+<a href=#122 id=122 data-nosnippet>122</a><span class="kw">mod </span>messages;
+<a href=#123 id=123 data-nosnippet>123</a>
+<a href=#124 id=124 data-nosnippet>124</a><span class="doccomment">/// An "opaque" identifier for a package.
+<a href=#125 id=125 data-nosnippet>125</a>///
+<a href=#126 id=126 data-nosnippet>126</a>/// It is possible to inspect the `repr` field, if the need arises, but its
+<a href=#127 id=127 data-nosnippet>127</a>/// precise format is an implementation detail and is subject to change.
+<a href=#128 id=128 data-nosnippet>128</a>///
+<a href=#129 id=129 data-nosnippet>129</a>/// `Metadata` can be indexed by `PackageId`.
+<a href=#130 id=130 data-nosnippet>130</a></span><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+<a href=#131 id=131 data-nosnippet>131</a>#[serde(transparent)]
+<a href=#132 id=132 data-nosnippet>132</a></span><span class="kw">pub struct </span>PackageId {
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="doccomment">/// The underlying string representation of id.
+<a href=#134 id=134 data-nosnippet>134</a>    </span><span class="kw">pub </span>repr: String,
+<a href=#135 id=135 data-nosnippet>135</a>}
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>PackageId {
+<a href=#138 id=138 data-nosnippet>138</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#139 id=139 data-nosnippet>139</a>        fmt::Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.repr, f)
+<a href=#140 id=140 data-nosnippet>140</a>    }
+<a href=#141 id=141 data-nosnippet>141</a>}
+<a href=#142 id=142 data-nosnippet>142</a>
+<a href=#143 id=143 data-nosnippet>143</a><span class="doccomment">/// Helpers for default metadata fields
+<a href=#144 id=144 data-nosnippet>144</a></span><span class="kw">fn </span>is_null(value: <span class="kw-2">&amp;</span>serde_json::Value) -&gt; bool {
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="macro">matches!</span>(value, serde_json::Value::Null)
+<a href=#146 id=146 data-nosnippet>146</a>}
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
+<a href=#149 id=149 data-nosnippet>149</a>#[cfg_attr(feature = <span class="string">"builder"</span>, derive(Builder))]
+<a href=#150 id=150 data-nosnippet>150</a>#[non_exhaustive]
+<a href=#151 id=151 data-nosnippet>151</a>#[cfg_attr(feature = <span class="string">"builder"</span>, builder(pattern = <span class="string">"owned"</span>, setter(into)))]
+<a href=#152 id=152 data-nosnippet>152</a></span><span class="doccomment">/// Starting point for metadata returned by `cargo metadata`
+<a href=#153 id=153 data-nosnippet>153</a></span><span class="kw">pub struct </span>Metadata {
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="doccomment">/// A list of all crates referenced by this crate (and the crate itself)
+<a href=#155 id=155 data-nosnippet>155</a>    </span><span class="kw">pub </span>packages: Vec&lt;Package&gt;,
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="doccomment">/// A list of all workspace members
+<a href=#157 id=157 data-nosnippet>157</a>    </span><span class="kw">pub </span>workspace_members: Vec&lt;PackageId&gt;,
+<a href=#158 id=158 data-nosnippet>158</a>    <span class="doccomment">/// The list of default workspace members
+<a href=#159 id=159 data-nosnippet>159</a>    ///
+<a href=#160 id=160 data-nosnippet>160</a>    /// This not available if running with a version of Cargo older than 1.71.
+<a href=#161 id=161 data-nosnippet>161</a>    </span><span class="attr">#[serde(skip_serializing_if = <span class="string">"workspace_default_members_is_missing"</span>)]
+<a href=#162 id=162 data-nosnippet>162</a>    </span><span class="kw">pub </span>workspace_default_members: WorkspaceDefaultMembers,
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="doccomment">/// Dependencies graph
+<a href=#164 id=164 data-nosnippet>164</a>    </span><span class="kw">pub </span>resolve: <span class="prelude-ty">Option</span>&lt;Resolve&gt;,
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="doccomment">/// Workspace root
+<a href=#166 id=166 data-nosnippet>166</a>    </span><span class="kw">pub </span>workspace_root: Utf8PathBuf,
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="doccomment">/// Build directory
+<a href=#168 id=168 data-nosnippet>168</a>    </span><span class="kw">pub </span>target_directory: Utf8PathBuf,
+<a href=#169 id=169 data-nosnippet>169</a>    <span class="doccomment">/// The workspace-level metadata object. Null if non-existent.
+<a href=#170 id=170 data-nosnippet>170</a>    </span><span class="attr">#[serde(rename = <span class="string">"metadata"</span>, default, skip_serializing_if = <span class="string">"is_null"</span>)]
+<a href=#171 id=171 data-nosnippet>171</a>    </span><span class="kw">pub </span>workspace_metadata: serde_json::Value,
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="doccomment">/// The metadata format version
+<a href=#173 id=173 data-nosnippet>173</a>    </span>version: usize,
+<a href=#174 id=174 data-nosnippet>174</a>}
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a><span class="kw">impl </span>Metadata {
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="doccomment">/// Get the workspace's root package of this metadata instance.
+<a href=#178 id=178 data-nosnippet>178</a>    </span><span class="kw">pub fn </span>root_package(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Package&gt; {
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.resolve {
+<a href=#180 id=180 data-nosnippet>180</a>            <span class="prelude-val">Some</span>(resolve) =&gt; {
+<a href=#181 id=181 data-nosnippet>181</a>                <span class="comment">// if dependencies are resolved, use Cargo's answer
+<a href=#182 id=182 data-nosnippet>182</a>                </span><span class="kw">let </span>root = resolve.root.as_ref()<span class="question-mark">?</span>;
+<a href=#183 id=183 data-nosnippet>183</a>                <span class="self">self</span>.packages.iter().find(|pkg| <span class="kw-2">&amp;</span>pkg.id == root)
+<a href=#184 id=184 data-nosnippet>184</a>            }
+<a href=#185 id=185 data-nosnippet>185</a>            <span class="prelude-val">None </span>=&gt; {
+<a href=#186 id=186 data-nosnippet>186</a>                <span class="comment">// if dependencies aren't resolved, check for a root package manually
+<a href=#187 id=187 data-nosnippet>187</a>                </span><span class="kw">let </span>root_manifest_path = <span class="self">self</span>.workspace_root.join(<span class="string">"Cargo.toml"</span>);
+<a href=#188 id=188 data-nosnippet>188</a>                <span class="self">self</span>.packages
+<a href=#189 id=189 data-nosnippet>189</a>                    .iter()
+<a href=#190 id=190 data-nosnippet>190</a>                    .find(|pkg| pkg.manifest_path == root_manifest_path)
+<a href=#191 id=191 data-nosnippet>191</a>            }
+<a href=#192 id=192 data-nosnippet>192</a>        }
+<a href=#193 id=193 data-nosnippet>193</a>    }
+<a href=#194 id=194 data-nosnippet>194</a>
+<a href=#195 id=195 data-nosnippet>195</a>    <span class="doccomment">/// Get the workspace packages.
+<a href=#196 id=196 data-nosnippet>196</a>    </span><span class="kw">pub fn </span>workspace_packages(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="kw-2">&amp;</span>Package&gt; {
+<a href=#197 id=197 data-nosnippet>197</a>        <span class="self">self</span>.packages
+<a href=#198 id=198 data-nosnippet>198</a>            .iter()
+<a href=#199 id=199 data-nosnippet>199</a>            .filter(|<span class="kw-2">&amp;</span>p| <span class="self">self</span>.workspace_members.contains(<span class="kw-2">&amp;</span>p.id))
+<a href=#200 id=200 data-nosnippet>200</a>            .collect()
+<a href=#201 id=201 data-nosnippet>201</a>    }
+<a href=#202 id=202 data-nosnippet>202</a>
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="doccomment">/// Get the workspace default packages.
+<a href=#204 id=204 data-nosnippet>204</a>    ///
+<a href=#205 id=205 data-nosnippet>205</a>    /// # Panics
+<a href=#206 id=206 data-nosnippet>206</a>    ///
+<a href=#207 id=207 data-nosnippet>207</a>    /// This will panic if running with a version of Cargo older than 1.71.
+<a href=#208 id=208 data-nosnippet>208</a>    </span><span class="kw">pub fn </span>workspace_default_packages(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="kw-2">&amp;</span>Package&gt; {
+<a href=#209 id=209 data-nosnippet>209</a>        <span class="self">self</span>.packages
+<a href=#210 id=210 data-nosnippet>210</a>            .iter()
+<a href=#211 id=211 data-nosnippet>211</a>            .filter(|<span class="kw-2">&amp;</span>p| <span class="self">self</span>.workspace_default_members.contains(<span class="kw-2">&amp;</span>p.id))
+<a href=#212 id=212 data-nosnippet>212</a>            .collect()
+<a href=#213 id=213 data-nosnippet>213</a>    }
+<a href=#214 id=214 data-nosnippet>214</a>}
+<a href=#215 id=215 data-nosnippet>215</a>
+<a href=#216 id=216 data-nosnippet>216</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; std::ops::Index&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>PackageId&gt; <span class="kw">for </span>Metadata {
+<a href=#217 id=217 data-nosnippet>217</a>    <span class="kw">type </span>Output = Package;
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">fn </span>index(<span class="kw-2">&amp;</span><span class="self">self</span>, idx: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>PackageId) -&gt; <span class="kw-2">&amp;</span>Package {
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="self">self</span>.packages
+<a href=#221 id=221 data-nosnippet>221</a>            .iter()
+<a href=#222 id=222 data-nosnippet>222</a>            .find(|p| p.id == <span class="kw-2">*</span>idx)
+<a href=#223 id=223 data-nosnippet>223</a>            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"no package with this id: {:?}"</span>, idx))
+<a href=#224 id=224 data-nosnippet>224</a>    }
+<a href=#225 id=225 data-nosnippet>225</a>}
+<a href=#226 id=226 data-nosnippet>226</a>
+<a href=#227 id=227 data-nosnippet>227</a><span class="attr">#[derive(Clone, Debug, Deserialize, Serialize)]
+<a href=#228 id=228 data-nosnippet>228</a>#[serde(transparent)]
+<a href=#229 id=229 data-nosnippet>229</a></span><span class="doccomment">/// A list of default workspace members.
+<a href=#230 id=230 data-nosnippet>230</a>///
+<a href=#231 id=231 data-nosnippet>231</a>/// See [`Metadata::workspace_default_members`].
+<a href=#232 id=232 data-nosnippet>232</a>///
+<a href=#233 id=233 data-nosnippet>233</a>/// It is only available if running a version of Cargo of 1.71 or newer.
+<a href=#234 id=234 data-nosnippet>234</a>///
+<a href=#235 id=235 data-nosnippet>235</a>/// # Panics
+<a href=#236 id=236 data-nosnippet>236</a>///
+<a href=#237 id=237 data-nosnippet>237</a>/// Dereferencing when running an older version of Cargo will panic.
+<a href=#238 id=238 data-nosnippet>238</a></span><span class="kw">pub struct </span>WorkspaceDefaultMembers(<span class="prelude-ty">Option</span>&lt;Vec&lt;PackageId&gt;&gt;);
+<a href=#239 id=239 data-nosnippet>239</a>
+<a href=#240 id=240 data-nosnippet>240</a><span class="kw">impl </span>core::ops::Deref <span class="kw">for </span>WorkspaceDefaultMembers {
+<a href=#241 id=241 data-nosnippet>241</a>    <span class="kw">type </span>Target = [PackageId];
+<a href=#242 id=242 data-nosnippet>242</a>
+<a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+<a href=#244 id=244 data-nosnippet>244</a>        <span class="self">self</span>.<span class="number">0
+<a href=#245 id=245 data-nosnippet>245</a>            </span>.as_ref()
+<a href=#246 id=246 data-nosnippet>246</a>            .expect(<span class="string">"WorkspaceDefaultMembers should only be dereferenced on Cargo versions &gt;= 1.71"</span>)
+<a href=#247 id=247 data-nosnippet>247</a>    }
+<a href=#248 id=248 data-nosnippet>248</a>}
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a><span class="doccomment">/// Return true if a valid value for [`WorkspaceDefaultMembers`] is missing, and
+<a href=#251 id=251 data-nosnippet>251</a>/// dereferencing it would panic.
+<a href=#252 id=252 data-nosnippet>252</a>///
+<a href=#253 id=253 data-nosnippet>253</a>/// Internal helper for `skip_serializing_if` and test code. Might be removed in
+<a href=#254 id=254 data-nosnippet>254</a>/// the future.
+<a href=#255 id=255 data-nosnippet>255</a></span><span class="attr">#[doc(hidden)]
+<a href=#256 id=256 data-nosnippet>256</a></span><span class="kw">pub fn </span>workspace_default_members_is_missing(
+<a href=#257 id=257 data-nosnippet>257</a>    workspace_default_members: <span class="kw-2">&amp;</span>WorkspaceDefaultMembers,
+<a href=#258 id=258 data-nosnippet>258</a>) -&gt; bool {
+<a href=#259 id=259 data-nosnippet>259</a>    workspace_default_members.<span class="number">0</span>.is_none()
+<a href=#260 id=260 data-nosnippet>260</a>}
+<a href=#261 id=261 data-nosnippet>261</a>
+<a href=#262 id=262 data-nosnippet>262</a><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
+<a href=#263 id=263 data-nosnippet>263</a>#[cfg_attr(feature = <span class="string">"builder"</span>, derive(Builder))]
+<a href=#264 id=264 data-nosnippet>264</a>#[non_exhaustive]
+<a href=#265 id=265 data-nosnippet>265</a>#[cfg_attr(feature = <span class="string">"builder"</span>, builder(pattern = <span class="string">"owned"</span>, setter(into)))]
+<a href=#266 id=266 data-nosnippet>266</a></span><span class="doccomment">/// A dependency graph
+<a href=#267 id=267 data-nosnippet>267</a></span><span class="kw">pub struct </span>Resolve {
+<a href=#268 id=268 data-nosnippet>268</a>    <span class="doccomment">/// Nodes in a dependencies graph
+<a href=#269 id=269 data-nosnippet>269</a>    </span><span class="kw">pub </span>nodes: Vec&lt;Node&gt;,
+<a href=#270 id=270 data-nosnippet>270</a>
+<a href=#271 id=271 data-nosnippet>271</a>    <span class="doccomment">/// The crate for which the metadata was read.
+<a href=#272 id=272 data-nosnippet>272</a>    </span><span class="kw">pub </span>root: <span class="prelude-ty">Option</span>&lt;PackageId&gt;,
+<a href=#273 id=273 data-nosnippet>273</a>}
+<a href=#274 id=274 data-nosnippet>274</a>
+<a href=#275 id=275 data-nosnippet>275</a><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
+<a href=#276 id=276 data-nosnippet>276</a>#[cfg_attr(feature = <span class="string">"builder"</span>, derive(Builder))]
+<a href=#277 id=277 data-nosnippet>277</a>#[non_exhaustive]
+<a href=#278 id=278 data-nosnippet>278</a>#[cfg_attr(feature = <span class="string">"builder"</span>, builder(pattern = <span class="string">"owned"</span>, setter(into)))]
+<a href=#279 id=279 data-nosnippet>279</a></span><span class="doccomment">/// A node in a dependencies graph
+<a href=#280 id=280 data-nosnippet>280</a></span><span class="kw">pub struct </span>Node {
+<a href=#281 id=281 data-nosnippet>281</a>    <span class="doccomment">/// An opaque identifier for a package
+<a href=#282 id=282 data-nosnippet>282</a>    </span><span class="kw">pub </span>id: PackageId,
+<a href=#283 id=283 data-nosnippet>283</a>    <span class="doccomment">/// Dependencies in a structured format.
+<a href=#284 id=284 data-nosnippet>284</a>    ///
+<a href=#285 id=285 data-nosnippet>285</a>    /// `deps` handles renamed dependencies whereas `dependencies` does not.
+<a href=#286 id=286 data-nosnippet>286</a>    </span><span class="attr">#[serde(default)]
+<a href=#287 id=287 data-nosnippet>287</a>    </span><span class="kw">pub </span>deps: Vec&lt;NodeDep&gt;,
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a>    <span class="doccomment">/// List of opaque identifiers for this node's dependencies.
+<a href=#290 id=290 data-nosnippet>290</a>    /// It doesn't support renamed dependencies. See `deps`.
+<a href=#291 id=291 data-nosnippet>291</a>    </span><span class="kw">pub </span>dependencies: Vec&lt;PackageId&gt;,
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a>    <span class="doccomment">/// Features enabled on the crate
+<a href=#294 id=294 data-nosnippet>294</a>    </span><span class="attr">#[serde(default)]
+<a href=#295 id=295 data-nosnippet>295</a>    </span><span class="kw">pub </span>features: Vec&lt;String&gt;,
+<a href=#296 id=296 data-nosnippet>296</a>}
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
+<a href=#299 id=299 data-nosnippet>299</a>#[cfg_attr(feature = <span class="string">"builder"</span>, derive(Builder))]
+<a href=#300 id=300 data-nosnippet>300</a>#[non_exhaustive]
+<a href=#301 id=301 data-nosnippet>301</a>#[cfg_attr(feature = <span class="string">"builder"</span>, builder(pattern = <span class="string">"owned"</span>, setter(into)))]
+<a href=#302 id=302 data-nosnippet>302</a></span><span class="doccomment">/// A dependency in a node
+<a href=#303 id=303 data-nosnippet>303</a></span><span class="kw">pub struct </span>NodeDep {
+<a href=#304 id=304 data-nosnippet>304</a>    <span class="doccomment">/// The name of the dependency's library target.
+<a href=#305 id=305 data-nosnippet>305</a>    /// If the crate was renamed, it is the new name.
+<a href=#306 id=306 data-nosnippet>306</a>    </span><span class="kw">pub </span>name: String,
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="doccomment">/// Package ID (opaque unique identifier)
+<a href=#308 id=308 data-nosnippet>308</a>    </span><span class="kw">pub </span>pkg: PackageId,
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="doccomment">/// The kinds of dependencies.
+<a href=#310 id=310 data-nosnippet>310</a>    ///
+<a href=#311 id=311 data-nosnippet>311</a>    /// This field was added in Rust 1.41.
+<a href=#312 id=312 data-nosnippet>312</a>    </span><span class="attr">#[serde(default)]
+<a href=#313 id=313 data-nosnippet>313</a>    </span><span class="kw">pub </span>dep_kinds: Vec&lt;DepKindInfo&gt;,
+<a href=#314 id=314 data-nosnippet>314</a>}
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
+<a href=#317 id=317 data-nosnippet>317</a>#[cfg_attr(feature = <span class="string">"builder"</span>, derive(Builder))]
+<a href=#318 id=318 data-nosnippet>318</a>#[non_exhaustive]
+<a href=#319 id=319 data-nosnippet>319</a>#[cfg_attr(feature = <span class="string">"builder"</span>, builder(pattern = <span class="string">"owned"</span>, setter(into)))]
+<a href=#320 id=320 data-nosnippet>320</a></span><span class="doccomment">/// Information about a dependency kind.
+<a href=#321 id=321 data-nosnippet>321</a></span><span class="kw">pub struct </span>DepKindInfo {
+<a href=#322 id=322 data-nosnippet>322</a>    <span class="doccomment">/// The kind of dependency.
+<a href=#323 id=323 data-nosnippet>323</a>    </span><span class="attr">#[serde(deserialize_with = <span class="string">"dependency::parse_dependency_kind"</span>)]
+<a href=#324 id=324 data-nosnippet>324</a>    </span><span class="kw">pub </span>kind: DependencyKind,
+<a href=#325 id=325 data-nosnippet>325</a>    <span class="doccomment">/// The target platform for the dependency.
+<a href=#326 id=326 data-nosnippet>326</a>    ///
+<a href=#327 id=327 data-nosnippet>327</a>    /// This is `None` if it is not a target dependency.
+<a href=#328 id=328 data-nosnippet>328</a>    ///
+<a href=#329 id=329 data-nosnippet>329</a>    /// Use the [`Display`] trait to access the contents.
+<a href=#330 id=330 data-nosnippet>330</a>    ///
+<a href=#331 id=331 data-nosnippet>331</a>    /// By default all platform dependencies are included in the resolve
+<a href=#332 id=332 data-nosnippet>332</a>    /// graph. Use Cargo's `--filter-platform` flag if you only want to
+<a href=#333 id=333 data-nosnippet>333</a>    /// include dependencies for a specific platform.
+<a href=#334 id=334 data-nosnippet>334</a>    ///
+<a href=#335 id=335 data-nosnippet>335</a>    /// [`Display`]: std::fmt::Display
+<a href=#336 id=336 data-nosnippet>336</a>    </span><span class="kw">pub </span>target: <span class="prelude-ty">Option</span>&lt;dependency::Platform&gt;,
+<a href=#337 id=337 data-nosnippet>337</a>}
+<a href=#338 id=338 data-nosnippet>338</a>
+<a href=#339 id=339 data-nosnippet>339</a><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+<a href=#340 id=340 data-nosnippet>340</a>#[cfg_attr(feature = <span class="string">"builder"</span>, derive(Builder))]
+<a href=#341 id=341 data-nosnippet>341</a>#[non_exhaustive]
+<a href=#342 id=342 data-nosnippet>342</a>#[cfg_attr(feature = <span class="string">"builder"</span>, builder(pattern = <span class="string">"owned"</span>, setter(into)))]
+<a href=#343 id=343 data-nosnippet>343</a></span><span class="doccomment">/// One or more crates described by a single `Cargo.toml`
+<a href=#344 id=344 data-nosnippet>344</a>///
+<a href=#345 id=345 data-nosnippet>345</a>/// Each [`target`][Package::targets] of a `Package` will be built as a crate.
+<a href=#346 id=346 data-nosnippet>346</a>/// For more information, see &lt;https://doc.rust-lang.org/book/ch07-01-packages-and-crates.html&gt;.
+<a href=#347 id=347 data-nosnippet>347</a></span><span class="kw">pub struct </span>Package {
+<a href=#348 id=348 data-nosnippet>348</a>    <span class="doccomment">/// The [`name` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-name-field) as given in the `Cargo.toml`
+<a href=#349 id=349 data-nosnippet>349</a>    </span><span class="comment">// (We say "given in" instead of "specified in" since the `name` key cannot be inherited from the workspace.)
+<a href=#350 id=350 data-nosnippet>350</a>    </span><span class="kw">pub </span>name: String,
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="doccomment">/// The [`version` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-version-field) as specified in the `Cargo.toml`
+<a href=#352 id=352 data-nosnippet>352</a>    </span><span class="kw">pub </span>version: Version,
+<a href=#353 id=353 data-nosnippet>353</a>    <span class="doccomment">/// The [`authors` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-authors-field) as specified in the `Cargo.toml`
+<a href=#354 id=354 data-nosnippet>354</a>    </span><span class="attr">#[serde(default)]
+<a href=#355 id=355 data-nosnippet>355</a>    </span><span class="kw">pub </span>authors: Vec&lt;String&gt;,
+<a href=#356 id=356 data-nosnippet>356</a>    <span class="doccomment">/// An opaque identifier for a package
+<a href=#357 id=357 data-nosnippet>357</a>    </span><span class="kw">pub </span>id: PackageId,
+<a href=#358 id=358 data-nosnippet>358</a>    <span class="doccomment">/// The source of the package, e.g.
+<a href=#359 id=359 data-nosnippet>359</a>    /// crates.io or `None` for local projects.
+<a href=#360 id=360 data-nosnippet>360</a>    </span><span class="kw">pub </span>source: <span class="prelude-ty">Option</span>&lt;Source&gt;,
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="doccomment">/// The [`description` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-description-field) as specified in the `Cargo.toml`
+<a href=#362 id=362 data-nosnippet>362</a>    </span><span class="kw">pub </span>description: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#363 id=363 data-nosnippet>363</a>    <span class="doccomment">/// List of dependencies of this particular package
+<a href=#364 id=364 data-nosnippet>364</a>    </span><span class="kw">pub </span>dependencies: Vec&lt;Dependency&gt;,
+<a href=#365 id=365 data-nosnippet>365</a>    <span class="doccomment">/// The [`license` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-license-and-license-file-fields) as specified in the `Cargo.toml`
+<a href=#366 id=366 data-nosnippet>366</a>    </span><span class="kw">pub </span>license: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="doccomment">/// The [`license-file` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-license-and-license-file-fields) as specified in the `Cargo.toml`.
+<a href=#368 id=368 data-nosnippet>368</a>    /// If the package is using a nonstandard license, this key may be specified instead of
+<a href=#369 id=369 data-nosnippet>369</a>    /// `license`, and must point to a file relative to the manifest.
+<a href=#370 id=370 data-nosnippet>370</a>    </span><span class="kw">pub </span>license_file: <span class="prelude-ty">Option</span>&lt;Utf8PathBuf&gt;,
+<a href=#371 id=371 data-nosnippet>371</a>    <span class="doccomment">/// Targets provided by the crate (lib, bin, example, test, ...)
+<a href=#372 id=372 data-nosnippet>372</a>    </span><span class="kw">pub </span>targets: Vec&lt;Target&gt;,
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="doccomment">/// Features provided by the crate, mapped to the features required by that feature.
+<a href=#374 id=374 data-nosnippet>374</a>    </span><span class="kw">pub </span>features: BTreeMap&lt;String, Vec&lt;String&gt;&gt;,
+<a href=#375 id=375 data-nosnippet>375</a>    <span class="doccomment">/// Path containing the `Cargo.toml`
+<a href=#376 id=376 data-nosnippet>376</a>    </span><span class="kw">pub </span>manifest_path: Utf8PathBuf,
+<a href=#377 id=377 data-nosnippet>377</a>    <span class="doccomment">/// The [`categories` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-categories-field) as specified in the `Cargo.toml`
+<a href=#378 id=378 data-nosnippet>378</a>    </span><span class="attr">#[serde(default)]
+<a href=#379 id=379 data-nosnippet>379</a>    </span><span class="kw">pub </span>categories: Vec&lt;String&gt;,
+<a href=#380 id=380 data-nosnippet>380</a>    <span class="doccomment">/// The [`keywords` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-keywords-field) as specified in the `Cargo.toml`
+<a href=#381 id=381 data-nosnippet>381</a>    </span><span class="attr">#[serde(default)]
+<a href=#382 id=382 data-nosnippet>382</a>    </span><span class="kw">pub </span>keywords: Vec&lt;String&gt;,
+<a href=#383 id=383 data-nosnippet>383</a>    <span class="doccomment">/// The [`readme` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-readme-field) as specified in the `Cargo.toml`
+<a href=#384 id=384 data-nosnippet>384</a>    </span><span class="kw">pub </span>readme: <span class="prelude-ty">Option</span>&lt;Utf8PathBuf&gt;,
+<a href=#385 id=385 data-nosnippet>385</a>    <span class="doccomment">/// The [`repository` URL](https://doc.rust-lang.org/cargo/reference/manifest.html#the-repository-field) as specified in the `Cargo.toml`
+<a href=#386 id=386 data-nosnippet>386</a>    </span><span class="comment">// can't use `url::Url` because that requires a more recent stable compiler
+<a href=#387 id=387 data-nosnippet>387</a>    </span><span class="kw">pub </span>repository: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#388 id=388 data-nosnippet>388</a>    <span class="doccomment">/// The [`homepage` URL](https://doc.rust-lang.org/cargo/reference/manifest.html#the-homepage-field) as specified in the `Cargo.toml`.
+<a href=#389 id=389 data-nosnippet>389</a>    ///
+<a href=#390 id=390 data-nosnippet>390</a>    /// On versions of cargo before 1.49, this will always be [`None`].
+<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="kw">pub </span>homepage: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="doccomment">/// The [`documentation` URL](https://doc.rust-lang.org/cargo/reference/manifest.html#the-documentation-field) as specified in the `Cargo.toml`.
+<a href=#393 id=393 data-nosnippet>393</a>    ///
+<a href=#394 id=394 data-nosnippet>394</a>    /// On versions of cargo before 1.49, this will always be [`None`].
+<a href=#395 id=395 data-nosnippet>395</a>    </span><span class="kw">pub </span>documentation: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="doccomment">/// The default Rust edition for the package (either what's specified in the [`edition` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-edition-field)
+<a href=#397 id=397 data-nosnippet>397</a>    /// or defaulting to [`Edition::E2015`]).
+<a href=#398 id=398 data-nosnippet>398</a>    ///
+<a href=#399 id=399 data-nosnippet>399</a>    /// Beware that individual targets may specify their own edition in
+<a href=#400 id=400 data-nosnippet>400</a>    /// [`Target::edition`].
+<a href=#401 id=401 data-nosnippet>401</a>    </span><span class="attr">#[serde(default)]
+<a href=#402 id=402 data-nosnippet>402</a>    </span><span class="kw">pub </span>edition: Edition,
+<a href=#403 id=403 data-nosnippet>403</a>    <span class="doccomment">/// Contents of the free form [`package.metadata` section](https://doc.rust-lang.org/cargo/reference/manifest.html#the-metadata-table).
+<a href=#404 id=404 data-nosnippet>404</a>    ///
+<a href=#405 id=405 data-nosnippet>405</a>    /// This contents can be serialized to a struct using serde:
+<a href=#406 id=406 data-nosnippet>406</a>    ///
+<a href=#407 id=407 data-nosnippet>407</a>    /// ```rust
+<a href=#408 id=408 data-nosnippet>408</a>    /// use serde::Deserialize;
+<a href=#409 id=409 data-nosnippet>409</a>    /// use serde_json::json;
+<a href=#410 id=410 data-nosnippet>410</a>    ///
+<a href=#411 id=411 data-nosnippet>411</a>    /// #[derive(Debug, Deserialize)]
+<a href=#412 id=412 data-nosnippet>412</a>    /// struct SomePackageMetadata {
+<a href=#413 id=413 data-nosnippet>413</a>    ///     some_value: i32,
+<a href=#414 id=414 data-nosnippet>414</a>    /// }
+<a href=#415 id=415 data-nosnippet>415</a>    ///
+<a href=#416 id=416 data-nosnippet>416</a>    /// fn main() {
+<a href=#417 id=417 data-nosnippet>417</a>    ///     let value = json!({
+<a href=#418 id=418 data-nosnippet>418</a>    ///         "some_value": 42,
+<a href=#419 id=419 data-nosnippet>419</a>    ///     });
+<a href=#420 id=420 data-nosnippet>420</a>    ///
+<a href=#421 id=421 data-nosnippet>421</a>    ///     let package_metadata: SomePackageMetadata = serde_json::from_value(value).unwrap();
+<a href=#422 id=422 data-nosnippet>422</a>    ///     assert_eq!(package_metadata.some_value, 42);
+<a href=#423 id=423 data-nosnippet>423</a>    /// }
+<a href=#424 id=424 data-nosnippet>424</a>    ///
+<a href=#425 id=425 data-nosnippet>425</a>    /// ```
+<a href=#426 id=426 data-nosnippet>426</a>    </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"is_null"</span>)]
+<a href=#427 id=427 data-nosnippet>427</a>    </span><span class="kw">pub </span>metadata: serde_json::Value,
+<a href=#428 id=428 data-nosnippet>428</a>    <span class="doccomment">/// The name of a native library the package is linking to.
+<a href=#429 id=429 data-nosnippet>429</a>    </span><span class="kw">pub </span>links: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#430 id=430 data-nosnippet>430</a>    <span class="doccomment">/// List of registries to which this package may be published (derived from the [`publish` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-publish-field)).
+<a href=#431 id=431 data-nosnippet>431</a>    ///
+<a href=#432 id=432 data-nosnippet>432</a>    /// Publishing is unrestricted if `None`, and forbidden if the `Vec` is empty.
+<a href=#433 id=433 data-nosnippet>433</a>    ///
+<a href=#434 id=434 data-nosnippet>434</a>    /// This is always `None` if running with a version of Cargo older than 1.39.
+<a href=#435 id=435 data-nosnippet>435</a>    </span><span class="kw">pub </span>publish: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
+<a href=#436 id=436 data-nosnippet>436</a>    <span class="doccomment">/// The [`default-run` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-default-run-field) as given in the `Cargo.toml`
+<a href=#437 id=437 data-nosnippet>437</a>    </span><span class="comment">// (We say "given in" instead of "specified in" since the `default-run` key cannot be inherited from the workspace.)
+<a href=#438 id=438 data-nosnippet>438</a>    </span><span class="doccomment">/// The default binary to run by `cargo run`.
+<a href=#439 id=439 data-nosnippet>439</a>    ///
+<a href=#440 id=440 data-nosnippet>440</a>    /// This is always `None` if running with a version of Cargo older than 1.55.
+<a href=#441 id=441 data-nosnippet>441</a>    </span><span class="kw">pub </span>default_run: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#442 id=442 data-nosnippet>442</a>    <span class="doccomment">/// The [`rust-version` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) as specified in the `Cargo.toml`.
+<a href=#443 id=443 data-nosnippet>443</a>    /// The minimum supported Rust version of this package.
+<a href=#444 id=444 data-nosnippet>444</a>    ///
+<a href=#445 id=445 data-nosnippet>445</a>    /// This is always `None` if running with a version of Cargo older than 1.58.
+<a href=#446 id=446 data-nosnippet>446</a>    </span><span class="attr">#[serde(default)]
+<a href=#447 id=447 data-nosnippet>447</a>    #[serde(deserialize_with = <span class="string">"deserialize_rust_version"</span>)]
+<a href=#448 id=448 data-nosnippet>448</a>    </span><span class="kw">pub </span>rust_version: <span class="prelude-ty">Option</span>&lt;Version&gt;,
+<a href=#449 id=449 data-nosnippet>449</a>}
+<a href=#450 id=450 data-nosnippet>450</a>
+<a href=#451 id=451 data-nosnippet>451</a><span class="kw">impl </span>Package {
+<a href=#452 id=452 data-nosnippet>452</a>    <span class="doccomment">/// Full path to the license file if one is present in the manifest
+<a href=#453 id=453 data-nosnippet>453</a>    </span><span class="kw">pub fn </span>license_file(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Utf8PathBuf&gt; {
+<a href=#454 id=454 data-nosnippet>454</a>        <span class="self">self</span>.license_file.as_ref().map(|file| {
+<a href=#455 id=455 data-nosnippet>455</a>            <span class="self">self</span>.manifest_path
+<a href=#456 id=456 data-nosnippet>456</a>                .parent()
+<a href=#457 id=457 data-nosnippet>457</a>                .unwrap_or(<span class="kw-2">&amp;</span><span class="self">self</span>.manifest_path)
+<a href=#458 id=458 data-nosnippet>458</a>                .join(file)
+<a href=#459 id=459 data-nosnippet>459</a>        })
+<a href=#460 id=460 data-nosnippet>460</a>    }
+<a href=#461 id=461 data-nosnippet>461</a>
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="doccomment">/// Full path to the readme file if one is present in the manifest
+<a href=#463 id=463 data-nosnippet>463</a>    </span><span class="kw">pub fn </span>readme(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Utf8PathBuf&gt; {
+<a href=#464 id=464 data-nosnippet>464</a>        <span class="self">self</span>.readme.as_ref().map(|file| {
+<a href=#465 id=465 data-nosnippet>465</a>            <span class="self">self</span>.manifest_path
+<a href=#466 id=466 data-nosnippet>466</a>                .parent()
+<a href=#467 id=467 data-nosnippet>467</a>                .unwrap_or(<span class="kw-2">&amp;</span><span class="self">self</span>.manifest_path)
+<a href=#468 id=468 data-nosnippet>468</a>                .join(file)
+<a href=#469 id=469 data-nosnippet>469</a>        })
+<a href=#470 id=470 data-nosnippet>470</a>    }
+<a href=#471 id=471 data-nosnippet>471</a>}
+<a href=#472 id=472 data-nosnippet>472</a>
+<a href=#473 id=473 data-nosnippet>473</a><span class="doccomment">/// The source of a package such as crates.io.
+<a href=#474 id=474 data-nosnippet>474</a>///
+<a href=#475 id=475 data-nosnippet>475</a>/// It is possible to inspect the `repr` field, if the need arises, but its
+<a href=#476 id=476 data-nosnippet>476</a>/// precise format is an implementation detail and is subject to change.
+<a href=#477 id=477 data-nosnippet>477</a></span><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+<a href=#478 id=478 data-nosnippet>478</a>#[serde(transparent)]
+<a href=#479 id=479 data-nosnippet>479</a></span><span class="kw">pub struct </span>Source {
+<a href=#480 id=480 data-nosnippet>480</a>    <span class="doccomment">/// The underlying string representation of a source.
+<a href=#481 id=481 data-nosnippet>481</a>    </span><span class="kw">pub </span>repr: String,
+<a href=#482 id=482 data-nosnippet>482</a>}
+<a href=#483 id=483 data-nosnippet>483</a>
+<a href=#484 id=484 data-nosnippet>484</a><span class="kw">impl </span>Source {
+<a href=#485 id=485 data-nosnippet>485</a>    <span class="doccomment">/// Returns true if the source is crates.io.
+<a href=#486 id=486 data-nosnippet>486</a>    </span><span class="kw">pub fn </span>is_crates_io(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#487 id=487 data-nosnippet>487</a>        <span class="self">self</span>.repr == <span class="string">"registry+https://github.com/rust-lang/crates.io-index"
+<a href=#488 id=488 data-nosnippet>488</a>    </span>}
+<a href=#489 id=489 data-nosnippet>489</a>}
+<a href=#490 id=490 data-nosnippet>490</a>
+<a href=#491 id=491 data-nosnippet>491</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>Source {
+<a href=#492 id=492 data-nosnippet>492</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#493 id=493 data-nosnippet>493</a>        fmt::Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.repr, f)
+<a href=#494 id=494 data-nosnippet>494</a>    }
+<a href=#495 id=495 data-nosnippet>495</a>}
+<a href=#496 id=496 data-nosnippet>496</a>
+<a href=#497 id=497 data-nosnippet>497</a><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+<a href=#498 id=498 data-nosnippet>498</a>#[cfg_attr(feature = <span class="string">"builder"</span>, derive(Builder))]
+<a href=#499 id=499 data-nosnippet>499</a>#[cfg_attr(feature = <span class="string">"builder"</span>, builder(pattern = <span class="string">"owned"</span>, setter(into)))]
+<a href=#500 id=500 data-nosnippet>500</a>#[non_exhaustive]
+<a href=#501 id=501 data-nosnippet>501</a></span><span class="doccomment">/// A single target (lib, bin, example, ...) provided by a crate
+<a href=#502 id=502 data-nosnippet>502</a></span><span class="kw">pub struct </span>Target {
+<a href=#503 id=503 data-nosnippet>503</a>    <span class="doccomment">/// Name as given in the `Cargo.toml` or generated from the file name
+<a href=#504 id=504 data-nosnippet>504</a>    </span><span class="kw">pub </span>name: String,
+<a href=#505 id=505 data-nosnippet>505</a>    <span class="doccomment">/// Kind of target ("bin", "example", "test", "bench", "lib", "custom-build")
+<a href=#506 id=506 data-nosnippet>506</a>    </span><span class="kw">pub </span>kind: Vec&lt;String&gt;,
+<a href=#507 id=507 data-nosnippet>507</a>    <span class="doccomment">/// Almost the same as `kind`, except when an example is a library instead of an executable.
+<a href=#508 id=508 data-nosnippet>508</a>    /// In that case `crate_types` contains things like `rlib` and `dylib` while `kind` is `example`
+<a href=#509 id=509 data-nosnippet>509</a>    </span><span class="attr">#[serde(default)]
+<a href=#510 id=510 data-nosnippet>510</a>    #[cfg_attr(feature = <span class="string">"builder"</span>, builder(default))]
+<a href=#511 id=511 data-nosnippet>511</a>    </span><span class="kw">pub </span>crate_types: Vec&lt;String&gt;,
+<a href=#512 id=512 data-nosnippet>512</a>
+<a href=#513 id=513 data-nosnippet>513</a>    <span class="attr">#[serde(default)]
+<a href=#514 id=514 data-nosnippet>514</a>    #[cfg_attr(feature = <span class="string">"builder"</span>, builder(default))]
+<a href=#515 id=515 data-nosnippet>515</a>    #[serde(rename = <span class="string">"required-features"</span>)]
+<a href=#516 id=516 data-nosnippet>516</a>    </span><span class="doccomment">/// This target is built only if these features are enabled.
+<a href=#517 id=517 data-nosnippet>517</a>    /// It doesn't apply to `lib` targets.
+<a href=#518 id=518 data-nosnippet>518</a>    </span><span class="kw">pub </span>required_features: Vec&lt;String&gt;,
+<a href=#519 id=519 data-nosnippet>519</a>    <span class="doccomment">/// Path to the main source file of the target
+<a href=#520 id=520 data-nosnippet>520</a>    </span><span class="kw">pub </span>src_path: Utf8PathBuf,
+<a href=#521 id=521 data-nosnippet>521</a>    <span class="doccomment">/// Rust edition for this target
+<a href=#522 id=522 data-nosnippet>522</a>    </span><span class="attr">#[serde(default)]
+<a href=#523 id=523 data-nosnippet>523</a>    #[cfg_attr(feature = <span class="string">"builder"</span>, builder(default))]
+<a href=#524 id=524 data-nosnippet>524</a>    </span><span class="kw">pub </span>edition: Edition,
+<a href=#525 id=525 data-nosnippet>525</a>    <span class="doccomment">/// Whether or not this target has doc tests enabled, and the target is
+<a href=#526 id=526 data-nosnippet>526</a>    /// compatible with doc testing.
+<a href=#527 id=527 data-nosnippet>527</a>    ///
+<a href=#528 id=528 data-nosnippet>528</a>    /// This is always `true` if running with a version of Cargo older than 1.37.
+<a href=#529 id=529 data-nosnippet>529</a>    </span><span class="attr">#[serde(default = <span class="string">"default_true"</span>)]
+<a href=#530 id=530 data-nosnippet>530</a>    #[cfg_attr(feature = <span class="string">"builder"</span>, builder(default = <span class="string">"true"</span>))]
+<a href=#531 id=531 data-nosnippet>531</a>    </span><span class="kw">pub </span>doctest: bool,
+<a href=#532 id=532 data-nosnippet>532</a>    <span class="doccomment">/// Whether or not this target is tested by default by `cargo test`.
+<a href=#533 id=533 data-nosnippet>533</a>    ///
+<a href=#534 id=534 data-nosnippet>534</a>    /// This is always `true` if running with a version of Cargo older than 1.47.
+<a href=#535 id=535 data-nosnippet>535</a>    </span><span class="attr">#[serde(default = <span class="string">"default_true"</span>)]
+<a href=#536 id=536 data-nosnippet>536</a>    #[cfg_attr(feature = <span class="string">"builder"</span>, builder(default = <span class="string">"true"</span>))]
+<a href=#537 id=537 data-nosnippet>537</a>    </span><span class="kw">pub </span>test: bool,
+<a href=#538 id=538 data-nosnippet>538</a>    <span class="doccomment">/// Whether or not this target is documented by `cargo doc`.
+<a href=#539 id=539 data-nosnippet>539</a>    ///
+<a href=#540 id=540 data-nosnippet>540</a>    /// This is always `true` if running with a version of Cargo older than 1.50.
+<a href=#541 id=541 data-nosnippet>541</a>    </span><span class="attr">#[serde(default = <span class="string">"default_true"</span>)]
+<a href=#542 id=542 data-nosnippet>542</a>    #[cfg_attr(feature = <span class="string">"builder"</span>, builder(default = <span class="string">"true"</span>))]
+<a href=#543 id=543 data-nosnippet>543</a>    </span><span class="kw">pub </span>doc: bool,
+<a href=#544 id=544 data-nosnippet>544</a>}
+<a href=#545 id=545 data-nosnippet>545</a>
+<a href=#546 id=546 data-nosnippet>546</a><span class="kw">impl </span>Target {
+<a href=#547 id=547 data-nosnippet>547</a>    <span class="kw">fn </span>is_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; bool {
+<a href=#548 id=548 data-nosnippet>548</a>        <span class="self">self</span>.kind.iter().any(|kind| kind == name)
+<a href=#549 id=549 data-nosnippet>549</a>    }
+<a href=#550 id=550 data-nosnippet>550</a>
+<a href=#551 id=551 data-nosnippet>551</a>    <span class="doccomment">/// Return true if this target is of kind "lib".
+<a href=#552 id=552 data-nosnippet>552</a>    </span><span class="kw">pub fn </span>is_lib(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#553 id=553 data-nosnippet>553</a>        <span class="self">self</span>.is_kind(<span class="string">"lib"</span>)
+<a href=#554 id=554 data-nosnippet>554</a>    }
+<a href=#555 id=555 data-nosnippet>555</a>
+<a href=#556 id=556 data-nosnippet>556</a>    <span class="doccomment">/// Return true if this target is of kind "bin".
+<a href=#557 id=557 data-nosnippet>557</a>    </span><span class="kw">pub fn </span>is_bin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#558 id=558 data-nosnippet>558</a>        <span class="self">self</span>.is_kind(<span class="string">"bin"</span>)
+<a href=#559 id=559 data-nosnippet>559</a>    }
+<a href=#560 id=560 data-nosnippet>560</a>
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="doccomment">/// Return true if this target is of kind "example".
+<a href=#562 id=562 data-nosnippet>562</a>    </span><span class="kw">pub fn </span>is_example(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#563 id=563 data-nosnippet>563</a>        <span class="self">self</span>.is_kind(<span class="string">"example"</span>)
+<a href=#564 id=564 data-nosnippet>564</a>    }
+<a href=#565 id=565 data-nosnippet>565</a>
+<a href=#566 id=566 data-nosnippet>566</a>    <span class="doccomment">/// Return true if this target is of kind "test".
+<a href=#567 id=567 data-nosnippet>567</a>    </span><span class="kw">pub fn </span>is_test(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#568 id=568 data-nosnippet>568</a>        <span class="self">self</span>.is_kind(<span class="string">"test"</span>)
+<a href=#569 id=569 data-nosnippet>569</a>    }
+<a href=#570 id=570 data-nosnippet>570</a>
+<a href=#571 id=571 data-nosnippet>571</a>    <span class="doccomment">/// Return true if this target is of kind "bench".
+<a href=#572 id=572 data-nosnippet>572</a>    </span><span class="kw">pub fn </span>is_bench(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#573 id=573 data-nosnippet>573</a>        <span class="self">self</span>.is_kind(<span class="string">"bench"</span>)
+<a href=#574 id=574 data-nosnippet>574</a>    }
+<a href=#575 id=575 data-nosnippet>575</a>
+<a href=#576 id=576 data-nosnippet>576</a>    <span class="doccomment">/// Return true if this target is of kind "custom-build".
+<a href=#577 id=577 data-nosnippet>577</a>    </span><span class="kw">pub fn </span>is_custom_build(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#578 id=578 data-nosnippet>578</a>        <span class="self">self</span>.is_kind(<span class="string">"custom-build"</span>)
+<a href=#579 id=579 data-nosnippet>579</a>    }
+<a href=#580 id=580 data-nosnippet>580</a>}
+<a href=#581 id=581 data-nosnippet>581</a>
+<a href=#582 id=582 data-nosnippet>582</a><span class="doccomment">/// The Rust edition
+<a href=#583 id=583 data-nosnippet>583</a>///
+<a href=#584 id=584 data-nosnippet>584</a>/// As of writing this comment rust editions 2024, 2027 and 2030 are not actually a thing yet but are parsed nonetheless for future proofing.
+<a href=#585 id=585 data-nosnippet>585</a></span><span class="attr">#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+<a href=#586 id=586 data-nosnippet>586</a>#[non_exhaustive]
+<a href=#587 id=587 data-nosnippet>587</a></span><span class="kw">pub enum </span>Edition {
+<a href=#588 id=588 data-nosnippet>588</a>    <span class="doccomment">/// Edition 2015
+<a href=#589 id=589 data-nosnippet>589</a>    </span><span class="attr">#[serde(rename = <span class="string">"2015"</span>)]
+<a href=#590 id=590 data-nosnippet>590</a>    </span>E2015,
+<a href=#591 id=591 data-nosnippet>591</a>    <span class="doccomment">/// Edition 2018
+<a href=#592 id=592 data-nosnippet>592</a>    </span><span class="attr">#[serde(rename = <span class="string">"2018"</span>)]
+<a href=#593 id=593 data-nosnippet>593</a>    </span>E2018,
+<a href=#594 id=594 data-nosnippet>594</a>    <span class="doccomment">/// Edition 2021
+<a href=#595 id=595 data-nosnippet>595</a>    </span><span class="attr">#[serde(rename = <span class="string">"2021"</span>)]
+<a href=#596 id=596 data-nosnippet>596</a>    </span>E2021,
+<a href=#597 id=597 data-nosnippet>597</a>    <span class="attr">#[doc(hidden)]
+<a href=#598 id=598 data-nosnippet>598</a>    #[serde(rename = <span class="string">"2024"</span>)]
+<a href=#599 id=599 data-nosnippet>599</a>    </span>_E2024,
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="attr">#[doc(hidden)]
+<a href=#601 id=601 data-nosnippet>601</a>    #[serde(rename = <span class="string">"2027"</span>)]
+<a href=#602 id=602 data-nosnippet>602</a>    </span>_E2027,
+<a href=#603 id=603 data-nosnippet>603</a>    <span class="attr">#[doc(hidden)]
+<a href=#604 id=604 data-nosnippet>604</a>    #[serde(rename = <span class="string">"2030"</span>)]
+<a href=#605 id=605 data-nosnippet>605</a>    </span>_E2030,
+<a href=#606 id=606 data-nosnippet>606</a>}
+<a href=#607 id=607 data-nosnippet>607</a>
+<a href=#608 id=608 data-nosnippet>608</a><span class="kw">impl </span>Edition {
+<a href=#609 id=609 data-nosnippet>609</a>    <span class="doccomment">/// Return the string representation of the edition
+<a href=#610 id=610 data-nosnippet>610</a>    </span><span class="kw">pub fn </span>as_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+<a href=#611 id=611 data-nosnippet>611</a>        <span class="kw">use </span>Edition::<span class="kw-2">*</span>;
+<a href=#612 id=612 data-nosnippet>612</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#613 id=613 data-nosnippet>613</a>            E2015 =&gt; <span class="string">"2015"</span>,
+<a href=#614 id=614 data-nosnippet>614</a>            E2018 =&gt; <span class="string">"2018"</span>,
+<a href=#615 id=615 data-nosnippet>615</a>            E2021 =&gt; <span class="string">"2021"</span>,
+<a href=#616 id=616 data-nosnippet>616</a>            _E2024 =&gt; <span class="string">"2024"</span>,
+<a href=#617 id=617 data-nosnippet>617</a>            _E2027 =&gt; <span class="string">"2027"</span>,
+<a href=#618 id=618 data-nosnippet>618</a>            _E2030 =&gt; <span class="string">"2030"</span>,
+<a href=#619 id=619 data-nosnippet>619</a>        }
+<a href=#620 id=620 data-nosnippet>620</a>    }
+<a href=#621 id=621 data-nosnippet>621</a>}
+<a href=#622 id=622 data-nosnippet>622</a>
+<a href=#623 id=623 data-nosnippet>623</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>Edition {
+<a href=#624 id=624 data-nosnippet>624</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#625 id=625 data-nosnippet>625</a>        f.write_str(<span class="self">self</span>.as_str())
+<a href=#626 id=626 data-nosnippet>626</a>    }
+<a href=#627 id=627 data-nosnippet>627</a>}
+<a href=#628 id=628 data-nosnippet>628</a>
+<a href=#629 id=629 data-nosnippet>629</a><span class="kw">impl </span>Default <span class="kw">for </span>Edition {
+<a href=#630 id=630 data-nosnippet>630</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#631 id=631 data-nosnippet>631</a>        <span class="self">Self</span>::E2015
+<a href=#632 id=632 data-nosnippet>632</a>    }
+<a href=#633 id=633 data-nosnippet>633</a>}
+<a href=#634 id=634 data-nosnippet>634</a>
+<a href=#635 id=635 data-nosnippet>635</a><span class="kw">fn </span>default_true() -&gt; bool {
+<a href=#636 id=636 data-nosnippet>636</a>    <span class="bool-val">true
+<a href=#637 id=637 data-nosnippet>637</a></span>}
+<a href=#638 id=638 data-nosnippet>638</a>
+<a href=#639 id=639 data-nosnippet>639</a><span class="doccomment">/// Cargo features flags
+<a href=#640 id=640 data-nosnippet>640</a></span><span class="attr">#[derive(Debug, Clone)]
+<a href=#641 id=641 data-nosnippet>641</a></span><span class="kw">pub enum </span>CargoOpt {
+<a href=#642 id=642 data-nosnippet>642</a>    <span class="doccomment">/// Run cargo with `--features-all`
+<a href=#643 id=643 data-nosnippet>643</a>    </span>AllFeatures,
+<a href=#644 id=644 data-nosnippet>644</a>    <span class="doccomment">/// Run cargo with `--no-default-features`
+<a href=#645 id=645 data-nosnippet>645</a>    </span>NoDefaultFeatures,
+<a href=#646 id=646 data-nosnippet>646</a>    <span class="doccomment">/// Run cargo with `--features &lt;FEATURES&gt;`
+<a href=#647 id=647 data-nosnippet>647</a>    </span>SomeFeatures(Vec&lt;String&gt;),
+<a href=#648 id=648 data-nosnippet>648</a>}
+<a href=#649 id=649 data-nosnippet>649</a>
+<a href=#650 id=650 data-nosnippet>650</a><span class="doccomment">/// A builder for configurating `cargo metadata` invocation.
+<a href=#651 id=651 data-nosnippet>651</a></span><span class="attr">#[derive(Debug, Clone, Default)]
+<a href=#652 id=652 data-nosnippet>652</a></span><span class="kw">pub struct </span>MetadataCommand {
+<a href=#653 id=653 data-nosnippet>653</a>    <span class="doccomment">/// Path to `cargo` executable.  If not set, this will use the
+<a href=#654 id=654 data-nosnippet>654</a>    /// the `$CARGO` environment variable, and if that is not set, will
+<a href=#655 id=655 data-nosnippet>655</a>    /// simply be `cargo`.
+<a href=#656 id=656 data-nosnippet>656</a>    </span>cargo_path: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
+<a href=#657 id=657 data-nosnippet>657</a>    <span class="doccomment">/// Path to `Cargo.toml`
+<a href=#658 id=658 data-nosnippet>658</a>    </span>manifest_path: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
+<a href=#659 id=659 data-nosnippet>659</a>    <span class="doccomment">/// Current directory of the `cargo metadata` process.
+<a href=#660 id=660 data-nosnippet>660</a>    </span>current_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
+<a href=#661 id=661 data-nosnippet>661</a>    <span class="doccomment">/// Output information only about workspace members and don't fetch dependencies.
+<a href=#662 id=662 data-nosnippet>662</a>    </span>no_deps: bool,
+<a href=#663 id=663 data-nosnippet>663</a>    <span class="doccomment">/// Collections of `CargoOpt::SomeFeatures(..)`
+<a href=#664 id=664 data-nosnippet>664</a>    </span>features: Vec&lt;String&gt;,
+<a href=#665 id=665 data-nosnippet>665</a>    <span class="doccomment">/// Latched `CargoOpt::AllFeatures`
+<a href=#666 id=666 data-nosnippet>666</a>    </span>all_features: bool,
+<a href=#667 id=667 data-nosnippet>667</a>    <span class="doccomment">/// Latched `CargoOpt::NoDefaultFeatures`
+<a href=#668 id=668 data-nosnippet>668</a>    </span>no_default_features: bool,
+<a href=#669 id=669 data-nosnippet>669</a>    <span class="doccomment">/// Arbitrary command line flags to pass to `cargo`.  These will be added
+<a href=#670 id=670 data-nosnippet>670</a>    /// to the end of the command line invocation.
+<a href=#671 id=671 data-nosnippet>671</a>    </span>other_options: Vec&lt;String&gt;,
+<a href=#672 id=672 data-nosnippet>672</a>    <span class="doccomment">/// Arbitrary environment variables to set when running `cargo`.  These will be merged into
+<a href=#673 id=673 data-nosnippet>673</a>    /// the calling environment, overriding any which clash.
+<a href=#674 id=674 data-nosnippet>674</a>    </span>env: BTreeMap&lt;OsString, OsString&gt;,
+<a href=#675 id=675 data-nosnippet>675</a>    <span class="doccomment">/// Show stderr
+<a href=#676 id=676 data-nosnippet>676</a>    </span>verbose: bool,
+<a href=#677 id=677 data-nosnippet>677</a>}
+<a href=#678 id=678 data-nosnippet>678</a>
+<a href=#679 id=679 data-nosnippet>679</a><span class="kw">impl </span>MetadataCommand {
+<a href=#680 id=680 data-nosnippet>680</a>    <span class="doccomment">/// Creates a default `cargo metadata` command, which will look for
+<a href=#681 id=681 data-nosnippet>681</a>    /// `Cargo.toml` in the ancestors of the current directory.
+<a href=#682 id=682 data-nosnippet>682</a>    </span><span class="kw">pub fn </span>new() -&gt; MetadataCommand {
+<a href=#683 id=683 data-nosnippet>683</a>        MetadataCommand::default()
+<a href=#684 id=684 data-nosnippet>684</a>    }
+<a href=#685 id=685 data-nosnippet>685</a>    <span class="doccomment">/// Path to `cargo` executable.  If not set, this will use the
+<a href=#686 id=686 data-nosnippet>686</a>    /// the `$CARGO` environment variable, and if that is not set, will
+<a href=#687 id=687 data-nosnippet>687</a>    /// simply be `cargo`.
+<a href=#688 id=688 data-nosnippet>688</a>    </span><span class="kw">pub fn </span>cargo_path(<span class="kw-2">&amp;mut </span><span class="self">self</span>, path: <span class="kw">impl </span>Into&lt;PathBuf&gt;) -&gt; <span class="kw-2">&amp;mut </span>MetadataCommand {
+<a href=#689 id=689 data-nosnippet>689</a>        <span class="self">self</span>.cargo_path = <span class="prelude-val">Some</span>(path.into());
+<a href=#690 id=690 data-nosnippet>690</a>        <span class="self">self
+<a href=#691 id=691 data-nosnippet>691</a>    </span>}
+<a href=#692 id=692 data-nosnippet>692</a>    <span class="doccomment">/// Path to `Cargo.toml`
+<a href=#693 id=693 data-nosnippet>693</a>    </span><span class="kw">pub fn </span>manifest_path(<span class="kw-2">&amp;mut </span><span class="self">self</span>, path: <span class="kw">impl </span>Into&lt;PathBuf&gt;) -&gt; <span class="kw-2">&amp;mut </span>MetadataCommand {
+<a href=#694 id=694 data-nosnippet>694</a>        <span class="self">self</span>.manifest_path = <span class="prelude-val">Some</span>(path.into());
+<a href=#695 id=695 data-nosnippet>695</a>        <span class="self">self
+<a href=#696 id=696 data-nosnippet>696</a>    </span>}
+<a href=#697 id=697 data-nosnippet>697</a>    <span class="doccomment">/// Current directory of the `cargo metadata` process.
+<a href=#698 id=698 data-nosnippet>698</a>    </span><span class="kw">pub fn </span>current_dir(<span class="kw-2">&amp;mut </span><span class="self">self</span>, path: <span class="kw">impl </span>Into&lt;PathBuf&gt;) -&gt; <span class="kw-2">&amp;mut </span>MetadataCommand {
+<a href=#699 id=699 data-nosnippet>699</a>        <span class="self">self</span>.current_dir = <span class="prelude-val">Some</span>(path.into());
+<a href=#700 id=700 data-nosnippet>700</a>        <span class="self">self
+<a href=#701 id=701 data-nosnippet>701</a>    </span>}
+<a href=#702 id=702 data-nosnippet>702</a>    <span class="doccomment">/// Output information only about workspace members and don't fetch dependencies.
+<a href=#703 id=703 data-nosnippet>703</a>    </span><span class="kw">pub fn </span>no_deps(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>MetadataCommand {
+<a href=#704 id=704 data-nosnippet>704</a>        <span class="self">self</span>.no_deps = <span class="bool-val">true</span>;
+<a href=#705 id=705 data-nosnippet>705</a>        <span class="self">self
+<a href=#706 id=706 data-nosnippet>706</a>    </span>}
+<a href=#707 id=707 data-nosnippet>707</a>    <span class="doccomment">/// Which features to include.
+<a href=#708 id=708 data-nosnippet>708</a>    ///
+<a href=#709 id=709 data-nosnippet>709</a>    /// Call this multiple times to specify advanced feature configurations:
+<a href=#710 id=710 data-nosnippet>710</a>    ///
+<a href=#711 id=711 data-nosnippet>711</a>    /// ```no_run
+<a href=#712 id=712 data-nosnippet>712</a>    /// # use cargo_metadata::{CargoOpt, MetadataCommand};
+<a href=#713 id=713 data-nosnippet>713</a>    /// MetadataCommand::new()
+<a href=#714 id=714 data-nosnippet>714</a>    ///     .features(CargoOpt::NoDefaultFeatures)
+<a href=#715 id=715 data-nosnippet>715</a>    ///     .features(CargoOpt::SomeFeatures(vec!["feat1".into(), "feat2".into()]))
+<a href=#716 id=716 data-nosnippet>716</a>    ///     .features(CargoOpt::SomeFeatures(vec!["feat3".into()]))
+<a href=#717 id=717 data-nosnippet>717</a>    ///     // ...
+<a href=#718 id=718 data-nosnippet>718</a>    ///     # ;
+<a href=#719 id=719 data-nosnippet>719</a>    /// ```
+<a href=#720 id=720 data-nosnippet>720</a>    ///
+<a href=#721 id=721 data-nosnippet>721</a>    /// # Panics
+<a href=#722 id=722 data-nosnippet>722</a>    ///
+<a href=#723 id=723 data-nosnippet>723</a>    /// `cargo metadata` rejects multiple `--no-default-features` flags. Similarly, the `features()`
+<a href=#724 id=724 data-nosnippet>724</a>    /// method panics when specifying multiple `CargoOpt::NoDefaultFeatures`:
+<a href=#725 id=725 data-nosnippet>725</a>    ///
+<a href=#726 id=726 data-nosnippet>726</a>    /// ```should_panic
+<a href=#727 id=727 data-nosnippet>727</a>    /// # use cargo_metadata::{CargoOpt, MetadataCommand};
+<a href=#728 id=728 data-nosnippet>728</a>    /// MetadataCommand::new()
+<a href=#729 id=729 data-nosnippet>729</a>    ///     .features(CargoOpt::NoDefaultFeatures)
+<a href=#730 id=730 data-nosnippet>730</a>    ///     .features(CargoOpt::NoDefaultFeatures) // &lt;-- panic!
+<a href=#731 id=731 data-nosnippet>731</a>    ///     // ...
+<a href=#732 id=732 data-nosnippet>732</a>    ///     # ;
+<a href=#733 id=733 data-nosnippet>733</a>    /// ```
+<a href=#734 id=734 data-nosnippet>734</a>    ///
+<a href=#735 id=735 data-nosnippet>735</a>    /// The method also panics for multiple `CargoOpt::AllFeatures` arguments:
+<a href=#736 id=736 data-nosnippet>736</a>    ///
+<a href=#737 id=737 data-nosnippet>737</a>    /// ```should_panic
+<a href=#738 id=738 data-nosnippet>738</a>    /// # use cargo_metadata::{CargoOpt, MetadataCommand};
+<a href=#739 id=739 data-nosnippet>739</a>    /// MetadataCommand::new()
+<a href=#740 id=740 data-nosnippet>740</a>    ///     .features(CargoOpt::AllFeatures)
+<a href=#741 id=741 data-nosnippet>741</a>    ///     .features(CargoOpt::AllFeatures) // &lt;-- panic!
+<a href=#742 id=742 data-nosnippet>742</a>    ///     // ...
+<a href=#743 id=743 data-nosnippet>743</a>    ///     # ;
+<a href=#744 id=744 data-nosnippet>744</a>    /// ```
+<a href=#745 id=745 data-nosnippet>745</a>    </span><span class="kw">pub fn </span>features(<span class="kw-2">&amp;mut </span><span class="self">self</span>, features: CargoOpt) -&gt; <span class="kw-2">&amp;mut </span>MetadataCommand {
+<a href=#746 id=746 data-nosnippet>746</a>        <span class="kw">match </span>features {
+<a href=#747 id=747 data-nosnippet>747</a>            CargoOpt::SomeFeatures(features) =&gt; <span class="self">self</span>.features.extend(features),
+<a href=#748 id=748 data-nosnippet>748</a>            CargoOpt::NoDefaultFeatures =&gt; {
+<a href=#749 id=749 data-nosnippet>749</a>                <span class="macro">assert!</span>(
+<a href=#750 id=750 data-nosnippet>750</a>                    !<span class="self">self</span>.no_default_features,
+<a href=#751 id=751 data-nosnippet>751</a>                    <span class="string">"Do not supply CargoOpt::NoDefaultFeatures more than once!"
+<a href=#752 id=752 data-nosnippet>752</a>                </span>);
+<a href=#753 id=753 data-nosnippet>753</a>                <span class="self">self</span>.no_default_features = <span class="bool-val">true</span>;
+<a href=#754 id=754 data-nosnippet>754</a>            }
+<a href=#755 id=755 data-nosnippet>755</a>            CargoOpt::AllFeatures =&gt; {
+<a href=#756 id=756 data-nosnippet>756</a>                <span class="macro">assert!</span>(
+<a href=#757 id=757 data-nosnippet>757</a>                    !<span class="self">self</span>.all_features,
+<a href=#758 id=758 data-nosnippet>758</a>                    <span class="string">"Do not supply CargoOpt::AllFeatures more than once!"
+<a href=#759 id=759 data-nosnippet>759</a>                </span>);
+<a href=#760 id=760 data-nosnippet>760</a>                <span class="self">self</span>.all_features = <span class="bool-val">true</span>;
+<a href=#761 id=761 data-nosnippet>761</a>            }
+<a href=#762 id=762 data-nosnippet>762</a>        }
+<a href=#763 id=763 data-nosnippet>763</a>        <span class="self">self
+<a href=#764 id=764 data-nosnippet>764</a>    </span>}
+<a href=#765 id=765 data-nosnippet>765</a>    <span class="doccomment">/// Arbitrary command line flags to pass to `cargo`.  These will be added
+<a href=#766 id=766 data-nosnippet>766</a>    /// to the end of the command line invocation.
+<a href=#767 id=767 data-nosnippet>767</a>    </span><span class="kw">pub fn </span>other_options(<span class="kw-2">&amp;mut </span><span class="self">self</span>, options: <span class="kw">impl </span>Into&lt;Vec&lt;String&gt;&gt;) -&gt; <span class="kw-2">&amp;mut </span>MetadataCommand {
+<a href=#768 id=768 data-nosnippet>768</a>        <span class="self">self</span>.other_options = options.into();
+<a href=#769 id=769 data-nosnippet>769</a>        <span class="self">self
+<a href=#770 id=770 data-nosnippet>770</a>    </span>}
+<a href=#771 id=771 data-nosnippet>771</a>
+<a href=#772 id=772 data-nosnippet>772</a>    <span class="doccomment">/// Arbitrary environment variables to set when running `cargo`.  These will be merged into
+<a href=#773 id=773 data-nosnippet>773</a>    /// the calling environment, overriding any which clash.
+<a href=#774 id=774 data-nosnippet>774</a>    ///
+<a href=#775 id=775 data-nosnippet>775</a>    /// Some examples of when you may want to use this:
+<a href=#776 id=776 data-nosnippet>776</a>    /// 1. Setting cargo config values without needing a .cargo/config.toml file, e.g. to set
+<a href=#777 id=777 data-nosnippet>777</a>    ///    `CARGO_NET_GIT_FETCH_WITH_CLI=true`
+<a href=#778 id=778 data-nosnippet>778</a>    /// 2. To specify a custom path to RUSTC if your rust toolchain components aren't laid out in
+<a href=#779 id=779 data-nosnippet>779</a>    ///    the way cargo expects by default.
+<a href=#780 id=780 data-nosnippet>780</a>    ///
+<a href=#781 id=781 data-nosnippet>781</a>    /// ```no_run
+<a href=#782 id=782 data-nosnippet>782</a>    /// # use cargo_metadata::{CargoOpt, MetadataCommand};
+<a href=#783 id=783 data-nosnippet>783</a>    /// MetadataCommand::new()
+<a href=#784 id=784 data-nosnippet>784</a>    ///     .env("CARGO_NET_GIT_FETCH_WITH_CLI", "true")
+<a href=#785 id=785 data-nosnippet>785</a>    ///     .env("RUSTC", "/path/to/rustc")
+<a href=#786 id=786 data-nosnippet>786</a>    ///     // ...
+<a href=#787 id=787 data-nosnippet>787</a>    ///     # ;
+<a href=#788 id=788 data-nosnippet>788</a>    /// ```
+<a href=#789 id=789 data-nosnippet>789</a>    </span><span class="kw">pub fn </span>env&lt;K: Into&lt;OsString&gt;, V: Into&lt;OsString&gt;&gt;(
+<a href=#790 id=790 data-nosnippet>790</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#791 id=791 data-nosnippet>791</a>        key: K,
+<a href=#792 id=792 data-nosnippet>792</a>        val: V,
+<a href=#793 id=793 data-nosnippet>793</a>    ) -&gt; <span class="kw-2">&amp;mut </span>MetadataCommand {
+<a href=#794 id=794 data-nosnippet>794</a>        <span class="self">self</span>.env.insert(key.into(), val.into());
+<a href=#795 id=795 data-nosnippet>795</a>        <span class="self">self
+<a href=#796 id=796 data-nosnippet>796</a>    </span>}
+<a href=#797 id=797 data-nosnippet>797</a>
+<a href=#798 id=798 data-nosnippet>798</a>    <span class="doccomment">/// Set whether to show stderr
+<a href=#799 id=799 data-nosnippet>799</a>    </span><span class="kw">pub fn </span>verbose(<span class="kw-2">&amp;mut </span><span class="self">self</span>, verbose: bool) -&gt; <span class="kw-2">&amp;mut </span>MetadataCommand {
+<a href=#800 id=800 data-nosnippet>800</a>        <span class="self">self</span>.verbose = verbose;
+<a href=#801 id=801 data-nosnippet>801</a>        <span class="self">self
+<a href=#802 id=802 data-nosnippet>802</a>    </span>}
+<a href=#803 id=803 data-nosnippet>803</a>
+<a href=#804 id=804 data-nosnippet>804</a>    <span class="doccomment">/// Builds a command for `cargo metadata`.  This is the first
+<a href=#805 id=805 data-nosnippet>805</a>    /// part of the work of `exec`.
+<a href=#806 id=806 data-nosnippet>806</a>    </span><span class="kw">pub fn </span>cargo_command(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
+<a href=#807 id=807 data-nosnippet>807</a>        <span class="kw">let </span>cargo = <span class="self">self
+<a href=#808 id=808 data-nosnippet>808</a>            </span>.cargo_path
+<a href=#809 id=809 data-nosnippet>809</a>            .clone()
+<a href=#810 id=810 data-nosnippet>810</a>            .or_else(|| env::var(<span class="string">"CARGO"</span>).map(PathBuf::from).ok())
+<a href=#811 id=811 data-nosnippet>811</a>            .unwrap_or_else(|| PathBuf::from(<span class="string">"cargo"</span>));
+<a href=#812 id=812 data-nosnippet>812</a>        <span class="kw">let </span><span class="kw-2">mut </span>cmd = Command::new(cargo);
+<a href=#813 id=813 data-nosnippet>813</a>        cmd.args([<span class="string">"metadata"</span>, <span class="string">"--format-version"</span>, <span class="string">"1"</span>]);
+<a href=#814 id=814 data-nosnippet>814</a>
+<a href=#815 id=815 data-nosnippet>815</a>        <span class="kw">if </span><span class="self">self</span>.no_deps {
+<a href=#816 id=816 data-nosnippet>816</a>            cmd.arg(<span class="string">"--no-deps"</span>);
+<a href=#817 id=817 data-nosnippet>817</a>        }
+<a href=#818 id=818 data-nosnippet>818</a>
+<a href=#819 id=819 data-nosnippet>819</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = <span class="self">self</span>.current_dir.as_ref() {
+<a href=#820 id=820 data-nosnippet>820</a>            cmd.current_dir(path);
+<a href=#821 id=821 data-nosnippet>821</a>        }
+<a href=#822 id=822 data-nosnippet>822</a>
+<a href=#823 id=823 data-nosnippet>823</a>        <span class="kw">if </span>!<span class="self">self</span>.features.is_empty() {
+<a href=#824 id=824 data-nosnippet>824</a>            cmd.arg(<span class="string">"--features"</span>).arg(<span class="self">self</span>.features.join(<span class="string">","</span>));
+<a href=#825 id=825 data-nosnippet>825</a>        }
+<a href=#826 id=826 data-nosnippet>826</a>        <span class="kw">if </span><span class="self">self</span>.all_features {
+<a href=#827 id=827 data-nosnippet>827</a>            cmd.arg(<span class="string">"--all-features"</span>);
+<a href=#828 id=828 data-nosnippet>828</a>        }
+<a href=#829 id=829 data-nosnippet>829</a>        <span class="kw">if </span><span class="self">self</span>.no_default_features {
+<a href=#830 id=830 data-nosnippet>830</a>            cmd.arg(<span class="string">"--no-default-features"</span>);
+<a href=#831 id=831 data-nosnippet>831</a>        }
+<a href=#832 id=832 data-nosnippet>832</a>
+<a href=#833 id=833 data-nosnippet>833</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(manifest_path) = <span class="kw-2">&amp;</span><span class="self">self</span>.manifest_path {
+<a href=#834 id=834 data-nosnippet>834</a>            cmd.arg(<span class="string">"--manifest-path"</span>).arg(manifest_path.as_os_str());
+<a href=#835 id=835 data-nosnippet>835</a>        }
+<a href=#836 id=836 data-nosnippet>836</a>        cmd.args(<span class="kw-2">&amp;</span><span class="self">self</span>.other_options);
+<a href=#837 id=837 data-nosnippet>837</a>
+<a href=#838 id=838 data-nosnippet>838</a>        cmd.envs(<span class="kw-2">&amp;</span><span class="self">self</span>.env);
+<a href=#839 id=839 data-nosnippet>839</a>
+<a href=#840 id=840 data-nosnippet>840</a>        cmd
+<a href=#841 id=841 data-nosnippet>841</a>    }
+<a href=#842 id=842 data-nosnippet>842</a>
+<a href=#843 id=843 data-nosnippet>843</a>    <span class="doccomment">/// Parses `cargo metadata` output.  `data` must have been
+<a href=#844 id=844 data-nosnippet>844</a>    /// produced by a command built with `cargo_command`.
+<a href=#845 id=845 data-nosnippet>845</a>    </span><span class="kw">pub fn </span>parse&lt;T: AsRef&lt;str&gt;&gt;(data: T) -&gt; <span class="prelude-ty">Result</span>&lt;Metadata&gt; {
+<a href=#846 id=846 data-nosnippet>846</a>        <span class="kw">let </span>meta = serde_json::from_str(data.as_ref())<span class="question-mark">?</span>;
+<a href=#847 id=847 data-nosnippet>847</a>        <span class="prelude-val">Ok</span>(meta)
+<a href=#848 id=848 data-nosnippet>848</a>    }
+<a href=#849 id=849 data-nosnippet>849</a>
+<a href=#850 id=850 data-nosnippet>850</a>    <span class="doccomment">/// Runs configured `cargo metadata` and returns parsed `Metadata`.
+<a href=#851 id=851 data-nosnippet>851</a>    </span><span class="kw">pub fn </span>exec(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Metadata&gt; {
+<a href=#852 id=852 data-nosnippet>852</a>        <span class="kw">let </span><span class="kw-2">mut </span>command = <span class="self">self</span>.cargo_command();
+<a href=#853 id=853 data-nosnippet>853</a>        <span class="kw">if </span><span class="self">self</span>.verbose {
+<a href=#854 id=854 data-nosnippet>854</a>            command.stderr(Stdio::inherit());
+<a href=#855 id=855 data-nosnippet>855</a>        }
+<a href=#856 id=856 data-nosnippet>856</a>        <span class="kw">let </span>output = command.output()<span class="question-mark">?</span>;
+<a href=#857 id=857 data-nosnippet>857</a>        <span class="kw">if </span>!output.status.success() {
+<a href=#858 id=858 data-nosnippet>858</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::CargoMetadata {
+<a href=#859 id=859 data-nosnippet>859</a>                stderr: String::from_utf8(output.stderr)<span class="question-mark">?</span>,
+<a href=#860 id=860 data-nosnippet>860</a>            });
+<a href=#861 id=861 data-nosnippet>861</a>        }
+<a href=#862 id=862 data-nosnippet>862</a>        <span class="kw">let </span>stdout = from_utf8(<span class="kw-2">&amp;</span>output.stdout)<span class="question-mark">?
+<a href=#863 id=863 data-nosnippet>863</a>            </span>.lines()
+<a href=#864 id=864 data-nosnippet>864</a>            .find(|line| line.starts_with(<span class="string">'{'</span>))
+<a href=#865 id=865 data-nosnippet>865</a>            .ok_or(Error::NoJson)<span class="question-mark">?</span>;
+<a href=#866 id=866 data-nosnippet>866</a>        <span class="self">Self</span>::parse(stdout)
+<a href=#867 id=867 data-nosnippet>867</a>    }
+<a href=#868 id=868 data-nosnippet>868</a>}
+<a href=#869 id=869 data-nosnippet>869</a>
+<a href=#870 id=870 data-nosnippet>870</a><span class="doccomment">/// As per the Cargo Book the [`rust-version` field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) must:
+<a href=#871 id=871 data-nosnippet>871</a>///
+<a href=#872 id=872 data-nosnippet>872</a>/// &gt; be a bare version number with two or three components;
+<a href=#873 id=873 data-nosnippet>873</a>/// &gt; it cannot include semver operators or pre-release identifiers.
+<a href=#874 id=874 data-nosnippet>874</a>///
+<a href=#875 id=875 data-nosnippet>875</a>/// [`semver::Version`] however requires three components. This function takes
+<a href=#876 id=876 data-nosnippet>876</a>/// care of appending `.0` if the provided version number only has two components
+<a href=#877 id=877 data-nosnippet>877</a>/// and ensuring that it does not contain a pre-release version or build metadata.
+<a href=#878 id=878 data-nosnippet>878</a></span><span class="kw">fn </span>deserialize_rust_version&lt;<span class="lifetime">'de</span>, D&gt;(
+<a href=#879 id=879 data-nosnippet>879</a>    deserializer: D,
+<a href=#880 id=880 data-nosnippet>880</a>) -&gt; std::result::Result&lt;<span class="prelude-ty">Option</span>&lt;Version&gt;, D::Error&gt;
+<a href=#881 id=881 data-nosnippet>881</a><span class="kw">where
+<a href=#882 id=882 data-nosnippet>882</a>    </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+<a href=#883 id=883 data-nosnippet>883</a>{
+<a href=#884 id=884 data-nosnippet>884</a>    <span class="kw">let </span><span class="kw-2">mut </span>buf = <span class="kw">match </span><span class="prelude-ty">Option</span>::&lt;String&gt;::deserialize(deserializer)<span class="question-mark">? </span>{
+<a href=#885 id=885 data-nosnippet>885</a>        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+<a href=#886 id=886 data-nosnippet>886</a>        <span class="prelude-val">Some</span>(buf) =&gt; buf,
+<a href=#887 id=887 data-nosnippet>887</a>    };
+<a href=#888 id=888 data-nosnippet>888</a>
+<a href=#889 id=889 data-nosnippet>889</a>    <span class="kw">for </span>char <span class="kw">in </span>buf.chars() {
+<a href=#890 id=890 data-nosnippet>890</a>        <span class="kw">if </span>char == <span class="string">'-' </span>{
+<a href=#891 id=891 data-nosnippet>891</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(serde::de::Error::custom(
+<a href=#892 id=892 data-nosnippet>892</a>                <span class="string">"pre-release identifiers are not supported in rust-version"</span>,
+<a href=#893 id=893 data-nosnippet>893</a>            ));
+<a href=#894 id=894 data-nosnippet>894</a>        } <span class="kw">else if </span>char == <span class="string">'+' </span>{
+<a href=#895 id=895 data-nosnippet>895</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(serde::de::Error::custom(
+<a href=#896 id=896 data-nosnippet>896</a>                <span class="string">"build metadata is not supported in rust-version"</span>,
+<a href=#897 id=897 data-nosnippet>897</a>            ));
+<a href=#898 id=898 data-nosnippet>898</a>        }
+<a href=#899 id=899 data-nosnippet>899</a>    }
+<a href=#900 id=900 data-nosnippet>900</a>
+<a href=#901 id=901 data-nosnippet>901</a>    <span class="kw">if </span>buf.matches(<span class="string">'.'</span>).count() == <span class="number">1 </span>{
+<a href=#902 id=902 data-nosnippet>902</a>        <span class="comment">// e.g. 1.0 -&gt; 1.0.0
+<a href=#903 id=903 data-nosnippet>903</a>        </span>buf.push_str(<span class="string">".0"</span>);
+<a href=#904 id=904 data-nosnippet>904</a>    }
+<a href=#905 id=905 data-nosnippet>905</a>
+<a href=#906 id=906 data-nosnippet>906</a>    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(
+<a href=#907 id=907 data-nosnippet>907</a>        Version::parse(<span class="kw-2">&amp;</span>buf).map_err(serde::de::Error::custom)<span class="question-mark">?</span>,
+<a href=#908 id=908 data-nosnippet>908</a>    ))
+<a href=#909 id=909 data-nosnippet>909</a>}
+<a href=#910 id=910 data-nosnippet>910</a>
+<a href=#911 id=911 data-nosnippet>911</a><span class="attr">#[cfg(test)]
+<a href=#912 id=912 data-nosnippet>912</a></span><span class="kw">mod </span>test {
+<a href=#913 id=913 data-nosnippet>913</a>    <span class="kw">use </span>semver::Version;
+<a href=#914 id=914 data-nosnippet>914</a>
+<a href=#915 id=915 data-nosnippet>915</a>    <span class="attr">#[derive(Debug, serde::Deserialize)]
+<a href=#916 id=916 data-nosnippet>916</a>    </span><span class="kw">struct </span>BareVersion(
+<a href=#917 id=917 data-nosnippet>917</a>        <span class="attr">#[serde(deserialize_with = <span class="string">"super::deserialize_rust_version"</span>)] </span><span class="prelude-ty">Option</span>&lt;semver::Version&gt;,
+<a href=#918 id=918 data-nosnippet>918</a>    );
+<a href=#919 id=919 data-nosnippet>919</a>
+<a href=#920 id=920 data-nosnippet>920</a>    <span class="kw">fn </span>bare_version(str: <span class="kw-2">&amp;</span>str) -&gt; Version {
+<a href=#921 id=921 data-nosnippet>921</a>        serde_json::from_str::&lt;BareVersion&gt;(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">r#""{}""#</span>, str))
+<a href=#922 id=922 data-nosnippet>922</a>            .unwrap()
+<a href=#923 id=923 data-nosnippet>923</a>            .<span class="number">0
+<a href=#924 id=924 data-nosnippet>924</a>            </span>.unwrap()
+<a href=#925 id=925 data-nosnippet>925</a>    }
+<a href=#926 id=926 data-nosnippet>926</a>
+<a href=#927 id=927 data-nosnippet>927</a>    <span class="kw">fn </span>bare_version_err(str: <span class="kw-2">&amp;</span>str) -&gt; String {
+<a href=#928 id=928 data-nosnippet>928</a>        serde_json::from_str::&lt;BareVersion&gt;(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">r#""{}""#</span>, str))
+<a href=#929 id=929 data-nosnippet>929</a>            .unwrap_err()
+<a href=#930 id=930 data-nosnippet>930</a>            .to_string()
+<a href=#931 id=931 data-nosnippet>931</a>    }
+<a href=#932 id=932 data-nosnippet>932</a>
+<a href=#933 id=933 data-nosnippet>933</a>    <span class="attr">#[test]
+<a href=#934 id=934 data-nosnippet>934</a>    </span><span class="kw">fn </span>test_deserialize_rust_version() {
+<a href=#935 id=935 data-nosnippet>935</a>        <span class="macro">assert_eq!</span>(bare_version(<span class="string">"1.2"</span>), Version::new(<span class="number">1</span>, <span class="number">2</span>, <span class="number">0</span>));
+<a href=#936 id=936 data-nosnippet>936</a>        <span class="macro">assert_eq!</span>(bare_version(<span class="string">"1.2.0"</span>), Version::new(<span class="number">1</span>, <span class="number">2</span>, <span class="number">0</span>));
+<a href=#937 id=937 data-nosnippet>937</a>        <span class="macro">assert_eq!</span>(
+<a href=#938 id=938 data-nosnippet>938</a>            bare_version_err(<span class="string">"1.2.0-alpha"</span>),
+<a href=#939 id=939 data-nosnippet>939</a>            <span class="string">"pre-release identifiers are not supported in rust-version"
+<a href=#940 id=940 data-nosnippet>940</a>        </span>);
+<a href=#941 id=941 data-nosnippet>941</a>        <span class="macro">assert_eq!</span>(
+<a href=#942 id=942 data-nosnippet>942</a>            bare_version_err(<span class="string">"1.2.0+123"</span>),
+<a href=#943 id=943 data-nosnippet>943</a>            <span class="string">"build metadata is not supported in rust-version"
+<a href=#944 id=944 data-nosnippet>944</a>        </span>);
+<a href=#945 id=945 data-nosnippet>945</a>    }
+<a href=#946 id=946 data-nosnippet>946</a>}</code></pre></div></section></main></body></html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derive macro for creating transaction envelope types."><title>TransactionEnvelope in alloy_consensus - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="alloy_consensus" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../alloy_consensus/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../alloy_consensus/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../alloy_consensus/index.html">alloy_<wbr>consensus</a><span class="version">1.0.24</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Transaction<wbr>Envelope</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#container-attributes" title="Container Attributes">Container Attributes</a></li><li><a href="#variant-attributes" title="Variant Attributes">Variant Attributes</a></li><li><a href="#generated-code" title="Generated Code">Generated Code</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate alloy_<wbr>consensus</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">alloy_consensus</a></div><h1>Derive Macro <span class="derive">TransactionEnvelope</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/alloy_tx_macros/lib.rs.html#43">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(TransactionEnvelope)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[envelope]
+    #[serde]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Derive macro for creating transaction envelope types.</p>
+<p>This macro generates a transaction envelope implementation that supports
+multiple transaction types following the EIP-2718 standard.</p>
+<h2 id="container-attributes"><a class="doc-anchor" href="#container-attributes">§</a>Container Attributes</h2>
+<ul>
+<li><code>#[envelope(tx_type_name = MyTxType)]</code> - Custom name for the generated transaction type enum</li>
+<li><code>#[envelope(alloy_consensus = path::to::alloy)]</code> - Custom path to alloy_consensus crate</li>
+</ul>
+<h2 id="variant-attributes"><a class="doc-anchor" href="#variant-attributes">§</a>Variant Attributes</h2>
+<ul>
+<li>Each variant must be annotated with <code>envelope</code> attribute with one of the following options:
+<ul>
+<li><code>#[envelope(ty = N)]</code> - Specify the transaction type ID (0-255)</li>
+<li><code>#[envelope(flatten)]</code> - Flatten this variant to delegate to inner envelope type</li>
+</ul>
+</li>
+</ul>
+<h2 id="generated-code"><a class="doc-anchor" href="#generated-code">§</a>Generated Code</h2>
+<p>The macro generates:</p>
+<ul>
+<li>A <code>MyTxType</code> enum with transaction type variants</li>
+<li>Implementations of <code>Transaction</code>, <code>Typed2718</code>, <code>Encodable2718</code>, <code>Decodable2718</code></li>
+<li>Serde serialization/deserialization support (if <code>serde</code> feature is enabled)</li>
+<li>Arbitrary implementations (if <code>arbitrary</code> feature is enabled)</li>
+</ul>
+</div></details></section></div></main></body></html>

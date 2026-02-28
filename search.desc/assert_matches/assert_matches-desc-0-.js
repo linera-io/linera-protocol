@@ -1,0 +1,1 @@
+searchState.loadedDescShard("assert_matches", 0, "Provides a macro, <code>assert_matches!</code>, which tests whether a …\nAsserts that an expression matches a given pattern.\nAsserts that an expression matches a given pattern.")

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("frunk_proc_macros", 0, "Frunk Proc Macros\nBuild a generic path that can be used for traversals\nBuild a generic path that can be used for traversals")

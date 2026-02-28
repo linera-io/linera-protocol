@@ -1,0 +1,140 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API for tracing applications and libraries."><title>opentelemetry::trace - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="opentelemetry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../opentelemetry/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../opentelemetry/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt="logo"></a><h2><a href="../../opentelemetry/index.html">opentelemetry</a><span class="version">0.30.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module trace</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#getting-started" title="Getting Started">Getting Started</a></li><li><a href="#overview" title="Overview">Overview</a></li><li><a href="#working-with-async-runtimes" title="Working with Async Runtimes">Working with Async Runtimes</a></li><li><a href="#managing-active-spans" title="Managing Active Spans">Managing Active Spans</a><ul><li><a href="#async-active-spans" title="Async active spans">Async active spans</a></li></ul></li></ul><h3><a href="#reexports">Module Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate opentelemetry</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">opentelemetry</a></div><h1>Module <span>trace</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/opentelemetry/trace/mod.rs.html#1-274">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>API for tracing applications and libraries.</p>
+<p>The <code>trace</code> module includes types for tracking the progression of a single
+request while it is handled by services that make up an application. A trace
+is a tree of <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>s which are objects that represent the work being done
+by individual services or components involved in a request as it flows
+through a system. This module implements the OpenTelemetry <a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/api.md">trace
+specification</a>.</p>
+<h3 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting Started</h3>
+<p>In application code:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::trace::{Tracer, noop::NoopTracerProvider};
+<span class="kw">use </span>opentelemetry::global;
+
+<span class="kw">fn </span>init_tracer() {
+    <span class="comment">// Swap this no-op provider for your tracing service of choice (jaeger, zipkin, etc)
+    </span><span class="kw">let </span>provider = NoopTracerProvider::new();
+
+    <span class="comment">// Configure the global `TracerProvider` singleton when your app starts
+    // (there is a no-op default if this is not set by your application)
+    </span><span class="kw">let _ </span>= global::set_tracer_provider(provider);
+}
+
+<span class="kw">fn </span>do_something_tracked() {
+    <span class="comment">// Then you can get a named tracer instance anywhere in your codebase.
+    </span><span class="kw">let </span>tracer = global::tracer(<span class="string">"my-component"</span>);
+
+    tracer.in_span(<span class="string">"doing_work"</span>, |cx| {
+        <span class="comment">// Traced app logic here...
+    </span>});
+}
+
+<span class="comment">// in main or other app start
+</span>init_tracer();
+do_something_tracked();</code></pre></div>
+<p>In library code:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, trace::{Span, Tracer, TracerProvider}};
+<span class="kw">use </span>opentelemetry::InstrumentationScope;
+<span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">fn </span>my_library_function() {
+    <span class="comment">// Use the global tracer provider to get access to the user-specified
+    // tracer configuration
+    </span><span class="kw">let </span>tracer_provider = global::tracer_provider();
+
+    <span class="comment">// Get a tracer for this library
+    </span><span class="kw">let </span>scope = InstrumentationScope::builder(<span class="string">"my_name"</span>)
+        .with_version(<span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>))
+        .with_schema_url(<span class="string">"https://opentelemetry.io/schemas/1.17.0"</span>)
+        .build();
+
+    <span class="kw">let </span>tracer = tracer_provider.tracer_with_scope(scope);
+
+    <span class="comment">// Create spans
+    </span><span class="kw">let </span><span class="kw-2">mut </span>span = tracer.start(<span class="string">"doing_work"</span>);
+
+    <span class="comment">// Do work...
+
+    // End the span
+    </span>span.end();
+}</code></pre></div>
+<h3 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h3>
+<p>The tracing API consists of a three main traits:</p>
+<ul>
+<li><a href="trait.TracerProvider.html" title="trait opentelemetry::trace::TracerProvider"><code>TracerProvider</code></a>s are the entry point of the API. They provide access to
+<code>Tracer</code>s.</li>
+<li><a href="trait.Tracer.html" title="trait opentelemetry::trace::Tracer"><code>Tracer</code></a>s are types responsible for creating <code>Span</code>s.</li>
+<li><a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>s provide the API to trace an operation.</li>
+</ul>
+<h3 id="working-with-async-runtimes"><a class="doc-anchor" href="#working-with-async-runtimes">§</a>Working with Async Runtimes</h3>
+<p>Exporting spans often involves sending data over a network or performing
+other I/O tasks. OpenTelemetry allows you to schedule these tasks using
+whichever runtime you are already using such as <a href="https://tokio.rs">Tokio</a>.
+When using an async runtime it’s best to use the batch span processor
+where the spans will be sent in batches as opposed to being sent once ended,
+which often ends up being more efficient.</p>
+<h3 id="managing-active-spans"><a class="doc-anchor" href="#managing-active-spans">§</a>Managing Active Spans</h3>
+<p>Spans can be marked as “active” for a given <a href="../context/struct.Context.html" title="struct opentelemetry::context::Context"><code>Context</code></a>, and all newly
+created spans will automatically be children of the currently active span.</p>
+<p>The active span for a given thread can be managed via <a href="fn.get_active_span.html" title="fn opentelemetry::trace::get_active_span"><code>get_active_span</code></a>
+and <a href="fn.mark_span_as_active.html" title="fn opentelemetry::trace::mark_span_as_active"><code>mark_span_as_active</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, trace::{<span class="self">self</span>, Span, Status, Tracer, TracerProvider}};
+
+<span class="kw">fn </span>may_error(rand: f32) {
+    <span class="kw">if </span>rand &lt; <span class="number">0.5 </span>{
+        <span class="comment">// Get the currently active span to record additional attributes,
+        // status, etc.
+        </span>trace::get_active_span(|span| {
+            span.set_status(Status::error(<span class="string">"value too small"</span>));
+        });
+    }
+}
+
+<span class="comment">// Get a tracer
+</span><span class="kw">let </span>tracer = global::tracer(<span class="string">"my_tracer"</span>);
+
+<span class="comment">// Create a span
+</span><span class="kw">let </span>span = tracer.start(<span class="string">"parent_span"</span>);
+
+<span class="comment">// Mark the span as active
+</span><span class="kw">let </span>active = trace::mark_span_as_active(span);
+
+<span class="comment">// Any span created here will be a child of `parent_span`...
+
+// Drop the guard and the span will no longer be active
+</span>drop(active)</code></pre></div>
+<p>Additionally <a href="trait.Tracer.html#method.in_span" title="method opentelemetry::trace::Tracer::in_span"><code>Tracer::in_span</code></a> can be used as shorthand to simplify
+managing the parent context.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, trace::Tracer};
+
+<span class="comment">// Get a tracer
+</span><span class="kw">let </span>tracer = global::tracer(<span class="string">"my_tracer"</span>);
+
+<span class="comment">// Use `in_span` to create a new span and mark it as the parent, dropping it
+// at the end of the block.
+</span>tracer.in_span(<span class="string">"parent_span"</span>, |cx| {
+    <span class="comment">// spans created here will be children of `parent_span`
+</span>});</code></pre></div>
+<h5 id="async-active-spans"><a class="doc-anchor" href="#async-active-spans">§</a>Async active spans</h5>
+<p>Async spans can be propagated with <a href="trait.TraceContextExt.html" title="trait opentelemetry::trace::TraceContextExt"><code>TraceContextExt</code></a> and <a href="../context/trait.FutureExt.html" title="trait opentelemetry::context::FutureExt"><code>FutureExt</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{Context, global, trace::{FutureExt, TraceContextExt, Tracer}};
+
+<span class="kw">async fn </span>some_work() { }
+
+<span class="comment">// Get a tracer
+</span><span class="kw">let </span>tracer = global::tracer(<span class="string">"my_tracer"</span>);
+
+<span class="comment">// Start a span
+</span><span class="kw">let </span>span = tracer.start(<span class="string">"my_span"</span>);
+
+<span class="comment">// Perform some async work with this span as the currently active parent.
+</span>some_work().with_context(Context::current_with_span(span)).<span class="kw">await</span>;</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.SpanId"><code>pub use crate::<a class="struct" href="../struct.SpanId.html" title="struct opentelemetry::SpanId">SpanId</a>;</code></dt><dt id="reexport.TraceFlags"><code>pub use crate::<a class="struct" href="../struct.TraceFlags.html" title="struct opentelemetry::TraceFlags">TraceFlags</a>;</code></dt><dt id="reexport.TraceId"><code>pub use crate::<a class="struct" href="../struct.TraceId.html" title="struct opentelemetry::TraceId">TraceId</a>;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="noop/index.html" title="mod opentelemetry::trace::noop">noop</a></dt><dd>No-op trace implementation</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Event.html" title="struct opentelemetry::trace::Event">Event</a></dt><dd>Events record things that happened during a <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>’s lifetime.</dd><dt><a class="struct" href="struct.Link.html" title="struct opentelemetry::trace::Link">Link</a></dt><dd>Link is the relationship between two Spans.</dd><dt><a class="struct" href="struct.SamplingResult.html" title="struct opentelemetry::trace::SamplingResult">Sampling<wbr>Result</a></dt><dd>The result of sampling logic for a given span.</dd><dt><a class="struct" href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder">Span<wbr>Builder</a></dt><dd><code>SpanBuilder</code> allows span attributes to be configured before the span
+has started.</dd><dt><a class="struct" href="struct.SpanContext.html" title="struct opentelemetry::trace::SpanContext">Span<wbr>Context</a></dt><dd>Immutable portion of a <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a> which can be serialized and propagated.</dd><dt><a class="struct" href="struct.SpanRef.html" title="struct opentelemetry::trace::SpanRef">SpanRef</a></dt><dd>A reference to the currently active span in this context.</dd><dt><a class="struct" href="struct.TraceState.html" title="struct opentelemetry::trace::TraceState">Trace<wbr>State</a></dt><dd>TraceState carries system-specific configuration data, represented as a list
+of key-value pairs. TraceState allows multiple tracing systems to
+participate in the same trace.</dd><dt><a class="struct" href="struct.WithContext.html" title="struct opentelemetry::trace::WithContext">With<wbr>Context</a></dt><dd>A future, stream, or sink that has an associated context.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.SamplingDecision.html" title="enum opentelemetry::trace::SamplingDecision">Sampling<wbr>Decision</a></dt><dd>Decision about whether or not to sample</dd><dt><a class="enum" href="enum.SpanKind.html" title="enum opentelemetry::trace::SpanKind">Span<wbr>Kind</a></dt><dd><code>SpanKind</code> describes the relationship between the <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>, its parents, and
+its children in a trace.</dd><dt><a class="enum" href="enum.Status.html" title="enum opentelemetry::trace::Status">Status</a></dt><dd>The status of a <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.FutureExt.html" title="trait opentelemetry::trace::FutureExt">Future<wbr>Ext</a></dt><dd>Extension trait allowing futures, streams, and sinks to be traced with a span.</dd><dt><a class="trait" href="trait.Span.html" title="trait opentelemetry::trace::Span">Span</a></dt><dd>The interface for a single operation within a trace.</dd><dt><a class="trait" href="trait.TraceContextExt.html" title="trait opentelemetry::trace::TraceContextExt">Trace<wbr>Context<wbr>Ext</a></dt><dd>Methods for storing and retrieving trace data in a <a href="../context/struct.Context.html" title="struct opentelemetry::context::Context"><code>Context</code></a>.</dd><dt><a class="trait" href="trait.Tracer.html" title="trait opentelemetry::trace::Tracer">Tracer</a></dt><dd>The interface for constructing <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>s.</dd><dt><a class="trait" href="trait.TracerProvider.html" title="trait opentelemetry::trace::TracerProvider">Tracer<wbr>Provider</a></dt><dd>Types that can create instances of <a href="trait.Tracer.html" title="trait opentelemetry::trace::Tracer"><code>Tracer</code></a>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.get_active_span.html" title="fn opentelemetry::trace::get_active_span">get_<wbr>active_<wbr>span</a></dt><dd>Executes a closure with a reference to this thread’s current span.</dd><dt><a class="fn" href="fn.mark_span_as_active.html" title="fn opentelemetry::trace::mark_span_as_active">mark_<wbr>span_<wbr>as_<wbr>active</a></dt><dd>Mark a given <code>Span</code> as active.</dd></dl></section></div></main></body></html>

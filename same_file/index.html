@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides a safe and simple cross platform way to determine whether two file paths refer to the same file or directory."><title>same_file - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="same_file" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../same_file/index.html">same_<wbr>file</a><span class="version">1.0.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>same_file</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/same_file/lib.rs.html#1-572">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides a safe and simple <strong>cross platform</strong> way to determine
+whether two file paths refer to the same file or directory.</p>
+<p>Most uses of this crate should be limited to the top-level <a href="fn.is_same_file.html"><code>is_same_file</code></a>
+function, which takes two file paths and returns true if they refer to the
+same file or directory:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>same_file::is_same_file;
+
+<span class="macro">assert!</span>(is_same_file(<span class="string">"/bin/sh"</span>, <span class="string">"/usr/bin/sh"</span>)<span class="question-mark">?</span>);</code></pre></div>
+<p>Additionally, this crate provides a <a href="struct.Handle.html"><code>Handle</code></a> type that permits a more efficient
+equality check depending on your access pattern. For example, if one wanted to
+check whether any path in a list of paths corresponded to the process’ stdout
+handle, then one could build a handle once for stdout. The equality check for
+each file in the list then only requires one stat call instead of two. The code
+might look like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>same_file::Handle;
+
+<span class="kw">let </span>candidates = <span class="kw-2">&amp;</span>[
+    <span class="string">"examples/is_same_file.rs"</span>,
+    <span class="string">"examples/is_stderr.rs"</span>,
+    <span class="string">"examples/stderr"</span>,
+];
+<span class="kw">let </span>stdout_handle = Handle::stdout()<span class="question-mark">?</span>;
+<span class="kw">for </span>candidate <span class="kw">in </span>candidates {
+    <span class="kw">let </span>handle = Handle::from_path(candidate)<span class="question-mark">?</span>;
+    <span class="kw">if </span>stdout_handle == handle {
+        <span class="macro">println!</span>(<span class="string">"{:?} is stdout!"</span>, candidate);
+    } <span class="kw">else </span>{
+        <span class="macro">println!</span>(<span class="string">"{:?} is NOT stdout!"</span>, candidate);
+    }
+}</code></pre></div>
+<p>See <a href="https://github.com/BurntSushi/same-file/blob/master/examples/is_same_file.rs"><code>examples/is_stderr.rs</code></a> for a runnable example and compare the output of:</p>
+<ul>
+<li><code>cargo run --example is_stderr 2&gt; examples/stderr</code> and</li>
+<li><code>cargo run --example is_stderr</code>.</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Handle.html" title="struct same_file::Handle">Handle</a></dt><dd>A handle to a file that can be tested for equality with other handles.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.is_same_file.html" title="fn same_file::is_same_file">is_<wbr>same_<wbr>file</a></dt><dd>Returns true if the two file paths may correspond to the same file.</dd></dl></section></div></main></body></html>

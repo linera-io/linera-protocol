@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["diff_chars","diff_lines","diff_slices","diff_words"],"struct":["TextDiffRemapper"]};

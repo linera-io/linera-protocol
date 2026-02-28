@@ -1,0 +1,155 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="HdrSample is a port of Gil Tene’s HdrHistogram to native Rust. It provides recording and analyzing of sampled data value counts across a large, configurable value range with configurable precision within the range. The resulting “HDR” histogram allows for fast and accurate analysis of the extreme ranges of data with non-normal distributions, like latency."><title>hdrhistogram - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="hdrhistogram" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../hdrhistogram/index.html">hdrhistogram</a><span class="version">7.5.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#hdrhistogram" title="HdrHistogram">HdrHistogram</a></li><li><a href="#interacting-with-the-library" title="Interacting with the library">Interacting with the library</a><ul><li><a href="#recording-samples" title="Recording samples">Recording samples</a></li><li><a href="#querying-samples" title="Querying samples">Querying samples</a></li><li><a href="#panics-and-error-handling" title="Panics and error handling">Panics and error handling</a></li><li><a href="#usize-limitations" title="`usize` limitations"><code>usize</code> limitations</a></li><li><a href="#floating-point-accuracy" title="Floating point accuracy">Floating point accuracy</a></li></ul></li><li><a href="#limitations-and-caveats" title="Limitations and Caveats">Limitations and Caveats</a></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>hdrhistogram</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/hdrhistogram/lib.rs.html#1-1924">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>HdrSample is a port of Gil Tene’s HdrHistogram to native Rust. It provides recording and
+analyzing of sampled data value counts across a large, configurable value range with
+configurable precision within the range. The resulting “HDR” histogram allows for fast and
+accurate analysis of the extreme ranges of data with non-normal distributions, like latency.</p>
+<h2 id="hdrhistogram"><a class="doc-anchor" href="#hdrhistogram">§</a>HdrHistogram</h2>
+<p>What follows is a description from <a href="https://hdrhistogram.github.io/HdrHistogram/">the HdrHistogram
+website</a>. Users are encouraged to read the
+documentation from the original <a href="https://github.com/HdrHistogram/HdrHistogram">Java
+implementation</a>, as most of the concepts
+translate directly to the Rust port.</p>
+<p>HdrHistogram supports the recording and analyzing of sampled data value counts across a
+configurable integer value range with configurable value precision within the range. Value
+precision is expressed as the number of significant digits in the value recording, and provides
+control over value quantization behavior across the value range and the subsequent value
+resolution at any given level.</p>
+<p>For example, a Histogram could be configured to track the counts of observed integer values
+between 0 and 3,600,000,000 while maintaining a value precision of 3 significant digits across
+that range. Value quantization within the range will thus be no larger than 1/1,000th (or 0.1%)
+of any value. This example Histogram could be used to track and analyze the counts of observed
+response times ranging between 1 microsecond and 1 hour in magnitude, while maintaining a value
+resolution of 1 microsecond up to 1 millisecond, a resolution of 1 millisecond (or better) up
+to one second, and a resolution of 1 second (or better) up to 1,000 seconds. At it’s maximum
+tracked value (1 hour), it would still maintain a resolution of 3.6 seconds (or better).</p>
+<p>HDR Histogram is designed for recording histograms of value measurements in latency and
+performance sensitive applications. Measurements show value recording times as low as 3-6
+nanoseconds on modern (circa 2014) Intel CPUs. The HDR Histogram maintains a fixed cost in both
+space and time. A Histogram’s memory footprint is constant, with no allocation operations
+involved in recording data values or in iterating through them. The memory footprint is fixed
+regardless of the number of data value samples recorded, and depends solely on the dynamic
+range and precision chosen. The amount of work involved in recording a sample is constant, and
+directly computes storage index locations such that no iteration or searching is ever involved
+in recording data values.</p>
+<p>If you are looking for FFI bindings to
+<a href="https://github.com/HdrHistogram/HdrHistogram_c"><code>HdrHistogram_c</code></a>, you want the
+<a href="https://crates.io/crates/hdrhistogram_c"><code>hdrhistogram_c</code></a> crate instead.</p>
+<h2 id="interacting-with-the-library"><a class="doc-anchor" href="#interacting-with-the-library">§</a>Interacting with the library</h2>
+<p>HdrSample’s API follows that of the original HdrHistogram Java implementation, with some
+modifications to make its use more idiomatic in Rust. The description in this section has been
+adapted from that given by the <a href="https://github.com/HdrHistogram/HdrHistogram_py">Python port</a>,
+as it gives a nicer first-time introduction to the use of HdrHistogram than the Java docs do.</p>
+<p>HdrSample is generally used in one of two modes: recording samples, or querying for analytics.
+In distributed deployments, the recording may be performed remotely (and possibly in multiple
+locations), to then be aggregated later in a central location for analysis.</p>
+<h3 id="recording-samples"><a class="doc-anchor" href="#recording-samples">§</a>Recording samples</h3>
+<p>A histogram instance is created using the <code>::new</code> methods on the <code>Histogram</code> struct. These come
+in three variants: <code>new</code>, <code>new_with_max</code>, and <code>new_with_bounds</code>. The first of these only sets
+the required precision of the sampled data, but leaves the value range open such that any value
+may be recorded. A <code>Histogram</code> created this way (or one where auto-resize has been explicitly
+enabled) will automatically resize itself if a value that is too large to fit in the current
+dataset is encountered. <code>new_with_max</code> sets an upper bound on the values to be recorded, and
+disables auto-resizing, thus preventing any re-allocation during recording. If the application
+attempts to record a larger value than this maximum bound, the <code>record</code> call will return an
+error. Finally, <code>new_with_bounds</code> restricts the lowest representable value of the dataset,
+such that a smaller range needs to be covered (thus reducing the overall allocation size).</p>
+<p>For example the example below shows how to create a <code>Histogram</code> that can count values in the
+<code>[1..3600000]</code> range with 1% precision, which could be used to track latencies in the range <code>[1 msec..1 hour]</code>).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hdrhistogram::Histogram;
+<span class="kw">let </span><span class="kw-2">mut </span>hist = Histogram::&lt;u64&gt;::new_with_bounds(<span class="number">1</span>, <span class="number">60 </span>* <span class="number">60 </span>* <span class="number">1000</span>, <span class="number">2</span>).unwrap();
+
+<span class="comment">// samples can be recorded using .record, which will error if the value is too small or large
+</span>hist.record(<span class="number">54321</span>).expect(<span class="string">"value 54321 should be in range"</span>);
+
+<span class="comment">// for ergonomics, samples can also be recorded with +=
+// this call will panic if the value is out of range!
+</span>hist += <span class="number">54321</span>;
+
+<span class="comment">// if the code that generates the values is subject to Coordinated Omission,
+// the self-correcting record method should be used instead.
+// for example, if the expected sampling interval is 10 msec:
+</span>hist.record_correct(<span class="number">54321</span>, <span class="number">10</span>).expect(<span class="string">"value 54321 should be in range"</span>);</code></pre></div>
+<p>Note the <code>u64</code> type. This type can be changed to reduce the storage overhead for all the
+histogram bins, at the cost of a risk of saturating if a large number of samples end up in the
+same bin.</p>
+<h3 id="querying-samples"><a class="doc-anchor" href="#querying-samples">§</a>Querying samples</h3>
+<p>At any time, the histogram can be queried to return interesting statistical measurements, such
+as the total number of recorded samples, or the value at a given quantile:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hdrhistogram::Histogram;
+<span class="kw">let </span>hist = Histogram::&lt;u64&gt;::new(<span class="number">2</span>).unwrap();
+<span class="comment">// ...
+</span><span class="macro">println!</span>(<span class="string">"# of samples: {}"</span>, hist.len());
+<span class="macro">println!</span>(<span class="string">"99.9'th percentile: {}"</span>, hist.value_at_quantile(<span class="number">0.999</span>));</code></pre></div>
+<p>Several useful iterators are also provided for quickly getting an overview of the dataset. The
+simplest one is <code>iter_recorded()</code>, which yields one item for every non-empty sample bin. All
+the HdrHistogram iterators are supported in HdrSample, so look for the <code>*Iterator</code> classes in
+the <a href="https://hdrhistogram.github.io/HdrHistogram/JavaDoc/">Java documentation</a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hdrhistogram::Histogram;
+<span class="kw">let </span>hist = Histogram::&lt;u64&gt;::new(<span class="number">2</span>).unwrap();
+<span class="comment">// ...
+</span><span class="kw">for </span>v <span class="kw">in </span>hist.iter_recorded() {
+    <span class="macro">println!</span>(<span class="string">"{}'th percentile of data is {} with {} samples"</span>,
+        v.percentile(), v.value_iterated_to(), v.count_at_value());
+}</code></pre></div>
+<h3 id="panics-and-error-handling"><a class="doc-anchor" href="#panics-and-error-handling">§</a>Panics and error handling</h3>
+<p>As long as you’re using safe, non-panicking functions (see below), this library should never
+panic. Any panics you encounter are a bug; please file them in the issue tracker.</p>
+<p>A few functions have their functionality exposed via <code>AddAssign</code> and <code>SubAssign</code>
+implementations. These alternate forms are equivalent to simply calling <code>unwrap()</code> on the
+normal functions, so the normal rules of <code>unwrap()</code> apply: view with suspicion when used in
+production code, etc.</p>
+<div><table><thead><tr><th>Returns Result</th><th>Panics on error</th><th>Functionality</th></tr></thead><tbody>
+<tr><td><code>h.record(v)</code></td><td><code>h += v</code></td><td>Increment count for value <code>v</code></td></tr>
+<tr><td><code>h.add(h2)</code></td><td><code>h += h2</code></td><td>Add <code>h2</code>’s counts to <code>h</code></td></tr>
+<tr><td><code>h.subtract(h2)</code></td><td><code>h -= h2</code></td><td>Subtract <code>h2</code>’s counts from <code>h</code></td></tr>
+</tbody></table>
+</div>
+<p>Other than the panicking forms of the above functions, everything will return <code>Result</code> or
+<code>Option</code> if it can fail.</p>
+<h3 id="usize-limitations"><a class="doc-anchor" href="#usize-limitations">§</a><code>usize</code> limitations</h3>
+<p>Depending on the configured number of significant digits and maximum value, a histogram’s
+internal storage may have hundreds of thousands of cells. Systems with a 16-bit <code>usize</code> cannot
+represent pointer offsets that large, so relevant operations (creation, deserialization, etc)
+will fail with a suitable error (e.g. <code>CreationError::UsizeTypeTooSmall</code>). If you are using such
+a system and hitting these errors, reducing the number of significant digits will greatly reduce
+memory consumption (and therefore the need for large <code>usize</code> values). Lowering the max value may
+also help as long as resizing is disabled.</p>
+<p>32- and above systems will not have any such issues, as all possible histograms fit within a
+32-bit index.</p>
+<h3 id="floating-point-accuracy"><a class="doc-anchor" href="#floating-point-accuracy">§</a>Floating point accuracy</h3>
+<p>Some calculations inherently involve floating point values, like <code>value_at_quantile</code>, and are
+therefore subject to the precision limits of IEEE754 floating point calculations. The user-
+visible consequence of this is that in certain corner cases, you might end up with a bucket (and
+therefore value) that is higher or lower than it would be if the calculation had been done
+with arbitrary-precision arithmetic. However, double-precision IEEE754 (i.e. <code>f64</code>) is very
+good at its job, so these cases should be rare. Also, we haven’t seen a case that was off by
+more than one bucket.</p>
+<p>To minimize FP precision losses, we favor working with quantiles rather than percentiles. A
+quantile represents a portion of a set with a number in <code>[0, 1]</code>. A percentile is the same
+concept, except it uses the range <code>[0, 100]</code>. Working just with quantiles means we can skip an
+FP operation in a few places, and therefore avoid opportunities for precision loss to creep in.</p>
+<h2 id="limitations-and-caveats"><a class="doc-anchor" href="#limitations-and-caveats">§</a>Limitations and Caveats</h2>
+<p>As with all the other HdrHistogram ports, the latest features and bug fixes from the upstream
+HdrHistogram implementations may not be available in this port. A number of features have also
+not (yet) been implemented:</p>
+<ul>
+<li>Concurrency support (<code>AtomicHistogram</code>, <code>ConcurrentHistogram</code>, …).</li>
+<li><code>DoubleHistogram</code>.</li>
+<li>The <code>Recorder</code> feature of HdrHistogram.</li>
+<li>Value shifting (“normalization”).</li>
+<li>Textual output methods. These seem almost orthogonal to HdrSample, though it might be
+convenient if we implemented some relevant traits (CSV, JSON, and possibly simple
+<code>fmt::Display</code>).</li>
+</ul>
+<p>Most of these should be fairly straightforward to add, as the code aligns pretty well with the
+original Java/C# code. If you do decide to implement one and send a PR, please make sure you
+also port the <a href="https://github.com/HdrHistogram/HdrHistogram/tree/master/src/test/java/org/HdrHistogram">test
+cases</a>,
+and try to make sure you implement appropriate traits to make the use of the feature as
+ergonomic as possible.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.SyncHistogram"><code>pub use sync::<a class="struct" href="sync/struct.SyncHistogram.html" title="struct hdrhistogram::sync::SyncHistogram">SyncHistogram</a>;</code></dt><dt><code>pub use <a class="mod" href="errors/index.html" title="mod hdrhistogram::errors">errors</a>::*;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="errors/index.html" title="mod hdrhistogram::errors">errors</a></dt><dd>Error types used throughout this library</dd><dt><a class="mod" href="iterators/index.html" title="mod hdrhistogram::iterators">iterators</a></dt><dd>Module containing the implementations of all <code>Histogram</code> iterators.</dd><dt><a class="mod" href="serialization/index.html" title="mod hdrhistogram::serialization">serialization</a></dt><dd>Serialization/deserialization support.</dd><dt><a class="mod" href="sync/index.html" title="mod hdrhistogram::sync">sync</a></dt><dd>Synchronized types that allow access to a <code>Histogram</code> from multiple threads.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Histogram.html" title="struct hdrhistogram::Histogram">Histogram</a></dt><dd><code>Histogram</code> is the core data structure in HdrSample. It records values, and performs analytics.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Counter.html" title="trait hdrhistogram::Counter">Counter</a></dt><dd>This trait represents the operations a histogram must be able to perform on the underlying
+counter type. The <code>ToPrimitive</code> trait is needed to perform floating point operations on the
+counts (usually for quantiles). The <code>FromPrimitive</code> to convert back into an integer count.
+Partial ordering is used for threshholding, also usually in the context of quantiles.</dd></dl></section></div></main></body></html>

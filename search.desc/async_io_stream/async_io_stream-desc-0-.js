@@ -1,0 +1,1 @@
+searchState.loadedDescShard("async_io_stream", 0, "async_io_stream\nA wrapper over a TryStream + Sink that implements <code>AsyncRead</code>…\nReturns the argument unchanged.\nGet a reference to the inner stream.\nGet a mut reference to the inner stream.\nCalls <code>U::from(self)</code>.\nCreate a new IoStream.\nWill always flush the underlying socket. Will always …")

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["Abi","ContractAbi","ServiceAbi","WithContractAbi","WithServiceAbi"]};

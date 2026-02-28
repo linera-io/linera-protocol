@@ -1,0 +1,1 @@
+searchState.loadedDescShard("tsify", 0, "<code>Tsify</code> is a trait that allows you to convert a type to and …\nThe <code>Tsify</code> derive macro, used in <code>#[derive(Tsify, ...)]</code> …\nThe <code>declare</code> macro, used in <code>#[declare]</code> annotations.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

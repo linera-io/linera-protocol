@@ -1,0 +1,1141 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aho-corasick-1.1.3/src/nfa/contiguous.rs`."><title>contiguous.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="aho_corasick" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">aho_corasick/nfa/</div>contiguous.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">/*!
+<a href=#2 id=2 data-nosnippet>2</a>Provides a contiguous NFA implementation of Aho-Corasick.
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a>This is a low-level API that generally only needs to be used in niche
+<a href=#5 id=5 data-nosnippet>5</a>circumstances. When possible, prefer using [`AhoCorasick`](crate::AhoCorasick)
+<a href=#6 id=6 data-nosnippet>6</a>instead of a contiguous NFA directly. Using an `NFA` directly is typically only
+<a href=#7 id=7 data-nosnippet>7</a>necessary when one needs access to the [`Automaton`] trait implementation.
+<a href=#8 id=8 data-nosnippet>8</a>*/
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">use </span>alloc::{vec, vec::Vec};
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use crate</span>::{
+<a href=#13 id=13 data-nosnippet>13</a>    automaton::Automaton,
+<a href=#14 id=14 data-nosnippet>14</a>    nfa::noncontiguous,
+<a href=#15 id=15 data-nosnippet>15</a>    util::{
+<a href=#16 id=16 data-nosnippet>16</a>        alphabet::ByteClasses,
+<a href=#17 id=17 data-nosnippet>17</a>        error::{BuildError, MatchError},
+<a href=#18 id=18 data-nosnippet>18</a>        int::{Usize, U16, U32},
+<a href=#19 id=19 data-nosnippet>19</a>        prefilter::Prefilter,
+<a href=#20 id=20 data-nosnippet>20</a>        primitives::{IteratorIndexExt, PatternID, SmallIndex, StateID},
+<a href=#21 id=21 data-nosnippet>21</a>        search::{Anchored, MatchKind},
+<a href=#22 id=22 data-nosnippet>22</a>        special::Special,
+<a href=#23 id=23 data-nosnippet>23</a>    },
+<a href=#24 id=24 data-nosnippet>24</a>};
+<a href=#25 id=25 data-nosnippet>25</a>
+<a href=#26 id=26 data-nosnippet>26</a><span class="doccomment">/// A contiguous NFA implementation of Aho-Corasick.
+<a href=#27 id=27 data-nosnippet>27</a>///
+<a href=#28 id=28 data-nosnippet>28</a>/// When possible, prefer using [`AhoCorasick`](crate::AhoCorasick) instead of
+<a href=#29 id=29 data-nosnippet>29</a>/// this type directly. Using an `NFA` directly is typically only necessary
+<a href=#30 id=30 data-nosnippet>30</a>/// when one needs access to the [`Automaton`] trait implementation.
+<a href=#31 id=31 data-nosnippet>31</a>///
+<a href=#32 id=32 data-nosnippet>32</a>/// This NFA can only be built by first constructing a [`noncontiguous::NFA`].
+<a href=#33 id=33 data-nosnippet>33</a>/// Both [`NFA::new`] and [`Builder::build`] do this for you automatically, but
+<a href=#34 id=34 data-nosnippet>34</a>/// [`Builder::build_from_noncontiguous`] permits doing it explicitly.
+<a href=#35 id=35 data-nosnippet>35</a>///
+<a href=#36 id=36 data-nosnippet>36</a>/// The main difference between a noncontiguous NFA and a contiguous NFA is
+<a href=#37 id=37 data-nosnippet>37</a>/// that the latter represents all of its states and transitions in a single
+<a href=#38 id=38 data-nosnippet>38</a>/// allocation, where as the former uses a separate allocation for each state.
+<a href=#39 id=39 data-nosnippet>39</a>/// Doing this at construction time while keeping a low memory footprint isn't
+<a href=#40 id=40 data-nosnippet>40</a>/// feasible, which is primarily why there are two different NFA types: one
+<a href=#41 id=41 data-nosnippet>41</a>/// that does the least amount of work possible to build itself, and another
+<a href=#42 id=42 data-nosnippet>42</a>/// that does a little extra work to compact itself and make state transitions
+<a href=#43 id=43 data-nosnippet>43</a>/// faster by making some states use a dense representation.
+<a href=#44 id=44 data-nosnippet>44</a>///
+<a href=#45 id=45 data-nosnippet>45</a>/// Because a contiguous NFA uses a single allocation, there is a lot more
+<a href=#46 id=46 data-nosnippet>46</a>/// opportunity for compression tricks to reduce the heap memory used. Indeed,
+<a href=#47 id=47 data-nosnippet>47</a>/// it is not uncommon for a contiguous NFA to use an order of magnitude less
+<a href=#48 id=48 data-nosnippet>48</a>/// heap memory than a noncontiguous NFA. Since building a contiguous NFA
+<a href=#49 id=49 data-nosnippet>49</a>/// usually only takes a fraction of the time it takes to build a noncontiguous
+<a href=#50 id=50 data-nosnippet>50</a>/// NFA, the overall build time is not much slower. Thus, in most cases, a
+<a href=#51 id=51 data-nosnippet>51</a>/// contiguous NFA is the best choice.
+<a href=#52 id=52 data-nosnippet>52</a>///
+<a href=#53 id=53 data-nosnippet>53</a>/// Since a contiguous NFA uses various tricks for compression and to achieve
+<a href=#54 id=54 data-nosnippet>54</a>/// faster state transitions, currently, its limit on the number of states
+<a href=#55 id=55 data-nosnippet>55</a>/// is somewhat smaller than what a noncontiguous NFA can achieve. Generally
+<a href=#56 id=56 data-nosnippet>56</a>/// speaking, you shouldn't expect to run into this limit if the number of
+<a href=#57 id=57 data-nosnippet>57</a>/// patterns is under 1 million. It is plausible that this limit will be
+<a href=#58 id=58 data-nosnippet>58</a>/// increased in the future. If the limit is reached, building a contiguous NFA
+<a href=#59 id=59 data-nosnippet>59</a>/// will return an error. Often, since building a contiguous NFA is relatively
+<a href=#60 id=60 data-nosnippet>60</a>/// cheap, it can make sense to always try it even if you aren't sure if it
+<a href=#61 id=61 data-nosnippet>61</a>/// will fail or not. If it does, you can always fall back to a noncontiguous
+<a href=#62 id=62 data-nosnippet>62</a>/// NFA. (Indeed, the main [`AhoCorasick`](crate::AhoCorasick) type employs a
+<a href=#63 id=63 data-nosnippet>63</a>/// strategy similar to this at construction time.)
+<a href=#64 id=64 data-nosnippet>64</a>///
+<a href=#65 id=65 data-nosnippet>65</a>/// # Example
+<a href=#66 id=66 data-nosnippet>66</a>///
+<a href=#67 id=67 data-nosnippet>67</a>/// This example shows how to build an `NFA` directly and use it to execute
+<a href=#68 id=68 data-nosnippet>68</a>/// [`Automaton::try_find`]:
+<a href=#69 id=69 data-nosnippet>69</a>///
+<a href=#70 id=70 data-nosnippet>70</a>/// ```
+<a href=#71 id=71 data-nosnippet>71</a>/// use aho_corasick::{
+<a href=#72 id=72 data-nosnippet>72</a>///     automaton::Automaton,
+<a href=#73 id=73 data-nosnippet>73</a>///     nfa::contiguous::NFA,
+<a href=#74 id=74 data-nosnippet>74</a>///     Input, Match,
+<a href=#75 id=75 data-nosnippet>75</a>/// };
+<a href=#76 id=76 data-nosnippet>76</a>///
+<a href=#77 id=77 data-nosnippet>77</a>/// let patterns = &amp;["b", "abc", "abcd"];
+<a href=#78 id=78 data-nosnippet>78</a>/// let haystack = "abcd";
+<a href=#79 id=79 data-nosnippet>79</a>///
+<a href=#80 id=80 data-nosnippet>80</a>/// let nfa = NFA::new(patterns).unwrap();
+<a href=#81 id=81 data-nosnippet>81</a>/// assert_eq!(
+<a href=#82 id=82 data-nosnippet>82</a>///     Some(Match::must(0, 1..2)),
+<a href=#83 id=83 data-nosnippet>83</a>///     nfa.try_find(&amp;Input::new(haystack))?,
+<a href=#84 id=84 data-nosnippet>84</a>/// );
+<a href=#85 id=85 data-nosnippet>85</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#86 id=86 data-nosnippet>86</a>/// ```
+<a href=#87 id=87 data-nosnippet>87</a>///
+<a href=#88 id=88 data-nosnippet>88</a>/// It is also possible to implement your own version of `try_find`. See the
+<a href=#89 id=89 data-nosnippet>89</a>/// [`Automaton`] documentation for an example.
+<a href=#90 id=90 data-nosnippet>90</a></span><span class="attr">#[derive(Clone)]
+<a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">pub struct </span>NFA {
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="doccomment">/// The raw NFA representation. Each state is packed with a header
+<a href=#93 id=93 data-nosnippet>93</a>    /// (containing the format of the state, the failure transition and, for
+<a href=#94 id=94 data-nosnippet>94</a>    /// a sparse state, the number of transitions), its transitions and any
+<a href=#95 id=95 data-nosnippet>95</a>    /// matching pattern IDs for match states.
+<a href=#96 id=96 data-nosnippet>96</a>    </span>repr: Vec&lt;u32&gt;,
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="doccomment">/// The length of each pattern. This is used to compute the start offset
+<a href=#98 id=98 data-nosnippet>98</a>    /// of a match.
+<a href=#99 id=99 data-nosnippet>99</a>    </span>pattern_lens: Vec&lt;SmallIndex&gt;,
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="doccomment">/// The total number of states in this NFA.
+<a href=#101 id=101 data-nosnippet>101</a>    </span>state_len: usize,
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="doccomment">/// A prefilter for accelerating searches, if one exists.
+<a href=#103 id=103 data-nosnippet>103</a>    </span>prefilter: <span class="prelude-ty">Option</span>&lt;Prefilter&gt;,
+<a href=#104 id=104 data-nosnippet>104</a>    <span class="doccomment">/// The match semantics built into this NFA.
+<a href=#105 id=105 data-nosnippet>105</a>    </span>match_kind: MatchKind,
+<a href=#106 id=106 data-nosnippet>106</a>    <span class="doccomment">/// The alphabet size, or total number of equivalence classes, for this
+<a href=#107 id=107 data-nosnippet>107</a>    /// NFA. Dense states always have this many transitions.
+<a href=#108 id=108 data-nosnippet>108</a>    </span>alphabet_len: usize,
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="doccomment">/// The equivalence classes for this NFA. All transitions, dense and
+<a href=#110 id=110 data-nosnippet>110</a>    /// sparse, are defined on equivalence classes and not on the 256 distinct
+<a href=#111 id=111 data-nosnippet>111</a>    /// byte values.
+<a href=#112 id=112 data-nosnippet>112</a>    </span>byte_classes: ByteClasses,
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="doccomment">/// The length of the shortest pattern in this automaton.
+<a href=#114 id=114 data-nosnippet>114</a>    </span>min_pattern_len: usize,
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="doccomment">/// The length of the longest pattern in this automaton.
+<a href=#116 id=116 data-nosnippet>116</a>    </span>max_pattern_len: usize,
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="doccomment">/// The information required to deduce which states are "special" in this
+<a href=#118 id=118 data-nosnippet>118</a>    /// NFA.
+<a href=#119 id=119 data-nosnippet>119</a>    </span>special: Special,
+<a href=#120 id=120 data-nosnippet>120</a>}
+<a href=#121 id=121 data-nosnippet>121</a>
+<a href=#122 id=122 data-nosnippet>122</a><span class="kw">impl </span>NFA {
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="doccomment">/// Create a new Aho-Corasick contiguous NFA using the default
+<a href=#124 id=124 data-nosnippet>124</a>    /// configuration.
+<a href=#125 id=125 data-nosnippet>125</a>    ///
+<a href=#126 id=126 data-nosnippet>126</a>    /// Use a [`Builder`] if you want to change the configuration.
+<a href=#127 id=127 data-nosnippet>127</a>    </span><span class="kw">pub fn </span>new&lt;I, P&gt;(patterns: I) -&gt; <span class="prelude-ty">Result</span>&lt;NFA, BuildError&gt;
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="kw">where
+<a href=#129 id=129 data-nosnippet>129</a>        </span>I: IntoIterator&lt;Item = P&gt;,
+<a href=#130 id=130 data-nosnippet>130</a>        P: AsRef&lt;[u8]&gt;,
+<a href=#131 id=131 data-nosnippet>131</a>    {
+<a href=#132 id=132 data-nosnippet>132</a>        NFA::builder().build(patterns)
+<a href=#133 id=133 data-nosnippet>133</a>    }
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="doccomment">/// A convenience method for returning a new Aho-Corasick contiguous NFA
+<a href=#136 id=136 data-nosnippet>136</a>    /// builder.
+<a href=#137 id=137 data-nosnippet>137</a>    ///
+<a href=#138 id=138 data-nosnippet>138</a>    /// This usually permits one to just import the `NFA` type.
+<a href=#139 id=139 data-nosnippet>139</a>    </span><span class="kw">pub fn </span>builder() -&gt; Builder {
+<a href=#140 id=140 data-nosnippet>140</a>        Builder::new()
+<a href=#141 id=141 data-nosnippet>141</a>    }
+<a href=#142 id=142 data-nosnippet>142</a>}
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a><span class="kw">impl </span>NFA {
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="doccomment">/// A sentinel state ID indicating that a search should stop once it has
+<a href=#146 id=146 data-nosnippet>146</a>    /// entered this state. When a search stops, it returns a match if one
+<a href=#147 id=147 data-nosnippet>147</a>    /// has been found, otherwise no match. A contiguous NFA always has an
+<a href=#148 id=148 data-nosnippet>148</a>    /// actual dead state at this ID.
+<a href=#149 id=149 data-nosnippet>149</a>    </span><span class="kw">const </span>DEAD: StateID = StateID::new_unchecked(<span class="number">0</span>);
+<a href=#150 id=150 data-nosnippet>150</a>    <span class="doccomment">/// Another sentinel state ID indicating that a search should move through
+<a href=#151 id=151 data-nosnippet>151</a>    /// current state's failure transition.
+<a href=#152 id=152 data-nosnippet>152</a>    ///
+<a href=#153 id=153 data-nosnippet>153</a>    /// Note that unlike DEAD, this does not actually point to a valid state
+<a href=#154 id=154 data-nosnippet>154</a>    /// in a contiguous NFA. (noncontiguous::NFA::FAIL does point to a valid
+<a href=#155 id=155 data-nosnippet>155</a>    /// state.) Instead, this points to the position that is guaranteed to
+<a href=#156 id=156 data-nosnippet>156</a>    /// never be a valid state ID (by making sure it points to a place in the
+<a href=#157 id=157 data-nosnippet>157</a>    /// middle of the encoding of the DEAD state). Since we never need to
+<a href=#158 id=158 data-nosnippet>158</a>    /// actually look at the FAIL state itself, this works out.
+<a href=#159 id=159 data-nosnippet>159</a>    ///
+<a href=#160 id=160 data-nosnippet>160</a>    /// By why do it this way? So that FAIL is a constant. I don't have any
+<a href=#161 id=161 data-nosnippet>161</a>    /// concrete evidence that this materially helps matters, but it's easy to
+<a href=#162 id=162 data-nosnippet>162</a>    /// do. The alternative would be making the FAIL ID point to the second
+<a href=#163 id=163 data-nosnippet>163</a>    /// state, which could be made a constant but is a little trickier to do.
+<a href=#164 id=164 data-nosnippet>164</a>    /// The easiest path is to just make the FAIL state a runtime value, but
+<a href=#165 id=165 data-nosnippet>165</a>    /// since comparisons with FAIL occur in perf critical parts of the search,
+<a href=#166 id=166 data-nosnippet>166</a>    /// we want it to be as tight as possible and not waste any registers.
+<a href=#167 id=167 data-nosnippet>167</a>    ///
+<a href=#168 id=168 data-nosnippet>168</a>    /// Very hand wavy... But the code complexity that results from this is
+<a href=#169 id=169 data-nosnippet>169</a>    /// very mild.
+<a href=#170 id=170 data-nosnippet>170</a>    </span><span class="kw">const </span>FAIL: StateID = StateID::new_unchecked(<span class="number">1</span>);
+<a href=#171 id=171 data-nosnippet>171</a>}
+<a href=#172 id=172 data-nosnippet>172</a>
+<a href=#173 id=173 data-nosnippet>173</a><span class="comment">// SAFETY: 'start_state' always returns a valid state ID, 'next_state' always
+<a href=#174 id=174 data-nosnippet>174</a>// returns a valid state ID given a valid state ID. We otherwise claim that
+<a href=#175 id=175 data-nosnippet>175</a>// all other methods are correct as well.
+<a href=#176 id=176 data-nosnippet>176</a></span><span class="kw">unsafe impl </span>Automaton <span class="kw">for </span>NFA {
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="attr">#[inline(always)]
+<a href=#178 id=178 data-nosnippet>178</a>    </span><span class="kw">fn </span>start_state(<span class="kw-2">&amp;</span><span class="self">self</span>, anchored: Anchored) -&gt; <span class="prelude-ty">Result</span>&lt;StateID, MatchError&gt; {
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw">match </span>anchored {
+<a href=#180 id=180 data-nosnippet>180</a>            Anchored::No =&gt; <span class="prelude-val">Ok</span>(<span class="self">self</span>.special.start_unanchored_id),
+<a href=#181 id=181 data-nosnippet>181</a>            Anchored::Yes =&gt; <span class="prelude-val">Ok</span>(<span class="self">self</span>.special.start_anchored_id),
+<a href=#182 id=182 data-nosnippet>182</a>        }
+<a href=#183 id=183 data-nosnippet>183</a>    }
+<a href=#184 id=184 data-nosnippet>184</a>
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="attr">#[inline(always)]
+<a href=#186 id=186 data-nosnippet>186</a>    </span><span class="kw">fn </span>next_state(
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#188 id=188 data-nosnippet>188</a>        anchored: Anchored,
+<a href=#189 id=189 data-nosnippet>189</a>        <span class="kw-2">mut </span>sid: StateID,
+<a href=#190 id=190 data-nosnippet>190</a>        byte: u8,
+<a href=#191 id=191 data-nosnippet>191</a>    ) -&gt; StateID {
+<a href=#192 id=192 data-nosnippet>192</a>        <span class="kw">let </span>repr = <span class="kw-2">&amp;</span><span class="self">self</span>.repr;
+<a href=#193 id=193 data-nosnippet>193</a>        <span class="kw">let </span>class = <span class="self">self</span>.byte_classes.get(byte);
+<a href=#194 id=194 data-nosnippet>194</a>        <span class="kw">let </span>u32tosid = StateID::from_u32_unchecked;
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">loop </span>{
+<a href=#196 id=196 data-nosnippet>196</a>            <span class="kw">let </span>o = sid.as_usize();
+<a href=#197 id=197 data-nosnippet>197</a>            <span class="kw">let </span>kind = repr[o] &amp; <span class="number">0xFF</span>;
+<a href=#198 id=198 data-nosnippet>198</a>            <span class="comment">// I tried to encapsulate the "next transition" logic into its own
+<a href=#199 id=199 data-nosnippet>199</a>            // function, but it seemed to always result in sub-optimal codegen
+<a href=#200 id=200 data-nosnippet>200</a>            // that led to real and significant slowdowns. So we just inline
+<a href=#201 id=201 data-nosnippet>201</a>            // the logic here.
+<a href=#202 id=202 data-nosnippet>202</a>            //
+<a href=#203 id=203 data-nosnippet>203</a>            // I've also tried a lot of different ways to speed up this
+<a href=#204 id=204 data-nosnippet>204</a>            // routine, and most of them have failed.
+<a href=#205 id=205 data-nosnippet>205</a>            </span><span class="kw">if </span>kind == State::KIND_DENSE {
+<a href=#206 id=206 data-nosnippet>206</a>                <span class="kw">let </span>next = u32tosid(repr[o + <span class="number">2 </span>+ usize::from(class)]);
+<a href=#207 id=207 data-nosnippet>207</a>                <span class="kw">if </span>next != NFA::FAIL {
+<a href=#208 id=208 data-nosnippet>208</a>                    <span class="kw">return </span>next;
+<a href=#209 id=209 data-nosnippet>209</a>                }
+<a href=#210 id=210 data-nosnippet>210</a>            } <span class="kw">else if </span>kind == State::KIND_ONE {
+<a href=#211 id=211 data-nosnippet>211</a>                <span class="kw">if </span>class == repr[o].low_u16().high_u8() {
+<a href=#212 id=212 data-nosnippet>212</a>                    <span class="kw">return </span>u32tosid(repr[o + <span class="number">2</span>]);
+<a href=#213 id=213 data-nosnippet>213</a>                }
+<a href=#214 id=214 data-nosnippet>214</a>            } <span class="kw">else </span>{
+<a href=#215 id=215 data-nosnippet>215</a>                <span class="comment">// NOTE: I tried a SWAR technique in the loop below, but found
+<a href=#216 id=216 data-nosnippet>216</a>                // it slower. See the 'swar' test in the tests for this module.
+<a href=#217 id=217 data-nosnippet>217</a>                </span><span class="kw">let </span>trans_len = kind.as_usize();
+<a href=#218 id=218 data-nosnippet>218</a>                <span class="kw">let </span>classes_len = u32_len(trans_len);
+<a href=#219 id=219 data-nosnippet>219</a>                <span class="kw">let </span>trans_offset = o + <span class="number">2 </span>+ classes_len;
+<a href=#220 id=220 data-nosnippet>220</a>                <span class="kw">for </span>(i, <span class="kw-2">&amp;</span>chunk) <span class="kw">in
+<a href=#221 id=221 data-nosnippet>221</a>                    </span>repr[o + <span class="number">2</span>..][..classes_len].iter().enumerate()
+<a href=#222 id=222 data-nosnippet>222</a>                {
+<a href=#223 id=223 data-nosnippet>223</a>                    <span class="kw">let </span>classes = chunk.to_ne_bytes();
+<a href=#224 id=224 data-nosnippet>224</a>                    <span class="kw">if </span>classes[<span class="number">0</span>] == class {
+<a href=#225 id=225 data-nosnippet>225</a>                        <span class="kw">return </span>u32tosid(repr[trans_offset + i * <span class="number">4</span>]);
+<a href=#226 id=226 data-nosnippet>226</a>                    }
+<a href=#227 id=227 data-nosnippet>227</a>                    <span class="kw">if </span>classes[<span class="number">1</span>] == class {
+<a href=#228 id=228 data-nosnippet>228</a>                        <span class="kw">return </span>u32tosid(repr[trans_offset + i * <span class="number">4 </span>+ <span class="number">1</span>]);
+<a href=#229 id=229 data-nosnippet>229</a>                    }
+<a href=#230 id=230 data-nosnippet>230</a>                    <span class="kw">if </span>classes[<span class="number">2</span>] == class {
+<a href=#231 id=231 data-nosnippet>231</a>                        <span class="kw">return </span>u32tosid(repr[trans_offset + i * <span class="number">4 </span>+ <span class="number">2</span>]);
+<a href=#232 id=232 data-nosnippet>232</a>                    }
+<a href=#233 id=233 data-nosnippet>233</a>                    <span class="kw">if </span>classes[<span class="number">3</span>] == class {
+<a href=#234 id=234 data-nosnippet>234</a>                        <span class="kw">return </span>u32tosid(repr[trans_offset + i * <span class="number">4 </span>+ <span class="number">3</span>]);
+<a href=#235 id=235 data-nosnippet>235</a>                    }
+<a href=#236 id=236 data-nosnippet>236</a>                }
+<a href=#237 id=237 data-nosnippet>237</a>            }
+<a href=#238 id=238 data-nosnippet>238</a>            <span class="comment">// For an anchored search, we never follow failure transitions
+<a href=#239 id=239 data-nosnippet>239</a>            // because failure transitions lead us down a path to matching
+<a href=#240 id=240 data-nosnippet>240</a>            // a *proper* suffix of the path we were on. Thus, it can only
+<a href=#241 id=241 data-nosnippet>241</a>            // produce matches that appear after the beginning of the search.
+<a href=#242 id=242 data-nosnippet>242</a>            </span><span class="kw">if </span>anchored.is_anchored() {
+<a href=#243 id=243 data-nosnippet>243</a>                <span class="kw">return </span>NFA::DEAD;
+<a href=#244 id=244 data-nosnippet>244</a>            }
+<a href=#245 id=245 data-nosnippet>245</a>            sid = u32tosid(repr[o + <span class="number">1</span>]);
+<a href=#246 id=246 data-nosnippet>246</a>        }
+<a href=#247 id=247 data-nosnippet>247</a>    }
+<a href=#248 id=248 data-nosnippet>248</a>
+<a href=#249 id=249 data-nosnippet>249</a>    <span class="attr">#[inline(always)]
+<a href=#250 id=250 data-nosnippet>250</a>    </span><span class="kw">fn </span>is_special(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#251 id=251 data-nosnippet>251</a>        sid &lt;= <span class="self">self</span>.special.max_special_id
+<a href=#252 id=252 data-nosnippet>252</a>    }
+<a href=#253 id=253 data-nosnippet>253</a>
+<a href=#254 id=254 data-nosnippet>254</a>    <span class="attr">#[inline(always)]
+<a href=#255 id=255 data-nosnippet>255</a>    </span><span class="kw">fn </span>is_dead(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#256 id=256 data-nosnippet>256</a>        sid == NFA::DEAD
+<a href=#257 id=257 data-nosnippet>257</a>    }
+<a href=#258 id=258 data-nosnippet>258</a>
+<a href=#259 id=259 data-nosnippet>259</a>    <span class="attr">#[inline(always)]
+<a href=#260 id=260 data-nosnippet>260</a>    </span><span class="kw">fn </span>is_match(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#261 id=261 data-nosnippet>261</a>        !<span class="self">self</span>.is_dead(sid) &amp;&amp; sid &lt;= <span class="self">self</span>.special.max_match_id
+<a href=#262 id=262 data-nosnippet>262</a>    }
+<a href=#263 id=263 data-nosnippet>263</a>
+<a href=#264 id=264 data-nosnippet>264</a>    <span class="attr">#[inline(always)]
+<a href=#265 id=265 data-nosnippet>265</a>    </span><span class="kw">fn </span>is_start(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#266 id=266 data-nosnippet>266</a>        sid == <span class="self">self</span>.special.start_unanchored_id
+<a href=#267 id=267 data-nosnippet>267</a>            || sid == <span class="self">self</span>.special.start_anchored_id
+<a href=#268 id=268 data-nosnippet>268</a>    }
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a>    <span class="attr">#[inline(always)]
+<a href=#271 id=271 data-nosnippet>271</a>    </span><span class="kw">fn </span>match_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MatchKind {
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="self">self</span>.match_kind
+<a href=#273 id=273 data-nosnippet>273</a>    }
+<a href=#274 id=274 data-nosnippet>274</a>
+<a href=#275 id=275 data-nosnippet>275</a>    <span class="attr">#[inline(always)]
+<a href=#276 id=276 data-nosnippet>276</a>    </span><span class="kw">fn </span>patterns_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="self">self</span>.pattern_lens.len()
+<a href=#278 id=278 data-nosnippet>278</a>    }
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="attr">#[inline(always)]
+<a href=#281 id=281 data-nosnippet>281</a>    </span><span class="kw">fn </span>pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>, pid: PatternID) -&gt; usize {
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="self">self</span>.pattern_lens[pid].as_usize()
+<a href=#283 id=283 data-nosnippet>283</a>    }
+<a href=#284 id=284 data-nosnippet>284</a>
+<a href=#285 id=285 data-nosnippet>285</a>    <span class="attr">#[inline(always)]
+<a href=#286 id=286 data-nosnippet>286</a>    </span><span class="kw">fn </span>min_pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#287 id=287 data-nosnippet>287</a>        <span class="self">self</span>.min_pattern_len
+<a href=#288 id=288 data-nosnippet>288</a>    }
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="attr">#[inline(always)]
+<a href=#291 id=291 data-nosnippet>291</a>    </span><span class="kw">fn </span>max_pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#292 id=292 data-nosnippet>292</a>        <span class="self">self</span>.max_pattern_len
+<a href=#293 id=293 data-nosnippet>293</a>    }
+<a href=#294 id=294 data-nosnippet>294</a>
+<a href=#295 id=295 data-nosnippet>295</a>    <span class="attr">#[inline(always)]
+<a href=#296 id=296 data-nosnippet>296</a>    </span><span class="kw">fn </span>match_len(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; usize {
+<a href=#297 id=297 data-nosnippet>297</a>        State::match_len(<span class="self">self</span>.alphabet_len, <span class="kw-2">&amp;</span><span class="self">self</span>.repr[sid.as_usize()..])
+<a href=#298 id=298 data-nosnippet>298</a>    }
+<a href=#299 id=299 data-nosnippet>299</a>
+<a href=#300 id=300 data-nosnippet>300</a>    <span class="attr">#[inline(always)]
+<a href=#301 id=301 data-nosnippet>301</a>    </span><span class="kw">fn </span>match_pattern(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID, index: usize) -&gt; PatternID {
+<a href=#302 id=302 data-nosnippet>302</a>        State::match_pattern(
+<a href=#303 id=303 data-nosnippet>303</a>            <span class="self">self</span>.alphabet_len,
+<a href=#304 id=304 data-nosnippet>304</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.repr[sid.as_usize()..],
+<a href=#305 id=305 data-nosnippet>305</a>            index,
+<a href=#306 id=306 data-nosnippet>306</a>        )
+<a href=#307 id=307 data-nosnippet>307</a>    }
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="attr">#[inline(always)]
+<a href=#310 id=310 data-nosnippet>310</a>    </span><span class="kw">fn </span>memory_usage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="kw">use </span>core::mem::size_of;
+<a href=#312 id=312 data-nosnippet>312</a>
+<a href=#313 id=313 data-nosnippet>313</a>        (<span class="self">self</span>.repr.len() * size_of::&lt;u32&gt;())
+<a href=#314 id=314 data-nosnippet>314</a>            + (<span class="self">self</span>.pattern_lens.len() * size_of::&lt;SmallIndex&gt;())
+<a href=#315 id=315 data-nosnippet>315</a>            + <span class="self">self</span>.prefilter.as_ref().map_or(<span class="number">0</span>, |p| p.memory_usage())
+<a href=#316 id=316 data-nosnippet>316</a>    }
+<a href=#317 id=317 data-nosnippet>317</a>
+<a href=#318 id=318 data-nosnippet>318</a>    <span class="attr">#[inline(always)]
+<a href=#319 id=319 data-nosnippet>319</a>    </span><span class="kw">fn </span>prefilter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Prefilter&gt; {
+<a href=#320 id=320 data-nosnippet>320</a>        <span class="self">self</span>.prefilter.as_ref()
+<a href=#321 id=321 data-nosnippet>321</a>    }
+<a href=#322 id=322 data-nosnippet>322</a>}
+<a href=#323 id=323 data-nosnippet>323</a>
+<a href=#324 id=324 data-nosnippet>324</a><span class="kw">impl </span>core::fmt::Debug <span class="kw">for </span>NFA {
+<a href=#325 id=325 data-nosnippet>325</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>core::fmt::Formatter) -&gt; core::fmt::Result {
+<a href=#326 id=326 data-nosnippet>326</a>        <span class="kw">use </span><span class="kw">crate</span>::automaton::fmt_state_indicator;
+<a href=#327 id=327 data-nosnippet>327</a>
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="macro">writeln!</span>(f, <span class="string">"contiguous::NFA("</span>)<span class="question-mark">?</span>;
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">let </span><span class="kw-2">mut </span>sid = NFA::DEAD; <span class="comment">// always the first state and always present
+<a href=#330 id=330 data-nosnippet>330</a>        </span><span class="kw">loop </span>{
+<a href=#331 id=331 data-nosnippet>331</a>            <span class="kw">let </span>raw = <span class="kw-2">&amp;</span><span class="self">self</span>.repr[sid.as_usize()..];
+<a href=#332 id=332 data-nosnippet>332</a>            <span class="kw">if </span>raw.is_empty() {
+<a href=#333 id=333 data-nosnippet>333</a>                <span class="kw">break</span>;
+<a href=#334 id=334 data-nosnippet>334</a>            }
+<a href=#335 id=335 data-nosnippet>335</a>            <span class="kw">let </span>is_match = <span class="self">self</span>.is_match(sid);
+<a href=#336 id=336 data-nosnippet>336</a>            <span class="kw">let </span>state = State::read(<span class="self">self</span>.alphabet_len, is_match, raw);
+<a href=#337 id=337 data-nosnippet>337</a>            fmt_state_indicator(f, <span class="self">self</span>, sid)<span class="question-mark">?</span>;
+<a href=#338 id=338 data-nosnippet>338</a>            <span class="macro">write!</span>(
+<a href=#339 id=339 data-nosnippet>339</a>                f,
+<a href=#340 id=340 data-nosnippet>340</a>                <span class="string">"{:06}({:06}): "</span>,
+<a href=#341 id=341 data-nosnippet>341</a>                sid.as_usize(),
+<a href=#342 id=342 data-nosnippet>342</a>                state.fail.as_usize()
+<a href=#343 id=343 data-nosnippet>343</a>            )<span class="question-mark">?</span>;
+<a href=#344 id=344 data-nosnippet>344</a>            state.fmt(f)<span class="question-mark">?</span>;
+<a href=#345 id=345 data-nosnippet>345</a>            <span class="macro">write!</span>(f, <span class="string">"\n"</span>)<span class="question-mark">?</span>;
+<a href=#346 id=346 data-nosnippet>346</a>            <span class="kw">if </span><span class="self">self</span>.is_match(sid) {
+<a href=#347 id=347 data-nosnippet>347</a>                <span class="macro">write!</span>(f, <span class="string">"         matches: "</span>)<span class="question-mark">?</span>;
+<a href=#348 id=348 data-nosnippet>348</a>                <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..state.match_len {
+<a href=#349 id=349 data-nosnippet>349</a>                    <span class="kw">let </span>pid = State::match_pattern(<span class="self">self</span>.alphabet_len, raw, i);
+<a href=#350 id=350 data-nosnippet>350</a>                    <span class="kw">if </span>i &gt; <span class="number">0 </span>{
+<a href=#351 id=351 data-nosnippet>351</a>                        <span class="macro">write!</span>(f, <span class="string">", "</span>)<span class="question-mark">?</span>;
+<a href=#352 id=352 data-nosnippet>352</a>                    }
+<a href=#353 id=353 data-nosnippet>353</a>                    <span class="macro">write!</span>(f, <span class="string">"{}"</span>, pid.as_usize())<span class="question-mark">?</span>;
+<a href=#354 id=354 data-nosnippet>354</a>                }
+<a href=#355 id=355 data-nosnippet>355</a>                <span class="macro">write!</span>(f, <span class="string">"\n"</span>)<span class="question-mark">?</span>;
+<a href=#356 id=356 data-nosnippet>356</a>            }
+<a href=#357 id=357 data-nosnippet>357</a>            <span class="comment">// The FAIL state doesn't actually have space for a state allocated
+<a href=#358 id=358 data-nosnippet>358</a>            // for it, so we have to treat it as a special case. write below
+<a href=#359 id=359 data-nosnippet>359</a>            // the DEAD state.
+<a href=#360 id=360 data-nosnippet>360</a>            </span><span class="kw">if </span>sid == NFA::DEAD {
+<a href=#361 id=361 data-nosnippet>361</a>                <span class="macro">writeln!</span>(f, <span class="string">"F {:06}:"</span>, NFA::FAIL.as_usize())<span class="question-mark">?</span>;
+<a href=#362 id=362 data-nosnippet>362</a>            }
+<a href=#363 id=363 data-nosnippet>363</a>            <span class="kw">let </span>len = State::len(<span class="self">self</span>.alphabet_len, is_match, raw);
+<a href=#364 id=364 data-nosnippet>364</a>            sid = StateID::new(sid.as_usize().checked_add(len).unwrap())
+<a href=#365 id=365 data-nosnippet>365</a>                .unwrap();
+<a href=#366 id=366 data-nosnippet>366</a>        }
+<a href=#367 id=367 data-nosnippet>367</a>        <span class="macro">writeln!</span>(f, <span class="string">"match kind: {:?}"</span>, <span class="self">self</span>.match_kind)<span class="question-mark">?</span>;
+<a href=#368 id=368 data-nosnippet>368</a>        <span class="macro">writeln!</span>(f, <span class="string">"prefilter: {:?}"</span>, <span class="self">self</span>.prefilter.is_some())<span class="question-mark">?</span>;
+<a href=#369 id=369 data-nosnippet>369</a>        <span class="macro">writeln!</span>(f, <span class="string">"state length: {:?}"</span>, <span class="self">self</span>.state_len)<span class="question-mark">?</span>;
+<a href=#370 id=370 data-nosnippet>370</a>        <span class="macro">writeln!</span>(f, <span class="string">"pattern length: {:?}"</span>, <span class="self">self</span>.patterns_len())<span class="question-mark">?</span>;
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="macro">writeln!</span>(f, <span class="string">"shortest pattern length: {:?}"</span>, <span class="self">self</span>.min_pattern_len)<span class="question-mark">?</span>;
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="macro">writeln!</span>(f, <span class="string">"longest pattern length: {:?}"</span>, <span class="self">self</span>.max_pattern_len)<span class="question-mark">?</span>;
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="macro">writeln!</span>(f, <span class="string">"alphabet length: {:?}"</span>, <span class="self">self</span>.alphabet_len)<span class="question-mark">?</span>;
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="macro">writeln!</span>(f, <span class="string">"byte classes: {:?}"</span>, <span class="self">self</span>.byte_classes)<span class="question-mark">?</span>;
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="macro">writeln!</span>(f, <span class="string">"memory usage: {:?}"</span>, <span class="self">self</span>.memory_usage())<span class="question-mark">?</span>;
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="macro">writeln!</span>(f, <span class="string">")"</span>)<span class="question-mark">?</span>;
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="prelude-val">Ok</span>(())
+<a href=#379 id=379 data-nosnippet>379</a>    }
+<a href=#380 id=380 data-nosnippet>380</a>}
+<a href=#381 id=381 data-nosnippet>381</a>
+<a href=#382 id=382 data-nosnippet>382</a><span class="doccomment">/// The "in memory" representation a single dense or sparse state.
+<a href=#383 id=383 data-nosnippet>383</a>///
+<a href=#384 id=384 data-nosnippet>384</a>/// A `State`'s in memory representation is not ever actually materialized
+<a href=#385 id=385 data-nosnippet>385</a>/// during a search with a contiguous NFA. Doing so would be too slow. (Indeed,
+<a href=#386 id=386 data-nosnippet>386</a>/// the only time a `State` is actually constructed is in `Debug` impls.)
+<a href=#387 id=387 data-nosnippet>387</a>/// Instead, a `State` exposes a number of static methods for reading certain
+<a href=#388 id=388 data-nosnippet>388</a>/// things from the raw binary encoding of the state.
+<a href=#389 id=389 data-nosnippet>389</a></span><span class="attr">#[derive(Clone)]
+<a href=#390 id=390 data-nosnippet>390</a></span><span class="kw">struct </span>State&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="doccomment">/// The state to transition to when 'class_to_next' yields a transition
+<a href=#392 id=392 data-nosnippet>392</a>    /// to the FAIL state.
+<a href=#393 id=393 data-nosnippet>393</a>    </span>fail: StateID,
+<a href=#394 id=394 data-nosnippet>394</a>    <span class="doccomment">/// The number of pattern IDs in this state. For a non-match state, this is
+<a href=#395 id=395 data-nosnippet>395</a>    /// always zero. Otherwise it is always bigger than zero.
+<a href=#396 id=396 data-nosnippet>396</a>    </span>match_len: usize,
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="doccomment">/// The sparse or dense representation of the transitions for this state.
+<a href=#398 id=398 data-nosnippet>398</a>    </span>trans: StateTrans&lt;<span class="lifetime">'a</span>&gt;,
+<a href=#399 id=399 data-nosnippet>399</a>}
+<a href=#400 id=400 data-nosnippet>400</a>
+<a href=#401 id=401 data-nosnippet>401</a><span class="doccomment">/// The underlying representation of sparse or dense transitions for a state.
+<a href=#402 id=402 data-nosnippet>402</a>///
+<a href=#403 id=403 data-nosnippet>403</a>/// Note that like `State`, we don't typically construct values of this type
+<a href=#404 id=404 data-nosnippet>404</a>/// during a search since we don't always need all values and thus would
+<a href=#405 id=405 data-nosnippet>405</a>/// represent a lot of wasteful work.
+<a href=#406 id=406 data-nosnippet>406</a></span><span class="attr">#[derive(Clone)]
+<a href=#407 id=407 data-nosnippet>407</a></span><span class="kw">enum </span>StateTrans&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="doccomment">/// A sparse representation of transitions for a state, where only non-FAIL
+<a href=#409 id=409 data-nosnippet>409</a>    /// transitions are explicitly represented.
+<a href=#410 id=410 data-nosnippet>410</a>    </span>Sparse {
+<a href=#411 id=411 data-nosnippet>411</a>        classes: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u32],
+<a href=#412 id=412 data-nosnippet>412</a>        <span class="doccomment">/// The transitions for this state, where each transition is packed
+<a href=#413 id=413 data-nosnippet>413</a>        /// into a u32. The low 8 bits correspond to the byte class for the
+<a href=#414 id=414 data-nosnippet>414</a>        /// transition, and the high 24 bits correspond to the next state ID.
+<a href=#415 id=415 data-nosnippet>415</a>        ///
+<a href=#416 id=416 data-nosnippet>416</a>        /// This packing is why the max state ID allowed for a contiguous
+<a href=#417 id=417 data-nosnippet>417</a>        /// NFA is 2^24-1.
+<a href=#418 id=418 data-nosnippet>418</a>        </span>nexts: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u32],
+<a href=#419 id=419 data-nosnippet>419</a>    },
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="doccomment">/// A "one transition" state that is never a match state.
+<a href=#421 id=421 data-nosnippet>421</a>    ///
+<a href=#422 id=422 data-nosnippet>422</a>    /// These are by far the most common state, so we use a specialized and
+<a href=#423 id=423 data-nosnippet>423</a>    /// very compact representation for them.
+<a href=#424 id=424 data-nosnippet>424</a>    </span>One {
+<a href=#425 id=425 data-nosnippet>425</a>        <span class="doccomment">/// The element of this NFA's alphabet that this transition is
+<a href=#426 id=426 data-nosnippet>426</a>        /// defined for.
+<a href=#427 id=427 data-nosnippet>427</a>        </span>class: u8,
+<a href=#428 id=428 data-nosnippet>428</a>        <span class="doccomment">/// The state this should transition to if the current symbol is
+<a href=#429 id=429 data-nosnippet>429</a>        /// equal to 'class'.
+<a href=#430 id=430 data-nosnippet>430</a>        </span>next: u32,
+<a href=#431 id=431 data-nosnippet>431</a>    },
+<a href=#432 id=432 data-nosnippet>432</a>    <span class="doccomment">/// A dense representation of transitions for a state, where all
+<a href=#433 id=433 data-nosnippet>433</a>    /// transitions are explicitly represented, including transitions to the
+<a href=#434 id=434 data-nosnippet>434</a>    /// FAIL state.
+<a href=#435 id=435 data-nosnippet>435</a>    </span>Dense {
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="doccomment">/// A dense set of transitions to other states. The transitions may
+<a href=#437 id=437 data-nosnippet>437</a>        /// point to a FAIL state, in which case, the search should try the
+<a href=#438 id=438 data-nosnippet>438</a>        /// same transition lookup at 'fail'.
+<a href=#439 id=439 data-nosnippet>439</a>        ///
+<a href=#440 id=440 data-nosnippet>440</a>        /// Note that this is indexed by byte equivalence classes and not
+<a href=#441 id=441 data-nosnippet>441</a>        /// byte values. That means 'class_to_next[byte]' is wrong and
+<a href=#442 id=442 data-nosnippet>442</a>        /// 'class_to_next[classes.get(byte)]' is correct. The number of
+<a href=#443 id=443 data-nosnippet>443</a>        /// transitions is always equivalent to 'classes.alphabet_len()'.
+<a href=#444 id=444 data-nosnippet>444</a>        </span>class_to_next: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u32],
+<a href=#445 id=445 data-nosnippet>445</a>    },
+<a href=#446 id=446 data-nosnippet>446</a>}
+<a href=#447 id=447 data-nosnippet>447</a>
+<a href=#448 id=448 data-nosnippet>448</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; State&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#449 id=449 data-nosnippet>449</a>    <span class="doccomment">/// The offset of where the "kind" of a state is stored. If it isn't one
+<a href=#450 id=450 data-nosnippet>450</a>    /// of the sentinel values below, then it's a sparse state and the kind
+<a href=#451 id=451 data-nosnippet>451</a>    /// corresponds to the number of transitions in the state.
+<a href=#452 id=452 data-nosnippet>452</a>    </span><span class="kw">const </span>KIND: usize = <span class="number">0</span>;
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a>    <span class="doccomment">/// A sentinel value indicating that the state uses a dense representation.
+<a href=#455 id=455 data-nosnippet>455</a>    </span><span class="kw">const </span>KIND_DENSE: u32 = <span class="number">0xFF</span>;
+<a href=#456 id=456 data-nosnippet>456</a>    <span class="doccomment">/// A sentinel value indicating that the state uses a special "one
+<a href=#457 id=457 data-nosnippet>457</a>    /// transition" encoding. In practice, non-match states with one transition
+<a href=#458 id=458 data-nosnippet>458</a>    /// make up the overwhelming majority of all states in any given
+<a href=#459 id=459 data-nosnippet>459</a>    /// Aho-Corasick automaton, so we can specialize them using a very compact
+<a href=#460 id=460 data-nosnippet>460</a>    /// representation.
+<a href=#461 id=461 data-nosnippet>461</a>    </span><span class="kw">const </span>KIND_ONE: u32 = <span class="number">0xFE</span>;
+<a href=#462 id=462 data-nosnippet>462</a>
+<a href=#463 id=463 data-nosnippet>463</a>    <span class="doccomment">/// The maximum number of transitions to encode as a sparse state. Usually
+<a href=#464 id=464 data-nosnippet>464</a>    /// states with a lot of transitions are either very rare, or occur near
+<a href=#465 id=465 data-nosnippet>465</a>    /// the start state. In the latter case, they are probably dense already
+<a href=#466 id=466 data-nosnippet>466</a>    /// anyway. In the former case, making them dense is fine because they're
+<a href=#467 id=467 data-nosnippet>467</a>    /// rare.
+<a href=#468 id=468 data-nosnippet>468</a>    ///
+<a href=#469 id=469 data-nosnippet>469</a>    /// This needs to be small enough to permit each of the sentinel values for
+<a href=#470 id=470 data-nosnippet>470</a>    /// 'KIND' above. Namely, a sparse state embeds the number of transitions
+<a href=#471 id=471 data-nosnippet>471</a>    /// into the 'KIND'. Basically, "sparse" is a state kind too, but it's the
+<a href=#472 id=472 data-nosnippet>472</a>    /// "else" branch.
+<a href=#473 id=473 data-nosnippet>473</a>    ///
+<a href=#474 id=474 data-nosnippet>474</a>    /// N.B. There isn't anything particularly magical about 127 here. I
+<a href=#475 id=475 data-nosnippet>475</a>    /// just picked it because I figured any sparse state with this many
+<a href=#476 id=476 data-nosnippet>476</a>    /// transitions is going to be exceptionally rare, and if it did have this
+<a href=#477 id=477 data-nosnippet>477</a>    /// many transitions, then it would be quite slow to do a linear scan on
+<a href=#478 id=478 data-nosnippet>478</a>    /// the transitions during a search anyway.
+<a href=#479 id=479 data-nosnippet>479</a>    </span><span class="kw">const </span>MAX_SPARSE_TRANSITIONS: usize = <span class="number">127</span>;
+<a href=#480 id=480 data-nosnippet>480</a>
+<a href=#481 id=481 data-nosnippet>481</a>    <span class="doccomment">/// Remap state IDs in-place.
+<a href=#482 id=482 data-nosnippet>482</a>    ///
+<a href=#483 id=483 data-nosnippet>483</a>    /// `state` should be the the raw binary encoding of a state. (The start
+<a href=#484 id=484 data-nosnippet>484</a>    /// of the slice must correspond to the start of the state, but the slice
+<a href=#485 id=485 data-nosnippet>485</a>    /// may extend past the end of the encoding of the state.)
+<a href=#486 id=486 data-nosnippet>486</a>    </span><span class="kw">fn </span>remap(
+<a href=#487 id=487 data-nosnippet>487</a>        alphabet_len: usize,
+<a href=#488 id=488 data-nosnippet>488</a>        old_to_new: <span class="kw-2">&amp;</span>[StateID],
+<a href=#489 id=489 data-nosnippet>489</a>        state: <span class="kw-2">&amp;mut </span>[u32],
+<a href=#490 id=490 data-nosnippet>490</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="kw">let </span>kind = State::kind(state);
+<a href=#492 id=492 data-nosnippet>492</a>        <span class="kw">if </span>kind == State::KIND_DENSE {
+<a href=#493 id=493 data-nosnippet>493</a>            state[<span class="number">1</span>] = old_to_new[state[<span class="number">1</span>].as_usize()].as_u32();
+<a href=#494 id=494 data-nosnippet>494</a>            <span class="kw">for </span>next <span class="kw">in </span>state[<span class="number">2</span>..][..alphabet_len].iter_mut() {
+<a href=#495 id=495 data-nosnippet>495</a>                <span class="kw-2">*</span>next = old_to_new[next.as_usize()].as_u32();
+<a href=#496 id=496 data-nosnippet>496</a>            }
+<a href=#497 id=497 data-nosnippet>497</a>        } <span class="kw">else if </span>kind == State::KIND_ONE {
+<a href=#498 id=498 data-nosnippet>498</a>            state[<span class="number">1</span>] = old_to_new[state[<span class="number">1</span>].as_usize()].as_u32();
+<a href=#499 id=499 data-nosnippet>499</a>            state[<span class="number">2</span>] = old_to_new[state[<span class="number">2</span>].as_usize()].as_u32();
+<a href=#500 id=500 data-nosnippet>500</a>        } <span class="kw">else </span>{
+<a href=#501 id=501 data-nosnippet>501</a>            <span class="kw">let </span>trans_len = State::sparse_trans_len(state);
+<a href=#502 id=502 data-nosnippet>502</a>            <span class="kw">let </span>classes_len = u32_len(trans_len);
+<a href=#503 id=503 data-nosnippet>503</a>            state[<span class="number">1</span>] = old_to_new[state[<span class="number">1</span>].as_usize()].as_u32();
+<a href=#504 id=504 data-nosnippet>504</a>            <span class="kw">for </span>next <span class="kw">in </span>state[<span class="number">2 </span>+ classes_len..][..trans_len].iter_mut() {
+<a href=#505 id=505 data-nosnippet>505</a>                <span class="kw-2">*</span>next = old_to_new[next.as_usize()].as_u32();
+<a href=#506 id=506 data-nosnippet>506</a>            }
+<a href=#507 id=507 data-nosnippet>507</a>        }
+<a href=#508 id=508 data-nosnippet>508</a>        <span class="prelude-val">Ok</span>(())
+<a href=#509 id=509 data-nosnippet>509</a>    }
+<a href=#510 id=510 data-nosnippet>510</a>
+<a href=#511 id=511 data-nosnippet>511</a>    <span class="doccomment">/// Returns the length, in number of u32s, of this state.
+<a href=#512 id=512 data-nosnippet>512</a>    ///
+<a href=#513 id=513 data-nosnippet>513</a>    /// This is useful for reading states consecutively, e.g., in the Debug
+<a href=#514 id=514 data-nosnippet>514</a>    /// impl without needing to store a separate map from state index to state
+<a href=#515 id=515 data-nosnippet>515</a>    /// identifier.
+<a href=#516 id=516 data-nosnippet>516</a>    ///
+<a href=#517 id=517 data-nosnippet>517</a>    /// `state` should be the the raw binary encoding of a state. (The start
+<a href=#518 id=518 data-nosnippet>518</a>    /// of the slice must correspond to the start of the state, but the slice
+<a href=#519 id=519 data-nosnippet>519</a>    /// may extend past the end of the encoding of the state.)
+<a href=#520 id=520 data-nosnippet>520</a>    </span><span class="kw">fn </span>len(alphabet_len: usize, is_match: bool, state: <span class="kw-2">&amp;</span>[u32]) -&gt; usize {
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span>kind_len = <span class="number">1</span>;
+<a href=#522 id=522 data-nosnippet>522</a>        <span class="kw">let </span>fail_len = <span class="number">1</span>;
+<a href=#523 id=523 data-nosnippet>523</a>        <span class="kw">let </span>kind = State::kind(state);
+<a href=#524 id=524 data-nosnippet>524</a>        <span class="kw">let </span>(classes_len, trans_len) = <span class="kw">if </span>kind == State::KIND_DENSE {
+<a href=#525 id=525 data-nosnippet>525</a>            (<span class="number">0</span>, alphabet_len)
+<a href=#526 id=526 data-nosnippet>526</a>        } <span class="kw">else if </span>kind == State::KIND_ONE {
+<a href=#527 id=527 data-nosnippet>527</a>            (<span class="number">0</span>, <span class="number">1</span>)
+<a href=#528 id=528 data-nosnippet>528</a>        } <span class="kw">else </span>{
+<a href=#529 id=529 data-nosnippet>529</a>            <span class="kw">let </span>trans_len = State::sparse_trans_len(state);
+<a href=#530 id=530 data-nosnippet>530</a>            <span class="kw">let </span>classes_len = u32_len(trans_len);
+<a href=#531 id=531 data-nosnippet>531</a>            (classes_len, trans_len)
+<a href=#532 id=532 data-nosnippet>532</a>        };
+<a href=#533 id=533 data-nosnippet>533</a>        <span class="kw">let </span>match_len = <span class="kw">if </span>!is_match {
+<a href=#534 id=534 data-nosnippet>534</a>            <span class="number">0
+<a href=#535 id=535 data-nosnippet>535</a>        </span>} <span class="kw">else if </span>State::match_len(alphabet_len, state) == <span class="number">1 </span>{
+<a href=#536 id=536 data-nosnippet>536</a>            <span class="comment">// This is a special case because when there is one pattern ID for
+<a href=#537 id=537 data-nosnippet>537</a>            // a match state, it is represented by a single u32 with its high
+<a href=#538 id=538 data-nosnippet>538</a>            // bit set (which is impossible for a valid pattern ID).
+<a href=#539 id=539 data-nosnippet>539</a>            </span><span class="number">1
+<a href=#540 id=540 data-nosnippet>540</a>        </span>} <span class="kw">else </span>{
+<a href=#541 id=541 data-nosnippet>541</a>            <span class="comment">// We add 1 to include the u32 that indicates the number of
+<a href=#542 id=542 data-nosnippet>542</a>            // pattern IDs that follow.
+<a href=#543 id=543 data-nosnippet>543</a>            </span><span class="number">1 </span>+ State::match_len(alphabet_len, state)
+<a href=#544 id=544 data-nosnippet>544</a>        };
+<a href=#545 id=545 data-nosnippet>545</a>        kind_len + fail_len + classes_len + trans_len + match_len
+<a href=#546 id=546 data-nosnippet>546</a>    }
+<a href=#547 id=547 data-nosnippet>547</a>
+<a href=#548 id=548 data-nosnippet>548</a>    <span class="doccomment">/// Returns the kind of this state.
+<a href=#549 id=549 data-nosnippet>549</a>    ///
+<a href=#550 id=550 data-nosnippet>550</a>    /// This only includes the low byte.
+<a href=#551 id=551 data-nosnippet>551</a>    </span><span class="attr">#[inline(always)]
+<a href=#552 id=552 data-nosnippet>552</a>    </span><span class="kw">fn </span>kind(state: <span class="kw-2">&amp;</span>[u32]) -&gt; u32 {
+<a href=#553 id=553 data-nosnippet>553</a>        state[State::KIND] &amp; <span class="number">0xFF
+<a href=#554 id=554 data-nosnippet>554</a>    </span>}
+<a href=#555 id=555 data-nosnippet>555</a>
+<a href=#556 id=556 data-nosnippet>556</a>    <span class="doccomment">/// Get the number of sparse transitions in this state. This can never
+<a href=#557 id=557 data-nosnippet>557</a>    /// be more than State::MAX_SPARSE_TRANSITIONS, as all states with more
+<a href=#558 id=558 data-nosnippet>558</a>    /// transitions are encoded as dense states.
+<a href=#559 id=559 data-nosnippet>559</a>    ///
+<a href=#560 id=560 data-nosnippet>560</a>    /// `state` should be the the raw binary encoding of a sparse state. (The
+<a href=#561 id=561 data-nosnippet>561</a>    /// start of the slice must correspond to the start of the state, but the
+<a href=#562 id=562 data-nosnippet>562</a>    /// slice may extend past the end of the encoding of the state.) If this
+<a href=#563 id=563 data-nosnippet>563</a>    /// isn't a sparse state, then the return value is unspecified.
+<a href=#564 id=564 data-nosnippet>564</a>    ///
+<a href=#565 id=565 data-nosnippet>565</a>    /// Do note that this is only legal to call on a sparse state. So for
+<a href=#566 id=566 data-nosnippet>566</a>    /// example, "one transition" state is not a sparse state, so it would not
+<a href=#567 id=567 data-nosnippet>567</a>    /// be legal to call this method on such a state.
+<a href=#568 id=568 data-nosnippet>568</a>    </span><span class="attr">#[inline(always)]
+<a href=#569 id=569 data-nosnippet>569</a>    </span><span class="kw">fn </span>sparse_trans_len(state: <span class="kw-2">&amp;</span>[u32]) -&gt; usize {
+<a href=#570 id=570 data-nosnippet>570</a>        (state[State::KIND] &amp; <span class="number">0xFF</span>).as_usize()
+<a href=#571 id=571 data-nosnippet>571</a>    }
+<a href=#572 id=572 data-nosnippet>572</a>
+<a href=#573 id=573 data-nosnippet>573</a>    <span class="doccomment">/// Returns the total number of matching pattern IDs in this state. Calling
+<a href=#574 id=574 data-nosnippet>574</a>    /// this on a state that isn't a match results in unspecified behavior.
+<a href=#575 id=575 data-nosnippet>575</a>    /// Thus, the returned number is never 0 for all correct calls.
+<a href=#576 id=576 data-nosnippet>576</a>    ///
+<a href=#577 id=577 data-nosnippet>577</a>    /// `state` should be the the raw binary encoding of a state. (The start
+<a href=#578 id=578 data-nosnippet>578</a>    /// of the slice must correspond to the start of the state, but the slice
+<a href=#579 id=579 data-nosnippet>579</a>    /// may extend past the end of the encoding of the state.)
+<a href=#580 id=580 data-nosnippet>580</a>    </span><span class="attr">#[inline(always)]
+<a href=#581 id=581 data-nosnippet>581</a>    </span><span class="kw">fn </span>match_len(alphabet_len: usize, state: <span class="kw-2">&amp;</span>[u32]) -&gt; usize {
+<a href=#582 id=582 data-nosnippet>582</a>        <span class="comment">// We don't need to handle KIND_ONE here because it can never be a
+<a href=#583 id=583 data-nosnippet>583</a>        // match state.
+<a href=#584 id=584 data-nosnippet>584</a>        </span><span class="kw">let </span>packed = <span class="kw">if </span>State::kind(state) == State::KIND_DENSE {
+<a href=#585 id=585 data-nosnippet>585</a>            <span class="kw">let </span>start = <span class="number">2 </span>+ alphabet_len;
+<a href=#586 id=586 data-nosnippet>586</a>            state[start].as_usize()
+<a href=#587 id=587 data-nosnippet>587</a>        } <span class="kw">else </span>{
+<a href=#588 id=588 data-nosnippet>588</a>            <span class="kw">let </span>trans_len = State::sparse_trans_len(state);
+<a href=#589 id=589 data-nosnippet>589</a>            <span class="kw">let </span>classes_len = u32_len(trans_len);
+<a href=#590 id=590 data-nosnippet>590</a>            <span class="kw">let </span>start = <span class="number">2 </span>+ classes_len + trans_len;
+<a href=#591 id=591 data-nosnippet>591</a>            state[start].as_usize()
+<a href=#592 id=592 data-nosnippet>592</a>        };
+<a href=#593 id=593 data-nosnippet>593</a>        <span class="kw">if </span>packed &amp; (<span class="number">1 </span>&lt;&lt; <span class="number">31</span>) == <span class="number">0 </span>{
+<a href=#594 id=594 data-nosnippet>594</a>            packed
+<a href=#595 id=595 data-nosnippet>595</a>        } <span class="kw">else </span>{
+<a href=#596 id=596 data-nosnippet>596</a>            <span class="number">1
+<a href=#597 id=597 data-nosnippet>597</a>        </span>}
+<a href=#598 id=598 data-nosnippet>598</a>    }
+<a href=#599 id=599 data-nosnippet>599</a>
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="doccomment">/// Returns the pattern ID corresponding to the given index for the state
+<a href=#601 id=601 data-nosnippet>601</a>    /// given. The `index` provided must be less than the number of pattern IDs
+<a href=#602 id=602 data-nosnippet>602</a>    /// in this state.
+<a href=#603 id=603 data-nosnippet>603</a>    ///
+<a href=#604 id=604 data-nosnippet>604</a>    /// `state` should be the the raw binary encoding of a state. (The start of
+<a href=#605 id=605 data-nosnippet>605</a>    /// the slice must correspond to the start of the state, but the slice may
+<a href=#606 id=606 data-nosnippet>606</a>    /// extend past the end of the encoding of the state.)
+<a href=#607 id=607 data-nosnippet>607</a>    ///
+<a href=#608 id=608 data-nosnippet>608</a>    /// If the given state is not a match state or if the index is out of
+<a href=#609 id=609 data-nosnippet>609</a>    /// bounds, then this has unspecified behavior.
+<a href=#610 id=610 data-nosnippet>610</a>    </span><span class="attr">#[inline(always)]
+<a href=#611 id=611 data-nosnippet>611</a>    </span><span class="kw">fn </span>match_pattern(
+<a href=#612 id=612 data-nosnippet>612</a>        alphabet_len: usize,
+<a href=#613 id=613 data-nosnippet>613</a>        state: <span class="kw-2">&amp;</span>[u32],
+<a href=#614 id=614 data-nosnippet>614</a>        index: usize,
+<a href=#615 id=615 data-nosnippet>615</a>    ) -&gt; PatternID {
+<a href=#616 id=616 data-nosnippet>616</a>        <span class="comment">// We don't need to handle KIND_ONE here because it can never be a
+<a href=#617 id=617 data-nosnippet>617</a>        // match state.
+<a href=#618 id=618 data-nosnippet>618</a>        </span><span class="kw">let </span>start = <span class="kw">if </span>State::kind(state) == State::KIND_DENSE {
+<a href=#619 id=619 data-nosnippet>619</a>            <span class="number">2 </span>+ alphabet_len
+<a href=#620 id=620 data-nosnippet>620</a>        } <span class="kw">else </span>{
+<a href=#621 id=621 data-nosnippet>621</a>            <span class="kw">let </span>trans_len = State::sparse_trans_len(state);
+<a href=#622 id=622 data-nosnippet>622</a>            <span class="kw">let </span>classes_len = u32_len(trans_len);
+<a href=#623 id=623 data-nosnippet>623</a>            <span class="number">2 </span>+ classes_len + trans_len
+<a href=#624 id=624 data-nosnippet>624</a>        };
+<a href=#625 id=625 data-nosnippet>625</a>        <span class="kw">let </span>packed = state[start];
+<a href=#626 id=626 data-nosnippet>626</a>        <span class="kw">let </span>pid = <span class="kw">if </span>packed &amp; (<span class="number">1 </span>&lt;&lt; <span class="number">31</span>) == <span class="number">0 </span>{
+<a href=#627 id=627 data-nosnippet>627</a>            state[start + <span class="number">1 </span>+ index]
+<a href=#628 id=628 data-nosnippet>628</a>        } <span class="kw">else </span>{
+<a href=#629 id=629 data-nosnippet>629</a>            <span class="macro">assert_eq!</span>(<span class="number">0</span>, index);
+<a href=#630 id=630 data-nosnippet>630</a>            packed &amp; !(<span class="number">1 </span>&lt;&lt; <span class="number">31</span>)
+<a href=#631 id=631 data-nosnippet>631</a>        };
+<a href=#632 id=632 data-nosnippet>632</a>        PatternID::from_u32_unchecked(pid)
+<a href=#633 id=633 data-nosnippet>633</a>    }
+<a href=#634 id=634 data-nosnippet>634</a>
+<a href=#635 id=635 data-nosnippet>635</a>    <span class="doccomment">/// Read a state's binary encoding to its in-memory representation.
+<a href=#636 id=636 data-nosnippet>636</a>    ///
+<a href=#637 id=637 data-nosnippet>637</a>    /// `alphabet_len` should be the total number of transitions defined for
+<a href=#638 id=638 data-nosnippet>638</a>    /// dense states.
+<a href=#639 id=639 data-nosnippet>639</a>    ///
+<a href=#640 id=640 data-nosnippet>640</a>    /// `is_match` should be true if this state is a match state and false
+<a href=#641 id=641 data-nosnippet>641</a>    /// otherwise.
+<a href=#642 id=642 data-nosnippet>642</a>    ///
+<a href=#643 id=643 data-nosnippet>643</a>    /// `state` should be the the raw binary encoding of a state. (The start
+<a href=#644 id=644 data-nosnippet>644</a>    /// of the slice must correspond to the start of the state, but the slice
+<a href=#645 id=645 data-nosnippet>645</a>    /// may extend past the end of the encoding of the state.)
+<a href=#646 id=646 data-nosnippet>646</a>    </span><span class="kw">fn </span>read(
+<a href=#647 id=647 data-nosnippet>647</a>        alphabet_len: usize,
+<a href=#648 id=648 data-nosnippet>648</a>        is_match: bool,
+<a href=#649 id=649 data-nosnippet>649</a>        state: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u32],
+<a href=#650 id=650 data-nosnippet>650</a>    ) -&gt; State&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#651 id=651 data-nosnippet>651</a>        <span class="kw">let </span>kind = State::kind(state);
+<a href=#652 id=652 data-nosnippet>652</a>        <span class="kw">let </span>match_len =
+<a href=#653 id=653 data-nosnippet>653</a>            <span class="kw">if </span>!is_match { <span class="number">0 </span>} <span class="kw">else </span>{ State::match_len(alphabet_len, state) };
+<a href=#654 id=654 data-nosnippet>654</a>        <span class="kw">let </span>(trans, fail) = <span class="kw">if </span>kind == State::KIND_DENSE {
+<a href=#655 id=655 data-nosnippet>655</a>            <span class="kw">let </span>fail = StateID::from_u32_unchecked(state[<span class="number">1</span>]);
+<a href=#656 id=656 data-nosnippet>656</a>            <span class="kw">let </span>class_to_next = <span class="kw-2">&amp;</span>state[<span class="number">2</span>..][..alphabet_len];
+<a href=#657 id=657 data-nosnippet>657</a>            (StateTrans::Dense { class_to_next }, fail)
+<a href=#658 id=658 data-nosnippet>658</a>        } <span class="kw">else if </span>kind == State::KIND_ONE {
+<a href=#659 id=659 data-nosnippet>659</a>            <span class="kw">let </span>fail = StateID::from_u32_unchecked(state[<span class="number">1</span>]);
+<a href=#660 id=660 data-nosnippet>660</a>            <span class="kw">let </span>class = state[State::KIND].low_u16().high_u8();
+<a href=#661 id=661 data-nosnippet>661</a>            <span class="kw">let </span>next = state[<span class="number">2</span>];
+<a href=#662 id=662 data-nosnippet>662</a>            (StateTrans::One { class, next }, fail)
+<a href=#663 id=663 data-nosnippet>663</a>        } <span class="kw">else </span>{
+<a href=#664 id=664 data-nosnippet>664</a>            <span class="kw">let </span>fail = StateID::from_u32_unchecked(state[<span class="number">1</span>]);
+<a href=#665 id=665 data-nosnippet>665</a>            <span class="kw">let </span>trans_len = State::sparse_trans_len(state);
+<a href=#666 id=666 data-nosnippet>666</a>            <span class="kw">let </span>classes_len = u32_len(trans_len);
+<a href=#667 id=667 data-nosnippet>667</a>            <span class="kw">let </span>classes = <span class="kw-2">&amp;</span>state[<span class="number">2</span>..][..classes_len];
+<a href=#668 id=668 data-nosnippet>668</a>            <span class="kw">let </span>nexts = <span class="kw-2">&amp;</span>state[<span class="number">2 </span>+ classes_len..][..trans_len];
+<a href=#669 id=669 data-nosnippet>669</a>            (StateTrans::Sparse { classes, nexts }, fail)
+<a href=#670 id=670 data-nosnippet>670</a>        };
+<a href=#671 id=671 data-nosnippet>671</a>        State { fail, match_len, trans }
+<a href=#672 id=672 data-nosnippet>672</a>    }
+<a href=#673 id=673 data-nosnippet>673</a>
+<a href=#674 id=674 data-nosnippet>674</a>    <span class="doccomment">/// Encode the "old" state from a noncontiguous NFA to its binary
+<a href=#675 id=675 data-nosnippet>675</a>    /// representation to the given `dst` slice. `classes` should be the byte
+<a href=#676 id=676 data-nosnippet>676</a>    /// classes computed for the noncontiguous NFA that the given state came
+<a href=#677 id=677 data-nosnippet>677</a>    /// from.
+<a href=#678 id=678 data-nosnippet>678</a>    ///
+<a href=#679 id=679 data-nosnippet>679</a>    /// This returns an error if `dst` became so big that `StateID`s can no
+<a href=#680 id=680 data-nosnippet>680</a>    /// longer be created for new states. Otherwise, it returns the state ID of
+<a href=#681 id=681 data-nosnippet>681</a>    /// the new state created.
+<a href=#682 id=682 data-nosnippet>682</a>    ///
+<a href=#683 id=683 data-nosnippet>683</a>    /// When `force_dense` is true, then the encoded state will always use a
+<a href=#684 id=684 data-nosnippet>684</a>    /// dense format. Otherwise, the choice between dense and sparse will be
+<a href=#685 id=685 data-nosnippet>685</a>    /// automatically chosen based on the old state.
+<a href=#686 id=686 data-nosnippet>686</a>    </span><span class="kw">fn </span>write(
+<a href=#687 id=687 data-nosnippet>687</a>        nnfa: <span class="kw-2">&amp;</span>noncontiguous::NFA,
+<a href=#688 id=688 data-nosnippet>688</a>        oldsid: StateID,
+<a href=#689 id=689 data-nosnippet>689</a>        old: <span class="kw-2">&amp;</span>noncontiguous::State,
+<a href=#690 id=690 data-nosnippet>690</a>        classes: <span class="kw-2">&amp;</span>ByteClasses,
+<a href=#691 id=691 data-nosnippet>691</a>        dst: <span class="kw-2">&amp;mut </span>Vec&lt;u32&gt;,
+<a href=#692 id=692 data-nosnippet>692</a>        force_dense: bool,
+<a href=#693 id=693 data-nosnippet>693</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;StateID, BuildError&gt; {
+<a href=#694 id=694 data-nosnippet>694</a>        <span class="kw">let </span>sid = StateID::new(dst.len()).map_err(|e| {
+<a href=#695 id=695 data-nosnippet>695</a>            BuildError::state_id_overflow(StateID::MAX.as_u64(), e.attempted())
+<a href=#696 id=696 data-nosnippet>696</a>        })<span class="question-mark">?</span>;
+<a href=#697 id=697 data-nosnippet>697</a>        <span class="kw">let </span>old_len = nnfa.iter_trans(oldsid).count();
+<a href=#698 id=698 data-nosnippet>698</a>        <span class="comment">// For states with a lot of transitions, we might as well just make
+<a href=#699 id=699 data-nosnippet>699</a>        // them dense. These kinds of hot states tend to be very rare, so we're
+<a href=#700 id=700 data-nosnippet>700</a>        // okay with it. This also gives us more sentinels in the state's
+<a href=#701 id=701 data-nosnippet>701</a>        // 'kind', which lets us create different state kinds to save on
+<a href=#702 id=702 data-nosnippet>702</a>        // space.
+<a href=#703 id=703 data-nosnippet>703</a>        </span><span class="kw">let </span>kind = <span class="kw">if </span>force_dense || old_len &gt; State::MAX_SPARSE_TRANSITIONS {
+<a href=#704 id=704 data-nosnippet>704</a>            State::KIND_DENSE
+<a href=#705 id=705 data-nosnippet>705</a>        } <span class="kw">else if </span>old_len == <span class="number">1 </span>&amp;&amp; !old.is_match() {
+<a href=#706 id=706 data-nosnippet>706</a>            State::KIND_ONE
+<a href=#707 id=707 data-nosnippet>707</a>        } <span class="kw">else </span>{
+<a href=#708 id=708 data-nosnippet>708</a>            <span class="comment">// For a sparse state, the kind is just the number of transitions.
+<a href=#709 id=709 data-nosnippet>709</a>            </span>u32::try_from(old_len).unwrap()
+<a href=#710 id=710 data-nosnippet>710</a>        };
+<a href=#711 id=711 data-nosnippet>711</a>        <span class="kw">if </span>kind == State::KIND_DENSE {
+<a href=#712 id=712 data-nosnippet>712</a>            dst.push(kind);
+<a href=#713 id=713 data-nosnippet>713</a>            dst.push(old.fail().as_u32());
+<a href=#714 id=714 data-nosnippet>714</a>            State::write_dense_trans(nnfa, oldsid, classes, dst)<span class="question-mark">?</span>;
+<a href=#715 id=715 data-nosnippet>715</a>        } <span class="kw">else if </span>kind == State::KIND_ONE {
+<a href=#716 id=716 data-nosnippet>716</a>            <span class="kw">let </span>t = nnfa.iter_trans(oldsid).next().unwrap();
+<a href=#717 id=717 data-nosnippet>717</a>            <span class="kw">let </span>class = u32::from(classes.get(t.byte()));
+<a href=#718 id=718 data-nosnippet>718</a>            dst.push(kind | (class &lt;&lt; <span class="number">8</span>));
+<a href=#719 id=719 data-nosnippet>719</a>            dst.push(old.fail().as_u32());
+<a href=#720 id=720 data-nosnippet>720</a>            dst.push(t.next().as_u32());
+<a href=#721 id=721 data-nosnippet>721</a>        } <span class="kw">else </span>{
+<a href=#722 id=722 data-nosnippet>722</a>            dst.push(kind);
+<a href=#723 id=723 data-nosnippet>723</a>            dst.push(old.fail().as_u32());
+<a href=#724 id=724 data-nosnippet>724</a>            State::write_sparse_trans(nnfa, oldsid, classes, dst)<span class="question-mark">?</span>;
+<a href=#725 id=725 data-nosnippet>725</a>        }
+<a href=#726 id=726 data-nosnippet>726</a>        <span class="comment">// Now finally write the number of matches and the matches themselves.
+<a href=#727 id=727 data-nosnippet>727</a>        </span><span class="kw">if </span>old.is_match() {
+<a href=#728 id=728 data-nosnippet>728</a>            <span class="kw">let </span>matches_len = nnfa.iter_matches(oldsid).count();
+<a href=#729 id=729 data-nosnippet>729</a>            <span class="kw">if </span>matches_len == <span class="number">1 </span>{
+<a href=#730 id=730 data-nosnippet>730</a>                <span class="kw">let </span>pid = nnfa.iter_matches(oldsid).next().unwrap().as_u32();
+<a href=#731 id=731 data-nosnippet>731</a>                <span class="macro">assert_eq!</span>(<span class="number">0</span>, pid &amp; (<span class="number">1 </span>&lt;&lt; <span class="number">31</span>));
+<a href=#732 id=732 data-nosnippet>732</a>                dst.push((<span class="number">1 </span>&lt;&lt; <span class="number">31</span>) | pid);
+<a href=#733 id=733 data-nosnippet>733</a>            } <span class="kw">else </span>{
+<a href=#734 id=734 data-nosnippet>734</a>                <span class="macro">assert_eq!</span>(<span class="number">0</span>, matches_len &amp; (<span class="number">1 </span>&lt;&lt; <span class="number">31</span>));
+<a href=#735 id=735 data-nosnippet>735</a>                dst.push(matches_len.as_u32());
+<a href=#736 id=736 data-nosnippet>736</a>                dst.extend(nnfa.iter_matches(oldsid).map(|pid| pid.as_u32()));
+<a href=#737 id=737 data-nosnippet>737</a>            }
+<a href=#738 id=738 data-nosnippet>738</a>        }
+<a href=#739 id=739 data-nosnippet>739</a>        <span class="prelude-val">Ok</span>(sid)
+<a href=#740 id=740 data-nosnippet>740</a>    }
+<a href=#741 id=741 data-nosnippet>741</a>
+<a href=#742 id=742 data-nosnippet>742</a>    <span class="doccomment">/// Encode the "old" state transitions from a noncontiguous NFA to its
+<a href=#743 id=743 data-nosnippet>743</a>    /// binary sparse representation to the given `dst` slice. `classes` should
+<a href=#744 id=744 data-nosnippet>744</a>    /// be the byte classes computed for the noncontiguous NFA that the given
+<a href=#745 id=745 data-nosnippet>745</a>    /// state came from.
+<a href=#746 id=746 data-nosnippet>746</a>    ///
+<a href=#747 id=747 data-nosnippet>747</a>    /// This returns an error if `dst` became so big that `StateID`s can no
+<a href=#748 id=748 data-nosnippet>748</a>    /// longer be created for new states.
+<a href=#749 id=749 data-nosnippet>749</a>    </span><span class="kw">fn </span>write_sparse_trans(
+<a href=#750 id=750 data-nosnippet>750</a>        nnfa: <span class="kw-2">&amp;</span>noncontiguous::NFA,
+<a href=#751 id=751 data-nosnippet>751</a>        oldsid: StateID,
+<a href=#752 id=752 data-nosnippet>752</a>        classes: <span class="kw-2">&amp;</span>ByteClasses,
+<a href=#753 id=753 data-nosnippet>753</a>        dst: <span class="kw-2">&amp;mut </span>Vec&lt;u32&gt;,
+<a href=#754 id=754 data-nosnippet>754</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#755 id=755 data-nosnippet>755</a>        <span class="kw">let </span>(<span class="kw-2">mut </span>chunk, <span class="kw-2">mut </span>len) = ([<span class="number">0</span>; <span class="number">4</span>], <span class="number">0</span>);
+<a href=#756 id=756 data-nosnippet>756</a>        <span class="kw">for </span>t <span class="kw">in </span>nnfa.iter_trans(oldsid) {
+<a href=#757 id=757 data-nosnippet>757</a>            chunk[len] = classes.get(t.byte());
+<a href=#758 id=758 data-nosnippet>758</a>            len += <span class="number">1</span>;
+<a href=#759 id=759 data-nosnippet>759</a>            <span class="kw">if </span>len == <span class="number">4 </span>{
+<a href=#760 id=760 data-nosnippet>760</a>                dst.push(u32::from_ne_bytes(chunk));
+<a href=#761 id=761 data-nosnippet>761</a>                chunk = [<span class="number">0</span>; <span class="number">4</span>];
+<a href=#762 id=762 data-nosnippet>762</a>                len = <span class="number">0</span>;
+<a href=#763 id=763 data-nosnippet>763</a>            }
+<a href=#764 id=764 data-nosnippet>764</a>        }
+<a href=#765 id=765 data-nosnippet>765</a>        <span class="kw">if </span>len &gt; <span class="number">0 </span>{
+<a href=#766 id=766 data-nosnippet>766</a>            <span class="comment">// In the case where the number of transitions isn't divisible
+<a href=#767 id=767 data-nosnippet>767</a>            // by 4, the last u32 chunk will have some left over room. In
+<a href=#768 id=768 data-nosnippet>768</a>            // this case, we "just" repeat the last equivalence class. By
+<a href=#769 id=769 data-nosnippet>769</a>            // doing this, we know the leftover faux transitions will never
+<a href=#770 id=770 data-nosnippet>770</a>            // be followed because if they were, it would have been followed
+<a href=#771 id=771 data-nosnippet>771</a>            // prior to it in the last equivalence class. This saves us some
+<a href=#772 id=772 data-nosnippet>772</a>            // branching in the search time state transition code.
+<a href=#773 id=773 data-nosnippet>773</a>            </span><span class="kw">let </span>repeat = chunk[len - <span class="number">1</span>];
+<a href=#774 id=774 data-nosnippet>774</a>            <span class="kw">while </span>len &lt; <span class="number">4 </span>{
+<a href=#775 id=775 data-nosnippet>775</a>                chunk[len] = repeat;
+<a href=#776 id=776 data-nosnippet>776</a>                len += <span class="number">1</span>;
+<a href=#777 id=777 data-nosnippet>777</a>            }
+<a href=#778 id=778 data-nosnippet>778</a>            dst.push(u32::from_ne_bytes(chunk));
+<a href=#779 id=779 data-nosnippet>779</a>        }
+<a href=#780 id=780 data-nosnippet>780</a>        <span class="kw">for </span>t <span class="kw">in </span>nnfa.iter_trans(oldsid) {
+<a href=#781 id=781 data-nosnippet>781</a>            dst.push(t.next().as_u32());
+<a href=#782 id=782 data-nosnippet>782</a>        }
+<a href=#783 id=783 data-nosnippet>783</a>        <span class="prelude-val">Ok</span>(())
+<a href=#784 id=784 data-nosnippet>784</a>    }
+<a href=#785 id=785 data-nosnippet>785</a>
+<a href=#786 id=786 data-nosnippet>786</a>    <span class="doccomment">/// Encode the "old" state transitions from a noncontiguous NFA to its
+<a href=#787 id=787 data-nosnippet>787</a>    /// binary dense representation to the given `dst` slice. `classes` should
+<a href=#788 id=788 data-nosnippet>788</a>    /// be the byte classes computed for the noncontiguous NFA that the given
+<a href=#789 id=789 data-nosnippet>789</a>    /// state came from.
+<a href=#790 id=790 data-nosnippet>790</a>    ///
+<a href=#791 id=791 data-nosnippet>791</a>    /// This returns an error if `dst` became so big that `StateID`s can no
+<a href=#792 id=792 data-nosnippet>792</a>    /// longer be created for new states.
+<a href=#793 id=793 data-nosnippet>793</a>    </span><span class="kw">fn </span>write_dense_trans(
+<a href=#794 id=794 data-nosnippet>794</a>        nnfa: <span class="kw-2">&amp;</span>noncontiguous::NFA,
+<a href=#795 id=795 data-nosnippet>795</a>        oldsid: StateID,
+<a href=#796 id=796 data-nosnippet>796</a>        classes: <span class="kw-2">&amp;</span>ByteClasses,
+<a href=#797 id=797 data-nosnippet>797</a>        dst: <span class="kw-2">&amp;mut </span>Vec&lt;u32&gt;,
+<a href=#798 id=798 data-nosnippet>798</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#799 id=799 data-nosnippet>799</a>        <span class="comment">// Our byte classes let us shrink the size of our dense states to the
+<a href=#800 id=800 data-nosnippet>800</a>        // number of equivalence classes instead of just fixing it to 256.
+<a href=#801 id=801 data-nosnippet>801</a>        // Any non-explicitly defined transition is just a transition to the
+<a href=#802 id=802 data-nosnippet>802</a>        // FAIL state, so we fill that in first and then overwrite them with
+<a href=#803 id=803 data-nosnippet>803</a>        // explicitly defined transitions. (Most states probably only have one
+<a href=#804 id=804 data-nosnippet>804</a>        // or two explicitly defined transitions.)
+<a href=#805 id=805 data-nosnippet>805</a>        //
+<a href=#806 id=806 data-nosnippet>806</a>        // N.B. Remember that while building the contiguous NFA, we use state
+<a href=#807 id=807 data-nosnippet>807</a>        // IDs from the noncontiguous NFA. It isn't until we've added all
+<a href=#808 id=808 data-nosnippet>808</a>        // states that we go back and map noncontiguous IDs to contiguous IDs.
+<a href=#809 id=809 data-nosnippet>809</a>        </span><span class="kw">let </span>start = dst.len();
+<a href=#810 id=810 data-nosnippet>810</a>        dst.extend(
+<a href=#811 id=811 data-nosnippet>811</a>            core::iter::repeat(noncontiguous::NFA::FAIL.as_u32())
+<a href=#812 id=812 data-nosnippet>812</a>                .take(classes.alphabet_len()),
+<a href=#813 id=813 data-nosnippet>813</a>        );
+<a href=#814 id=814 data-nosnippet>814</a>        <span class="macro">assert!</span>(start &lt; dst.len(), <span class="string">"equivalence classes are never empty"</span>);
+<a href=#815 id=815 data-nosnippet>815</a>        <span class="kw">for </span>t <span class="kw">in </span>nnfa.iter_trans(oldsid) {
+<a href=#816 id=816 data-nosnippet>816</a>            dst[start + usize::from(classes.get(t.byte()))] =
+<a href=#817 id=817 data-nosnippet>817</a>                t.next().as_u32();
+<a href=#818 id=818 data-nosnippet>818</a>        }
+<a href=#819 id=819 data-nosnippet>819</a>        <span class="prelude-val">Ok</span>(())
+<a href=#820 id=820 data-nosnippet>820</a>    }
+<a href=#821 id=821 data-nosnippet>821</a>
+<a href=#822 id=822 data-nosnippet>822</a>    <span class="doccomment">/// Return an iterator over every explicitly defined transition in this
+<a href=#823 id=823 data-nosnippet>823</a>    /// state.
+<a href=#824 id=824 data-nosnippet>824</a>    </span><span class="kw">fn </span>transitions&lt;<span class="lifetime">'b</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'b </span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (u8, StateID)&gt; + <span class="lifetime">'b </span>{
+<a href=#825 id=825 data-nosnippet>825</a>        <span class="kw">let </span><span class="kw-2">mut </span>i = <span class="number">0</span>;
+<a href=#826 id=826 data-nosnippet>826</a>        core::iter::from_fn(<span class="kw">move </span>|| <span class="kw">match </span><span class="self">self</span>.trans {
+<a href=#827 id=827 data-nosnippet>827</a>            StateTrans::Sparse { classes, nexts } =&gt; {
+<a href=#828 id=828 data-nosnippet>828</a>                <span class="kw">if </span>i &gt;= nexts.len() {
+<a href=#829 id=829 data-nosnippet>829</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#830 id=830 data-nosnippet>830</a>                }
+<a href=#831 id=831 data-nosnippet>831</a>                <span class="kw">let </span>chunk = classes[i / <span class="number">4</span>];
+<a href=#832 id=832 data-nosnippet>832</a>                <span class="kw">let </span>class = chunk.to_ne_bytes()[i % <span class="number">4</span>];
+<a href=#833 id=833 data-nosnippet>833</a>                <span class="kw">let </span>next = StateID::from_u32_unchecked(nexts[i]);
+<a href=#834 id=834 data-nosnippet>834</a>                i += <span class="number">1</span>;
+<a href=#835 id=835 data-nosnippet>835</a>                <span class="prelude-val">Some</span>((class, next))
+<a href=#836 id=836 data-nosnippet>836</a>            }
+<a href=#837 id=837 data-nosnippet>837</a>            StateTrans::One { class, next } =&gt; {
+<a href=#838 id=838 data-nosnippet>838</a>                <span class="kw">if </span>i == <span class="number">0 </span>{
+<a href=#839 id=839 data-nosnippet>839</a>                    i += <span class="number">1</span>;
+<a href=#840 id=840 data-nosnippet>840</a>                    <span class="prelude-val">Some</span>((class, StateID::from_u32_unchecked(next)))
+<a href=#841 id=841 data-nosnippet>841</a>                } <span class="kw">else </span>{
+<a href=#842 id=842 data-nosnippet>842</a>                    <span class="prelude-val">None
+<a href=#843 id=843 data-nosnippet>843</a>                </span>}
+<a href=#844 id=844 data-nosnippet>844</a>            }
+<a href=#845 id=845 data-nosnippet>845</a>            StateTrans::Dense { class_to_next } =&gt; {
+<a href=#846 id=846 data-nosnippet>846</a>                <span class="kw">if </span>i &gt;= class_to_next.len() {
+<a href=#847 id=847 data-nosnippet>847</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#848 id=848 data-nosnippet>848</a>                }
+<a href=#849 id=849 data-nosnippet>849</a>                <span class="kw">let </span>class = i.as_u8();
+<a href=#850 id=850 data-nosnippet>850</a>                <span class="kw">let </span>next = StateID::from_u32_unchecked(class_to_next[i]);
+<a href=#851 id=851 data-nosnippet>851</a>                i += <span class="number">1</span>;
+<a href=#852 id=852 data-nosnippet>852</a>                <span class="prelude-val">Some</span>((class, next))
+<a href=#853 id=853 data-nosnippet>853</a>            }
+<a href=#854 id=854 data-nosnippet>854</a>        })
+<a href=#855 id=855 data-nosnippet>855</a>    }
+<a href=#856 id=856 data-nosnippet>856</a>}
+<a href=#857 id=857 data-nosnippet>857</a>
+<a href=#858 id=858 data-nosnippet>858</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; core::fmt::Debug <span class="kw">for </span>State&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#859 id=859 data-nosnippet>859</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>core::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; core::fmt::Result {
+<a href=#860 id=860 data-nosnippet>860</a>        <span class="kw">use crate</span>::{automaton::sparse_transitions, util::debug::DebugByte};
+<a href=#861 id=861 data-nosnippet>861</a>
+<a href=#862 id=862 data-nosnippet>862</a>        <span class="kw">let </span>it = sparse_transitions(<span class="self">self</span>.transitions())
+<a href=#863 id=863 data-nosnippet>863</a>            <span class="comment">// Writing out all FAIL transitions is quite noisy. Instead, we
+<a href=#864 id=864 data-nosnippet>864</a>            // just require readers of the output to assume anything absent
+<a href=#865 id=865 data-nosnippet>865</a>            // maps to the FAIL transition.
+<a href=#866 id=866 data-nosnippet>866</a>            </span>.filter(|<span class="kw-2">&amp;</span>(<span class="kw">_</span>, <span class="kw">_</span>, sid)| sid != NFA::FAIL)
+<a href=#867 id=867 data-nosnippet>867</a>            .enumerate();
+<a href=#868 id=868 data-nosnippet>868</a>        <span class="kw">for </span>(i, (start, end, sid)) <span class="kw">in </span>it {
+<a href=#869 id=869 data-nosnippet>869</a>            <span class="kw">if </span>i &gt; <span class="number">0 </span>{
+<a href=#870 id=870 data-nosnippet>870</a>                <span class="macro">write!</span>(f, <span class="string">", "</span>)<span class="question-mark">?</span>;
+<a href=#871 id=871 data-nosnippet>871</a>            }
+<a href=#872 id=872 data-nosnippet>872</a>            <span class="kw">if </span>start == end {
+<a href=#873 id=873 data-nosnippet>873</a>                <span class="macro">write!</span>(f, <span class="string">"{:?} =&gt; {:?}"</span>, DebugByte(start), sid.as_usize())<span class="question-mark">?</span>;
+<a href=#874 id=874 data-nosnippet>874</a>            } <span class="kw">else </span>{
+<a href=#875 id=875 data-nosnippet>875</a>                <span class="macro">write!</span>(
+<a href=#876 id=876 data-nosnippet>876</a>                    f,
+<a href=#877 id=877 data-nosnippet>877</a>                    <span class="string">"{:?}-{:?} =&gt; {:?}"</span>,
+<a href=#878 id=878 data-nosnippet>878</a>                    DebugByte(start),
+<a href=#879 id=879 data-nosnippet>879</a>                    DebugByte(end),
+<a href=#880 id=880 data-nosnippet>880</a>                    sid.as_usize()
+<a href=#881 id=881 data-nosnippet>881</a>                )<span class="question-mark">?</span>;
+<a href=#882 id=882 data-nosnippet>882</a>            }
+<a href=#883 id=883 data-nosnippet>883</a>        }
+<a href=#884 id=884 data-nosnippet>884</a>        <span class="prelude-val">Ok</span>(())
+<a href=#885 id=885 data-nosnippet>885</a>    }
+<a href=#886 id=886 data-nosnippet>886</a>}
+<a href=#887 id=887 data-nosnippet>887</a>
+<a href=#888 id=888 data-nosnippet>888</a><span class="doccomment">/// A builder for configuring an Aho-Corasick contiguous NFA.
+<a href=#889 id=889 data-nosnippet>889</a>///
+<a href=#890 id=890 data-nosnippet>890</a>/// This builder has a subset of the options available to a
+<a href=#891 id=891 data-nosnippet>891</a>/// [`AhoCorasickBuilder`](crate::AhoCorasickBuilder). Of the shared options,
+<a href=#892 id=892 data-nosnippet>892</a>/// their behavior is identical.
+<a href=#893 id=893 data-nosnippet>893</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#894 id=894 data-nosnippet>894</a></span><span class="kw">pub struct </span>Builder {
+<a href=#895 id=895 data-nosnippet>895</a>    noncontiguous: noncontiguous::Builder,
+<a href=#896 id=896 data-nosnippet>896</a>    dense_depth: usize,
+<a href=#897 id=897 data-nosnippet>897</a>    byte_classes: bool,
+<a href=#898 id=898 data-nosnippet>898</a>}
+<a href=#899 id=899 data-nosnippet>899</a>
+<a href=#900 id=900 data-nosnippet>900</a><span class="kw">impl </span>Default <span class="kw">for </span>Builder {
+<a href=#901 id=901 data-nosnippet>901</a>    <span class="kw">fn </span>default() -&gt; Builder {
+<a href=#902 id=902 data-nosnippet>902</a>        Builder {
+<a href=#903 id=903 data-nosnippet>903</a>            noncontiguous: noncontiguous::Builder::new(),
+<a href=#904 id=904 data-nosnippet>904</a>            dense_depth: <span class="number">2</span>,
+<a href=#905 id=905 data-nosnippet>905</a>            byte_classes: <span class="bool-val">true</span>,
+<a href=#906 id=906 data-nosnippet>906</a>        }
+<a href=#907 id=907 data-nosnippet>907</a>    }
+<a href=#908 id=908 data-nosnippet>908</a>}
+<a href=#909 id=909 data-nosnippet>909</a>
+<a href=#910 id=910 data-nosnippet>910</a><span class="kw">impl </span>Builder {
+<a href=#911 id=911 data-nosnippet>911</a>    <span class="doccomment">/// Create a new builder for configuring an Aho-Corasick contiguous NFA.
+<a href=#912 id=912 data-nosnippet>912</a>    </span><span class="kw">pub fn </span>new() -&gt; Builder {
+<a href=#913 id=913 data-nosnippet>913</a>        Builder::default()
+<a href=#914 id=914 data-nosnippet>914</a>    }
+<a href=#915 id=915 data-nosnippet>915</a>
+<a href=#916 id=916 data-nosnippet>916</a>    <span class="doccomment">/// Build an Aho-Corasick contiguous NFA from the given iterator of
+<a href=#917 id=917 data-nosnippet>917</a>    /// patterns.
+<a href=#918 id=918 data-nosnippet>918</a>    ///
+<a href=#919 id=919 data-nosnippet>919</a>    /// A builder may be reused to create more NFAs.
+<a href=#920 id=920 data-nosnippet>920</a>    </span><span class="kw">pub fn </span>build&lt;I, P&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, patterns: I) -&gt; <span class="prelude-ty">Result</span>&lt;NFA, BuildError&gt;
+<a href=#921 id=921 data-nosnippet>921</a>    <span class="kw">where
+<a href=#922 id=922 data-nosnippet>922</a>        </span>I: IntoIterator&lt;Item = P&gt;,
+<a href=#923 id=923 data-nosnippet>923</a>        P: AsRef&lt;[u8]&gt;,
+<a href=#924 id=924 data-nosnippet>924</a>    {
+<a href=#925 id=925 data-nosnippet>925</a>        <span class="kw">let </span>nnfa = <span class="self">self</span>.noncontiguous.build(patterns)<span class="question-mark">?</span>;
+<a href=#926 id=926 data-nosnippet>926</a>        <span class="self">self</span>.build_from_noncontiguous(<span class="kw-2">&amp;</span>nnfa)
+<a href=#927 id=927 data-nosnippet>927</a>    }
+<a href=#928 id=928 data-nosnippet>928</a>
+<a href=#929 id=929 data-nosnippet>929</a>    <span class="doccomment">/// Build an Aho-Corasick contiguous NFA from the given noncontiguous NFA.
+<a href=#930 id=930 data-nosnippet>930</a>    ///
+<a href=#931 id=931 data-nosnippet>931</a>    /// Note that when this method is used, only the `dense_depth` and
+<a href=#932 id=932 data-nosnippet>932</a>    /// `byte_classes` settings on this builder are respected. The other
+<a href=#933 id=933 data-nosnippet>933</a>    /// settings only apply to the initial construction of the Aho-Corasick
+<a href=#934 id=934 data-nosnippet>934</a>    /// automaton. Since using this method requires that initial construction
+<a href=#935 id=935 data-nosnippet>935</a>    /// has already completed, all settings impacting only initial construction
+<a href=#936 id=936 data-nosnippet>936</a>    /// are no longer relevant.
+<a href=#937 id=937 data-nosnippet>937</a>    </span><span class="kw">pub fn </span>build_from_noncontiguous(
+<a href=#938 id=938 data-nosnippet>938</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#939 id=939 data-nosnippet>939</a>        nnfa: <span class="kw-2">&amp;</span>noncontiguous::NFA,
+<a href=#940 id=940 data-nosnippet>940</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;NFA, BuildError&gt; {
+<a href=#941 id=941 data-nosnippet>941</a>        <span class="macro">debug!</span>(<span class="string">"building contiguous NFA"</span>);
+<a href=#942 id=942 data-nosnippet>942</a>        <span class="kw">let </span>byte_classes = <span class="kw">if </span><span class="self">self</span>.byte_classes {
+<a href=#943 id=943 data-nosnippet>943</a>            nnfa.byte_classes().clone()
+<a href=#944 id=944 data-nosnippet>944</a>        } <span class="kw">else </span>{
+<a href=#945 id=945 data-nosnippet>945</a>            ByteClasses::singletons()
+<a href=#946 id=946 data-nosnippet>946</a>        };
+<a href=#947 id=947 data-nosnippet>947</a>        <span class="kw">let </span><span class="kw-2">mut </span>index_to_state_id = <span class="macro">vec!</span>[NFA::DEAD; nnfa.states().len()];
+<a href=#948 id=948 data-nosnippet>948</a>        <span class="kw">let </span><span class="kw-2">mut </span>nfa = NFA {
+<a href=#949 id=949 data-nosnippet>949</a>            repr: <span class="macro">vec!</span>[],
+<a href=#950 id=950 data-nosnippet>950</a>            pattern_lens: nnfa.pattern_lens_raw().to_vec(),
+<a href=#951 id=951 data-nosnippet>951</a>            state_len: nnfa.states().len(),
+<a href=#952 id=952 data-nosnippet>952</a>            prefilter: nnfa.prefilter().map(|p| p.clone()),
+<a href=#953 id=953 data-nosnippet>953</a>            match_kind: nnfa.match_kind(),
+<a href=#954 id=954 data-nosnippet>954</a>            alphabet_len: byte_classes.alphabet_len(),
+<a href=#955 id=955 data-nosnippet>955</a>            byte_classes,
+<a href=#956 id=956 data-nosnippet>956</a>            min_pattern_len: nnfa.min_pattern_len(),
+<a href=#957 id=957 data-nosnippet>957</a>            max_pattern_len: nnfa.max_pattern_len(),
+<a href=#958 id=958 data-nosnippet>958</a>            <span class="comment">// The special state IDs are set later.
+<a href=#959 id=959 data-nosnippet>959</a>            </span>special: Special::zero(),
+<a href=#960 id=960 data-nosnippet>960</a>        };
+<a href=#961 id=961 data-nosnippet>961</a>        <span class="kw">for </span>(oldsid, state) <span class="kw">in </span>nnfa.states().iter().with_state_ids() {
+<a href=#962 id=962 data-nosnippet>962</a>            <span class="comment">// We don't actually encode a fail state since it isn't necessary.
+<a href=#963 id=963 data-nosnippet>963</a>            // But we still want to make sure any FAIL ids are mapped
+<a href=#964 id=964 data-nosnippet>964</a>            // correctly.
+<a href=#965 id=965 data-nosnippet>965</a>            </span><span class="kw">if </span>oldsid == noncontiguous::NFA::FAIL {
+<a href=#966 id=966 data-nosnippet>966</a>                index_to_state_id[oldsid] = NFA::FAIL;
+<a href=#967 id=967 data-nosnippet>967</a>                <span class="kw">continue</span>;
+<a href=#968 id=968 data-nosnippet>968</a>            }
+<a href=#969 id=969 data-nosnippet>969</a>            <span class="kw">let </span>force_dense = state.depth().as_usize() &lt; <span class="self">self</span>.dense_depth;
+<a href=#970 id=970 data-nosnippet>970</a>            <span class="kw">let </span>newsid = State::write(
+<a href=#971 id=971 data-nosnippet>971</a>                nnfa,
+<a href=#972 id=972 data-nosnippet>972</a>                oldsid,
+<a href=#973 id=973 data-nosnippet>973</a>                state,
+<a href=#974 id=974 data-nosnippet>974</a>                <span class="kw-2">&amp;</span>nfa.byte_classes,
+<a href=#975 id=975 data-nosnippet>975</a>                <span class="kw-2">&amp;mut </span>nfa.repr,
+<a href=#976 id=976 data-nosnippet>976</a>                force_dense,
+<a href=#977 id=977 data-nosnippet>977</a>            )<span class="question-mark">?</span>;
+<a href=#978 id=978 data-nosnippet>978</a>            index_to_state_id[oldsid] = newsid;
+<a href=#979 id=979 data-nosnippet>979</a>        }
+<a href=#980 id=980 data-nosnippet>980</a>        <span class="kw">for </span><span class="kw-2">&amp;</span>newsid <span class="kw">in </span>index_to_state_id.iter() {
+<a href=#981 id=981 data-nosnippet>981</a>            <span class="kw">if </span>newsid == NFA::FAIL {
+<a href=#982 id=982 data-nosnippet>982</a>                <span class="kw">continue</span>;
+<a href=#983 id=983 data-nosnippet>983</a>            }
+<a href=#984 id=984 data-nosnippet>984</a>            <span class="kw">let </span>state = <span class="kw-2">&amp;mut </span>nfa.repr[newsid.as_usize()..];
+<a href=#985 id=985 data-nosnippet>985</a>            State::remap(nfa.alphabet_len, <span class="kw-2">&amp;</span>index_to_state_id, state)<span class="question-mark">?</span>;
+<a href=#986 id=986 data-nosnippet>986</a>        }
+<a href=#987 id=987 data-nosnippet>987</a>        <span class="comment">// Now that we've remapped all the IDs in our states, all that's left
+<a href=#988 id=988 data-nosnippet>988</a>        // is remapping the special state IDs.
+<a href=#989 id=989 data-nosnippet>989</a>        </span><span class="kw">let </span>remap = <span class="kw-2">&amp;</span>index_to_state_id;
+<a href=#990 id=990 data-nosnippet>990</a>        <span class="kw">let </span>old = nnfa.special();
+<a href=#991 id=991 data-nosnippet>991</a>        <span class="kw">let </span>new = <span class="kw-2">&amp;mut </span>nfa.special;
+<a href=#992 id=992 data-nosnippet>992</a>        new.max_special_id = remap[old.max_special_id];
+<a href=#993 id=993 data-nosnippet>993</a>        new.max_match_id = remap[old.max_match_id];
+<a href=#994 id=994 data-nosnippet>994</a>        new.start_unanchored_id = remap[old.start_unanchored_id];
+<a href=#995 id=995 data-nosnippet>995</a>        new.start_anchored_id = remap[old.start_anchored_id];
+<a href=#996 id=996 data-nosnippet>996</a>        <span class="macro">debug!</span>(
+<a href=#997 id=997 data-nosnippet>997</a>            <span class="string">"contiguous NFA built, &lt;states: {:?}, size: {:?}, \
+<a href=#998 id=998 data-nosnippet>998</a>             alphabet len: {:?}&gt;"</span>,
+<a href=#999 id=999 data-nosnippet>999</a>            nfa.state_len,
+<a href=#1000 id=1000 data-nosnippet>1000</a>            nfa.memory_usage(),
+<a href=#1001 id=1001 data-nosnippet>1001</a>            nfa.byte_classes.alphabet_len(),
+<a href=#1002 id=1002 data-nosnippet>1002</a>        );
+<a href=#1003 id=1003 data-nosnippet>1003</a>        <span class="comment">// The vectors can grow ~twice as big during construction because a
+<a href=#1004 id=1004 data-nosnippet>1004</a>        // Vec amortizes growth. But here, let's shrink things back down to
+<a href=#1005 id=1005 data-nosnippet>1005</a>        // what we actually need since we're never going to add more to it.
+<a href=#1006 id=1006 data-nosnippet>1006</a>        </span>nfa.repr.shrink_to_fit();
+<a href=#1007 id=1007 data-nosnippet>1007</a>        nfa.pattern_lens.shrink_to_fit();
+<a href=#1008 id=1008 data-nosnippet>1008</a>        <span class="prelude-val">Ok</span>(nfa)
+<a href=#1009 id=1009 data-nosnippet>1009</a>    }
+<a href=#1010 id=1010 data-nosnippet>1010</a>
+<a href=#1011 id=1011 data-nosnippet>1011</a>    <span class="doccomment">/// Set the desired match semantics.
+<a href=#1012 id=1012 data-nosnippet>1012</a>    ///
+<a href=#1013 id=1013 data-nosnippet>1013</a>    /// This only applies when using [`Builder::build`] and not
+<a href=#1014 id=1014 data-nosnippet>1014</a>    /// [`Builder::build_from_noncontiguous`].
+<a href=#1015 id=1015 data-nosnippet>1015</a>    ///
+<a href=#1016 id=1016 data-nosnippet>1016</a>    /// See
+<a href=#1017 id=1017 data-nosnippet>1017</a>    /// [`AhoCorasickBuilder::match_kind`](crate::AhoCorasickBuilder::match_kind)
+<a href=#1018 id=1018 data-nosnippet>1018</a>    /// for more documentation and examples.
+<a href=#1019 id=1019 data-nosnippet>1019</a>    </span><span class="kw">pub fn </span>match_kind(<span class="kw-2">&amp;mut </span><span class="self">self</span>, kind: MatchKind) -&gt; <span class="kw-2">&amp;mut </span>Builder {
+<a href=#1020 id=1020 data-nosnippet>1020</a>        <span class="self">self</span>.noncontiguous.match_kind(kind);
+<a href=#1021 id=1021 data-nosnippet>1021</a>        <span class="self">self
+<a href=#1022 id=1022 data-nosnippet>1022</a>    </span>}
+<a href=#1023 id=1023 data-nosnippet>1023</a>
+<a href=#1024 id=1024 data-nosnippet>1024</a>    <span class="doccomment">/// Enable ASCII-aware case insensitive matching.
+<a href=#1025 id=1025 data-nosnippet>1025</a>    ///
+<a href=#1026 id=1026 data-nosnippet>1026</a>    /// This only applies when using [`Builder::build`] and not
+<a href=#1027 id=1027 data-nosnippet>1027</a>    /// [`Builder::build_from_noncontiguous`].
+<a href=#1028 id=1028 data-nosnippet>1028</a>    ///
+<a href=#1029 id=1029 data-nosnippet>1029</a>    /// See
+<a href=#1030 id=1030 data-nosnippet>1030</a>    /// [`AhoCorasickBuilder::ascii_case_insensitive`](crate::AhoCorasickBuilder::ascii_case_insensitive)
+<a href=#1031 id=1031 data-nosnippet>1031</a>    /// for more documentation and examples.
+<a href=#1032 id=1032 data-nosnippet>1032</a>    </span><span class="kw">pub fn </span>ascii_case_insensitive(<span class="kw-2">&amp;mut </span><span class="self">self</span>, yes: bool) -&gt; <span class="kw-2">&amp;mut </span>Builder {
+<a href=#1033 id=1033 data-nosnippet>1033</a>        <span class="self">self</span>.noncontiguous.ascii_case_insensitive(yes);
+<a href=#1034 id=1034 data-nosnippet>1034</a>        <span class="self">self
+<a href=#1035 id=1035 data-nosnippet>1035</a>    </span>}
+<a href=#1036 id=1036 data-nosnippet>1036</a>
+<a href=#1037 id=1037 data-nosnippet>1037</a>    <span class="doccomment">/// Enable heuristic prefilter optimizations.
+<a href=#1038 id=1038 data-nosnippet>1038</a>    ///
+<a href=#1039 id=1039 data-nosnippet>1039</a>    /// This only applies when using [`Builder::build`] and not
+<a href=#1040 id=1040 data-nosnippet>1040</a>    /// [`Builder::build_from_noncontiguous`].
+<a href=#1041 id=1041 data-nosnippet>1041</a>    ///
+<a href=#1042 id=1042 data-nosnippet>1042</a>    /// See
+<a href=#1043 id=1043 data-nosnippet>1043</a>    /// [`AhoCorasickBuilder::prefilter`](crate::AhoCorasickBuilder::prefilter)
+<a href=#1044 id=1044 data-nosnippet>1044</a>    /// for more documentation and examples.
+<a href=#1045 id=1045 data-nosnippet>1045</a>    </span><span class="kw">pub fn </span>prefilter(<span class="kw-2">&amp;mut </span><span class="self">self</span>, yes: bool) -&gt; <span class="kw-2">&amp;mut </span>Builder {
+<a href=#1046 id=1046 data-nosnippet>1046</a>        <span class="self">self</span>.noncontiguous.prefilter(yes);
+<a href=#1047 id=1047 data-nosnippet>1047</a>        <span class="self">self
+<a href=#1048 id=1048 data-nosnippet>1048</a>    </span>}
+<a href=#1049 id=1049 data-nosnippet>1049</a>
+<a href=#1050 id=1050 data-nosnippet>1050</a>    <span class="doccomment">/// Set the limit on how many states use a dense representation for their
+<a href=#1051 id=1051 data-nosnippet>1051</a>    /// transitions. Other states will generally use a sparse representation.
+<a href=#1052 id=1052 data-nosnippet>1052</a>    ///
+<a href=#1053 id=1053 data-nosnippet>1053</a>    /// See
+<a href=#1054 id=1054 data-nosnippet>1054</a>    /// [`AhoCorasickBuilder::dense_depth`](crate::AhoCorasickBuilder::dense_depth)
+<a href=#1055 id=1055 data-nosnippet>1055</a>    /// for more documentation and examples.
+<a href=#1056 id=1056 data-nosnippet>1056</a>    </span><span class="kw">pub fn </span>dense_depth(<span class="kw-2">&amp;mut </span><span class="self">self</span>, depth: usize) -&gt; <span class="kw-2">&amp;mut </span>Builder {
+<a href=#1057 id=1057 data-nosnippet>1057</a>        <span class="self">self</span>.dense_depth = depth;
+<a href=#1058 id=1058 data-nosnippet>1058</a>        <span class="self">self
+<a href=#1059 id=1059 data-nosnippet>1059</a>    </span>}
+<a href=#1060 id=1060 data-nosnippet>1060</a>
+<a href=#1061 id=1061 data-nosnippet>1061</a>    <span class="doccomment">/// A debug setting for whether to attempt to shrink the size of the
+<a href=#1062 id=1062 data-nosnippet>1062</a>    /// automaton's alphabet or not.
+<a href=#1063 id=1063 data-nosnippet>1063</a>    ///
+<a href=#1064 id=1064 data-nosnippet>1064</a>    /// This should never be enabled unless you're debugging an automaton.
+<a href=#1065 id=1065 data-nosnippet>1065</a>    /// Namely, disabling byte classes makes transitions easier to reason
+<a href=#1066 id=1066 data-nosnippet>1066</a>    /// about, since they use the actual bytes instead of equivalence classes.
+<a href=#1067 id=1067 data-nosnippet>1067</a>    /// Disabling this confers no performance benefit at search time.
+<a href=#1068 id=1068 data-nosnippet>1068</a>    ///
+<a href=#1069 id=1069 data-nosnippet>1069</a>    /// See
+<a href=#1070 id=1070 data-nosnippet>1070</a>    /// [`AhoCorasickBuilder::byte_classes`](crate::AhoCorasickBuilder::byte_classes)
+<a href=#1071 id=1071 data-nosnippet>1071</a>    /// for more documentation and examples.
+<a href=#1072 id=1072 data-nosnippet>1072</a>    </span><span class="kw">pub fn </span>byte_classes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, yes: bool) -&gt; <span class="kw-2">&amp;mut </span>Builder {
+<a href=#1073 id=1073 data-nosnippet>1073</a>        <span class="self">self</span>.byte_classes = yes;
+<a href=#1074 id=1074 data-nosnippet>1074</a>        <span class="self">self
+<a href=#1075 id=1075 data-nosnippet>1075</a>    </span>}
+<a href=#1076 id=1076 data-nosnippet>1076</a>}
+<a href=#1077 id=1077 data-nosnippet>1077</a>
+<a href=#1078 id=1078 data-nosnippet>1078</a><span class="doccomment">/// Computes the number of u32 values needed to represent one byte per the
+<a href=#1079 id=1079 data-nosnippet>1079</a>/// number of transitions given.
+<a href=#1080 id=1080 data-nosnippet>1080</a></span><span class="kw">fn </span>u32_len(ntrans: usize) -&gt; usize {
+<a href=#1081 id=1081 data-nosnippet>1081</a>    <span class="kw">if </span>ntrans % <span class="number">4 </span>== <span class="number">0 </span>{
+<a href=#1082 id=1082 data-nosnippet>1082</a>        ntrans &gt;&gt; <span class="number">2
+<a href=#1083 id=1083 data-nosnippet>1083</a>    </span>} <span class="kw">else </span>{
+<a href=#1084 id=1084 data-nosnippet>1084</a>        (ntrans &gt;&gt; <span class="number">2</span>) + <span class="number">1
+<a href=#1085 id=1085 data-nosnippet>1085</a>    </span>}
+<a href=#1086 id=1086 data-nosnippet>1086</a>}
+<a href=#1087 id=1087 data-nosnippet>1087</a>
+<a href=#1088 id=1088 data-nosnippet>1088</a><span class="attr">#[cfg(test)]
+<a href=#1089 id=1089 data-nosnippet>1089</a></span><span class="kw">mod </span>tests {
+<a href=#1090 id=1090 data-nosnippet>1090</a>    <span class="comment">// This test demonstrates a SWAR technique I tried in the sparse transition
+<a href=#1091 id=1091 data-nosnippet>1091</a>    // code inside of 'next_state'. Namely, sparse transitions work by
+<a href=#1092 id=1092 data-nosnippet>1092</a>    // iterating over u32 chunks, with each chunk containing up to 4 classes
+<a href=#1093 id=1093 data-nosnippet>1093</a>    // corresponding to 4 transitions. This SWAR technique lets us find a
+<a href=#1094 id=1094 data-nosnippet>1094</a>    // matching transition without converting the u32 to a [u8; 4].
+<a href=#1095 id=1095 data-nosnippet>1095</a>    //
+<a href=#1096 id=1096 data-nosnippet>1096</a>    // It turned out to be a little slower unfortunately, which isn't too
+<a href=#1097 id=1097 data-nosnippet>1097</a>    // surprising, since this is likely a throughput oriented optimization.
+<a href=#1098 id=1098 data-nosnippet>1098</a>    // Loop unrolling doesn't really help us because the vast majority of
+<a href=#1099 id=1099 data-nosnippet>1099</a>    // states have very few transitions.
+<a href=#1100 id=1100 data-nosnippet>1100</a>    //
+<a href=#1101 id=1101 data-nosnippet>1101</a>    // Anyway, this code was a little tricky to write, so I converted it to a
+<a href=#1102 id=1102 data-nosnippet>1102</a>    // test in case someone figures out how to use it more effectively than
+<a href=#1103 id=1103 data-nosnippet>1103</a>    // I could.
+<a href=#1104 id=1104 data-nosnippet>1104</a>    //
+<a href=#1105 id=1105 data-nosnippet>1105</a>    // (This also only works on little endian. So big endian would need to be
+<a href=#1106 id=1106 data-nosnippet>1106</a>    // accounted for if we ever decided to use this I think.)
+<a href=#1107 id=1107 data-nosnippet>1107</a>    </span><span class="attr">#[cfg(target_endian = <span class="string">"little"</span>)]
+<a href=#1108 id=1108 data-nosnippet>1108</a>    #[test]
+<a href=#1109 id=1109 data-nosnippet>1109</a>    </span><span class="kw">fn </span>swar() {
+<a href=#1110 id=1110 data-nosnippet>1110</a>        <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#1111 id=1111 data-nosnippet>1111</a>
+<a href=#1112 id=1112 data-nosnippet>1112</a>        <span class="kw">fn </span>has_zero_byte(x: u32) -&gt; u32 {
+<a href=#1113 id=1113 data-nosnippet>1113</a>            <span class="kw">const </span>LO_U32: u32 = <span class="number">0x01010101</span>;
+<a href=#1114 id=1114 data-nosnippet>1114</a>            <span class="kw">const </span>HI_U32: u32 = <span class="number">0x80808080</span>;
+<a href=#1115 id=1115 data-nosnippet>1115</a>
+<a href=#1116 id=1116 data-nosnippet>1116</a>            x.wrapping_sub(LO_U32) &amp; !x &amp; HI_U32
+<a href=#1117 id=1117 data-nosnippet>1117</a>        }
+<a href=#1118 id=1118 data-nosnippet>1118</a>
+<a href=#1119 id=1119 data-nosnippet>1119</a>        <span class="kw">fn </span>broadcast(b: u8) -&gt; u32 {
+<a href=#1120 id=1120 data-nosnippet>1120</a>            (u32::from(b)) * (u32::MAX / <span class="number">255</span>)
+<a href=#1121 id=1121 data-nosnippet>1121</a>        }
+<a href=#1122 id=1122 data-nosnippet>1122</a>
+<a href=#1123 id=1123 data-nosnippet>1123</a>        <span class="kw">fn </span>index_of(x: u32) -&gt; usize {
+<a href=#1124 id=1124 data-nosnippet>1124</a>            <span class="kw">let </span>o =
+<a href=#1125 id=1125 data-nosnippet>1125</a>                (((x - <span class="number">1</span>) &amp; <span class="number">0x01010101</span>).wrapping_mul(<span class="number">0x01010101</span>) &gt;&gt; <span class="number">24</span>) - <span class="number">1</span>;
+<a href=#1126 id=1126 data-nosnippet>1126</a>            o.as_usize()
+<a href=#1127 id=1127 data-nosnippet>1127</a>        }
+<a href=#1128 id=1128 data-nosnippet>1128</a>
+<a href=#1129 id=1129 data-nosnippet>1129</a>        <span class="kw">let </span>bytes: [u8; <span class="number">4</span>] = [<span class="string">b'1'</span>, <span class="string">b'A'</span>, <span class="string">b'a'</span>, <span class="string">b'z'</span>];
+<a href=#1130 id=1130 data-nosnippet>1130</a>        <span class="kw">let </span>chunk = u32::from_ne_bytes(bytes);
+<a href=#1131 id=1131 data-nosnippet>1131</a>
+<a href=#1132 id=1132 data-nosnippet>1132</a>        <span class="kw">let </span>needle = broadcast(<span class="string">b'1'</span>);
+<a href=#1133 id=1133 data-nosnippet>1133</a>        <span class="macro">assert_eq!</span>(<span class="number">0</span>, index_of(has_zero_byte(needle ^ chunk)));
+<a href=#1134 id=1134 data-nosnippet>1134</a>        <span class="kw">let </span>needle = broadcast(<span class="string">b'A'</span>);
+<a href=#1135 id=1135 data-nosnippet>1135</a>        <span class="macro">assert_eq!</span>(<span class="number">1</span>, index_of(has_zero_byte(needle ^ chunk)));
+<a href=#1136 id=1136 data-nosnippet>1136</a>        <span class="kw">let </span>needle = broadcast(<span class="string">b'a'</span>);
+<a href=#1137 id=1137 data-nosnippet>1137</a>        <span class="macro">assert_eq!</span>(<span class="number">2</span>, index_of(has_zero_byte(needle ^ chunk)));
+<a href=#1138 id=1138 data-nosnippet>1138</a>        <span class="kw">let </span>needle = broadcast(<span class="string">b'z'</span>);
+<a href=#1139 id=1139 data-nosnippet>1139</a>        <span class="macro">assert_eq!</span>(<span class="number">3</span>, index_of(has_zero_byte(needle ^ chunk)));
+<a href=#1140 id=1140 data-nosnippet>1140</a>    }
+<a href=#1141 id=1141 data-nosnippet>1141</a>}</code></pre></div></section></main></body></html>

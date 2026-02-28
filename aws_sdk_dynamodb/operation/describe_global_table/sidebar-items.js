@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DescribeGlobalTableError"],"mod":["builders"],"struct":["DescribeGlobalTable","DescribeGlobalTableInput","DescribeGlobalTableOutput"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["UpdateTableError"],"mod":["builders"],"struct":["UpdateTable","UpdateTableInput","UpdateTableOutput"]};

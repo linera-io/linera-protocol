@@ -1,0 +1,1 @@
+searchState.loadedDescShard("httpdate", 0, "Date and time utils for HTTP.\nAn opaque error type for all parsing errors.\nHTTP timestamp type.\nFormat a date to be used in a HTTP header field.\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nParse a date from an HTTP header field.")

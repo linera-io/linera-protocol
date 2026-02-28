@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FilterExpression","FilterSign","Function","JsonPath","JsonPathIndex","Operand"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InstructionSetTypeId"],"fn":["detect"],"struct":["AVX2","Fallback","NEON","SSE2","SSE41","SSSE3","WASM128"],"trait":["InstructionSet"]};

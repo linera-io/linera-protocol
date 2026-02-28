@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GetFederationTokenError"],"mod":["builders"],"struct":["GetFederationToken","GetFederationTokenInput","GetFederationTokenOutput"]};

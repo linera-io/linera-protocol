@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Forms a slice from a pointer range."><title>from_ptr_range in wasmtime_environ::__core::slice - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">from_<wbr>ptr_<wbr>range</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#safety" title="Safety">Safety</a></li><li><a href="#panics" title="Panics">Panics</a></li><li><a href="#caveat" title="Caveat">Caveat</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>slice</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">slice</a></div><h1>Function <span class="fn">from_ptr_range</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/slice/raw.rs.html#273">Source</a> </span></div><pre class="rust item-decl"><code>pub const unsafe fn from_ptr_range&lt;'a, T&gt;(range: <a class="struct" href="../ops/struct.Range.html" title="struct wasmtime_environ::__core::ops::Range">Range</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html">*const T</a>&gt;) -&gt; &amp;'a <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.slice.html">[T]</a></code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>slice_from_ptr_range</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Forms a slice from a pointer range.</p>
+<p>This function is useful for interacting with foreign interfaces which
+use two pointers to refer to a range of elements in memory, as is
+common in C++.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li>
+<p>The <code>start</code> pointer of the range must be a non-null, <a href="../ptr/index.html#safety" title="mod wasmtime_environ::__core::ptr">valid</a> and properly aligned pointer
+to the first element of a slice.</p>
+</li>
+<li>
+<p>The <code>end</code> pointer must be a <a href="../ptr/index.html#safety" title="mod wasmtime_environ::__core::ptr">valid</a> and properly aligned pointer to <em>one past</em>
+the last element, such that the offset from the end to the start pointer is
+the length of the slice.</p>
+</li>
+<li>
+<p>The entire memory range of this slice must be contained within a single allocated object!
+Slices can never span across multiple allocated objects.</p>
+</li>
+<li>
+<p>The range must contain <code>N</code> consecutive properly initialized values of type <code>T</code>.</p>
+</li>
+<li>
+<p>The memory referenced by the returned slice must not be mutated for the duration
+of lifetime <code>'a</code>, except inside an <code>UnsafeCell</code>.</p>
+</li>
+<li>
+<p>The total length of the range must be no larger than <code>isize::MAX</code>,
+and adding that size to <code>start</code> must not “wrap around” the address space.
+See the safety documentation of <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.offset" title="method pointer::offset"><code>pointer::offset</code></a>.</p>
+</li>
+</ul>
+<p>Note that a range created from <a href="https://doc.rust-lang.org/1.86.0/std/primitive.slice.html#method.as_ptr_range" title="method slice::as_ptr_range"><code>slice::as_ptr_range</code></a> fulfills these requirements.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This function panics if <code>T</code> is a Zero-Sized Type (“ZST”).</p>
+<h2 id="caveat"><a class="doc-anchor" href="#caveat">§</a>Caveat</h2>
+<p>The lifetime for the returned slice is inferred from its usage. To
+prevent accidental misuse, it’s suggested to tie the lifetime to whichever
+source lifetime is safe in the context, such as by providing a helper
+function taking the lifetime of a host value for the slice, or by explicit
+annotation.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(slice_from_ptr_range)]
+
+</span><span class="kw">use </span>core::slice;
+
+<span class="kw">let </span>x = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+<span class="kw">let </span>range = x.as_ptr_range();
+
+<span class="kw">unsafe </span>{
+    <span class="macro">assert_eq!</span>(slice::from_ptr_range(range), <span class="kw-2">&amp;</span>x);
+}</code></pre></div>
+</div></details></section></div></main></body></html>

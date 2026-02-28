@@ -1,0 +1,177 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ruint-1.16.0/src/algorithms/div/reciprocal.rs`."><title>reciprocal.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="ruint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">ruint/algorithms/div/</div>reciprocal.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Reciprocals and division using reciprocals
+<a href=#2 id=2 data-nosnippet>2</a>//! See [MG10].
+<a href=#3 id=3 data-nosnippet>3</a>//!
+<a href=#4 id=4 data-nosnippet>4</a>//! [MG10]: https://gmplib.org/~tege/division-paper.pdf
+<a href=#5 id=5 data-nosnippet>5</a>//! [GM94]: https://gmplib.org/~tege/divcnst-pldi94.pdf
+<a href=#6 id=6 data-nosnippet>6</a>//! [new]: https://gmplib.org/list-archives/gmp-devel/2019-October/005590.html
+<a href=#7 id=7 data-nosnippet>7</a></span><span class="attr">#![allow(dead_code, clippy::cast_possible_truncation, clippy::cast_lossless)]
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">use </span><span class="kw">crate</span>::algorithms::DoubleWord;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>core::num::Wrapping;
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">pub use </span><span class="self">self</span>::{reciprocal_2_mg10 <span class="kw">as </span>reciprocal_2, reciprocal_mg10 <span class="kw">as </span>reciprocal};
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a><span class="doccomment">/// ⚠️ Computes $\floor{\frac{2^{128} - 1}{\mathtt{d}}} - 2^{64}$.
+<a href=#15 id=15 data-nosnippet>15</a></span><span class="attr">#[doc = <span class="macro">crate::algorithms::unstable_warning!</span>()]
+<a href=#16 id=16 data-nosnippet>16</a></span><span class="doccomment">/// Requires $\mathtt{d} ≥ 2^{127}$, i.e. the highest bit of $\mathtt{d}$ must
+<a href=#17 id=17 data-nosnippet>17</a>/// be set.
+<a href=#18 id=18 data-nosnippet>18</a></span><span class="attr">#[inline(always)]
+<a href=#19 id=19 data-nosnippet>19</a>#[must_use]
+<a href=#20 id=20 data-nosnippet>20</a></span><span class="kw">pub fn </span>reciprocal_ref(d: u64) -&gt; u64 {
+<a href=#21 id=21 data-nosnippet>21</a>    <span class="macro">debug_assert!</span>(d &gt;= (<span class="number">1 </span>&lt;&lt; <span class="number">63</span>));
+<a href=#22 id=22 data-nosnippet>22</a>    <span class="kw">let </span>r = u128::MAX / u128::from(d);
+<a href=#23 id=23 data-nosnippet>23</a>    <span class="macro">debug_assert!</span>(r &gt;= (<span class="number">1 </span>&lt;&lt; <span class="number">64</span>));
+<a href=#24 id=24 data-nosnippet>24</a>    <span class="macro">debug_assert!</span>(r &lt; (<span class="number">1 </span>&lt;&lt; <span class="number">65</span>));
+<a href=#25 id=25 data-nosnippet>25</a>    r <span class="kw">as </span>u64
+<a href=#26 id=26 data-nosnippet>26</a>}
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a><span class="doccomment">/// ⚠️ Computes $\floor{\frac{2^{128} - 1}{\mathsf{d}}} - 2^{64}$.
+<a href=#29 id=29 data-nosnippet>29</a></span><span class="attr">#[doc = <span class="macro">crate::algorithms::unstable_warning!</span>()]
+<a href=#30 id=30 data-nosnippet>30</a></span><span class="doccomment">/// Requires $\mathsf{d} ∈ [2^{63}, 2^{64})$, i.e. the highest bit of
+<a href=#31 id=31 data-nosnippet>31</a>/// $\mathsf{d}$ must be set.
+<a href=#32 id=32 data-nosnippet>32</a>///
+<a href=#33 id=33 data-nosnippet>33</a>/// Using [MG10] algorithm 3. See also the [intx] implementation. Here is a
+<a href=#34 id=34 data-nosnippet>34</a>/// direct translation of the algorithm to Python for reference:
+<a href=#35 id=35 data-nosnippet>35</a>///
+<a href=#36 id=36 data-nosnippet>36</a>/// ```python
+<a href=#37 id=37 data-nosnippet>37</a>/// d0 = d % 2
+<a href=#38 id=38 data-nosnippet>38</a>/// d9 = d // 2**55
+<a href=#39 id=39 data-nosnippet>39</a>/// d40 = d // 2**24 + 1
+<a href=#40 id=40 data-nosnippet>40</a>/// d63 = (d + 1) // 2
+<a href=#41 id=41 data-nosnippet>41</a>/// v0 = (2**19 - 3 * 2**8) // d9
+<a href=#42 id=42 data-nosnippet>42</a>/// v1 = 2**11 * v0 - v0**2 * d40 // 2**40 - 1
+<a href=#43 id=43 data-nosnippet>43</a>/// v2 = 2**13 * v1 + v1 * (2**60 - v1 * d40) // 2**47
+<a href=#44 id=44 data-nosnippet>44</a>/// e = 2**96 - v2 * d63 + (v2 // 2) * d0
+<a href=#45 id=45 data-nosnippet>45</a>/// v3 = (2**31 * v2 +v2 * e // 2**65) % 2**64
+<a href=#46 id=46 data-nosnippet>46</a>/// v4 = (v3 - (v3 + 2**64 + 1) * d // 2**64) % 2**64
+<a href=#47 id=47 data-nosnippet>47</a>/// ```
+<a href=#48 id=48 data-nosnippet>48</a>///
+<a href=#49 id=49 data-nosnippet>49</a>/// [MG10]: https://gmplib.org/~tege/division-paper.pdf
+<a href=#50 id=50 data-nosnippet>50</a>/// [intx]: https://github.com/chfast/intx/blob/8b5f4748a7386a9530769893dae26b3273e0ffe2/include/intx/intx.hpp#L683
+<a href=#51 id=51 data-nosnippet>51</a></span><span class="attr">#[inline(always)]
+<a href=#52 id=52 data-nosnippet>52</a>#[must_use]
+<a href=#53 id=53 data-nosnippet>53</a></span><span class="kw">pub fn </span>reciprocal_mg10(d: u64) -&gt; u64 {
+<a href=#54 id=54 data-nosnippet>54</a>    <span class="kw">const </span>ZERO: Wrapping&lt;u64&gt; = Wrapping(<span class="number">0</span>);
+<a href=#55 id=55 data-nosnippet>55</a>    <span class="kw">const </span>ONE: Wrapping&lt;u64&gt; = Wrapping(<span class="number">1</span>);
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="comment">// Lookup table for $\floor{\frac{2^{19} -3 ⋅ 2^8}{d_9 - 256}}$
+<a href=#58 id=58 data-nosnippet>58</a>    </span><span class="kw">static </span>TABLE: [u16; <span class="number">256</span>] = [
+<a href=#59 id=59 data-nosnippet>59</a>        <span class="number">2045</span>, <span class="number">2037</span>, <span class="number">2029</span>, <span class="number">2021</span>, <span class="number">2013</span>, <span class="number">2005</span>, <span class="number">1998</span>, <span class="number">1990</span>, <span class="number">1983</span>, <span class="number">1975</span>, <span class="number">1968</span>, <span class="number">1960</span>, <span class="number">1953</span>, <span class="number">1946</span>, <span class="number">1938</span>,
+<a href=#60 id=60 data-nosnippet>60</a>        <span class="number">1931</span>, <span class="number">1924</span>, <span class="number">1917</span>, <span class="number">1910</span>, <span class="number">1903</span>, <span class="number">1896</span>, <span class="number">1889</span>, <span class="number">1883</span>, <span class="number">1876</span>, <span class="number">1869</span>, <span class="number">1863</span>, <span class="number">1856</span>, <span class="number">1849</span>, <span class="number">1843</span>, <span class="number">1836</span>,
+<a href=#61 id=61 data-nosnippet>61</a>        <span class="number">1830</span>, <span class="number">1824</span>, <span class="number">1817</span>, <span class="number">1811</span>, <span class="number">1805</span>, <span class="number">1799</span>, <span class="number">1792</span>, <span class="number">1786</span>, <span class="number">1780</span>, <span class="number">1774</span>, <span class="number">1768</span>, <span class="number">1762</span>, <span class="number">1756</span>, <span class="number">1750</span>, <span class="number">1745</span>,
+<a href=#62 id=62 data-nosnippet>62</a>        <span class="number">1739</span>, <span class="number">1733</span>, <span class="number">1727</span>, <span class="number">1722</span>, <span class="number">1716</span>, <span class="number">1710</span>, <span class="number">1705</span>, <span class="number">1699</span>, <span class="number">1694</span>, <span class="number">1688</span>, <span class="number">1683</span>, <span class="number">1677</span>, <span class="number">1672</span>, <span class="number">1667</span>, <span class="number">1661</span>,
+<a href=#63 id=63 data-nosnippet>63</a>        <span class="number">1656</span>, <span class="number">1651</span>, <span class="number">1646</span>, <span class="number">1641</span>, <span class="number">1636</span>, <span class="number">1630</span>, <span class="number">1625</span>, <span class="number">1620</span>, <span class="number">1615</span>, <span class="number">1610</span>, <span class="number">1605</span>, <span class="number">1600</span>, <span class="number">1596</span>, <span class="number">1591</span>, <span class="number">1586</span>,
+<a href=#64 id=64 data-nosnippet>64</a>        <span class="number">1581</span>, <span class="number">1576</span>, <span class="number">1572</span>, <span class="number">1567</span>, <span class="number">1562</span>, <span class="number">1558</span>, <span class="number">1553</span>, <span class="number">1548</span>, <span class="number">1544</span>, <span class="number">1539</span>, <span class="number">1535</span>, <span class="number">1530</span>, <span class="number">1526</span>, <span class="number">1521</span>, <span class="number">1517</span>,
+<a href=#65 id=65 data-nosnippet>65</a>        <span class="number">1513</span>, <span class="number">1508</span>, <span class="number">1504</span>, <span class="number">1500</span>, <span class="number">1495</span>, <span class="number">1491</span>, <span class="number">1487</span>, <span class="number">1483</span>, <span class="number">1478</span>, <span class="number">1474</span>, <span class="number">1470</span>, <span class="number">1466</span>, <span class="number">1462</span>, <span class="number">1458</span>, <span class="number">1454</span>,
+<a href=#66 id=66 data-nosnippet>66</a>        <span class="number">1450</span>, <span class="number">1446</span>, <span class="number">1442</span>, <span class="number">1438</span>, <span class="number">1434</span>, <span class="number">1430</span>, <span class="number">1426</span>, <span class="number">1422</span>, <span class="number">1418</span>, <span class="number">1414</span>, <span class="number">1411</span>, <span class="number">1407</span>, <span class="number">1403</span>, <span class="number">1399</span>, <span class="number">1396</span>,
+<a href=#67 id=67 data-nosnippet>67</a>        <span class="number">1392</span>, <span class="number">1388</span>, <span class="number">1384</span>, <span class="number">1381</span>, <span class="number">1377</span>, <span class="number">1374</span>, <span class="number">1370</span>, <span class="number">1366</span>, <span class="number">1363</span>, <span class="number">1359</span>, <span class="number">1356</span>, <span class="number">1352</span>, <span class="number">1349</span>, <span class="number">1345</span>, <span class="number">1342</span>,
+<a href=#68 id=68 data-nosnippet>68</a>        <span class="number">1338</span>, <span class="number">1335</span>, <span class="number">1332</span>, <span class="number">1328</span>, <span class="number">1325</span>, <span class="number">1322</span>, <span class="number">1318</span>, <span class="number">1315</span>, <span class="number">1312</span>, <span class="number">1308</span>, <span class="number">1305</span>, <span class="number">1302</span>, <span class="number">1299</span>, <span class="number">1295</span>, <span class="number">1292</span>,
+<a href=#69 id=69 data-nosnippet>69</a>        <span class="number">1289</span>, <span class="number">1286</span>, <span class="number">1283</span>, <span class="number">1280</span>, <span class="number">1276</span>, <span class="number">1273</span>, <span class="number">1270</span>, <span class="number">1267</span>, <span class="number">1264</span>, <span class="number">1261</span>, <span class="number">1258</span>, <span class="number">1255</span>, <span class="number">1252</span>, <span class="number">1249</span>, <span class="number">1246</span>,
+<a href=#70 id=70 data-nosnippet>70</a>        <span class="number">1243</span>, <span class="number">1240</span>, <span class="number">1237</span>, <span class="number">1234</span>, <span class="number">1231</span>, <span class="number">1228</span>, <span class="number">1226</span>, <span class="number">1223</span>, <span class="number">1220</span>, <span class="number">1217</span>, <span class="number">1214</span>, <span class="number">1211</span>, <span class="number">1209</span>, <span class="number">1206</span>, <span class="number">1203</span>,
+<a href=#71 id=71 data-nosnippet>71</a>        <span class="number">1200</span>, <span class="number">1197</span>, <span class="number">1195</span>, <span class="number">1192</span>, <span class="number">1189</span>, <span class="number">1187</span>, <span class="number">1184</span>, <span class="number">1181</span>, <span class="number">1179</span>, <span class="number">1176</span>, <span class="number">1173</span>, <span class="number">1171</span>, <span class="number">1168</span>, <span class="number">1165</span>, <span class="number">1163</span>,
+<a href=#72 id=72 data-nosnippet>72</a>        <span class="number">1160</span>, <span class="number">1158</span>, <span class="number">1155</span>, <span class="number">1153</span>, <span class="number">1150</span>, <span class="number">1148</span>, <span class="number">1145</span>, <span class="number">1143</span>, <span class="number">1140</span>, <span class="number">1138</span>, <span class="number">1135</span>, <span class="number">1133</span>, <span class="number">1130</span>, <span class="number">1128</span>, <span class="number">1125</span>,
+<a href=#73 id=73 data-nosnippet>73</a>        <span class="number">1123</span>, <span class="number">1121</span>, <span class="number">1118</span>, <span class="number">1116</span>, <span class="number">1113</span>, <span class="number">1111</span>, <span class="number">1109</span>, <span class="number">1106</span>, <span class="number">1104</span>, <span class="number">1102</span>, <span class="number">1099</span>, <span class="number">1097</span>, <span class="number">1095</span>, <span class="number">1092</span>, <span class="number">1090</span>,
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="number">1088</span>, <span class="number">1086</span>, <span class="number">1083</span>, <span class="number">1081</span>, <span class="number">1079</span>, <span class="number">1077</span>, <span class="number">1074</span>, <span class="number">1072</span>, <span class="number">1070</span>, <span class="number">1068</span>, <span class="number">1066</span>, <span class="number">1064</span>, <span class="number">1061</span>, <span class="number">1059</span>, <span class="number">1057</span>,
+<a href=#75 id=75 data-nosnippet>75</a>        <span class="number">1055</span>, <span class="number">1053</span>, <span class="number">1051</span>, <span class="number">1049</span>, <span class="number">1047</span>, <span class="number">1044</span>, <span class="number">1042</span>, <span class="number">1040</span>, <span class="number">1038</span>, <span class="number">1036</span>, <span class="number">1034</span>, <span class="number">1032</span>, <span class="number">1030</span>, <span class="number">1028</span>, <span class="number">1026</span>,
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="number">1024</span>,
+<a href=#77 id=77 data-nosnippet>77</a>    ];
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="macro">debug_assert!</span>(d &gt;= (<span class="number">1 </span>&lt;&lt; <span class="number">63</span>));
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="kw">let </span>d = Wrapping(d);
+<a href=#81 id=81 data-nosnippet>81</a>
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">let </span>d0 = d &amp; ONE;
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="kw">let </span>d9 = d &gt;&gt; <span class="number">55</span>;
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">let </span>d40 = ONE + (d &gt;&gt; <span class="number">24</span>);
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="kw">let </span>d63 = (d + ONE) &gt;&gt; <span class="number">1</span>;
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="comment">// let v0 = Wrapping(TABLE[(d9.0 - 256) as usize] as u64);
+<a href=#87 id=87 data-nosnippet>87</a>    </span><span class="kw">let </span>v0 = Wrapping(<span class="kw-2">*</span><span class="kw">unsafe </span>{ TABLE.get_unchecked((d9.<span class="number">0 </span>- <span class="number">256</span>) <span class="kw">as </span>usize) } <span class="kw">as </span>u64);
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="kw">let </span>v1 = (v0 &lt;&lt; <span class="number">11</span>) - ((v0 * v0 * d40) &gt;&gt; <span class="number">40</span>) - ONE;
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">let </span>v2 = (v1 &lt;&lt; <span class="number">13</span>) + ((v1 * ((ONE &lt;&lt; <span class="number">60</span>) - v1 * d40)) &gt;&gt; <span class="number">47</span>);
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span>e = ((v2 &gt;&gt; <span class="number">1</span>) &amp; (ZERO - d0)) - v2 * d63;
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">let </span>v3 = (mul_hi(v2, e) &gt;&gt; <span class="number">1</span>) + (v2 &lt;&lt; <span class="number">31</span>);
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">let </span>v4 = v3 - muladd_hi(v3, d, d) - d;
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a>    v4.<span class="number">0
+<a href=#95 id=95 data-nosnippet>95</a></span>}
+<a href=#96 id=96 data-nosnippet>96</a>
+<a href=#97 id=97 data-nosnippet>97</a><span class="doccomment">/// ⚠️ Computes $\floor{\frac{2^{192} - 1}{\mathsf{d}}} - 2^{64}$.
+<a href=#98 id=98 data-nosnippet>98</a></span><span class="attr">#[doc = <span class="macro">crate::algorithms::unstable_warning!</span>()]
+<a href=#99 id=99 data-nosnippet>99</a></span><span class="doccomment">/// Requires $\mathsf{d} ∈ [2^{127}, 2^{128})$, i.e. the most significant bit
+<a href=#100 id=100 data-nosnippet>100</a>/// of $\mathsf{d}$ must be set.
+<a href=#101 id=101 data-nosnippet>101</a>///
+<a href=#102 id=102 data-nosnippet>102</a>/// Implements [MG10] algorithm 6.
+<a href=#103 id=103 data-nosnippet>103</a>///
+<a href=#104 id=104 data-nosnippet>104</a>/// [MG10]: https://gmplib.org/~tege/division-paper.pdf
+<a href=#105 id=105 data-nosnippet>105</a></span><span class="attr">#[inline(always)]
+<a href=#106 id=106 data-nosnippet>106</a>#[must_use]
+<a href=#107 id=107 data-nosnippet>107</a></span><span class="kw">pub fn </span>reciprocal_2_mg10(d: u128) -&gt; u64 {
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="macro">debug_assert!</span>(d &gt;= (<span class="number">1 </span>&lt;&lt; <span class="number">127</span>));
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">let </span>(d0, d1) = d.split();
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">let </span><span class="kw-2">mut </span>v = reciprocal(d1);
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="kw">let </span>(<span class="kw-2">mut </span>p, overflow) = d1.wrapping_mul(v).overflowing_add(d0);
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">if </span>overflow {
+<a href=#114 id=114 data-nosnippet>114</a>        v = v.wrapping_sub(<span class="number">1</span>);
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">if </span>p &gt;= d1 {
+<a href=#116 id=116 data-nosnippet>116</a>            v = v.wrapping_sub(<span class="number">1</span>);
+<a href=#117 id=117 data-nosnippet>117</a>            p = p.wrapping_sub(d1);
+<a href=#118 id=118 data-nosnippet>118</a>        }
+<a href=#119 id=119 data-nosnippet>119</a>        p = p.wrapping_sub(d1);
+<a href=#120 id=120 data-nosnippet>120</a>    }
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="kw">let </span>(t0, t1) = u128::mul(v, d0).split();
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">let </span>(p, overflow) = p.overflowing_add(t1);
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">if </span>overflow {
+<a href=#125 id=125 data-nosnippet>125</a>        v = v.wrapping_sub(<span class="number">1</span>);
+<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">if </span>u128::join(p, t0) &gt;= d {
+<a href=#127 id=127 data-nosnippet>127</a>            v = v.wrapping_sub(<span class="number">1</span>);
+<a href=#128 id=128 data-nosnippet>128</a>        }
+<a href=#129 id=129 data-nosnippet>129</a>    }
+<a href=#130 id=130 data-nosnippet>130</a>    v
+<a href=#131 id=131 data-nosnippet>131</a>}
+<a href=#132 id=132 data-nosnippet>132</a>
+<a href=#133 id=133 data-nosnippet>133</a><span class="attr">#[inline(always)]
+<a href=#134 id=134 data-nosnippet>134</a>#[must_use]
+<a href=#135 id=135 data-nosnippet>135</a></span><span class="kw">fn </span>mul_hi(a: Wrapping&lt;u64&gt;, b: Wrapping&lt;u64&gt;) -&gt; Wrapping&lt;u64&gt; {
+<a href=#136 id=136 data-nosnippet>136</a>    Wrapping(u128::mul(a.<span class="number">0</span>, b.<span class="number">0</span>).high())
+<a href=#137 id=137 data-nosnippet>137</a>}
+<a href=#138 id=138 data-nosnippet>138</a>
+<a href=#139 id=139 data-nosnippet>139</a><span class="attr">#[inline(always)]
+<a href=#140 id=140 data-nosnippet>140</a>#[must_use]
+<a href=#141 id=141 data-nosnippet>141</a></span><span class="kw">fn </span>muladd_hi(a: Wrapping&lt;u64&gt;, b: Wrapping&lt;u64&gt;, c: Wrapping&lt;u64&gt;) -&gt; Wrapping&lt;u64&gt; {
+<a href=#142 id=142 data-nosnippet>142</a>    Wrapping(u128::muladd(a.<span class="number">0</span>, b.<span class="number">0</span>, c.<span class="number">0</span>).high())
+<a href=#143 id=143 data-nosnippet>143</a>}
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a><span class="attr">#[cfg(test)]
+<a href=#146 id=146 data-nosnippet>146</a></span><span class="kw">mod </span>tests {
+<a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#148 id=148 data-nosnippet>148</a>    <span class="kw">use </span>proptest::proptest;
+<a href=#149 id=149 data-nosnippet>149</a>
+<a href=#150 id=150 data-nosnippet>150</a>    <span class="attr">#[test]
+<a href=#151 id=151 data-nosnippet>151</a>    </span><span class="kw">fn </span>test_reciprocal() {
+<a href=#152 id=152 data-nosnippet>152</a>        <span class="macro">proptest!</span>(|(n: u64)| {
+<a href=#153 id=153 data-nosnippet>153</a>            <span class="kw">let </span>n = n | (<span class="number">1 </span>&lt;&lt; <span class="number">63</span>);
+<a href=#154 id=154 data-nosnippet>154</a>            <span class="kw">let </span>expected = reciprocal_ref(n);
+<a href=#155 id=155 data-nosnippet>155</a>            <span class="kw">let </span>actual = reciprocal_mg10(n);
+<a href=#156 id=156 data-nosnippet>156</a>            <span class="macro">assert_eq!</span>(expected, actual);
+<a href=#157 id=157 data-nosnippet>157</a>        });
+<a href=#158 id=158 data-nosnippet>158</a>    }
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="attr">#[test]
+<a href=#161 id=161 data-nosnippet>161</a>    </span><span class="kw">fn </span>test_reciprocal_2() {
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="macro">assert_eq!</span>(reciprocal_2_mg10(<span class="number">1 </span>&lt;&lt; <span class="number">127</span>), u64::MAX);
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="macro">assert_eq!</span>(reciprocal_2_mg10(u128::MAX), <span class="number">0</span>);
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="macro">assert_eq!</span>(
+<a href=#165 id=165 data-nosnippet>165</a>            reciprocal_2_mg10(<span class="number">0xd555_5555_5555_5555_5555_5555_5555_5555</span>),
+<a href=#166 id=166 data-nosnippet>166</a>            <span class="number">0x3333_3333_3333_3333
+<a href=#167 id=167 data-nosnippet>167</a>        </span>);
+<a href=#168 id=168 data-nosnippet>168</a>        <span class="macro">assert_eq!</span>(
+<a href=#169 id=169 data-nosnippet>169</a>            reciprocal_2_mg10(<span class="number">0xd0e7_57b0_2171_5fbe_cba4_ad0e_825a_e500</span>),
+<a href=#170 id=170 data-nosnippet>170</a>            <span class="number">0x39b6_c5af_970f_86b3
+<a href=#171 id=171 data-nosnippet>171</a>        </span>);
+<a href=#172 id=172 data-nosnippet>172</a>        <span class="macro">assert_eq!</span>(
+<a href=#173 id=173 data-nosnippet>173</a>            reciprocal_2_mg10(<span class="number">0xae5d_6551_8a51_3208_a850_5491_9637_eb17</span>),
+<a href=#174 id=174 data-nosnippet>174</a>            <span class="number">0x77db_09d1_5c3b_970b
+<a href=#175 id=175 data-nosnippet>175</a>        </span>);
+<a href=#176 id=176 data-nosnippet>176</a>    }
+<a href=#177 id=177 data-nosnippet>177</a>}</code></pre></div></section></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AssumeRoleWithSAMLError"],"mod":["builders"],"struct":["AssumeRoleWithSAML","AssumeRoleWithSamlInput","AssumeRoleWithSamlOutput"]};

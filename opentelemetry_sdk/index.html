@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implements the `SDK` component of OpenTelemetry."><title>opentelemetry_sdk - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="opentelemetry_sdk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../opentelemetry_sdk/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../opentelemetry_sdk/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt="logo"></a><h2><a href="../opentelemetry_sdk/index.html">opentelemetry_<wbr>sdk</a><span class="version">0.30.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#getting-started" title="Getting Started">Getting Started</a></li><li><a href="#metrics" title="Metrics">Metrics</a><ul><li><a href="#creating-instruments-and-recording-measurements" title="Creating instruments and recording measurements">Creating instruments and recording measurements</a></li><li><a href="#crate-feature-flags" title="Crate Feature Flags">Crate Feature Flags</a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>opentelemetry_sdk</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/opentelemetry_sdk/lib.rs.html#1-169">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implements the <a href="https://opentelemetry.io/docs/specs/otel/overview/#sdk"><code>SDK</code></a> component of <a href="https://opentelemetry.io/docs/what-is-opentelemetry/">OpenTelemetry</a>.</p>
+<p><em><a href="#supported-rust-versions">Supported Rust Versions</a></em></p>
+<h2 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting Started</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, trace::{Tracer, TracerProvider}};
+<span class="kw">use </span>opentelemetry_sdk::trace::SdkTracerProvider;
+
+<span class="kw">fn </span>main() {
+    <span class="comment">// Choose an exporter like `opentelemetry_stdout::SpanExporter`
+    </span><span class="kw">let </span>exporter = new_exporter();
+
+    <span class="comment">// Create a new trace pipeline that prints to stdout
+    </span><span class="kw">let </span>provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter)
+        .build();
+    <span class="kw">let </span>tracer = provider.tracer(<span class="string">"readme_example"</span>);
+
+    tracer.in_span(<span class="string">"doing_work"</span>, |cx| {
+        <span class="comment">// Traced app logic here...
+    </span>});
+
+    <span class="comment">// Shutdown trace pipeline
+    </span>provider.shutdown().expect(<span class="string">"TracerProvider should shutdown successfully"</span>)
+}</code></pre></div>
+<p>See the <a href="https://github.com/open-telemetry/opentelemetry-rust/tree/main/examples">examples</a> directory for different integration patterns.</p>
+<p>See the API <a href="https://docs.rs/opentelemetry/latest/opentelemetry/trace/index.html"><code>trace</code></a> module docs for more information on creating and managing
+spans.</p>
+<h2 id="metrics"><a class="doc-anchor" href="#metrics">§</a>Metrics</h2><h4 id="creating-instruments-and-recording-measurements"><a class="doc-anchor" href="#creating-instruments-and-recording-measurements">§</a>Creating instruments and recording measurements</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, KeyValue};
+
+<span class="comment">// get a meter from a provider
+</span><span class="kw">let </span>meter = global::meter(<span class="string">"my_service"</span>);
+
+<span class="comment">// create an instrument
+</span><span class="kw">let </span>counter = meter.u64_counter(<span class="string">"my_counter"</span>).build();
+
+<span class="comment">// record a measurement
+</span>counter.add(<span class="number">1</span>, <span class="kw-2">&amp;</span>[KeyValue::new(<span class="string">"http.client_ip"</span>, <span class="string">"83.164.160.102"</span>)]);</code></pre></div>
+<p>See the <a href="https://github.com/open-telemetry/opentelemetry-rust/tree/main/examples">examples</a> directory for different integration patterns.</p>
+<p>See the API <a href="https://docs.rs/opentelemetry/latest/opentelemetry/metrics/index.html"><code>metrics</code></a> module docs for more information on creating and
+managing instruments.</p>
+<h3 id="crate-feature-flags"><a class="doc-anchor" href="#crate-feature-flags">§</a>Crate Feature Flags</h3>
+<p>The following feature flags can used to control the telemetry signals to use:</p>
+<ul>
+<li><code>trace</code>: Includes the trace SDK (enabled by default).</li>
+<li><code>metrics</code>: Includes the metrics SDK.</li>
+<li><code>logs</code>: Includes the logs SDK.</li>
+</ul>
+<p>For <code>trace</code> the following feature flags are available:</p>
+<ul>
+<li><code>jaeger_remote_sampler</code>: Enables the <a href="https://www.jaegertracing.io/docs/1.53/sampling/">Jaeger remote sampler</a>.</li>
+</ul>
+<p>For <code>logs</code> the following feature flags are available:</p>
+<ul>
+<li><code>spec_unstable_logs_enabled</code>: control the log level</li>
+</ul>
+<p>Support for recording and exporting telemetry asynchronously and perform
+metrics aggregation can be added via the following flags:</p>
+<ul>
+<li><code>experimental_async_runtime</code>: Enables the experimental <code>Runtime</code> trait and related functionality.</li>
+<li><code>rt-tokio</code>: Spawn telemetry tasks using <a href="https://crates.io/crates/tokio">tokio</a>’s multi-thread runtime.</li>
+<li><code>rt-tokio-current-thread</code>: Spawn telemetry tasks on a separate runtime so that the main runtime won’t be blocked.</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.ExportError"><code>pub use error::<a class="trait" href="error/trait.ExportError.html" title="trait opentelemetry_sdk::error::ExportError">ExportError</a>;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="error/index.html" title="mod opentelemetry_sdk::error">error</a></dt><dd>Wrapper for error from trace, logs and metrics part of open telemetry.</dd><dt><a class="mod" href="logs/index.html" title="mod opentelemetry_sdk::logs">logs</a></dt><dd>OpenTelemetry Log SDK</dd><dt><a class="mod" href="metrics/index.html" title="mod opentelemetry_sdk::metrics">metrics</a></dt><dd>The crust of the OpenTelemetry metrics SDK.</dd><dt><a class="mod" href="propagation/index.html" title="mod opentelemetry_sdk::propagation">propagation</a></dt><dd>OpenTelemetry Propagators</dd><dt><a class="mod" href="resource/index.html" title="mod opentelemetry_sdk::resource">resource</a></dt><dd>Representations of entities producing telemetry.</dd><dt><a class="mod" href="runtime/index.html" title="mod opentelemetry_sdk::runtime">runtime</a></dt><dd>Provides an abstraction of several async runtimes</dd><dt><a class="mod" href="testing/index.html" title="mod opentelemetry_sdk::testing">testing</a></dt><dd>In-Memory exporters for testing purpose.</dd><dt><a class="mod" href="trace/index.html" title="mod opentelemetry_sdk::trace">trace</a></dt><dd>OpenTelemetry Trace SDK</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Resource.html" title="struct opentelemetry_sdk::Resource">Resource</a></dt><dd>An immutable representation of the entity producing telemetry as attributes.
+Utilizes <code>Arc</code> for efficient sharing and cloning.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.InMemoryExporterError.html" title="enum opentelemetry_sdk::InMemoryExporterError">InMemory<wbr>Exporter<wbr>Error</a></dt><dd>Errors that can occur during when returning telemetry from InMemoryLogExporter</dd></dl></section></div></main></body></html>

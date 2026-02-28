@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GetCallerIdentityError"],"mod":["builders"],"struct":["GetCallerIdentity","GetCallerIdentityInput","GetCallerIdentityOutput"]};

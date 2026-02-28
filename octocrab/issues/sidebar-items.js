@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CreateIssueBuilder","IssueHandler","ListAssigneesBuilder","ListCommentReactionsBuilder","ListCommentsBuilder","ListIssueCommentsBuilder","ListIssuesBuilder","ListLabelsForIssueBuilder","ListLabelsForRepoBuilder","ListReactionsBuilder","ListTimelineEventsBuilder","UpdateIssueBuilder"]};

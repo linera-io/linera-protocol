@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["AtLeast128","AtLeast16","AtLeast32","AtLeast64","AtLeast8","AtMost128","AtMost16","AtMost32","AtMost64","AtMost8","Floating","Fundamental","Integral","Is128","Is16","Is32","Is64","Is8","Numeric","Signed","Unsigned"]};

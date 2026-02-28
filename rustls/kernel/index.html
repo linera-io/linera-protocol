@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Kernel connection API."><title>rustls::kernel - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../rustls/index.html">rustls</a><span class="version">0.23.31</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module kernel</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#entry-point" title="Entry Point">Entry Point</a></li><li><a href="#cipher-suite-confidentiality-limits" title="Cipher Suite Confidentiality Limits">Cipher Suite Confidentiality Limits</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate rustls</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">rustls</a></div><h1>Module <span>kernel</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/rustls/conn/kernel.rs.html#1-268">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Kernel connection API.</p>
+<p>This module gives you the bare minimum you need to implement a TLS connection
+that does its own encryption and decryption while still using rustls to manage
+connection secrets and session tickets. It is intended for use cases like kTLS
+where you want to use rustls to establish the connection but want to use
+something else to do the encryption/decryption after that.</p>
+<p>There are only two things that <a href="struct.KernelConnection.html" title="struct rustls::kernel::KernelConnection"><code>KernelConnection</code></a> is able to do:</p>
+<ol>
+<li>Compute new traffic secrets when a key update occurs.</li>
+<li>Save received session tickets sent by a server peer.</li>
+</ol>
+<p>That’s it. Everything else you will need to implement yourself.</p>
+<h2 id="entry-point"><a class="doc-anchor" href="#entry-point">§</a>Entry Point</h2>
+<p>The entry points into this API are
+<a href="../client/struct.UnbufferedClientConnection.html#method.dangerous_into_kernel_connection" title="method rustls::client::UnbufferedClientConnection::dangerous_into_kernel_connection"><code>UnbufferedClientConnection::dangerous_into_kernel_connection</code></a>
+and
+<a href="../server/struct.UnbufferedServerConnection.html#method.dangerous_into_kernel_connection" title="method rustls::server::UnbufferedServerConnection::dangerous_into_kernel_connection"><code>UnbufferedServerConnection::dangerous_into_kernel_connection</code></a>.</p>
+<p>In order to actually create an <a href="struct.KernelConnection.html" title="struct rustls::kernel::KernelConnection"><code>KernelConnection</code></a> all of the following
+must be true:</p>
+<ul>
+<li>the connection must have completed its handshake,</li>
+<li>the connection must have no buffered TLS data waiting to be sent, and,</li>
+<li>the config used to create the connection must have <code>enable_extract_secrets</code>
+set to true.</li>
+</ul>
+<p>This sounds fairly complicated to achieve at first glance. However, if you
+drive an unbuffered connection through the handshake until it returns
+<a href="../unbuffered/enum.ConnectionState.html#variant.WriteTraffic" title="variant rustls::unbuffered::ConnectionState::WriteTraffic"><code>WriteTraffic</code></a> then it will end up in an appropriate state to convert
+into an external connection.</p>
+<h2 id="cipher-suite-confidentiality-limits"><a class="doc-anchor" href="#cipher-suite-confidentiality-limits">§</a>Cipher Suite Confidentiality Limits</h2>
+<p>Some cipher suites (notably AES-GCM) have vulnerabilities where they are no
+longer secure once a certain number of messages have been sent. Normally,
+rustls tracks how many messages have been written or read and will
+automatically either refresh keys or emit an error when approaching the
+confidentiality limit of the cipher suite.</p>
+<p><a href="struct.KernelConnection.html" title="struct rustls::kernel::KernelConnection"><code>KernelConnection</code></a> has no way to track this. It is the responsibility
+of the user of the API to track approximately how many messages have been
+sent and either refresh the traffic keys or abort the connection before the
+confidentiality limit is reached.</p>
+<p>You can find the current confidentiality limit by looking at
+<a href="../struct.CipherSuiteCommon.html#structfield.confidentiality_limit" title="field rustls::CipherSuiteCommon::confidentiality_limit"><code>CipherSuiteCommon::confidentiality_limit</code></a> for the cipher suite selected
+by the connection.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.KernelConnection.html" title="struct rustls::kernel::KernelConnection">Kernel<wbr>Connection</a></dt><dd>A kernel connection.</dd></dl></section></div></main></body></html>

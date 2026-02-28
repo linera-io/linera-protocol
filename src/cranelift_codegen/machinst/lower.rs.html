@@ -1,0 +1,1590 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cranelift-codegen-0.112.3/src/machinst/lower.rs`."><title>lower.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cranelift_codegen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cranelift_codegen/machinst/</div>lower.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! This module implements lowering (instruction selection) from Cranelift IR
+<a href=#2 id=2 data-nosnippet>2</a>//! to machine instructions with virtual registers. This is *almost* the final
+<a href=#3 id=3 data-nosnippet>3</a>//! machine code, except for register allocation.
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a></span><span class="comment">// TODO: separate the IR-query core of `Lower` from the lowering logic built on
+<a href=#6 id=6 data-nosnippet>6</a>// top of it, e.g. the side-effect/coloring analysis and the scan support.
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">use </span><span class="kw">crate</span>::entity::SecondaryMap;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span><span class="kw">crate</span>::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span><span class="kw">crate</span>::ir::pcc::{Fact, FactContext, PccError, PccResult};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">crate</span>::ir::{
+<a href=#12 id=12 data-nosnippet>12</a>    ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
+<a href=#13 id=13 data-nosnippet>13</a>    GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, RelSourceLoc, Type,
+<a href=#14 id=14 data-nosnippet>14</a>    Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+<a href=#15 id=15 data-nosnippet>15</a>};
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span><span class="kw">crate</span>::machinst::{
+<a href=#17 id=17 data-nosnippet>17</a>    writable_value_regs, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, Callee, InsnIndex,
+<a href=#18 id=18 data-nosnippet>18</a>    LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
+<a href=#19 id=19 data-nosnippet>19</a>    VCodeConstants, VCodeInst, ValueRegs, Writable,
+<a href=#20 id=20 data-nosnippet>20</a>};
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span><span class="kw">crate</span>::settings::Flags;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use crate</span>::{trace, CodegenResult};
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>alloc::vec::Vec;
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>cranelift_control::ControlPlane;
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>rustc_hash::{FxHashMap, FxHashSet};
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>smallvec::{smallvec, SmallVec};
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>std::fmt::Debug;
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use super</span>::{VCodeBuildDirection, VRegAllocator};
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a><span class="doccomment">/// A vector of ValueRegs, used to represent the outputs of an instruction.
+<a href=#32 id=32 data-nosnippet>32</a></span><span class="kw">pub type </span>InstOutput = SmallVec&lt;[ValueRegs&lt;Reg&gt;; <span class="number">2</span>]&gt;;
+<a href=#33 id=33 data-nosnippet>33</a>
+<a href=#34 id=34 data-nosnippet>34</a><span class="doccomment">/// An "instruction color" partitions CLIF instructions by side-effecting ops.
+<a href=#35 id=35 data-nosnippet>35</a>/// All instructions with the same "color" are guaranteed not to be separated by
+<a href=#36 id=36 data-nosnippet>36</a>/// any side-effecting op (for this purpose, loads are also considered
+<a href=#37 id=37 data-nosnippet>37</a>/// side-effecting, to avoid subtle questions w.r.t. the memory model), and
+<a href=#38 id=38 data-nosnippet>38</a>/// furthermore, it is guaranteed that for any two instructions A and B such
+<a href=#39 id=39 data-nosnippet>39</a>/// that color(A) == color(B), either A dominates B and B postdominates A, or
+<a href=#40 id=40 data-nosnippet>40</a>/// vice-versa. (For now, in practice, only ops in the same basic block can ever
+<a href=#41 id=41 data-nosnippet>41</a>/// have the same color, trivially providing the second condition.) Intuitively,
+<a href=#42 id=42 data-nosnippet>42</a>/// this means that the ops of the same color must always execute "together", as
+<a href=#43 id=43 data-nosnippet>43</a>/// part of one atomic contiguous section of the dynamic execution trace, and
+<a href=#44 id=44 data-nosnippet>44</a>/// they can be freely permuted (modulo true dataflow dependencies) without
+<a href=#45 id=45 data-nosnippet>45</a>/// affecting program behavior.
+<a href=#46 id=46 data-nosnippet>46</a></span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+<a href=#47 id=47 data-nosnippet>47</a></span><span class="kw">struct </span>InstColor(u32);
+<a href=#48 id=48 data-nosnippet>48</a><span class="kw">impl </span>InstColor {
+<a href=#49 id=49 data-nosnippet>49</a>    <span class="kw">fn </span>new(n: u32) -&gt; InstColor {
+<a href=#50 id=50 data-nosnippet>50</a>        InstColor(n)
+<a href=#51 id=51 data-nosnippet>51</a>    }
+<a href=#52 id=52 data-nosnippet>52</a>
+<a href=#53 id=53 data-nosnippet>53</a>    <span class="doccomment">/// Get an arbitrary index representing this color. The index is unique
+<a href=#54 id=54 data-nosnippet>54</a>    /// *within a single function compilation*, but indices may be reused across
+<a href=#55 id=55 data-nosnippet>55</a>    /// functions.
+<a href=#56 id=56 data-nosnippet>56</a>    </span><span class="kw">pub fn </span>get(<span class="self">self</span>) -&gt; u32 {
+<a href=#57 id=57 data-nosnippet>57</a>        <span class="self">self</span>.<span class="number">0
+<a href=#58 id=58 data-nosnippet>58</a>    </span>}
+<a href=#59 id=59 data-nosnippet>59</a>}
+<a href=#60 id=60 data-nosnippet>60</a>
+<a href=#61 id=61 data-nosnippet>61</a><span class="doccomment">/// A representation of all of the ways in which a value is available, aside
+<a href=#62 id=62 data-nosnippet>62</a>/// from as a direct register.
+<a href=#63 id=63 data-nosnippet>63</a>///
+<a href=#64 id=64 data-nosnippet>64</a>/// - An instruction, if it would be allowed to occur at the current location
+<a href=#65 id=65 data-nosnippet>65</a>///   instead (see [Lower::get_input_as_source_or_const()] for more details).
+<a href=#66 id=66 data-nosnippet>66</a>///
+<a href=#67 id=67 data-nosnippet>67</a>/// - A constant, if the value is known to be a constant.
+<a href=#68 id=68 data-nosnippet>68</a></span><span class="attr">#[derive(Clone, Copy, Debug)]
+<a href=#69 id=69 data-nosnippet>69</a></span><span class="kw">pub struct </span>NonRegInput {
+<a href=#70 id=70 data-nosnippet>70</a>    <span class="doccomment">/// An instruction produces this value (as the given output), and its
+<a href=#71 id=71 data-nosnippet>71</a>    /// computation (and side-effect if applicable) could occur at the
+<a href=#72 id=72 data-nosnippet>72</a>    /// current instruction's location instead.
+<a href=#73 id=73 data-nosnippet>73</a>    ///
+<a href=#74 id=74 data-nosnippet>74</a>    /// If this instruction's operation is merged into the current instruction,
+<a href=#75 id=75 data-nosnippet>75</a>    /// the backend must call [Lower::sink_inst()].
+<a href=#76 id=76 data-nosnippet>76</a>    ///
+<a href=#77 id=77 data-nosnippet>77</a>    /// This enum indicates whether this use of the source instruction
+<a href=#78 id=78 data-nosnippet>78</a>    /// is unique or not.
+<a href=#79 id=79 data-nosnippet>79</a>    </span><span class="kw">pub </span>inst: InputSourceInst,
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="doccomment">/// The value is a known constant.
+<a href=#81 id=81 data-nosnippet>81</a>    </span><span class="kw">pub </span>constant: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#82 id=82 data-nosnippet>82</a>}
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a><span class="doccomment">/// When examining an input to an instruction, this enum provides one
+<a href=#85 id=85 data-nosnippet>85</a>/// of several options: there is or isn't a single instruction (that
+<a href=#86 id=86 data-nosnippet>86</a>/// we can see and merge with) that produces that input's value, and
+<a href=#87 id=87 data-nosnippet>87</a>/// we are or aren't the single user of that instruction.
+<a href=#88 id=88 data-nosnippet>88</a></span><span class="attr">#[derive(Clone, Copy, Debug)]
+<a href=#89 id=89 data-nosnippet>89</a></span><span class="kw">pub enum </span>InputSourceInst {
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="doccomment">/// The input in question is the single, unique use of the given
+<a href=#91 id=91 data-nosnippet>91</a>    /// instruction and output index, and it can be sunk to the
+<a href=#92 id=92 data-nosnippet>92</a>    /// location of this input.
+<a href=#93 id=93 data-nosnippet>93</a>    </span>UniqueUse(Inst, usize),
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="doccomment">/// The input in question is one of multiple uses of the given
+<a href=#95 id=95 data-nosnippet>95</a>    /// instruction. It can still be sunk to the location of this
+<a href=#96 id=96 data-nosnippet>96</a>    /// input.
+<a href=#97 id=97 data-nosnippet>97</a>    </span>Use(Inst, usize),
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="doccomment">/// We cannot determine which instruction produced the input, or
+<a href=#99 id=99 data-nosnippet>99</a>    /// it is one of several instructions (e.g., due to a control-flow
+<a href=#100 id=100 data-nosnippet>100</a>    /// merge and blockparam), or the source instruction cannot be
+<a href=#101 id=101 data-nosnippet>101</a>    /// allowed to sink to the current location due to side-effects.
+<a href=#102 id=102 data-nosnippet>102</a>    </span><span class="prelude-val">None</span>,
+<a href=#103 id=103 data-nosnippet>103</a>}
+<a href=#104 id=104 data-nosnippet>104</a>
+<a href=#105 id=105 data-nosnippet>105</a><span class="kw">impl </span>InputSourceInst {
+<a href=#106 id=106 data-nosnippet>106</a>    <span class="doccomment">/// Get the instruction and output index for this source, whether
+<a href=#107 id=107 data-nosnippet>107</a>    /// we are its single or one of many users.
+<a href=#108 id=108 data-nosnippet>108</a>    </span><span class="kw">pub fn </span>as_inst(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(Inst, usize)&gt; {
+<a href=#109 id=109 data-nosnippet>109</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#110 id=110 data-nosnippet>110</a>            <span class="kw-2">&amp;</span>InputSourceInst::UniqueUse(inst, output_idx)
+<a href=#111 id=111 data-nosnippet>111</a>            | <span class="kw-2">&amp;</span>InputSourceInst::Use(inst, output_idx) =&gt; <span class="prelude-val">Some</span>((inst, output_idx)),
+<a href=#112 id=112 data-nosnippet>112</a>            <span class="kw-2">&amp;</span>InputSourceInst::None =&gt; <span class="prelude-val">None</span>,
+<a href=#113 id=113 data-nosnippet>113</a>        }
+<a href=#114 id=114 data-nosnippet>114</a>    }
+<a href=#115 id=115 data-nosnippet>115</a>}
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a><span class="doccomment">/// A machine backend.
+<a href=#118 id=118 data-nosnippet>118</a></span><span class="kw">pub trait </span>LowerBackend {
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="doccomment">/// The machine instruction type.
+<a href=#120 id=120 data-nosnippet>120</a>    </span><span class="kw">type </span>MInst: VCodeInst;
+<a href=#121 id=121 data-nosnippet>121</a>
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="doccomment">/// Lower a single instruction.
+<a href=#123 id=123 data-nosnippet>123</a>    ///
+<a href=#124 id=124 data-nosnippet>124</a>    /// For a branch, this function should not generate the actual branch
+<a href=#125 id=125 data-nosnippet>125</a>    /// instruction. However, it must force any values it needs for the branch
+<a href=#126 id=126 data-nosnippet>126</a>    /// edge (block-param actuals) into registers, because the actual branch
+<a href=#127 id=127 data-nosnippet>127</a>    /// generation (`lower_branch()`) happens *after* any possible merged
+<a href=#128 id=128 data-nosnippet>128</a>    /// out-edge.
+<a href=#129 id=129 data-nosnippet>129</a>    ///
+<a href=#130 id=130 data-nosnippet>130</a>    /// Returns `None` if no lowering for the instruction was found.
+<a href=#131 id=131 data-nosnippet>131</a>    </span><span class="kw">fn </span>lower(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Lower&lt;<span class="self">Self</span>::MInst&gt;, inst: Inst) -&gt; <span class="prelude-ty">Option</span>&lt;InstOutput&gt;;
+<a href=#132 id=132 data-nosnippet>132</a>
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="doccomment">/// Lower a block-terminating group of branches (which together can be seen
+<a href=#134 id=134 data-nosnippet>134</a>    /// as one N-way branch), given a vcode MachLabel for each target.
+<a href=#135 id=135 data-nosnippet>135</a>    ///
+<a href=#136 id=136 data-nosnippet>136</a>    /// Returns `None` if no lowering for the branch was found.
+<a href=#137 id=137 data-nosnippet>137</a>    </span><span class="kw">fn </span>lower_branch(
+<a href=#138 id=138 data-nosnippet>138</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#139 id=139 data-nosnippet>139</a>        ctx: <span class="kw-2">&amp;mut </span>Lower&lt;<span class="self">Self</span>::MInst&gt;,
+<a href=#140 id=140 data-nosnippet>140</a>        inst: Inst,
+<a href=#141 id=141 data-nosnippet>141</a>        targets: <span class="kw-2">&amp;</span>[MachLabel],
+<a href=#142 id=142 data-nosnippet>142</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt;;
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="doccomment">/// A bit of a hack: give a fixed register that always holds the result of a
+<a href=#145 id=145 data-nosnippet>145</a>    /// `get_pinned_reg` instruction, if known.  This allows elision of moves
+<a href=#146 id=146 data-nosnippet>146</a>    /// into the associated vreg, instead using the real reg directly.
+<a href=#147 id=147 data-nosnippet>147</a>    </span><span class="kw">fn </span>maybe_pinned_reg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Reg&gt; {
+<a href=#148 id=148 data-nosnippet>148</a>        <span class="prelude-val">None
+<a href=#149 id=149 data-nosnippet>149</a>    </span>}
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a>    <span class="doccomment">/// The type of state carried between `check_fact` invocations.
+<a href=#152 id=152 data-nosnippet>152</a>    </span><span class="kw">type </span>FactFlowState: Default + Clone + Debug;
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="doccomment">/// Check any facts about an instruction, given VCode with facts
+<a href=#155 id=155 data-nosnippet>155</a>    /// on VRegs. Takes mutable `VCode` so that it can propagate some
+<a href=#156 id=156 data-nosnippet>156</a>    /// kinds of facts automatically.
+<a href=#157 id=157 data-nosnippet>157</a>    </span><span class="kw">fn </span>check_fact(
+<a href=#158 id=158 data-nosnippet>158</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#159 id=159 data-nosnippet>159</a>        _ctx: <span class="kw-2">&amp;</span>FactContext&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#160 id=160 data-nosnippet>160</a>        _vcode: <span class="kw-2">&amp;mut </span>VCode&lt;<span class="self">Self</span>::MInst&gt;,
+<a href=#161 id=161 data-nosnippet>161</a>        _inst: InsnIndex,
+<a href=#162 id=162 data-nosnippet>162</a>        _state: <span class="kw-2">&amp;mut </span><span class="self">Self</span>::FactFlowState,
+<a href=#163 id=163 data-nosnippet>163</a>    ) -&gt; PccResult&lt;()&gt; {
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="prelude-val">Err</span>(PccError::UnimplementedBackend)
+<a href=#165 id=165 data-nosnippet>165</a>    }
+<a href=#166 id=166 data-nosnippet>166</a>}
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a><span class="doccomment">/// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
+<a href=#169 id=169 data-nosnippet>169</a>/// from original Inst to MachInsts.
+<a href=#170 id=170 data-nosnippet>170</a></span><span class="kw">pub struct </span>Lower&lt;<span class="lifetime">'func</span>, I: VCodeInst&gt; {
+<a href=#171 id=171 data-nosnippet>171</a>    <span class="doccomment">/// The function to lower.
+<a href=#172 id=172 data-nosnippet>172</a>    </span>f: <span class="kw-2">&amp;</span><span class="lifetime">'func </span>Function,
+<a href=#173 id=173 data-nosnippet>173</a>
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="doccomment">/// Lowered machine instructions.
+<a href=#175 id=175 data-nosnippet>175</a>    </span>vcode: VCodeBuilder&lt;I&gt;,
+<a href=#176 id=176 data-nosnippet>176</a>
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="doccomment">/// VReg allocation context, given to the vcode field at build time to finalize the vcode.
+<a href=#178 id=178 data-nosnippet>178</a>    </span>vregs: VRegAllocator&lt;I&gt;,
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="doccomment">/// Mapping from `Value` (SSA value in IR) to virtual register.
+<a href=#181 id=181 data-nosnippet>181</a>    </span>value_regs: SecondaryMap&lt;Value, ValueRegs&lt;Reg&gt;&gt;,
+<a href=#182 id=182 data-nosnippet>182</a>
+<a href=#183 id=183 data-nosnippet>183</a>    <span class="doccomment">/// sret registers, if needed.
+<a href=#184 id=184 data-nosnippet>184</a>    </span>sret_reg: <span class="prelude-ty">Option</span>&lt;ValueRegs&lt;Reg&gt;&gt;,
+<a href=#185 id=185 data-nosnippet>185</a>
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="doccomment">/// Instruction colors at block exits. From this map, we can recover all
+<a href=#187 id=187 data-nosnippet>187</a>    /// instruction colors by scanning backward from the block end and
+<a href=#188 id=188 data-nosnippet>188</a>    /// decrementing on any color-changing (side-effecting) instruction.
+<a href=#189 id=189 data-nosnippet>189</a>    </span>block_end_colors: SecondaryMap&lt;Block, InstColor&gt;,
+<a href=#190 id=190 data-nosnippet>190</a>
+<a href=#191 id=191 data-nosnippet>191</a>    <span class="doccomment">/// Instruction colors at side-effecting ops. This is the *entry* color,
+<a href=#192 id=192 data-nosnippet>192</a>    /// i.e., the version of global state that exists before an instruction
+<a href=#193 id=193 data-nosnippet>193</a>    /// executes.  For each side-effecting instruction, the *exit* color is its
+<a href=#194 id=194 data-nosnippet>194</a>    /// entry color plus one.
+<a href=#195 id=195 data-nosnippet>195</a>    </span>side_effect_inst_entry_colors: FxHashMap&lt;Inst, InstColor&gt;,
+<a href=#196 id=196 data-nosnippet>196</a>
+<a href=#197 id=197 data-nosnippet>197</a>    <span class="doccomment">/// Current color as we scan during lowering. While we are lowering an
+<a href=#198 id=198 data-nosnippet>198</a>    /// instruction, this is equal to the color *at entry to* the instruction.
+<a href=#199 id=199 data-nosnippet>199</a>    </span>cur_scan_entry_color: <span class="prelude-ty">Option</span>&lt;InstColor&gt;,
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a>    <span class="doccomment">/// Current instruction as we scan during lowering.
+<a href=#202 id=202 data-nosnippet>202</a>    </span>cur_inst: <span class="prelude-ty">Option</span>&lt;Inst&gt;,
+<a href=#203 id=203 data-nosnippet>203</a>
+<a href=#204 id=204 data-nosnippet>204</a>    <span class="doccomment">/// Instruction constant values, if known.
+<a href=#205 id=205 data-nosnippet>205</a>    </span>inst_constants: FxHashMap&lt;Inst, u64&gt;,
+<a href=#206 id=206 data-nosnippet>206</a>
+<a href=#207 id=207 data-nosnippet>207</a>    <span class="doccomment">/// Use-counts per SSA value, as counted in the input IR. These
+<a href=#208 id=208 data-nosnippet>208</a>    /// are "coarsened", in the abstract-interpretation sense: we only
+<a href=#209 id=209 data-nosnippet>209</a>    /// care about "0, 1, many" states, as this is all we need and
+<a href=#210 id=210 data-nosnippet>210</a>    /// this lets us do an efficient fixpoint analysis.
+<a href=#211 id=211 data-nosnippet>211</a>    ///
+<a href=#212 id=212 data-nosnippet>212</a>    /// See doc comment on `ValueUseState` for more details.
+<a href=#213 id=213 data-nosnippet>213</a>    </span>value_ir_uses: SecondaryMap&lt;Value, ValueUseState&gt;,
+<a href=#214 id=214 data-nosnippet>214</a>
+<a href=#215 id=215 data-nosnippet>215</a>    <span class="doccomment">/// Actual uses of each SSA value so far, incremented while lowering.
+<a href=#216 id=216 data-nosnippet>216</a>    </span>value_lowered_uses: SecondaryMap&lt;Value, u32&gt;,
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a>    <span class="doccomment">/// Effectful instructions that have been sunk; they are not codegen'd at
+<a href=#219 id=219 data-nosnippet>219</a>    /// their original locations.
+<a href=#220 id=220 data-nosnippet>220</a>    </span>inst_sunk: FxHashSet&lt;Inst&gt;,
+<a href=#221 id=221 data-nosnippet>221</a>
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="doccomment">/// Instructions collected for the CLIF inst in progress, in forward order.
+<a href=#223 id=223 data-nosnippet>223</a>    </span>ir_insts: Vec&lt;I&gt;,
+<a href=#224 id=224 data-nosnippet>224</a>
+<a href=#225 id=225 data-nosnippet>225</a>    <span class="doccomment">/// The register to use for GetPinnedReg, if any, on this architecture.
+<a href=#226 id=226 data-nosnippet>226</a>    </span>pinned_reg: <span class="prelude-ty">Option</span>&lt;Reg&gt;,
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a>    <span class="doccomment">/// Compilation flags.
+<a href=#229 id=229 data-nosnippet>229</a>    </span>flags: Flags,
+<a href=#230 id=230 data-nosnippet>230</a>}
+<a href=#231 id=231 data-nosnippet>231</a>
+<a href=#232 id=232 data-nosnippet>232</a><span class="doccomment">/// How is a value used in the IR?
+<a href=#233 id=233 data-nosnippet>233</a>///
+<a href=#234 id=234 data-nosnippet>234</a>/// This can be seen as a coarsening of an integer count. We only need
+<a href=#235 id=235 data-nosnippet>235</a>/// distinct states for zero, one, or many.
+<a href=#236 id=236 data-nosnippet>236</a>///
+<a href=#237 id=237 data-nosnippet>237</a>/// This analysis deserves further explanation. The basic idea is that
+<a href=#238 id=238 data-nosnippet>238</a>/// we want to allow instruction lowering to know whether a value that
+<a href=#239 id=239 data-nosnippet>239</a>/// an instruction references is *only* referenced by that one use, or
+<a href=#240 id=240 data-nosnippet>240</a>/// by others as well. This is necessary to know when we might want to
+<a href=#241 id=241 data-nosnippet>241</a>/// move a side-effect: we cannot, for example, duplicate a load, so
+<a href=#242 id=242 data-nosnippet>242</a>/// we cannot let instruction lowering match a load as part of a
+<a href=#243 id=243 data-nosnippet>243</a>/// subpattern and potentially incorporate it.
+<a href=#244 id=244 data-nosnippet>244</a>///
+<a href=#245 id=245 data-nosnippet>245</a>/// Note that a lot of subtlety comes into play once we have
+<a href=#246 id=246 data-nosnippet>246</a>/// *indirect* uses. The classical example of this in our development
+<a href=#247 id=247 data-nosnippet>247</a>/// history was the x86 compare instruction, which is incorporated
+<a href=#248 id=248 data-nosnippet>248</a>/// into flags users (e.g. `selectif`, `trueif`, branches) and can
+<a href=#249 id=249 data-nosnippet>249</a>/// subsequently incorporate loads, or at least we would like it
+<a href=#250 id=250 data-nosnippet>250</a>/// to. However, danger awaits: the compare might be the only user of
+<a href=#251 id=251 data-nosnippet>251</a>/// a load, so we might think we can just move the load (and nothing
+<a href=#252 id=252 data-nosnippet>252</a>/// is duplicated -- success!), except that the compare itself is
+<a href=#253 id=253 data-nosnippet>253</a>/// codegen'd in multiple places, where it is incorporated as a
+<a href=#254 id=254 data-nosnippet>254</a>/// subpattern itself.
+<a href=#255 id=255 data-nosnippet>255</a>///
+<a href=#256 id=256 data-nosnippet>256</a>/// So we really want a notion of "unique all the way along the
+<a href=#257 id=257 data-nosnippet>257</a>/// matching path". Rust's `&amp;T` and `&amp;mut T` offer a partial analogy
+<a href=#258 id=258 data-nosnippet>258</a>/// to the semantics that we want here: we want to know when we've
+<a href=#259 id=259 data-nosnippet>259</a>/// matched a unique use of an instruction, and that instruction's
+<a href=#260 id=260 data-nosnippet>260</a>/// unique use of another instruction, etc, just as `&amp;mut T` can only
+<a href=#261 id=261 data-nosnippet>261</a>/// be obtained by going through a chain of `&amp;mut T`. If one has a
+<a href=#262 id=262 data-nosnippet>262</a>/// `&amp;T` to a struct containing `&amp;mut T` (one of several uses of an
+<a href=#263 id=263 data-nosnippet>263</a>/// instruction that itself has a unique use of an instruction), one
+<a href=#264 id=264 data-nosnippet>264</a>/// can only get a `&amp;T` (one can only get a "I am one of several users
+<a href=#265 id=265 data-nosnippet>265</a>/// of this instruction" result).
+<a href=#266 id=266 data-nosnippet>266</a>///
+<a href=#267 id=267 data-nosnippet>267</a>/// We could track these paths, either dynamically as one "looks up the operand
+<a href=#268 id=268 data-nosnippet>268</a>/// tree" or precomputed. But the former requires state and means that the
+<a href=#269 id=269 data-nosnippet>269</a>/// `Lower` API carries that state implicitly, which we'd like to avoid if we
+<a href=#270 id=270 data-nosnippet>270</a>/// can. And the latter implies O(n^2) storage: it is an all-pairs property (is
+<a href=#271 id=271 data-nosnippet>271</a>/// inst `i` unique from the point of view of `j`).
+<a href=#272 id=272 data-nosnippet>272</a>///
+<a href=#273 id=273 data-nosnippet>273</a>/// To make matters even a little more complex still, a value that is
+<a href=#274 id=274 data-nosnippet>274</a>/// not uniquely used when initially viewing the IR can *become*
+<a href=#275 id=275 data-nosnippet>275</a>/// uniquely used, at least as a root allowing further unique uses of
+<a href=#276 id=276 data-nosnippet>276</a>/// e.g. loads to merge, if no other instruction actually merges
+<a href=#277 id=277 data-nosnippet>277</a>/// it. To be more concrete, if we have `v1 := load; v2 := op v1; v3
+<a href=#278 id=278 data-nosnippet>278</a>/// := op v2; v4 := op v2` then `v2` is non-uniquely used, so from the
+<a href=#279 id=279 data-nosnippet>279</a>/// point of view of lowering `v4` or `v3`, we cannot merge the load
+<a href=#280 id=280 data-nosnippet>280</a>/// at `v1`. But if we decide just to use the assigned register for
+<a href=#281 id=281 data-nosnippet>281</a>/// `v2` at both `v3` and `v4`, then we only actually codegen `v2`
+<a href=#282 id=282 data-nosnippet>282</a>/// once, so it *is* a unique root at that point and we *can* merge
+<a href=#283 id=283 data-nosnippet>283</a>/// the load.
+<a href=#284 id=284 data-nosnippet>284</a>///
+<a href=#285 id=285 data-nosnippet>285</a>/// Note also that the color scheme is not sufficient to give us this
+<a href=#286 id=286 data-nosnippet>286</a>/// information, for various reasons: reasoning about side-effects
+<a href=#287 id=287 data-nosnippet>287</a>/// does not tell us about potential duplication of uses through pure
+<a href=#288 id=288 data-nosnippet>288</a>/// ops.
+<a href=#289 id=289 data-nosnippet>289</a>///
+<a href=#290 id=290 data-nosnippet>290</a>/// To keep things simple and avoid error-prone lowering APIs that
+<a href=#291 id=291 data-nosnippet>291</a>/// would extract more information about whether instruction merging
+<a href=#292 id=292 data-nosnippet>292</a>/// happens or not (we don't have that info now, and it would be
+<a href=#293 id=293 data-nosnippet>293</a>/// difficult to refactor to get it and make that refactor 100%
+<a href=#294 id=294 data-nosnippet>294</a>/// correct), we give up on the above "can become unique if not
+<a href=#295 id=295 data-nosnippet>295</a>/// actually merged" point. Instead, we compute a
+<a href=#296 id=296 data-nosnippet>296</a>/// transitive-uniqueness. That is what this enum represents.
+<a href=#297 id=297 data-nosnippet>297</a>///
+<a href=#298 id=298 data-nosnippet>298</a>/// There is one final caveat as well to the result of this analysis.  Notably,
+<a href=#299 id=299 data-nosnippet>299</a>/// we define some instructions to be "root" instructions, which means that we
+<a href=#300 id=300 data-nosnippet>300</a>/// assume they will always be codegen'd at the root of a matching tree, and not
+<a href=#301 id=301 data-nosnippet>301</a>/// matched. (This comes with the caveat that we actually enforce this property
+<a href=#302 id=302 data-nosnippet>302</a>/// by making them "opaque" to subtree matching in
+<a href=#303 id=303 data-nosnippet>303</a>/// `get_value_as_source_or_const`). Because they will always be codegen'd once,
+<a href=#304 id=304 data-nosnippet>304</a>/// they in some sense "reset" multiplicity: these root instructions can be used
+<a href=#305 id=305 data-nosnippet>305</a>/// many times, but because their result(s) are only computed once, they only
+<a href=#306 id=306 data-nosnippet>306</a>/// use their inputs once.
+<a href=#307 id=307 data-nosnippet>307</a>///
+<a href=#308 id=308 data-nosnippet>308</a>/// We currently define all multi-result instructions to be "root" instructions,
+<a href=#309 id=309 data-nosnippet>309</a>/// because it is too complex to reason about matching through them, and they
+<a href=#310 id=310 data-nosnippet>310</a>/// cause too-coarse-grained approximation of multiplicity otherwise: the
+<a href=#311 id=311 data-nosnippet>311</a>/// analysis would have to assume (as it used to!) that they are always
+<a href=#312 id=312 data-nosnippet>312</a>/// multiply-used, simply because they have multiple outputs even if those
+<a href=#313 id=313 data-nosnippet>313</a>/// outputs are used only once.
+<a href=#314 id=314 data-nosnippet>314</a>///
+<a href=#315 id=315 data-nosnippet>315</a>/// In the future we could define other instructions to be "root" instructions
+<a href=#316 id=316 data-nosnippet>316</a>/// as well, if we make the corresponding change to get_value_as_source_or_const
+<a href=#317 id=317 data-nosnippet>317</a>/// as well.
+<a href=#318 id=318 data-nosnippet>318</a>///
+<a href=#319 id=319 data-nosnippet>319</a>/// To define `ValueUseState` more plainly: a value is `Unused` if no references
+<a href=#320 id=320 data-nosnippet>320</a>/// exist to it; `Once` if only one other op refers to it, *and* that other op
+<a href=#321 id=321 data-nosnippet>321</a>/// is `Unused` or `Once`; and `Multiple` otherwise. In other words, `Multiple`
+<a href=#322 id=322 data-nosnippet>322</a>/// is contagious (except through root instructions): even if an op's result
+<a href=#323 id=323 data-nosnippet>323</a>/// value is directly used only once in the CLIF, that value is `Multiple` if
+<a href=#324 id=324 data-nosnippet>324</a>/// the op that uses it is itself used multiple times (hence could be codegen'd
+<a href=#325 id=325 data-nosnippet>325</a>/// multiple times). In brief, this analysis tells us whether, if every op
+<a href=#326 id=326 data-nosnippet>326</a>/// merged all of its operand tree, a given op could be codegen'd in more than
+<a href=#327 id=327 data-nosnippet>327</a>/// one place.
+<a href=#328 id=328 data-nosnippet>328</a>///
+<a href=#329 id=329 data-nosnippet>329</a>/// To compute this, we first consider direct uses. At this point
+<a href=#330 id=330 data-nosnippet>330</a>/// `Unused` answers are correct, `Multiple` answers are correct, but
+<a href=#331 id=331 data-nosnippet>331</a>/// some `Once`s may change to `Multiple`s. Then we propagate
+<a href=#332 id=332 data-nosnippet>332</a>/// `Multiple` transitively using a workqueue/fixpoint algorithm.
+<a href=#333 id=333 data-nosnippet>333</a></span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+<a href=#334 id=334 data-nosnippet>334</a></span><span class="kw">enum </span>ValueUseState {
+<a href=#335 id=335 data-nosnippet>335</a>    <span class="doccomment">/// Not used at all.
+<a href=#336 id=336 data-nosnippet>336</a>    </span>Unused,
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="doccomment">/// Used exactly once.
+<a href=#338 id=338 data-nosnippet>338</a>    </span>Once,
+<a href=#339 id=339 data-nosnippet>339</a>    <span class="doccomment">/// Used multiple times.
+<a href=#340 id=340 data-nosnippet>340</a>    </span>Multiple,
+<a href=#341 id=341 data-nosnippet>341</a>}
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a><span class="kw">impl </span>ValueUseState {
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="doccomment">/// Add one use.
+<a href=#345 id=345 data-nosnippet>345</a>    </span><span class="kw">fn </span>inc(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#346 id=346 data-nosnippet>346</a>        <span class="kw">let </span>new = <span class="kw">match </span><span class="self">self </span>{
+<a href=#347 id=347 data-nosnippet>347</a>            <span class="self">Self</span>::Unused =&gt; <span class="self">Self</span>::Once,
+<a href=#348 id=348 data-nosnippet>348</a>            <span class="self">Self</span>::Once | <span class="self">Self</span>::Multiple =&gt; <span class="self">Self</span>::Multiple,
+<a href=#349 id=349 data-nosnippet>349</a>        };
+<a href=#350 id=350 data-nosnippet>350</a>        <span class="kw-2">*</span><span class="self">self </span>= new;
+<a href=#351 id=351 data-nosnippet>351</a>    }
+<a href=#352 id=352 data-nosnippet>352</a>}
+<a href=#353 id=353 data-nosnippet>353</a>
+<a href=#354 id=354 data-nosnippet>354</a><span class="doccomment">/// Notion of "relocation distance". This gives an estimate of how far away a symbol will be from a
+<a href=#355 id=355 data-nosnippet>355</a>/// reference.
+<a href=#356 id=356 data-nosnippet>356</a></span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+<a href=#357 id=357 data-nosnippet>357</a></span><span class="kw">pub enum </span>RelocDistance {
+<a href=#358 id=358 data-nosnippet>358</a>    <span class="doccomment">/// Target of relocation is "nearby". The threshold for this is fuzzy but should be interpreted
+<a href=#359 id=359 data-nosnippet>359</a>    /// as approximately "within the compiled output of one module"; e.g., within AArch64's +/-
+<a href=#360 id=360 data-nosnippet>360</a>    /// 128MB offset. If unsure, use `Far` instead.
+<a href=#361 id=361 data-nosnippet>361</a>    </span>Near,
+<a href=#362 id=362 data-nosnippet>362</a>    <span class="doccomment">/// Target of relocation could be anywhere in the address space.
+<a href=#363 id=363 data-nosnippet>363</a>    </span>Far,
+<a href=#364 id=364 data-nosnippet>364</a>}
+<a href=#365 id=365 data-nosnippet>365</a>
+<a href=#366 id=366 data-nosnippet>366</a><span class="kw">impl</span>&lt;<span class="lifetime">'func</span>, I: VCodeInst&gt; Lower&lt;<span class="lifetime">'func</span>, I&gt; {
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="doccomment">/// Prepare a new lowering context for the given IR function.
+<a href=#368 id=368 data-nosnippet>368</a>    </span><span class="kw">pub fn </span>new(
+<a href=#369 id=369 data-nosnippet>369</a>        f: <span class="kw-2">&amp;</span><span class="lifetime">'func </span>Function,
+<a href=#370 id=370 data-nosnippet>370</a>        abi: Callee&lt;I::ABIMachineSpec&gt;,
+<a href=#371 id=371 data-nosnippet>371</a>        emit_info: I::Info,
+<a href=#372 id=372 data-nosnippet>372</a>        block_order: BlockLoweringOrder,
+<a href=#373 id=373 data-nosnippet>373</a>        sigs: SigSet,
+<a href=#374 id=374 data-nosnippet>374</a>        flags: Flags,
+<a href=#375 id=375 data-nosnippet>375</a>    ) -&gt; CodegenResult&lt;<span class="self">Self</span>&gt; {
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">let </span>constants = VCodeConstants::with_capacity(f.dfg.constants.len());
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">let </span>vcode = VCodeBuilder::new(
+<a href=#378 id=378 data-nosnippet>378</a>            sigs,
+<a href=#379 id=379 data-nosnippet>379</a>            abi,
+<a href=#380 id=380 data-nosnippet>380</a>            emit_info,
+<a href=#381 id=381 data-nosnippet>381</a>            block_order,
+<a href=#382 id=382 data-nosnippet>382</a>            constants,
+<a href=#383 id=383 data-nosnippet>383</a>            VCodeBuildDirection::Backward,
+<a href=#384 id=384 data-nosnippet>384</a>        );
+<a href=#385 id=385 data-nosnippet>385</a>
+<a href=#386 id=386 data-nosnippet>386</a>        <span class="comment">// We usually need two VRegs per instruction result, plus extras for
+<a href=#387 id=387 data-nosnippet>387</a>        // various temporaries, but two per Value is a good starting point.
+<a href=#388 id=388 data-nosnippet>388</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>vregs = VRegAllocator::with_capacity(f.dfg.num_values() * <span class="number">2</span>);
+<a href=#389 id=389 data-nosnippet>389</a>
+<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">let </span><span class="kw-2">mut </span>value_regs = SecondaryMap::with_default(ValueRegs::invalid());
+<a href=#391 id=391 data-nosnippet>391</a>
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="comment">// Assign a vreg to each block param and each inst result.
+<a href=#393 id=393 data-nosnippet>393</a>        </span><span class="kw">for </span>bb <span class="kw">in </span>f.layout.blocks() {
+<a href=#394 id=394 data-nosnippet>394</a>            <span class="kw">for </span><span class="kw-2">&amp;</span>param <span class="kw">in </span>f.dfg.block_params(bb) {
+<a href=#395 id=395 data-nosnippet>395</a>                <span class="kw">let </span>ty = f.dfg.value_type(param);
+<a href=#396 id=396 data-nosnippet>396</a>                <span class="kw">if </span>value_regs[param].is_invalid() {
+<a href=#397 id=397 data-nosnippet>397</a>                    <span class="kw">let </span>regs = vregs.alloc_with_maybe_fact(ty, f.dfg.facts[param].clone())<span class="question-mark">?</span>;
+<a href=#398 id=398 data-nosnippet>398</a>                    value_regs[param] = regs;
+<a href=#399 id=399 data-nosnippet>399</a>                    <span class="macro">trace!</span>(<span class="string">"bb {} param {}: regs {:?}"</span>, bb, param, regs);
+<a href=#400 id=400 data-nosnippet>400</a>                }
+<a href=#401 id=401 data-nosnippet>401</a>            }
+<a href=#402 id=402 data-nosnippet>402</a>            <span class="kw">for </span>inst <span class="kw">in </span>f.layout.block_insts(bb) {
+<a href=#403 id=403 data-nosnippet>403</a>                <span class="kw">for </span><span class="kw-2">&amp;</span>result <span class="kw">in </span>f.dfg.inst_results(inst) {
+<a href=#404 id=404 data-nosnippet>404</a>                    <span class="kw">let </span>ty = f.dfg.value_type(result);
+<a href=#405 id=405 data-nosnippet>405</a>                    <span class="kw">if </span>value_regs[result].is_invalid() &amp;&amp; !ty.is_invalid() {
+<a href=#406 id=406 data-nosnippet>406</a>                        <span class="kw">let </span>regs = vregs.alloc_with_maybe_fact(ty, f.dfg.facts[result].clone())<span class="question-mark">?</span>;
+<a href=#407 id=407 data-nosnippet>407</a>                        value_regs[result] = regs;
+<a href=#408 id=408 data-nosnippet>408</a>                        <span class="macro">trace!</span>(
+<a href=#409 id=409 data-nosnippet>409</a>                            <span class="string">"bb {} inst {} ({:?}): result {} regs {:?}"</span>,
+<a href=#410 id=410 data-nosnippet>410</a>                            bb,
+<a href=#411 id=411 data-nosnippet>411</a>                            inst,
+<a href=#412 id=412 data-nosnippet>412</a>                            f.dfg.insts[inst],
+<a href=#413 id=413 data-nosnippet>413</a>                            result,
+<a href=#414 id=414 data-nosnippet>414</a>                            regs,
+<a href=#415 id=415 data-nosnippet>415</a>                        );
+<a href=#416 id=416 data-nosnippet>416</a>                    }
+<a href=#417 id=417 data-nosnippet>417</a>                }
+<a href=#418 id=418 data-nosnippet>418</a>            }
+<a href=#419 id=419 data-nosnippet>419</a>        }
+<a href=#420 id=420 data-nosnippet>420</a>
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="comment">// Find the sret register, if it's used.
+<a href=#422 id=422 data-nosnippet>422</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>sret_param = <span class="prelude-val">None</span>;
+<a href=#423 id=423 data-nosnippet>423</a>        <span class="kw">for </span>ret <span class="kw">in </span>vcode.abi().signature().returns.iter() {
+<a href=#424 id=424 data-nosnippet>424</a>            <span class="kw">if </span>ret.purpose == ArgumentPurpose::StructReturn {
+<a href=#425 id=425 data-nosnippet>425</a>                <span class="kw">let </span>entry_bb = f.stencil.layout.entry_block().unwrap();
+<a href=#426 id=426 data-nosnippet>426</a>                <span class="kw">for </span>(<span class="kw-2">&amp;</span>param, sig_param) <span class="kw">in </span>f
+<a href=#427 id=427 data-nosnippet>427</a>                    .dfg
+<a href=#428 id=428 data-nosnippet>428</a>                    .block_params(entry_bb)
+<a href=#429 id=429 data-nosnippet>429</a>                    .iter()
+<a href=#430 id=430 data-nosnippet>430</a>                    .zip(vcode.abi().signature().params.iter())
+<a href=#431 id=431 data-nosnippet>431</a>                {
+<a href=#432 id=432 data-nosnippet>432</a>                    <span class="kw">if </span>sig_param.purpose == ArgumentPurpose::StructReturn {
+<a href=#433 id=433 data-nosnippet>433</a>                        <span class="macro">assert!</span>(sret_param.is_none());
+<a href=#434 id=434 data-nosnippet>434</a>                        sret_param = <span class="prelude-val">Some</span>(param);
+<a href=#435 id=435 data-nosnippet>435</a>                    }
+<a href=#436 id=436 data-nosnippet>436</a>                }
+<a href=#437 id=437 data-nosnippet>437</a>
+<a href=#438 id=438 data-nosnippet>438</a>                <span class="macro">assert!</span>(sret_param.is_some());
+<a href=#439 id=439 data-nosnippet>439</a>            }
+<a href=#440 id=440 data-nosnippet>440</a>        }
+<a href=#441 id=441 data-nosnippet>441</a>
+<a href=#442 id=442 data-nosnippet>442</a>        <span class="kw">let </span>sret_reg = sret_param.map(|param| {
+<a href=#443 id=443 data-nosnippet>443</a>            <span class="kw">let </span>regs = value_regs[param];
+<a href=#444 id=444 data-nosnippet>444</a>            <span class="macro">assert!</span>(regs.len() == <span class="number">1</span>);
+<a href=#445 id=445 data-nosnippet>445</a>            regs
+<a href=#446 id=446 data-nosnippet>446</a>        });
+<a href=#447 id=447 data-nosnippet>447</a>
+<a href=#448 id=448 data-nosnippet>448</a>        <span class="comment">// Compute instruction colors, find constant instructions, and find instructions with
+<a href=#449 id=449 data-nosnippet>449</a>        // side-effects, in one combined pass.
+<a href=#450 id=450 data-nosnippet>450</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>cur_color = <span class="number">0</span>;
+<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">let </span><span class="kw-2">mut </span>block_end_colors = SecondaryMap::with_default(InstColor::new(<span class="number">0</span>));
+<a href=#452 id=452 data-nosnippet>452</a>        <span class="kw">let </span><span class="kw-2">mut </span>side_effect_inst_entry_colors = FxHashMap::default();
+<a href=#453 id=453 data-nosnippet>453</a>        <span class="kw">let </span><span class="kw-2">mut </span>inst_constants = FxHashMap::default();
+<a href=#454 id=454 data-nosnippet>454</a>        <span class="kw">for </span>bb <span class="kw">in </span>f.layout.blocks() {
+<a href=#455 id=455 data-nosnippet>455</a>            cur_color += <span class="number">1</span>;
+<a href=#456 id=456 data-nosnippet>456</a>            <span class="kw">for </span>inst <span class="kw">in </span>f.layout.block_insts(bb) {
+<a href=#457 id=457 data-nosnippet>457</a>                <span class="kw">let </span>side_effect = has_lowering_side_effect(f, inst);
+<a href=#458 id=458 data-nosnippet>458</a>
+<a href=#459 id=459 data-nosnippet>459</a>                <span class="macro">trace!</span>(<span class="string">"bb {} inst {} has color {}"</span>, bb, inst, cur_color);
+<a href=#460 id=460 data-nosnippet>460</a>                <span class="kw">if </span>side_effect {
+<a href=#461 id=461 data-nosnippet>461</a>                    side_effect_inst_entry_colors.insert(inst, InstColor::new(cur_color));
+<a href=#462 id=462 data-nosnippet>462</a>                    <span class="macro">trace!</span>(<span class="string">" -&gt; side-effecting; incrementing color for next inst"</span>);
+<a href=#463 id=463 data-nosnippet>463</a>                    cur_color += <span class="number">1</span>;
+<a href=#464 id=464 data-nosnippet>464</a>                }
+<a href=#465 id=465 data-nosnippet>465</a>
+<a href=#466 id=466 data-nosnippet>466</a>                <span class="comment">// Determine if this is a constant; if so, add to the table.
+<a href=#467 id=467 data-nosnippet>467</a>                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(c) = is_constant_64bit(f, inst) {
+<a href=#468 id=468 data-nosnippet>468</a>                    <span class="macro">trace!</span>(<span class="string">" -&gt; constant: {}"</span>, c);
+<a href=#469 id=469 data-nosnippet>469</a>                    inst_constants.insert(inst, c);
+<a href=#470 id=470 data-nosnippet>470</a>                }
+<a href=#471 id=471 data-nosnippet>471</a>            }
+<a href=#472 id=472 data-nosnippet>472</a>
+<a href=#473 id=473 data-nosnippet>473</a>            block_end_colors[bb] = InstColor::new(cur_color);
+<a href=#474 id=474 data-nosnippet>474</a>        }
+<a href=#475 id=475 data-nosnippet>475</a>
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">let </span>value_ir_uses = compute_use_states(f, sret_param);
+<a href=#477 id=477 data-nosnippet>477</a>
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="prelude-val">Ok</span>(Lower {
+<a href=#479 id=479 data-nosnippet>479</a>            f,
+<a href=#480 id=480 data-nosnippet>480</a>            vcode,
+<a href=#481 id=481 data-nosnippet>481</a>            vregs,
+<a href=#482 id=482 data-nosnippet>482</a>            value_regs,
+<a href=#483 id=483 data-nosnippet>483</a>            sret_reg,
+<a href=#484 id=484 data-nosnippet>484</a>            block_end_colors,
+<a href=#485 id=485 data-nosnippet>485</a>            side_effect_inst_entry_colors,
+<a href=#486 id=486 data-nosnippet>486</a>            inst_constants,
+<a href=#487 id=487 data-nosnippet>487</a>            value_ir_uses,
+<a href=#488 id=488 data-nosnippet>488</a>            value_lowered_uses: SecondaryMap::default(),
+<a href=#489 id=489 data-nosnippet>489</a>            inst_sunk: FxHashSet::default(),
+<a href=#490 id=490 data-nosnippet>490</a>            cur_scan_entry_color: <span class="prelude-val">None</span>,
+<a href=#491 id=491 data-nosnippet>491</a>            cur_inst: <span class="prelude-val">None</span>,
+<a href=#492 id=492 data-nosnippet>492</a>            ir_insts: <span class="macro">vec!</span>[],
+<a href=#493 id=493 data-nosnippet>493</a>            pinned_reg: <span class="prelude-val">None</span>,
+<a href=#494 id=494 data-nosnippet>494</a>            flags,
+<a href=#495 id=495 data-nosnippet>495</a>        })
+<a href=#496 id=496 data-nosnippet>496</a>    }
+<a href=#497 id=497 data-nosnippet>497</a>
+<a href=#498 id=498 data-nosnippet>498</a>    <span class="kw">pub fn </span>sigs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>SigSet {
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="self">self</span>.vcode.sigs()
+<a href=#500 id=500 data-nosnippet>500</a>    }
+<a href=#501 id=501 data-nosnippet>501</a>
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">pub fn </span>sigs_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>SigSet {
+<a href=#503 id=503 data-nosnippet>503</a>        <span class="self">self</span>.vcode.sigs_mut()
+<a href=#504 id=504 data-nosnippet>504</a>    }
+<a href=#505 id=505 data-nosnippet>505</a>
+<a href=#506 id=506 data-nosnippet>506</a>    <span class="kw">fn </span>gen_arg_setup(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#507 id=507 data-nosnippet>507</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(entry_bb) = <span class="self">self</span>.f.layout.entry_block() {
+<a href=#508 id=508 data-nosnippet>508</a>            <span class="macro">trace!</span>(
+<a href=#509 id=509 data-nosnippet>509</a>                <span class="string">"gen_arg_setup: entry BB {} args are:\n{:?}"</span>,
+<a href=#510 id=510 data-nosnippet>510</a>                entry_bb,
+<a href=#511 id=511 data-nosnippet>511</a>                <span class="self">self</span>.f.dfg.block_params(entry_bb)
+<a href=#512 id=512 data-nosnippet>512</a>            );
+<a href=#513 id=513 data-nosnippet>513</a>
+<a href=#514 id=514 data-nosnippet>514</a>            <span class="kw">for </span>(i, param) <span class="kw">in </span><span class="self">self</span>.f.dfg.block_params(entry_bb).iter().enumerate() {
+<a href=#515 id=515 data-nosnippet>515</a>                <span class="kw">if </span><span class="self">self</span>.value_ir_uses[<span class="kw-2">*</span>param] == ValueUseState::Unused {
+<a href=#516 id=516 data-nosnippet>516</a>                    <span class="kw">continue</span>;
+<a href=#517 id=517 data-nosnippet>517</a>                }
+<a href=#518 id=518 data-nosnippet>518</a>                <span class="kw">let </span>regs = writable_value_regs(<span class="self">self</span>.value_regs[<span class="kw-2">*</span>param]);
+<a href=#519 id=519 data-nosnippet>519</a>                <span class="kw">for </span>insn <span class="kw">in </span><span class="self">self
+<a href=#520 id=520 data-nosnippet>520</a>                    </span>.vcode
+<a href=#521 id=521 data-nosnippet>521</a>                    .vcode
+<a href=#522 id=522 data-nosnippet>522</a>                    .abi
+<a href=#523 id=523 data-nosnippet>523</a>                    .gen_copy_arg_to_regs(<span class="kw-2">&amp;</span><span class="self">self</span>.vcode.vcode.sigs, i, regs, <span class="kw-2">&amp;mut </span><span class="self">self</span>.vregs)
+<a href=#524 id=524 data-nosnippet>524</a>                    .into_iter()
+<a href=#525 id=525 data-nosnippet>525</a>                {
+<a href=#526 id=526 data-nosnippet>526</a>                    <span class="self">self</span>.emit(insn);
+<a href=#527 id=527 data-nosnippet>527</a>                }
+<a href=#528 id=528 data-nosnippet>528</a>            }
+<a href=#529 id=529 data-nosnippet>529</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(insn) = <span class="self">self
+<a href=#530 id=530 data-nosnippet>530</a>                </span>.vcode
+<a href=#531 id=531 data-nosnippet>531</a>                .vcode
+<a href=#532 id=532 data-nosnippet>532</a>                .abi
+<a href=#533 id=533 data-nosnippet>533</a>                .gen_retval_area_setup(<span class="kw-2">&amp;</span><span class="self">self</span>.vcode.vcode.sigs, <span class="kw-2">&amp;mut </span><span class="self">self</span>.vregs)
+<a href=#534 id=534 data-nosnippet>534</a>            {
+<a href=#535 id=535 data-nosnippet>535</a>                <span class="self">self</span>.emit(insn);
+<a href=#536 id=536 data-nosnippet>536</a>            }
+<a href=#537 id=537 data-nosnippet>537</a>
+<a href=#538 id=538 data-nosnippet>538</a>            <span class="comment">// The `args` instruction below must come first. Finish
+<a href=#539 id=539 data-nosnippet>539</a>            // the current "IR inst" (with a default source location,
+<a href=#540 id=540 data-nosnippet>540</a>            // as for other special instructions inserted during
+<a href=#541 id=541 data-nosnippet>541</a>            // lowering) and continue the scan backward.
+<a href=#542 id=542 data-nosnippet>542</a>            </span><span class="self">self</span>.finish_ir_inst(Default::default());
+<a href=#543 id=543 data-nosnippet>543</a>
+<a href=#544 id=544 data-nosnippet>544</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(insn) = <span class="self">self</span>.vcode.vcode.abi.take_args() {
+<a href=#545 id=545 data-nosnippet>545</a>                <span class="self">self</span>.emit(insn);
+<a href=#546 id=546 data-nosnippet>546</a>            }
+<a href=#547 id=547 data-nosnippet>547</a>        }
+<a href=#548 id=548 data-nosnippet>548</a>    }
+<a href=#549 id=549 data-nosnippet>549</a>
+<a href=#550 id=550 data-nosnippet>550</a>    <span class="doccomment">/// Generate the return instruction.
+<a href=#551 id=551 data-nosnippet>551</a>    </span><span class="kw">pub fn </span>gen_return(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rets: Vec&lt;ValueRegs&lt;Reg&gt;&gt;) {
+<a href=#552 id=552 data-nosnippet>552</a>        <span class="kw">let </span><span class="kw-2">mut </span>out_rets = <span class="macro">vec!</span>[];
+<a href=#553 id=553 data-nosnippet>553</a>
+<a href=#554 id=554 data-nosnippet>554</a>        <span class="kw">let </span><span class="kw-2">mut </span>rets = rets.into_iter();
+<a href=#555 id=555 data-nosnippet>555</a>        <span class="kw">for </span>(i, ret) <span class="kw">in </span><span class="self">self
+<a href=#556 id=556 data-nosnippet>556</a>            </span>.abi()
+<a href=#557 id=557 data-nosnippet>557</a>            .signature()
+<a href=#558 id=558 data-nosnippet>558</a>            .returns
+<a href=#559 id=559 data-nosnippet>559</a>            .clone()
+<a href=#560 id=560 data-nosnippet>560</a>            .into_iter()
+<a href=#561 id=561 data-nosnippet>561</a>            .enumerate()
+<a href=#562 id=562 data-nosnippet>562</a>        {
+<a href=#563 id=563 data-nosnippet>563</a>            <span class="kw">let </span>regs = <span class="kw">if </span>ret.purpose == ArgumentPurpose::StructReturn {
+<a href=#564 id=564 data-nosnippet>564</a>                <span class="self">self</span>.sret_reg.unwrap()
+<a href=#565 id=565 data-nosnippet>565</a>            } <span class="kw">else </span>{
+<a href=#566 id=566 data-nosnippet>566</a>                rets.next().unwrap()
+<a href=#567 id=567 data-nosnippet>567</a>            };
+<a href=#568 id=568 data-nosnippet>568</a>
+<a href=#569 id=569 data-nosnippet>569</a>            <span class="kw">let </span>(regs, insns) = <span class="self">self</span>.vcode.abi().gen_copy_regs_to_retval(
+<a href=#570 id=570 data-nosnippet>570</a>                <span class="self">self</span>.vcode.sigs(),
+<a href=#571 id=571 data-nosnippet>571</a>                i,
+<a href=#572 id=572 data-nosnippet>572</a>                regs,
+<a href=#573 id=573 data-nosnippet>573</a>                <span class="kw-2">&amp;mut </span><span class="self">self</span>.vregs,
+<a href=#574 id=574 data-nosnippet>574</a>            );
+<a href=#575 id=575 data-nosnippet>575</a>            out_rets.extend(regs);
+<a href=#576 id=576 data-nosnippet>576</a>            <span class="kw">for </span>insn <span class="kw">in </span>insns {
+<a href=#577 id=577 data-nosnippet>577</a>                <span class="self">self</span>.emit(insn);
+<a href=#578 id=578 data-nosnippet>578</a>            }
+<a href=#579 id=579 data-nosnippet>579</a>        }
+<a href=#580 id=580 data-nosnippet>580</a>
+<a href=#581 id=581 data-nosnippet>581</a>        <span class="comment">// Hack: generate a virtual instruction that uses vmctx in
+<a href=#582 id=582 data-nosnippet>582</a>        // order to keep it alive for the duration of the function,
+<a href=#583 id=583 data-nosnippet>583</a>        // for the benefit of debuginfo.
+<a href=#584 id=584 data-nosnippet>584</a>        </span><span class="kw">if </span><span class="self">self</span>.f.dfg.values_labels.is_some() {
+<a href=#585 id=585 data-nosnippet>585</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(vmctx_val) = <span class="self">self</span>.f.special_param(ArgumentPurpose::VMContext) {
+<a href=#586 id=586 data-nosnippet>586</a>                <span class="kw">if </span><span class="self">self</span>.value_ir_uses[vmctx_val] != ValueUseState::Unused {
+<a href=#587 id=587 data-nosnippet>587</a>                    <span class="kw">let </span>vmctx_reg = <span class="self">self</span>.value_regs[vmctx_val].only_reg().unwrap();
+<a href=#588 id=588 data-nosnippet>588</a>                    <span class="self">self</span>.emit(I::gen_dummy_use(vmctx_reg));
+<a href=#589 id=589 data-nosnippet>589</a>                }
+<a href=#590 id=590 data-nosnippet>590</a>            }
+<a href=#591 id=591 data-nosnippet>591</a>        }
+<a href=#592 id=592 data-nosnippet>592</a>
+<a href=#593 id=593 data-nosnippet>593</a>        <span class="kw">let </span>inst = <span class="self">self</span>.abi().gen_rets(out_rets);
+<a href=#594 id=594 data-nosnippet>594</a>        <span class="self">self</span>.emit(inst);
+<a href=#595 id=595 data-nosnippet>595</a>    }
+<a href=#596 id=596 data-nosnippet>596</a>
+<a href=#597 id=597 data-nosnippet>597</a>    <span class="doccomment">/// Has this instruction been sunk to a use-site (i.e., away from its
+<a href=#598 id=598 data-nosnippet>598</a>    /// original location)?
+<a href=#599 id=599 data-nosnippet>599</a>    </span><span class="kw">fn </span>is_inst_sunk(<span class="kw-2">&amp;</span><span class="self">self</span>, inst: Inst) -&gt; bool {
+<a href=#600 id=600 data-nosnippet>600</a>        <span class="self">self</span>.inst_sunk.contains(<span class="kw-2">&amp;</span>inst)
+<a href=#601 id=601 data-nosnippet>601</a>    }
+<a href=#602 id=602 data-nosnippet>602</a>
+<a href=#603 id=603 data-nosnippet>603</a>    <span class="comment">// Is any result of this instruction needed?
+<a href=#604 id=604 data-nosnippet>604</a>    </span><span class="kw">fn </span>is_any_inst_result_needed(<span class="kw-2">&amp;</span><span class="self">self</span>, inst: Inst) -&gt; bool {
+<a href=#605 id=605 data-nosnippet>605</a>        <span class="self">self</span>.f
+<a href=#606 id=606 data-nosnippet>606</a>            .dfg
+<a href=#607 id=607 data-nosnippet>607</a>            .inst_results(inst)
+<a href=#608 id=608 data-nosnippet>608</a>            .iter()
+<a href=#609 id=609 data-nosnippet>609</a>            .any(|<span class="kw-2">&amp;</span>result| <span class="self">self</span>.value_lowered_uses[result] &gt; <span class="number">0</span>)
+<a href=#610 id=610 data-nosnippet>610</a>    }
+<a href=#611 id=611 data-nosnippet>611</a>
+<a href=#612 id=612 data-nosnippet>612</a>    <span class="kw">fn </span>lower_clif_block&lt;B: LowerBackend&lt;MInst = I&gt;&gt;(
+<a href=#613 id=613 data-nosnippet>613</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#614 id=614 data-nosnippet>614</a>        backend: <span class="kw-2">&amp;</span>B,
+<a href=#615 id=615 data-nosnippet>615</a>        block: Block,
+<a href=#616 id=616 data-nosnippet>616</a>        ctrl_plane: <span class="kw-2">&amp;mut </span>ControlPlane,
+<a href=#617 id=617 data-nosnippet>617</a>    ) -&gt; CodegenResult&lt;()&gt; {
+<a href=#618 id=618 data-nosnippet>618</a>        <span class="self">self</span>.cur_scan_entry_color = <span class="prelude-val">Some</span>(<span class="self">self</span>.block_end_colors[block]);
+<a href=#619 id=619 data-nosnippet>619</a>        <span class="comment">// Lowering loop:
+<a href=#620 id=620 data-nosnippet>620</a>        // - For each non-branch instruction, in reverse order:
+<a href=#621 id=621 data-nosnippet>621</a>        //   - If side-effecting (load, store, branch/call/return,
+<a href=#622 id=622 data-nosnippet>622</a>        //     possible trap), or if used outside of this block, or if
+<a href=#623 id=623 data-nosnippet>623</a>        //     demanded by another inst, then lower.
+<a href=#624 id=624 data-nosnippet>624</a>        //
+<a href=#625 id=625 data-nosnippet>625</a>        // That's it! Lowering of side-effecting ops will force all *needed*
+<a href=#626 id=626 data-nosnippet>626</a>        // (live) non-side-effecting ops to be lowered at the right places, via
+<a href=#627 id=627 data-nosnippet>627</a>        // the `use_input_reg()` callback on the `Lower` (that's us). That's
+<a href=#628 id=628 data-nosnippet>628</a>        // because `use_input_reg()` sets the eager/demand bit for any insts
+<a href=#629 id=629 data-nosnippet>629</a>        // whose result registers are used.
+<a href=#630 id=630 data-nosnippet>630</a>        //
+<a href=#631 id=631 data-nosnippet>631</a>        // We set the VCodeBuilder to "backward" mode, so we emit
+<a href=#632 id=632 data-nosnippet>632</a>        // blocks in reverse order wrt the BlockIndex sequence, and
+<a href=#633 id=633 data-nosnippet>633</a>        // emit instructions in reverse order within blocks.  Because
+<a href=#634 id=634 data-nosnippet>634</a>        // the machine backend calls `ctx.emit()` in forward order, we
+<a href=#635 id=635 data-nosnippet>635</a>        // collect per-IR-inst lowered instructions in `ir_insts`,
+<a href=#636 id=636 data-nosnippet>636</a>        // then reverse these and append to the VCode at the end of
+<a href=#637 id=637 data-nosnippet>637</a>        // each IR instruction.
+<a href=#638 id=638 data-nosnippet>638</a>        </span><span class="kw">for </span>inst <span class="kw">in </span><span class="self">self</span>.f.layout.block_insts(block).rev() {
+<a href=#639 id=639 data-nosnippet>639</a>            <span class="kw">let </span>data = <span class="kw-2">&amp;</span><span class="self">self</span>.f.dfg.insts[inst];
+<a href=#640 id=640 data-nosnippet>640</a>            <span class="kw">let </span>has_side_effect = has_lowering_side_effect(<span class="self">self</span>.f, inst);
+<a href=#641 id=641 data-nosnippet>641</a>            <span class="comment">// If  inst has been sunk to another location, skip it.
+<a href=#642 id=642 data-nosnippet>642</a>            </span><span class="kw">if </span><span class="self">self</span>.is_inst_sunk(inst) {
+<a href=#643 id=643 data-nosnippet>643</a>                <span class="kw">continue</span>;
+<a href=#644 id=644 data-nosnippet>644</a>            }
+<a href=#645 id=645 data-nosnippet>645</a>            <span class="comment">// Are any outputs used at least once?
+<a href=#646 id=646 data-nosnippet>646</a>            </span><span class="kw">let </span>value_needed = <span class="self">self</span>.is_any_inst_result_needed(inst);
+<a href=#647 id=647 data-nosnippet>647</a>            <span class="macro">trace!</span>(
+<a href=#648 id=648 data-nosnippet>648</a>                <span class="string">"lower_clif_block: block {} inst {} ({:?}) is_branch {} side_effect {} value_needed {}"</span>,
+<a href=#649 id=649 data-nosnippet>649</a>                block,
+<a href=#650 id=650 data-nosnippet>650</a>                inst,
+<a href=#651 id=651 data-nosnippet>651</a>                data,
+<a href=#652 id=652 data-nosnippet>652</a>                data.opcode().is_branch(),
+<a href=#653 id=653 data-nosnippet>653</a>                has_side_effect,
+<a href=#654 id=654 data-nosnippet>654</a>                value_needed,
+<a href=#655 id=655 data-nosnippet>655</a>            );
+<a href=#656 id=656 data-nosnippet>656</a>
+<a href=#657 id=657 data-nosnippet>657</a>            <span class="comment">// Update scan state to color prior to this inst (as we are scanning
+<a href=#658 id=658 data-nosnippet>658</a>            // backward).
+<a href=#659 id=659 data-nosnippet>659</a>            </span><span class="self">self</span>.cur_inst = <span class="prelude-val">Some</span>(inst);
+<a href=#660 id=660 data-nosnippet>660</a>            <span class="kw">if </span>has_side_effect {
+<a href=#661 id=661 data-nosnippet>661</a>                <span class="kw">let </span>entry_color = <span class="kw-2">*</span><span class="self">self
+<a href=#662 id=662 data-nosnippet>662</a>                    </span>.side_effect_inst_entry_colors
+<a href=#663 id=663 data-nosnippet>663</a>                    .get(<span class="kw-2">&amp;</span>inst)
+<a href=#664 id=664 data-nosnippet>664</a>                    .expect(<span class="string">"every side-effecting inst should have a color-map entry"</span>);
+<a href=#665 id=665 data-nosnippet>665</a>                <span class="self">self</span>.cur_scan_entry_color = <span class="prelude-val">Some</span>(entry_color);
+<a href=#666 id=666 data-nosnippet>666</a>            }
+<a href=#667 id=667 data-nosnippet>667</a>
+<a href=#668 id=668 data-nosnippet>668</a>            <span class="comment">// Skip lowering branches; these are handled separately
+<a href=#669 id=669 data-nosnippet>669</a>            // (see `lower_clif_branches()` below).
+<a href=#670 id=670 data-nosnippet>670</a>            </span><span class="kw">if </span><span class="self">self</span>.f.dfg.insts[inst].opcode().is_branch() {
+<a href=#671 id=671 data-nosnippet>671</a>                <span class="kw">continue</span>;
+<a href=#672 id=672 data-nosnippet>672</a>            }
+<a href=#673 id=673 data-nosnippet>673</a>
+<a href=#674 id=674 data-nosnippet>674</a>            <span class="comment">// Normal instruction: codegen if the instruction is side-effecting
+<a href=#675 id=675 data-nosnippet>675</a>            // or any of its outputs is used.
+<a href=#676 id=676 data-nosnippet>676</a>            </span><span class="kw">if </span>has_side_effect || value_needed {
+<a href=#677 id=677 data-nosnippet>677</a>                <span class="macro">trace!</span>(<span class="string">"lowering: inst {}: {}"</span>, inst, <span class="self">self</span>.f.dfg.display_inst(inst));
+<a href=#678 id=678 data-nosnippet>678</a>                <span class="kw">let </span>temp_regs = backend.lower(<span class="self">self</span>, inst).unwrap_or_else(|| {
+<a href=#679 id=679 data-nosnippet>679</a>                    <span class="kw">let </span>ty = <span class="kw">if </span><span class="self">self</span>.num_outputs(inst) &gt; <span class="number">0 </span>{
+<a href=#680 id=680 data-nosnippet>680</a>                        <span class="prelude-val">Some</span>(<span class="self">self</span>.output_ty(inst, <span class="number">0</span>))
+<a href=#681 id=681 data-nosnippet>681</a>                    } <span class="kw">else </span>{
+<a href=#682 id=682 data-nosnippet>682</a>                        <span class="prelude-val">None
+<a href=#683 id=683 data-nosnippet>683</a>                    </span>};
+<a href=#684 id=684 data-nosnippet>684</a>                    <span class="macro">panic!</span>(
+<a href=#685 id=685 data-nosnippet>685</a>                        <span class="string">"should be implemented in ISLE: inst = `{}`, type = `{:?}`"</span>,
+<a href=#686 id=686 data-nosnippet>686</a>                        <span class="self">self</span>.f.dfg.display_inst(inst),
+<a href=#687 id=687 data-nosnippet>687</a>                        ty
+<a href=#688 id=688 data-nosnippet>688</a>                    )
+<a href=#689 id=689 data-nosnippet>689</a>                });
+<a href=#690 id=690 data-nosnippet>690</a>
+<a href=#691 id=691 data-nosnippet>691</a>                <span class="comment">// The ISLE generated code emits its own registers to define the
+<a href=#692 id=692 data-nosnippet>692</a>                // instruction's lowered values in. However, other instructions
+<a href=#693 id=693 data-nosnippet>693</a>                // that use this SSA value will be lowered assuming that the value
+<a href=#694 id=694 data-nosnippet>694</a>                // is generated into a pre-assigned, different, register.
+<a href=#695 id=695 data-nosnippet>695</a>                //
+<a href=#696 id=696 data-nosnippet>696</a>                // To connect the two, we set up "aliases" in the VCodeBuilder
+<a href=#697 id=697 data-nosnippet>697</a>                // that apply when it is building the Operand table for the
+<a href=#698 id=698 data-nosnippet>698</a>                // regalloc to use. These aliases effectively rewrite any use of
+<a href=#699 id=699 data-nosnippet>699</a>                // the pre-assigned register to the register that was returned by
+<a href=#700 id=700 data-nosnippet>700</a>                // the ISLE lowering logic.
+<a href=#701 id=701 data-nosnippet>701</a>                </span><span class="kw">let </span>results = <span class="self">self</span>.f.dfg.inst_results(inst);
+<a href=#702 id=702 data-nosnippet>702</a>                <span class="macro">debug_assert_eq!</span>(temp_regs.len(), results.len());
+<a href=#703 id=703 data-nosnippet>703</a>                <span class="kw">for </span>(regs, <span class="kw-2">&amp;</span>result) <span class="kw">in </span>temp_regs.iter().zip(results) {
+<a href=#704 id=704 data-nosnippet>704</a>                    <span class="kw">let </span>dsts = <span class="self">self</span>.value_regs[result];
+<a href=#705 id=705 data-nosnippet>705</a>                    <span class="macro">debug_assert_eq!</span>(regs.len(), dsts.len());
+<a href=#706 id=706 data-nosnippet>706</a>                    <span class="kw">for </span>(<span class="kw-2">&amp;</span>dst, <span class="kw-2">&amp;</span>temp) <span class="kw">in </span>dsts.regs().iter().zip(regs.regs()) {
+<a href=#707 id=707 data-nosnippet>707</a>                        <span class="macro">trace!</span>(<span class="string">"set vreg alias: {result:?} = {dst:?}, lowering = {temp:?}"</span>);
+<a href=#708 id=708 data-nosnippet>708</a>                        <span class="self">self</span>.vregs.set_vreg_alias(dst, temp);
+<a href=#709 id=709 data-nosnippet>709</a>                    }
+<a href=#710 id=710 data-nosnippet>710</a>                }
+<a href=#711 id=711 data-nosnippet>711</a>            }
+<a href=#712 id=712 data-nosnippet>712</a>
+<a href=#713 id=713 data-nosnippet>713</a>            <span class="kw">let </span>start = <span class="self">self</span>.vcode.vcode.num_insts();
+<a href=#714 id=714 data-nosnippet>714</a>            <span class="kw">let </span>loc = <span class="self">self</span>.srcloc(inst);
+<a href=#715 id=715 data-nosnippet>715</a>            <span class="self">self</span>.finish_ir_inst(loc);
+<a href=#716 id=716 data-nosnippet>716</a>
+<a href=#717 id=717 data-nosnippet>717</a>            <span class="comment">// If the instruction had a user stack map, forward it from the CLIF
+<a href=#718 id=718 data-nosnippet>718</a>            // to the vcode.
+<a href=#719 id=719 data-nosnippet>719</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(entries) = <span class="self">self</span>.f.dfg.user_stack_map_entries(inst) {
+<a href=#720 id=720 data-nosnippet>720</a>                <span class="kw">let </span>end = <span class="self">self</span>.vcode.vcode.num_insts();
+<a href=#721 id=721 data-nosnippet>721</a>                <span class="macro">debug_assert!</span>(end &gt; start);
+<a href=#722 id=722 data-nosnippet>722</a>                <span class="macro">debug_assert_eq!</span>(
+<a href=#723 id=723 data-nosnippet>723</a>                    (start..end)
+<a href=#724 id=724 data-nosnippet>724</a>                        .filter(|i| <span class="self">self</span>.vcode.vcode[InsnIndex::new(<span class="kw-2">*</span>i)].is_safepoint())
+<a href=#725 id=725 data-nosnippet>725</a>                        .count(),
+<a href=#726 id=726 data-nosnippet>726</a>                    <span class="number">1
+<a href=#727 id=727 data-nosnippet>727</a>                </span>);
+<a href=#728 id=728 data-nosnippet>728</a>                <span class="kw">for </span>i <span class="kw">in </span>start..end {
+<a href=#729 id=729 data-nosnippet>729</a>                    <span class="kw">let </span>iix = InsnIndex::new(i);
+<a href=#730 id=730 data-nosnippet>730</a>                    <span class="kw">if </span><span class="self">self</span>.vcode.vcode[iix].is_safepoint() {
+<a href=#731 id=731 data-nosnippet>731</a>                        <span class="macro">trace!</span>(
+<a href=#732 id=732 data-nosnippet>732</a>                            <span class="string">"Adding user stack map from clif\n\n\
+<a href=#733 id=733 data-nosnippet>733</a>                                 {inst:?} `{}`\n\n\
+<a href=#734 id=734 data-nosnippet>734</a>                             to vcode\n\n\
+<a href=#735 id=735 data-nosnippet>735</a>                                 {iix:?} `{}`"</span>,
+<a href=#736 id=736 data-nosnippet>736</a>                            <span class="self">self</span>.f.dfg.display_inst(inst),
+<a href=#737 id=737 data-nosnippet>737</a>                            <span class="kw-2">&amp;</span><span class="self">self</span>.vcode.vcode[iix].pretty_print_inst(<span class="kw-2">&amp;mut </span>Default::default()),
+<a href=#738 id=738 data-nosnippet>738</a>                        );
+<a href=#739 id=739 data-nosnippet>739</a>                        <span class="self">self</span>.vcode
+<a href=#740 id=740 data-nosnippet>740</a>                            .add_user_stack_map(BackwardsInsnIndex::new(iix.index()), entries);
+<a href=#741 id=741 data-nosnippet>741</a>                        <span class="kw">break</span>;
+<a href=#742 id=742 data-nosnippet>742</a>                    }
+<a href=#743 id=743 data-nosnippet>743</a>                }
+<a href=#744 id=744 data-nosnippet>744</a>            }
+<a href=#745 id=745 data-nosnippet>745</a>
+<a href=#746 id=746 data-nosnippet>746</a>            <span class="comment">// maybe insert random instruction
+<a href=#747 id=747 data-nosnippet>747</a>            </span><span class="kw">if </span>ctrl_plane.get_decision() {
+<a href=#748 id=748 data-nosnippet>748</a>                <span class="kw">if </span>ctrl_plane.get_decision() {
+<a href=#749 id=749 data-nosnippet>749</a>                    <span class="kw">let </span>imm: u64 = ctrl_plane.get_arbitrary();
+<a href=#750 id=750 data-nosnippet>750</a>                    <span class="kw">let </span>reg = <span class="self">self</span>.alloc_tmp(<span class="kw">crate</span>::ir::types::I64).regs()[<span class="number">0</span>];
+<a href=#751 id=751 data-nosnippet>751</a>                    I::gen_imm_u64(imm, reg).map(|inst| <span class="self">self</span>.emit(inst));
+<a href=#752 id=752 data-nosnippet>752</a>                } <span class="kw">else </span>{
+<a href=#753 id=753 data-nosnippet>753</a>                    <span class="kw">let </span>imm: f64 = ctrl_plane.get_arbitrary();
+<a href=#754 id=754 data-nosnippet>754</a>                    <span class="kw">let </span>tmp = <span class="self">self</span>.alloc_tmp(<span class="kw">crate</span>::ir::types::I64).regs()[<span class="number">0</span>];
+<a href=#755 id=755 data-nosnippet>755</a>                    <span class="kw">let </span>reg = <span class="self">self</span>.alloc_tmp(<span class="kw">crate</span>::ir::types::F64).regs()[<span class="number">0</span>];
+<a href=#756 id=756 data-nosnippet>756</a>                    <span class="kw">for </span>inst <span class="kw">in </span>I::gen_imm_f64(imm, tmp, reg) {
+<a href=#757 id=757 data-nosnippet>757</a>                        <span class="self">self</span>.emit(inst);
+<a href=#758 id=758 data-nosnippet>758</a>                    }
+<a href=#759 id=759 data-nosnippet>759</a>                }
+<a href=#760 id=760 data-nosnippet>760</a>            }
+<a href=#761 id=761 data-nosnippet>761</a>
+<a href=#762 id=762 data-nosnippet>762</a>            <span class="comment">// Emit value-label markers if needed, to later recover
+<a href=#763 id=763 data-nosnippet>763</a>            // debug mappings. This must happen before the instruction
+<a href=#764 id=764 data-nosnippet>764</a>            // (so after we emit, in bottom-to-top pass).
+<a href=#765 id=765 data-nosnippet>765</a>            </span><span class="self">self</span>.emit_value_label_markers_for_inst(inst);
+<a href=#766 id=766 data-nosnippet>766</a>        }
+<a href=#767 id=767 data-nosnippet>767</a>
+<a href=#768 id=768 data-nosnippet>768</a>        <span class="comment">// Add the block params to this block.
+<a href=#769 id=769 data-nosnippet>769</a>        </span><span class="self">self</span>.add_block_params(block)<span class="question-mark">?</span>;
+<a href=#770 id=770 data-nosnippet>770</a>
+<a href=#771 id=771 data-nosnippet>771</a>        <span class="self">self</span>.cur_scan_entry_color = <span class="prelude-val">None</span>;
+<a href=#772 id=772 data-nosnippet>772</a>        <span class="prelude-val">Ok</span>(())
+<a href=#773 id=773 data-nosnippet>773</a>    }
+<a href=#774 id=774 data-nosnippet>774</a>
+<a href=#775 id=775 data-nosnippet>775</a>    <span class="kw">fn </span>add_block_params(<span class="kw-2">&amp;mut </span><span class="self">self</span>, block: Block) -&gt; CodegenResult&lt;()&gt; {
+<a href=#776 id=776 data-nosnippet>776</a>        <span class="kw">for </span><span class="kw-2">&amp;</span>param <span class="kw">in </span><span class="self">self</span>.f.dfg.block_params(block) {
+<a href=#777 id=777 data-nosnippet>777</a>            <span class="kw">for </span><span class="kw-2">&amp;</span>reg <span class="kw">in </span><span class="self">self</span>.value_regs[param].regs() {
+<a href=#778 id=778 data-nosnippet>778</a>                <span class="kw">let </span>vreg = reg.to_virtual_reg().unwrap();
+<a href=#779 id=779 data-nosnippet>779</a>                <span class="self">self</span>.vcode.add_block_param(vreg);
+<a href=#780 id=780 data-nosnippet>780</a>            }
+<a href=#781 id=781 data-nosnippet>781</a>        }
+<a href=#782 id=782 data-nosnippet>782</a>        <span class="prelude-val">Ok</span>(())
+<a href=#783 id=783 data-nosnippet>783</a>    }
+<a href=#784 id=784 data-nosnippet>784</a>
+<a href=#785 id=785 data-nosnippet>785</a>    <span class="kw">fn </span>get_value_labels&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, val: Value, depth: usize) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[ValueLabelStart]&gt; {
+<a href=#786 id=786 data-nosnippet>786</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>values_labels) = <span class="self">self</span>.f.dfg.values_labels {
+<a href=#787 id=787 data-nosnippet>787</a>            <span class="macro">debug_assert!</span>(<span class="self">self</span>.f.dfg.value_is_real(val));
+<a href=#788 id=788 data-nosnippet>788</a>            <span class="macro">trace!</span>(
+<a href=#789 id=789 data-nosnippet>789</a>                <span class="string">"get_value_labels: val {} -&gt; {:?}"</span>,
+<a href=#790 id=790 data-nosnippet>790</a>                val,
+<a href=#791 id=791 data-nosnippet>791</a>                values_labels.get(<span class="kw-2">&amp;</span>val)
+<a href=#792 id=792 data-nosnippet>792</a>            );
+<a href=#793 id=793 data-nosnippet>793</a>            <span class="kw">match </span>values_labels.get(<span class="kw-2">&amp;</span>val) {
+<a href=#794 id=794 data-nosnippet>794</a>                <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>ValueLabelAssignments::Starts(<span class="kw-2">ref </span>list)) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>list[..]),
+<a href=#795 id=795 data-nosnippet>795</a>                <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>ValueLabelAssignments::Alias { value, .. }) <span class="kw">if </span>depth &lt; <span class="number">10 </span>=&gt; {
+<a href=#796 id=796 data-nosnippet>796</a>                    <span class="self">self</span>.get_value_labels(value, depth + <span class="number">1</span>)
+<a href=#797 id=797 data-nosnippet>797</a>                }
+<a href=#798 id=798 data-nosnippet>798</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#799 id=799 data-nosnippet>799</a>            }
+<a href=#800 id=800 data-nosnippet>800</a>        } <span class="kw">else </span>{
+<a href=#801 id=801 data-nosnippet>801</a>            <span class="prelude-val">None
+<a href=#802 id=802 data-nosnippet>802</a>        </span>}
+<a href=#803 id=803 data-nosnippet>803</a>    }
+<a href=#804 id=804 data-nosnippet>804</a>
+<a href=#805 id=805 data-nosnippet>805</a>    <span class="kw">fn </span>emit_value_label_marks_for_value(<span class="kw-2">&amp;mut </span><span class="self">self</span>, val: Value) {
+<a href=#806 id=806 data-nosnippet>806</a>        <span class="kw">let </span>regs = <span class="self">self</span>.value_regs[val];
+<a href=#807 id=807 data-nosnippet>807</a>        <span class="kw">if </span>regs.len() &gt; <span class="number">1 </span>{
+<a href=#808 id=808 data-nosnippet>808</a>            <span class="kw">return</span>;
+<a href=#809 id=809 data-nosnippet>809</a>        }
+<a href=#810 id=810 data-nosnippet>810</a>        <span class="kw">let </span>reg = regs.only_reg().unwrap();
+<a href=#811 id=811 data-nosnippet>811</a>
+<a href=#812 id=812 data-nosnippet>812</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(label_starts) = <span class="self">self</span>.get_value_labels(val, <span class="number">0</span>) {
+<a href=#813 id=813 data-nosnippet>813</a>            <span class="kw">let </span>labels = label_starts
+<a href=#814 id=814 data-nosnippet>814</a>                .iter()
+<a href=#815 id=815 data-nosnippet>815</a>                .map(|<span class="kw-2">&amp;</span>ValueLabelStart { label, .. }| label)
+<a href=#816 id=816 data-nosnippet>816</a>                .collect::&lt;FxHashSet&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#817 id=817 data-nosnippet>817</a>            <span class="kw">for </span>label <span class="kw">in </span>labels {
+<a href=#818 id=818 data-nosnippet>818</a>                <span class="macro">trace!</span>(
+<a href=#819 id=819 data-nosnippet>819</a>                    <span class="string">"value labeling: defines val {:?} -&gt; reg {:?} -&gt; label {:?}"</span>,
+<a href=#820 id=820 data-nosnippet>820</a>                    val,
+<a href=#821 id=821 data-nosnippet>821</a>                    reg,
+<a href=#822 id=822 data-nosnippet>822</a>                    label,
+<a href=#823 id=823 data-nosnippet>823</a>                );
+<a href=#824 id=824 data-nosnippet>824</a>                <span class="self">self</span>.vcode.add_value_label(reg, label);
+<a href=#825 id=825 data-nosnippet>825</a>            }
+<a href=#826 id=826 data-nosnippet>826</a>        }
+<a href=#827 id=827 data-nosnippet>827</a>    }
+<a href=#828 id=828 data-nosnippet>828</a>
+<a href=#829 id=829 data-nosnippet>829</a>    <span class="kw">fn </span>emit_value_label_markers_for_inst(<span class="kw-2">&amp;mut </span><span class="self">self</span>, inst: Inst) {
+<a href=#830 id=830 data-nosnippet>830</a>        <span class="kw">if </span><span class="self">self</span>.f.dfg.values_labels.is_none() {
+<a href=#831 id=831 data-nosnippet>831</a>            <span class="kw">return</span>;
+<a href=#832 id=832 data-nosnippet>832</a>        }
+<a href=#833 id=833 data-nosnippet>833</a>
+<a href=#834 id=834 data-nosnippet>834</a>        <span class="macro">trace!</span>(
+<a href=#835 id=835 data-nosnippet>835</a>            <span class="string">"value labeling: srcloc {}: inst {}"</span>,
+<a href=#836 id=836 data-nosnippet>836</a>            <span class="self">self</span>.srcloc(inst),
+<a href=#837 id=837 data-nosnippet>837</a>            inst
+<a href=#838 id=838 data-nosnippet>838</a>        );
+<a href=#839 id=839 data-nosnippet>839</a>        <span class="kw">for </span><span class="kw-2">&amp;</span>val <span class="kw">in </span><span class="self">self</span>.f.dfg.inst_results(inst) {
+<a href=#840 id=840 data-nosnippet>840</a>            <span class="self">self</span>.emit_value_label_marks_for_value(val);
+<a href=#841 id=841 data-nosnippet>841</a>        }
+<a href=#842 id=842 data-nosnippet>842</a>    }
+<a href=#843 id=843 data-nosnippet>843</a>
+<a href=#844 id=844 data-nosnippet>844</a>    <span class="kw">fn </span>emit_value_label_markers_for_block_args(<span class="kw-2">&amp;mut </span><span class="self">self</span>, block: Block) {
+<a href=#845 id=845 data-nosnippet>845</a>        <span class="kw">if </span><span class="self">self</span>.f.dfg.values_labels.is_none() {
+<a href=#846 id=846 data-nosnippet>846</a>            <span class="kw">return</span>;
+<a href=#847 id=847 data-nosnippet>847</a>        }
+<a href=#848 id=848 data-nosnippet>848</a>
+<a href=#849 id=849 data-nosnippet>849</a>        <span class="macro">trace!</span>(<span class="string">"value labeling: block {}"</span>, block);
+<a href=#850 id=850 data-nosnippet>850</a>        <span class="kw">for </span><span class="kw-2">&amp;</span>arg <span class="kw">in </span><span class="self">self</span>.f.dfg.block_params(block) {
+<a href=#851 id=851 data-nosnippet>851</a>            <span class="self">self</span>.emit_value_label_marks_for_value(arg);
+<a href=#852 id=852 data-nosnippet>852</a>        }
+<a href=#853 id=853 data-nosnippet>853</a>        <span class="self">self</span>.finish_ir_inst(Default::default());
+<a href=#854 id=854 data-nosnippet>854</a>    }
+<a href=#855 id=855 data-nosnippet>855</a>
+<a href=#856 id=856 data-nosnippet>856</a>    <span class="kw">fn </span>finish_ir_inst(<span class="kw-2">&amp;mut </span><span class="self">self</span>, loc: RelSourceLoc) {
+<a href=#857 id=857 data-nosnippet>857</a>        <span class="comment">// The VCodeBuilder builds in reverse order (and reverses at
+<a href=#858 id=858 data-nosnippet>858</a>        // the end), but `ir_insts` is in forward order, so reverse
+<a href=#859 id=859 data-nosnippet>859</a>        // it.
+<a href=#860 id=860 data-nosnippet>860</a>        </span><span class="kw">for </span>inst <span class="kw">in </span><span class="self">self</span>.ir_insts.drain(..).rev() {
+<a href=#861 id=861 data-nosnippet>861</a>            <span class="self">self</span>.vcode.push(inst, loc);
+<a href=#862 id=862 data-nosnippet>862</a>        }
+<a href=#863 id=863 data-nosnippet>863</a>    }
+<a href=#864 id=864 data-nosnippet>864</a>
+<a href=#865 id=865 data-nosnippet>865</a>    <span class="kw">fn </span>finish_bb(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#866 id=866 data-nosnippet>866</a>        <span class="self">self</span>.vcode.end_bb();
+<a href=#867 id=867 data-nosnippet>867</a>    }
+<a href=#868 id=868 data-nosnippet>868</a>
+<a href=#869 id=869 data-nosnippet>869</a>    <span class="kw">fn </span>lower_clif_branches&lt;B: LowerBackend&lt;MInst = I&gt;&gt;(
+<a href=#870 id=870 data-nosnippet>870</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#871 id=871 data-nosnippet>871</a>        backend: <span class="kw-2">&amp;</span>B,
+<a href=#872 id=872 data-nosnippet>872</a>        <span class="comment">// Lowered block index:
+<a href=#873 id=873 data-nosnippet>873</a>        </span>bindex: BlockIndex,
+<a href=#874 id=874 data-nosnippet>874</a>        <span class="comment">// Original CLIF block:
+<a href=#875 id=875 data-nosnippet>875</a>        </span>block: Block,
+<a href=#876 id=876 data-nosnippet>876</a>        branch: Inst,
+<a href=#877 id=877 data-nosnippet>877</a>        targets: <span class="kw-2">&amp;</span>[MachLabel],
+<a href=#878 id=878 data-nosnippet>878</a>    ) -&gt; CodegenResult&lt;()&gt; {
+<a href=#879 id=879 data-nosnippet>879</a>        <span class="macro">trace!</span>(
+<a href=#880 id=880 data-nosnippet>880</a>            <span class="string">"lower_clif_branches: block {} branch {:?} targets {:?}"</span>,
+<a href=#881 id=881 data-nosnippet>881</a>            block,
+<a href=#882 id=882 data-nosnippet>882</a>            branch,
+<a href=#883 id=883 data-nosnippet>883</a>            targets,
+<a href=#884 id=884 data-nosnippet>884</a>        );
+<a href=#885 id=885 data-nosnippet>885</a>        <span class="comment">// When considering code-motion opportunities, consider the current
+<a href=#886 id=886 data-nosnippet>886</a>        // program point to be this branch.
+<a href=#887 id=887 data-nosnippet>887</a>        </span><span class="self">self</span>.cur_inst = <span class="prelude-val">Some</span>(branch);
+<a href=#888 id=888 data-nosnippet>888</a>
+<a href=#889 id=889 data-nosnippet>889</a>        <span class="comment">// Lower the branch in ISLE.
+<a href=#890 id=890 data-nosnippet>890</a>        </span>backend
+<a href=#891 id=891 data-nosnippet>891</a>            .lower_branch(<span class="self">self</span>, branch, targets)
+<a href=#892 id=892 data-nosnippet>892</a>            .unwrap_or_else(|| {
+<a href=#893 id=893 data-nosnippet>893</a>                <span class="macro">panic!</span>(
+<a href=#894 id=894 data-nosnippet>894</a>                    <span class="string">"should be implemented in ISLE: branch = `{}`"</span>,
+<a href=#895 id=895 data-nosnippet>895</a>                    <span class="self">self</span>.f.dfg.display_inst(branch),
+<a href=#896 id=896 data-nosnippet>896</a>                )
+<a href=#897 id=897 data-nosnippet>897</a>            });
+<a href=#898 id=898 data-nosnippet>898</a>        <span class="kw">let </span>loc = <span class="self">self</span>.srcloc(branch);
+<a href=#899 id=899 data-nosnippet>899</a>        <span class="self">self</span>.finish_ir_inst(loc);
+<a href=#900 id=900 data-nosnippet>900</a>        <span class="comment">// Add block param outputs for current block.
+<a href=#901 id=901 data-nosnippet>901</a>        </span><span class="self">self</span>.lower_branch_blockparam_args(bindex);
+<a href=#902 id=902 data-nosnippet>902</a>        <span class="prelude-val">Ok</span>(())
+<a href=#903 id=903 data-nosnippet>903</a>    }
+<a href=#904 id=904 data-nosnippet>904</a>
+<a href=#905 id=905 data-nosnippet>905</a>    <span class="kw">fn </span>lower_branch_blockparam_args(<span class="kw-2">&amp;mut </span><span class="self">self</span>, block: BlockIndex) {
+<a href=#906 id=906 data-nosnippet>906</a>        <span class="comment">// TODO: why not make `block_order` public?
+<a href=#907 id=907 data-nosnippet>907</a>        </span><span class="kw">for </span>succ_idx <span class="kw">in </span><span class="number">0</span>..<span class="self">self</span>.vcode.block_order().succ_indices(block).<span class="number">1</span>.len() {
+<a href=#908 id=908 data-nosnippet>908</a>            <span class="comment">// Avoid immutable borrow by explicitly indexing.
+<a href=#909 id=909 data-nosnippet>909</a>            </span><span class="kw">let </span>(opt_inst, succs) = <span class="self">self</span>.vcode.block_order().succ_indices(block);
+<a href=#910 id=910 data-nosnippet>910</a>            <span class="kw">let </span>inst = opt_inst.expect(<span class="string">"lower_branch_blockparam_args called on a critical edge!"</span>);
+<a href=#911 id=911 data-nosnippet>911</a>            <span class="kw">let </span>succ = succs[succ_idx];
+<a href=#912 id=912 data-nosnippet>912</a>
+<a href=#913 id=913 data-nosnippet>913</a>            <span class="comment">// The use of `succ_idx` to index `branch_destination` is valid on the assumption that
+<a href=#914 id=914 data-nosnippet>914</a>            // the traversal order defined in `visit_block_succs` mirrors the order returned by
+<a href=#915 id=915 data-nosnippet>915</a>            // `branch_destination`. If that assumption is violated, the branch targets returned
+<a href=#916 id=916 data-nosnippet>916</a>            // here will not match the clif.
+<a href=#917 id=917 data-nosnippet>917</a>            </span><span class="kw">let </span>branches = <span class="self">self</span>.f.dfg.insts[inst].branch_destination(<span class="kw-2">&amp;</span><span class="self">self</span>.f.dfg.jump_tables);
+<a href=#918 id=918 data-nosnippet>918</a>            <span class="kw">let </span>branch_args = branches[succ_idx].args_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.f.dfg.value_lists);
+<a href=#919 id=919 data-nosnippet>919</a>
+<a href=#920 id=920 data-nosnippet>920</a>            <span class="kw">let </span><span class="kw-2">mut </span>branch_arg_vregs: SmallVec&lt;[Reg; <span class="number">16</span>]&gt; = <span class="macro">smallvec!</span>[];
+<a href=#921 id=921 data-nosnippet>921</a>            <span class="kw">for </span><span class="kw-2">&amp;</span>arg <span class="kw">in </span>branch_args {
+<a href=#922 id=922 data-nosnippet>922</a>                <span class="macro">debug_assert!</span>(<span class="self">self</span>.f.dfg.value_is_real(arg));
+<a href=#923 id=923 data-nosnippet>923</a>                <span class="kw">let </span>regs = <span class="self">self</span>.put_value_in_regs(arg);
+<a href=#924 id=924 data-nosnippet>924</a>                branch_arg_vregs.extend_from_slice(regs.regs());
+<a href=#925 id=925 data-nosnippet>925</a>            }
+<a href=#926 id=926 data-nosnippet>926</a>            <span class="self">self</span>.vcode.add_succ(succ, <span class="kw-2">&amp;</span>branch_arg_vregs[..]);
+<a href=#927 id=927 data-nosnippet>927</a>        }
+<a href=#928 id=928 data-nosnippet>928</a>    }
+<a href=#929 id=929 data-nosnippet>929</a>
+<a href=#930 id=930 data-nosnippet>930</a>    <span class="kw">fn </span>collect_branches_and_targets(
+<a href=#931 id=931 data-nosnippet>931</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#932 id=932 data-nosnippet>932</a>        bindex: BlockIndex,
+<a href=#933 id=933 data-nosnippet>933</a>        _bb: Block,
+<a href=#934 id=934 data-nosnippet>934</a>        targets: <span class="kw-2">&amp;mut </span>SmallVec&lt;[MachLabel; <span class="number">2</span>]&gt;,
+<a href=#935 id=935 data-nosnippet>935</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Inst&gt; {
+<a href=#936 id=936 data-nosnippet>936</a>        targets.clear();
+<a href=#937 id=937 data-nosnippet>937</a>        <span class="kw">let </span>(opt_inst, succs) = <span class="self">self</span>.vcode.block_order().succ_indices(bindex);
+<a href=#938 id=938 data-nosnippet>938</a>        targets.extend(succs.iter().map(|succ| MachLabel::from_block(<span class="kw-2">*</span>succ)));
+<a href=#939 id=939 data-nosnippet>939</a>        opt_inst
+<a href=#940 id=940 data-nosnippet>940</a>    }
+<a href=#941 id=941 data-nosnippet>941</a>
+<a href=#942 id=942 data-nosnippet>942</a>    <span class="doccomment">/// Lower the function.
+<a href=#943 id=943 data-nosnippet>943</a>    </span><span class="kw">pub fn </span>lower&lt;B: LowerBackend&lt;MInst = I&gt;&gt;(
+<a href=#944 id=944 data-nosnippet>944</a>        <span class="kw-2">mut </span><span class="self">self</span>,
+<a href=#945 id=945 data-nosnippet>945</a>        backend: <span class="kw-2">&amp;</span>B,
+<a href=#946 id=946 data-nosnippet>946</a>        ctrl_plane: <span class="kw-2">&amp;mut </span>ControlPlane,
+<a href=#947 id=947 data-nosnippet>947</a>    ) -&gt; CodegenResult&lt;VCode&lt;I&gt;&gt; {
+<a href=#948 id=948 data-nosnippet>948</a>        <span class="macro">trace!</span>(<span class="string">"about to lower function: {:?}"</span>, <span class="self">self</span>.f);
+<a href=#949 id=949 data-nosnippet>949</a>
+<a href=#950 id=950 data-nosnippet>950</a>        <span class="self">self</span>.vcode.init_retval_area(<span class="kw-2">&amp;mut </span><span class="self">self</span>.vregs)<span class="question-mark">?</span>;
+<a href=#951 id=951 data-nosnippet>951</a>
+<a href=#952 id=952 data-nosnippet>952</a>        <span class="comment">// Get the pinned reg here (we only parameterize this function on `B`,
+<a href=#953 id=953 data-nosnippet>953</a>        // not the whole `Lower` impl).
+<a href=#954 id=954 data-nosnippet>954</a>        </span><span class="self">self</span>.pinned_reg = backend.maybe_pinned_reg();
+<a href=#955 id=955 data-nosnippet>955</a>
+<a href=#956 id=956 data-nosnippet>956</a>        <span class="self">self</span>.vcode.set_entry(BlockIndex::new(<span class="number">0</span>));
+<a href=#957 id=957 data-nosnippet>957</a>
+<a href=#958 id=958 data-nosnippet>958</a>        <span class="comment">// Reused vectors for branch lowering.
+<a href=#959 id=959 data-nosnippet>959</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>targets: SmallVec&lt;[MachLabel; <span class="number">2</span>]&gt; = SmallVec::new();
+<a href=#960 id=960 data-nosnippet>960</a>
+<a href=#961 id=961 data-nosnippet>961</a>        <span class="comment">// get a copy of the lowered order; we hold this separately because we
+<a href=#962 id=962 data-nosnippet>962</a>        // need a mut ref to the vcode to mutate it below.
+<a href=#963 id=963 data-nosnippet>963</a>        </span><span class="kw">let </span>lowered_order: SmallVec&lt;[LoweredBlock; <span class="number">64</span>]&gt; = <span class="self">self
+<a href=#964 id=964 data-nosnippet>964</a>            </span>.vcode
+<a href=#965 id=965 data-nosnippet>965</a>            .block_order()
+<a href=#966 id=966 data-nosnippet>966</a>            .lowered_order()
+<a href=#967 id=967 data-nosnippet>967</a>            .iter()
+<a href=#968 id=968 data-nosnippet>968</a>            .cloned()
+<a href=#969 id=969 data-nosnippet>969</a>            .collect();
+<a href=#970 id=970 data-nosnippet>970</a>
+<a href=#971 id=971 data-nosnippet>971</a>        <span class="comment">// Main lowering loop over lowered blocks.
+<a href=#972 id=972 data-nosnippet>972</a>        </span><span class="kw">for </span>(bindex, lb) <span class="kw">in </span>lowered_order.iter().enumerate().rev() {
+<a href=#973 id=973 data-nosnippet>973</a>            <span class="kw">let </span>bindex = BlockIndex::new(bindex);
+<a href=#974 id=974 data-nosnippet>974</a>
+<a href=#975 id=975 data-nosnippet>975</a>            <span class="comment">// Lower the block body in reverse order (see comment in
+<a href=#976 id=976 data-nosnippet>976</a>            // `lower_clif_block()` for rationale).
+<a href=#977 id=977 data-nosnippet>977</a>
+<a href=#978 id=978 data-nosnippet>978</a>            // End branches.
+<a href=#979 id=979 data-nosnippet>979</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(bb) = lb.orig_block() {
+<a href=#980 id=980 data-nosnippet>980</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(branch) = <span class="self">self</span>.collect_branches_and_targets(bindex, bb, <span class="kw-2">&amp;mut </span>targets) {
+<a href=#981 id=981 data-nosnippet>981</a>                    <span class="self">self</span>.lower_clif_branches(backend, bindex, bb, branch, <span class="kw-2">&amp;</span>targets)<span class="question-mark">?</span>;
+<a href=#982 id=982 data-nosnippet>982</a>                    <span class="self">self</span>.finish_ir_inst(<span class="self">self</span>.srcloc(branch));
+<a href=#983 id=983 data-nosnippet>983</a>                }
+<a href=#984 id=984 data-nosnippet>984</a>            } <span class="kw">else </span>{
+<a href=#985 id=985 data-nosnippet>985</a>                <span class="comment">// If no orig block, this must be a pure edge block;
+<a href=#986 id=986 data-nosnippet>986</a>                // get the successor and emit a jump. Add block params
+<a href=#987 id=987 data-nosnippet>987</a>                // according to the one successor, and pass them
+<a href=#988 id=988 data-nosnippet>988</a>                // through; note that the successor must have an
+<a href=#989 id=989 data-nosnippet>989</a>                // original block.
+<a href=#990 id=990 data-nosnippet>990</a>                </span><span class="kw">let </span>(<span class="kw">_</span>, succs) = <span class="self">self</span>.vcode.block_order().succ_indices(bindex);
+<a href=#991 id=991 data-nosnippet>991</a>                <span class="kw">let </span>succ = succs[<span class="number">0</span>];
+<a href=#992 id=992 data-nosnippet>992</a>
+<a href=#993 id=993 data-nosnippet>993</a>                <span class="kw">let </span>orig_succ = lowered_order[succ.index()];
+<a href=#994 id=994 data-nosnippet>994</a>                <span class="kw">let </span>orig_succ = orig_succ
+<a href=#995 id=995 data-nosnippet>995</a>                    .orig_block()
+<a href=#996 id=996 data-nosnippet>996</a>                    .expect(<span class="string">"Edge block succ must be body block"</span>);
+<a href=#997 id=997 data-nosnippet>997</a>
+<a href=#998 id=998 data-nosnippet>998</a>                <span class="kw">let </span><span class="kw-2">mut </span>branch_arg_vregs: SmallVec&lt;[Reg; <span class="number">16</span>]&gt; = <span class="macro">smallvec!</span>[];
+<a href=#999 id=999 data-nosnippet>999</a>                <span class="kw">for </span>ty <span class="kw">in </span><span class="self">self</span>.f.dfg.block_param_types(orig_succ) {
+<a href=#1000 id=1000 data-nosnippet>1000</a>                    <span class="kw">let </span>regs = <span class="self">self</span>.vregs.alloc(ty)<span class="question-mark">?</span>;
+<a href=#1001 id=1001 data-nosnippet>1001</a>                    <span class="kw">for </span><span class="kw-2">&amp;</span>reg <span class="kw">in </span>regs.regs() {
+<a href=#1002 id=1002 data-nosnippet>1002</a>                        branch_arg_vregs.push(reg);
+<a href=#1003 id=1003 data-nosnippet>1003</a>                        <span class="kw">let </span>vreg = reg.to_virtual_reg().unwrap();
+<a href=#1004 id=1004 data-nosnippet>1004</a>                        <span class="self">self</span>.vcode.add_block_param(vreg);
+<a href=#1005 id=1005 data-nosnippet>1005</a>                    }
+<a href=#1006 id=1006 data-nosnippet>1006</a>                }
+<a href=#1007 id=1007 data-nosnippet>1007</a>                <span class="self">self</span>.vcode.add_succ(succ, <span class="kw-2">&amp;</span>branch_arg_vregs[..]);
+<a href=#1008 id=1008 data-nosnippet>1008</a>
+<a href=#1009 id=1009 data-nosnippet>1009</a>                <span class="self">self</span>.emit(I::gen_jump(MachLabel::from_block(succ)));
+<a href=#1010 id=1010 data-nosnippet>1010</a>                <span class="self">self</span>.finish_ir_inst(Default::default());
+<a href=#1011 id=1011 data-nosnippet>1011</a>            }
+<a href=#1012 id=1012 data-nosnippet>1012</a>
+<a href=#1013 id=1013 data-nosnippet>1013</a>            <span class="comment">// Original block body.
+<a href=#1014 id=1014 data-nosnippet>1014</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(bb) = lb.orig_block() {
+<a href=#1015 id=1015 data-nosnippet>1015</a>                <span class="self">self</span>.lower_clif_block(backend, bb, ctrl_plane)<span class="question-mark">?</span>;
+<a href=#1016 id=1016 data-nosnippet>1016</a>                <span class="self">self</span>.emit_value_label_markers_for_block_args(bb);
+<a href=#1017 id=1017 data-nosnippet>1017</a>            }
+<a href=#1018 id=1018 data-nosnippet>1018</a>
+<a href=#1019 id=1019 data-nosnippet>1019</a>            <span class="kw">if </span>bindex.index() == <span class="number">0 </span>{
+<a href=#1020 id=1020 data-nosnippet>1020</a>                <span class="comment">// Set up the function with arg vreg inits.
+<a href=#1021 id=1021 data-nosnippet>1021</a>                </span><span class="self">self</span>.gen_arg_setup();
+<a href=#1022 id=1022 data-nosnippet>1022</a>                <span class="self">self</span>.finish_ir_inst(Default::default());
+<a href=#1023 id=1023 data-nosnippet>1023</a>            }
+<a href=#1024 id=1024 data-nosnippet>1024</a>
+<a href=#1025 id=1025 data-nosnippet>1025</a>            <span class="self">self</span>.finish_bb();
+<a href=#1026 id=1026 data-nosnippet>1026</a>
+<a href=#1027 id=1027 data-nosnippet>1027</a>            <span class="comment">// Check for any deferred vreg-temp allocation errors, and
+<a href=#1028 id=1028 data-nosnippet>1028</a>            // bubble one up at this time if it exists.
+<a href=#1029 id=1029 data-nosnippet>1029</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(e) = <span class="self">self</span>.vregs.take_deferred_error() {
+<a href=#1030 id=1030 data-nosnippet>1030</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(e);
+<a href=#1031 id=1031 data-nosnippet>1031</a>            }
+<a href=#1032 id=1032 data-nosnippet>1032</a>        }
+<a href=#1033 id=1033 data-nosnippet>1033</a>
+<a href=#1034 id=1034 data-nosnippet>1034</a>        <span class="comment">// Now that we've emitted all instructions into the
+<a href=#1035 id=1035 data-nosnippet>1035</a>        // VCodeBuilder, let's build the VCode.
+<a href=#1036 id=1036 data-nosnippet>1036</a>        </span><span class="macro">trace!</span>(
+<a href=#1037 id=1037 data-nosnippet>1037</a>            <span class="string">"built vcode:\n{:?}Backwards {:?}"</span>,
+<a href=#1038 id=1038 data-nosnippet>1038</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.vregs,
+<a href=#1039 id=1039 data-nosnippet>1039</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.vcode.vcode
+<a href=#1040 id=1040 data-nosnippet>1040</a>        );
+<a href=#1041 id=1041 data-nosnippet>1041</a>        <span class="kw">let </span>vcode = <span class="self">self</span>.vcode.build(<span class="self">self</span>.vregs);
+<a href=#1042 id=1042 data-nosnippet>1042</a>
+<a href=#1043 id=1043 data-nosnippet>1043</a>        <span class="prelude-val">Ok</span>(vcode)
+<a href=#1044 id=1044 data-nosnippet>1044</a>    }
+<a href=#1045 id=1045 data-nosnippet>1045</a>}
+<a href=#1046 id=1046 data-nosnippet>1046</a>
+<a href=#1047 id=1047 data-nosnippet>1047</a><span class="doccomment">/// Pre-analysis: compute `value_ir_uses`. See comment on
+<a href=#1048 id=1048 data-nosnippet>1048</a>/// `ValueUseState` for a description of what this analysis
+<a href=#1049 id=1049 data-nosnippet>1049</a>/// computes.
+<a href=#1050 id=1050 data-nosnippet>1050</a></span><span class="kw">fn </span>compute_use_states(
+<a href=#1051 id=1051 data-nosnippet>1051</a>    f: <span class="kw-2">&amp;</span>Function,
+<a href=#1052 id=1052 data-nosnippet>1052</a>    sret_param: <span class="prelude-ty">Option</span>&lt;Value&gt;,
+<a href=#1053 id=1053 data-nosnippet>1053</a>) -&gt; SecondaryMap&lt;Value, ValueUseState&gt; {
+<a href=#1054 id=1054 data-nosnippet>1054</a>    <span class="comment">// We perform the analysis without recursion, so we don't
+<a href=#1055 id=1055 data-nosnippet>1055</a>    // overflow the stack on long chains of ops in the input.
+<a href=#1056 id=1056 data-nosnippet>1056</a>    //
+<a href=#1057 id=1057 data-nosnippet>1057</a>    // This is sort of a hybrid of a "shallow use-count" pass and
+<a href=#1058 id=1058 data-nosnippet>1058</a>    // a DFS. We iterate over all instructions and mark their args
+<a href=#1059 id=1059 data-nosnippet>1059</a>    // as used. However when we increment a use-count to
+<a href=#1060 id=1060 data-nosnippet>1060</a>    // "Multiple" we push its args onto the stack and do a DFS,
+<a href=#1061 id=1061 data-nosnippet>1061</a>    // immediately marking the whole dependency tree as
+<a href=#1062 id=1062 data-nosnippet>1062</a>    // Multiple. Doing both (shallow use-counting over all insts,
+<a href=#1063 id=1063 data-nosnippet>1063</a>    // and deep Multiple propagation) lets us trim both
+<a href=#1064 id=1064 data-nosnippet>1064</a>    // traversals, stopping recursion when a node is already at
+<a href=#1065 id=1065 data-nosnippet>1065</a>    // the appropriate state.
+<a href=#1066 id=1066 data-nosnippet>1066</a>    //
+<a href=#1067 id=1067 data-nosnippet>1067</a>    // In particular, note that the *coarsening* into {Unused,
+<a href=#1068 id=1068 data-nosnippet>1068</a>    // Once, Multiple} is part of what makes this pass more
+<a href=#1069 id=1069 data-nosnippet>1069</a>    // efficient than a full indirect-use-counting pass.
+<a href=#1070 id=1070 data-nosnippet>1070</a>
+<a href=#1071 id=1071 data-nosnippet>1071</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
+<a href=#1072 id=1072 data-nosnippet>1072</a>
+<a href=#1073 id=1073 data-nosnippet>1073</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(sret_param) = sret_param {
+<a href=#1074 id=1074 data-nosnippet>1074</a>        <span class="comment">// There's an implicit use of the struct-return parameter in each
+<a href=#1075 id=1075 data-nosnippet>1075</a>        // copy of the function epilogue, which we count here.
+<a href=#1076 id=1076 data-nosnippet>1076</a>        </span>value_ir_uses[sret_param] = ValueUseState::Multiple;
+<a href=#1077 id=1077 data-nosnippet>1077</a>    }
+<a href=#1078 id=1078 data-nosnippet>1078</a>
+<a href=#1079 id=1079 data-nosnippet>1079</a>    <span class="comment">// Stack of iterators over Values as we do DFS to mark
+<a href=#1080 id=1080 data-nosnippet>1080</a>    // Multiple-state subtrees. The iterator type is whatever is
+<a href=#1081 id=1081 data-nosnippet>1081</a>    // returned by `uses` below.
+<a href=#1082 id=1082 data-nosnippet>1082</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>stack: SmallVec&lt;[<span class="kw">_</span>; <span class="number">16</span>]&gt; = <span class="macro">smallvec!</span>[];
+<a href=#1083 id=1083 data-nosnippet>1083</a>
+<a href=#1084 id=1084 data-nosnippet>1084</a>    <span class="comment">// Find the args for the inst corresponding to the given value.
+<a href=#1085 id=1085 data-nosnippet>1085</a>    //
+<a href=#1086 id=1086 data-nosnippet>1086</a>    // Note that "root" instructions are skipped here. This means that multiple
+<a href=#1087 id=1087 data-nosnippet>1087</a>    // uses of any result of a multi-result instruction are not considered
+<a href=#1088 id=1088 data-nosnippet>1088</a>    // multiple uses of the operands of a multi-result instruction. This
+<a href=#1089 id=1089 data-nosnippet>1089</a>    // requires tight coupling with `get_value_as_source_or_const` above which
+<a href=#1090 id=1090 data-nosnippet>1090</a>    // is the consumer of the map that this function is producing.
+<a href=#1091 id=1091 data-nosnippet>1091</a>    </span><span class="kw">let </span>uses = |value| {
+<a href=#1092 id=1092 data-nosnippet>1092</a>        <span class="macro">trace!</span>(<span class="string">" -&gt; pushing args for {} onto stack"</span>, value);
+<a href=#1093 id=1093 data-nosnippet>1093</a>        <span class="kw">if let </span>ValueDef::Result(src_inst, <span class="kw">_</span>) = f.dfg.value_def(value) {
+<a href=#1094 id=1094 data-nosnippet>1094</a>            <span class="kw">if </span>is_value_use_root(f, src_inst) {
+<a href=#1095 id=1095 data-nosnippet>1095</a>                <span class="prelude-val">None
+<a href=#1096 id=1096 data-nosnippet>1096</a>            </span>} <span class="kw">else </span>{
+<a href=#1097 id=1097 data-nosnippet>1097</a>                <span class="prelude-val">Some</span>(f.dfg.inst_values(src_inst))
+<a href=#1098 id=1098 data-nosnippet>1098</a>            }
+<a href=#1099 id=1099 data-nosnippet>1099</a>        } <span class="kw">else </span>{
+<a href=#1100 id=1100 data-nosnippet>1100</a>            <span class="prelude-val">None
+<a href=#1101 id=1101 data-nosnippet>1101</a>        </span>}
+<a href=#1102 id=1102 data-nosnippet>1102</a>    };
+<a href=#1103 id=1103 data-nosnippet>1103</a>
+<a href=#1104 id=1104 data-nosnippet>1104</a>    <span class="comment">// Do a DFS through `value_ir_uses` to mark a subtree as
+<a href=#1105 id=1105 data-nosnippet>1105</a>    // Multiple.
+<a href=#1106 id=1106 data-nosnippet>1106</a>    </span><span class="kw">for </span>inst <span class="kw">in </span>f
+<a href=#1107 id=1107 data-nosnippet>1107</a>        .layout
+<a href=#1108 id=1108 data-nosnippet>1108</a>        .blocks()
+<a href=#1109 id=1109 data-nosnippet>1109</a>        .flat_map(|block| f.layout.block_insts(block))
+<a href=#1110 id=1110 data-nosnippet>1110</a>    {
+<a href=#1111 id=1111 data-nosnippet>1111</a>        <span class="comment">// Iterate over all values used by all instructions, noting an
+<a href=#1112 id=1112 data-nosnippet>1112</a>        // additional use on each operand.
+<a href=#1113 id=1113 data-nosnippet>1113</a>        </span><span class="kw">for </span>arg <span class="kw">in </span>f.dfg.inst_values(inst) {
+<a href=#1114 id=1114 data-nosnippet>1114</a>            <span class="macro">debug_assert!</span>(f.dfg.value_is_real(arg));
+<a href=#1115 id=1115 data-nosnippet>1115</a>            <span class="kw">let </span>old = value_ir_uses[arg];
+<a href=#1116 id=1116 data-nosnippet>1116</a>            value_ir_uses[arg].inc();
+<a href=#1117 id=1117 data-nosnippet>1117</a>            <span class="kw">let </span>new = value_ir_uses[arg];
+<a href=#1118 id=1118 data-nosnippet>1118</a>            <span class="macro">trace!</span>(<span class="string">"arg {} used, old state {:?}, new {:?}"</span>, arg, old, new);
+<a href=#1119 id=1119 data-nosnippet>1119</a>
+<a href=#1120 id=1120 data-nosnippet>1120</a>            <span class="comment">// On transition to Multiple, do DFS.
+<a href=#1121 id=1121 data-nosnippet>1121</a>            </span><span class="kw">if </span>old == ValueUseState::Multiple || new != ValueUseState::Multiple {
+<a href=#1122 id=1122 data-nosnippet>1122</a>                <span class="kw">continue</span>;
+<a href=#1123 id=1123 data-nosnippet>1123</a>            }
+<a href=#1124 id=1124 data-nosnippet>1124</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(iter) = uses(arg) {
+<a href=#1125 id=1125 data-nosnippet>1125</a>                stack.push(iter);
+<a href=#1126 id=1126 data-nosnippet>1126</a>            }
+<a href=#1127 id=1127 data-nosnippet>1127</a>            <span class="kw">while let </span><span class="prelude-val">Some</span>(iter) = stack.last_mut() {
+<a href=#1128 id=1128 data-nosnippet>1128</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = iter.next() {
+<a href=#1129 id=1129 data-nosnippet>1129</a>                    <span class="macro">debug_assert!</span>(f.dfg.value_is_real(value));
+<a href=#1130 id=1130 data-nosnippet>1130</a>                    <span class="macro">trace!</span>(<span class="string">" -&gt; DFS reaches {}"</span>, value);
+<a href=#1131 id=1131 data-nosnippet>1131</a>                    <span class="kw">if </span>value_ir_uses[value] == ValueUseState::Multiple {
+<a href=#1132 id=1132 data-nosnippet>1132</a>                        <span class="comment">// Truncate DFS here: no need to go further,
+<a href=#1133 id=1133 data-nosnippet>1133</a>                        // as whole subtree must already be Multiple.
+<a href=#1134 id=1134 data-nosnippet>1134</a>                        // With debug asserts, check one level of
+<a href=#1135 id=1135 data-nosnippet>1135</a>                        // that invariant at least.
+<a href=#1136 id=1136 data-nosnippet>1136</a>                        </span><span class="macro">debug_assert!</span>(uses(value).into_iter().flatten().all(|arg| {
+<a href=#1137 id=1137 data-nosnippet>1137</a>                            <span class="macro">debug_assert!</span>(f.dfg.value_is_real(arg));
+<a href=#1138 id=1138 data-nosnippet>1138</a>                            value_ir_uses[arg] == ValueUseState::Multiple
+<a href=#1139 id=1139 data-nosnippet>1139</a>                        }));
+<a href=#1140 id=1140 data-nosnippet>1140</a>                        <span class="kw">continue</span>;
+<a href=#1141 id=1141 data-nosnippet>1141</a>                    }
+<a href=#1142 id=1142 data-nosnippet>1142</a>                    value_ir_uses[value] = ValueUseState::Multiple;
+<a href=#1143 id=1143 data-nosnippet>1143</a>                    <span class="macro">trace!</span>(<span class="string">" -&gt; became Multiple"</span>);
+<a href=#1144 id=1144 data-nosnippet>1144</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(iter) = uses(value) {
+<a href=#1145 id=1145 data-nosnippet>1145</a>                        stack.push(iter);
+<a href=#1146 id=1146 data-nosnippet>1146</a>                    }
+<a href=#1147 id=1147 data-nosnippet>1147</a>                } <span class="kw">else </span>{
+<a href=#1148 id=1148 data-nosnippet>1148</a>                    <span class="comment">// Empty iterator, discard.
+<a href=#1149 id=1149 data-nosnippet>1149</a>                    </span>stack.pop();
+<a href=#1150 id=1150 data-nosnippet>1150</a>                }
+<a href=#1151 id=1151 data-nosnippet>1151</a>            }
+<a href=#1152 id=1152 data-nosnippet>1152</a>        }
+<a href=#1153 id=1153 data-nosnippet>1153</a>    }
+<a href=#1154 id=1154 data-nosnippet>1154</a>
+<a href=#1155 id=1155 data-nosnippet>1155</a>    value_ir_uses
+<a href=#1156 id=1156 data-nosnippet>1156</a>}
+<a href=#1157 id=1157 data-nosnippet>1157</a>
+<a href=#1158 id=1158 data-nosnippet>1158</a><span class="doccomment">/// Definition of a "root" instruction for the calculation of `ValueUseState`.
+<a href=#1159 id=1159 data-nosnippet>1159</a>///
+<a href=#1160 id=1160 data-nosnippet>1160</a>/// This function calculates whether `inst` is considered a "root" for value-use
+<a href=#1161 id=1161 data-nosnippet>1161</a>/// information. This concept is used to forcibly prevent looking-through the
+<a href=#1162 id=1162 data-nosnippet>1162</a>/// instruction during `get_value_as_source_or_const` as it additionally
+<a href=#1163 id=1163 data-nosnippet>1163</a>/// prevents propagating `Multiple`-used results of the `inst` here to the
+<a href=#1164 id=1164 data-nosnippet>1164</a>/// operands of the instruction.
+<a href=#1165 id=1165 data-nosnippet>1165</a>///
+<a href=#1166 id=1166 data-nosnippet>1166</a>/// Currently this is defined as multi-result instructions. That means that
+<a href=#1167 id=1167 data-nosnippet>1167</a>/// lowerings are never allowed to look through a multi-result instruction to
+<a href=#1168 id=1168 data-nosnippet>1168</a>/// generate patterns. Note that this isn't possible in ISLE today anyway so
+<a href=#1169 id=1169 data-nosnippet>1169</a>/// this isn't currently much of a loss.
+<a href=#1170 id=1170 data-nosnippet>1170</a>///
+<a href=#1171 id=1171 data-nosnippet>1171</a>/// The main purpose of this function is to prevent the operands of a
+<a href=#1172 id=1172 data-nosnippet>1172</a>/// multi-result instruction from being forcibly considered `Multiple`-used
+<a href=#1173 id=1173 data-nosnippet>1173</a>/// regardless of circumstances.
+<a href=#1174 id=1174 data-nosnippet>1174</a></span><span class="kw">fn </span>is_value_use_root(f: <span class="kw-2">&amp;</span>Function, inst: Inst) -&gt; bool {
+<a href=#1175 id=1175 data-nosnippet>1175</a>    f.dfg.inst_results(inst).len() &gt; <span class="number">1
+<a href=#1176 id=1176 data-nosnippet>1176</a></span>}
+<a href=#1177 id=1177 data-nosnippet>1177</a>
+<a href=#1178 id=1178 data-nosnippet>1178</a><span class="doccomment">/// Function-level queries.
+<a href=#1179 id=1179 data-nosnippet>1179</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'func</span>, I: VCodeInst&gt; Lower&lt;<span class="lifetime">'func</span>, I&gt; {
+<a href=#1180 id=1180 data-nosnippet>1180</a>    <span class="kw">pub fn </span>dfg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DataFlowGraph {
+<a href=#1181 id=1181 data-nosnippet>1181</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.f.dfg
+<a href=#1182 id=1182 data-nosnippet>1182</a>    }
+<a href=#1183 id=1183 data-nosnippet>1183</a>
+<a href=#1184 id=1184 data-nosnippet>1184</a>    <span class="doccomment">/// Get the `Callee`.
+<a href=#1185 id=1185 data-nosnippet>1185</a>    </span><span class="kw">pub fn </span>abi(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Callee&lt;I::ABIMachineSpec&gt; {
+<a href=#1186 id=1186 data-nosnippet>1186</a>        <span class="self">self</span>.vcode.abi()
+<a href=#1187 id=1187 data-nosnippet>1187</a>    }
+<a href=#1188 id=1188 data-nosnippet>1188</a>
+<a href=#1189 id=1189 data-nosnippet>1189</a>    <span class="doccomment">/// Get the `Callee`.
+<a href=#1190 id=1190 data-nosnippet>1190</a>    </span><span class="kw">pub fn </span>abi_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>Callee&lt;I::ABIMachineSpec&gt; {
+<a href=#1191 id=1191 data-nosnippet>1191</a>        <span class="self">self</span>.vcode.abi_mut()
+<a href=#1192 id=1192 data-nosnippet>1192</a>    }
+<a href=#1193 id=1193 data-nosnippet>1193</a>}
+<a href=#1194 id=1194 data-nosnippet>1194</a>
+<a href=#1195 id=1195 data-nosnippet>1195</a><span class="doccomment">/// Instruction input/output queries.
+<a href=#1196 id=1196 data-nosnippet>1196</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'func</span>, I: VCodeInst&gt; Lower&lt;<span class="lifetime">'func</span>, I&gt; {
+<a href=#1197 id=1197 data-nosnippet>1197</a>    <span class="doccomment">/// Get the instdata for a given IR instruction.
+<a href=#1198 id=1198 data-nosnippet>1198</a>    </span><span class="kw">pub fn </span>data(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst) -&gt; <span class="kw-2">&amp;</span>InstructionData {
+<a href=#1199 id=1199 data-nosnippet>1199</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.f.dfg.insts[ir_inst]
+<a href=#1200 id=1200 data-nosnippet>1200</a>    }
+<a href=#1201 id=1201 data-nosnippet>1201</a>
+<a href=#1202 id=1202 data-nosnippet>1202</a>    <span class="doccomment">/// Likewise, but starting with a GlobalValue identifier.
+<a href=#1203 id=1203 data-nosnippet>1203</a>    </span><span class="kw">pub fn </span>symbol_value_data&lt;<span class="lifetime">'b</span>&gt;(
+<a href=#1204 id=1204 data-nosnippet>1204</a>        <span class="kw-2">&amp;</span><span class="lifetime">'b </span><span class="self">self</span>,
+<a href=#1205 id=1205 data-nosnippet>1205</a>        global_value: GlobalValue,
+<a href=#1206 id=1206 data-nosnippet>1206</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'b </span>ExternalName, RelocDistance, i64)&gt; {
+<a href=#1207 id=1207 data-nosnippet>1207</a>        <span class="kw">let </span>gvdata = <span class="kw-2">&amp;</span><span class="self">self</span>.f.global_values[global_value];
+<a href=#1208 id=1208 data-nosnippet>1208</a>        <span class="kw">match </span>gvdata {
+<a href=#1209 id=1209 data-nosnippet>1209</a>            <span class="kw-2">&amp;</span>GlobalValueData::Symbol {
+<a href=#1210 id=1210 data-nosnippet>1210</a>                <span class="kw-2">ref </span>name,
+<a href=#1211 id=1211 data-nosnippet>1211</a>                <span class="kw-2">ref </span>offset,
+<a href=#1212 id=1212 data-nosnippet>1212</a>                colocated,
+<a href=#1213 id=1213 data-nosnippet>1213</a>                ..
+<a href=#1214 id=1214 data-nosnippet>1214</a>            } =&gt; {
+<a href=#1215 id=1215 data-nosnippet>1215</a>                <span class="kw">let </span>offset = offset.bits();
+<a href=#1216 id=1216 data-nosnippet>1216</a>                <span class="kw">let </span>dist = <span class="kw">if </span>colocated {
+<a href=#1217 id=1217 data-nosnippet>1217</a>                    RelocDistance::Near
+<a href=#1218 id=1218 data-nosnippet>1218</a>                } <span class="kw">else </span>{
+<a href=#1219 id=1219 data-nosnippet>1219</a>                    RelocDistance::Far
+<a href=#1220 id=1220 data-nosnippet>1220</a>                };
+<a href=#1221 id=1221 data-nosnippet>1221</a>                <span class="prelude-val">Some</span>((name, dist, offset))
+<a href=#1222 id=1222 data-nosnippet>1222</a>            }
+<a href=#1223 id=1223 data-nosnippet>1223</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#1224 id=1224 data-nosnippet>1224</a>        }
+<a href=#1225 id=1225 data-nosnippet>1225</a>    }
+<a href=#1226 id=1226 data-nosnippet>1226</a>
+<a href=#1227 id=1227 data-nosnippet>1227</a>    <span class="doccomment">/// Returns the memory flags of a given memory access.
+<a href=#1228 id=1228 data-nosnippet>1228</a>    </span><span class="kw">pub fn </span>memflags(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst) -&gt; <span class="prelude-ty">Option</span>&lt;MemFlags&gt; {
+<a href=#1229 id=1229 data-nosnippet>1229</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.f.dfg.insts[ir_inst] {
+<a href=#1230 id=1230 data-nosnippet>1230</a>            <span class="kw-2">&amp;</span>InstructionData::AtomicCas { flags, .. } =&gt; <span class="prelude-val">Some</span>(flags),
+<a href=#1231 id=1231 data-nosnippet>1231</a>            <span class="kw-2">&amp;</span>InstructionData::AtomicRmw { flags, .. } =&gt; <span class="prelude-val">Some</span>(flags),
+<a href=#1232 id=1232 data-nosnippet>1232</a>            <span class="kw-2">&amp;</span>InstructionData::Load { flags, .. }
+<a href=#1233 id=1233 data-nosnippet>1233</a>            | <span class="kw-2">&amp;</span>InstructionData::LoadNoOffset { flags, .. }
+<a href=#1234 id=1234 data-nosnippet>1234</a>            | <span class="kw-2">&amp;</span>InstructionData::Store { flags, .. } =&gt; <span class="prelude-val">Some</span>(flags),
+<a href=#1235 id=1235 data-nosnippet>1235</a>            <span class="kw-2">&amp;</span>InstructionData::StoreNoOffset { flags, .. } =&gt; <span class="prelude-val">Some</span>(flags),
+<a href=#1236 id=1236 data-nosnippet>1236</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#1237 id=1237 data-nosnippet>1237</a>        }
+<a href=#1238 id=1238 data-nosnippet>1238</a>    }
+<a href=#1239 id=1239 data-nosnippet>1239</a>
+<a href=#1240 id=1240 data-nosnippet>1240</a>    <span class="doccomment">/// Get the source location for a given instruction.
+<a href=#1241 id=1241 data-nosnippet>1241</a>    </span><span class="kw">pub fn </span>srcloc(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst) -&gt; RelSourceLoc {
+<a href=#1242 id=1242 data-nosnippet>1242</a>        <span class="self">self</span>.f.rel_srclocs()[ir_inst]
+<a href=#1243 id=1243 data-nosnippet>1243</a>    }
+<a href=#1244 id=1244 data-nosnippet>1244</a>
+<a href=#1245 id=1245 data-nosnippet>1245</a>    <span class="doccomment">/// Get the number of inputs to the given IR instruction. This is a count only of the Value
+<a href=#1246 id=1246 data-nosnippet>1246</a>    /// arguments to the instruction: block arguments will not be included in this count.
+<a href=#1247 id=1247 data-nosnippet>1247</a>    </span><span class="kw">pub fn </span>num_inputs(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst) -&gt; usize {
+<a href=#1248 id=1248 data-nosnippet>1248</a>        <span class="self">self</span>.f.dfg.inst_args(ir_inst).len()
+<a href=#1249 id=1249 data-nosnippet>1249</a>    }
+<a href=#1250 id=1250 data-nosnippet>1250</a>
+<a href=#1251 id=1251 data-nosnippet>1251</a>    <span class="doccomment">/// Get the number of outputs to the given IR instruction.
+<a href=#1252 id=1252 data-nosnippet>1252</a>    </span><span class="kw">pub fn </span>num_outputs(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst) -&gt; usize {
+<a href=#1253 id=1253 data-nosnippet>1253</a>        <span class="self">self</span>.f.dfg.inst_results(ir_inst).len()
+<a href=#1254 id=1254 data-nosnippet>1254</a>    }
+<a href=#1255 id=1255 data-nosnippet>1255</a>
+<a href=#1256 id=1256 data-nosnippet>1256</a>    <span class="doccomment">/// Get the type for an instruction's input.
+<a href=#1257 id=1257 data-nosnippet>1257</a>    </span><span class="kw">pub fn </span>input_ty(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst, idx: usize) -&gt; Type {
+<a href=#1258 id=1258 data-nosnippet>1258</a>        <span class="self">self</span>.value_ty(<span class="self">self</span>.input_as_value(ir_inst, idx))
+<a href=#1259 id=1259 data-nosnippet>1259</a>    }
+<a href=#1260 id=1260 data-nosnippet>1260</a>
+<a href=#1261 id=1261 data-nosnippet>1261</a>    <span class="doccomment">/// Get the type for a value.
+<a href=#1262 id=1262 data-nosnippet>1262</a>    </span><span class="kw">pub fn </span>value_ty(<span class="kw-2">&amp;</span><span class="self">self</span>, val: Value) -&gt; Type {
+<a href=#1263 id=1263 data-nosnippet>1263</a>        <span class="self">self</span>.f.dfg.value_type(val)
+<a href=#1264 id=1264 data-nosnippet>1264</a>    }
+<a href=#1265 id=1265 data-nosnippet>1265</a>
+<a href=#1266 id=1266 data-nosnippet>1266</a>    <span class="doccomment">/// Get the type for an instruction's output.
+<a href=#1267 id=1267 data-nosnippet>1267</a>    </span><span class="kw">pub fn </span>output_ty(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst, idx: usize) -&gt; Type {
+<a href=#1268 id=1268 data-nosnippet>1268</a>        <span class="self">self</span>.f.dfg.value_type(<span class="self">self</span>.f.dfg.inst_results(ir_inst)[idx])
+<a href=#1269 id=1269 data-nosnippet>1269</a>    }
+<a href=#1270 id=1270 data-nosnippet>1270</a>
+<a href=#1271 id=1271 data-nosnippet>1271</a>    <span class="doccomment">/// Get the value of a constant instruction (`iconst`, etc.) as a 64-bit
+<a href=#1272 id=1272 data-nosnippet>1272</a>    /// value, if possible.
+<a href=#1273 id=1273 data-nosnippet>1273</a>    </span><span class="kw">pub fn </span>get_constant(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+<a href=#1274 id=1274 data-nosnippet>1274</a>        <span class="self">self</span>.inst_constants.get(<span class="kw-2">&amp;</span>ir_inst).map(|<span class="kw-2">&amp;</span>c| {
+<a href=#1275 id=1275 data-nosnippet>1275</a>            <span class="comment">// The upper bits must be zero, enforced during legalization and by
+<a href=#1276 id=1276 data-nosnippet>1276</a>            // the CLIF verifier.
+<a href=#1277 id=1277 data-nosnippet>1277</a>            </span><span class="macro">debug_assert_eq!</span>(c, {
+<a href=#1278 id=1278 data-nosnippet>1278</a>                <span class="kw">let </span>input_size = <span class="self">self</span>.output_ty(ir_inst, <span class="number">0</span>).bits() <span class="kw">as </span>u64;
+<a href=#1279 id=1279 data-nosnippet>1279</a>                <span class="kw">let </span>shift = <span class="number">64 </span>- input_size;
+<a href=#1280 id=1280 data-nosnippet>1280</a>                (c &lt;&lt; shift) &gt;&gt; shift
+<a href=#1281 id=1281 data-nosnippet>1281</a>            });
+<a href=#1282 id=1282 data-nosnippet>1282</a>            c
+<a href=#1283 id=1283 data-nosnippet>1283</a>        })
+<a href=#1284 id=1284 data-nosnippet>1284</a>    }
+<a href=#1285 id=1285 data-nosnippet>1285</a>
+<a href=#1286 id=1286 data-nosnippet>1286</a>    <span class="doccomment">/// Get the input as one of two options other than a direct register:
+<a href=#1287 id=1287 data-nosnippet>1287</a>    ///
+<a href=#1288 id=1288 data-nosnippet>1288</a>    /// - An instruction, given that it is effect-free or able to sink its
+<a href=#1289 id=1289 data-nosnippet>1289</a>    ///   effect to the current instruction being lowered, and given it has only
+<a href=#1290 id=1290 data-nosnippet>1290</a>    ///   one output, and if effect-ful, given that this is the only use;
+<a href=#1291 id=1291 data-nosnippet>1291</a>    /// - A constant, if the value is a constant.
+<a href=#1292 id=1292 data-nosnippet>1292</a>    ///
+<a href=#1293 id=1293 data-nosnippet>1293</a>    /// The instruction input may be available in either of these forms.  It may
+<a href=#1294 id=1294 data-nosnippet>1294</a>    /// be available in neither form, if the conditions are not met; if so, use
+<a href=#1295 id=1295 data-nosnippet>1295</a>    /// `put_input_in_regs()` instead to get it in a register.
+<a href=#1296 id=1296 data-nosnippet>1296</a>    ///
+<a href=#1297 id=1297 data-nosnippet>1297</a>    /// If the backend merges the effect of a side-effecting instruction, it
+<a href=#1298 id=1298 data-nosnippet>1298</a>    /// must call `sink_inst()`. When this is called, it indicates that the
+<a href=#1299 id=1299 data-nosnippet>1299</a>    /// effect has been sunk to the current scan location. The sunk
+<a href=#1300 id=1300 data-nosnippet>1300</a>    /// instruction's result(s) must have *no* uses remaining, because it will
+<a href=#1301 id=1301 data-nosnippet>1301</a>    /// not be codegen'd (it has been integrated into the current instruction).
+<a href=#1302 id=1302 data-nosnippet>1302</a>    </span><span class="kw">pub fn </span>input_as_value(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst, idx: usize) -&gt; Value {
+<a href=#1303 id=1303 data-nosnippet>1303</a>        <span class="kw">let </span>val = <span class="self">self</span>.f.dfg.inst_args(ir_inst)[idx];
+<a href=#1304 id=1304 data-nosnippet>1304</a>        <span class="macro">debug_assert!</span>(<span class="self">self</span>.f.dfg.value_is_real(val));
+<a href=#1305 id=1305 data-nosnippet>1305</a>        val
+<a href=#1306 id=1306 data-nosnippet>1306</a>    }
+<a href=#1307 id=1307 data-nosnippet>1307</a>
+<a href=#1308 id=1308 data-nosnippet>1308</a>    <span class="doccomment">/// Resolves a particular input of an instruction to the `Value` that it is
+<a href=#1309 id=1309 data-nosnippet>1309</a>    /// represented with.
+<a href=#1310 id=1310 data-nosnippet>1310</a>    ///
+<a href=#1311 id=1311 data-nosnippet>1311</a>    /// For more information see [`Lower::get_value_as_source_or_const`].
+<a href=#1312 id=1312 data-nosnippet>1312</a>    </span><span class="kw">pub fn </span>get_input_as_source_or_const(<span class="kw-2">&amp;</span><span class="self">self</span>, ir_inst: Inst, idx: usize) -&gt; NonRegInput {
+<a href=#1313 id=1313 data-nosnippet>1313</a>        <span class="kw">let </span>val = <span class="self">self</span>.input_as_value(ir_inst, idx);
+<a href=#1314 id=1314 data-nosnippet>1314</a>        <span class="self">self</span>.get_value_as_source_or_const(val)
+<a href=#1315 id=1315 data-nosnippet>1315</a>    }
+<a href=#1316 id=1316 data-nosnippet>1316</a>
+<a href=#1317 id=1317 data-nosnippet>1317</a>    <span class="doccomment">/// Resolves a `Value` definition to the source instruction it came from
+<a href=#1318 id=1318 data-nosnippet>1318</a>    /// plus whether it's a unique-use of that instruction.
+<a href=#1319 id=1319 data-nosnippet>1319</a>    ///
+<a href=#1320 id=1320 data-nosnippet>1320</a>    /// This function is the workhorse of pattern-matching in ISLE which enables
+<a href=#1321 id=1321 data-nosnippet>1321</a>    /// combining multiple instructions together. This is used implicitly in
+<a href=#1322 id=1322 data-nosnippet>1322</a>    /// patterns such as `(iadd x (iconst y))` where this function is used to
+<a href=#1323 id=1323 data-nosnippet>1323</a>    /// extract the `(iconst y)` operand.
+<a href=#1324 id=1324 data-nosnippet>1324</a>    ///
+<a href=#1325 id=1325 data-nosnippet>1325</a>    /// At its core this function is a wrapper around
+<a href=#1326 id=1326 data-nosnippet>1326</a>    /// [`DataFlowGraph::value_def`]. This function applies a filter on top of
+<a href=#1327 id=1327 data-nosnippet>1327</a>    /// that, however, to determine when it is actually safe to "look through"
+<a href=#1328 id=1328 data-nosnippet>1328</a>    /// the `val` definition here and view the underlying instruction. This
+<a href=#1329 id=1329 data-nosnippet>1329</a>    /// protects against duplicating side effects, such as loads, for example.
+<a href=#1330 id=1330 data-nosnippet>1330</a>    ///
+<a href=#1331 id=1331 data-nosnippet>1331</a>    /// Internally this uses the data computed from `compute_use_states` along
+<a href=#1332 id=1332 data-nosnippet>1332</a>    /// with other instruction properties to know what to return.
+<a href=#1333 id=1333 data-nosnippet>1333</a>    </span><span class="kw">pub fn </span>get_value_as_source_or_const(<span class="kw-2">&amp;</span><span class="self">self</span>, val: Value) -&gt; NonRegInput {
+<a href=#1334 id=1334 data-nosnippet>1334</a>        <span class="macro">trace!</span>(
+<a href=#1335 id=1335 data-nosnippet>1335</a>            <span class="string">"get_input_for_val: val {} at cur_inst {:?} cur_scan_entry_color {:?}"</span>,
+<a href=#1336 id=1336 data-nosnippet>1336</a>            val,
+<a href=#1337 id=1337 data-nosnippet>1337</a>            <span class="self">self</span>.cur_inst,
+<a href=#1338 id=1338 data-nosnippet>1338</a>            <span class="self">self</span>.cur_scan_entry_color,
+<a href=#1339 id=1339 data-nosnippet>1339</a>        );
+<a href=#1340 id=1340 data-nosnippet>1340</a>        <span class="kw">let </span>inst = <span class="kw">match </span><span class="self">self</span>.f.dfg.value_def(val) {
+<a href=#1341 id=1341 data-nosnippet>1341</a>            <span class="comment">// OK to merge source instruction if we have a source
+<a href=#1342 id=1342 data-nosnippet>1342</a>            // instruction, and one of these two conditions hold:
+<a href=#1343 id=1343 data-nosnippet>1343</a>            //
+<a href=#1344 id=1344 data-nosnippet>1344</a>            // - It has no side-effects and this instruction is not a "value-use
+<a href=#1345 id=1345 data-nosnippet>1345</a>            //   root" instruction. Instructions which are considered "roots"
+<a href=#1346 id=1346 data-nosnippet>1346</a>            //   for value-use calculations do not have accurate information
+<a href=#1347 id=1347 data-nosnippet>1347</a>            //   known about the `ValueUseState` of their operands. This is
+<a href=#1348 id=1348 data-nosnippet>1348</a>            //   currently done for multi-result instructions to prevent a use
+<a href=#1349 id=1349 data-nosnippet>1349</a>            //   of each result from forcing all operands of the multi-result
+<a href=#1350 id=1350 data-nosnippet>1350</a>            //   instruction to also be `Multiple`. This in turn means that the
+<a href=#1351 id=1351 data-nosnippet>1351</a>            //   `ValueUseState` for operands of a "root" instruction to be a
+<a href=#1352 id=1352 data-nosnippet>1352</a>            //   lie if pattern matching were to look through the multi-result
+<a href=#1353 id=1353 data-nosnippet>1353</a>            //   instruction. As a result the "look through this instruction"
+<a href=#1354 id=1354 data-nosnippet>1354</a>            //   logic only succeeds if it's not a root instruction.
+<a href=#1355 id=1355 data-nosnippet>1355</a>            //
+<a href=#1356 id=1356 data-nosnippet>1356</a>            // - It has a side-effect, has one output value, that one
+<a href=#1357 id=1357 data-nosnippet>1357</a>            //   output has only one use, directly or indirectly (so
+<a href=#1358 id=1358 data-nosnippet>1358</a>            //   cannot be duplicated -- see comment on
+<a href=#1359 id=1359 data-nosnippet>1359</a>            //   `ValueUseState`), and the instruction's color is *one
+<a href=#1360 id=1360 data-nosnippet>1360</a>            //   less than* the current scan color.
+<a href=#1361 id=1361 data-nosnippet>1361</a>            //
+<a href=#1362 id=1362 data-nosnippet>1362</a>            //   This latter set of conditions is testing whether a
+<a href=#1363 id=1363 data-nosnippet>1363</a>            //   side-effecting instruction can sink to the current scan
+<a href=#1364 id=1364 data-nosnippet>1364</a>            //   location; this is possible if the in-color of this inst is
+<a href=#1365 id=1365 data-nosnippet>1365</a>            //   equal to the out-color of the producing inst, so no other
+<a href=#1366 id=1366 data-nosnippet>1366</a>            //   side-effecting ops occur between them (which will only be true
+<a href=#1367 id=1367 data-nosnippet>1367</a>            //   if they are in the same BB, because color increments at each BB
+<a href=#1368 id=1368 data-nosnippet>1368</a>            //   start).
+<a href=#1369 id=1369 data-nosnippet>1369</a>            //
+<a href=#1370 id=1370 data-nosnippet>1370</a>            //   If it is actually sunk, then in `merge_inst()`, we update the
+<a href=#1371 id=1371 data-nosnippet>1371</a>            //   scan color so that as we scan over the range past which the
+<a href=#1372 id=1372 data-nosnippet>1372</a>            //   instruction was sunk, we allow other instructions (that came
+<a href=#1373 id=1373 data-nosnippet>1373</a>            //   prior to the sunk instruction) to sink.
+<a href=#1374 id=1374 data-nosnippet>1374</a>            </span>ValueDef::Result(src_inst, result_idx) =&gt; {
+<a href=#1375 id=1375 data-nosnippet>1375</a>                <span class="kw">let </span>src_side_effect = has_lowering_side_effect(<span class="self">self</span>.f, src_inst);
+<a href=#1376 id=1376 data-nosnippet>1376</a>                <span class="macro">trace!</span>(<span class="string">" -&gt; src inst {}"</span>, src_inst);
+<a href=#1377 id=1377 data-nosnippet>1377</a>                <span class="macro">trace!</span>(<span class="string">" -&gt; has lowering side effect: {}"</span>, src_side_effect);
+<a href=#1378 id=1378 data-nosnippet>1378</a>                <span class="kw">if </span>is_value_use_root(<span class="self">self</span>.f, src_inst) {
+<a href=#1379 id=1379 data-nosnippet>1379</a>                    <span class="comment">// If this instruction is a "root instruction" then it's
+<a href=#1380 id=1380 data-nosnippet>1380</a>                    // required that we can't look through it to see the
+<a href=#1381 id=1381 data-nosnippet>1381</a>                    // definition. This means that the `ValueUseState` for the
+<a href=#1382 id=1382 data-nosnippet>1382</a>                    // operands of this result assume that this instruction is
+<a href=#1383 id=1383 data-nosnippet>1383</a>                    // generated exactly once which might get violated were we
+<a href=#1384 id=1384 data-nosnippet>1384</a>                    // to allow looking through it.
+<a href=#1385 id=1385 data-nosnippet>1385</a>                    </span><span class="macro">trace!</span>(<span class="string">" -&gt; is a root instruction"</span>);
+<a href=#1386 id=1386 data-nosnippet>1386</a>                    InputSourceInst::None
+<a href=#1387 id=1387 data-nosnippet>1387</a>                } <span class="kw">else if </span>!src_side_effect {
+<a href=#1388 id=1388 data-nosnippet>1388</a>                    <span class="comment">// Otherwise if this instruction has no side effects and the
+<a href=#1389 id=1389 data-nosnippet>1389</a>                    // value is used only once then we can look through it with
+<a href=#1390 id=1390 data-nosnippet>1390</a>                    // a "unique" tag. A non-unique `Use` can be shown for other
+<a href=#1391 id=1391 data-nosnippet>1391</a>                    // values ensuring consumers know how it's computed but that
+<a href=#1392 id=1392 data-nosnippet>1392</a>                    // it's not available to omit.
+<a href=#1393 id=1393 data-nosnippet>1393</a>                    </span><span class="kw">if </span><span class="self">self</span>.value_ir_uses[val] == ValueUseState::Once {
+<a href=#1394 id=1394 data-nosnippet>1394</a>                        InputSourceInst::UniqueUse(src_inst, result_idx)
+<a href=#1395 id=1395 data-nosnippet>1395</a>                    } <span class="kw">else </span>{
+<a href=#1396 id=1396 data-nosnippet>1396</a>                        InputSourceInst::Use(src_inst, result_idx)
+<a href=#1397 id=1397 data-nosnippet>1397</a>                    }
+<a href=#1398 id=1398 data-nosnippet>1398</a>                } <span class="kw">else </span>{
+<a href=#1399 id=1399 data-nosnippet>1399</a>                    <span class="comment">// Side-effect: test whether this is the only use of the
+<a href=#1400 id=1400 data-nosnippet>1400</a>                    // only result of the instruction, and whether colors allow
+<a href=#1401 id=1401 data-nosnippet>1401</a>                    // the code-motion.
+<a href=#1402 id=1402 data-nosnippet>1402</a>                    </span><span class="macro">trace!</span>(
+<a href=#1403 id=1403 data-nosnippet>1403</a>                        <span class="string">" -&gt; side-effecting op {} for val {}: use state {:?}"</span>,
+<a href=#1404 id=1404 data-nosnippet>1404</a>                        src_inst,
+<a href=#1405 id=1405 data-nosnippet>1405</a>                        val,
+<a href=#1406 id=1406 data-nosnippet>1406</a>                        <span class="self">self</span>.value_ir_uses[val]
+<a href=#1407 id=1407 data-nosnippet>1407</a>                    );
+<a href=#1408 id=1408 data-nosnippet>1408</a>                    <span class="kw">if </span><span class="self">self</span>.cur_scan_entry_color.is_some()
+<a href=#1409 id=1409 data-nosnippet>1409</a>                        &amp;&amp; <span class="self">self</span>.value_ir_uses[val] == ValueUseState::Once
+<a href=#1410 id=1410 data-nosnippet>1410</a>                        &amp;&amp; <span class="self">self</span>.num_outputs(src_inst) == <span class="number">1
+<a href=#1411 id=1411 data-nosnippet>1411</a>                        </span>&amp;&amp; <span class="self">self
+<a href=#1412 id=1412 data-nosnippet>1412</a>                            </span>.side_effect_inst_entry_colors
+<a href=#1413 id=1413 data-nosnippet>1413</a>                            .get(<span class="kw-2">&amp;</span>src_inst)
+<a href=#1414 id=1414 data-nosnippet>1414</a>                            .unwrap()
+<a href=#1415 id=1415 data-nosnippet>1415</a>                            .get()
+<a href=#1416 id=1416 data-nosnippet>1416</a>                            + <span class="number">1
+<a href=#1417 id=1417 data-nosnippet>1417</a>                            </span>== <span class="self">self</span>.cur_scan_entry_color.unwrap().get()
+<a href=#1418 id=1418 data-nosnippet>1418</a>                    {
+<a href=#1419 id=1419 data-nosnippet>1419</a>                        InputSourceInst::UniqueUse(src_inst, <span class="number">0</span>)
+<a href=#1420 id=1420 data-nosnippet>1420</a>                    } <span class="kw">else </span>{
+<a href=#1421 id=1421 data-nosnippet>1421</a>                        InputSourceInst::None
+<a href=#1422 id=1422 data-nosnippet>1422</a>                    }
+<a href=#1423 id=1423 data-nosnippet>1423</a>                }
+<a href=#1424 id=1424 data-nosnippet>1424</a>            }
+<a href=#1425 id=1425 data-nosnippet>1425</a>            <span class="kw">_ </span>=&gt; InputSourceInst::None,
+<a href=#1426 id=1426 data-nosnippet>1426</a>        };
+<a href=#1427 id=1427 data-nosnippet>1427</a>        <span class="kw">let </span>constant = inst.as_inst().and_then(|(inst, <span class="kw">_</span>)| <span class="self">self</span>.get_constant(inst));
+<a href=#1428 id=1428 data-nosnippet>1428</a>
+<a href=#1429 id=1429 data-nosnippet>1429</a>        NonRegInput { inst, constant }
+<a href=#1430 id=1430 data-nosnippet>1430</a>    }
+<a href=#1431 id=1431 data-nosnippet>1431</a>
+<a href=#1432 id=1432 data-nosnippet>1432</a>    <span class="doccomment">/// Increment the reference count for the Value, ensuring that it gets lowered.
+<a href=#1433 id=1433 data-nosnippet>1433</a>    </span><span class="kw">pub fn </span>increment_lowered_uses(<span class="kw-2">&amp;mut </span><span class="self">self</span>, val: Value) {
+<a href=#1434 id=1434 data-nosnippet>1434</a>        <span class="self">self</span>.value_lowered_uses[val] += <span class="number">1
+<a href=#1435 id=1435 data-nosnippet>1435</a>    </span>}
+<a href=#1436 id=1436 data-nosnippet>1436</a>
+<a href=#1437 id=1437 data-nosnippet>1437</a>    <span class="doccomment">/// Put the `idx`th input into register(s) and return the assigned register.
+<a href=#1438 id=1438 data-nosnippet>1438</a>    </span><span class="kw">pub fn </span>put_input_in_regs(<span class="kw-2">&amp;mut </span><span class="self">self</span>, ir_inst: Inst, idx: usize) -&gt; ValueRegs&lt;Reg&gt; {
+<a href=#1439 id=1439 data-nosnippet>1439</a>        <span class="kw">let </span>val = <span class="self">self</span>.f.dfg.inst_args(ir_inst)[idx];
+<a href=#1440 id=1440 data-nosnippet>1440</a>        <span class="self">self</span>.put_value_in_regs(val)
+<a href=#1441 id=1441 data-nosnippet>1441</a>    }
+<a href=#1442 id=1442 data-nosnippet>1442</a>
+<a href=#1443 id=1443 data-nosnippet>1443</a>    <span class="doccomment">/// Put the given value into register(s) and return the assigned register.
+<a href=#1444 id=1444 data-nosnippet>1444</a>    </span><span class="kw">pub fn </span>put_value_in_regs(<span class="kw-2">&amp;mut </span><span class="self">self</span>, val: Value) -&gt; ValueRegs&lt;Reg&gt; {
+<a href=#1445 id=1445 data-nosnippet>1445</a>        <span class="macro">debug_assert!</span>(<span class="self">self</span>.f.dfg.value_is_real(val));
+<a href=#1446 id=1446 data-nosnippet>1446</a>        <span class="macro">trace!</span>(<span class="string">"put_value_in_regs: val {}"</span>, val);
+<a href=#1447 id=1447 data-nosnippet>1447</a>
+<a href=#1448 id=1448 data-nosnippet>1448</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inst) = <span class="self">self</span>.f.dfg.value_def(val).inst() {
+<a href=#1449 id=1449 data-nosnippet>1449</a>            <span class="macro">assert!</span>(!<span class="self">self</span>.inst_sunk.contains(<span class="kw-2">&amp;</span>inst));
+<a href=#1450 id=1450 data-nosnippet>1450</a>        }
+<a href=#1451 id=1451 data-nosnippet>1451</a>
+<a href=#1452 id=1452 data-nosnippet>1452</a>        <span class="kw">let </span>regs = <span class="self">self</span>.value_regs[val];
+<a href=#1453 id=1453 data-nosnippet>1453</a>        <span class="macro">trace!</span>(<span class="string">" -&gt; regs {:?}"</span>, regs);
+<a href=#1454 id=1454 data-nosnippet>1454</a>        <span class="macro">assert!</span>(regs.is_valid());
+<a href=#1455 id=1455 data-nosnippet>1455</a>
+<a href=#1456 id=1456 data-nosnippet>1456</a>        <span class="self">self</span>.value_lowered_uses[val] += <span class="number">1</span>;
+<a href=#1457 id=1457 data-nosnippet>1457</a>
+<a href=#1458 id=1458 data-nosnippet>1458</a>        regs
+<a href=#1459 id=1459 data-nosnippet>1459</a>    }
+<a href=#1460 id=1460 data-nosnippet>1460</a>}
+<a href=#1461 id=1461 data-nosnippet>1461</a>
+<a href=#1462 id=1462 data-nosnippet>1462</a><span class="doccomment">/// Codegen primitives: allocate temps, emit instructions, set result registers,
+<a href=#1463 id=1463 data-nosnippet>1463</a>/// ask for an input to be gen'd into a register.
+<a href=#1464 id=1464 data-nosnippet>1464</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'func</span>, I: VCodeInst&gt; Lower&lt;<span class="lifetime">'func</span>, I&gt; {
+<a href=#1465 id=1465 data-nosnippet>1465</a>    <span class="doccomment">/// Get a new temp.
+<a href=#1466 id=1466 data-nosnippet>1466</a>    </span><span class="kw">pub fn </span>alloc_tmp(<span class="kw-2">&amp;mut </span><span class="self">self</span>, ty: Type) -&gt; ValueRegs&lt;Writable&lt;Reg&gt;&gt; {
+<a href=#1467 id=1467 data-nosnippet>1467</a>        writable_value_regs(<span class="self">self</span>.vregs.alloc_with_deferred_error(ty))
+<a href=#1468 id=1468 data-nosnippet>1468</a>    }
+<a href=#1469 id=1469 data-nosnippet>1469</a>
+<a href=#1470 id=1470 data-nosnippet>1470</a>    <span class="doccomment">/// Emit a machine instruction.
+<a href=#1471 id=1471 data-nosnippet>1471</a>    </span><span class="kw">pub fn </span>emit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, mach_inst: I) {
+<a href=#1472 id=1472 data-nosnippet>1472</a>        <span class="macro">trace!</span>(<span class="string">"emit: {:?}"</span>, mach_inst);
+<a href=#1473 id=1473 data-nosnippet>1473</a>        <span class="self">self</span>.ir_insts.push(mach_inst);
+<a href=#1474 id=1474 data-nosnippet>1474</a>    }
+<a href=#1475 id=1475 data-nosnippet>1475</a>
+<a href=#1476 id=1476 data-nosnippet>1476</a>    <span class="doccomment">/// Indicate that the side-effect of an instruction has been sunk to the
+<a href=#1477 id=1477 data-nosnippet>1477</a>    /// current scan location. This should only be done with the instruction's
+<a href=#1478 id=1478 data-nosnippet>1478</a>    /// original results are not used (i.e., `put_input_in_regs` is not invoked
+<a href=#1479 id=1479 data-nosnippet>1479</a>    /// for the input produced by the sunk instruction), otherwise the
+<a href=#1480 id=1480 data-nosnippet>1480</a>    /// side-effect will occur twice.
+<a href=#1481 id=1481 data-nosnippet>1481</a>    </span><span class="kw">pub fn </span>sink_inst(<span class="kw-2">&amp;mut </span><span class="self">self</span>, ir_inst: Inst) {
+<a href=#1482 id=1482 data-nosnippet>1482</a>        <span class="macro">assert!</span>(has_lowering_side_effect(<span class="self">self</span>.f, ir_inst));
+<a href=#1483 id=1483 data-nosnippet>1483</a>        <span class="macro">assert!</span>(<span class="self">self</span>.cur_scan_entry_color.is_some());
+<a href=#1484 id=1484 data-nosnippet>1484</a>
+<a href=#1485 id=1485 data-nosnippet>1485</a>        <span class="kw">for </span>result <span class="kw">in </span><span class="self">self</span>.dfg().inst_results(ir_inst) {
+<a href=#1486 id=1486 data-nosnippet>1486</a>            <span class="macro">assert!</span>(<span class="self">self</span>.value_lowered_uses[<span class="kw-2">*</span>result] == <span class="number">0</span>);
+<a href=#1487 id=1487 data-nosnippet>1487</a>        }
+<a href=#1488 id=1488 data-nosnippet>1488</a>
+<a href=#1489 id=1489 data-nosnippet>1489</a>        <span class="kw">let </span>sunk_inst_entry_color = <span class="self">self
+<a href=#1490 id=1490 data-nosnippet>1490</a>            </span>.side_effect_inst_entry_colors
+<a href=#1491 id=1491 data-nosnippet>1491</a>            .get(<span class="kw-2">&amp;</span>ir_inst)
+<a href=#1492 id=1492 data-nosnippet>1492</a>            .cloned()
+<a href=#1493 id=1493 data-nosnippet>1493</a>            .unwrap();
+<a href=#1494 id=1494 data-nosnippet>1494</a>        <span class="kw">let </span>sunk_inst_exit_color = InstColor::new(sunk_inst_entry_color.get() + <span class="number">1</span>);
+<a href=#1495 id=1495 data-nosnippet>1495</a>        <span class="macro">assert!</span>(sunk_inst_exit_color == <span class="self">self</span>.cur_scan_entry_color.unwrap());
+<a href=#1496 id=1496 data-nosnippet>1496</a>        <span class="self">self</span>.cur_scan_entry_color = <span class="prelude-val">Some</span>(sunk_inst_entry_color);
+<a href=#1497 id=1497 data-nosnippet>1497</a>        <span class="self">self</span>.inst_sunk.insert(ir_inst);
+<a href=#1498 id=1498 data-nosnippet>1498</a>    }
+<a href=#1499 id=1499 data-nosnippet>1499</a>
+<a href=#1500 id=1500 data-nosnippet>1500</a>    <span class="doccomment">/// Retrieve immediate data given a handle.
+<a href=#1501 id=1501 data-nosnippet>1501</a>    </span><span class="kw">pub fn </span>get_immediate_data(<span class="kw-2">&amp;</span><span class="self">self</span>, imm: Immediate) -&gt; <span class="kw-2">&amp;</span>ConstantData {
+<a href=#1502 id=1502 data-nosnippet>1502</a>        <span class="self">self</span>.f.dfg.immediates.get(imm).unwrap()
+<a href=#1503 id=1503 data-nosnippet>1503</a>    }
+<a href=#1504 id=1504 data-nosnippet>1504</a>
+<a href=#1505 id=1505 data-nosnippet>1505</a>    <span class="doccomment">/// Retrieve constant data given a handle.
+<a href=#1506 id=1506 data-nosnippet>1506</a>    </span><span class="kw">pub fn </span>get_constant_data(<span class="kw-2">&amp;</span><span class="self">self</span>, constant_handle: Constant) -&gt; <span class="kw-2">&amp;</span>ConstantData {
+<a href=#1507 id=1507 data-nosnippet>1507</a>        <span class="self">self</span>.f.dfg.constants.get(constant_handle)
+<a href=#1508 id=1508 data-nosnippet>1508</a>    }
+<a href=#1509 id=1509 data-nosnippet>1509</a>
+<a href=#1510 id=1510 data-nosnippet>1510</a>    <span class="doccomment">/// Indicate that a constant should be emitted.
+<a href=#1511 id=1511 data-nosnippet>1511</a>    </span><span class="kw">pub fn </span>use_constant(<span class="kw-2">&amp;mut </span><span class="self">self</span>, constant: VCodeConstantData) -&gt; VCodeConstant {
+<a href=#1512 id=1512 data-nosnippet>1512</a>        <span class="self">self</span>.vcode.constants().insert(constant)
+<a href=#1513 id=1513 data-nosnippet>1513</a>    }
+<a href=#1514 id=1514 data-nosnippet>1514</a>
+<a href=#1515 id=1515 data-nosnippet>1515</a>    <span class="doccomment">/// Cause the value in `reg` to be in a virtual reg, by copying it into a new virtual reg
+<a href=#1516 id=1516 data-nosnippet>1516</a>    /// if `reg` is a real reg.  `ty` describes the type of the value in `reg`.
+<a href=#1517 id=1517 data-nosnippet>1517</a>    </span><span class="kw">pub fn </span>ensure_in_vreg(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reg: Reg, ty: Type) -&gt; Reg {
+<a href=#1518 id=1518 data-nosnippet>1518</a>        <span class="kw">if </span>reg.to_virtual_reg().is_some() {
+<a href=#1519 id=1519 data-nosnippet>1519</a>            reg
+<a href=#1520 id=1520 data-nosnippet>1520</a>        } <span class="kw">else </span>{
+<a href=#1521 id=1521 data-nosnippet>1521</a>            <span class="kw">let </span>new_reg = <span class="self">self</span>.alloc_tmp(ty).only_reg().unwrap();
+<a href=#1522 id=1522 data-nosnippet>1522</a>            <span class="self">self</span>.emit(I::gen_move(new_reg, reg, ty));
+<a href=#1523 id=1523 data-nosnippet>1523</a>            new_reg.to_reg()
+<a href=#1524 id=1524 data-nosnippet>1524</a>        }
+<a href=#1525 id=1525 data-nosnippet>1525</a>    }
+<a href=#1526 id=1526 data-nosnippet>1526</a>
+<a href=#1527 id=1527 data-nosnippet>1527</a>    <span class="doccomment">/// Add a range fact to a register, if no other fact is present.
+<a href=#1528 id=1528 data-nosnippet>1528</a>    </span><span class="kw">pub fn </span>add_range_fact(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reg: Reg, bit_width: u16, min: u64, max: u64) {
+<a href=#1529 id=1529 data-nosnippet>1529</a>        <span class="kw">if </span><span class="self">self</span>.flags.enable_pcc() {
+<a href=#1530 id=1530 data-nosnippet>1530</a>            <span class="self">self</span>.vregs.set_fact_if_missing(
+<a href=#1531 id=1531 data-nosnippet>1531</a>                reg.to_virtual_reg().unwrap(),
+<a href=#1532 id=1532 data-nosnippet>1532</a>                Fact::Range {
+<a href=#1533 id=1533 data-nosnippet>1533</a>                    bit_width,
+<a href=#1534 id=1534 data-nosnippet>1534</a>                    min,
+<a href=#1535 id=1535 data-nosnippet>1535</a>                    max,
+<a href=#1536 id=1536 data-nosnippet>1536</a>                },
+<a href=#1537 id=1537 data-nosnippet>1537</a>            );
+<a href=#1538 id=1538 data-nosnippet>1538</a>        }
+<a href=#1539 id=1539 data-nosnippet>1539</a>    }
+<a href=#1540 id=1540 data-nosnippet>1540</a>}
+<a href=#1541 id=1541 data-nosnippet>1541</a>
+<a href=#1542 id=1542 data-nosnippet>1542</a><span class="attr">#[cfg(test)]
+<a href=#1543 id=1543 data-nosnippet>1543</a></span><span class="kw">mod </span>tests {
+<a href=#1544 id=1544 data-nosnippet>1544</a>    <span class="kw">use </span><span class="kw">super</span>::ValueUseState;
+<a href=#1545 id=1545 data-nosnippet>1545</a>    <span class="kw">use </span><span class="kw">crate</span>::cursor::{Cursor, FuncCursor};
+<a href=#1546 id=1546 data-nosnippet>1546</a>    <span class="kw">use </span><span class="kw">crate</span>::ir::types;
+<a href=#1547 id=1547 data-nosnippet>1547</a>    <span class="kw">use </span><span class="kw">crate</span>::ir::{Function, InstBuilder};
+<a href=#1548 id=1548 data-nosnippet>1548</a>
+<a href=#1549 id=1549 data-nosnippet>1549</a>    <span class="attr">#[test]
+<a href=#1550 id=1550 data-nosnippet>1550</a>    </span><span class="kw">fn </span>multi_result_use_once() {
+<a href=#1551 id=1551 data-nosnippet>1551</a>        <span class="kw">let </span><span class="kw-2">mut </span>func = Function::new();
+<a href=#1552 id=1552 data-nosnippet>1552</a>        <span class="kw">let </span>block0 = func.dfg.make_block();
+<a href=#1553 id=1553 data-nosnippet>1553</a>        <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(<span class="kw-2">&amp;mut </span>func);
+<a href=#1554 id=1554 data-nosnippet>1554</a>        pos.insert_block(block0);
+<a href=#1555 id=1555 data-nosnippet>1555</a>        <span class="kw">let </span>v1 = pos.ins().iconst(types::I64, <span class="number">0</span>);
+<a href=#1556 id=1556 data-nosnippet>1556</a>        <span class="kw">let </span>v2 = pos.ins().iconst(types::I64, <span class="number">1</span>);
+<a href=#1557 id=1557 data-nosnippet>1557</a>        <span class="kw">let </span>v3 = pos.ins().iconcat(v1, v2);
+<a href=#1558 id=1558 data-nosnippet>1558</a>        <span class="kw">let </span>(v4, v5) = pos.ins().isplit(v3);
+<a href=#1559 id=1559 data-nosnippet>1559</a>        pos.ins().return_(<span class="kw-2">&amp;</span>[v4, v5]);
+<a href=#1560 id=1560 data-nosnippet>1560</a>        <span class="kw">let </span>func = pos.func;
+<a href=#1561 id=1561 data-nosnippet>1561</a>
+<a href=#1562 id=1562 data-nosnippet>1562</a>        <span class="kw">let </span>uses = <span class="kw">super</span>::compute_use_states(<span class="kw-2">&amp;</span>func, <span class="prelude-val">None</span>);
+<a href=#1563 id=1563 data-nosnippet>1563</a>        <span class="macro">assert_eq!</span>(uses[v1], ValueUseState::Once);
+<a href=#1564 id=1564 data-nosnippet>1564</a>        <span class="macro">assert_eq!</span>(uses[v2], ValueUseState::Once);
+<a href=#1565 id=1565 data-nosnippet>1565</a>        <span class="macro">assert_eq!</span>(uses[v3], ValueUseState::Once);
+<a href=#1566 id=1566 data-nosnippet>1566</a>        <span class="macro">assert_eq!</span>(uses[v4], ValueUseState::Once);
+<a href=#1567 id=1567 data-nosnippet>1567</a>        <span class="macro">assert_eq!</span>(uses[v5], ValueUseState::Once);
+<a href=#1568 id=1568 data-nosnippet>1568</a>    }
+<a href=#1569 id=1569 data-nosnippet>1569</a>
+<a href=#1570 id=1570 data-nosnippet>1570</a>    <span class="attr">#[test]
+<a href=#1571 id=1571 data-nosnippet>1571</a>    </span><span class="kw">fn </span>results_used_twice_but_not_operands() {
+<a href=#1572 id=1572 data-nosnippet>1572</a>        <span class="kw">let </span><span class="kw-2">mut </span>func = Function::new();
+<a href=#1573 id=1573 data-nosnippet>1573</a>        <span class="kw">let </span>block0 = func.dfg.make_block();
+<a href=#1574 id=1574 data-nosnippet>1574</a>        <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(<span class="kw-2">&amp;mut </span>func);
+<a href=#1575 id=1575 data-nosnippet>1575</a>        pos.insert_block(block0);
+<a href=#1576 id=1576 data-nosnippet>1576</a>        <span class="kw">let </span>v1 = pos.ins().iconst(types::I64, <span class="number">0</span>);
+<a href=#1577 id=1577 data-nosnippet>1577</a>        <span class="kw">let </span>v2 = pos.ins().iconst(types::I64, <span class="number">1</span>);
+<a href=#1578 id=1578 data-nosnippet>1578</a>        <span class="kw">let </span>v3 = pos.ins().iconcat(v1, v2);
+<a href=#1579 id=1579 data-nosnippet>1579</a>        <span class="kw">let </span>(v4, v5) = pos.ins().isplit(v3);
+<a href=#1580 id=1580 data-nosnippet>1580</a>        pos.ins().return_(<span class="kw-2">&amp;</span>[v4, v4]);
+<a href=#1581 id=1581 data-nosnippet>1581</a>        <span class="kw">let </span>func = pos.func;
+<a href=#1582 id=1582 data-nosnippet>1582</a>
+<a href=#1583 id=1583 data-nosnippet>1583</a>        <span class="kw">let </span>uses = <span class="kw">super</span>::compute_use_states(<span class="kw-2">&amp;</span>func, <span class="prelude-val">None</span>);
+<a href=#1584 id=1584 data-nosnippet>1584</a>        <span class="macro">assert_eq!</span>(uses[v1], ValueUseState::Once);
+<a href=#1585 id=1585 data-nosnippet>1585</a>        <span class="macro">assert_eq!</span>(uses[v2], ValueUseState::Once);
+<a href=#1586 id=1586 data-nosnippet>1586</a>        <span class="macro">assert_eq!</span>(uses[v3], ValueUseState::Once);
+<a href=#1587 id=1587 data-nosnippet>1587</a>        <span class="macro">assert_eq!</span>(uses[v4], ValueUseState::Multiple);
+<a href=#1588 id=1588 data-nosnippet>1588</a>        <span class="macro">assert_eq!</span>(uses[v5], ValueUseState::Unused);
+<a href=#1589 id=1589 data-nosnippet>1589</a>    }
+<a href=#1590 id=1590 data-nosnippet>1590</a>}</code></pre></div></section></main></body></html>

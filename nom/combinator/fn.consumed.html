@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="if the child parser was successful, return the consumed input with the output as a tuple. Functions similarly to recognize except it returns the parser output as well."><title>consumed in nom::combinator - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="nom" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../nom/index.html">nom</a><span class="version">7.1.3</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"><h2><a href="index.html">In nom::<wbr>combinator</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">nom</a>::<wbr><a href="index.html">combinator</a></div><h1>Function <span class="fn">consumed</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/nom/combinator/mod.rs.html#561-578">Source</a> </span></div><pre class="rust item-decl"><code>pub fn consumed&lt;I, O, F, E&gt;(parser: F) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(I) -&gt; <a class="type" href="../type.IResult.html" title="type nom::IResult">IResult</a>&lt;I, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.tuple.html">(I, O)</a>, E&gt;<div class="where">where
+    I: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="../trait.Offset.html" title="trait nom::Offset">Offset</a> + <a class="trait" href="../trait.Slice.html" title="trait nom::Slice">Slice</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/core/ops/range/struct.RangeTo.html" title="struct core::ops::range::RangeTo">RangeTo</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>&gt;&gt;,
+    E: <a class="trait" href="../error/trait.ParseError.html" title="trait nom::error::ParseError">ParseError</a>&lt;I&gt;,
+    F: <a class="trait" href="../trait.Parser.html" title="trait nom::Parser">Parser</a>&lt;I, O, E&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>if the child parser was successful, return the consumed input with the output
+as a tuple. Functions similarly to <a href="fn.recognize.html">recognize</a> except it
+returns the parser output as well.</p>
+<p>This can be useful especially in cases where the output is not the same type
+as the input, or the input is a user defined type.</p>
+<p>Returned tuple is of the format <code>(consumed input, produced output)</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nom::combinator::{consumed, value, recognize, map};
+<span class="kw">use </span>nom::character::complete::{char, alpha1};
+<span class="kw">use </span>nom::bytes::complete::tag;
+<span class="kw">use </span>nom::sequence::separated_pair;
+
+<span class="kw">fn </span>inner_parser(input: <span class="kw-2">&amp;</span>str) -&gt; IResult&lt;<span class="kw-2">&amp;</span>str, bool&gt; {
+    value(<span class="bool-val">true</span>, tag(<span class="string">"1234"</span>))(input)
+}
+
+
+<span class="kw">let </span><span class="kw-2">mut </span>consumed_parser = consumed(value(<span class="bool-val">true</span>, separated_pair(alpha1, char(<span class="string">','</span>), alpha1)));
+
+<span class="macro">assert_eq!</span>(consumed_parser(<span class="string">"abcd,efgh1"</span>), <span class="prelude-val">Ok</span>((<span class="string">"1"</span>, (<span class="string">"abcd,efgh"</span>, <span class="bool-val">true</span>))));
+<span class="macro">assert_eq!</span>(consumed_parser(<span class="string">"abcd;"</span>),<span class="prelude-val">Err</span>(Err::Error((<span class="string">";"</span>, ErrorKind::Char))));
+
+
+<span class="comment">// the first output (representing the consumed input)
+// should be the same as that of the `recognize` parser.
+</span><span class="kw">let </span><span class="kw-2">mut </span>recognize_parser = recognize(inner_parser);
+<span class="kw">let </span><span class="kw-2">mut </span>consumed_parser = map(consumed(inner_parser), |(consumed, output)| consumed);
+
+<span class="macro">assert_eq!</span>(recognize_parser(<span class="string">"1234"</span>), consumed_parser(<span class="string">"1234"</span>));
+<span class="macro">assert_eq!</span>(recognize_parser(<span class="string">"abcd"</span>), consumed_parser(<span class="string">"abcd"</span>));</code></pre></div>
+</div></details></section></div></main></body></html>

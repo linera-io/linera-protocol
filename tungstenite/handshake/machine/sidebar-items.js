@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RoundResult","StageResult"],"struct":["HandshakeMachine"],"trait":["TryParse"]};

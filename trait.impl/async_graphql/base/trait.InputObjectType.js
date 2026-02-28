@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["linera_base",[["impl <a class=\"trait\" href=\"async_graphql/base/trait.InputObjectType.html\" title=\"trait async_graphql::base::InputObjectType\">InputObjectType</a> for <a class=\"struct\" href=\"linera_base/data_types/struct.ApplicationPermissions.html\" title=\"struct linera_base::data_types::ApplicationPermissions\">ApplicationPermissions</a>"],["impl <a class=\"trait\" href=\"async_graphql/base/trait.InputObjectType.html\" title=\"trait async_graphql::base::InputObjectType\">InputObjectType</a> for <a class=\"struct\" href=\"linera_base/identifiers/struct.Account.html\" title=\"struct linera_base::identifiers::Account\">Account</a>"],["impl <a class=\"trait\" href=\"async_graphql/base/trait.InputObjectType.html\" title=\"trait async_graphql::base::InputObjectType\">InputObjectType</a> for <a class=\"struct\" href=\"linera_base/identifiers/struct.StreamId.html\" title=\"struct linera_base::identifiers::StreamId\">StreamId</a>"]]],["linera_execution",[["impl <a class=\"trait\" href=\"async_graphql/base/trait.InputObjectType.html\" title=\"trait async_graphql::base::InputObjectType\">InputObjectType</a> for <a class=\"struct\" href=\"linera_execution/committee/struct.Committee.html\" title=\"struct linera_execution::committee::Committee\">Committee</a>"]]],["linera_indexer_plugins",[["impl <a class=\"trait\" href=\"async_graphql/base/trait.InputObjectType.html\" title=\"trait async_graphql::base::InputObjectType\">InputObjectType</a> for <a class=\"enum\" href=\"linera_indexer_plugins/operations/enum.OperationKeyKind.html\" title=\"enum linera_indexer_plugins::operations::OperationKeyKind\">OperationKeyKind</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[951,331,366]}

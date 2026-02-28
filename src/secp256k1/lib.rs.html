@@ -1,0 +1,1052 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/secp256k1-0.30.0/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="secp256k1" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">secp256k1/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// SPDX-License-Identifier: CC0-1.0
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="doccomment">//! Rust bindings for Pieter Wuille's secp256k1 library, which is used for
+<a href=#4 id=4 data-nosnippet>4</a>//! fast and accurate manipulation of ECDSA and Schnorr signatures on the secp256k1
+<a href=#5 id=5 data-nosnippet>5</a>//! curve. Such signatures are used extensively by the Bitcoin network
+<a href=#6 id=6 data-nosnippet>6</a>//! and its derivatives.
+<a href=#7 id=7 data-nosnippet>7</a>//!
+<a href=#8 id=8 data-nosnippet>8</a>//! To minimize dependencies, some functions are feature-gated. To generate
+<a href=#9 id=9 data-nosnippet>9</a>//! random keys or to re-randomize a context object, compile with the
+<a href=#10 id=10 data-nosnippet>10</a>//! `rand` and `std` features. If you are willing to use these features, we
+<a href=#11 id=11 data-nosnippet>11</a>//! have enabled an additional defense-in-depth sidechannel protection for
+<a href=#12 id=12 data-nosnippet>12</a>//! our context objects, which re-blinds certain operations on secret key
+<a href=#13 id=13 data-nosnippet>13</a>//! data. To de/serialize objects with serde, compile with "serde".
+<a href=#14 id=14 data-nosnippet>14</a>//! **Important**: `serde` encoding is **not** the same as consensus
+<a href=#15 id=15 data-nosnippet>15</a>//! encoding!
+<a href=#16 id=16 data-nosnippet>16</a>//!
+<a href=#17 id=17 data-nosnippet>17</a>//! Where possible, the bindings use the Rust type system to ensure that
+<a href=#18 id=18 data-nosnippet>18</a>//! API usage errors are impossible. For example, the library uses context
+<a href=#19 id=19 data-nosnippet>19</a>//! objects that contain precomputation tables which are created on object
+<a href=#20 id=20 data-nosnippet>20</a>//! construction. Since this is a slow operation (10+ milliseconds, vs ~50
+<a href=#21 id=21 data-nosnippet>21</a>//! microseconds for typical crypto operations, on a 2.70 Ghz i7-6820HQ)
+<a href=#22 id=22 data-nosnippet>22</a>//! the tables are optional, giving a performance boost for users who only
+<a href=#23 id=23 data-nosnippet>23</a>//! care about signing, only care about verification, or only care about
+<a href=#24 id=24 data-nosnippet>24</a>//! parsing. In the upstream library, if you attempt to sign a message using
+<a href=#25 id=25 data-nosnippet>25</a>//! a context that does not support this, it will trigger an assertion
+<a href=#26 id=26 data-nosnippet>26</a>//! failure and terminate the program. In `rust-secp256k1`, this is caught
+<a href=#27 id=27 data-nosnippet>27</a>//! at compile-time; in fact, it is impossible to compile code that will
+<a href=#28 id=28 data-nosnippet>28</a>//! trigger any assertion failures in the upstream library.
+<a href=#29 id=29 data-nosnippet>29</a>//!
+<a href=#30 id=30 data-nosnippet>30</a>//! ```rust
+<a href=#31 id=31 data-nosnippet>31</a>//! # #[cfg(all(feature = "rand", feature = "hashes", feature = "std"))] {
+<a href=#32 id=32 data-nosnippet>32</a>//! use secp256k1::rand::rngs::OsRng;
+<a href=#33 id=33 data-nosnippet>33</a>//! use secp256k1::{Secp256k1, Message};
+<a href=#34 id=34 data-nosnippet>34</a>//! use secp256k1::hashes::{sha256, Hash};
+<a href=#35 id=35 data-nosnippet>35</a>//!
+<a href=#36 id=36 data-nosnippet>36</a>//! let secp = Secp256k1::new();
+<a href=#37 id=37 data-nosnippet>37</a>//! let (secret_key, public_key) = secp.generate_keypair(&amp;mut OsRng);
+<a href=#38 id=38 data-nosnippet>38</a>//! let digest = sha256::Hash::hash("Hello World!".as_bytes());
+<a href=#39 id=39 data-nosnippet>39</a>//! let message = Message::from_digest(digest.to_byte_array());
+<a href=#40 id=40 data-nosnippet>40</a>//!
+<a href=#41 id=41 data-nosnippet>41</a>//! let sig = secp.sign_ecdsa(&amp;message, &amp;secret_key);
+<a href=#42 id=42 data-nosnippet>42</a>//! assert!(secp.verify_ecdsa(&amp;message, &amp;sig, &amp;public_key).is_ok());
+<a href=#43 id=43 data-nosnippet>43</a>//! # }
+<a href=#44 id=44 data-nosnippet>44</a>//! ```
+<a href=#45 id=45 data-nosnippet>45</a>//!
+<a href=#46 id=46 data-nosnippet>46</a>//! If the "global-context" feature is enabled you have access to an alternate API.
+<a href=#47 id=47 data-nosnippet>47</a>//!
+<a href=#48 id=48 data-nosnippet>48</a>//! ```rust
+<a href=#49 id=49 data-nosnippet>49</a>//! # #[cfg(all(feature = "global-context", feature = "hashes", feature = "rand", feature = "std"))] {
+<a href=#50 id=50 data-nosnippet>50</a>//! use secp256k1::{generate_keypair, Message};
+<a href=#51 id=51 data-nosnippet>51</a>//! use secp256k1::hashes::{sha256, Hash};
+<a href=#52 id=52 data-nosnippet>52</a>//!
+<a href=#53 id=53 data-nosnippet>53</a>//! let (secret_key, public_key) = generate_keypair(&amp;mut rand::thread_rng());
+<a href=#54 id=54 data-nosnippet>54</a>//! let digest = sha256::Hash::hash("Hello World!".as_bytes());
+<a href=#55 id=55 data-nosnippet>55</a>//! let message = Message::from_digest(digest.to_byte_array());
+<a href=#56 id=56 data-nosnippet>56</a>//!
+<a href=#57 id=57 data-nosnippet>57</a>//! let sig = secret_key.sign_ecdsa(message);
+<a href=#58 id=58 data-nosnippet>58</a>//! assert!(sig.verify(&amp;message, &amp;public_key).is_ok());
+<a href=#59 id=59 data-nosnippet>59</a>//! # }
+<a href=#60 id=60 data-nosnippet>60</a>//! ```
+<a href=#61 id=61 data-nosnippet>61</a>//!
+<a href=#62 id=62 data-nosnippet>62</a>//! The above code requires `rust-secp256k1` to be compiled with the `rand`, `hashes`, and `std`
+<a href=#63 id=63 data-nosnippet>63</a>//! feature enabled, to get access to [`generate_keypair`](struct.Secp256k1.html#method.generate_keypair)
+<a href=#64 id=64 data-nosnippet>64</a>//! Alternately, keys and messages can be parsed from slices, like
+<a href=#65 id=65 data-nosnippet>65</a>//!
+<a href=#66 id=66 data-nosnippet>66</a>//! ```rust
+<a href=#67 id=67 data-nosnippet>67</a>//! # #[cfg(feature = "alloc")] {
+<a href=#68 id=68 data-nosnippet>68</a>//! use secp256k1::{Secp256k1, Message, SecretKey, PublicKey};
+<a href=#69 id=69 data-nosnippet>69</a>//! # fn compute_hash(_: &amp;[u8]) -&gt; [u8; 32] { [0xab; 32] }
+<a href=#70 id=70 data-nosnippet>70</a>//!
+<a href=#71 id=71 data-nosnippet>71</a>//! let secp = Secp256k1::new();
+<a href=#72 id=72 data-nosnippet>72</a>//! let secret_key = SecretKey::from_slice(&amp;[0xcd; 32]).expect("32 bytes, within curve order");
+<a href=#73 id=73 data-nosnippet>73</a>//! let public_key = PublicKey::from_secret_key(&amp;secp, &amp;secret_key);
+<a href=#74 id=74 data-nosnippet>74</a>//! // If the supplied byte slice was *not* the output of a cryptographic hash function this would
+<a href=#75 id=75 data-nosnippet>75</a>//! // be cryptographically broken. It has been trivially used in the past to execute attacks.
+<a href=#76 id=76 data-nosnippet>76</a>//! let message = Message::from_digest(compute_hash(b"CSW is not Satoshi"));
+<a href=#77 id=77 data-nosnippet>77</a>//!
+<a href=#78 id=78 data-nosnippet>78</a>//! let sig = secp.sign_ecdsa(&amp;message, &amp;secret_key);
+<a href=#79 id=79 data-nosnippet>79</a>//! assert!(secp.verify_ecdsa(&amp;message, &amp;sig, &amp;public_key).is_ok());
+<a href=#80 id=80 data-nosnippet>80</a>//! # }
+<a href=#81 id=81 data-nosnippet>81</a>//! ```
+<a href=#82 id=82 data-nosnippet>82</a>//!
+<a href=#83 id=83 data-nosnippet>83</a>//! Users who only want to verify signatures can use a cheaper context, like so:
+<a href=#84 id=84 data-nosnippet>84</a>//!
+<a href=#85 id=85 data-nosnippet>85</a>//! ```rust
+<a href=#86 id=86 data-nosnippet>86</a>//! # #[cfg(feature = "alloc")] {
+<a href=#87 id=87 data-nosnippet>87</a>//! use secp256k1::{Secp256k1, Message, ecdsa, PublicKey};
+<a href=#88 id=88 data-nosnippet>88</a>//!
+<a href=#89 id=89 data-nosnippet>89</a>//! let secp = Secp256k1::verification_only();
+<a href=#90 id=90 data-nosnippet>90</a>//!
+<a href=#91 id=91 data-nosnippet>91</a>//! let public_key = PublicKey::from_slice(&amp;[
+<a href=#92 id=92 data-nosnippet>92</a>//!     0x02,
+<a href=#93 id=93 data-nosnippet>93</a>//!     0xc6, 0x6e, 0x7d, 0x89, 0x66, 0xb5, 0xc5, 0x55,
+<a href=#94 id=94 data-nosnippet>94</a>//!     0xaf, 0x58, 0x05, 0x98, 0x9d, 0xa9, 0xfb, 0xf8,
+<a href=#95 id=95 data-nosnippet>95</a>//!     0xdb, 0x95, 0xe1, 0x56, 0x31, 0xce, 0x35, 0x8c,
+<a href=#96 id=96 data-nosnippet>96</a>//!     0x3a, 0x17, 0x10, 0xc9, 0x62, 0x67, 0x90, 0x63,
+<a href=#97 id=97 data-nosnippet>97</a>//! ]).expect("public keys must be 33 or 65 bytes, serialized according to SEC 2");
+<a href=#98 id=98 data-nosnippet>98</a>//!
+<a href=#99 id=99 data-nosnippet>99</a>//! let message = Message::from_digest([
+<a href=#100 id=100 data-nosnippet>100</a>//!     0xaa, 0xdf, 0x7d, 0xe7, 0x82, 0x03, 0x4f, 0xbe,
+<a href=#101 id=101 data-nosnippet>101</a>//!     0x3d, 0x3d, 0xb2, 0xcb, 0x13, 0xc0, 0xcd, 0x91,
+<a href=#102 id=102 data-nosnippet>102</a>//!     0xbf, 0x41, 0xcb, 0x08, 0xfa, 0xc7, 0xbd, 0x61,
+<a href=#103 id=103 data-nosnippet>103</a>//!     0xd5, 0x44, 0x53, 0xcf, 0x6e, 0x82, 0xb4, 0x50,
+<a href=#104 id=104 data-nosnippet>104</a>//! ]);
+<a href=#105 id=105 data-nosnippet>105</a>//!
+<a href=#106 id=106 data-nosnippet>106</a>//! let sig = ecdsa::Signature::from_compact(&amp;[
+<a href=#107 id=107 data-nosnippet>107</a>//!     0xdc, 0x4d, 0xc2, 0x64, 0xa9, 0xfe, 0xf1, 0x7a,
+<a href=#108 id=108 data-nosnippet>108</a>//!     0x3f, 0x25, 0x34, 0x49, 0xcf, 0x8c, 0x39, 0x7a,
+<a href=#109 id=109 data-nosnippet>109</a>//!     0xb6, 0xf1, 0x6f, 0xb3, 0xd6, 0x3d, 0x86, 0x94,
+<a href=#110 id=110 data-nosnippet>110</a>//!     0x0b, 0x55, 0x86, 0x82, 0x3d, 0xfd, 0x02, 0xae,
+<a href=#111 id=111 data-nosnippet>111</a>//!     0x3b, 0x46, 0x1b, 0xb4, 0x33, 0x6b, 0x5e, 0xcb,
+<a href=#112 id=112 data-nosnippet>112</a>//!     0xae, 0xfd, 0x66, 0x27, 0xaa, 0x92, 0x2e, 0xfc,
+<a href=#113 id=113 data-nosnippet>113</a>//!     0x04, 0x8f, 0xec, 0x0c, 0x88, 0x1c, 0x10, 0xc4,
+<a href=#114 id=114 data-nosnippet>114</a>//!     0xc9, 0x42, 0x8f, 0xca, 0x69, 0xc1, 0x32, 0xa2,
+<a href=#115 id=115 data-nosnippet>115</a>//! ]).expect("compact signatures are 64 bytes; DER signatures are 68-72 bytes");
+<a href=#116 id=116 data-nosnippet>116</a>//!
+<a href=#117 id=117 data-nosnippet>117</a>//! # #[cfg(not(secp256k1_fuzz))]
+<a href=#118 id=118 data-nosnippet>118</a>//! assert!(secp.verify_ecdsa(&amp;message, &amp;sig, &amp;public_key).is_ok());
+<a href=#119 id=119 data-nosnippet>119</a>//! # }
+<a href=#120 id=120 data-nosnippet>120</a>//! ```
+<a href=#121 id=121 data-nosnippet>121</a>//!
+<a href=#122 id=122 data-nosnippet>122</a>//! Observe that the same code using, say [`signing_only`](struct.Secp256k1.html#method.signing_only)
+<a href=#123 id=123 data-nosnippet>123</a>//! to generate a context would simply not compile.
+<a href=#124 id=124 data-nosnippet>124</a>//!
+<a href=#125 id=125 data-nosnippet>125</a>//! ## Crate features/optional dependencies
+<a href=#126 id=126 data-nosnippet>126</a>//!
+<a href=#127 id=127 data-nosnippet>127</a>//! This crate provides the following opt-in Cargo features:
+<a href=#128 id=128 data-nosnippet>128</a>//!
+<a href=#129 id=129 data-nosnippet>129</a>//! * `std` - use standard Rust library, enabled by default.
+<a href=#130 id=130 data-nosnippet>130</a>//! * `alloc` - use the `alloc` standard Rust library to provide heap allocations.
+<a href=#131 id=131 data-nosnippet>131</a>//! * `rand` - use `rand` library to provide random generator (e.g. to generate keys).
+<a href=#132 id=132 data-nosnippet>132</a>//! * `hashes` - use the `hashes` library.
+<a href=#133 id=133 data-nosnippet>133</a>//! * `recovery` - enable functions that can compute the public key from signature.
+<a href=#134 id=134 data-nosnippet>134</a>//! * `lowmemory` - optimize the library for low-memory environments.
+<a href=#135 id=135 data-nosnippet>135</a>//! * `global-context` - enable use of global secp256k1 context (implies `std`).
+<a href=#136 id=136 data-nosnippet>136</a>//! * `serde` - implements serialization and deserialization for types in this crate using `serde`.
+<a href=#137 id=137 data-nosnippet>137</a>//!           **Important**: `serde` encoding is **not** the same as consensus encoding!
+<a href=#138 id=138 data-nosnippet>138</a>//!
+<a href=#139 id=139 data-nosnippet>139</a>
+<a href=#140 id=140 data-nosnippet>140</a></span><span class="comment">// Coding conventions
+<a href=#141 id=141 data-nosnippet>141</a></span><span class="attr">#![deny(non_upper_case_globals, non_camel_case_types, non_snake_case)]
+<a href=#142 id=142 data-nosnippet>142</a>#![warn(missing_docs, missing_copy_implementations, missing_debug_implementations)]
+<a href=#143 id=143 data-nosnippet>143</a>#![cfg_attr(all(not(test), not(feature = <span class="string">"std"</span>)), no_std)]
+<a href=#144 id=144 data-nosnippet>144</a></span><span class="comment">// Experimental features we need.
+<a href=#145 id=145 data-nosnippet>145</a></span><span class="attr">#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+<a href=#146 id=146 data-nosnippet>146</a>#![cfg_attr(bench, feature(test))]
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a>#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#149 id=149 data-nosnippet>149</a></span><span class="kw">extern crate </span>alloc;
+<a href=#150 id=150 data-nosnippet>150</a><span class="attr">#[cfg(any(test, feature = <span class="string">"std"</span>))]
+<a href=#151 id=151 data-nosnippet>151</a></span><span class="kw">extern crate </span>core;
+<a href=#152 id=152 data-nosnippet>152</a><span class="attr">#[cfg(bench)]
+<a href=#153 id=153 data-nosnippet>153</a></span><span class="kw">extern crate </span>test;
+<a href=#154 id=154 data-nosnippet>154</a>
+<a href=#155 id=155 data-nosnippet>155</a><span class="attr">#[cfg(feature = <span class="string">"hashes"</span>)]
+<a href=#156 id=156 data-nosnippet>156</a></span><span class="kw">pub extern crate </span>hashes;
+<a href=#157 id=157 data-nosnippet>157</a>
+<a href=#158 id=158 data-nosnippet>158</a><span class="attr">#[macro_use]
+<a href=#159 id=159 data-nosnippet>159</a></span><span class="kw">mod </span>macros;
+<a href=#160 id=160 data-nosnippet>160</a><span class="attr">#[macro_use]
+<a href=#161 id=161 data-nosnippet>161</a></span><span class="kw">mod </span>secret;
+<a href=#162 id=162 data-nosnippet>162</a><span class="kw">mod </span>context;
+<a href=#163 id=163 data-nosnippet>163</a><span class="kw">mod </span>key;
+<a href=#164 id=164 data-nosnippet>164</a>
+<a href=#165 id=165 data-nosnippet>165</a><span class="kw">pub mod </span>constants;
+<a href=#166 id=166 data-nosnippet>166</a><span class="kw">pub mod </span>ecdh;
+<a href=#167 id=167 data-nosnippet>167</a><span class="kw">pub mod </span>ecdsa;
+<a href=#168 id=168 data-nosnippet>168</a><span class="kw">pub mod </span>ellswift;
+<a href=#169 id=169 data-nosnippet>169</a><span class="kw">pub mod </span>scalar;
+<a href=#170 id=170 data-nosnippet>170</a><span class="kw">pub mod </span>schnorr;
+<a href=#171 id=171 data-nosnippet>171</a><span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
+<a href=#172 id=172 data-nosnippet>172</a></span><span class="kw">mod </span>serde_util;
+<a href=#173 id=173 data-nosnippet>173</a>
+<a href=#174 id=174 data-nosnippet>174</a><span class="kw">use </span>core::marker::PhantomData;
+<a href=#175 id=175 data-nosnippet>175</a><span class="kw">use </span>core::ptr::NonNull;
+<a href=#176 id=176 data-nosnippet>176</a><span class="kw">use </span>core::{fmt, mem, str};
+<a href=#177 id=177 data-nosnippet>177</a>
+<a href=#178 id=178 data-nosnippet>178</a><span class="attr">#[cfg(all(feature = <span class="string">"global-context"</span>, feature = <span class="string">"std"</span>))]
+<a href=#179 id=179 data-nosnippet>179</a></span><span class="kw">pub use </span>context::global::{<span class="self">self</span>, SECP256K1};
+<a href=#180 id=180 data-nosnippet>180</a><span class="attr">#[cfg(feature = <span class="string">"rand"</span>)]
+<a href=#181 id=181 data-nosnippet>181</a></span><span class="kw">pub use </span>rand;
+<a href=#182 id=182 data-nosnippet>182</a><span class="kw">pub use </span>secp256k1_sys <span class="kw">as </span>ffi;
+<a href=#183 id=183 data-nosnippet>183</a><span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
+<a href=#184 id=184 data-nosnippet>184</a></span><span class="kw">pub use </span>serde;
+<a href=#185 id=185 data-nosnippet>185</a>
+<a href=#186 id=186 data-nosnippet>186</a><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#187 id=187 data-nosnippet>187</a></span><span class="kw">pub use </span><span class="kw">crate</span>::context::{All, SignOnly, VerifyOnly};
+<a href=#188 id=188 data-nosnippet>188</a><span class="kw">pub use </span><span class="kw">crate</span>::context::{
+<a href=#189 id=189 data-nosnippet>189</a>    AllPreallocated, Context, PreallocatedContext, SignOnlyPreallocated, Signing, Verification,
+<a href=#190 id=190 data-nosnippet>190</a>    VerifyOnlyPreallocated,
+<a href=#191 id=191 data-nosnippet>191</a>};
+<a href=#192 id=192 data-nosnippet>192</a><span class="kw">use </span><span class="kw">crate</span>::ffi::types::AlignedType;
+<a href=#193 id=193 data-nosnippet>193</a><span class="kw">use </span><span class="kw">crate</span>::ffi::CPtr;
+<a href=#194 id=194 data-nosnippet>194</a><span class="kw">pub use </span><span class="kw">crate</span>::key::{InvalidParityValue, Keypair, Parity, PublicKey, SecretKey, XOnlyPublicKey};
+<a href=#195 id=195 data-nosnippet>195</a><span class="kw">pub use </span><span class="kw">crate</span>::scalar::Scalar;
+<a href=#196 id=196 data-nosnippet>196</a>
+<a href=#197 id=197 data-nosnippet>197</a><span class="doccomment">/// Trait describing something that promises to be a 32-byte uniformly random number.
+<a href=#198 id=198 data-nosnippet>198</a>///
+<a href=#199 id=199 data-nosnippet>199</a>/// In particular, anything implementing this trait must have neglibile probability
+<a href=#200 id=200 data-nosnippet>200</a>/// of being zero, overflowing the group order, or equalling any specific value.
+<a href=#201 id=201 data-nosnippet>201</a>///
+<a href=#202 id=202 data-nosnippet>202</a>/// Since version 0.29 this has been deprecated; users should instead implement
+<a href=#203 id=203 data-nosnippet>203</a>/// `Into&lt;Message&gt;` for types that satisfy these properties.
+<a href=#204 id=204 data-nosnippet>204</a></span><span class="attr">#[deprecated(
+<a href=#205 id=205 data-nosnippet>205</a>    since = <span class="string">"0.29.0"</span>,
+<a href=#206 id=206 data-nosnippet>206</a>    note = <span class="string">"Please see v0.29.0 rust-secp256k1/CHANGELOG.md for suggestion"
+<a href=#207 id=207 data-nosnippet>207</a></span>)]
+<a href=#208 id=208 data-nosnippet>208</a></span><span class="kw">pub trait </span>ThirtyTwoByteHash {
+<a href=#209 id=209 data-nosnippet>209</a>    <span class="doccomment">/// Converts the object into a 32-byte array
+<a href=#210 id=210 data-nosnippet>210</a>    </span><span class="kw">fn </span>into_32(<span class="self">self</span>) -&gt; [u8; <span class="number">32</span>];
+<a href=#211 id=211 data-nosnippet>211</a>}
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a><span class="doccomment">/// A (hashed) message input to an ECDSA signature.
+<a href=#214 id=214 data-nosnippet>214</a></span><span class="attr">#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+<a href=#215 id=215 data-nosnippet>215</a></span><span class="kw">pub struct </span>Message([u8; constants::MESSAGE_SIZE]);
+<a href=#216 id=216 data-nosnippet>216</a><span class="macro">impl_array_newtype!</span>(Message, u8, constants::MESSAGE_SIZE);
+<a href=#217 id=217 data-nosnippet>217</a><span class="macro">impl_pretty_debug!</span>(Message);
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a><span class="kw">impl </span>Message {
+<a href=#220 id=220 data-nosnippet>220</a>    <span class="doccomment">/// Creates a [`Message`] from a 32 byte slice `digest`.
+<a href=#221 id=221 data-nosnippet>221</a>    ///
+<a href=#222 id=222 data-nosnippet>222</a>    /// Converts a `MESSAGE_SIZE`-byte slice to a message object. **WARNING:** the slice has to be a
+<a href=#223 id=223 data-nosnippet>223</a>    /// cryptographically secure hash of the actual message that's going to be signed. Otherwise
+<a href=#224 id=224 data-nosnippet>224</a>    /// the result of signing isn't a
+<a href=#225 id=225 data-nosnippet>225</a>    /// [secure signature](https://twitter.com/pwuille/status/1063582706288586752).
+<a href=#226 id=226 data-nosnippet>226</a>    </span><span class="attr">#[inline]
+<a href=#227 id=227 data-nosnippet>227</a>    #[deprecated(since = <span class="string">"0.28.0"</span>, note = <span class="string">"use from_digest instead"</span>)]
+<a href=#228 id=228 data-nosnippet>228</a>    </span><span class="kw">pub fn </span>from_slice(digest: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;Message, Error&gt; {
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="attr">#[allow(deprecated)]
+<a href=#230 id=230 data-nosnippet>230</a>        </span>Message::from_digest_slice(digest)
+<a href=#231 id=231 data-nosnippet>231</a>    }
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a>    <span class="doccomment">/// Creates a [`Message`] from a `digest`.
+<a href=#234 id=234 data-nosnippet>234</a>    ///
+<a href=#235 id=235 data-nosnippet>235</a>    /// The `digest` array has to be a cryptographically secure hash of the actual message that's
+<a href=#236 id=236 data-nosnippet>236</a>    /// going to be signed. Otherwise the result of signing isn't a [secure signature].
+<a href=#237 id=237 data-nosnippet>237</a>    ///
+<a href=#238 id=238 data-nosnippet>238</a>    /// [secure signature]: https://twitter.com/pwuille/status/1063582706288586752
+<a href=#239 id=239 data-nosnippet>239</a>    </span><span class="attr">#[inline]
+<a href=#240 id=240 data-nosnippet>240</a>    </span><span class="kw">pub fn </span>from_digest(digest: [u8; <span class="number">32</span>]) -&gt; Message { Message(digest) }
+<a href=#241 id=241 data-nosnippet>241</a>
+<a href=#242 id=242 data-nosnippet>242</a>    <span class="doccomment">/// Creates a [`Message`] from a 32 byte slice `digest`.
+<a href=#243 id=243 data-nosnippet>243</a>    ///
+<a href=#244 id=244 data-nosnippet>244</a>    /// The slice has to be 32 bytes long and be a cryptographically secure hash of the actual
+<a href=#245 id=245 data-nosnippet>245</a>    /// message that's going to be signed. Otherwise the result of signing isn't a [secure
+<a href=#246 id=246 data-nosnippet>246</a>    /// signature].
+<a href=#247 id=247 data-nosnippet>247</a>    ///
+<a href=#248 id=248 data-nosnippet>248</a>    /// This method is deprecated. It's best to use [`Message::from_digest`] directly with an
+<a href=#249 id=249 data-nosnippet>249</a>    /// array. If your hash engine doesn't return an array for some reason use `.try_into()` on its
+<a href=#250 id=250 data-nosnippet>250</a>    /// output.
+<a href=#251 id=251 data-nosnippet>251</a>    ///
+<a href=#252 id=252 data-nosnippet>252</a>    /// # Errors
+<a href=#253 id=253 data-nosnippet>253</a>    ///
+<a href=#254 id=254 data-nosnippet>254</a>    /// If `digest` is not exactly 32 bytes long.
+<a href=#255 id=255 data-nosnippet>255</a>    ///
+<a href=#256 id=256 data-nosnippet>256</a>    /// [secure signature]: https://twitter.com/pwuille/status/1063582706288586752
+<a href=#257 id=257 data-nosnippet>257</a>    </span><span class="attr">#[inline]
+<a href=#258 id=258 data-nosnippet>258</a>    #[deprecated(since = <span class="string">"TBD"</span>, note = <span class="string">"use from_digest instead"</span>)]
+<a href=#259 id=259 data-nosnippet>259</a>    </span><span class="kw">pub fn </span>from_digest_slice(digest: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;Message, Error&gt; {
+<a href=#260 id=260 data-nosnippet>260</a>        <span class="prelude-val">Ok</span>(Message::from_digest(digest.try_into().map_err(|<span class="kw">_</span>| Error::InvalidMessage)<span class="question-mark">?</span>))
+<a href=#261 id=261 data-nosnippet>261</a>    }
+<a href=#262 id=262 data-nosnippet>262</a>}
+<a href=#263 id=263 data-nosnippet>263</a>
+<a href=#264 id=264 data-nosnippet>264</a><span class="attr">#[allow(deprecated)]
+<a href=#265 id=265 data-nosnippet>265</a></span><span class="kw">impl</span>&lt;T: ThirtyTwoByteHash&gt; From&lt;T&gt; <span class="kw">for </span>Message {
+<a href=#266 id=266 data-nosnippet>266</a>    <span class="doccomment">/// Converts a 32-byte hash directly to a message without error paths.
+<a href=#267 id=267 data-nosnippet>267</a>    </span><span class="kw">fn </span>from(t: T) -&gt; Message { Message(t.into_32()) }
+<a href=#268 id=268 data-nosnippet>268</a>}
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a><span class="kw">impl </span>fmt::LowerHex <span class="kw">for </span>Message {
+<a href=#271 id=271 data-nosnippet>271</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">for </span>byte <span class="kw">in </span><span class="self">self</span>.<span class="number">0</span>.iter() {
+<a href=#273 id=273 data-nosnippet>273</a>            <span class="macro">write!</span>(f, <span class="string">"{:02x}"</span>, byte)<span class="question-mark">?</span>;
+<a href=#274 id=274 data-nosnippet>274</a>        }
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="prelude-val">Ok</span>(())
+<a href=#276 id=276 data-nosnippet>276</a>    }
+<a href=#277 id=277 data-nosnippet>277</a>}
+<a href=#278 id=278 data-nosnippet>278</a>
+<a href=#279 id=279 data-nosnippet>279</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>Message {
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result { fmt::LowerHex::fmt(<span class="self">self</span>, f) }
+<a href=#281 id=281 data-nosnippet>281</a>}
+<a href=#282 id=282 data-nosnippet>282</a>
+<a href=#283 id=283 data-nosnippet>283</a><span class="doccomment">/// The main error type for this library.
+<a href=#284 id=284 data-nosnippet>284</a></span><span class="attr">#[derive(Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+<a href=#285 id=285 data-nosnippet>285</a></span><span class="kw">pub enum </span>Error {
+<a href=#286 id=286 data-nosnippet>286</a>    <span class="doccomment">/// Signature failed verification.
+<a href=#287 id=287 data-nosnippet>287</a>    </span>IncorrectSignature,
+<a href=#288 id=288 data-nosnippet>288</a>    <span class="doccomment">/// Bad sized message ("messages" are actually fixed-sized digests [`constants::MESSAGE_SIZE`]).
+<a href=#289 id=289 data-nosnippet>289</a>    </span>InvalidMessage,
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="doccomment">/// Bad public key.
+<a href=#291 id=291 data-nosnippet>291</a>    </span>InvalidPublicKey,
+<a href=#292 id=292 data-nosnippet>292</a>    <span class="doccomment">/// Bad signature.
+<a href=#293 id=293 data-nosnippet>293</a>    </span>InvalidSignature,
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="doccomment">/// Bad secret key.
+<a href=#295 id=295 data-nosnippet>295</a>    </span>InvalidSecretKey,
+<a href=#296 id=296 data-nosnippet>296</a>    <span class="doccomment">/// Bad shared secret.
+<a href=#297 id=297 data-nosnippet>297</a>    </span>InvalidSharedSecret,
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="doccomment">/// Bad recovery id.
+<a href=#299 id=299 data-nosnippet>299</a>    </span>InvalidRecoveryId,
+<a href=#300 id=300 data-nosnippet>300</a>    <span class="doccomment">/// Tried to add/multiply by an invalid tweak.
+<a href=#301 id=301 data-nosnippet>301</a>    </span>InvalidTweak,
+<a href=#302 id=302 data-nosnippet>302</a>    <span class="doccomment">/// Didn't pass enough memory to context creation with preallocated memory.
+<a href=#303 id=303 data-nosnippet>303</a>    </span>NotEnoughMemory,
+<a href=#304 id=304 data-nosnippet>304</a>    <span class="doccomment">/// Bad set of public keys.
+<a href=#305 id=305 data-nosnippet>305</a>    </span>InvalidPublicKeySum,
+<a href=#306 id=306 data-nosnippet>306</a>    <span class="doccomment">/// The only valid parity values are 0 or 1.
+<a href=#307 id=307 data-nosnippet>307</a>    </span>InvalidParityValue(key::InvalidParityValue),
+<a href=#308 id=308 data-nosnippet>308</a>    <span class="doccomment">/// Bad EllSwift value
+<a href=#309 id=309 data-nosnippet>309</a>    </span>InvalidEllSwift,
+<a href=#310 id=310 data-nosnippet>310</a>}
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>Error {
+<a href=#313 id=313 data-nosnippet>313</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; <span class="prelude-ty">Result</span>&lt;(), fmt::Error&gt; {
+<a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">use </span>Error::<span class="kw-2">*</span>;
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+<a href=#317 id=317 data-nosnippet>317</a>            IncorrectSignature =&gt; f.write_str(<span class="string">"signature failed verification"</span>),
+<a href=#318 id=318 data-nosnippet>318</a>            InvalidMessage =&gt; f.write_str(<span class="string">"message was not 32 bytes (do you need to hash?)"</span>),
+<a href=#319 id=319 data-nosnippet>319</a>            InvalidPublicKey =&gt; f.write_str(<span class="string">"malformed public key"</span>),
+<a href=#320 id=320 data-nosnippet>320</a>            InvalidSignature =&gt; f.write_str(<span class="string">"malformed signature"</span>),
+<a href=#321 id=321 data-nosnippet>321</a>            InvalidSecretKey =&gt; f.write_str(<span class="string">"malformed or out-of-range secret key"</span>),
+<a href=#322 id=322 data-nosnippet>322</a>            InvalidSharedSecret =&gt; f.write_str(<span class="string">"malformed or out-of-range shared secret"</span>),
+<a href=#323 id=323 data-nosnippet>323</a>            InvalidRecoveryId =&gt; f.write_str(<span class="string">"bad recovery id"</span>),
+<a href=#324 id=324 data-nosnippet>324</a>            InvalidTweak =&gt; f.write_str(<span class="string">"bad tweak"</span>),
+<a href=#325 id=325 data-nosnippet>325</a>            NotEnoughMemory =&gt; f.write_str(<span class="string">"not enough memory allocated"</span>),
+<a href=#326 id=326 data-nosnippet>326</a>            InvalidPublicKeySum =&gt; f.write_str(
+<a href=#327 id=327 data-nosnippet>327</a>                <span class="string">"the sum of public keys was invalid or the input vector lengths was less than 1"</span>,
+<a href=#328 id=328 data-nosnippet>328</a>            ),
+<a href=#329 id=329 data-nosnippet>329</a>            InvalidParityValue(e) =&gt; <span class="macro">write_err!</span>(f, <span class="string">"couldn't create parity"</span>; e),
+<a href=#330 id=330 data-nosnippet>330</a>            InvalidEllSwift =&gt; f.write_str(<span class="string">"malformed EllSwift value"</span>),
+<a href=#331 id=331 data-nosnippet>331</a>        }
+<a href=#332 id=332 data-nosnippet>332</a>    }
+<a href=#333 id=333 data-nosnippet>333</a>}
+<a href=#334 id=334 data-nosnippet>334</a>
+<a href=#335 id=335 data-nosnippet>335</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#336 id=336 data-nosnippet>336</a></span><span class="kw">impl </span>std::error::Error <span class="kw">for </span>Error {
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">fn </span>source(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(<span class="kw">dyn </span>std::error::Error + <span class="lifetime">'static</span>)&gt; {
+<a href=#338 id=338 data-nosnippet>338</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#339 id=339 data-nosnippet>339</a>            Error::IncorrectSignature =&gt; <span class="prelude-val">None</span>,
+<a href=#340 id=340 data-nosnippet>340</a>            Error::InvalidMessage =&gt; <span class="prelude-val">None</span>,
+<a href=#341 id=341 data-nosnippet>341</a>            Error::InvalidPublicKey =&gt; <span class="prelude-val">None</span>,
+<a href=#342 id=342 data-nosnippet>342</a>            Error::InvalidSignature =&gt; <span class="prelude-val">None</span>,
+<a href=#343 id=343 data-nosnippet>343</a>            Error::InvalidSecretKey =&gt; <span class="prelude-val">None</span>,
+<a href=#344 id=344 data-nosnippet>344</a>            Error::InvalidSharedSecret =&gt; <span class="prelude-val">None</span>,
+<a href=#345 id=345 data-nosnippet>345</a>            Error::InvalidRecoveryId =&gt; <span class="prelude-val">None</span>,
+<a href=#346 id=346 data-nosnippet>346</a>            Error::InvalidTweak =&gt; <span class="prelude-val">None</span>,
+<a href=#347 id=347 data-nosnippet>347</a>            Error::NotEnoughMemory =&gt; <span class="prelude-val">None</span>,
+<a href=#348 id=348 data-nosnippet>348</a>            Error::InvalidPublicKeySum =&gt; <span class="prelude-val">None</span>,
+<a href=#349 id=349 data-nosnippet>349</a>            Error::InvalidParityValue(error) =&gt; <span class="prelude-val">Some</span>(error),
+<a href=#350 id=350 data-nosnippet>350</a>            Error::InvalidEllSwift =&gt; <span class="prelude-val">None</span>,
+<a href=#351 id=351 data-nosnippet>351</a>        }
+<a href=#352 id=352 data-nosnippet>352</a>    }
+<a href=#353 id=353 data-nosnippet>353</a>}
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a><span class="doccomment">/// The secp256k1 engine, used to execute all signature operations.
+<a href=#356 id=356 data-nosnippet>356</a></span><span class="kw">pub struct </span>Secp256k1&lt;C: Context&gt; {
+<a href=#357 id=357 data-nosnippet>357</a>    ctx: NonNull&lt;ffi::Context&gt;,
+<a href=#358 id=358 data-nosnippet>358</a>    phantom: PhantomData&lt;C&gt;,
+<a href=#359 id=359 data-nosnippet>359</a>}
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a><span class="comment">// The underlying secp context does not contain any references to memory it does not own.
+<a href=#362 id=362 data-nosnippet>362</a></span><span class="kw">unsafe impl</span>&lt;C: Context&gt; Send <span class="kw">for </span>Secp256k1&lt;C&gt; {}
+<a href=#363 id=363 data-nosnippet>363</a><span class="comment">// The API does not permit any mutation of `Secp256k1` objects except through `&amp;mut` references.
+<a href=#364 id=364 data-nosnippet>364</a></span><span class="kw">unsafe impl</span>&lt;C: Context&gt; Sync <span class="kw">for </span>Secp256k1&lt;C&gt; {}
+<a href=#365 id=365 data-nosnippet>365</a>
+<a href=#366 id=366 data-nosnippet>366</a><span class="kw">impl</span>&lt;C: Context&gt; PartialEq <span class="kw">for </span>Secp256k1&lt;C&gt; {
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, _other: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;) -&gt; bool { <span class="bool-val">true </span>}
+<a href=#368 id=368 data-nosnippet>368</a>}
+<a href=#369 id=369 data-nosnippet>369</a>
+<a href=#370 id=370 data-nosnippet>370</a><span class="kw">impl</span>&lt;C: Context&gt; Eq <span class="kw">for </span>Secp256k1&lt;C&gt; {}
+<a href=#371 id=371 data-nosnippet>371</a>
+<a href=#372 id=372 data-nosnippet>372</a><span class="kw">impl</span>&lt;C: Context&gt; Drop <span class="kw">for </span>Secp256k1&lt;C&gt; {
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">unsafe </span>{
+<a href=#375 id=375 data-nosnippet>375</a>            <span class="kw">let </span>size = ffi::secp256k1_context_preallocated_clone_size(<span class="self">self</span>.ctx.as_ptr());
+<a href=#376 id=376 data-nosnippet>376</a>            ffi::secp256k1_context_preallocated_destroy(<span class="self">self</span>.ctx);
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a>            C::deallocate(<span class="self">self</span>.ctx.as_ptr() <span class="kw">as _</span>, size);
+<a href=#379 id=379 data-nosnippet>379</a>        }
+<a href=#380 id=380 data-nosnippet>380</a>    }
+<a href=#381 id=381 data-nosnippet>381</a>}
+<a href=#382 id=382 data-nosnippet>382</a>
+<a href=#383 id=383 data-nosnippet>383</a><span class="kw">impl</span>&lt;C: Context&gt; fmt::Debug <span class="kw">for </span>Secp256k1&lt;C&gt; {
+<a href=#384 id=384 data-nosnippet>384</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#385 id=385 data-nosnippet>385</a>        <span class="macro">write!</span>(f, <span class="string">"&lt;secp256k1 context {:?}, {}&gt;"</span>, <span class="self">self</span>.ctx, C::DESCRIPTION)
+<a href=#386 id=386 data-nosnippet>386</a>    }
+<a href=#387 id=387 data-nosnippet>387</a>}
+<a href=#388 id=388 data-nosnippet>388</a>
+<a href=#389 id=389 data-nosnippet>389</a><span class="kw">impl</span>&lt;C: Context&gt; Secp256k1&lt;C&gt; {
+<a href=#390 id=390 data-nosnippet>390</a>    <span class="doccomment">/// Getter for the raw pointer to the underlying secp256k1 context. This
+<a href=#391 id=391 data-nosnippet>391</a>    /// shouldn't be needed with normal usage of the library. It enables
+<a href=#392 id=392 data-nosnippet>392</a>    /// extending the Secp256k1 with more cryptographic algorithms outside of
+<a href=#393 id=393 data-nosnippet>393</a>    /// this crate.
+<a href=#394 id=394 data-nosnippet>394</a>    </span><span class="kw">pub fn </span>ctx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NonNull&lt;ffi::Context&gt; { <span class="self">self</span>.ctx }
+<a href=#395 id=395 data-nosnippet>395</a>
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="doccomment">/// Returns the required memory for a preallocated context buffer in a generic manner(sign/verify/all).
+<a href=#397 id=397 data-nosnippet>397</a>    </span><span class="kw">pub fn </span>preallocate_size_gen() -&gt; usize {
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw">let </span>word_size = mem::size_of::&lt;AlignedType&gt;();
+<a href=#399 id=399 data-nosnippet>399</a>        <span class="kw">let </span>bytes = <span class="kw">unsafe </span>{ ffi::secp256k1_context_preallocated_size(C::FLAGS) };
+<a href=#400 id=400 data-nosnippet>400</a>
+<a href=#401 id=401 data-nosnippet>401</a>        (bytes + word_size - <span class="number">1</span>) / word_size
+<a href=#402 id=402 data-nosnippet>402</a>    }
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="doccomment">/// (Re)randomizes the Secp256k1 context for extra sidechannel resistance.
+<a href=#405 id=405 data-nosnippet>405</a>    ///
+<a href=#406 id=406 data-nosnippet>406</a>    /// Requires compilation with "rand" feature. See comment by Gregory Maxwell in
+<a href=#407 id=407 data-nosnippet>407</a>    /// [libsecp256k1](https://github.com/bitcoin-core/secp256k1/commit/d2275795ff22a6f4738869f5528fbbb61738aa48).
+<a href=#408 id=408 data-nosnippet>408</a>    </span><span class="attr">#[cfg(feature = <span class="string">"rand"</span>)]
+<a href=#409 id=409 data-nosnippet>409</a>    </span><span class="kw">pub fn </span>randomize&lt;R: rand::Rng + <span class="question-mark">?</span>Sized&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rng: <span class="kw-2">&amp;mut </span>R) {
+<a href=#410 id=410 data-nosnippet>410</a>        <span class="kw">let </span><span class="kw-2">mut </span>seed = [<span class="number">0u8</span>; <span class="number">32</span>];
+<a href=#411 id=411 data-nosnippet>411</a>        rng.fill_bytes(<span class="kw-2">&amp;mut </span>seed);
+<a href=#412 id=412 data-nosnippet>412</a>        <span class="self">self</span>.seeded_randomize(<span class="kw-2">&amp;</span>seed);
+<a href=#413 id=413 data-nosnippet>413</a>    }
+<a href=#414 id=414 data-nosnippet>414</a>
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="doccomment">/// (Re)randomizes the Secp256k1 context for extra sidechannel resistance given 32 bytes of
+<a href=#416 id=416 data-nosnippet>416</a>    /// cryptographically-secure random data;
+<a href=#417 id=417 data-nosnippet>417</a>    /// see comment in libsecp256k1 commit d2275795f by Gregory Maxwell.
+<a href=#418 id=418 data-nosnippet>418</a>    </span><span class="kw">pub fn </span>seeded_randomize(<span class="kw-2">&amp;mut </span><span class="self">self</span>, seed: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>]) {
+<a href=#419 id=419 data-nosnippet>419</a>        <span class="kw">unsafe </span>{
+<a href=#420 id=420 data-nosnippet>420</a>            <span class="kw">let </span>err = ffi::secp256k1_context_randomize(<span class="self">self</span>.ctx, seed.as_c_ptr());
+<a href=#421 id=421 data-nosnippet>421</a>            <span class="comment">// This function cannot fail; it has an error return for future-proofing.
+<a href=#422 id=422 data-nosnippet>422</a>            // We do not expose this error since it is impossible to hit, and we have
+<a href=#423 id=423 data-nosnippet>423</a>            // precedent for not exposing impossible errors (for example in
+<a href=#424 id=424 data-nosnippet>424</a>            // `PublicKey::from_secret_key` where it is impossible to create an invalid
+<a href=#425 id=425 data-nosnippet>425</a>            // secret key through the API.)
+<a href=#426 id=426 data-nosnippet>426</a>            // However, if this DOES fail, the result is potentially weaker side-channel
+<a href=#427 id=427 data-nosnippet>427</a>            // resistance, which is deadly and undetectable, so we take out the entire
+<a href=#428 id=428 data-nosnippet>428</a>            // thread to be on the safe side.
+<a href=#429 id=429 data-nosnippet>429</a>            </span><span class="macro">assert_eq!</span>(err, <span class="number">1</span>);
+<a href=#430 id=430 data-nosnippet>430</a>        }
+<a href=#431 id=431 data-nosnippet>431</a>    }
+<a href=#432 id=432 data-nosnippet>432</a>}
+<a href=#433 id=433 data-nosnippet>433</a>
+<a href=#434 id=434 data-nosnippet>434</a><span class="kw">impl</span>&lt;C: Signing&gt; Secp256k1&lt;C&gt; {
+<a href=#435 id=435 data-nosnippet>435</a>    <span class="doccomment">/// Generates a random keypair. Convenience function for [`SecretKey::new`] and
+<a href=#436 id=436 data-nosnippet>436</a>    /// [`PublicKey::from_secret_key`].
+<a href=#437 id=437 data-nosnippet>437</a>    </span><span class="attr">#[inline]
+<a href=#438 id=438 data-nosnippet>438</a>    #[cfg(feature = <span class="string">"rand"</span>)]
+<a href=#439 id=439 data-nosnippet>439</a>    </span><span class="kw">pub fn </span>generate_keypair&lt;R: rand::Rng + <span class="question-mark">?</span>Sized&gt;(
+<a href=#440 id=440 data-nosnippet>440</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#441 id=441 data-nosnippet>441</a>        rng: <span class="kw-2">&amp;mut </span>R,
+<a href=#442 id=442 data-nosnippet>442</a>    ) -&gt; (key::SecretKey, key::PublicKey) {
+<a href=#443 id=443 data-nosnippet>443</a>        <span class="kw">let </span>sk = key::SecretKey::new(rng);
+<a href=#444 id=444 data-nosnippet>444</a>        <span class="kw">let </span>pk = key::PublicKey::from_secret_key(<span class="self">self</span>, <span class="kw-2">&amp;</span>sk);
+<a href=#445 id=445 data-nosnippet>445</a>        (sk, pk)
+<a href=#446 id=446 data-nosnippet>446</a>    }
+<a href=#447 id=447 data-nosnippet>447</a>}
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a><span class="doccomment">/// Generates a random keypair using the global [`SECP256K1`] context.
+<a href=#450 id=450 data-nosnippet>450</a></span><span class="attr">#[inline]
+<a href=#451 id=451 data-nosnippet>451</a>#[cfg(all(feature = <span class="string">"global-context"</span>, feature = <span class="string">"rand"</span>))]
+<a href=#452 id=452 data-nosnippet>452</a></span><span class="kw">pub fn </span>generate_keypair&lt;R: rand::Rng + <span class="question-mark">?</span>Sized&gt;(rng: <span class="kw-2">&amp;mut </span>R) -&gt; (key::SecretKey, key::PublicKey) {
+<a href=#453 id=453 data-nosnippet>453</a>    SECP256K1.generate_keypair(rng)
+<a href=#454 id=454 data-nosnippet>454</a>}
+<a href=#455 id=455 data-nosnippet>455</a>
+<a href=#456 id=456 data-nosnippet>456</a><span class="doccomment">/// Utility function used to parse hex into a target u8 buffer. Returns
+<a href=#457 id=457 data-nosnippet>457</a>/// the number of bytes converted or an error if it encounters an invalid
+<a href=#458 id=458 data-nosnippet>458</a>/// character or unexpected end of string.
+<a href=#459 id=459 data-nosnippet>459</a></span><span class="kw">fn </span>from_hex(hex: <span class="kw-2">&amp;</span>str, target: <span class="kw-2">&amp;mut </span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;usize, ()&gt; {
+<a href=#460 id=460 data-nosnippet>460</a>    <span class="kw">if </span>hex.len() % <span class="number">2 </span>== <span class="number">1 </span>|| hex.len() &gt; target.len() * <span class="number">2 </span>{
+<a href=#461 id=461 data-nosnippet>461</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(());
+<a href=#462 id=462 data-nosnippet>462</a>    }
+<a href=#463 id=463 data-nosnippet>463</a>
+<a href=#464 id=464 data-nosnippet>464</a>    <span class="kw">let </span><span class="kw-2">mut </span>b = <span class="number">0</span>;
+<a href=#465 id=465 data-nosnippet>465</a>    <span class="kw">let </span><span class="kw-2">mut </span>idx = <span class="number">0</span>;
+<a href=#466 id=466 data-nosnippet>466</a>    <span class="kw">for </span>c <span class="kw">in </span>hex.bytes() {
+<a href=#467 id=467 data-nosnippet>467</a>        b &lt;&lt;= <span class="number">4</span>;
+<a href=#468 id=468 data-nosnippet>468</a>        <span class="kw">match </span>c {
+<a href=#469 id=469 data-nosnippet>469</a>            <span class="string">b'A'</span>..=<span class="string">b'F' </span>=&gt; b |= c - <span class="string">b'A' </span>+ <span class="number">10</span>,
+<a href=#470 id=470 data-nosnippet>470</a>            <span class="string">b'a'</span>..=<span class="string">b'f' </span>=&gt; b |= c - <span class="string">b'a' </span>+ <span class="number">10</span>,
+<a href=#471 id=471 data-nosnippet>471</a>            <span class="string">b'0'</span>..=<span class="string">b'9' </span>=&gt; b |= c - <span class="string">b'0'</span>,
+<a href=#472 id=472 data-nosnippet>472</a>            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(()),
+<a href=#473 id=473 data-nosnippet>473</a>        }
+<a href=#474 id=474 data-nosnippet>474</a>        <span class="kw">if </span>(idx &amp; <span class="number">1</span>) == <span class="number">1 </span>{
+<a href=#475 id=475 data-nosnippet>475</a>            target[idx / <span class="number">2</span>] = b;
+<a href=#476 id=476 data-nosnippet>476</a>            b = <span class="number">0</span>;
+<a href=#477 id=477 data-nosnippet>477</a>        }
+<a href=#478 id=478 data-nosnippet>478</a>        idx += <span class="number">1</span>;
+<a href=#479 id=479 data-nosnippet>479</a>    }
+<a href=#480 id=480 data-nosnippet>480</a>    <span class="prelude-val">Ok</span>(idx / <span class="number">2</span>)
+<a href=#481 id=481 data-nosnippet>481</a>}
+<a href=#482 id=482 data-nosnippet>482</a>
+<a href=#483 id=483 data-nosnippet>483</a><span class="doccomment">/// Utility function used to encode hex into a target u8 buffer. Returns
+<a href=#484 id=484 data-nosnippet>484</a>/// a reference to the target buffer as an str. Returns an error if the target
+<a href=#485 id=485 data-nosnippet>485</a>/// buffer isn't big enough.
+<a href=#486 id=486 data-nosnippet>486</a></span><span class="attr">#[inline]
+<a href=#487 id=487 data-nosnippet>487</a></span><span class="kw">fn </span>to_hex&lt;<span class="lifetime">'a</span>&gt;(src: <span class="kw-2">&amp;</span>[u8], target: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str, ()&gt; {
+<a href=#488 id=488 data-nosnippet>488</a>    <span class="kw">let </span>hex_len = src.len() * <span class="number">2</span>;
+<a href=#489 id=489 data-nosnippet>489</a>    <span class="kw">if </span>target.len() &lt; hex_len {
+<a href=#490 id=490 data-nosnippet>490</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(());
+<a href=#491 id=491 data-nosnippet>491</a>    }
+<a href=#492 id=492 data-nosnippet>492</a>    <span class="kw">const </span>HEX_TABLE: [u8; <span class="number">16</span>] = <span class="kw-2">*</span><span class="string">b"0123456789abcdef"</span>;
+<a href=#493 id=493 data-nosnippet>493</a>
+<a href=#494 id=494 data-nosnippet>494</a>    <span class="kw">let </span><span class="kw-2">mut </span>i = <span class="number">0</span>;
+<a href=#495 id=495 data-nosnippet>495</a>    <span class="kw">for </span><span class="kw-2">&amp;</span>b <span class="kw">in </span>src {
+<a href=#496 id=496 data-nosnippet>496</a>        target[i] = HEX_TABLE[usize::from(b &gt;&gt; <span class="number">4</span>)];
+<a href=#497 id=497 data-nosnippet>497</a>        target[i + <span class="number">1</span>] = HEX_TABLE[usize::from(b &amp; <span class="number">0b00001111</span>)];
+<a href=#498 id=498 data-nosnippet>498</a>        i += <span class="number">2</span>;
+<a href=#499 id=499 data-nosnippet>499</a>    }
+<a href=#500 id=500 data-nosnippet>500</a>    <span class="kw">let </span>result = <span class="kw-2">&amp;</span>target[..hex_len];
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="macro">debug_assert!</span>(str::from_utf8(result).is_ok());
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">return unsafe </span>{ <span class="prelude-val">Ok</span>(str::from_utf8_unchecked(result)) };
+<a href=#503 id=503 data-nosnippet>503</a>}
+<a href=#504 id=504 data-nosnippet>504</a>
+<a href=#505 id=505 data-nosnippet>505</a><span class="attr">#[cfg(feature = <span class="string">"rand"</span>)]
+<a href=#506 id=506 data-nosnippet>506</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>random_32_bytes&lt;R: rand::Rng + <span class="question-mark">?</span>Sized&gt;(rng: <span class="kw-2">&amp;mut </span>R) -&gt; [u8; <span class="number">32</span>] {
+<a href=#507 id=507 data-nosnippet>507</a>    <span class="kw">let </span><span class="kw-2">mut </span>ret = [<span class="number">0u8</span>; <span class="number">32</span>];
+<a href=#508 id=508 data-nosnippet>508</a>    rng.fill(<span class="kw-2">&amp;mut </span>ret);
+<a href=#509 id=509 data-nosnippet>509</a>    ret
+<a href=#510 id=510 data-nosnippet>510</a>}
+<a href=#511 id=511 data-nosnippet>511</a>
+<a href=#512 id=512 data-nosnippet>512</a><span class="attr">#[cfg(test)]
+<a href=#513 id=513 data-nosnippet>513</a></span><span class="kw">mod </span>tests {
+<a href=#514 id=514 data-nosnippet>514</a>    <span class="kw">use </span>std::str::FromStr;
+<a href=#515 id=515 data-nosnippet>515</a>
+<a href=#516 id=516 data-nosnippet>516</a>    <span class="kw">use </span>hex_lit::hex;
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="attr">#[cfg(target_arch = <span class="string">"wasm32"</span>)]
+<a href=#518 id=518 data-nosnippet>518</a>    </span><span class="kw">use </span>wasm_bindgen_test::wasm_bindgen_test <span class="kw">as </span>test;
+<a href=#519 id=519 data-nosnippet>519</a>
+<a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#521 id=521 data-nosnippet>521</a>
+<a href=#522 id=522 data-nosnippet>522</a>    <span class="attr">#[test]
+<a href=#523 id=523 data-nosnippet>523</a>    #[cfg(all(feature = <span class="string">"rand"</span>, feature = <span class="string">"std"</span>))]
+<a href=#524 id=524 data-nosnippet>524</a>    </span><span class="comment">// In rustc 1.72 this Clippy lint was pulled out of clippy and into rustc, and
+<a href=#525 id=525 data-nosnippet>525</a>    // was made deny-by-default, breaking compilation of this test. Aside from this
+<a href=#526 id=526 data-nosnippet>526</a>    // breaking change, which there is no point in bugging, the rename was done so
+<a href=#527 id=527 data-nosnippet>527</a>    // clumsily that you need four separate "allow"s to disable this wrong lint.
+<a href=#528 id=528 data-nosnippet>528</a>    </span><span class="attr">#[allow(unknown_lints)]
+<a href=#529 id=529 data-nosnippet>529</a>    #[allow(renamed_and_removed_lints)]
+<a href=#530 id=530 data-nosnippet>530</a>    #[allow(undropped_manually_drops)]
+<a href=#531 id=531 data-nosnippet>531</a>    #[allow(clippy::unknown_manually_drops)]
+<a href=#532 id=532 data-nosnippet>532</a>    </span><span class="kw">fn </span>test_raw_ctx() {
+<a href=#533 id=533 data-nosnippet>533</a>        <span class="kw">use </span>std::mem::{forget, ManuallyDrop};
+<a href=#534 id=534 data-nosnippet>534</a>
+<a href=#535 id=535 data-nosnippet>535</a>        <span class="kw">let </span>ctx_full = Secp256k1::new();
+<a href=#536 id=536 data-nosnippet>536</a>        <span class="kw">let </span>ctx_sign = Secp256k1::signing_only();
+<a href=#537 id=537 data-nosnippet>537</a>        <span class="kw">let </span>ctx_vrfy = Secp256k1::verification_only();
+<a href=#538 id=538 data-nosnippet>538</a>
+<a href=#539 id=539 data-nosnippet>539</a>        <span class="kw">let </span>full = <span class="kw">unsafe </span>{ Secp256k1::from_raw_all(ctx_full.ctx) };
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span>sign = <span class="kw">unsafe </span>{ Secp256k1::from_raw_signing_only(ctx_sign.ctx) };
+<a href=#541 id=541 data-nosnippet>541</a>        <span class="kw">let </span><span class="kw-2">mut </span>vrfy = <span class="kw">unsafe </span>{ Secp256k1::from_raw_verification_only(ctx_vrfy.ctx) };
+<a href=#542 id=542 data-nosnippet>542</a>
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="kw">let </span>(sk, pk) = full.generate_keypair(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#544 id=544 data-nosnippet>544</a>        <span class="kw">let </span>msg = Message::from_digest([<span class="number">2u8</span>; <span class="number">32</span>]);
+<a href=#545 id=545 data-nosnippet>545</a>        <span class="comment">// Try signing
+<a href=#546 id=546 data-nosnippet>546</a>        </span><span class="macro">assert_eq!</span>(sign.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk), full.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk));
+<a href=#547 id=547 data-nosnippet>547</a>        <span class="kw">let </span>sig = full.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#548 id=548 data-nosnippet>548</a>
+<a href=#549 id=549 data-nosnippet>549</a>        <span class="comment">// Try verifying
+<a href=#550 id=550 data-nosnippet>550</a>        </span><span class="macro">assert!</span>(vrfy.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk).is_ok());
+<a href=#551 id=551 data-nosnippet>551</a>        <span class="macro">assert!</span>(full.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk).is_ok());
+<a href=#552 id=552 data-nosnippet>552</a>
+<a href=#553 id=553 data-nosnippet>553</a>        <span class="comment">// The following drop will have no effect; in fact, they will trigger a compiler
+<a href=#554 id=554 data-nosnippet>554</a>        // error because manually dropping a `ManuallyDrop` is almost certainly incorrect.
+<a href=#555 id=555 data-nosnippet>555</a>        // If you want to drop the inner object you should called `ManuallyDrop::drop`.
+<a href=#556 id=556 data-nosnippet>556</a>        </span>drop(full);
+<a href=#557 id=557 data-nosnippet>557</a>        <span class="comment">// This will actually drop the context, though it will leave `full` accessible and
+<a href=#558 id=558 data-nosnippet>558</a>        // in an invalid state. However, this is almost certainly what you want to do.
+<a href=#559 id=559 data-nosnippet>559</a>        </span>drop(ctx_full);
+<a href=#560 id=560 data-nosnippet>560</a>        <span class="kw">unsafe </span>{
+<a href=#561 id=561 data-nosnippet>561</a>            <span class="comment">// Need to compute the allocation size, and need to do so *before* dropping
+<a href=#562 id=562 data-nosnippet>562</a>            // anything.
+<a href=#563 id=563 data-nosnippet>563</a>            </span><span class="kw">let </span>sz = ffi::secp256k1_context_preallocated_clone_size(ctx_sign.ctx.as_ptr());
+<a href=#564 id=564 data-nosnippet>564</a>            <span class="comment">// We can alternately drop the `ManuallyDrop` by unwrapping it and then letting
+<a href=#565 id=565 data-nosnippet>565</a>            // it be dropped. This is actually a safe function, but it will destruct the
+<a href=#566 id=566 data-nosnippet>566</a>            // underlying context without deallocating it...
+<a href=#567 id=567 data-nosnippet>567</a>            </span>ManuallyDrop::into_inner(sign);
+<a href=#568 id=568 data-nosnippet>568</a>            <span class="comment">// ...leaving us holding the bag to deallocate the context's memory without
+<a href=#569 id=569 data-nosnippet>569</a>            // double-calling `secp256k1_context_destroy`, which cannot be done safely.
+<a href=#570 id=570 data-nosnippet>570</a>            </span>SignOnly::deallocate(ctx_sign.ctx.as_ptr() <span class="kw">as </span><span class="kw-2">*mut </span>u8, sz);
+<a href=#571 id=571 data-nosnippet>571</a>            forget(ctx_sign);
+<a href=#572 id=572 data-nosnippet>572</a>        }
+<a href=#573 id=573 data-nosnippet>573</a>
+<a href=#574 id=574 data-nosnippet>574</a>        <span class="kw">unsafe </span>{
+<a href=#575 id=575 data-nosnippet>575</a>            <span class="comment">// Finally, we can call `ManuallyDrop::drop`, which has the same effect, but
+<a href=#576 id=576 data-nosnippet>576</a>            </span><span class="kw">let </span>sz = ffi::secp256k1_context_preallocated_clone_size(ctx_vrfy.ctx.as_ptr());
+<a href=#577 id=577 data-nosnippet>577</a>            <span class="comment">// leaves the `ManuallyDrop` itself accessible. This is marked unsafe.
+<a href=#578 id=578 data-nosnippet>578</a>            </span>ManuallyDrop::drop(<span class="kw-2">&amp;mut </span>vrfy);
+<a href=#579 id=579 data-nosnippet>579</a>            VerifyOnly::deallocate(ctx_vrfy.ctx.as_ptr() <span class="kw">as </span><span class="kw-2">*mut </span>u8, sz);
+<a href=#580 id=580 data-nosnippet>580</a>            forget(ctx_vrfy);
+<a href=#581 id=581 data-nosnippet>581</a>        }
+<a href=#582 id=582 data-nosnippet>582</a>    }
+<a href=#583 id=583 data-nosnippet>583</a>
+<a href=#584 id=584 data-nosnippet>584</a>    <span class="attr">#[cfg(not(target_arch = <span class="string">"wasm32"</span>))]
+<a href=#585 id=585 data-nosnippet>585</a>    #[test]
+<a href=#586 id=586 data-nosnippet>586</a>    #[ignore] </span><span class="comment">// Panicking from C may trap (SIGILL) intentionally, so we test this manually.
+<a href=#587 id=587 data-nosnippet>587</a>    </span><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#588 id=588 data-nosnippet>588</a>    </span><span class="kw">fn </span>test_panic_raw_ctx_should_terminate_abnormally() {
+<a href=#589 id=589 data-nosnippet>589</a>        <span class="comment">// Trying to use an all-zeros public key should cause an ARG_CHECK to trigger.
+<a href=#590 id=590 data-nosnippet>590</a>        </span><span class="kw">let </span>pk = PublicKey::from(<span class="kw">unsafe </span>{ ffi::PublicKey::new() });
+<a href=#591 id=591 data-nosnippet>591</a>        pk.serialize();
+<a href=#592 id=592 data-nosnippet>592</a>    }
+<a href=#593 id=593 data-nosnippet>593</a>
+<a href=#594 id=594 data-nosnippet>594</a>    <span class="attr">#[test]
+<a href=#595 id=595 data-nosnippet>595</a>    #[cfg(all(feature = <span class="string">"rand"</span>, feature = <span class="string">"std"</span>))]
+<a href=#596 id=596 data-nosnippet>596</a>    </span><span class="kw">fn </span>test_preallocation() {
+<a href=#597 id=597 data-nosnippet>597</a>        <span class="kw">use </span><span class="kw">crate</span>::ffi::types::AlignedType;
+<a href=#598 id=598 data-nosnippet>598</a>
+<a href=#599 id=599 data-nosnippet>599</a>        <span class="kw">let </span><span class="kw-2">mut </span>buf_ful = <span class="macro">vec!</span>[AlignedType::zeroed(); Secp256k1::preallocate_size()];
+<a href=#600 id=600 data-nosnippet>600</a>        <span class="kw">let </span><span class="kw-2">mut </span>buf_sign = <span class="macro">vec!</span>[AlignedType::zeroed(); Secp256k1::preallocate_signing_size()];
+<a href=#601 id=601 data-nosnippet>601</a>        <span class="kw">let </span><span class="kw-2">mut </span>buf_vfy = <span class="macro">vec!</span>[AlignedType::zeroed(); Secp256k1::preallocate_verification_size()];
+<a href=#602 id=602 data-nosnippet>602</a>
+<a href=#603 id=603 data-nosnippet>603</a>        <span class="kw">let </span>full = Secp256k1::preallocated_new(<span class="kw-2">&amp;mut </span>buf_ful).unwrap();
+<a href=#604 id=604 data-nosnippet>604</a>        <span class="kw">let </span>sign = Secp256k1::preallocated_signing_only(<span class="kw-2">&amp;mut </span>buf_sign).unwrap();
+<a href=#605 id=605 data-nosnippet>605</a>        <span class="kw">let </span>vrfy = Secp256k1::preallocated_verification_only(<span class="kw-2">&amp;mut </span>buf_vfy).unwrap();
+<a href=#606 id=606 data-nosnippet>606</a>
+<a href=#607 id=607 data-nosnippet>607</a>        <span class="comment">//        drop(buf_vfy); // The buffer can't get dropped before the context.
+<a href=#608 id=608 data-nosnippet>608</a>        //        println!("{:?}", buf_ful[5]); // Can't even read the data thanks to the borrow checker.
+<a href=#609 id=609 data-nosnippet>609</a>
+<a href=#610 id=610 data-nosnippet>610</a>        </span><span class="kw">let </span>(sk, pk) = full.generate_keypair(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#611 id=611 data-nosnippet>611</a>        <span class="kw">let </span>msg = Message::from_digest([<span class="number">2u8</span>; <span class="number">32</span>]);
+<a href=#612 id=612 data-nosnippet>612</a>        <span class="comment">// Try signing
+<a href=#613 id=613 data-nosnippet>613</a>        </span><span class="macro">assert_eq!</span>(sign.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk), full.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk));
+<a href=#614 id=614 data-nosnippet>614</a>        <span class="kw">let </span>sig = full.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#615 id=615 data-nosnippet>615</a>
+<a href=#616 id=616 data-nosnippet>616</a>        <span class="comment">// Try verifying
+<a href=#617 id=617 data-nosnippet>617</a>        </span><span class="macro">assert!</span>(vrfy.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk).is_ok());
+<a href=#618 id=618 data-nosnippet>618</a>        <span class="macro">assert!</span>(full.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk).is_ok());
+<a href=#619 id=619 data-nosnippet>619</a>    }
+<a href=#620 id=620 data-nosnippet>620</a>
+<a href=#621 id=621 data-nosnippet>621</a>    <span class="attr">#[test]
+<a href=#622 id=622 data-nosnippet>622</a>    #[cfg(all(feature = <span class="string">"rand"</span>, feature = <span class="string">"std"</span>))]
+<a href=#623 id=623 data-nosnippet>623</a>    </span><span class="kw">fn </span>capabilities() {
+<a href=#624 id=624 data-nosnippet>624</a>        <span class="kw">let </span>sign = Secp256k1::signing_only();
+<a href=#625 id=625 data-nosnippet>625</a>        <span class="kw">let </span>vrfy = Secp256k1::verification_only();
+<a href=#626 id=626 data-nosnippet>626</a>        <span class="kw">let </span>full = Secp256k1::new();
+<a href=#627 id=627 data-nosnippet>627</a>
+<a href=#628 id=628 data-nosnippet>628</a>        <span class="kw">let </span>msg = <span class="kw">crate</span>::random_32_bytes(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#629 id=629 data-nosnippet>629</a>        <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#630 id=630 data-nosnippet>630</a>
+<a href=#631 id=631 data-nosnippet>631</a>        <span class="comment">// Try key generation
+<a href=#632 id=632 data-nosnippet>632</a>        </span><span class="kw">let </span>(sk, pk) = full.generate_keypair(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#633 id=633 data-nosnippet>633</a>
+<a href=#634 id=634 data-nosnippet>634</a>        <span class="comment">// Try signing
+<a href=#635 id=635 data-nosnippet>635</a>        </span><span class="macro">assert_eq!</span>(sign.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk), full.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk));
+<a href=#636 id=636 data-nosnippet>636</a>        <span class="kw">let </span>sig = full.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#637 id=637 data-nosnippet>637</a>
+<a href=#638 id=638 data-nosnippet>638</a>        <span class="comment">// Try verifying
+<a href=#639 id=639 data-nosnippet>639</a>        </span><span class="macro">assert!</span>(vrfy.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk).is_ok());
+<a href=#640 id=640 data-nosnippet>640</a>        <span class="macro">assert!</span>(full.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk).is_ok());
+<a href=#641 id=641 data-nosnippet>641</a>
+<a href=#642 id=642 data-nosnippet>642</a>        <span class="comment">// Check that we can produce keys from slices with no precomputation
+<a href=#643 id=643 data-nosnippet>643</a>        </span><span class="kw">let </span>(pk_slice, sk_slice) = (<span class="kw-2">&amp;</span>pk.serialize(), <span class="kw-2">&amp;</span>sk[..]);
+<a href=#644 id=644 data-nosnippet>644</a>        <span class="kw">let </span>new_pk = PublicKey::from_slice(pk_slice).unwrap();
+<a href=#645 id=645 data-nosnippet>645</a>        <span class="kw">let </span>new_sk = SecretKey::from_slice(sk_slice).unwrap();
+<a href=#646 id=646 data-nosnippet>646</a>        <span class="macro">assert_eq!</span>(sk, new_sk);
+<a href=#647 id=647 data-nosnippet>647</a>        <span class="macro">assert_eq!</span>(pk, new_pk);
+<a href=#648 id=648 data-nosnippet>648</a>    }
+<a href=#649 id=649 data-nosnippet>649</a>
+<a href=#650 id=650 data-nosnippet>650</a>    <span class="attr">#[test]
+<a href=#651 id=651 data-nosnippet>651</a>    #[cfg(all(feature = <span class="string">"rand"</span>, feature = <span class="string">"std"</span>))]
+<a href=#652 id=652 data-nosnippet>652</a>    </span><span class="kw">fn </span>signature_serialize_roundtrip() {
+<a href=#653 id=653 data-nosnippet>653</a>        <span class="kw">let </span><span class="kw-2">mut </span>s = Secp256k1::new();
+<a href=#654 id=654 data-nosnippet>654</a>        s.randomize(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#655 id=655 data-nosnippet>655</a>
+<a href=#656 id=656 data-nosnippet>656</a>        <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">100 </span>{
+<a href=#657 id=657 data-nosnippet>657</a>            <span class="kw">let </span>msg = <span class="kw">crate</span>::random_32_bytes(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#658 id=658 data-nosnippet>658</a>            <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#659 id=659 data-nosnippet>659</a>
+<a href=#660 id=660 data-nosnippet>660</a>            <span class="kw">let </span>(sk, <span class="kw">_</span>) = s.generate_keypair(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#661 id=661 data-nosnippet>661</a>            <span class="kw">let </span>sig1 = s.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#662 id=662 data-nosnippet>662</a>            <span class="kw">let </span>der = sig1.serialize_der();
+<a href=#663 id=663 data-nosnippet>663</a>            <span class="kw">let </span>sig2 = ecdsa::Signature::from_der(<span class="kw-2">&amp;</span>der[..]).unwrap();
+<a href=#664 id=664 data-nosnippet>664</a>            <span class="macro">assert_eq!</span>(sig1, sig2);
+<a href=#665 id=665 data-nosnippet>665</a>
+<a href=#666 id=666 data-nosnippet>666</a>            <span class="kw">let </span>compact = sig1.serialize_compact();
+<a href=#667 id=667 data-nosnippet>667</a>            <span class="kw">let </span>sig2 = ecdsa::Signature::from_compact(<span class="kw-2">&amp;</span>compact[..]).unwrap();
+<a href=#668 id=668 data-nosnippet>668</a>            <span class="macro">assert_eq!</span>(sig1, sig2);
+<a href=#669 id=669 data-nosnippet>669</a>
+<a href=#670 id=670 data-nosnippet>670</a>            <span class="macro">assert!</span>(ecdsa::Signature::from_compact(<span class="kw-2">&amp;</span>der[..]).is_err());
+<a href=#671 id=671 data-nosnippet>671</a>            <span class="macro">assert!</span>(ecdsa::Signature::from_compact(<span class="kw-2">&amp;</span>compact[<span class="number">0</span>..<span class="number">4</span>]).is_err());
+<a href=#672 id=672 data-nosnippet>672</a>            <span class="macro">assert!</span>(ecdsa::Signature::from_der(<span class="kw-2">&amp;</span>compact[..]).is_err());
+<a href=#673 id=673 data-nosnippet>673</a>            <span class="macro">assert!</span>(ecdsa::Signature::from_der(<span class="kw-2">&amp;</span>der[<span class="number">0</span>..<span class="number">4</span>]).is_err());
+<a href=#674 id=674 data-nosnippet>674</a>        }
+<a href=#675 id=675 data-nosnippet>675</a>    }
+<a href=#676 id=676 data-nosnippet>676</a>
+<a href=#677 id=677 data-nosnippet>677</a>    <span class="attr">#[test]
+<a href=#678 id=678 data-nosnippet>678</a>    </span><span class="kw">fn </span>signature_display() {
+<a href=#679 id=679 data-nosnippet>679</a>        <span class="kw">const </span>HEX_STR: <span class="kw-2">&amp;</span>str = <span class="string">"3046022100839c1fbc5304de944f697c9f4b1d01d1faeba32d751c0f7acb21ac8a0f436a72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab45"</span>;
+<a href=#680 id=680 data-nosnippet>680</a>        <span class="kw">let </span>byte_str = <span class="macro">hex!</span>(HEX_STR);
+<a href=#681 id=681 data-nosnippet>681</a>
+<a href=#682 id=682 data-nosnippet>682</a>        <span class="macro">assert_eq!</span>(
+<a href=#683 id=683 data-nosnippet>683</a>            ecdsa::Signature::from_der(<span class="kw-2">&amp;</span>byte_str).expect(<span class="string">"byte str decode"</span>),
+<a href=#684 id=684 data-nosnippet>684</a>            ecdsa::Signature::from_str(HEX_STR).expect(<span class="string">"byte str decode"</span>)
+<a href=#685 id=685 data-nosnippet>685</a>        );
+<a href=#686 id=686 data-nosnippet>686</a>
+<a href=#687 id=687 data-nosnippet>687</a>        <span class="kw">let </span>sig = ecdsa::Signature::from_str(HEX_STR).expect(<span class="string">"byte str decode"</span>);
+<a href=#688 id=688 data-nosnippet>688</a>        <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>sig.to_string(), HEX_STR);
+<a href=#689 id=689 data-nosnippet>689</a>        <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{:?}"</span>, sig), HEX_STR);
+<a href=#690 id=690 data-nosnippet>690</a>
+<a href=#691 id=691 data-nosnippet>691</a>        <span class="macro">assert!</span>(ecdsa::Signature::from_str(
+<a href=#692 id=692 data-nosnippet>692</a>            <span class="string">"3046022100839c1fbc5304de944f697c9f4b1d01d1faeba32d751c0f7acb21ac8a0f436a\
+<a href=#693 id=693 data-nosnippet>693</a>             72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab4"
+<a href=#694 id=694 data-nosnippet>694</a>        </span>)
+<a href=#695 id=695 data-nosnippet>695</a>        .is_err());
+<a href=#696 id=696 data-nosnippet>696</a>        <span class="macro">assert!</span>(ecdsa::Signature::from_str(
+<a href=#697 id=697 data-nosnippet>697</a>            <span class="string">"3046022100839c1fbc5304de944f697c9f4b1d01d1faeba32d751c0f7acb21ac8a0f436a\
+<a href=#698 id=698 data-nosnippet>698</a>             72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab"
+<a href=#699 id=699 data-nosnippet>699</a>        </span>)
+<a href=#700 id=700 data-nosnippet>700</a>        .is_err());
+<a href=#701 id=701 data-nosnippet>701</a>        <span class="macro">assert!</span>(ecdsa::Signature::from_str(
+<a href=#702 id=702 data-nosnippet>702</a>            <span class="string">"3046022100839c1fbc5304de944f697c9f4b1d01d1faeba32d751c0f7acb21ac8a0f436a\
+<a href=#703 id=703 data-nosnippet>703</a>             72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eabxx"
+<a href=#704 id=704 data-nosnippet>704</a>        </span>)
+<a href=#705 id=705 data-nosnippet>705</a>        .is_err());
+<a href=#706 id=706 data-nosnippet>706</a>        <span class="macro">assert!</span>(ecdsa::Signature::from_str(
+<a href=#707 id=707 data-nosnippet>707</a>            <span class="string">"3046022100839c1fbc5304de944f697c9f4b1d01d1faeba32d751c0f7acb21ac8a0f436a\
+<a href=#708 id=708 data-nosnippet>708</a>             72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab45\
+<a href=#709 id=709 data-nosnippet>709</a>             72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab45\
+<a href=#710 id=710 data-nosnippet>710</a>             72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab45\
+<a href=#711 id=711 data-nosnippet>711</a>             72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab45\
+<a href=#712 id=712 data-nosnippet>712</a>             72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab45"
+<a href=#713 id=713 data-nosnippet>713</a>        </span>)
+<a href=#714 id=714 data-nosnippet>714</a>        .is_err());
+<a href=#715 id=715 data-nosnippet>715</a>
+<a href=#716 id=716 data-nosnippet>716</a>        <span class="comment">// 71 byte signature
+<a href=#717 id=717 data-nosnippet>717</a>        </span><span class="kw">let </span>hex_str = <span class="string">"30450221009d0bad576719d32ae76bedb34c774866673cbde3f4e12951555c9408e6ce774b02202876e7102f204f6bfee26c967c3926ce702cf97d4b010062e193f763190f6776"</span>;
+<a href=#718 id=718 data-nosnippet>718</a>        <span class="kw">let </span>sig = ecdsa::Signature::from_str(hex_str).expect(<span class="string">"byte str decode"</span>);
+<a href=#719 id=719 data-nosnippet>719</a>        <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}"</span>, sig), hex_str);
+<a href=#720 id=720 data-nosnippet>720</a>    }
+<a href=#721 id=721 data-nosnippet>721</a>
+<a href=#722 id=722 data-nosnippet>722</a>    <span class="attr">#[test]
+<a href=#723 id=723 data-nosnippet>723</a>    </span><span class="kw">fn </span>signature_lax_der() {
+<a href=#724 id=724 data-nosnippet>724</a>        <span class="macro">macro_rules!</span> check_lax_sig(
+<a href=#725 id=725 data-nosnippet>725</a>            (<span class="macro-nonterminal">$hex</span>:expr) =&gt; ({
+<a href=#726 id=726 data-nosnippet>726</a>                <span class="kw">let </span>sig = <span class="macro">hex!</span>(<span class="macro-nonterminal">$hex</span>);
+<a href=#727 id=727 data-nosnippet>727</a>                <span class="macro">assert!</span>(ecdsa::Signature::from_der_lax(<span class="kw-2">&amp;</span>sig[..]).is_ok());
+<a href=#728 id=728 data-nosnippet>728</a>            })
+<a href=#729 id=729 data-nosnippet>729</a>        );
+<a href=#730 id=730 data-nosnippet>730</a>
+<a href=#731 id=731 data-nosnippet>731</a>        <span class="macro">check_lax_sig!</span>(<span class="string">"304402204c2dd8a9b6f8d425fcd8ee9a20ac73b619906a6367eac6cb93e70375225ec0160220356878eff111ff3663d7e6bf08947f94443845e0dcc54961664d922f7660b80c"</span>);
+<a href=#732 id=732 data-nosnippet>732</a>        <span class="macro">check_lax_sig!</span>(<span class="string">"304402202ea9d51c7173b1d96d331bd41b3d1b4e78e66148e64ed5992abd6ca66290321c0220628c47517e049b3e41509e9d71e480a0cdc766f8cdec265ef0017711c1b5336f"</span>);
+<a href=#733 id=733 data-nosnippet>733</a>        <span class="macro">check_lax_sig!</span>(<span class="string">"3045022100bf8e050c85ffa1c313108ad8c482c4849027937916374617af3f2e9a881861c9022023f65814222cab09d5ec41032ce9c72ca96a5676020736614de7b78a4e55325a"</span>);
+<a href=#734 id=734 data-nosnippet>734</a>        <span class="macro">check_lax_sig!</span>(<span class="string">"3046022100839c1fbc5304de944f697c9f4b1d01d1faeba32d751c0f7acb21ac8a0f436a72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab45"</span>);
+<a href=#735 id=735 data-nosnippet>735</a>        <span class="macro">check_lax_sig!</span>(<span class="string">"3046022100eaa5f90483eb20224616775891397d47efa64c68b969db1dacb1c30acdfc50aa022100cf9903bbefb1c8000cf482b0aeeb5af19287af20bd794de11d82716f9bae3db1"</span>);
+<a href=#736 id=736 data-nosnippet>736</a>        <span class="macro">check_lax_sig!</span>(<span class="string">"3045022047d512bc85842ac463ca3b669b62666ab8672ee60725b6c06759e476cebdc6c102210083805e93bd941770109bcc797784a71db9e48913f702c56e60b1c3e2ff379a60"</span>);
+<a href=#737 id=737 data-nosnippet>737</a>        <span class="macro">check_lax_sig!</span>(<span class="string">"3044022023ee4e95151b2fbbb08a72f35babe02830d14d54bd7ed1320e4751751d1baa4802206235245254f58fd1be6ff19ca291817da76da65c2f6d81d654b5185dd86b8acf"</span>);
+<a href=#738 id=738 data-nosnippet>738</a>    }
+<a href=#739 id=739 data-nosnippet>739</a>
+<a href=#740 id=740 data-nosnippet>740</a>    <span class="attr">#[test]
+<a href=#741 id=741 data-nosnippet>741</a>    #[cfg(all(feature = <span class="string">"rand"</span>, feature = <span class="string">"std"</span>))]
+<a href=#742 id=742 data-nosnippet>742</a>    </span><span class="kw">fn </span>sign_and_verify_ecdsa() {
+<a href=#743 id=743 data-nosnippet>743</a>        <span class="kw">let </span><span class="kw-2">mut </span>s = Secp256k1::new();
+<a href=#744 id=744 data-nosnippet>744</a>        s.randomize(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#745 id=745 data-nosnippet>745</a>
+<a href=#746 id=746 data-nosnippet>746</a>        <span class="kw">let </span>noncedata = [<span class="number">42u8</span>; <span class="number">32</span>];
+<a href=#747 id=747 data-nosnippet>747</a>        <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">100 </span>{
+<a href=#748 id=748 data-nosnippet>748</a>            <span class="kw">let </span>msg = <span class="kw">crate</span>::random_32_bytes(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#749 id=749 data-nosnippet>749</a>            <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#750 id=750 data-nosnippet>750</a>
+<a href=#751 id=751 data-nosnippet>751</a>            <span class="kw">let </span>(sk, pk) = s.generate_keypair(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#752 id=752 data-nosnippet>752</a>            <span class="kw">let </span>sig = s.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#753 id=753 data-nosnippet>753</a>            <span class="macro">assert_eq!</span>(s.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
+<a href=#754 id=754 data-nosnippet>754</a>            <span class="kw">let </span>noncedata_sig = s.sign_ecdsa_with_noncedata(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk, <span class="kw-2">&amp;</span>noncedata);
+<a href=#755 id=755 data-nosnippet>755</a>            <span class="macro">assert_eq!</span>(s.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>noncedata_sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
+<a href=#756 id=756 data-nosnippet>756</a>            <span class="kw">let </span>low_r_sig = s.sign_ecdsa_low_r(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#757 id=757 data-nosnippet>757</a>            <span class="macro">assert_eq!</span>(s.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>low_r_sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
+<a href=#758 id=758 data-nosnippet>758</a>            <span class="kw">let </span>grind_r_sig = s.sign_ecdsa_grind_r(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk, <span class="number">1</span>);
+<a href=#759 id=759 data-nosnippet>759</a>            <span class="macro">assert_eq!</span>(s.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>grind_r_sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
+<a href=#760 id=760 data-nosnippet>760</a>            <span class="kw">let </span>compact = sig.serialize_compact();
+<a href=#761 id=761 data-nosnippet>761</a>            <span class="kw">if </span>compact[<span class="number">0</span>] &lt; <span class="number">0x80 </span>{
+<a href=#762 id=762 data-nosnippet>762</a>                <span class="macro">assert_eq!</span>(sig, low_r_sig);
+<a href=#763 id=763 data-nosnippet>763</a>            } <span class="kw">else </span>{
+<a href=#764 id=764 data-nosnippet>764</a>                <span class="attr">#[cfg(not(secp256k1_fuzz))] </span><span class="comment">// mocked sig generation doesn't produce low-R sigs
+<a href=#765 id=765 data-nosnippet>765</a>                </span><span class="macro">assert_ne!</span>(sig, low_r_sig);
+<a href=#766 id=766 data-nosnippet>766</a>            }
+<a href=#767 id=767 data-nosnippet>767</a>            <span class="attr">#[cfg(not(secp256k1_fuzz))] </span><span class="comment">// mocked sig generation doesn't produce low-R sigs
+<a href=#768 id=768 data-nosnippet>768</a>            </span><span class="macro">assert!</span>(ecdsa::compact_sig_has_zero_first_bit(<span class="kw-2">&amp;</span>low_r_sig.<span class="number">0</span>));
+<a href=#769 id=769 data-nosnippet>769</a>            <span class="attr">#[cfg(not(secp256k1_fuzz))] </span><span class="comment">// mocked sig generation doesn't produce low-R sigs
+<a href=#770 id=770 data-nosnippet>770</a>            </span><span class="macro">assert!</span>(ecdsa::der_length_check(<span class="kw-2">&amp;</span>grind_r_sig.<span class="number">0</span>, <span class="number">70</span>));
+<a href=#771 id=771 data-nosnippet>771</a>        }
+<a href=#772 id=772 data-nosnippet>772</a>    }
+<a href=#773 id=773 data-nosnippet>773</a>
+<a href=#774 id=774 data-nosnippet>774</a>    <span class="attr">#[test]
+<a href=#775 id=775 data-nosnippet>775</a>    #[cfg(all(feature = <span class="string">"rand"</span>, feature = <span class="string">"std"</span>))]
+<a href=#776 id=776 data-nosnippet>776</a>    </span><span class="kw">fn </span>sign_and_verify_extreme() {
+<a href=#777 id=777 data-nosnippet>777</a>        <span class="kw">let </span><span class="kw-2">mut </span>s = Secp256k1::new();
+<a href=#778 id=778 data-nosnippet>778</a>        s.randomize(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#779 id=779 data-nosnippet>779</a>
+<a href=#780 id=780 data-nosnippet>780</a>        <span class="comment">// Wild keys: 1, CURVE_ORDER - 1
+<a href=#781 id=781 data-nosnippet>781</a>        // Wild msgs: 1, CURVE_ORDER - 1
+<a href=#782 id=782 data-nosnippet>782</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>wild_keys = [[<span class="number">0u8</span>; <span class="number">32</span>]; <span class="number">2</span>];
+<a href=#783 id=783 data-nosnippet>783</a>        <span class="kw">let </span><span class="kw-2">mut </span>wild_msgs = [[<span class="number">0u8</span>; <span class="number">32</span>]; <span class="number">2</span>];
+<a href=#784 id=784 data-nosnippet>784</a>
+<a href=#785 id=785 data-nosnippet>785</a>        wild_keys[<span class="number">0</span>][<span class="number">0</span>] = <span class="number">1</span>;
+<a href=#786 id=786 data-nosnippet>786</a>        wild_msgs[<span class="number">0</span>][<span class="number">0</span>] = <span class="number">1</span>;
+<a href=#787 id=787 data-nosnippet>787</a>
+<a href=#788 id=788 data-nosnippet>788</a>        <span class="kw">use </span>constants;
+<a href=#789 id=789 data-nosnippet>789</a>        wild_keys[<span class="number">1</span>][..].copy_from_slice(<span class="kw-2">&amp;</span>constants::CURVE_ORDER[..]);
+<a href=#790 id=790 data-nosnippet>790</a>        wild_msgs[<span class="number">1</span>][..].copy_from_slice(<span class="kw-2">&amp;</span>constants::CURVE_ORDER[..]);
+<a href=#791 id=791 data-nosnippet>791</a>
+<a href=#792 id=792 data-nosnippet>792</a>        wild_keys[<span class="number">1</span>][<span class="number">0</span>] -= <span class="number">1</span>;
+<a href=#793 id=793 data-nosnippet>793</a>        wild_msgs[<span class="number">1</span>][<span class="number">0</span>] -= <span class="number">1</span>;
+<a href=#794 id=794 data-nosnippet>794</a>
+<a href=#795 id=795 data-nosnippet>795</a>        <span class="kw">for </span>key <span class="kw">in </span>wild_keys.iter().map(|k| SecretKey::from_slice(<span class="kw-2">&amp;</span>k[..]).unwrap()) {
+<a href=#796 id=796 data-nosnippet>796</a>            <span class="kw">for </span>msg <span class="kw">in </span>wild_msgs.into_iter().map(Message::from_digest) {
+<a href=#797 id=797 data-nosnippet>797</a>                <span class="kw">let </span>sig = s.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>key);
+<a href=#798 id=798 data-nosnippet>798</a>                <span class="kw">let </span>low_r_sig = s.sign_ecdsa_low_r(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>key);
+<a href=#799 id=799 data-nosnippet>799</a>                <span class="kw">let </span>grind_r_sig = s.sign_ecdsa_grind_r(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>key, <span class="number">1</span>);
+<a href=#800 id=800 data-nosnippet>800</a>                <span class="kw">let </span>pk = PublicKey::from_secret_key(<span class="kw-2">&amp;</span>s, <span class="kw-2">&amp;</span>key);
+<a href=#801 id=801 data-nosnippet>801</a>                <span class="macro">assert_eq!</span>(s.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
+<a href=#802 id=802 data-nosnippet>802</a>                <span class="macro">assert_eq!</span>(s.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>low_r_sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
+<a href=#803 id=803 data-nosnippet>803</a>                <span class="macro">assert_eq!</span>(s.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>grind_r_sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
+<a href=#804 id=804 data-nosnippet>804</a>            }
+<a href=#805 id=805 data-nosnippet>805</a>        }
+<a href=#806 id=806 data-nosnippet>806</a>    }
+<a href=#807 id=807 data-nosnippet>807</a>
+<a href=#808 id=808 data-nosnippet>808</a>    <span class="attr">#[test]
+<a href=#809 id=809 data-nosnippet>809</a>    #[cfg(all(feature = <span class="string">"rand"</span>, feature = <span class="string">"std"</span>))]
+<a href=#810 id=810 data-nosnippet>810</a>    </span><span class="kw">fn </span>sign_and_verify_fail() {
+<a href=#811 id=811 data-nosnippet>811</a>        <span class="kw">let </span><span class="kw-2">mut </span>s = Secp256k1::new();
+<a href=#812 id=812 data-nosnippet>812</a>        s.randomize(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#813 id=813 data-nosnippet>813</a>
+<a href=#814 id=814 data-nosnippet>814</a>        <span class="kw">let </span>msg = <span class="kw">crate</span>::random_32_bytes(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#815 id=815 data-nosnippet>815</a>        <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#816 id=816 data-nosnippet>816</a>
+<a href=#817 id=817 data-nosnippet>817</a>        <span class="kw">let </span>(sk, pk) = s.generate_keypair(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#818 id=818 data-nosnippet>818</a>
+<a href=#819 id=819 data-nosnippet>819</a>        <span class="kw">let </span>sig = s.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#820 id=820 data-nosnippet>820</a>
+<a href=#821 id=821 data-nosnippet>821</a>        <span class="kw">let </span>msg = <span class="kw">crate</span>::random_32_bytes(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#822 id=822 data-nosnippet>822</a>        <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#823 id=823 data-nosnippet>823</a>        <span class="macro">assert_eq!</span>(s.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Err</span>(Error::IncorrectSignature));
+<a href=#824 id=824 data-nosnippet>824</a>    }
+<a href=#825 id=825 data-nosnippet>825</a>
+<a href=#826 id=826 data-nosnippet>826</a>    <span class="attr">#[test]
+<a href=#827 id=827 data-nosnippet>827</a>    #[allow(deprecated)]
+<a href=#828 id=828 data-nosnippet>828</a>    </span><span class="kw">fn </span>test_bad_slice() {
+<a href=#829 id=829 data-nosnippet>829</a>        <span class="macro">assert_eq!</span>(
+<a href=#830 id=830 data-nosnippet>830</a>            ecdsa::Signature::from_der(<span class="kw-2">&amp;</span>[<span class="number">0</span>; constants::MAX_SIGNATURE_SIZE + <span class="number">1</span>]),
+<a href=#831 id=831 data-nosnippet>831</a>            <span class="prelude-val">Err</span>(Error::InvalidSignature)
+<a href=#832 id=832 data-nosnippet>832</a>        );
+<a href=#833 id=833 data-nosnippet>833</a>        <span class="macro">assert_eq!</span>(
+<a href=#834 id=834 data-nosnippet>834</a>            ecdsa::Signature::from_der(<span class="kw-2">&amp;</span>[<span class="number">0</span>; constants::MAX_SIGNATURE_SIZE]),
+<a href=#835 id=835 data-nosnippet>835</a>            <span class="prelude-val">Err</span>(Error::InvalidSignature)
+<a href=#836 id=836 data-nosnippet>836</a>        );
+<a href=#837 id=837 data-nosnippet>837</a>
+<a href=#838 id=838 data-nosnippet>838</a>        <span class="macro">assert_eq!</span>(
+<a href=#839 id=839 data-nosnippet>839</a>            Message::from_digest_slice(<span class="kw-2">&amp;</span>[<span class="number">0</span>; constants::MESSAGE_SIZE - <span class="number">1</span>]),
+<a href=#840 id=840 data-nosnippet>840</a>            <span class="prelude-val">Err</span>(Error::InvalidMessage)
+<a href=#841 id=841 data-nosnippet>841</a>        );
+<a href=#842 id=842 data-nosnippet>842</a>        <span class="macro">assert_eq!</span>(
+<a href=#843 id=843 data-nosnippet>843</a>            Message::from_digest_slice(<span class="kw-2">&amp;</span>[<span class="number">0</span>; constants::MESSAGE_SIZE + <span class="number">1</span>]),
+<a href=#844 id=844 data-nosnippet>844</a>            <span class="prelude-val">Err</span>(Error::InvalidMessage)
+<a href=#845 id=845 data-nosnippet>845</a>        );
+<a href=#846 id=846 data-nosnippet>846</a>        <span class="macro">assert!</span>(Message::from_digest_slice(<span class="kw-2">&amp;</span>[<span class="number">0</span>; constants::MESSAGE_SIZE]).is_ok());
+<a href=#847 id=847 data-nosnippet>847</a>        <span class="macro">assert!</span>(Message::from_digest_slice(<span class="kw-2">&amp;</span>[<span class="number">1</span>; constants::MESSAGE_SIZE]).is_ok());
+<a href=#848 id=848 data-nosnippet>848</a>    }
+<a href=#849 id=849 data-nosnippet>849</a>
+<a href=#850 id=850 data-nosnippet>850</a>    <span class="attr">#[test]
+<a href=#851 id=851 data-nosnippet>851</a>    #[cfg(all(feature = <span class="string">"rand"</span>, feature = <span class="string">"std"</span>))]
+<a href=#852 id=852 data-nosnippet>852</a>    </span><span class="kw">fn </span>test_hex() {
+<a href=#853 id=853 data-nosnippet>853</a>        <span class="kw">use </span>rand::RngCore;
+<a href=#854 id=854 data-nosnippet>854</a>
+<a href=#855 id=855 data-nosnippet>855</a>        <span class="kw">use </span><span class="kw">super</span>::to_hex;
+<a href=#856 id=856 data-nosnippet>856</a>
+<a href=#857 id=857 data-nosnippet>857</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
+<a href=#858 id=858 data-nosnippet>858</a>        <span class="kw">const </span>AMOUNT: usize = <span class="number">1024</span>;
+<a href=#859 id=859 data-nosnippet>859</a>        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..AMOUNT {
+<a href=#860 id=860 data-nosnippet>860</a>            <span class="comment">// 255 isn't a valid utf8 character.
+<a href=#861 id=861 data-nosnippet>861</a>            </span><span class="kw">let </span><span class="kw-2">mut </span>hex_buf = [<span class="number">255u8</span>; AMOUNT * <span class="number">2</span>];
+<a href=#862 id=862 data-nosnippet>862</a>            <span class="kw">let </span><span class="kw-2">mut </span>src_buf = [<span class="number">0u8</span>; AMOUNT];
+<a href=#863 id=863 data-nosnippet>863</a>            <span class="kw">let </span><span class="kw-2">mut </span>result_buf = [<span class="number">0u8</span>; AMOUNT];
+<a href=#864 id=864 data-nosnippet>864</a>            <span class="kw">let </span>src = <span class="kw-2">&amp;mut </span>src_buf[<span class="number">0</span>..i];
+<a href=#865 id=865 data-nosnippet>865</a>            rng.fill_bytes(src);
+<a href=#866 id=866 data-nosnippet>866</a>
+<a href=#867 id=867 data-nosnippet>867</a>            <span class="kw">let </span>hex = to_hex(src, <span class="kw-2">&amp;mut </span>hex_buf).unwrap();
+<a href=#868 id=868 data-nosnippet>868</a>            <span class="macro">assert_eq!</span>(from_hex(hex, <span class="kw-2">&amp;mut </span>result_buf).unwrap(), i);
+<a href=#869 id=869 data-nosnippet>869</a>            <span class="macro">assert_eq!</span>(src, <span class="kw-2">&amp;</span>result_buf[..i]);
+<a href=#870 id=870 data-nosnippet>870</a>        }
+<a href=#871 id=871 data-nosnippet>871</a>
+<a href=#872 id=872 data-nosnippet>872</a>        <span class="macro">assert!</span>(to_hex(<span class="kw-2">&amp;</span>[<span class="number">1</span>; <span class="number">2</span>], <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">3</span>]).is_err());
+<a href=#873 id=873 data-nosnippet>873</a>        <span class="macro">assert!</span>(to_hex(<span class="kw-2">&amp;</span>[<span class="number">1</span>; <span class="number">2</span>], <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">4</span>]).is_ok());
+<a href=#874 id=874 data-nosnippet>874</a>        <span class="macro">assert!</span>(from_hex(<span class="string">"deadbeaf"</span>, <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">3</span>]).is_err());
+<a href=#875 id=875 data-nosnippet>875</a>        <span class="macro">assert!</span>(from_hex(<span class="string">"deadbeaf"</span>, <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">4</span>]).is_ok());
+<a href=#876 id=876 data-nosnippet>876</a>        <span class="macro">assert!</span>(from_hex(<span class="string">"a"</span>, <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">4</span>]).is_err());
+<a href=#877 id=877 data-nosnippet>877</a>        <span class="macro">assert!</span>(from_hex(<span class="string">"ag"</span>, <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">4</span>]).is_err());
+<a href=#878 id=878 data-nosnippet>878</a>    }
+<a href=#879 id=879 data-nosnippet>879</a>
+<a href=#880 id=880 data-nosnippet>880</a>    <span class="attr">#[test]
+<a href=#881 id=881 data-nosnippet>881</a>    #[cfg(not(secp256k1_fuzz))] </span><span class="comment">// fuzz-sigs have fixed size/format
+<a href=#882 id=882 data-nosnippet>882</a>    </span><span class="attr">#[cfg(any(feature = <span class="string">"alloc"</span>, feature = <span class="string">"std"</span>))]
+<a href=#883 id=883 data-nosnippet>883</a>    </span><span class="kw">fn </span>test_noncedata() {
+<a href=#884 id=884 data-nosnippet>884</a>        <span class="kw">let </span>secp = Secp256k1::new();
+<a href=#885 id=885 data-nosnippet>885</a>        <span class="kw">let </span>msg = <span class="macro">hex!</span>(<span class="string">"887d04bb1cf1b1554f1b268dfe62d13064ca67ae45348d50d1392ce2d13418ac"</span>);
+<a href=#886 id=886 data-nosnippet>886</a>        <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#887 id=887 data-nosnippet>887</a>        <span class="kw">let </span>noncedata = [<span class="number">42u8</span>; <span class="number">32</span>];
+<a href=#888 id=888 data-nosnippet>888</a>        <span class="kw">let </span>sk =
+<a href=#889 id=889 data-nosnippet>889</a>            SecretKey::from_str(<span class="string">"57f0148f94d13095cfda539d0da0d1541304b678d8b36e243980aab4e1b7cead"</span>)
+<a href=#890 id=890 data-nosnippet>890</a>                .unwrap();
+<a href=#891 id=891 data-nosnippet>891</a>        <span class="kw">let </span>expected_sig = <span class="macro">hex!</span>(<span class="string">"24861b3edd4e7da43319c635091405feced6efa4ec99c3c3c35f6c3ba0ed8816116772e84994084db85a6c20589f6a85af569d42275c2a5dd900da5776b99d5d"</span>);
+<a href=#892 id=892 data-nosnippet>892</a>        <span class="kw">let </span>expected_sig = ecdsa::Signature::from_compact(<span class="kw-2">&amp;</span>expected_sig).unwrap();
+<a href=#893 id=893 data-nosnippet>893</a>
+<a href=#894 id=894 data-nosnippet>894</a>        <span class="kw">let </span>sig = secp.sign_ecdsa_with_noncedata(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk, <span class="kw-2">&amp;</span>noncedata);
+<a href=#895 id=895 data-nosnippet>895</a>
+<a href=#896 id=896 data-nosnippet>896</a>        <span class="macro">assert_eq!</span>(expected_sig, sig);
+<a href=#897 id=897 data-nosnippet>897</a>    }
+<a href=#898 id=898 data-nosnippet>898</a>
+<a href=#899 id=899 data-nosnippet>899</a>    <span class="attr">#[test]
+<a href=#900 id=900 data-nosnippet>900</a>    #[cfg(not(secp256k1_fuzz))] </span><span class="comment">// fixed sig vectors can't work with fuzz-sigs
+<a href=#901 id=901 data-nosnippet>901</a>    </span><span class="attr">#[cfg(any(feature = <span class="string">"alloc"</span>, feature = <span class="string">"std"</span>))]
+<a href=#902 id=902 data-nosnippet>902</a>    </span><span class="kw">fn </span>test_low_s() {
+<a href=#903 id=903 data-nosnippet>903</a>        <span class="comment">// nb this is a transaction on testnet
+<a href=#904 id=904 data-nosnippet>904</a>        // txid 8ccc87b72d766ab3128f03176bb1c98293f2d1f85ebfaf07b82cc81ea6891fa9
+<a href=#905 id=905 data-nosnippet>905</a>        //      input number 3
+<a href=#906 id=906 data-nosnippet>906</a>        </span><span class="kw">let </span>sig = <span class="macro">hex!</span>(<span class="string">"3046022100839c1fbc5304de944f697c9f4b1d01d1faeba32d751c0f7acb21ac8a0f436a72022100e89bd46bb3a5a62adc679f659b7ce876d83ee297c7a5587b2011c4fcc72eab45"</span>);
+<a href=#907 id=907 data-nosnippet>907</a>        <span class="kw">let </span>pk = <span class="macro">hex!</span>(<span class="string">"031ee99d2b786ab3b0991325f2de8489246a6a3fdb700f6d0511b1d80cf5f4cd43"</span>);
+<a href=#908 id=908 data-nosnippet>908</a>        <span class="kw">let </span>msg = <span class="macro">hex!</span>(<span class="string">"a4965ca63b7d8562736ceec36dfa5a11bf426eb65be8ea3f7a49ae363032da0d"</span>);
+<a href=#909 id=909 data-nosnippet>909</a>
+<a href=#910 id=910 data-nosnippet>910</a>        <span class="kw">let </span>secp = Secp256k1::new();
+<a href=#911 id=911 data-nosnippet>911</a>        <span class="kw">let </span><span class="kw-2">mut </span>sig = ecdsa::Signature::from_der(<span class="kw-2">&amp;</span>sig[..]).unwrap();
+<a href=#912 id=912 data-nosnippet>912</a>        <span class="kw">let </span>pk = PublicKey::from_slice(<span class="kw-2">&amp;</span>pk[..]).unwrap();
+<a href=#913 id=913 data-nosnippet>913</a>        <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#914 id=914 data-nosnippet>914</a>
+<a href=#915 id=915 data-nosnippet>915</a>        <span class="comment">// without normalization we expect this will fail
+<a href=#916 id=916 data-nosnippet>916</a>        </span><span class="macro">assert_eq!</span>(secp.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Err</span>(Error::IncorrectSignature));
+<a href=#917 id=917 data-nosnippet>917</a>        <span class="comment">// after normalization it should pass
+<a href=#918 id=918 data-nosnippet>918</a>        </span>sig.normalize_s();
+<a href=#919 id=919 data-nosnippet>919</a>        <span class="macro">assert_eq!</span>(secp.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
+<a href=#920 id=920 data-nosnippet>920</a>    }
+<a href=#921 id=921 data-nosnippet>921</a>
+<a href=#922 id=922 data-nosnippet>922</a>    <span class="attr">#[test]
+<a href=#923 id=923 data-nosnippet>923</a>    #[cfg(not(secp256k1_fuzz))] </span><span class="comment">// fuzz-sigs have fixed size/format
+<a href=#924 id=924 data-nosnippet>924</a>    </span><span class="attr">#[cfg(any(feature = <span class="string">"alloc"</span>, feature = <span class="string">"std"</span>))]
+<a href=#925 id=925 data-nosnippet>925</a>    </span><span class="kw">fn </span>test_low_r() {
+<a href=#926 id=926 data-nosnippet>926</a>        <span class="kw">let </span>secp = Secp256k1::new();
+<a href=#927 id=927 data-nosnippet>927</a>        <span class="kw">let </span>msg = <span class="macro">hex!</span>(<span class="string">"887d04bb1cf1b1554f1b268dfe62d13064ca67ae45348d50d1392ce2d13418ac"</span>);
+<a href=#928 id=928 data-nosnippet>928</a>        <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#929 id=929 data-nosnippet>929</a>        <span class="kw">let </span>sk =
+<a href=#930 id=930 data-nosnippet>930</a>            SecretKey::from_str(<span class="string">"57f0148f94d13095cfda539d0da0d1541304b678d8b36e243980aab4e1b7cead"</span>)
+<a href=#931 id=931 data-nosnippet>931</a>                .unwrap();
+<a href=#932 id=932 data-nosnippet>932</a>        <span class="kw">let </span>expected_sig = <span class="macro">hex!</span>(<span class="string">"047dd4d049db02b430d24c41c7925b2725bcd5a85393513bdec04b4dc363632b1054d0180094122b380f4cfa391e6296244da773173e78fc745c1b9c79f7b713"</span>);
+<a href=#933 id=933 data-nosnippet>933</a>        <span class="kw">let </span>expected_sig = ecdsa::Signature::from_compact(<span class="kw-2">&amp;</span>expected_sig).unwrap();
+<a href=#934 id=934 data-nosnippet>934</a>
+<a href=#935 id=935 data-nosnippet>935</a>        <span class="kw">let </span>sig = secp.sign_ecdsa_low_r(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#936 id=936 data-nosnippet>936</a>
+<a href=#937 id=937 data-nosnippet>937</a>        <span class="macro">assert_eq!</span>(expected_sig, sig);
+<a href=#938 id=938 data-nosnippet>938</a>    }
+<a href=#939 id=939 data-nosnippet>939</a>
+<a href=#940 id=940 data-nosnippet>940</a>    <span class="attr">#[test]
+<a href=#941 id=941 data-nosnippet>941</a>    #[cfg(not(secp256k1_fuzz))] </span><span class="comment">// fuzz-sigs have fixed size/format
+<a href=#942 id=942 data-nosnippet>942</a>    </span><span class="attr">#[cfg(any(feature = <span class="string">"alloc"</span>, feature = <span class="string">"std"</span>))]
+<a href=#943 id=943 data-nosnippet>943</a>    </span><span class="kw">fn </span>test_grind_r() {
+<a href=#944 id=944 data-nosnippet>944</a>        <span class="kw">let </span>secp = Secp256k1::new();
+<a href=#945 id=945 data-nosnippet>945</a>        <span class="kw">let </span>msg = <span class="macro">hex!</span>(<span class="string">"ef2d5b9a7c61865a95941d0f04285420560df7e9d76890ac1b8867b12ce43167"</span>);
+<a href=#946 id=946 data-nosnippet>946</a>        <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#947 id=947 data-nosnippet>947</a>        <span class="kw">let </span>sk =
+<a href=#948 id=948 data-nosnippet>948</a>            SecretKey::from_str(<span class="string">"848355d75fe1c354cf05539bb29b2015f1863065bcb6766b44d399ab95c3fa0b"</span>)
+<a href=#949 id=949 data-nosnippet>949</a>                .unwrap();
+<a href=#950 id=950 data-nosnippet>950</a>        <span class="kw">let </span>expected_sig = ecdsa::Signature::from_str(<span class="string">"304302202ffc447100d518c8ba643d11f3e6a83a8640488e7d2537b1954b942408be6ea3021f26e1248dd1e52160c3a38af9769d91a1a806cab5f9d508c103464d3c02d6e1"</span>).unwrap();
+<a href=#951 id=951 data-nosnippet>951</a>
+<a href=#952 id=952 data-nosnippet>952</a>        <span class="kw">let </span>sig = secp.sign_ecdsa_grind_r(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk, <span class="number">2</span>);
+<a href=#953 id=953 data-nosnippet>953</a>
+<a href=#954 id=954 data-nosnippet>954</a>        <span class="macro">assert_eq!</span>(expected_sig, sig);
+<a href=#955 id=955 data-nosnippet>955</a>    }
+<a href=#956 id=956 data-nosnippet>956</a>
+<a href=#957 id=957 data-nosnippet>957</a>    <span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
+<a href=#958 id=958 data-nosnippet>958</a>    #[cfg(not(secp256k1_fuzz))] </span><span class="comment">// fixed sig vectors can't work with fuzz-sigs
+<a href=#959 id=959 data-nosnippet>959</a>    </span><span class="attr">#[cfg(any(feature = <span class="string">"alloc"</span>, feature = <span class="string">"std"</span>))]
+<a href=#960 id=960 data-nosnippet>960</a>    #[test]
+<a href=#961 id=961 data-nosnippet>961</a>    </span><span class="kw">fn </span>test_serde() {
+<a href=#962 id=962 data-nosnippet>962</a>        <span class="kw">use </span>serde_test::{assert_tokens, Configure, Token};
+<a href=#963 id=963 data-nosnippet>963</a>
+<a href=#964 id=964 data-nosnippet>964</a>        <span class="kw">let </span>s = Secp256k1::new();
+<a href=#965 id=965 data-nosnippet>965</a>
+<a href=#966 id=966 data-nosnippet>966</a>        <span class="kw">let </span>msg = Message::from_digest([<span class="number">1</span>; <span class="number">32</span>]);
+<a href=#967 id=967 data-nosnippet>967</a>        <span class="kw">let </span>sk = SecretKey::from_slice(<span class="kw-2">&amp;</span>[<span class="number">2</span>; <span class="number">32</span>]).unwrap();
+<a href=#968 id=968 data-nosnippet>968</a>        <span class="kw">let </span>sig = s.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#969 id=969 data-nosnippet>969</a>        <span class="kw">static </span>SIG_BYTES: [u8; <span class="number">71</span>] = [
+<a href=#970 id=970 data-nosnippet>970</a>            <span class="number">48</span>, <span class="number">69</span>, <span class="number">2</span>, <span class="number">33</span>, <span class="number">0</span>, <span class="number">157</span>, <span class="number">11</span>, <span class="number">173</span>, <span class="number">87</span>, <span class="number">103</span>, <span class="number">25</span>, <span class="number">211</span>, <span class="number">42</span>, <span class="number">231</span>, <span class="number">107</span>, <span class="number">237</span>, <span class="number">179</span>, <span class="number">76</span>, <span class="number">119</span>, <span class="number">72</span>,
+<a href=#971 id=971 data-nosnippet>971</a>            <span class="number">102</span>, <span class="number">103</span>, <span class="number">60</span>, <span class="number">189</span>, <span class="number">227</span>, <span class="number">244</span>, <span class="number">225</span>, <span class="number">41</span>, <span class="number">81</span>, <span class="number">85</span>, <span class="number">92</span>, <span class="number">148</span>, <span class="number">8</span>, <span class="number">230</span>, <span class="number">206</span>, <span class="number">119</span>, <span class="number">75</span>, <span class="number">2</span>, <span class="number">32</span>, <span class="number">40</span>,
+<a href=#972 id=972 data-nosnippet>972</a>            <span class="number">118</span>, <span class="number">231</span>, <span class="number">16</span>, <span class="number">47</span>, <span class="number">32</span>, <span class="number">79</span>, <span class="number">107</span>, <span class="number">254</span>, <span class="number">226</span>, <span class="number">108</span>, <span class="number">150</span>, <span class="number">124</span>, <span class="number">57</span>, <span class="number">38</span>, <span class="number">206</span>, <span class="number">112</span>, <span class="number">44</span>, <span class="number">249</span>, <span class="number">125</span>,
+<a href=#973 id=973 data-nosnippet>973</a>            <span class="number">75</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">98</span>, <span class="number">225</span>, <span class="number">147</span>, <span class="number">247</span>, <span class="number">99</span>, <span class="number">25</span>, <span class="number">15</span>, <span class="number">103</span>, <span class="number">118</span>,
+<a href=#974 id=974 data-nosnippet>974</a>        ];
+<a href=#975 id=975 data-nosnippet>975</a>        <span class="kw">static </span>SIG_STR: <span class="kw-2">&amp;</span>str = <span class="string">"\
+<a href=#976 id=976 data-nosnippet>976</a>            30450221009d0bad576719d32ae76bedb34c774866673cbde3f4e12951555c9408e6ce77\
+<a href=#977 id=977 data-nosnippet>977</a>            4b02202876e7102f204f6bfee26c967c3926ce702cf97d4b010062e193f763190f6776\
+<a href=#978 id=978 data-nosnippet>978</a>        "</span>;
+<a href=#979 id=979 data-nosnippet>979</a>
+<a href=#980 id=980 data-nosnippet>980</a>        assert_tokens(<span class="kw-2">&amp;</span>sig.compact(), <span class="kw-2">&amp;</span>[Token::BorrowedBytes(<span class="kw-2">&amp;</span>SIG_BYTES[..])]);
+<a href=#981 id=981 data-nosnippet>981</a>        assert_tokens(<span class="kw-2">&amp;</span>sig.compact(), <span class="kw-2">&amp;</span>[Token::Bytes(<span class="kw-2">&amp;</span>SIG_BYTES)]);
+<a href=#982 id=982 data-nosnippet>982</a>        assert_tokens(<span class="kw-2">&amp;</span>sig.compact(), <span class="kw-2">&amp;</span>[Token::ByteBuf(<span class="kw-2">&amp;</span>SIG_BYTES)]);
+<a href=#983 id=983 data-nosnippet>983</a>
+<a href=#984 id=984 data-nosnippet>984</a>        assert_tokens(<span class="kw-2">&amp;</span>sig.readable(), <span class="kw-2">&amp;</span>[Token::BorrowedStr(SIG_STR)]);
+<a href=#985 id=985 data-nosnippet>985</a>        assert_tokens(<span class="kw-2">&amp;</span>sig.readable(), <span class="kw-2">&amp;</span>[Token::Str(SIG_STR)]);
+<a href=#986 id=986 data-nosnippet>986</a>        assert_tokens(<span class="kw-2">&amp;</span>sig.readable(), <span class="kw-2">&amp;</span>[Token::String(SIG_STR)]);
+<a href=#987 id=987 data-nosnippet>987</a>    }
+<a href=#988 id=988 data-nosnippet>988</a>
+<a href=#989 id=989 data-nosnippet>989</a>    <span class="attr">#[cfg(feature = <span class="string">"global-context"</span>)]
+<a href=#990 id=990 data-nosnippet>990</a>    #[test]
+<a href=#991 id=991 data-nosnippet>991</a>    </span><span class="kw">fn </span>test_global_context() {
+<a href=#992 id=992 data-nosnippet>992</a>        <span class="kw">use </span><span class="kw">crate</span>::SECP256K1;
+<a href=#993 id=993 data-nosnippet>993</a>        <span class="kw">let </span>sk_data = <span class="macro">hex!</span>(<span class="string">"e6dd32f8761625f105c39a39f19370b3521d845a12456d60ce44debd0a362641"</span>);
+<a href=#994 id=994 data-nosnippet>994</a>        <span class="kw">let </span>sk = SecretKey::from_slice(<span class="kw-2">&amp;</span>sk_data).unwrap();
+<a href=#995 id=995 data-nosnippet>995</a>        <span class="kw">let </span>msg_data = <span class="macro">hex!</span>(<span class="string">"a4965ca63b7d8562736ceec36dfa5a11bf426eb65be8ea3f7a49ae363032da0d"</span>);
+<a href=#996 id=996 data-nosnippet>996</a>        <span class="kw">let </span>msg = Message::from_digest(msg_data);
+<a href=#997 id=997 data-nosnippet>997</a>
+<a href=#998 id=998 data-nosnippet>998</a>        <span class="comment">// Check usage as explicit parameter
+<a href=#999 id=999 data-nosnippet>999</a>        </span><span class="kw">let </span>pk = PublicKey::from_secret_key(SECP256K1, <span class="kw-2">&amp;</span>sk);
+<a href=#1000 id=1000 data-nosnippet>1000</a>
+<a href=#1001 id=1001 data-nosnippet>1001</a>        <span class="comment">// Check usage as self
+<a href=#1002 id=1002 data-nosnippet>1002</a>        </span><span class="kw">let </span>sig = SECP256K1.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#1003 id=1003 data-nosnippet>1003</a>        <span class="macro">assert!</span>(SECP256K1.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk).is_ok());
+<a href=#1004 id=1004 data-nosnippet>1004</a>    }
+<a href=#1005 id=1005 data-nosnippet>1005</a>}
+<a href=#1006 id=1006 data-nosnippet>1006</a>
+<a href=#1007 id=1007 data-nosnippet>1007</a><span class="attr">#[cfg(bench)]
+<a href=#1008 id=1008 data-nosnippet>1008</a>#[cfg(all(feature = <span class="string">"rand"</span>, feature = <span class="string">"std"</span>))]
+<a href=#1009 id=1009 data-nosnippet>1009</a></span><span class="kw">mod </span>benches {
+<a href=#1010 id=1010 data-nosnippet>1010</a>    <span class="kw">use </span>rand::rngs::mock::StepRng;
+<a href=#1011 id=1011 data-nosnippet>1011</a>    <span class="kw">use </span>test::{black_box, Bencher};
+<a href=#1012 id=1012 data-nosnippet>1012</a>
+<a href=#1013 id=1013 data-nosnippet>1013</a>    <span class="kw">use super</span>::{Message, Secp256k1};
+<a href=#1014 id=1014 data-nosnippet>1014</a>
+<a href=#1015 id=1015 data-nosnippet>1015</a>    <span class="attr">#[bench]
+<a href=#1016 id=1016 data-nosnippet>1016</a>    </span><span class="kw">pub fn </span>generate(bh: <span class="kw-2">&amp;mut </span>Bencher) {
+<a href=#1017 id=1017 data-nosnippet>1017</a>        <span class="kw">let </span>s = Secp256k1::new();
+<a href=#1018 id=1018 data-nosnippet>1018</a>        <span class="kw">let </span><span class="kw-2">mut </span>r = StepRng::new(<span class="number">1</span>, <span class="number">1</span>);
+<a href=#1019 id=1019 data-nosnippet>1019</a>        bh.iter(|| {
+<a href=#1020 id=1020 data-nosnippet>1020</a>            <span class="kw">let </span>(sk, pk) = s.generate_keypair(<span class="kw-2">&amp;mut </span>r);
+<a href=#1021 id=1021 data-nosnippet>1021</a>            black_box(sk);
+<a href=#1022 id=1022 data-nosnippet>1022</a>            black_box(pk);
+<a href=#1023 id=1023 data-nosnippet>1023</a>        });
+<a href=#1024 id=1024 data-nosnippet>1024</a>    }
+<a href=#1025 id=1025 data-nosnippet>1025</a>
+<a href=#1026 id=1026 data-nosnippet>1026</a>    <span class="attr">#[bench]
+<a href=#1027 id=1027 data-nosnippet>1027</a>    </span><span class="kw">pub fn </span>bench_sign_ecdsa(bh: <span class="kw-2">&amp;mut </span>Bencher) {
+<a href=#1028 id=1028 data-nosnippet>1028</a>        <span class="kw">let </span>s = Secp256k1::new();
+<a href=#1029 id=1029 data-nosnippet>1029</a>        <span class="kw">let </span>msg = <span class="kw">crate</span>::random_32_bytes(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#1030 id=1030 data-nosnippet>1030</a>        <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#1031 id=1031 data-nosnippet>1031</a>        <span class="kw">let </span>(sk, <span class="kw">_</span>) = s.generate_keypair(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#1032 id=1032 data-nosnippet>1032</a>
+<a href=#1033 id=1033 data-nosnippet>1033</a>        bh.iter(|| {
+<a href=#1034 id=1034 data-nosnippet>1034</a>            <span class="kw">let </span>sig = s.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#1035 id=1035 data-nosnippet>1035</a>            black_box(sig);
+<a href=#1036 id=1036 data-nosnippet>1036</a>        });
+<a href=#1037 id=1037 data-nosnippet>1037</a>    }
+<a href=#1038 id=1038 data-nosnippet>1038</a>
+<a href=#1039 id=1039 data-nosnippet>1039</a>    <span class="attr">#[bench]
+<a href=#1040 id=1040 data-nosnippet>1040</a>    </span><span class="kw">pub fn </span>bench_verify_ecdsa(bh: <span class="kw-2">&amp;mut </span>Bencher) {
+<a href=#1041 id=1041 data-nosnippet>1041</a>        <span class="kw">let </span>s = Secp256k1::new();
+<a href=#1042 id=1042 data-nosnippet>1042</a>        <span class="kw">let </span>msg = <span class="kw">crate</span>::random_32_bytes(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#1043 id=1043 data-nosnippet>1043</a>        <span class="kw">let </span>msg = Message::from_digest(msg);
+<a href=#1044 id=1044 data-nosnippet>1044</a>        <span class="kw">let </span>(sk, pk) = s.generate_keypair(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#1045 id=1045 data-nosnippet>1045</a>        <span class="kw">let </span>sig = s.sign_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sk);
+<a href=#1046 id=1046 data-nosnippet>1046</a>
+<a href=#1047 id=1047 data-nosnippet>1047</a>        bh.iter(|| {
+<a href=#1048 id=1048 data-nosnippet>1048</a>            <span class="kw">let </span>res = s.verify_ecdsa(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>pk).unwrap();
+<a href=#1049 id=1049 data-nosnippet>1049</a>            black_box(res);
+<a href=#1050 id=1050 data-nosnippet>1050</a>        });
+<a href=#1051 id=1051 data-nosnippet>1051</a>    }
+<a href=#1052 id=1052 data-nosnippet>1052</a>}</code></pre></div></section></main></body></html>

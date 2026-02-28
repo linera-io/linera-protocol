@@ -1,0 +1,325 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bcs-0.1.6/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="bcs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">bcs/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) The Diem Core Contributors
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="attr">#![forbid(unsafe_code)]
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="doccomment">//! # Binary Canonical Serialization (BCS)
+<a href=#7 id=7 data-nosnippet>7</a>//!
+<a href=#8 id=8 data-nosnippet>8</a>//! BCS (formerly "Libra Canonical Serialization" or LCS) is a serialization format developed
+<a href=#9 id=9 data-nosnippet>9</a>//! in the context of the [Diem](https://diem.com) blockchain.
+<a href=#10 id=10 data-nosnippet>10</a>//!
+<a href=#11 id=11 data-nosnippet>11</a>//! BCS was designed with the following main goals in mind:
+<a href=#12 id=12 data-nosnippet>12</a>//! * provide good performance and concise (binary) representations;
+<a href=#13 id=13 data-nosnippet>13</a>//! * support a rich set of data types commonly used in Rust;
+<a href=#14 id=14 data-nosnippet>14</a>//! * enforce canonical serialization, meaning that every value of a given type should have
+<a href=#15 id=15 data-nosnippet>15</a>//! a single valid representation.
+<a href=#16 id=16 data-nosnippet>16</a>//!
+<a href=#17 id=17 data-nosnippet>17</a>//! BCS also aims to mitigate the consequence of malicious inputs by enforcing well-defined limits
+<a href=#18 id=18 data-nosnippet>18</a>//! on large or nested containers during (de)serialization.
+<a href=#19 id=19 data-nosnippet>19</a>//!
+<a href=#20 id=20 data-nosnippet>20</a>//! ## Rust Implementation
+<a href=#21 id=21 data-nosnippet>21</a>//!
+<a href=#22 id=22 data-nosnippet>22</a>//! This crate provides a Rust implementation of BCS as an encoding format for the [Serde library](https://serde.rs).
+<a href=#23 id=23 data-nosnippet>23</a>//! As such, this implementation covers most data types supported by Serde -- including user-defined structs,
+<a href=#24 id=24 data-nosnippet>24</a>//! tagged variants (Rust enums), tuples, and maps -- excluding floats, single unicode characters (char), and sets.
+<a href=#25 id=25 data-nosnippet>25</a>//!
+<a href=#26 id=26 data-nosnippet>26</a>//! BCS is also available in other programming languages, thanks to the separate project [serde-reflection](https://github.com/novifinancial/serde-reflection).
+<a href=#27 id=27 data-nosnippet>27</a>//!
+<a href=#28 id=28 data-nosnippet>28</a>//! ## Application to Cryptography
+<a href=#29 id=29 data-nosnippet>29</a>//!
+<a href=#30 id=30 data-nosnippet>30</a>//! The BCS format guarantees canonical serialization, meaning that for any given data type, there
+<a href=#31 id=31 data-nosnippet>31</a>//! is a one-to-one correspondance between in-memory values and valid byte representations.
+<a href=#32 id=32 data-nosnippet>32</a>//!
+<a href=#33 id=33 data-nosnippet>33</a>//! In the context of a cryptographic application, canonical serialization has several benefits:
+<a href=#34 id=34 data-nosnippet>34</a>//! * It provides a natural and reliable way to associate in-memory values to cryptographic hashes.
+<a href=#35 id=35 data-nosnippet>35</a>//! * It allows the signature of a message to be defined equivalently as the signature of the serialized bytes or as the signature of the in-memory value.
+<a href=#36 id=36 data-nosnippet>36</a>//!
+<a href=#37 id=37 data-nosnippet>37</a>//! Note that BCS ensures canonical serialization for each data type separately. The data type of a serialized value
+<a href=#38 id=38 data-nosnippet>38</a>//! must be enforced by the application itself. This requirement is typically fulfilled
+<a href=#39 id=39 data-nosnippet>39</a>//! using unique hash seeds for each data type. (See [Diem's cryptographic library](https://github.com/diem/diem/blob/master/crypto/crypto/src/hash.rs) for an example.)
+<a href=#40 id=40 data-nosnippet>40</a>//!
+<a href=#41 id=41 data-nosnippet>41</a>//! ## Backwards Compatibility
+<a href=#42 id=42 data-nosnippet>42</a>//!
+<a href=#43 id=43 data-nosnippet>43</a>//! By design, BCS does not provide implicit versioning or backwards/forwards compatibility, therefore
+<a href=#44 id=44 data-nosnippet>44</a>//! applications must carefully plan in advance for adhoc extension points:
+<a href=#45 id=45 data-nosnippet>45</a>//! * Enums may be used for explicit versioning and backward compatibility (e.g. extensible query interfaces).
+<a href=#46 id=46 data-nosnippet>46</a>//! * In some cases, data fields of type `Vec&lt;u8&gt;` may also be added to allow (future) unknown payloads
+<a href=#47 id=47 data-nosnippet>47</a>//! in serialized form.
+<a href=#48 id=48 data-nosnippet>48</a>//!
+<a href=#49 id=49 data-nosnippet>49</a>//! ## Detailed Specifications
+<a href=#50 id=50 data-nosnippet>50</a>//!
+<a href=#51 id=51 data-nosnippet>51</a>//! BCS supports the following data types:
+<a href=#52 id=52 data-nosnippet>52</a>//!
+<a href=#53 id=53 data-nosnippet>53</a>//! * Booleans
+<a href=#54 id=54 data-nosnippet>54</a>//! * Signed 8-bit, 16-bit, 32-bit, 64-bit, and 128-bit integers
+<a href=#55 id=55 data-nosnippet>55</a>//! * Unsigned 8-bit, 16-bit, 32-bit, 64-bit, and 128-bit integers
+<a href=#56 id=56 data-nosnippet>56</a>//! * Option
+<a href=#57 id=57 data-nosnippet>57</a>//! * Unit (an empty value)
+<a href=#58 id=58 data-nosnippet>58</a>//! * Fixed and variable length sequences
+<a href=#59 id=59 data-nosnippet>59</a>//! * UTF-8 Encoded Strings
+<a href=#60 id=60 data-nosnippet>60</a>//! * Tuples
+<a href=#61 id=61 data-nosnippet>61</a>//! * Structures (aka "structs")
+<a href=#62 id=62 data-nosnippet>62</a>//! * Externally tagged enumerations (aka "enums")
+<a href=#63 id=63 data-nosnippet>63</a>//! * Maps
+<a href=#64 id=64 data-nosnippet>64</a>//!
+<a href=#65 id=65 data-nosnippet>65</a>//! BCS is not a self-describing format. As such, in order to deserialize a message, one must
+<a href=#66 id=66 data-nosnippet>66</a>//! know the message type and layout ahead of time.
+<a href=#67 id=67 data-nosnippet>67</a>//!
+<a href=#68 id=68 data-nosnippet>68</a>//! Unless specified, all numbers are stored in little endian, two's complement format.
+<a href=#69 id=69 data-nosnippet>69</a>//!
+<a href=#70 id=70 data-nosnippet>70</a>//! ### Recursion and Depth of BCS Data
+<a href=#71 id=71 data-nosnippet>71</a>//!
+<a href=#72 id=72 data-nosnippet>72</a>//! Recursive data-structures (e.g. trees) are allowed. However, because of the possibility of stack
+<a href=#73 id=73 data-nosnippet>73</a>//! overflow during (de)serialization, the *container depth* of any valid BCS data cannot exceed the constant
+<a href=#74 id=74 data-nosnippet>74</a>//! `MAX_CONTAINER_DEPTH`. Formally, we define *container depth* as the number of structs and enums traversed
+<a href=#75 id=75 data-nosnippet>75</a>//! during (de)serialization.
+<a href=#76 id=76 data-nosnippet>76</a>//!
+<a href=#77 id=77 data-nosnippet>77</a>//! This definition aims to minimize the number of operations while ensuring that
+<a href=#78 id=78 data-nosnippet>78</a>//! (de)serialization of a known BCS format cannot cause arbitrarily large stack allocations.
+<a href=#79 id=79 data-nosnippet>79</a>//!
+<a href=#80 id=80 data-nosnippet>80</a>//! As an example, if `v1` and `v2` are values of depth `n1` and `n2`,
+<a href=#81 id=81 data-nosnippet>81</a>//! * a struct value `Foo { v1, v2 }` has depth `1 + max(n1, n2)`;
+<a href=#82 id=82 data-nosnippet>82</a>//! * an enum value `E::Foo { v1, v2 }` has depth `1 + max(n1, n2)`;
+<a href=#83 id=83 data-nosnippet>83</a>//! * a pair `(v1, v2)` has depth `max(n1, n2)`;
+<a href=#84 id=84 data-nosnippet>84</a>//! * the value `Some(v1)` has depth `n1`.
+<a href=#85 id=85 data-nosnippet>85</a>//!
+<a href=#86 id=86 data-nosnippet>86</a>//! All string and integer values have depths `0`.
+<a href=#87 id=87 data-nosnippet>87</a>//!
+<a href=#88 id=88 data-nosnippet>88</a>//! ### Booleans and Integers
+<a href=#89 id=89 data-nosnippet>89</a>//!
+<a href=#90 id=90 data-nosnippet>90</a>//! |Type                       |Original data          |Hex representation |Serialized bytes        |
+<a href=#91 id=91 data-nosnippet>91</a>//! |---                        |---                    |---                |---                     |
+<a href=#92 id=92 data-nosnippet>92</a>//! |Boolean                    |True / False           |0x01 / 0x00        |01 / 00                 |
+<a href=#93 id=93 data-nosnippet>93</a>//! |8-bit signed integer       |-1                     |0xFF               |FF                      |
+<a href=#94 id=94 data-nosnippet>94</a>//! |8-bit unsigned integer     |1                      |0x01               |01                      |
+<a href=#95 id=95 data-nosnippet>95</a>//! |16-bit signed integer      |-4660                  |0xEDCC             |CC ED                   |
+<a href=#96 id=96 data-nosnippet>96</a>//! |16-bit unsigned integer    |4660                   |0x1234             |34 12                   |
+<a href=#97 id=97 data-nosnippet>97</a>//! |32-bit signed integer      |-305419896             |0xEDCBA988         |88 A9 CB ED             |
+<a href=#98 id=98 data-nosnippet>98</a>//! |32-bit unsigned integer    |305419896              |0x12345678         |78 56 34 12             |
+<a href=#99 id=99 data-nosnippet>99</a>//! |64-bit signed integer      |-1311768467750121216   |0xEDCBA98754321100 |00 11 32 54 87 A9 CB ED |
+<a href=#100 id=100 data-nosnippet>100</a>//! |64-bit unsigned integer    |1311768467750121216    |0x12345678ABCDEF00 |00 EF CD AB 78 56 34 12 |
+<a href=#101 id=101 data-nosnippet>101</a>//!
+<a href=#102 id=102 data-nosnippet>102</a>//! ### ULEB128-Encoded Integers
+<a href=#103 id=103 data-nosnippet>103</a>//!
+<a href=#104 id=104 data-nosnippet>104</a>//! The BCS format also uses the [ULEB128 encoding](https://en.wikipedia.org/wiki/LEB128) internally
+<a href=#105 id=105 data-nosnippet>105</a>//! to represent unsigned 32-bit integers in two cases where small values are usually expected:
+<a href=#106 id=106 data-nosnippet>106</a>//! (1) lengths of variable-length sequences and (2) tags of enum values (see the corresponding
+<a href=#107 id=107 data-nosnippet>107</a>//! sections below).
+<a href=#108 id=108 data-nosnippet>108</a>//!
+<a href=#109 id=109 data-nosnippet>109</a>//! |Type                       |Original data          |Hex representation |Serialized bytes   |
+<a href=#110 id=110 data-nosnippet>110</a>//! |---                        |---                    |---                |---                |
+<a href=#111 id=111 data-nosnippet>111</a>//! |ULEB128-encoded u32-integer|2^0 = 1                |0x00000001         |01                 |
+<a href=#112 id=112 data-nosnippet>112</a>//! |                           |2^7 = 128              |0x00000080         |80 01              |
+<a href=#113 id=113 data-nosnippet>113</a>//! |                           |2^14 = 16384           |0x00004000         |80 80 01           |
+<a href=#114 id=114 data-nosnippet>114</a>//! |                           |2^21 = 2097152         |0x00200000         |80 80 80 01        |
+<a href=#115 id=115 data-nosnippet>115</a>//! |                           |2^28 = 268435456       |0x10000000         |80 80 80 80 01     |
+<a href=#116 id=116 data-nosnippet>116</a>//! |                           |9487                   |0x0000250f         |8f 4a              |
+<a href=#117 id=117 data-nosnippet>117</a>//!
+<a href=#118 id=118 data-nosnippet>118</a>//! In general, a ULEB128 encoding consists of a little-endian sequence of base-128 (7-bit)
+<a href=#119 id=119 data-nosnippet>119</a>//! digits. Each digit is completed into a byte by setting the highest bit to 1, except for the
+<a href=#120 id=120 data-nosnippet>120</a>//! last (highest-significance) digit whose highest bit is set to 0.
+<a href=#121 id=121 data-nosnippet>121</a>//!
+<a href=#122 id=122 data-nosnippet>122</a>//! In BCS, the result of decoding ULEB128 bytes is required to fit into a 32-bit unsigned
+<a href=#123 id=123 data-nosnippet>123</a>//! integer and be in canonical form. For instance, the following values are rejected:
+<a href=#124 id=124 data-nosnippet>124</a>//! * 80 80 80 80 80 01 (2^36) is too large.
+<a href=#125 id=125 data-nosnippet>125</a>//! * 80 80 80 80 10 (2^33) is too large.
+<a href=#126 id=126 data-nosnippet>126</a>//! * 80 00 is not a minimal encoding of 0.
+<a href=#127 id=127 data-nosnippet>127</a>//!
+<a href=#128 id=128 data-nosnippet>128</a>//! ### Optional Data
+<a href=#129 id=129 data-nosnippet>129</a>//!
+<a href=#130 id=130 data-nosnippet>130</a>//! Optional or nullable data either exists in its full representation or does not. BCS represents
+<a href=#131 id=131 data-nosnippet>131</a>//! this as a single byte representing the presence `0x01` or absence `0x00` of data. If the data
+<a href=#132 id=132 data-nosnippet>132</a>//! is present then the serialized form of that data follows. For example:
+<a href=#133 id=133 data-nosnippet>133</a>//!
+<a href=#134 id=134 data-nosnippet>134</a>//! ```rust
+<a href=#135 id=135 data-nosnippet>135</a>//! # use bcs::{Result, to_bytes};
+<a href=#136 id=136 data-nosnippet>136</a>//! # fn main() -&gt; Result&lt;()&gt; {
+<a href=#137 id=137 data-nosnippet>137</a>//! let some_data: Option&lt;u8&gt; = Some(8);
+<a href=#138 id=138 data-nosnippet>138</a>//! assert_eq!(to_bytes(&amp;some_data)?, vec![1, 8]);
+<a href=#139 id=139 data-nosnippet>139</a>//!
+<a href=#140 id=140 data-nosnippet>140</a>//! let no_data: Option&lt;u8&gt; = None;
+<a href=#141 id=141 data-nosnippet>141</a>//! assert_eq!(to_bytes(&amp;no_data)?, vec![0]);
+<a href=#142 id=142 data-nosnippet>142</a>//! # Ok(())}
+<a href=#143 id=143 data-nosnippet>143</a>//! ```
+<a href=#144 id=144 data-nosnippet>144</a>//!
+<a href=#145 id=145 data-nosnippet>145</a>//! ### Fixed and Variable Length Sequences
+<a href=#146 id=146 data-nosnippet>146</a>//!
+<a href=#147 id=147 data-nosnippet>147</a>//! Sequences can be made of up of any BCS supported types (even complex structures) but all
+<a href=#148 id=148 data-nosnippet>148</a>//! elements in the sequence must be of the same type. If the length of a sequence is fixed and
+<a href=#149 id=149 data-nosnippet>149</a>//! well known then BCS represents this as just the concatenation of the serialized form of each
+<a href=#150 id=150 data-nosnippet>150</a>//! individual element in the sequence. If the length of the sequence can be variable, then the
+<a href=#151 id=151 data-nosnippet>151</a>//! serialized sequence is length prefixed with a ULEB128-encoded unsigned integer indicating
+<a href=#152 id=152 data-nosnippet>152</a>//! the number of elements in the sequence. All variable length sequences must be
+<a href=#153 id=153 data-nosnippet>153</a>//! `MAX_SEQUENCE_LENGTH` elements long or less.
+<a href=#154 id=154 data-nosnippet>154</a>//!
+<a href=#155 id=155 data-nosnippet>155</a>//! ```rust
+<a href=#156 id=156 data-nosnippet>156</a>//! # use bcs::{Result, to_bytes};
+<a href=#157 id=157 data-nosnippet>157</a>//! # fn main() -&gt; Result&lt;()&gt; {
+<a href=#158 id=158 data-nosnippet>158</a>//! let fixed: [u16; 3] = [1, 2, 3];
+<a href=#159 id=159 data-nosnippet>159</a>//! assert_eq!(to_bytes(&amp;fixed)?, vec![1, 0, 2, 0, 3, 0]);
+<a href=#160 id=160 data-nosnippet>160</a>//!
+<a href=#161 id=161 data-nosnippet>161</a>//! let variable: Vec&lt;u16&gt; = vec![1, 2];
+<a href=#162 id=162 data-nosnippet>162</a>//! assert_eq!(to_bytes(&amp;variable)?, vec![2, 1, 0, 2, 0]);
+<a href=#163 id=163 data-nosnippet>163</a>//!
+<a href=#164 id=164 data-nosnippet>164</a>//! let large_variable_length: Vec&lt;()&gt; = vec![(); 9_487];
+<a href=#165 id=165 data-nosnippet>165</a>//! assert_eq!(to_bytes(&amp;large_variable_length)?, vec![0x8f, 0x4a]);
+<a href=#166 id=166 data-nosnippet>166</a>//! # Ok(())}
+<a href=#167 id=167 data-nosnippet>167</a>//! ```
+<a href=#168 id=168 data-nosnippet>168</a>//!
+<a href=#169 id=169 data-nosnippet>169</a>//! ### Strings
+<a href=#170 id=170 data-nosnippet>170</a>//!
+<a href=#171 id=171 data-nosnippet>171</a>//! Only valid UTF-8 Strings are supported. BCS serializes such strings as a variable length byte
+<a href=#172 id=172 data-nosnippet>172</a>//! sequence, i.e. length prefixed with a ULEB128-encoded unsigned integer followed by the byte
+<a href=#173 id=173 data-nosnippet>173</a>//! representation of the string.
+<a href=#174 id=174 data-nosnippet>174</a>//!
+<a href=#175 id=175 data-nosnippet>175</a>//! ```rust
+<a href=#176 id=176 data-nosnippet>176</a>//! # use bcs::{Result, to_bytes};
+<a href=#177 id=177 data-nosnippet>177</a>//! # fn main() -&gt; Result&lt;()&gt; {
+<a href=#178 id=178 data-nosnippet>178</a>//! // Note that this string has 10 characters but has a byte length of 24
+<a href=#179 id=179 data-nosnippet>179</a>//! let utf8_str = "çå∞≠¢õß∂ƒ∫";
+<a href=#180 id=180 data-nosnippet>180</a>//! let expecting = vec![
+<a href=#181 id=181 data-nosnippet>181</a>//!     24, 0xc3, 0xa7, 0xc3, 0xa5, 0xe2, 0x88, 0x9e, 0xe2, 0x89, 0xa0, 0xc2,
+<a href=#182 id=182 data-nosnippet>182</a>//!     0xa2, 0xc3, 0xb5, 0xc3, 0x9f, 0xe2, 0x88, 0x82, 0xc6, 0x92, 0xe2, 0x88, 0xab,
+<a href=#183 id=183 data-nosnippet>183</a>//! ];
+<a href=#184 id=184 data-nosnippet>184</a>//! assert_eq!(to_bytes(&amp;utf8_str)?, expecting);
+<a href=#185 id=185 data-nosnippet>185</a>//! # Ok(())}
+<a href=#186 id=186 data-nosnippet>186</a>//! ```
+<a href=#187 id=187 data-nosnippet>187</a>//!
+<a href=#188 id=188 data-nosnippet>188</a>//! ### Tuples
+<a href=#189 id=189 data-nosnippet>189</a>//!
+<a href=#190 id=190 data-nosnippet>190</a>//! Tuples are typed composition of objects: `(Type0, Type1)`
+<a href=#191 id=191 data-nosnippet>191</a>//!
+<a href=#192 id=192 data-nosnippet>192</a>//! Tuples are considered a fixed length sequence where each element in the sequence can be a
+<a href=#193 id=193 data-nosnippet>193</a>//! different type supported by BCS. Each element of a tuple is serialized in the order it is
+<a href=#194 id=194 data-nosnippet>194</a>//! defined within the tuple, i.e. [tuple.0, tuple.2].
+<a href=#195 id=195 data-nosnippet>195</a>//!
+<a href=#196 id=196 data-nosnippet>196</a>//! ```rust
+<a href=#197 id=197 data-nosnippet>197</a>//! # use bcs::{Result, to_bytes};
+<a href=#198 id=198 data-nosnippet>198</a>//! # fn main() -&gt; Result&lt;()&gt; {
+<a href=#199 id=199 data-nosnippet>199</a>//! let tuple = (-1i8, "diem");
+<a href=#200 id=200 data-nosnippet>200</a>//! let expecting = vec![0xFF, 4, b'd', b'i', b'e', b'm'];
+<a href=#201 id=201 data-nosnippet>201</a>//! assert_eq!(to_bytes(&amp;tuple)?, expecting);
+<a href=#202 id=202 data-nosnippet>202</a>//! # Ok(())}
+<a href=#203 id=203 data-nosnippet>203</a>//! ```
+<a href=#204 id=204 data-nosnippet>204</a>//!
+<a href=#205 id=205 data-nosnippet>205</a>//!
+<a href=#206 id=206 data-nosnippet>206</a>//! ### Structures
+<a href=#207 id=207 data-nosnippet>207</a>//!
+<a href=#208 id=208 data-nosnippet>208</a>//! Structures are fixed length sequences consisting of fields with potentially different types.
+<a href=#209 id=209 data-nosnippet>209</a>//! Each field within a struct is serialized in the order specified by the canonical structure
+<a href=#210 id=210 data-nosnippet>210</a>//! definition. Structs can exist within other structs and as such, BCS recurses into each struct
+<a href=#211 id=211 data-nosnippet>211</a>//! and serializes them in order. There are no labels in the serialized format, the struct ordering
+<a href=#212 id=212 data-nosnippet>212</a>//! defines the organization within the serialization stream.
+<a href=#213 id=213 data-nosnippet>213</a>//!
+<a href=#214 id=214 data-nosnippet>214</a>//! ```rust
+<a href=#215 id=215 data-nosnippet>215</a>//! # use bcs::{Result, to_bytes};
+<a href=#216 id=216 data-nosnippet>216</a>//! # use serde::Serialize;
+<a href=#217 id=217 data-nosnippet>217</a>//! # fn main() -&gt; Result&lt;()&gt; {
+<a href=#218 id=218 data-nosnippet>218</a>//! #[derive(Serialize)]
+<a href=#219 id=219 data-nosnippet>219</a>//! struct MyStruct {
+<a href=#220 id=220 data-nosnippet>220</a>//!     boolean: bool,
+<a href=#221 id=221 data-nosnippet>221</a>//!     bytes: Vec&lt;u8&gt;,
+<a href=#222 id=222 data-nosnippet>222</a>//!     label: String,
+<a href=#223 id=223 data-nosnippet>223</a>//! }
+<a href=#224 id=224 data-nosnippet>224</a>//!
+<a href=#225 id=225 data-nosnippet>225</a>//! #[derive(Serialize)]
+<a href=#226 id=226 data-nosnippet>226</a>//! struct Wrapper {
+<a href=#227 id=227 data-nosnippet>227</a>//!     inner: MyStruct,
+<a href=#228 id=228 data-nosnippet>228</a>//!     name: String,
+<a href=#229 id=229 data-nosnippet>229</a>//! }
+<a href=#230 id=230 data-nosnippet>230</a>//!
+<a href=#231 id=231 data-nosnippet>231</a>//! let s = MyStruct {
+<a href=#232 id=232 data-nosnippet>232</a>//!     boolean: true,
+<a href=#233 id=233 data-nosnippet>233</a>//!     bytes: vec![0xC0, 0xDE],
+<a href=#234 id=234 data-nosnippet>234</a>//!     label: "a".to_owned(),
+<a href=#235 id=235 data-nosnippet>235</a>//! };
+<a href=#236 id=236 data-nosnippet>236</a>//! let s_bytes = to_bytes(&amp;s)?;
+<a href=#237 id=237 data-nosnippet>237</a>//! let mut expecting = vec![1, 2, 0xC0, 0xDE, 1, b'a'];
+<a href=#238 id=238 data-nosnippet>238</a>//! assert_eq!(s_bytes, expecting);
+<a href=#239 id=239 data-nosnippet>239</a>//!
+<a href=#240 id=240 data-nosnippet>240</a>//! let w = Wrapper {
+<a href=#241 id=241 data-nosnippet>241</a>//!     inner: s,
+<a href=#242 id=242 data-nosnippet>242</a>//!     name: "b".to_owned(),
+<a href=#243 id=243 data-nosnippet>243</a>//! };
+<a href=#244 id=244 data-nosnippet>244</a>//! let w_bytes = to_bytes(&amp;w)?;
+<a href=#245 id=245 data-nosnippet>245</a>//! assert!(w_bytes.starts_with(&amp;s_bytes));
+<a href=#246 id=246 data-nosnippet>246</a>//!
+<a href=#247 id=247 data-nosnippet>247</a>//! expecting.append(&amp;mut vec![1, b'b']);
+<a href=#248 id=248 data-nosnippet>248</a>//! assert_eq!(w_bytes, expecting);
+<a href=#249 id=249 data-nosnippet>249</a>//! # Ok(())}
+<a href=#250 id=250 data-nosnippet>250</a>//! ```
+<a href=#251 id=251 data-nosnippet>251</a>//!
+<a href=#252 id=252 data-nosnippet>252</a>//! ### Externally Tagged Enumerations
+<a href=#253 id=253 data-nosnippet>253</a>//!
+<a href=#254 id=254 data-nosnippet>254</a>//! An enumeration is typically represented as a type that can take one of potentially many
+<a href=#255 id=255 data-nosnippet>255</a>//! different variants. In BCS, each variant is mapped to a variant index, a ULEB128-encoded 32-bit unsigned
+<a href=#256 id=256 data-nosnippet>256</a>//! integer, followed by serialized data if the type has an associated value. An
+<a href=#257 id=257 data-nosnippet>257</a>//! associated type can be any BCS supported type. The variant index is determined based on the
+<a href=#258 id=258 data-nosnippet>258</a>//! ordering of the variants in the canonical enum definition, where the first variant has an index
+<a href=#259 id=259 data-nosnippet>259</a>//! of `0`, the second an index of `1`, etc.
+<a href=#260 id=260 data-nosnippet>260</a>//!
+<a href=#261 id=261 data-nosnippet>261</a>//! ```rust
+<a href=#262 id=262 data-nosnippet>262</a>//! # use bcs::{Result, to_bytes};
+<a href=#263 id=263 data-nosnippet>263</a>//! # use serde::Serialize;
+<a href=#264 id=264 data-nosnippet>264</a>//! # fn main() -&gt; Result&lt;()&gt; {
+<a href=#265 id=265 data-nosnippet>265</a>//! #[derive(Serialize)]
+<a href=#266 id=266 data-nosnippet>266</a>//! enum E {
+<a href=#267 id=267 data-nosnippet>267</a>//!     Variant0(u16),
+<a href=#268 id=268 data-nosnippet>268</a>//!     Variant1(u8),
+<a href=#269 id=269 data-nosnippet>269</a>//!     Variant2(String),
+<a href=#270 id=270 data-nosnippet>270</a>//! }
+<a href=#271 id=271 data-nosnippet>271</a>//!
+<a href=#272 id=272 data-nosnippet>272</a>//! let v0 = E::Variant0(8000);
+<a href=#273 id=273 data-nosnippet>273</a>//! let v1 = E::Variant1(255);
+<a href=#274 id=274 data-nosnippet>274</a>//! let v2 = E::Variant2("e".to_owned());
+<a href=#275 id=275 data-nosnippet>275</a>//!
+<a href=#276 id=276 data-nosnippet>276</a>//! assert_eq!(to_bytes(&amp;v0)?, vec![0, 0x40, 0x1F]);
+<a href=#277 id=277 data-nosnippet>277</a>//! assert_eq!(to_bytes(&amp;v1)?, vec![1, 0xFF]);
+<a href=#278 id=278 data-nosnippet>278</a>//! assert_eq!(to_bytes(&amp;v2)?, vec![2, 1, b'e']);
+<a href=#279 id=279 data-nosnippet>279</a>//! # Ok(())}
+<a href=#280 id=280 data-nosnippet>280</a>//! ```
+<a href=#281 id=281 data-nosnippet>281</a>//!
+<a href=#282 id=282 data-nosnippet>282</a>//! If you need to serialize a C-style enum, you should use a primitive integer type.
+<a href=#283 id=283 data-nosnippet>283</a>//!
+<a href=#284 id=284 data-nosnippet>284</a>//! ### Maps (Key / Value Stores)
+<a href=#285 id=285 data-nosnippet>285</a>//!
+<a href=#286 id=286 data-nosnippet>286</a>//! Maps are represented as a variable-length, sorted sequence of (Key, Value) tuples. Keys must be
+<a href=#287 id=287 data-nosnippet>287</a>//! unique and the tuples sorted by increasing lexicographical order on the BCS bytes of each key.
+<a href=#288 id=288 data-nosnippet>288</a>//! The representation is otherwise similar to that of a variable-length sequence. In particular,
+<a href=#289 id=289 data-nosnippet>289</a>//! it is preceded by the number of tuples, encoded in ULEB128.
+<a href=#290 id=290 data-nosnippet>290</a>//!
+<a href=#291 id=291 data-nosnippet>291</a>//! ```rust
+<a href=#292 id=292 data-nosnippet>292</a>//! # use bcs::{Result, to_bytes};
+<a href=#293 id=293 data-nosnippet>293</a>//! # use std::collections::HashMap;
+<a href=#294 id=294 data-nosnippet>294</a>//! # fn main() -&gt; Result&lt;()&gt; {
+<a href=#295 id=295 data-nosnippet>295</a>//! let mut map = HashMap::new();
+<a href=#296 id=296 data-nosnippet>296</a>//! map.insert(b'e', b'f');
+<a href=#297 id=297 data-nosnippet>297</a>//! map.insert(b'a', b'b');
+<a href=#298 id=298 data-nosnippet>298</a>//! map.insert(b'c', b'd');
+<a href=#299 id=299 data-nosnippet>299</a>//!
+<a href=#300 id=300 data-nosnippet>300</a>//! let expecting = vec![(b'a', b'b'), (b'c', b'd'), (b'e', b'f')];
+<a href=#301 id=301 data-nosnippet>301</a>//!
+<a href=#302 id=302 data-nosnippet>302</a>//! assert_eq!(to_bytes(&amp;map)?, to_bytes(&amp;expecting)?);
+<a href=#303 id=303 data-nosnippet>303</a>//! # Ok(())}
+<a href=#304 id=304 data-nosnippet>304</a>//! ```
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a></span><span class="kw">mod </span>de;
+<a href=#307 id=307 data-nosnippet>307</a><span class="kw">mod </span>error;
+<a href=#308 id=308 data-nosnippet>308</a><span class="kw">mod </span>ser;
+<a href=#309 id=309 data-nosnippet>309</a><span class="kw">pub mod </span>test_helpers;
+<a href=#310 id=310 data-nosnippet>310</a>
+<a href=#311 id=311 data-nosnippet>311</a><span class="doccomment">/// Variable length sequences in BCS are limited to max length of 2^31 - 1.
+<a href=#312 id=312 data-nosnippet>312</a></span><span class="kw">pub const </span>MAX_SEQUENCE_LENGTH: usize = (<span class="number">1 </span>&lt;&lt; <span class="number">31</span>) - <span class="number">1</span>;
+<a href=#313 id=313 data-nosnippet>313</a>
+<a href=#314 id=314 data-nosnippet>314</a><span class="doccomment">/// Maximal allowed depth of BCS data, counting only structs and enums.
+<a href=#315 id=315 data-nosnippet>315</a></span><span class="kw">pub const </span>MAX_CONTAINER_DEPTH: usize = <span class="number">500</span>;
+<a href=#316 id=316 data-nosnippet>316</a>
+<a href=#317 id=317 data-nosnippet>317</a><span class="kw">pub use </span>de::{
+<a href=#318 id=318 data-nosnippet>318</a>    from_bytes, from_bytes_seed, from_bytes_seed_with_limit, from_bytes_with_limit, from_reader,
+<a href=#319 id=319 data-nosnippet>319</a>    from_reader_seed, from_reader_seed_with_limit, from_reader_with_limit,
+<a href=#320 id=320 data-nosnippet>320</a>};
+<a href=#321 id=321 data-nosnippet>321</a><span class="kw">pub use </span>error::{Error, <span class="prelude-ty">Result</span>};
+<a href=#322 id=322 data-nosnippet>322</a><span class="kw">pub use </span>ser::{
+<a href=#323 id=323 data-nosnippet>323</a>    is_human_readable, serialize_into, serialize_into_with_limit, serialized_size,
+<a href=#324 id=324 data-nosnippet>324</a>    serialized_size_with_limit, to_bytes, to_bytes_with_limit,
+<a href=#325 id=325 data-nosnippet>325</a>};</code></pre></div></section></main></body></html>

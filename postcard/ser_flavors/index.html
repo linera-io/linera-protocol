@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Serialization Flavors"><title>postcard::ser_flavors - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="postcard" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../postcard/index.html">postcard</a><span class="version">1.1.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module ser_<wbr>flavors</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#serialization-flavors" title="Serialization Flavors">Serialization Flavors</a><ul><li><a href="#usability" title="Usability">Usability</a></li><li><a href="#when-to-use-multiple-flavors" title="When to use (multiple) flavors">When to use (multiple) flavors</a></li><li><a href="#when-not-to-use-multiple-flavors" title="When NOT to use (multiple) flavors">When NOT to use (multiple) flavors</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></li></ul><h3><a href="#modules">Module Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate postcard</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">postcard</a></div><h1>Module <span>ser_flavors</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/postcard/ser/flavors.rs.html#1-729">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="serialization-flavors"><a class="doc-anchor" href="#serialization-flavors">§</a>Serialization Flavors</h2>
+<p>“Flavors” in <code>postcard</code> are used as modifiers to the serialization or deserialization
+process. Flavors typically modify one or both of the following:</p>
+<ol>
+<li>The output medium of the serialization, e.g. whether the data is serialized to a <code>[u8]</code> slice, or a <code>heapless::Vec</code>.</li>
+<li>The format of the serialization, such as encoding the serialized output in a COBS format, performing CRC32 checksumming while serializing, etc.</li>
+</ol>
+<p>Flavors are implemented using the <a href="trait.Flavor.html" title="trait postcard::ser_flavors::Flavor"><code>Flavor</code></a> trait, which acts as a “middleware” for receiving the bytes as serialized by <code>serde</code>.
+Multiple flavors may be combined to obtain a desired combination of behavior and storage.
+When flavors are combined, it is expected that the storage flavor (such as <code>Slice</code> or <code>HVec</code>) is the innermost flavor.</p>
+<p>Custom flavors may be defined by users of the <code>postcard</code> crate, however some commonly useful flavors have been provided in
+this module. If you think your custom flavor would be useful to others, PRs adding flavors are very welcome!</p>
+<h3 id="usability"><a class="doc-anchor" href="#usability">§</a>Usability</h3>
+<p>Flavors may not always be convenient to use directly, as they may expose some implementation details of how the
+inner workings of the flavor behaves. It is typical to provide a convenience method for using a flavor, to prevent
+the user from having to specify generic parameters, setting correct initialization values, or handling the output of
+the flavor correctly. See <code>postcard::to_vec()</code> for an example of this.</p>
+<p>It is recommended to use the <a href="../fn.serialize_with_flavor.html"><code>serialize_with_flavor()</code></a> method for serialization. See it’s documentation for information
+regarding usage and generic type parameters.</p>
+<h3 id="when-to-use-multiple-flavors"><a class="doc-anchor" href="#when-to-use-multiple-flavors">§</a>When to use (multiple) flavors</h3>
+<p>Combining flavors are nice for convenience, as they perform potentially multiple steps of
+serialization at one time.</p>
+<p>This can often be more memory efficient, as intermediate buffers are not typically required.</p>
+<h3 id="when-not-to-use-multiple-flavors"><a class="doc-anchor" href="#when-not-to-use-multiple-flavors">§</a>When NOT to use (multiple) flavors</h3>
+<p>The downside of passing serialization through multiple steps is that it is typically slower than
+performing each step serially. Said simply, “cobs encoding while serializing” is often slower
+than “serialize then cobs encode”, due to the ability to handle longer “runs” of data in each
+stage. The downside is that if these stages can not be performed in-place on the buffer, you
+will need additional buffers for each stage.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3><h4 id="using-a-single-flavor"><a class="doc-anchor" href="#using-a-single-flavor">§</a>Using a single flavor</h4>
+<p>In the first example, we use the <code>Slice</code> flavor, to store the serialized output into a mutable <code>[u8]</code> slice.
+No other modification is made to the serialization process.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>postcard::{
+    serialize_with_flavor,
+    ser_flavors::Slice,
+};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">32</span>];
+
+<span class="kw">let </span>data: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>[<span class="number">0x01</span>, <span class="number">0x00</span>, <span class="number">0x20</span>, <span class="number">0x30</span>];
+<span class="kw">let </span>buffer = <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">32</span>];
+<span class="kw">let </span>res = serialize_with_flavor::&lt;[u8], Slice, <span class="kw-2">&amp;mut </span>[u8]&gt;(
+    data,
+    Slice::new(buffer)
+).unwrap();
+
+<span class="macro">assert_eq!</span>(res, <span class="kw-2">&amp;</span>[<span class="number">0x04</span>, <span class="number">0x01</span>, <span class="number">0x00</span>, <span class="number">0x20</span>, <span class="number">0x30</span>]);</code></pre></div>
+<h4 id="using-combined-flavors"><a class="doc-anchor" href="#using-combined-flavors">§</a>Using combined flavors</h4>
+<p>In the second example, we mix <code>Slice</code> with <code>Cobs</code>, to cobs encode the output while
+the data is serialized. Notice how <code>Slice</code> (the storage flavor) is the innermost flavor used.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>postcard::{
+    serialize_with_flavor,
+    ser_flavors::{Cobs, Slice},
+};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">32</span>];
+
+<span class="kw">let </span>data: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>[<span class="number">0x01</span>, <span class="number">0x00</span>, <span class="number">0x20</span>, <span class="number">0x30</span>];
+<span class="kw">let </span>buffer = <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">32</span>];
+<span class="kw">let </span>res = serialize_with_flavor::&lt;[u8], Cobs&lt;Slice&gt;, <span class="kw-2">&amp;mut </span>[u8]&gt;(
+    data,
+    Cobs::try_new(Slice::new(buffer)).unwrap(),
+).unwrap();
+
+<span class="macro">assert_eq!</span>(res, <span class="kw-2">&amp;</span>[<span class="number">0x03</span>, <span class="number">0x04</span>, <span class="number">0x01</span>, <span class="number">0x03</span>, <span class="number">0x20</span>, <span class="number">0x30</span>, <span class="number">0x00</span>]);</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="io/index.html" title="mod postcard::ser_flavors::io">io</a></dt><dd>Support for the <a href="https://doc.rust-lang.org/1.86.0/std/io/index.html" title="mod std::io"><code>std::io</code></a> traits</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.AllocVec.html" title="struct postcard::ser_flavors::AllocVec">Alloc<wbr>Vec</a></dt><dd>The <code>AllocVec</code> flavor is a wrapper type around an <a href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec"><code>alloc::vec::Vec</code></a>.</dd><dt><a class="struct" href="struct.Cobs.html" title="struct postcard::ser_flavors::Cobs">Cobs</a></dt><dd>The <code>Cobs</code> flavor implements <a href="https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing">Consistent Overhead Byte Stuffing</a> on
+the serialized data. The output of this flavor includes the termination/sentinel
+byte of <code>0x00</code>.</dd><dt><a class="struct" href="struct.ExtendFlavor.html" title="struct postcard::ser_flavors::ExtendFlavor">Extend<wbr>Flavor</a></dt><dd>Wrapper over a <a href="https://doc.rust-lang.org/1.86.0/core/iter/traits/collect/trait.Extend.html" title="trait core::iter::traits::collect::Extend"><code>core::iter::Extend&lt;u8&gt;</code></a> that implements the flavor trait</dd><dt><a class="struct" href="struct.Size.html" title="struct postcard::ser_flavors::Size">Size</a></dt><dd>The <code>Size</code> flavor is a measurement flavor, which accumulates the number of bytes needed to
+serialize the data.</dd><dt><a class="struct" href="struct.Slice.html" title="struct postcard::ser_flavors::Slice">Slice</a></dt><dd>The <code>Slice</code> flavor is a storage flavor, storing the serialized (or otherwise modified) bytes into a plain
+<code>[u8]</code> slice. The <code>Slice</code> flavor resolves into a sub-slice of the original slice buffer.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Flavor.html" title="trait postcard::ser_flavors::Flavor">Flavor</a></dt><dd>The serialization Flavor trait</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.StdVec.html" title="type postcard::ser_flavors::StdVec">StdVec</a></dt><dd>The <code>StdVec</code> flavor is a wrapper type around a <code>std::vec::Vec</code>.</dd></dl></section></div></main></body></html>

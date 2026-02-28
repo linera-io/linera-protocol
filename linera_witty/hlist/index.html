@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Module that holds HList data structures, implementations, and typeclasses."><title>linera_witty::hlist - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="linera_witty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../linera_witty/index.html">linera_<wbr>witty</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module hlist</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#modules">Module Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate linera_<wbr>witty</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">linera_witty</a></div><h1>Module <span>hlist</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/frunk_core/lib.rs.html#72">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Module that holds HList data structures, implementations, and typeclasses.</p>
+<p>Typically, you would want to use the <code>hlist!</code> macro to make it easier
+for you to use HList.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>frunk_core::{hlist, HList, poly_fn};
+
+<span class="kw">let </span>h = <span class="macro">hlist!</span>[<span class="number">1</span>, <span class="string">"hi"</span>];
+<span class="macro">assert_eq!</span>(h.len(), <span class="number">2</span>);
+<span class="kw">let </span>(a, b) = h.into_tuple2();
+<span class="macro">assert_eq!</span>(a, <span class="number">1</span>);
+<span class="macro">assert_eq!</span>(b, <span class="string">"hi"</span>);
+
+<span class="comment">// Reverse
+</span><span class="kw">let </span>h1 = <span class="macro">hlist!</span>[<span class="bool-val">true</span>, <span class="string">"hi"</span>];
+<span class="macro">assert_eq!</span>(h1.into_reverse(), <span class="macro">hlist!</span>[<span class="string">"hi"</span>, <span class="bool-val">true</span>]);
+
+<span class="comment">// foldr (foldl also available)
+</span><span class="kw">let </span>h2 = <span class="macro">hlist!</span>[<span class="number">1</span>, <span class="bool-val">false</span>, <span class="number">42f32</span>];
+<span class="kw">let </span>folded = h2.foldr(
+            <span class="macro">hlist!</span>[|acc, i| i + acc,
+                   |acc, <span class="kw">_</span>| <span class="kw">if </span>acc &gt; <span class="number">42f32 </span>{ <span class="number">9000 </span>} <span class="kw">else </span>{ <span class="number">0 </span>},
+                   |acc, f| f + acc],
+            <span class="number">1f32
+    </span>);
+<span class="macro">assert_eq!</span>(folded, <span class="number">9001</span>);
+
+<span class="kw">let </span>h3 = <span class="macro">hlist!</span>[<span class="number">9000</span>, <span class="string">"joe"</span>, <span class="number">41f32</span>];
+<span class="comment">// Mapping over an HList with a polymorphic function,
+// declared using the poly_fn! macro (you can choose to impl
+// it manually)
+</span><span class="kw">let </span>mapped = h3.map(
+  <span class="macro">poly_fn!</span>[
+    |f: f32|   -&gt; f32 { f + <span class="number">1f32 </span>},
+    |i: isize| -&gt; isize { i + <span class="number">1 </span>},
+    [<span class="lifetime">'a</span>] |s: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str| -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str { s }
+  ]);
+<span class="macro">assert_eq!</span>(mapped, <span class="macro">hlist!</span>[<span class="number">9001</span>, <span class="string">"joe"</span>, <span class="number">42f32</span>]);
+
+<span class="comment">// Plucking a value out by type
+</span><span class="kw">let </span>h4 = <span class="macro">hlist!</span>[<span class="number">1</span>, <span class="string">"hello"</span>, <span class="bool-val">true</span>, <span class="number">42f32</span>];
+<span class="kw">let </span>(t, remainder): (bool, <span class="kw">_</span>) = h4.pluck();
+<span class="macro">assert!</span>(t);
+<span class="macro">assert_eq!</span>(remainder, <span class="macro">hlist!</span>[<span class="number">1</span>, <span class="string">"hello"</span>, <span class="number">42f32</span>]);
+
+<span class="comment">// Resculpting an HList
+</span><span class="kw">let </span>h5 = <span class="macro">hlist!</span>[<span class="number">9000</span>, <span class="string">"joe"</span>, <span class="number">41f32</span>, <span class="bool-val">true</span>];
+<span class="kw">let </span>(reshaped, remainder2): (<span class="macro">HList!</span>[f32, i32, <span class="kw-2">&amp;</span>str], <span class="kw">_</span>) = h5.sculpt();
+<span class="macro">assert_eq!</span>(reshaped, <span class="macro">hlist!</span>[<span class="number">41f32</span>, <span class="number">9000</span>, <span class="string">"joe"</span>]);
+<span class="macro">assert_eq!</span>(remainder2, <span class="macro">hlist!</span>[<span class="bool-val">true</span>]);</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="foldr_owned/index.html" title="mod linera_witty::hlist::foldr_owned">foldr_<wbr>owned</a></dt><dd><a href="trait.HFoldRightable.html" title="trait linera_witty::hlist::HFoldRightable"><code>HFoldRightable</code></a> inner mechanics for folding with a folder that needs to be owned.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.HCons.html" title="struct linera_witty::hlist::HCons">HCons</a></dt><dd>Represents the most basic non-empty HList. Its value is held in <code>head</code>
+while its tail is another HList.</dd><dt><a class="struct" href="struct.HNil.html" title="struct linera_witty::hlist::HNil">HNil</a></dt><dd>Represents the right-most end of a heterogeneous list</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.HFoldLeftable.html" title="trait linera_witty::hlist::HFoldLeftable">HFold<wbr>Leftable</a></dt><dd>Trait for performing a left fold over an HList</dd><dt><a class="trait" href="trait.HFoldRightable.html" title="trait linera_witty::hlist::HFoldRightable">HFold<wbr>Rightable</a></dt><dd>Trait for performing a right fold over an HList</dd><dt><a class="trait" href="trait.HList.html" title="trait linera_witty::hlist::HList">HList</a></dt><dd>Typeclass for HList-y behaviour</dd><dt><a class="trait" href="trait.HMappable.html" title="trait linera_witty::hlist::HMappable">HMappable</a></dt><dd>Trait for mapping over an HList</dd><dt><a class="trait" href="trait.HZippable.html" title="trait linera_witty::hlist::HZippable">HZippable</a></dt><dd>Trait for zipping HLists</dd><dt><a class="trait" href="trait.IntoTuple2.html" title="trait linera_witty::hlist::IntoTuple2">Into<wbr>Tuple2</a></dt><dd>Trait for transforming an HList into a nested tuple.</dd><dt><a class="trait" href="trait.LiftFrom.html" title="trait linera_witty::hlist::LiftFrom">Lift<wbr>From</a></dt><dd>Indexed type conversions of <code>T -&gt; Self</code> with index <code>I</code>.
+This is a generalized version of <code>From</code> which for example allows the caller
+to use default values for parts of <code>Self</code> and thus “fill in the blanks”.</dd><dt><a class="trait" href="trait.LiftInto.html" title="trait linera_witty::hlist::LiftInto">Lift<wbr>Into</a></dt><dd>An indexed conversion that consumes <code>self</code>, and produces a <code>T</code>. To produce
+<code>T</code>, the index <code>I</code> may be used to for example “fill in the blanks”.
+<code>LiftInto</code> is the reciprocal of <code>LiftFrom</code>.</dd><dt><a class="trait" href="trait.Plucker.html" title="trait linera_witty::hlist::Plucker">Plucker</a></dt><dd>Trait defining extraction from a given HList</dd><dt><a class="trait" href="trait.Sculptor.html" title="trait linera_witty::hlist::Sculptor">Sculptor</a></dt><dd>Trait for pulling out some subset of an HList, using type inference.</dd><dt><a class="trait" href="trait.Selector.html" title="trait linera_witty::hlist::Selector">Selector</a></dt><dd>Trait for borrowing an HList element by type</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.h_cons.html" title="fn linera_witty::hlist::h_cons">h_cons</a></dt><dd>Takes an element and an Hlist and returns another one with
+the element prepended to the original list. The original list
+is consumed</dd><dt><a class="fn" href="fn.lift_from.html" title="fn linera_witty::hlist::lift_from">lift_<wbr>from</a></dt><dd>Free function version of <code>LiftFrom::lift_from</code>.</dd></dl></section></div></main></body></html>

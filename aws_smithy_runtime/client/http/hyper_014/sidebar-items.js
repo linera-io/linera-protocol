@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["default_client","default_connector"],"struct":["HyperClientBuilder","HyperConnector","HyperConnectorBuilder"]};

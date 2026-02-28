@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SERVICE_NAME"],"struct":["NotifierServiceServer"],"trait":["NotifierService"]};

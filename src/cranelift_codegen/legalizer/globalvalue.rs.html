@@ -1,0 +1,151 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cranelift-codegen-0.112.3/src/legalizer/globalvalue.rs`."><title>globalvalue.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cranelift_codegen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cranelift_codegen/legalizer/</div>globalvalue.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Legalization of global values.
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! This module exports the `expand_global_value` function which transforms a `global_value`
+<a href=#4 id=4 data-nosnippet>4</a>//! instruction into code that depends on the kind of global value referenced.
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span><span class="kw">crate</span>::cursor::{Cursor, FuncCursor};
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span><span class="kw">crate</span>::ir::{<span class="self">self</span>, pcc::Fact, InstBuilder};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">crate</span>::isa::TargetIsa;
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a><span class="doccomment">/// Expand a `global_value` instruction according to the definition of the global value.
+<a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">pub fn </span>expand_global_value(
+<a href=#12 id=12 data-nosnippet>12</a>    inst: ir::Inst,
+<a href=#13 id=13 data-nosnippet>13</a>    func: <span class="kw-2">&amp;mut </span>ir::Function,
+<a href=#14 id=14 data-nosnippet>14</a>    isa: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TargetIsa,
+<a href=#15 id=15 data-nosnippet>15</a>    global_value: ir::GlobalValue,
+<a href=#16 id=16 data-nosnippet>16</a>) {
+<a href=#17 id=17 data-nosnippet>17</a>    <span class="macro">crate::trace!</span>(
+<a href=#18 id=18 data-nosnippet>18</a>        <span class="string">"expanding global value: {:?}: {}"</span>,
+<a href=#19 id=19 data-nosnippet>19</a>        inst,
+<a href=#20 id=20 data-nosnippet>20</a>        func.dfg.display_inst(inst)
+<a href=#21 id=21 data-nosnippet>21</a>    );
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a>    <span class="kw">match </span>func.global_values[global_value] {
+<a href=#24 id=24 data-nosnippet>24</a>        ir::GlobalValueData::VMContext =&gt; vmctx_addr(global_value, inst, func),
+<a href=#25 id=25 data-nosnippet>25</a>        ir::GlobalValueData::IAddImm {
+<a href=#26 id=26 data-nosnippet>26</a>            base,
+<a href=#27 id=27 data-nosnippet>27</a>            offset,
+<a href=#28 id=28 data-nosnippet>28</a>            global_type,
+<a href=#29 id=29 data-nosnippet>29</a>        } =&gt; iadd_imm_addr(inst, func, base, offset.into(), global_type),
+<a href=#30 id=30 data-nosnippet>30</a>        ir::GlobalValueData::Load {
+<a href=#31 id=31 data-nosnippet>31</a>            base,
+<a href=#32 id=32 data-nosnippet>32</a>            offset,
+<a href=#33 id=33 data-nosnippet>33</a>            global_type,
+<a href=#34 id=34 data-nosnippet>34</a>            flags,
+<a href=#35 id=35 data-nosnippet>35</a>        } =&gt; load_addr(inst, func, base, offset, global_type, flags, isa),
+<a href=#36 id=36 data-nosnippet>36</a>        ir::GlobalValueData::Symbol { tls, .. } =&gt; symbol(inst, func, global_value, isa, tls),
+<a href=#37 id=37 data-nosnippet>37</a>        ir::GlobalValueData::DynScaleTargetConst { vector_type } =&gt; {
+<a href=#38 id=38 data-nosnippet>38</a>            const_vector_scale(inst, func, vector_type, isa)
+<a href=#39 id=39 data-nosnippet>39</a>        }
+<a href=#40 id=40 data-nosnippet>40</a>    }
+<a href=#41 id=41 data-nosnippet>41</a>}
+<a href=#42 id=42 data-nosnippet>42</a>
+<a href=#43 id=43 data-nosnippet>43</a><span class="kw">fn </span>const_vector_scale(inst: ir::Inst, func: <span class="kw-2">&amp;mut </span>ir::Function, ty: ir::Type, isa: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TargetIsa) {
+<a href=#44 id=44 data-nosnippet>44</a>    <span class="macro">assert!</span>(ty.bytes() &lt;= <span class="number">16</span>);
+<a href=#45 id=45 data-nosnippet>45</a>
+<a href=#46 id=46 data-nosnippet>46</a>    <span class="comment">// Use a minimum of 128-bits for the base type.
+<a href=#47 id=47 data-nosnippet>47</a>    </span><span class="kw">let </span>base_bytes = std::cmp::max(ty.bytes(), <span class="number">16</span>);
+<a href=#48 id=48 data-nosnippet>48</a>    <span class="kw">let </span>scale = (isa.dynamic_vector_bytes(ty) / base_bytes) <span class="kw">as </span>i64;
+<a href=#49 id=49 data-nosnippet>49</a>    <span class="macro">assert!</span>(scale &gt; <span class="number">0</span>);
+<a href=#50 id=50 data-nosnippet>50</a>    <span class="kw">let </span>pos = FuncCursor::new(func).at_inst(inst);
+<a href=#51 id=51 data-nosnippet>51</a>    pos.func.dfg.replace(inst).iconst(isa.pointer_type(), scale);
+<a href=#52 id=52 data-nosnippet>52</a>}
+<a href=#53 id=53 data-nosnippet>53</a>
+<a href=#54 id=54 data-nosnippet>54</a><span class="doccomment">/// Expand a `global_value` instruction for a vmctx global.
+<a href=#55 id=55 data-nosnippet>55</a></span><span class="kw">fn </span>vmctx_addr(global_value: ir::GlobalValue, inst: ir::Inst, func: <span class="kw-2">&amp;mut </span>ir::Function) {
+<a href=#56 id=56 data-nosnippet>56</a>    <span class="comment">// Get the value representing the `vmctx` argument.
+<a href=#57 id=57 data-nosnippet>57</a>    </span><span class="kw">let </span>vmctx = func
+<a href=#58 id=58 data-nosnippet>58</a>        .special_param(ir::ArgumentPurpose::VMContext)
+<a href=#59 id=59 data-nosnippet>59</a>        .expect(<span class="string">"Missing vmctx parameter"</span>);
+<a href=#60 id=60 data-nosnippet>60</a>
+<a href=#61 id=61 data-nosnippet>61</a>    <span class="comment">// Replace the `global_value` instruction's value with an alias to the vmctx arg.
+<a href=#62 id=62 data-nosnippet>62</a>    </span><span class="kw">let </span>result = func.dfg.first_result(inst);
+<a href=#63 id=63 data-nosnippet>63</a>    func.dfg.clear_results(inst);
+<a href=#64 id=64 data-nosnippet>64</a>    func.dfg.change_to_alias(result, vmctx);
+<a href=#65 id=65 data-nosnippet>65</a>    func.layout.remove_inst(inst);
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a>    <span class="comment">// If there was a fact on the GV, then copy it to the vmctx arg
+<a href=#68 id=68 data-nosnippet>68</a>    // blockparam def.
+<a href=#69 id=69 data-nosnippet>69</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(fact) = <span class="kw-2">&amp;</span>func.global_value_facts[global_value] {
+<a href=#70 id=70 data-nosnippet>70</a>        <span class="kw">if </span>func.dfg.facts[vmctx].is_none() {
+<a href=#71 id=71 data-nosnippet>71</a>            <span class="kw">let </span>fact = fact.clone();
+<a href=#72 id=72 data-nosnippet>72</a>            func.dfg.facts[vmctx] = <span class="prelude-val">Some</span>(fact);
+<a href=#73 id=73 data-nosnippet>73</a>        }
+<a href=#74 id=74 data-nosnippet>74</a>    }
+<a href=#75 id=75 data-nosnippet>75</a>}
+<a href=#76 id=76 data-nosnippet>76</a>
+<a href=#77 id=77 data-nosnippet>77</a><span class="doccomment">/// Expand a `global_value` instruction for an iadd_imm global.
+<a href=#78 id=78 data-nosnippet>78</a></span><span class="kw">fn </span>iadd_imm_addr(
+<a href=#79 id=79 data-nosnippet>79</a>    inst: ir::Inst,
+<a href=#80 id=80 data-nosnippet>80</a>    func: <span class="kw-2">&amp;mut </span>ir::Function,
+<a href=#81 id=81 data-nosnippet>81</a>    base: ir::GlobalValue,
+<a href=#82 id=82 data-nosnippet>82</a>    offset: i64,
+<a href=#83 id=83 data-nosnippet>83</a>    global_type: ir::Type,
+<a href=#84 id=84 data-nosnippet>84</a>) {
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).at_inst(inst);
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="comment">// Get the value for the lhs.
+<a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">let </span>lhs = pos.ins().global_value(global_type, base);
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(fact) = <span class="kw-2">&amp;</span>pos.func.global_value_facts[base] {
+<a href=#90 id=90 data-nosnippet>90</a>        pos.func.dfg.facts[lhs] = <span class="prelude-val">Some</span>(fact.clone());
+<a href=#91 id=91 data-nosnippet>91</a>    }
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="comment">// Generate the constant and attach a fact to the constant if
+<a href=#94 id=94 data-nosnippet>94</a>    // there is a fact on the base.
+<a href=#95 id=95 data-nosnippet>95</a>    </span><span class="kw">let </span>constant = pos.ins().iconst(global_type, offset);
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">if </span>pos.func.global_value_facts[base].is_some() {
+<a href=#97 id=97 data-nosnippet>97</a>        <span class="kw">let </span>bits = u16::try_from(global_type.bits()).unwrap();
+<a href=#98 id=98 data-nosnippet>98</a>        <span class="kw">let </span>unsigned_offset = offset <span class="kw">as </span>u64; <span class="comment">// Safety: reinterpret i64 bits as u64.
+<a href=#99 id=99 data-nosnippet>99</a>        </span>pos.func.dfg.facts[constant] = <span class="prelude-val">Some</span>(Fact::constant(bits, unsigned_offset));
+<a href=#100 id=100 data-nosnippet>100</a>    }
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="comment">// Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
+<a href=#103 id=103 data-nosnippet>103</a>    </span>pos.func.dfg.replace(inst).iadd(lhs, constant);
+<a href=#104 id=104 data-nosnippet>104</a>}
+<a href=#105 id=105 data-nosnippet>105</a>
+<a href=#106 id=106 data-nosnippet>106</a><span class="doccomment">/// Expand a `global_value` instruction for a load global.
+<a href=#107 id=107 data-nosnippet>107</a></span><span class="kw">fn </span>load_addr(
+<a href=#108 id=108 data-nosnippet>108</a>    inst: ir::Inst,
+<a href=#109 id=109 data-nosnippet>109</a>    func: <span class="kw-2">&amp;mut </span>ir::Function,
+<a href=#110 id=110 data-nosnippet>110</a>    base: ir::GlobalValue,
+<a href=#111 id=111 data-nosnippet>111</a>    offset: ir::immediates::Offset32,
+<a href=#112 id=112 data-nosnippet>112</a>    global_type: ir::Type,
+<a href=#113 id=113 data-nosnippet>113</a>    flags: ir::MemFlags,
+<a href=#114 id=114 data-nosnippet>114</a>    isa: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TargetIsa,
+<a href=#115 id=115 data-nosnippet>115</a>) {
+<a href=#116 id=116 data-nosnippet>116</a>    <span class="comment">// We need to load a pointer from the `base` global value, so insert a new `global_value`
+<a href=#117 id=117 data-nosnippet>117</a>    // instruction. This depends on the iterative legalization loop. Note that the IR verifier
+<a href=#118 id=118 data-nosnippet>118</a>    // detects any cycles in the `load` globals.
+<a href=#119 id=119 data-nosnippet>119</a>    </span><span class="kw">let </span>ptr_ty = isa.pointer_type();
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).at_inst(inst);
+<a href=#121 id=121 data-nosnippet>121</a>    pos.use_srcloc(inst);
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="comment">// Get the value for the base.
+<a href=#124 id=124 data-nosnippet>124</a>    </span><span class="kw">let </span>base_addr = pos.ins().global_value(ptr_ty, base);
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(fact) = <span class="kw-2">&amp;</span>pos.func.global_value_facts[base] {
+<a href=#126 id=126 data-nosnippet>126</a>        pos.func.dfg.facts[base_addr] = <span class="prelude-val">Some</span>(fact.clone());
+<a href=#127 id=127 data-nosnippet>127</a>    }
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="comment">// Perform the load.
+<a href=#130 id=130 data-nosnippet>130</a>    </span>pos.func
+<a href=#131 id=131 data-nosnippet>131</a>        .dfg
+<a href=#132 id=132 data-nosnippet>132</a>        .replace(inst)
+<a href=#133 id=133 data-nosnippet>133</a>        .load(global_type, flags, base_addr, offset);
+<a href=#134 id=134 data-nosnippet>134</a>}
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a><span class="doccomment">/// Expand a `global_value` instruction for a symbolic name global.
+<a href=#137 id=137 data-nosnippet>137</a></span><span class="kw">fn </span>symbol(
+<a href=#138 id=138 data-nosnippet>138</a>    inst: ir::Inst,
+<a href=#139 id=139 data-nosnippet>139</a>    func: <span class="kw-2">&amp;mut </span>ir::Function,
+<a href=#140 id=140 data-nosnippet>140</a>    gv: ir::GlobalValue,
+<a href=#141 id=141 data-nosnippet>141</a>    isa: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TargetIsa,
+<a href=#142 id=142 data-nosnippet>142</a>    tls: bool,
+<a href=#143 id=143 data-nosnippet>143</a>) {
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="kw">let </span>ptr_ty = isa.pointer_type();
+<a href=#145 id=145 data-nosnippet>145</a>
+<a href=#146 id=146 data-nosnippet>146</a>    <span class="kw">if </span>tls {
+<a href=#147 id=147 data-nosnippet>147</a>        func.dfg.replace(inst).tls_value(ptr_ty, gv);
+<a href=#148 id=148 data-nosnippet>148</a>    } <span class="kw">else </span>{
+<a href=#149 id=149 data-nosnippet>149</a>        func.dfg.replace(inst).symbol_value(ptr_ty, gv);
+<a href=#150 id=150 data-nosnippet>150</a>    }
+<a href=#151 id=151 data-nosnippet>151</a>}</code></pre></div></section></main></body></html>

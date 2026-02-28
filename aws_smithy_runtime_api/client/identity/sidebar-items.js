@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["IdentityCacheLocation"],"mod":["http"],"struct":["BuildError","Builder","Identity","IdentityCachePartition","IdentityFuture","SharedIdentityCache","SharedIdentityResolver"],"trait":["ResolveCachedIdentity","ResolveIdentity"]};

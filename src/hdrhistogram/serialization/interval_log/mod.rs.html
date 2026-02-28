@@ -1,0 +1,822 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hdrhistogram-7.5.4/src/serialization/interval_log/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="hdrhistogram" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">hdrhistogram/serialization/interval_log/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Interval log parsing and writing.
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! Interval logs, as handled by the Java implementation's `HistogramLogWriter`,
+<a href=#4 id=4 data-nosnippet>4</a>//! `HistogramLogReader`, and `HistogramLogProcessor`, are a way to record a sequence of histograms
+<a href=#5 id=5 data-nosnippet>5</a>//! over time. Suppose you were running a load test for an hour: you might want to record a
+<a href=#6 id=6 data-nosnippet>6</a>//! histogram per second or minute so that you could correlate measurements with behavior you might
+<a href=#7 id=7 data-nosnippet>7</a>//! see in logs, etc.
+<a href=#8 id=8 data-nosnippet>8</a>//!
+<a href=#9 id=9 data-nosnippet>9</a>//! An interval log contains some initial metadata, then a sequence of histograms, each with some
+<a href=#10 id=10 data-nosnippet>10</a>//! additional metadata (timestamps, etc). See `IntervalLogHistogram`.
+<a href=#11 id=11 data-nosnippet>11</a>//!
+<a href=#12 id=12 data-nosnippet>12</a>//! The intervals in the log should be ordered by start timestamp. It's possible to write (and
+<a href=#13 id=13 data-nosnippet>13</a>//! parse) logs with intervals in any order, but the expectation is that they will be sorted.
+<a href=#14 id=14 data-nosnippet>14</a>//!
+<a href=#15 id=15 data-nosnippet>15</a>//! To parse a log, see `IntervalLogIterator`. To write a log, see `IntervalLogWriterBuilder`.
+<a href=#16 id=16 data-nosnippet>16</a>//!
+<a href=#17 id=17 data-nosnippet>17</a>//! # Timestamps
+<a href=#18 id=18 data-nosnippet>18</a>//!
+<a href=#19 id=19 data-nosnippet>19</a>//! Each interval has a timestamp in seconds associated with it. However, it's not necessarily as
+<a href=#20 id=20 data-nosnippet>20</a>//! simple as just interpreting the number as seconds since the epoch. There are two optional pieces
+<a href=#21 id=21 data-nosnippet>21</a>//! of header metadata: "StartTime" and "BaseTime". Neither, one, or both of these may be present.
+<a href=#22 id=22 data-nosnippet>22</a>//! It is possible to have multiple StartTime or BaseTime entries in the log, or even interleaved
+<a href=#23 id=23 data-nosnippet>23</a>//! with interval histograms, but that is confusing, so this API prevents you from doing so.
+<a href=#24 id=24 data-nosnippet>24</a>//!
+<a href=#25 id=25 data-nosnippet>25</a>//! When BaseTime is present, per-interval timestamps are the number of seconds since BaseTime. When
+<a href=#26 id=26 data-nosnippet>26</a>//! it is absent, the per-interval timestamps represent fractional seconds since the epoch (aka
+<a href=#27 id=27 data-nosnippet>27</a>//! Unix time). BaseTime is useful because it allows you to have somewhat human-readable timestamps
+<a href=#28 id=28 data-nosnippet>28</a>//! for each interval -- it's easier to see 245.3 and see that that's 4 minutes after the start of
+<a href=#29 id=29 data-nosnippet>29</a>//! whatever it is you're doing than it is to mentally parse a Unix timestamp. Naturally, you can
+<a href=#30 id=30 data-nosnippet>30</a>//! always calculate the deltas after the fact if you're willing to write a little tooling, but in
+<a href=#31 id=31 data-nosnippet>31</a>//! some cases log files are consumed by humans too.
+<a href=#32 id=32 data-nosnippet>32</a>//!
+<a href=#33 id=33 data-nosnippet>33</a>//! While BaseTime is used to redefine per-interval timestamps for human readability, StartTime
+<a href=#34 id=34 data-nosnippet>34</a>//! provides information about when the process that is generating the log reached some "start"
+<a href=#35 id=35 data-nosnippet>35</a>//! condition. It's frequently the case that intervals will start some seconds after the process
+<a href=#36 id=36 data-nosnippet>36</a>//! started, whether due to initial warmup before a benchmark or because it just takes a
+<a href=#37 id=37 data-nosnippet>37</a>//! while to start up. If this is relevant to your workload, use StartTime to record the actual
+<a href=#38 id=38 data-nosnippet>38</a>//! process start time (or other relevant "start" condition, like when a benchmark begins on an
+<a href=#39 id=39 data-nosnippet>39</a>//! already long-running process). You could then use this when processing a log to more accurately
+<a href=#40 id=40 data-nosnippet>40</a>//! plot interval data over time. Put differently, StartTime doesn't change the interpretation of
+<a href=#41 id=41 data-nosnippet>41</a>//! interval timestamps directly like BaseTime; instead, it provides a hint to the consumer of the
+<a href=#42 id=42 data-nosnippet>42</a>//! log that the "start" (whatever that means to you -- process start, etc) was at a different time
+<a href=#43 id=43 data-nosnippet>43</a>//! than that associated with the first interval.
+<a href=#44 id=44 data-nosnippet>44</a>//!
+<a href=#45 id=45 data-nosnippet>45</a>//! #### Example scenario
+<a href=#46 id=46 data-nosnippet>46</a>//!
+<a href=#47 id=47 data-nosnippet>47</a>//! To explain their usage, suppose we're running a multi-hour benchmark on a process that starts
+<a href=#48 id=48 data-nosnippet>48</a>//! up at a Unix time of 1500000000. We'll be recording separate log files per hour just to
+<a href=#49 id=49 data-nosnippet>49</a>//! demonstrate the interaction between BaseTime, StartTime, and interval log timestamps.
+<a href=#50 id=50 data-nosnippet>50</a>//!
+<a href=#51 id=51 data-nosnippet>51</a>//! The process starts up, warms up its caches, JIT compiles, etc and is ready to start its
+<a href=#52 id=52 data-nosnippet>52</a>//! benchmark 40 seconds later, so we create the first interval log file and record a StartTime of
+<a href=#53 id=53 data-nosnippet>53</a>//! 1500000040. If the actual process start (rather than benchmark start) is more useful to you,
+<a href=#54 id=54 data-nosnippet>54</a>//! using a StartTime of 1500000000 would be reasonable, but we'll stick with 1500000040.
+<a href=#55 id=55 data-nosnippet>55</a>//!
+<a href=#56 id=56 data-nosnippet>56</a>//! We'll use a BaseTime of 1500000040 because that's when the benchmark began, but 1500000000 would
+<a href=#57 id=57 data-nosnippet>57</a>//! also be a reasonable choice here -- it would just make the per-interval deltas 40 seconds
+<a href=#58 id=58 data-nosnippet>58</a>//! larger, which might be a more useful way of recording them, depending on the situation.
+<a href=#59 id=59 data-nosnippet>59</a>//!
+<a href=#60 id=60 data-nosnippet>60</a>//! The benchmark produces an interval histogram for each 60 seconds of workload, so the first one
+<a href=#61 id=61 data-nosnippet>61</a>//! is ready at 1500000100, and is recorded with a delta timestamp of 60. This goes on for another
+<a href=#62 id=62 data-nosnippet>62</a>//! hour, with the last one being 3540 seconds after the start of the benchmark with a corresponding
+<a href=#63 id=63 data-nosnippet>63</a>//! delta of 3540.
+<a href=#64 id=64 data-nosnippet>64</a>//!
+<a href=#65 id=65 data-nosnippet>65</a>//! At the start of the second hour, the time is 1500003640 and the first log file is ended (which
+<a href=#66 id=66 data-nosnippet>66</a>//! is straightforward: just stop writing to it and close the file) and the second log file is
+<a href=#67 id=67 data-nosnippet>67</a>//! opened. It still uses a StartTime of 1500000040 because we want to represent that this log
+<a href=#68 id=68 data-nosnippet>68</a>//! pertains to something that started an hour ago, but we'll use a BaseTime of 1500003640 so that
+<a href=#69 id=69 data-nosnippet>69</a>//! our delta timestamps start over at 0. Again, you could just as well decide to use the same
+<a href=#70 id=70 data-nosnippet>70</a>//! BaseTime of 1500000040 if you prefer, but it's arguably easier for a human to parse "h hours
+<a href=#71 id=71 data-nosnippet>71</a>//! into the benchmark, s seconds past the hour" than it is to mentally divide by 3600, so we'll
+<a href=#72 id=72 data-nosnippet>72</a>//! go with the new BaseTime.
+<a href=#73 id=73 data-nosnippet>73</a>//!
+<a href=#74 id=74 data-nosnippet>74</a>//! Suppose now you wanted to process these logs and show information (e.g. the 0.999th quantile of
+<a href=#75 id=75 data-nosnippet>75</a>//! each interval) as the y-axis on a plot where time is the x-axis. You would want to have
+<a href=#76 id=76 data-nosnippet>76</a>//! StartTime be the zero of the x-axis. For each interval, calculate the Unix time by adding its
+<a href=#77 id=77 data-nosnippet>77</a>//! timestamp to BaseTime, where BaseTime is assumed to be zero if it's not specified. The point on
+<a href=#78 id=78 data-nosnippet>78</a>//! the x-axis for that interval would be the result of subtracting StartTime from that Unix time.
+<a href=#79 id=79 data-nosnippet>79</a>//! As an example, the 17th minute in the 2nd hour would have an interval timestamp of approximately
+<a href=#80 id=80 data-nosnippet>80</a>//! 1020, which when added to 1500003640 is 1500004660. The difference between StartTime and then is
+<a href=#81 id=81 data-nosnippet>81</a>//! 4620. You might choose to display that in units of minutes, which would be 4620 / 60 = 77.
+<a href=#82 id=82 data-nosnippet>82</a>//!
+<a href=#83 id=83 data-nosnippet>83</a>//! #### Java interop
+<a href=#84 id=84 data-nosnippet>84</a>//!
+<a href=#85 id=85 data-nosnippet>85</a>//! Since you may be interoperating with the Java reference implementation, here's a summary of the
+<a href=#86 id=86 data-nosnippet>86</a>//! logic used by the `HistogramLogReader` class for StartTime and BaseTime. It's slightly different
+<a href=#87 id=87 data-nosnippet>87</a>//! than what was described above, presumably for legacy compatibility reasons. This class stores
+<a href=#88 id=88 data-nosnippet>88</a>//! the StartTime as a field which is exposed via a getter, and also integrates filtering intervals
+<a href=#89 id=89 data-nosnippet>89</a>//! based on windows for either "absolute" (Unix time) timestamps or "offset" timestamps (delta vs
+<a href=#90 id=90 data-nosnippet>90</a>//! the StartTime), so if you're using that filtering functionality, you need to understand how it
+<a href=#91 id=91 data-nosnippet>91</a>//! ends up setting its internal version of StartTime.
+<a href=#92 id=92 data-nosnippet>92</a>//!
+<a href=#93 id=93 data-nosnippet>93</a>//! - Neither StartTime nor BaseTime are present: interval timestamps are interpreted as seconds
+<a href=#94 id=94 data-nosnippet>94</a>//! since the epoch. The first interval's timestamp is stored to the StartTime field.
+<a href=#95 id=95 data-nosnippet>95</a>//! - StartTime is present: StartTime is a number of seconds since epoch, and interval timestamps
+<a href=#96 id=96 data-nosnippet>96</a>//! may be interpreted as deltas to be added to StartTime or as "absolute" Unix time depending on a
+<a href=#97 id=97 data-nosnippet>97</a>//! heuristic. In other words, the heuristic chooses between setting the effective BaseTime to 0 or
+<a href=#98 id=98 data-nosnippet>98</a>//! to StartTime. Specifically, the heuristic interprets interval timestamps as deltas if they are
+<a href=#99 id=99 data-nosnippet>99</a>//! more than a year's worth of seconds smaller than StartTime and as absolute timestamps otherwise.
+<a href=#100 id=100 data-nosnippet>100</a>//! - BaseTime is present: BaseTime is a number of seconds since epoch, and interval timestamps are
+<a href=#101 id=101 data-nosnippet>101</a>//! interpreted as deltas. The first interval's (delta) timestamp is stored to the StartTime field.
+<a href=#102 id=102 data-nosnippet>102</a>//! This is likely a bug, since StartTime should be an absolute timestamp, and appears to cause
+<a href=#103 id=103 data-nosnippet>103</a>//! erroneous behavior when filtering by offset timestamps.
+<a href=#104 id=104 data-nosnippet>104</a>//! - BaseTime and StartTime are present: The BaseTime is used like it is when it's the only one
+<a href=#105 id=105 data-nosnippet>105</a>//! present: it's a number of seconds since epoch that serves as the starting point for the
+<a href=#106 id=106 data-nosnippet>106</a>//! per-interval deltas to get a wall-clock time for each interval. No heuristics are applied to
+<a href=#107 id=107 data-nosnippet>107</a>//! guess whether or not the intervals are absolute or deltas.
+<a href=#108 id=108 data-nosnippet>108</a>//!
+<a href=#109 id=109 data-nosnippet>109</a>//! The Java implementation also supports re-setting the StartTime and BaseTime if those entries
+<a href=#110 id=110 data-nosnippet>110</a>//! exist more than once in the log. Suppose that you had an hour's worth of per-minute intervals,
+<a href=#111 id=111 data-nosnippet>111</a>//! and then you set another StartTime to the current time and added a second hour's worth of
+<a href=#112 id=112 data-nosnippet>112</a>//! intervals. Filtering for "all intervals between 5 and 10 minutes past the start" would result in
+<a href=#113 id=113 data-nosnippet>113</a>//! two disjoint sequences of intervals, which is at the very least arguably unintuitive. However,
+<a href=#114 id=114 data-nosnippet>114</a>//! you may well be working with log files that are structured that way, so this implementation's
+<a href=#115 id=115 data-nosnippet>115</a>//! `IntervalLogIterator` will expose multiple StartTime, etc, entries as they appear in the log
+<a href=#116 id=116 data-nosnippet>116</a>//! file.
+<a href=#117 id=117 data-nosnippet>117</a>//!
+<a href=#118 id=118 data-nosnippet>118</a>//! # Examples
+<a href=#119 id=119 data-nosnippet>119</a>//!
+<a href=#120 id=120 data-nosnippet>120</a>//! Parse a single interval from a log.
+<a href=#121 id=121 data-nosnippet>121</a>//!
+<a href=#122 id=122 data-nosnippet>122</a>//! ```
+<a href=#123 id=123 data-nosnippet>123</a>//! use std::time;
+<a href=#124 id=124 data-nosnippet>124</a>//! use hdrhistogram::serialization::interval_log;
+<a href=#125 id=125 data-nosnippet>125</a>//!
+<a href=#126 id=126 data-nosnippet>126</a>//! // two newline-separated log lines: a comment, then an interval
+<a href=#127 id=127 data-nosnippet>127</a>//! let log = b"#I'm a comment\nTag=t,0.127,1.007,2.769,base64EncodedHisto\n";
+<a href=#128 id=128 data-nosnippet>128</a>//!
+<a href=#129 id=129 data-nosnippet>129</a>//! let mut iter = interval_log::IntervalLogIterator::new(&amp;log[..]);
+<a href=#130 id=130 data-nosnippet>130</a>//!
+<a href=#131 id=131 data-nosnippet>131</a>//! // the comment is consumed and ignored by the parser, so the first event is an Interval
+<a href=#132 id=132 data-nosnippet>132</a>//! match iter.next().unwrap() {
+<a href=#133 id=133 data-nosnippet>133</a>//!     Ok(interval_log::LogEntry::Interval(h)) =&gt; {
+<a href=#134 id=134 data-nosnippet>134</a>//!         assert_eq!(time::Duration::new(0, 127_000_000), h.start_timestamp());
+<a href=#135 id=135 data-nosnippet>135</a>//!     }
+<a href=#136 id=136 data-nosnippet>136</a>//!     _ =&gt; panic!()
+<a href=#137 id=137 data-nosnippet>137</a>//! }
+<a href=#138 id=138 data-nosnippet>138</a>//!
+<a href=#139 id=139 data-nosnippet>139</a>//! // there are no more lines in the log; iteration complete
+<a href=#140 id=140 data-nosnippet>140</a>//! assert_eq!(None, iter.next());
+<a href=#141 id=141 data-nosnippet>141</a>//! ```
+<a href=#142 id=142 data-nosnippet>142</a>//!
+<a href=#143 id=143 data-nosnippet>143</a>//! Skip logs that started before 3 seconds.
+<a href=#144 id=144 data-nosnippet>144</a>//!
+<a href=#145 id=145 data-nosnippet>145</a>//! ```
+<a href=#146 id=146 data-nosnippet>146</a>//! use hdrhistogram::serialization::interval_log;
+<a href=#147 id=147 data-nosnippet>147</a>//!
+<a href=#148 id=148 data-nosnippet>148</a>//! let log = "\
+<a href=#149 id=149 data-nosnippet>149</a>//!     #I'm a comment\n\
+<a href=#150 id=150 data-nosnippet>150</a>//!     Tag=a,0.123,1.007,2.769,base64EncodedHisto\n\
+<a href=#151 id=151 data-nosnippet>151</a>//!     1.456,1.007,2.769,base64EncodedHisto\n\
+<a href=#152 id=152 data-nosnippet>152</a>//!     3.789,1.007,2.769,base64EncodedHisto\n\
+<a href=#153 id=153 data-nosnippet>153</a>//!     Tag=b,4.123,1.007,2.769,base64EncodedHisto\n\
+<a href=#154 id=154 data-nosnippet>154</a>//!     5.456,1.007,2.769,base64EncodedHisto\n\
+<a href=#155 id=155 data-nosnippet>155</a>//!     #Another comment\n"
+<a href=#156 id=156 data-nosnippet>156</a>//! .as_bytes();
+<a href=#157 id=157 data-nosnippet>157</a>//!
+<a href=#158 id=158 data-nosnippet>158</a>//! let iter = interval_log::IntervalLogIterator::new(&amp;log);
+<a href=#159 id=159 data-nosnippet>159</a>//!
+<a href=#160 id=160 data-nosnippet>160</a>//! let count = iter
+<a href=#161 id=161 data-nosnippet>161</a>//!     // only look at intervals (which are the only non-comment lines in this log)
+<a href=#162 id=162 data-nosnippet>162</a>//!     .filter_map(|e| match e {
+<a href=#163 id=163 data-nosnippet>163</a>//!         Ok(interval_log::LogEntry::Interval(ilh)) =&gt; Some(ilh),
+<a href=#164 id=164 data-nosnippet>164</a>//!          _ =&gt; None
+<a href=#165 id=165 data-nosnippet>165</a>//!     })
+<a href=#166 id=166 data-nosnippet>166</a>//!     // do any filtering you want
+<a href=#167 id=167 data-nosnippet>167</a>//!     .filter(|ilh| ilh.start_timestamp().as_secs() &gt;= 3)
+<a href=#168 id=168 data-nosnippet>168</a>//!     .count();
+<a href=#169 id=169 data-nosnippet>169</a>//!
+<a href=#170 id=170 data-nosnippet>170</a>//! assert_eq!(3, count);
+<a href=#171 id=171 data-nosnippet>171</a>//! ```
+<a href=#172 id=172 data-nosnippet>172</a>//!
+<a href=#173 id=173 data-nosnippet>173</a>//! Write a log.
+<a href=#174 id=174 data-nosnippet>174</a>//!
+<a href=#175 id=175 data-nosnippet>175</a>//! ```
+<a href=#176 id=176 data-nosnippet>176</a>//! use std::{str, time};
+<a href=#177 id=177 data-nosnippet>177</a>//! use hdrhistogram;
+<a href=#178 id=178 data-nosnippet>178</a>//! use hdrhistogram::serialization;
+<a href=#179 id=179 data-nosnippet>179</a>//! use hdrhistogram::serialization::interval_log;
+<a href=#180 id=180 data-nosnippet>180</a>//!
+<a href=#181 id=181 data-nosnippet>181</a>//! let mut buf = Vec::new();
+<a href=#182 id=182 data-nosnippet>182</a>//! let mut serializer = serialization::V2Serializer::new();
+<a href=#183 id=183 data-nosnippet>183</a>//!
+<a href=#184 id=184 data-nosnippet>184</a>//! let mut h = hdrhistogram::Histogram::&lt;u64&gt;::new_with_bounds(
+<a href=#185 id=185 data-nosnippet>185</a>//!     1, u64::max_value(), 3).unwrap();
+<a href=#186 id=186 data-nosnippet>186</a>//! h.record(12345).unwrap();
+<a href=#187 id=187 data-nosnippet>187</a>//!
+<a href=#188 id=188 data-nosnippet>188</a>//! // limit scope of mutable borrow of `buf`
+<a href=#189 id=189 data-nosnippet>189</a>//! {
+<a href=#190 id=190 data-nosnippet>190</a>//!     let now = time::SystemTime::now();
+<a href=#191 id=191 data-nosnippet>191</a>//!     let mut log_writer = interval_log::IntervalLogWriterBuilder::new()
+<a href=#192 id=192 data-nosnippet>192</a>//!         .add_comment("Comments are great")
+<a href=#193 id=193 data-nosnippet>193</a>//!         .with_start_time(now)
+<a href=#194 id=194 data-nosnippet>194</a>//!         .begin_log_with(&amp;mut buf, &amp;mut serializer)
+<a href=#195 id=195 data-nosnippet>195</a>//!         .unwrap();
+<a href=#196 id=196 data-nosnippet>196</a>//!
+<a href=#197 id=197 data-nosnippet>197</a>//!     log_writer.write_comment(
+<a href=#198 id=198 data-nosnippet>198</a>//!         "You can have comments anywhere in the log").unwrap();
+<a href=#199 id=199 data-nosnippet>199</a>//!
+<a href=#200 id=200 data-nosnippet>200</a>//!     log_writer
+<a href=#201 id=201 data-nosnippet>201</a>//!         .write_histogram(
+<a href=#202 id=202 data-nosnippet>202</a>//!             &amp;h,
+<a href=#203 id=203 data-nosnippet>203</a>//!             now.elapsed().unwrap(),
+<a href=#204 id=204 data-nosnippet>204</a>//!             time::Duration::new(12, 345_678_901),
+<a href=#205 id=205 data-nosnippet>205</a>//!             interval_log::Tag::new("im-a-tag")
+<a href=#206 id=206 data-nosnippet>206</a>//!         )
+<a href=#207 id=207 data-nosnippet>207</a>//!         .unwrap();
+<a href=#208 id=208 data-nosnippet>208</a>//! }
+<a href=#209 id=209 data-nosnippet>209</a>//!
+<a href=#210 id=210 data-nosnippet>210</a>//! // `buf` is now full of stuff; we check for the first line
+<a href=#211 id=211 data-nosnippet>211</a>//! assert_eq!("#Comments are great\n", &amp;str::from_utf8(&amp;buf).unwrap()[0..20]);
+<a href=#212 id=212 data-nosnippet>212</a>//! ```
+<a href=#213 id=213 data-nosnippet>213</a>
+<a href=#214 id=214 data-nosnippet>214</a></span><span class="kw">use </span>std::cmp::Ordering;
+<a href=#215 id=215 data-nosnippet>215</a><span class="kw">use </span>std::error::Error;
+<a href=#216 id=216 data-nosnippet>216</a><span class="kw">use </span>std::fmt::Write;
+<a href=#217 id=217 data-nosnippet>217</a><span class="kw">use </span>std::str::FromStr;
+<a href=#218 id=218 data-nosnippet>218</a><span class="kw">use </span>std::{fmt, io, ops, str, time};
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a><span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
+<a href=#221 id=221 data-nosnippet>221</a><span class="kw">use </span>nom::branch::alt;
+<a href=#222 id=222 data-nosnippet>222</a><span class="kw">use </span>nom::bytes::complete::{tag, take, take_until, take_while1};
+<a href=#223 id=223 data-nosnippet>223</a><span class="kw">use </span>nom::character::complete::char;
+<a href=#224 id=224 data-nosnippet>224</a><span class="kw">use </span>nom::character::is_digit;
+<a href=#225 id=225 data-nosnippet>225</a><span class="kw">use </span>nom::combinator::{complete, map_res, opt, recognize};
+<a href=#226 id=226 data-nosnippet>226</a><span class="kw">use </span>nom::error::ErrorKind;
+<a href=#227 id=227 data-nosnippet>227</a><span class="kw">use </span>nom::number::complete::double;
+<a href=#228 id=228 data-nosnippet>228</a><span class="kw">use </span>nom::{<span class="prelude-val">Err</span>, IResult};
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a><span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::{Counter, Histogram};
+<a href=#231 id=231 data-nosnippet>231</a><span class="kw">use </span><span class="kw">super</span>::Serializer;
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a><span class="doccomment">/// Prepare an `IntervalLogWriter`.
+<a href=#234 id=234 data-nosnippet>234</a>///
+<a href=#235 id=235 data-nosnippet>235</a>/// This type only allows writing comments and headers. Once you're done writing those things, use
+<a href=#236 id=236 data-nosnippet>236</a>/// `into_log_writer()` to convert this into an `IntervalLogWriter`.
+<a href=#237 id=237 data-nosnippet>237</a></span><span class="kw">pub struct </span>IntervalLogWriterBuilder {
+<a href=#238 id=238 data-nosnippet>238</a>    comments: Vec&lt;String&gt;,
+<a href=#239 id=239 data-nosnippet>239</a>    start_time: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+<a href=#240 id=240 data-nosnippet>240</a>    base_time: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+<a href=#241 id=241 data-nosnippet>241</a>    max_value_divisor: f64,
+<a href=#242 id=242 data-nosnippet>242</a>}
+<a href=#243 id=243 data-nosnippet>243</a>
+<a href=#244 id=244 data-nosnippet>244</a><span class="kw">impl </span>Default <span class="kw">for </span>IntervalLogWriterBuilder {
+<a href=#245 id=245 data-nosnippet>245</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#246 id=246 data-nosnippet>246</a>        <span class="self">Self</span>::new()
+<a href=#247 id=247 data-nosnippet>247</a>    }
+<a href=#248 id=248 data-nosnippet>248</a>}
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a><span class="kw">impl </span>IntervalLogWriterBuilder {
+<a href=#251 id=251 data-nosnippet>251</a>    <span class="doccomment">/// Create a new log writer that writes to `writer` and serializes histograms with `serializer`.
+<a href=#252 id=252 data-nosnippet>252</a>    </span><span class="kw">pub fn </span>new() -&gt; IntervalLogWriterBuilder {
+<a href=#253 id=253 data-nosnippet>253</a>        IntervalLogWriterBuilder {
+<a href=#254 id=254 data-nosnippet>254</a>            comments: Vec::new(),
+<a href=#255 id=255 data-nosnippet>255</a>            start_time: <span class="prelude-val">None</span>,
+<a href=#256 id=256 data-nosnippet>256</a>            base_time: <span class="prelude-val">None</span>,
+<a href=#257 id=257 data-nosnippet>257</a>            max_value_divisor: <span class="number">1.0</span>,
+<a href=#258 id=258 data-nosnippet>258</a>        }
+<a href=#259 id=259 data-nosnippet>259</a>    }
+<a href=#260 id=260 data-nosnippet>260</a>
+<a href=#261 id=261 data-nosnippet>261</a>    <span class="doccomment">/// Add a comment line to be written when the writer is built.
+<a href=#262 id=262 data-nosnippet>262</a>    ///
+<a href=#263 id=263 data-nosnippet>263</a>    /// Comments containing '\n' will be transformed into multiple lines of comments.
+<a href=#264 id=264 data-nosnippet>264</a>    </span><span class="kw">pub fn </span>add_comment(<span class="kw-2">&amp;mut </span><span class="self">self</span>, s: <span class="kw-2">&amp;</span>str) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+<a href=#265 id=265 data-nosnippet>265</a>        <span class="self">self</span>.comments.push(s.to_owned());
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="self">self
+<a href=#267 id=267 data-nosnippet>267</a>    </span>}
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="doccomment">/// Set a StartTime. See the module-level documentation for more info.
+<a href=#270 id=270 data-nosnippet>270</a>    ///
+<a href=#271 id=271 data-nosnippet>271</a>    /// This can be called multiple times, but only the value for the most recent invocation will
+<a href=#272 id=272 data-nosnippet>272</a>    /// be written.
+<a href=#273 id=273 data-nosnippet>273</a>    </span><span class="kw">pub fn </span>with_start_time(<span class="kw-2">&amp;mut </span><span class="self">self</span>, time: time::SystemTime) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="self">self</span>.start_time = <span class="prelude-val">Some</span>(system_time_as_fp_seconds(time));
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="self">self
+<a href=#276 id=276 data-nosnippet>276</a>    </span>}
+<a href=#277 id=277 data-nosnippet>277</a>
+<a href=#278 id=278 data-nosnippet>278</a>    <span class="doccomment">/// Set a BaseTime. See the module-level documentation for more info.
+<a href=#279 id=279 data-nosnippet>279</a>    ///
+<a href=#280 id=280 data-nosnippet>280</a>    /// This can be called multiple times, but only the value for the most recent invocation will
+<a href=#281 id=281 data-nosnippet>281</a>    /// be written.
+<a href=#282 id=282 data-nosnippet>282</a>    </span><span class="kw">pub fn </span>with_base_time(<span class="kw-2">&amp;mut </span><span class="self">self</span>, time: time::SystemTime) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+<a href=#283 id=283 data-nosnippet>283</a>        <span class="self">self</span>.base_time = <span class="prelude-val">Some</span>(system_time_as_fp_seconds(time));
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="self">self
+<a href=#285 id=285 data-nosnippet>285</a>    </span>}
+<a href=#286 id=286 data-nosnippet>286</a>
+<a href=#287 id=287 data-nosnippet>287</a>    <span class="doccomment">/// Set a max value divisor.
+<a href=#288 id=288 data-nosnippet>288</a>    ///
+<a href=#289 id=289 data-nosnippet>289</a>    /// This is used to scale down the max value part of an interval log to something that may be
+<a href=#290 id=290 data-nosnippet>290</a>    /// more human readable. The max value in the log is only for human consumption, so you might
+<a href=#291 id=291 data-nosnippet>291</a>    /// prefer to divide by 10&lt;sup&gt;9&lt;/sup&gt; to turn nanoseconds into fractional seconds, for
+<a href=#292 id=292 data-nosnippet>292</a>    /// instance.
+<a href=#293 id=293 data-nosnippet>293</a>    ///
+<a href=#294 id=294 data-nosnippet>294</a>    /// If this is not set, 1.0 will be used.
+<a href=#295 id=295 data-nosnippet>295</a>    ///
+<a href=#296 id=296 data-nosnippet>296</a>    /// This can be called multiple times, but only the value for the most recent invocation will
+<a href=#297 id=297 data-nosnippet>297</a>    /// be written.
+<a href=#298 id=298 data-nosnippet>298</a>    </span><span class="kw">pub fn </span>with_max_value_divisor(<span class="kw-2">&amp;mut </span><span class="self">self</span>, max_value_divisor: f64) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+<a href=#299 id=299 data-nosnippet>299</a>        <span class="self">self</span>.max_value_divisor = max_value_divisor;
+<a href=#300 id=300 data-nosnippet>300</a>        <span class="self">self
+<a href=#301 id=301 data-nosnippet>301</a>    </span>}
+<a href=#302 id=302 data-nosnippet>302</a>
+<a href=#303 id=303 data-nosnippet>303</a>    <span class="doccomment">/// Build a LogWriter and apply any configured headers.
+<a href=#304 id=304 data-nosnippet>304</a>    </span><span class="attr">#[allow(clippy::float_cmp)]
+<a href=#305 id=305 data-nosnippet>305</a>    </span><span class="kw">pub fn </span>begin_log_with&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, W: <span class="lifetime">'a </span>+ io::Write, S: <span class="lifetime">'b </span>+ Serializer&gt;(
+<a href=#306 id=306 data-nosnippet>306</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#307 id=307 data-nosnippet>307</a>        writer: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>W,
+<a href=#308 id=308 data-nosnippet>308</a>        serializer: <span class="kw-2">&amp;</span><span class="lifetime">'b </span><span class="kw-2">mut </span>S,
+<a href=#309 id=309 data-nosnippet>309</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;IntervalLogWriter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, W, S&gt;, io::Error&gt; {
+<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw">let </span><span class="kw-2">mut </span>internal_writer = InternalLogWriter {
+<a href=#311 id=311 data-nosnippet>311</a>            writer,
+<a href=#312 id=312 data-nosnippet>312</a>            serializer,
+<a href=#313 id=313 data-nosnippet>313</a>            text_buf: String::new(),
+<a href=#314 id=314 data-nosnippet>314</a>            serialize_buf: Vec::new(),
+<a href=#315 id=315 data-nosnippet>315</a>            max_value_divisor: <span class="self">self</span>.max_value_divisor,
+<a href=#316 id=316 data-nosnippet>316</a>        };
+<a href=#317 id=317 data-nosnippet>317</a>
+<a href=#318 id=318 data-nosnippet>318</a>        <span class="kw">for </span>c <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.comments {
+<a href=#319 id=319 data-nosnippet>319</a>            internal_writer.write_comment(<span class="kw-2">&amp;</span>c)<span class="question-mark">?</span>;
+<a href=#320 id=320 data-nosnippet>320</a>        }
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(st) = <span class="self">self</span>.start_time {
+<a href=#323 id=323 data-nosnippet>323</a>            internal_writer.write_fmt(<span class="macro">format_args!</span>(
+<a href=#324 id=324 data-nosnippet>324</a>                <span class="string">"#[StartTime: {:.3} (seconds since epoch)]\n"</span>,
+<a href=#325 id=325 data-nosnippet>325</a>                st
+<a href=#326 id=326 data-nosnippet>326</a>            ))<span class="question-mark">?</span>;
+<a href=#327 id=327 data-nosnippet>327</a>        }
+<a href=#328 id=328 data-nosnippet>328</a>
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(bt) = <span class="self">self</span>.base_time {
+<a href=#330 id=330 data-nosnippet>330</a>            internal_writer.write_fmt(<span class="macro">format_args!</span>(
+<a href=#331 id=331 data-nosnippet>331</a>                <span class="string">"#[BaseTime: {:.3} (seconds since epoch)]\n"</span>,
+<a href=#332 id=332 data-nosnippet>332</a>                bt
+<a href=#333 id=333 data-nosnippet>333</a>            ))<span class="question-mark">?</span>;
+<a href=#334 id=334 data-nosnippet>334</a>        }
+<a href=#335 id=335 data-nosnippet>335</a>
+<a href=#336 id=336 data-nosnippet>336</a>        <span class="comment">// The Java impl doesn't write a comment for this but it's confusing to silently modify the
+<a href=#337 id=337 data-nosnippet>337</a>        // max value without leaving a trace
+<a href=#338 id=338 data-nosnippet>338</a>        </span><span class="kw">if </span><span class="self">self</span>.max_value_divisor != <span class="number">1.0_f64 </span>{
+<a href=#339 id=339 data-nosnippet>339</a>            internal_writer.write_fmt(<span class="macro">format_args!</span>(
+<a href=#340 id=340 data-nosnippet>340</a>                <span class="string">"#[MaxValueDivisor: {:.3}]\n"</span>,
+<a href=#341 id=341 data-nosnippet>341</a>                <span class="self">self</span>.max_value_divisor
+<a href=#342 id=342 data-nosnippet>342</a>            ))<span class="question-mark">?</span>;
+<a href=#343 id=343 data-nosnippet>343</a>        }
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="prelude-val">Ok</span>(IntervalLogWriter { internal_writer })
+<a href=#346 id=346 data-nosnippet>346</a>    }
+<a href=#347 id=347 data-nosnippet>347</a>}
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a><span class="doccomment">/// Writes interval histograms in an interval log.
+<a href=#350 id=350 data-nosnippet>350</a>///
+<a href=#351 id=351 data-nosnippet>351</a>/// This isn't created directly; start with an `IntervalLogWriterBuilder`. Once you've written the
+<a href=#352 id=352 data-nosnippet>352</a>/// headers and ended up with an `IntervalLogWriter`, typical usage would be to write a histogram
+<a href=#353 id=353 data-nosnippet>353</a>/// at regular intervals (e.g. once a second).
+<a href=#354 id=354 data-nosnippet>354</a>///
+<a href=#355 id=355 data-nosnippet>355</a>/// ```
+<a href=#356 id=356 data-nosnippet>356</a>/// use hdrhistogram::serialization;
+<a href=#357 id=357 data-nosnippet>357</a>/// use hdrhistogram::serialization::interval_log;
+<a href=#358 id=358 data-nosnippet>358</a>///
+<a href=#359 id=359 data-nosnippet>359</a>/// let mut buf = Vec::new();
+<a href=#360 id=360 data-nosnippet>360</a>/// let mut serializer = serialization::V2Serializer::new();
+<a href=#361 id=361 data-nosnippet>361</a>///
+<a href=#362 id=362 data-nosnippet>362</a>/// // create a writer via a builder
+<a href=#363 id=363 data-nosnippet>363</a>/// let mut writer = interval_log::IntervalLogWriterBuilder::new()
+<a href=#364 id=364 data-nosnippet>364</a>///     .begin_log_with(&amp;mut buf, &amp;mut serializer)
+<a href=#365 id=365 data-nosnippet>365</a>///     .unwrap();
+<a href=#366 id=366 data-nosnippet>366</a>///
+<a href=#367 id=367 data-nosnippet>367</a>/// writer.write_comment("Comment 2").unwrap();
+<a href=#368 id=368 data-nosnippet>368</a>///
+<a href=#369 id=369 data-nosnippet>369</a>/// // .. write some intervals
+<a href=#370 id=370 data-nosnippet>370</a>/// ```
+<a href=#371 id=371 data-nosnippet>371</a></span><span class="kw">pub struct </span>IntervalLogWriter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, W: <span class="lifetime">'a </span>+ io::Write, S: <span class="lifetime">'b </span>+ Serializer&gt; {
+<a href=#372 id=372 data-nosnippet>372</a>    internal_writer: InternalLogWriter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, W, S&gt;,
+<a href=#373 id=373 data-nosnippet>373</a>}
+<a href=#374 id=374 data-nosnippet>374</a>
+<a href=#375 id=375 data-nosnippet>375</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, W: <span class="lifetime">'a </span>+ io::Write, S: <span class="lifetime">'b </span>+ Serializer&gt; IntervalLogWriter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, W, S&gt; {
+<a href=#376 id=376 data-nosnippet>376</a>    <span class="doccomment">/// Write a comment line.
+<a href=#377 id=377 data-nosnippet>377</a>    ///
+<a href=#378 id=378 data-nosnippet>378</a>    /// Comments containing '\n' will be transformed into multiple lines of comments.
+<a href=#379 id=379 data-nosnippet>379</a>    </span><span class="kw">pub fn </span>write_comment(<span class="kw-2">&amp;mut </span><span class="self">self</span>, s: <span class="kw-2">&amp;</span>str) -&gt; io::Result&lt;()&gt; {
+<a href=#380 id=380 data-nosnippet>380</a>        <span class="self">self</span>.internal_writer.write_comment(s)
+<a href=#381 id=381 data-nosnippet>381</a>    }
+<a href=#382 id=382 data-nosnippet>382</a>
+<a href=#383 id=383 data-nosnippet>383</a>    <span class="doccomment">/// Write an interval histogram.
+<a href=#384 id=384 data-nosnippet>384</a>    ///
+<a href=#385 id=385 data-nosnippet>385</a>    /// `start_timestamp` is the time since the epoch in seconds that measurements started being
+<a href=#386 id=386 data-nosnippet>386</a>    /// recorded in this interval. If you're using a StartTime or BaseTime offset, you should
+<a href=#387 id=387 data-nosnippet>387</a>    /// instead use a delta since that time. See the discussion about timestamps in the module-level
+<a href=#388 id=388 data-nosnippet>388</a>    /// documentation.
+<a href=#389 id=389 data-nosnippet>389</a>    ///
+<a href=#390 id=390 data-nosnippet>390</a>    /// `duration` is the duration of the interval in seconds.
+<a href=#391 id=391 data-nosnippet>391</a>    ///
+<a href=#392 id=392 data-nosnippet>392</a>    /// `tag` is an optional tag for this histogram.
+<a href=#393 id=393 data-nosnippet>393</a>    </span><span class="kw">pub fn </span>write_histogram&lt;T: Counter&gt;(
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#395 id=395 data-nosnippet>395</a>        h: <span class="kw-2">&amp;</span>Histogram&lt;T&gt;,
+<a href=#396 id=396 data-nosnippet>396</a>        start_timestamp: time::Duration,
+<a href=#397 id=397 data-nosnippet>397</a>        duration: time::Duration,
+<a href=#398 id=398 data-nosnippet>398</a>        tag: <span class="prelude-ty">Option</span>&lt;Tag&gt;,
+<a href=#399 id=399 data-nosnippet>399</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), IntervalLogWriterError&lt;S::SerializeError&gt;&gt; {
+<a href=#400 id=400 data-nosnippet>400</a>        <span class="self">self</span>.internal_writer
+<a href=#401 id=401 data-nosnippet>401</a>            .write_histogram(h, start_timestamp, duration, tag)
+<a href=#402 id=402 data-nosnippet>402</a>    }
+<a href=#403 id=403 data-nosnippet>403</a>}
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a><span class="doccomment">/// Errors that can occur while writing a log.
+<a href=#406 id=406 data-nosnippet>406</a></span><span class="attr">#[derive(Debug)]
+<a href=#407 id=407 data-nosnippet>407</a></span><span class="kw">pub enum </span>IntervalLogWriterError&lt;E&gt; {
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="doccomment">/// Histogram serialization failed.
+<a href=#409 id=409 data-nosnippet>409</a>    </span>SerializeError(E),
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="doccomment">/// An i/o error occurred.
+<a href=#411 id=411 data-nosnippet>411</a>    </span>IoError(io::Error),
+<a href=#412 id=412 data-nosnippet>412</a>}
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a><span class="kw">impl</span>&lt;E&gt; From&lt;io::Error&gt; <span class="kw">for </span>IntervalLogWriterError&lt;E&gt; {
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="kw">fn </span>from(e: io::Error) -&gt; <span class="self">Self </span>{
+<a href=#416 id=416 data-nosnippet>416</a>        IntervalLogWriterError::IoError(e)
+<a href=#417 id=417 data-nosnippet>417</a>    }
+<a href=#418 id=418 data-nosnippet>418</a>}
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a><span class="kw">impl</span>&lt;E: fmt::Display + fmt::Debug&gt; fmt::Display <span class="kw">for </span>IntervalLogWriterError&lt;E&gt; {
+<a href=#421 id=421 data-nosnippet>421</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#423 id=423 data-nosnippet>423</a>            IntervalLogWriterError::SerializeError(e) =&gt; {
+<a href=#424 id=424 data-nosnippet>424</a>                <span class="macro">write!</span>(f, <span class="string">"Histogram serialization failed: {}"</span>, e)
+<a href=#425 id=425 data-nosnippet>425</a>            }
+<a href=#426 id=426 data-nosnippet>426</a>            IntervalLogWriterError::IoError(e) =&gt; <span class="macro">write!</span>(f, <span class="string">"An i/o error occurred: {}"</span>, e),
+<a href=#427 id=427 data-nosnippet>427</a>        }
+<a href=#428 id=428 data-nosnippet>428</a>    }
+<a href=#429 id=429 data-nosnippet>429</a>}
+<a href=#430 id=430 data-nosnippet>430</a>
+<a href=#431 id=431 data-nosnippet>431</a><span class="kw">impl</span>&lt;E: Error + <span class="lifetime">'static</span>&gt; Error <span class="kw">for </span>IntervalLogWriterError&lt;E&gt; {
+<a href=#432 id=432 data-nosnippet>432</a>    <span class="kw">fn </span>source(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Error + <span class="lifetime">'static</span>)&gt; {
+<a href=#433 id=433 data-nosnippet>433</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#434 id=434 data-nosnippet>434</a>            IntervalLogWriterError::SerializeError(e) =&gt; <span class="prelude-val">Some</span>(e),
+<a href=#435 id=435 data-nosnippet>435</a>            IntervalLogWriterError::IoError(e) =&gt; <span class="prelude-val">Some</span>(e),
+<a href=#436 id=436 data-nosnippet>436</a>        }
+<a href=#437 id=437 data-nosnippet>437</a>    }
+<a href=#438 id=438 data-nosnippet>438</a>}
+<a href=#439 id=439 data-nosnippet>439</a>
+<a href=#440 id=440 data-nosnippet>440</a><span class="doccomment">/// Write interval logs.
+<a href=#441 id=441 data-nosnippet>441</a></span><span class="kw">struct </span>InternalLogWriter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, W: <span class="lifetime">'a </span>+ io::Write, S: <span class="lifetime">'b </span>+ Serializer&gt; {
+<a href=#442 id=442 data-nosnippet>442</a>    writer: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>W,
+<a href=#443 id=443 data-nosnippet>443</a>    serializer: <span class="kw-2">&amp;</span><span class="lifetime">'b </span><span class="kw-2">mut </span>S,
+<a href=#444 id=444 data-nosnippet>444</a>    text_buf: String,
+<a href=#445 id=445 data-nosnippet>445</a>    serialize_buf: Vec&lt;u8&gt;,
+<a href=#446 id=446 data-nosnippet>446</a>    max_value_divisor: f64,
+<a href=#447 id=447 data-nosnippet>447</a>}
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, W: <span class="lifetime">'a </span>+ io::Write, S: <span class="lifetime">'b </span>+ Serializer&gt; InternalLogWriter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, W, S&gt; {
+<a href=#450 id=450 data-nosnippet>450</a>    <span class="kw">fn </span>write_fmt(<span class="kw-2">&amp;mut </span><span class="self">self</span>, args: fmt::Arguments) -&gt; io::Result&lt;()&gt; {
+<a href=#451 id=451 data-nosnippet>451</a>        <span class="self">self</span>.writer.write_fmt(args)
+<a href=#452 id=452 data-nosnippet>452</a>    }
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a>    <span class="kw">fn </span>write_comment(<span class="kw-2">&amp;mut </span><span class="self">self</span>, s: <span class="kw-2">&amp;</span>str) -&gt; io::Result&lt;()&gt; {
+<a href=#455 id=455 data-nosnippet>455</a>        <span class="kw">for </span>l <span class="kw">in </span>s.split(<span class="string">'\n'</span>) {
+<a href=#456 id=456 data-nosnippet>456</a>            <span class="macro">writeln!</span>(<span class="self">self</span>.writer, <span class="string">"#{}"</span>, l)<span class="question-mark">?</span>;
+<a href=#457 id=457 data-nosnippet>457</a>        }
+<a href=#458 id=458 data-nosnippet>458</a>
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="prelude-val">Ok</span>(())
+<a href=#460 id=460 data-nosnippet>460</a>    }
+<a href=#461 id=461 data-nosnippet>461</a>
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">fn </span>write_histogram&lt;T: Counter&gt;(
+<a href=#463 id=463 data-nosnippet>463</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#464 id=464 data-nosnippet>464</a>        h: <span class="kw-2">&amp;</span>Histogram&lt;T&gt;,
+<a href=#465 id=465 data-nosnippet>465</a>        start_timestamp: time::Duration,
+<a href=#466 id=466 data-nosnippet>466</a>        duration: time::Duration,
+<a href=#467 id=467 data-nosnippet>467</a>        tag: <span class="prelude-ty">Option</span>&lt;Tag&gt;,
+<a href=#468 id=468 data-nosnippet>468</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), IntervalLogWriterError&lt;S::SerializeError&gt;&gt; {
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="self">self</span>.serialize_buf.clear();
+<a href=#470 id=470 data-nosnippet>470</a>        <span class="self">self</span>.text_buf.clear();
+<a href=#471 id=471 data-nosnippet>471</a>
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(Tag(s)) = tag {
+<a href=#473 id=473 data-nosnippet>473</a>            <span class="macro">write!</span>(<span class="self">self</span>.text_buf, <span class="string">"Tag={},"</span>, <span class="kw-2">&amp;</span>s).expect(<span class="string">"Writes to a String can't fail"</span>);
+<a href=#474 id=474 data-nosnippet>474</a>        }
+<a href=#475 id=475 data-nosnippet>475</a>
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="macro">write!</span>(
+<a href=#477 id=477 data-nosnippet>477</a>            <span class="self">self</span>.writer,
+<a href=#478 id=478 data-nosnippet>478</a>            <span class="string">"{}{:.3},{:.3},{:.3},"</span>,
+<a href=#479 id=479 data-nosnippet>479</a>            <span class="self">self</span>.text_buf,
+<a href=#480 id=480 data-nosnippet>480</a>            duration_as_fp_seconds(start_timestamp),
+<a href=#481 id=481 data-nosnippet>481</a>            duration_as_fp_seconds(duration),
+<a href=#482 id=482 data-nosnippet>482</a>            h.max() <span class="kw">as </span>f64 / <span class="self">self</span>.max_value_divisor <span class="comment">// because the Java impl does it this way
+<a href=#483 id=483 data-nosnippet>483</a>        </span>)<span class="question-mark">?</span>;
+<a href=#484 id=484 data-nosnippet>484</a>
+<a href=#485 id=485 data-nosnippet>485</a>        <span class="self">self</span>.text_buf.clear();
+<a href=#486 id=486 data-nosnippet>486</a>        <span class="kw">let </span>_len = <span class="self">self
+<a href=#487 id=487 data-nosnippet>487</a>            </span>.serializer
+<a href=#488 id=488 data-nosnippet>488</a>            .serialize(h, <span class="kw-2">&amp;mut </span><span class="self">self</span>.serialize_buf)
+<a href=#489 id=489 data-nosnippet>489</a>            .map_err(IntervalLogWriterError::SerializeError)<span class="question-mark">?</span>;
+<a href=#490 id=490 data-nosnippet>490</a>        base64::engine::general_purpose::STANDARD
+<a href=#491 id=491 data-nosnippet>491</a>            .encode_string(<span class="kw-2">&amp;</span><span class="self">self</span>.serialize_buf, <span class="kw-2">&amp;mut </span><span class="self">self</span>.text_buf);
+<a href=#492 id=492 data-nosnippet>492</a>
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="self">self</span>.writer.write_all(<span class="self">self</span>.text_buf.as_bytes())<span class="question-mark">?</span>;
+<a href=#494 id=494 data-nosnippet>494</a>        <span class="self">self</span>.writer.write_all(<span class="string">b"\n"</span>)<span class="question-mark">?</span>;
+<a href=#495 id=495 data-nosnippet>495</a>
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="prelude-val">Ok</span>(())
+<a href=#497 id=497 data-nosnippet>497</a>    }
+<a href=#498 id=498 data-nosnippet>498</a>}
+<a href=#499 id=499 data-nosnippet>499</a>
+<a href=#500 id=500 data-nosnippet>500</a><span class="doccomment">/// A tag for an interval histogram.
+<a href=#501 id=501 data-nosnippet>501</a>///
+<a href=#502 id=502 data-nosnippet>502</a>/// Tags are just `str`s that do not contain a few disallowed characters: ',', '\r', '\n', and ' '.
+<a href=#503 id=503 data-nosnippet>503</a>///
+<a href=#504 id=504 data-nosnippet>504</a>/// To get the wrapped `str` back out, use `as_str()` or the `Deref&lt;str&gt;` implementation
+<a href=#505 id=505 data-nosnippet>505</a>/// (`&amp;some_tag`).
+<a href=#506 id=506 data-nosnippet>506</a></span><span class="attr">#[derive(Debug, PartialEq, Clone, Copy)]
+<a href=#507 id=507 data-nosnippet>507</a></span><span class="kw">pub struct </span>Tag&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str);
+<a href=#508 id=508 data-nosnippet>508</a>
+<a href=#509 id=509 data-nosnippet>509</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Tag&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#510 id=510 data-nosnippet>510</a>    <span class="doccomment">/// Create a new Tag.
+<a href=#511 id=511 data-nosnippet>511</a>    ///
+<a href=#512 id=512 data-nosnippet>512</a>    /// If a disallowed character is present, this will return `None`.
+<a href=#513 id=513 data-nosnippet>513</a>    </span><span class="kw">pub fn </span>new(s: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str) -&gt; <span class="prelude-ty">Option</span>&lt;Tag&lt;<span class="lifetime">'a</span>&gt;&gt; {
+<a href=#514 id=514 data-nosnippet>514</a>        <span class="kw">if </span>s.chars()
+<a href=#515 id=515 data-nosnippet>515</a>            .any(|c| c == <span class="string">',' </span>|| c == <span class="string">'\r' </span>|| c == <span class="string">'\n' </span>|| c == <span class="string">' '</span>)
+<a href=#516 id=516 data-nosnippet>516</a>        {
+<a href=#517 id=517 data-nosnippet>517</a>            <span class="prelude-val">None
+<a href=#518 id=518 data-nosnippet>518</a>        </span>} <span class="kw">else </span>{
+<a href=#519 id=519 data-nosnippet>519</a>            <span class="prelude-val">Some</span>(Tag(s))
+<a href=#520 id=520 data-nosnippet>520</a>        }
+<a href=#521 id=521 data-nosnippet>521</a>    }
+<a href=#522 id=522 data-nosnippet>522</a>
+<a href=#523 id=523 data-nosnippet>523</a>    <span class="doccomment">/// Returns the tag contents as a str.
+<a href=#524 id=524 data-nosnippet>524</a>    </span><span class="kw">pub fn </span>as_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str {
+<a href=#525 id=525 data-nosnippet>525</a>        <span class="self">self</span>.<span class="number">0
+<a href=#526 id=526 data-nosnippet>526</a>    </span>}
+<a href=#527 id=527 data-nosnippet>527</a>}
+<a href=#528 id=528 data-nosnippet>528</a>
+<a href=#529 id=529 data-nosnippet>529</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ops::Deref <span class="kw">for </span>Tag&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#530 id=530 data-nosnippet>530</a>    <span class="kw">type </span>Target = str;
+<a href=#531 id=531 data-nosnippet>531</a>
+<a href=#532 id=532 data-nosnippet>532</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+<a href=#533 id=533 data-nosnippet>533</a>        <span class="self">self</span>.as_str()
+<a href=#534 id=534 data-nosnippet>534</a>    }
+<a href=#535 id=535 data-nosnippet>535</a>}
+<a href=#536 id=536 data-nosnippet>536</a>
+<a href=#537 id=537 data-nosnippet>537</a><span class="doccomment">/// An individual interval histogram parsed from an interval log.
+<a href=#538 id=538 data-nosnippet>538</a></span><span class="attr">#[derive(PartialEq, Debug)]
+<a href=#539 id=539 data-nosnippet>539</a></span><span class="kw">pub struct </span>IntervalLogHistogram&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#540 id=540 data-nosnippet>540</a>    tag: <span class="prelude-ty">Option</span>&lt;Tag&lt;<span class="lifetime">'a</span>&gt;&gt;,
+<a href=#541 id=541 data-nosnippet>541</a>    start_timestamp: time::Duration,
+<a href=#542 id=542 data-nosnippet>542</a>    duration: time::Duration,
+<a href=#543 id=543 data-nosnippet>543</a>    max: f64,
+<a href=#544 id=544 data-nosnippet>544</a>    encoded_histogram: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+<a href=#545 id=545 data-nosnippet>545</a>}
+<a href=#546 id=546 data-nosnippet>546</a>
+<a href=#547 id=547 data-nosnippet>547</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IntervalLogHistogram&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#548 id=548 data-nosnippet>548</a>    <span class="doccomment">/// Tag, if any is present.
+<a href=#549 id=549 data-nosnippet>549</a>    </span><span class="kw">pub fn </span>tag(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Tag&lt;<span class="lifetime">'a</span>&gt;&gt; {
+<a href=#550 id=550 data-nosnippet>550</a>        <span class="self">self</span>.tag
+<a href=#551 id=551 data-nosnippet>551</a>    }
+<a href=#552 id=552 data-nosnippet>552</a>
+<a href=#553 id=553 data-nosnippet>553</a>    <span class="doccomment">/// Timestamp of the start of the interval in seconds, expressed as a `Duration` relative to
+<a href=#554 id=554 data-nosnippet>554</a>    /// some start point.
+<a href=#555 id=555 data-nosnippet>555</a>    ///
+<a href=#556 id=556 data-nosnippet>556</a>    /// The timestamp may be absolute vs the epoch, or there may be a `StartTime` or `BaseTime` for
+<a href=#557 id=557 data-nosnippet>557</a>    /// the log, in which case you may wish to consider this number as a delta vs those timestamps.
+<a href=#558 id=558 data-nosnippet>558</a>    /// See the module-level documentation about timestamps.
+<a href=#559 id=559 data-nosnippet>559</a>    </span><span class="kw">pub fn </span>start_timestamp(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; time::Duration {
+<a href=#560 id=560 data-nosnippet>560</a>        <span class="self">self</span>.start_timestamp
+<a href=#561 id=561 data-nosnippet>561</a>    }
+<a href=#562 id=562 data-nosnippet>562</a>
+<a href=#563 id=563 data-nosnippet>563</a>    <span class="doccomment">/// Duration of the interval in seconds.
+<a href=#564 id=564 data-nosnippet>564</a>    </span><span class="kw">pub fn </span>duration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; time::Duration {
+<a href=#565 id=565 data-nosnippet>565</a>        <span class="self">self</span>.duration
+<a href=#566 id=566 data-nosnippet>566</a>    }
+<a href=#567 id=567 data-nosnippet>567</a>
+<a href=#568 id=568 data-nosnippet>568</a>    <span class="doccomment">/// Max value in the encoded histogram
+<a href=#569 id=569 data-nosnippet>569</a>    ///
+<a href=#570 id=570 data-nosnippet>570</a>    /// This max value is the max of the histogram divided by some scaling factor (which may be
+<a href=#571 id=571 data-nosnippet>571</a>    /// 1.0).
+<a href=#572 id=572 data-nosnippet>572</a>    </span><span class="kw">pub fn </span>max(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; f64 {
+<a href=#573 id=573 data-nosnippet>573</a>        <span class="self">self</span>.max
+<a href=#574 id=574 data-nosnippet>574</a>    }
+<a href=#575 id=575 data-nosnippet>575</a>
+<a href=#576 id=576 data-nosnippet>576</a>    <span class="doccomment">/// Base64-encoded serialized histogram.
+<a href=#577 id=577 data-nosnippet>577</a>    ///
+<a href=#578 id=578 data-nosnippet>578</a>    /// If you need the deserialized histogram, base64-decode and use a `Deserializer` on the
+<a href=#579 id=579 data-nosnippet>579</a>    /// resulting bytes.
+<a href=#580 id=580 data-nosnippet>580</a>    </span><span class="kw">pub fn </span>encoded_histogram(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str {
+<a href=#581 id=581 data-nosnippet>581</a>        <span class="self">self</span>.encoded_histogram
+<a href=#582 id=582 data-nosnippet>582</a>    }
+<a href=#583 id=583 data-nosnippet>583</a>}
+<a href=#584 id=584 data-nosnippet>584</a>
+<a href=#585 id=585 data-nosnippet>585</a><span class="attr">#[derive(PartialEq, Debug)]
+<a href=#586 id=586 data-nosnippet>586</a></span><span class="doccomment">/// Represents one non-comment line in an interval log.
+<a href=#587 id=587 data-nosnippet>587</a>///
+<a href=#588 id=588 data-nosnippet>588</a>/// One thing to note is that the way your interval timestamps work can vary. If your log was
+<a href=#589 id=589 data-nosnippet>589</a>/// written with a StartTime or BaseTime, that metadata will appear in header comments, and that
+<a href=#590 id=590 data-nosnippet>590</a>/// will be represented by the iterator providing the corresponding variants here. The presence
+<a href=#591 id=591 data-nosnippet>591</a>/// of those timestamps will affect how you should interpret the timestamps for individual
+<a href=#592 id=592 data-nosnippet>592</a>/// intervals. See the module-level documentation.
+<a href=#593 id=593 data-nosnippet>593</a></span><span class="attr">#[allow(variant_size_differences)]
+<a href=#594 id=594 data-nosnippet>594</a></span><span class="kw">pub enum </span>LogEntry&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#595 id=595 data-nosnippet>595</a>    <span class="doccomment">/// Logs may include a StartTime. If present, it represents seconds since the epoch.
+<a href=#596 id=596 data-nosnippet>596</a>    </span>StartTime(time::Duration),
+<a href=#597 id=597 data-nosnippet>597</a>    <span class="doccomment">/// Logs may include a BaseTime. If present, it represents seconds since the epoch.
+<a href=#598 id=598 data-nosnippet>598</a>    </span>BaseTime(time::Duration),
+<a href=#599 id=599 data-nosnippet>599</a>    <span class="doccomment">/// An individual interval histogram.
+<a href=#600 id=600 data-nosnippet>600</a>    </span>Interval(IntervalLogHistogram&lt;<span class="lifetime">'a</span>&gt;),
+<a href=#601 id=601 data-nosnippet>601</a>}
+<a href=#602 id=602 data-nosnippet>602</a>
+<a href=#603 id=603 data-nosnippet>603</a><span class="doccomment">/// Errors that occur when parsing an interval log.
+<a href=#604 id=604 data-nosnippet>604</a></span><span class="attr">#[derive(Debug, PartialEq)]
+<a href=#605 id=605 data-nosnippet>605</a></span><span class="kw">pub enum </span>LogIteratorError {
+<a href=#606 id=606 data-nosnippet>606</a>    <span class="doccomment">/// Parsing failed
+<a href=#607 id=607 data-nosnippet>607</a>    </span>ParseError {
+<a href=#608 id=608 data-nosnippet>608</a>        <span class="doccomment">/// Offset in the input where the failed parse started
+<a href=#609 id=609 data-nosnippet>609</a>        </span>offset: usize,
+<a href=#610 id=610 data-nosnippet>610</a>    },
+<a href=#611 id=611 data-nosnippet>611</a>}
+<a href=#612 id=612 data-nosnippet>612</a>
+<a href=#613 id=613 data-nosnippet>613</a><span class="doccomment">/// Parse interval logs.
+<a href=#614 id=614 data-nosnippet>614</a>///
+<a href=#615 id=615 data-nosnippet>615</a>/// This iterator exposes each item (excluding comments and other information-free lines). See
+<a href=#616 id=616 data-nosnippet>616</a>/// `LogEntry`.
+<a href=#617 id=617 data-nosnippet>617</a>///
+<a href=#618 id=618 data-nosnippet>618</a>/// Because histogram deserialization is deferred, parsing logs is fast. See the `interval_log`
+<a href=#619 id=619 data-nosnippet>619</a>/// benchmark if you wish to see how it does on your hardware. As a baseline, parsing a log of 1000
+<a href=#620 id=620 data-nosnippet>620</a>/// random histograms of 10,000 values each takes 2ms total on an E5-1650v3.
+<a href=#621 id=621 data-nosnippet>621</a>///
+<a href=#622 id=622 data-nosnippet>622</a>/// Deferring deserialization is handy because it allows you to cheaply navigate the log to find
+<a href=#623 id=623 data-nosnippet>623</a>/// the records you care about (e.g. ones in a certain time range, or with a certain tag) without
+<a href=#624 id=624 data-nosnippet>624</a>/// doing all the allocation, etc, of deserialization.
+<a href=#625 id=625 data-nosnippet>625</a>///
+<a href=#626 id=626 data-nosnippet>626</a>/// If you're looking for a direct port of the Java impl's `HistogramLogReader`, this isn't one: it
+<a href=#627 id=627 data-nosnippet>627</a>/// won't deserialize for you, and it pushes the burden of figuring out what to do with StartTime,
+<a href=#628 id=628 data-nosnippet>628</a>/// BaseTime, etc to you, and there aren't built in functions to filter by timestamp. On the other
+<a href=#629 id=629 data-nosnippet>629</a>/// hand, because it doesn't do those things, it is much more flexible: you can easily build any
+<a href=#630 id=630 data-nosnippet>630</a>/// sort of filtering you want, not just timestamp ranges, because you have cheap access to all the
+<a href=#631 id=631 data-nosnippet>631</a>/// metadata before incurring the cost of deserialization. If you're not using any timestamp
+<a href=#632 id=632 data-nosnippet>632</a>/// headers, or at least using them in straightforward ways, it is easy to accumulate the
+<a href=#633 id=633 data-nosnippet>633</a>/// timestamp state you need. Since all the parsing is taken care of already, writing your own
+<a href=#634 id=634 data-nosnippet>634</a>/// `HistogramLogReader` equivalent that fits the way your logs are assembled is just a couple of
+<a href=#635 id=635 data-nosnippet>635</a>/// lines. (And if you're doing complex stuff, we probably wouldn't have built something that fits
+<a href=#636 id=636 data-nosnippet>636</a>/// your quirky logs anyway!)
+<a href=#637 id=637 data-nosnippet>637</a>///
+<a href=#638 id=638 data-nosnippet>638</a>/// This parses from a slice representing the complete file because it made implementation easier
+<a href=#639 id=639 data-nosnippet>639</a>/// (and also supports mmap'd files for maximum parsing speed). If parsing from a `Read` is
+<a href=#640 id=640 data-nosnippet>640</a>/// important for your use case, open an issue about it.
+<a href=#641 id=641 data-nosnippet>641</a></span><span class="kw">pub struct </span>IntervalLogIterator&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#642 id=642 data-nosnippet>642</a>    orig_len: usize,
+<a href=#643 id=643 data-nosnippet>643</a>    input: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8],
+<a href=#644 id=644 data-nosnippet>644</a>    ended: bool,
+<a href=#645 id=645 data-nosnippet>645</a>}
+<a href=#646 id=646 data-nosnippet>646</a>
+<a href=#647 id=647 data-nosnippet>647</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IntervalLogIterator&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#648 id=648 data-nosnippet>648</a>    <span class="doccomment">/// Create a new iterator from the UTF-8 bytes of an interval log.
+<a href=#649 id=649 data-nosnippet>649</a>    </span><span class="kw">pub fn </span>new(input: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8]) -&gt; IntervalLogIterator&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#650 id=650 data-nosnippet>650</a>        IntervalLogIterator {
+<a href=#651 id=651 data-nosnippet>651</a>            orig_len: input.len(),
+<a href=#652 id=652 data-nosnippet>652</a>            input,
+<a href=#653 id=653 data-nosnippet>653</a>            ended: <span class="bool-val">false</span>,
+<a href=#654 id=654 data-nosnippet>654</a>        }
+<a href=#655 id=655 data-nosnippet>655</a>    }
+<a href=#656 id=656 data-nosnippet>656</a>}
+<a href=#657 id=657 data-nosnippet>657</a>
+<a href=#658 id=658 data-nosnippet>658</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Iterator <span class="kw">for </span>IntervalLogIterator&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#659 id=659 data-nosnippet>659</a>    <span class="kw">type </span>Item = <span class="prelude-ty">Result</span>&lt;LogEntry&lt;<span class="lifetime">'a</span>&gt;, LogIteratorError&gt;;
+<a href=#660 id=660 data-nosnippet>660</a>
+<a href=#661 id=661 data-nosnippet>661</a>    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+<a href=#662 id=662 data-nosnippet>662</a>        <span class="kw">loop </span>{
+<a href=#663 id=663 data-nosnippet>663</a>            <span class="kw">if </span><span class="self">self</span>.ended {
+<a href=#664 id=664 data-nosnippet>664</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#665 id=665 data-nosnippet>665</a>            }
+<a href=#666 id=666 data-nosnippet>666</a>
+<a href=#667 id=667 data-nosnippet>667</a>            <span class="kw">if </span><span class="self">self</span>.input.is_empty() {
+<a href=#668 id=668 data-nosnippet>668</a>                <span class="self">self</span>.ended = <span class="bool-val">true</span>;
+<a href=#669 id=669 data-nosnippet>669</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#670 id=670 data-nosnippet>670</a>            }
+<a href=#671 id=671 data-nosnippet>671</a>
+<a href=#672 id=672 data-nosnippet>672</a>            <span class="comment">// Look for magic comments first otherwise they will get matched by the simple comment
+<a href=#673 id=673 data-nosnippet>673</a>            // parser
+<a href=#674 id=674 data-nosnippet>674</a>            </span><span class="kw">if let </span><span class="prelude-val">Ok</span>((rest, e)) = log_entry(<span class="self">self</span>.input) {
+<a href=#675 id=675 data-nosnippet>675</a>                <span class="self">self</span>.input = rest;
+<a href=#676 id=676 data-nosnippet>676</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(e));
+<a href=#677 id=677 data-nosnippet>677</a>            }
+<a href=#678 id=678 data-nosnippet>678</a>
+<a href=#679 id=679 data-nosnippet>679</a>            <span class="comment">// it wasn't a log entry; try parsing a comment
+<a href=#680 id=680 data-nosnippet>680</a>            </span><span class="kw">match </span>ignored_line(<span class="self">self</span>.input) {
+<a href=#681 id=681 data-nosnippet>681</a>                <span class="prelude-val">Ok</span>((rest, <span class="kw">_</span>)) =&gt; {
+<a href=#682 id=682 data-nosnippet>682</a>                    <span class="self">self</span>.input = rest;
+<a href=#683 id=683 data-nosnippet>683</a>                    <span class="kw">continue</span>;
+<a href=#684 id=684 data-nosnippet>684</a>                }
+<a href=#685 id=685 data-nosnippet>685</a>                <span class="kw">_ </span>=&gt; {
+<a href=#686 id=686 data-nosnippet>686</a>                    <span class="self">self</span>.ended = <span class="bool-val">true</span>;
+<a href=#687 id=687 data-nosnippet>687</a>                    <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(LogIteratorError::ParseError {
+<a href=#688 id=688 data-nosnippet>688</a>                        offset: <span class="self">self</span>.orig_len - <span class="self">self</span>.input.len(),
+<a href=#689 id=689 data-nosnippet>689</a>                    }));
+<a href=#690 id=690 data-nosnippet>690</a>                }
+<a href=#691 id=691 data-nosnippet>691</a>            }
+<a href=#692 id=692 data-nosnippet>692</a>        }
+<a href=#693 id=693 data-nosnippet>693</a>    }
+<a href=#694 id=694 data-nosnippet>694</a>}
+<a href=#695 id=695 data-nosnippet>695</a>
+<a href=#696 id=696 data-nosnippet>696</a><span class="kw">fn </span>duration_as_fp_seconds(d: time::Duration) -&gt; f64 {
+<a href=#697 id=697 data-nosnippet>697</a>    d.as_secs() <span class="kw">as </span>f64 + f64::from(d.subsec_nanos()) / <span class="number">1_000_000_000_f64
+<a href=#698 id=698 data-nosnippet>698</a></span>}
+<a href=#699 id=699 data-nosnippet>699</a>
+<a href=#700 id=700 data-nosnippet>700</a><span class="kw">fn </span>system_time_as_fp_seconds(time: time::SystemTime) -&gt; f64 {
+<a href=#701 id=701 data-nosnippet>701</a>    <span class="kw">match </span>time.duration_since(time::UNIX_EPOCH) {
+<a href=#702 id=702 data-nosnippet>702</a>        <span class="prelude-val">Ok</span>(dur_after_epoch) =&gt; duration_as_fp_seconds(dur_after_epoch),
+<a href=#703 id=703 data-nosnippet>703</a>        <span class="comment">// Doesn't seem possible to be before the epoch, but using a negative number seems like
+<a href=#704 id=704 data-nosnippet>704</a>        // a reasonable representation if it does occur
+<a href=#705 id=705 data-nosnippet>705</a>        </span><span class="prelude-val">Err</span>(t) =&gt; duration_as_fp_seconds(t.duration()) * -<span class="number">1_f64</span>,
+<a href=#706 id=706 data-nosnippet>706</a>    }
+<a href=#707 id=707 data-nosnippet>707</a>}
+<a href=#708 id=708 data-nosnippet>708</a>
+<a href=#709 id=709 data-nosnippet>709</a><span class="kw">fn </span>start_time(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], LogEntry&gt; {
+<a href=#710 id=710 data-nosnippet>710</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = tag(<span class="string">"#[StartTime: "</span>)(input)<span class="question-mark">?</span>;
+<a href=#711 id=711 data-nosnippet>711</a>    <span class="kw">let </span>(input, duration) = fract_sec_duration(input)<span class="question-mark">?</span>;
+<a href=#712 id=712 data-nosnippet>712</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = char(<span class="string">' '</span>)(input)<span class="question-mark">?</span>;
+<a href=#713 id=713 data-nosnippet>713</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take_until(<span class="string">"\n"</span>)(input)<span class="question-mark">?</span>;
+<a href=#714 id=714 data-nosnippet>714</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take(<span class="number">1_usize</span>)(input)<span class="question-mark">?</span>;
+<a href=#715 id=715 data-nosnippet>715</a>    <span class="prelude-val">Ok</span>((input, LogEntry::StartTime(duration)))
+<a href=#716 id=716 data-nosnippet>716</a>}
+<a href=#717 id=717 data-nosnippet>717</a>
+<a href=#718 id=718 data-nosnippet>718</a><span class="kw">fn </span>base_time(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], LogEntry&gt; {
+<a href=#719 id=719 data-nosnippet>719</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = tag(<span class="string">"#[BaseTime: "</span>)(input)<span class="question-mark">?</span>;
+<a href=#720 id=720 data-nosnippet>720</a>    <span class="kw">let </span>(input, duration) = fract_sec_duration(input)<span class="question-mark">?</span>;
+<a href=#721 id=721 data-nosnippet>721</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = char(<span class="string">' '</span>)(input)<span class="question-mark">?</span>;
+<a href=#722 id=722 data-nosnippet>722</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take_until(<span class="string">"\n"</span>)(input)<span class="question-mark">?</span>;
+<a href=#723 id=723 data-nosnippet>723</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take(<span class="number">1_usize</span>)(input)<span class="question-mark">?</span>;
+<a href=#724 id=724 data-nosnippet>724</a>    <span class="prelude-val">Ok</span>((input, LogEntry::BaseTime(duration)))
+<a href=#725 id=725 data-nosnippet>725</a>}
+<a href=#726 id=726 data-nosnippet>726</a>
+<a href=#727 id=727 data-nosnippet>727</a><span class="kw">fn </span>tag_bytes(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], <span class="kw-2">&amp;</span>[u8]&gt; {
+<a href=#728 id=728 data-nosnippet>728</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = tag(<span class="string">"Tag="</span>)(input)<span class="question-mark">?</span>;
+<a href=#729 id=729 data-nosnippet>729</a>    <span class="kw">let </span>(input, tag) = take_until(<span class="string">","</span>)(input)<span class="question-mark">?</span>;
+<a href=#730 id=730 data-nosnippet>730</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take(<span class="number">1_usize</span>)(input)<span class="question-mark">?</span>;
+<a href=#731 id=731 data-nosnippet>731</a>    <span class="prelude-val">Ok</span>((input, tag))
+<a href=#732 id=732 data-nosnippet>732</a>}
+<a href=#733 id=733 data-nosnippet>733</a>
+<a href=#734 id=734 data-nosnippet>734</a><span class="kw">fn </span>tag_parser(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], Tag&gt; {
+<a href=#735 id=735 data-nosnippet>735</a>    <span class="kw">let </span>(input, tag) = map_res(tag_bytes, str::from_utf8)(input)<span class="question-mark">?</span>;
+<a href=#736 id=736 data-nosnippet>736</a>    <span class="prelude-val">Ok</span>((input, Tag(tag)))
+<a href=#737 id=737 data-nosnippet>737</a>}
+<a href=#738 id=738 data-nosnippet>738</a>
+<a href=#739 id=739 data-nosnippet>739</a><span class="kw">fn </span>interval_hist(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], LogEntry&gt; {
+<a href=#740 id=740 data-nosnippet>740</a>    <span class="kw">let </span>(input, tag) = opt(tag_parser)(input)<span class="question-mark">?</span>;
+<a href=#741 id=741 data-nosnippet>741</a>    <span class="kw">let </span>(input, start_timestamp) = fract_sec_duration(input)<span class="question-mark">?</span>;
+<a href=#742 id=742 data-nosnippet>742</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = char(<span class="string">','</span>)(input)<span class="question-mark">?</span>;
+<a href=#743 id=743 data-nosnippet>743</a>    <span class="kw">let </span>(input, duration) = fract_sec_duration(input)<span class="question-mark">?</span>;
+<a href=#744 id=744 data-nosnippet>744</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = char(<span class="string">','</span>)(input)<span class="question-mark">?</span>;
+<a href=#745 id=745 data-nosnippet>745</a>    <span class="kw">let </span>(input, max) = double(input)<span class="question-mark">?</span>;
+<a href=#746 id=746 data-nosnippet>746</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = char(<span class="string">','</span>)(input)<span class="question-mark">?</span>;
+<a href=#747 id=747 data-nosnippet>747</a>    <span class="kw">let </span>(input, encoded_histogram) = map_res(take_until(<span class="string">"\n"</span>), str::from_utf8)(input)<span class="question-mark">?</span>;
+<a href=#748 id=748 data-nosnippet>748</a>    <span class="comment">// Be nice to Windows users:
+<a href=#749 id=749 data-nosnippet>749</a>    </span><span class="kw">let </span>encoded_histogram = encoded_histogram.trim_end_matches(<span class="string">'\r'</span>);
+<a href=#750 id=750 data-nosnippet>750</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take(<span class="number">1_usize</span>)(input)<span class="question-mark">?</span>;
+<a href=#751 id=751 data-nosnippet>751</a>
+<a href=#752 id=752 data-nosnippet>752</a>    <span class="prelude-val">Ok</span>((
+<a href=#753 id=753 data-nosnippet>753</a>        input,
+<a href=#754 id=754 data-nosnippet>754</a>        LogEntry::Interval(IntervalLogHistogram {
+<a href=#755 id=755 data-nosnippet>755</a>            tag,
+<a href=#756 id=756 data-nosnippet>756</a>            start_timestamp,
+<a href=#757 id=757 data-nosnippet>757</a>            duration,
+<a href=#758 id=758 data-nosnippet>758</a>            max,
+<a href=#759 id=759 data-nosnippet>759</a>            encoded_histogram,
+<a href=#760 id=760 data-nosnippet>760</a>        }),
+<a href=#761 id=761 data-nosnippet>761</a>    ))
+<a href=#762 id=762 data-nosnippet>762</a>}
+<a href=#763 id=763 data-nosnippet>763</a>
+<a href=#764 id=764 data-nosnippet>764</a><span class="kw">fn </span>log_entry(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], LogEntry&lt;<span class="lifetime">'_</span>&gt;&gt; {
+<a href=#765 id=765 data-nosnippet>765</a>    complete(alt((start_time, base_time, interval_hist)))(input)
+<a href=#766 id=766 data-nosnippet>766</a>}
+<a href=#767 id=767 data-nosnippet>767</a>
+<a href=#768 id=768 data-nosnippet>768</a><span class="kw">fn </span>comment_line(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], ()&gt; {
+<a href=#769 id=769 data-nosnippet>769</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = tag(<span class="string">"#"</span>)(input)<span class="question-mark">?</span>;
+<a href=#770 id=770 data-nosnippet>770</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take_until(<span class="string">"\n"</span>)(input)<span class="question-mark">?</span>;
+<a href=#771 id=771 data-nosnippet>771</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take(<span class="number">1_usize</span>)(input)<span class="question-mark">?</span>;
+<a href=#772 id=772 data-nosnippet>772</a>    <span class="prelude-val">Ok</span>((input, ()))
+<a href=#773 id=773 data-nosnippet>773</a>}
+<a href=#774 id=774 data-nosnippet>774</a>
+<a href=#775 id=775 data-nosnippet>775</a><span class="kw">fn </span>legend(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], ()&gt; {
+<a href=#776 id=776 data-nosnippet>776</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = tag(<span class="string">"\"StartTimestamp\""</span>)(input)<span class="question-mark">?</span>;
+<a href=#777 id=777 data-nosnippet>777</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take_until(<span class="string">"\n"</span>)(input)<span class="question-mark">?</span>;
+<a href=#778 id=778 data-nosnippet>778</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = take(<span class="number">1_usize</span>)(input)<span class="question-mark">?</span>;
+<a href=#779 id=779 data-nosnippet>779</a>    <span class="prelude-val">Ok</span>((input, ()))
+<a href=#780 id=780 data-nosnippet>780</a>}
+<a href=#781 id=781 data-nosnippet>781</a>
+<a href=#782 id=782 data-nosnippet>782</a><span class="kw">fn </span>ignored_line(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], ()&gt; {
+<a href=#783 id=783 data-nosnippet>783</a>    alt((comment_line, legend))(input)
+<a href=#784 id=784 data-nosnippet>784</a>}
+<a href=#785 id=785 data-nosnippet>785</a>
+<a href=#786 id=786 data-nosnippet>786</a><span class="kw">fn </span>fract_sec_duration(input: <span class="kw-2">&amp;</span>[u8]) -&gt; IResult&lt;<span class="kw-2">&amp;</span>[u8], time::Duration&gt; {
+<a href=#787 id=787 data-nosnippet>787</a>    <span class="kw">let </span>(rest, data) = fract_sec_tuple(input)<span class="question-mark">?</span>;
+<a href=#788 id=788 data-nosnippet>788</a>    <span class="kw">let </span>(secs, nanos_str) = data;
+<a href=#789 id=789 data-nosnippet>789</a>
+<a href=#790 id=790 data-nosnippet>790</a>    <span class="comment">// only read up to 9 digits since we can only support nanos, not smaller precision
+<a href=#791 id=791 data-nosnippet>791</a>    </span><span class="kw">let </span>nanos_parse_res = <span class="kw">match </span>nanos_str.len().cmp(<span class="kw-2">&amp;</span><span class="number">9</span>) {
+<a href=#792 id=792 data-nosnippet>792</a>        Ordering::Greater =&gt; nanos_str[<span class="number">0</span>..<span class="number">9</span>].parse::&lt;u32&gt;(),
+<a href=#793 id=793 data-nosnippet>793</a>        Ordering::Equal =&gt; nanos_str.parse::&lt;u32&gt;(),
+<a href=#794 id=794 data-nosnippet>794</a>        Ordering::Less =&gt; nanos_str
+<a href=#795 id=795 data-nosnippet>795</a>            .parse::&lt;u32&gt;()
+<a href=#796 id=796 data-nosnippet>796</a>            <span class="comment">// subtraction will not overflow because len is &lt; 9
+<a href=#797 id=797 data-nosnippet>797</a>            </span>.map(|n| n * <span class="number">10_u32</span>.pow(<span class="number">9 </span>- nanos_str.len() <span class="kw">as </span>u32)),
+<a href=#798 id=798 data-nosnippet>798</a>    };
+<a href=#799 id=799 data-nosnippet>799</a>
+<a href=#800 id=800 data-nosnippet>800</a>    <span class="kw">if let </span><span class="prelude-val">Ok</span>(nanos) = nanos_parse_res {
+<a href=#801 id=801 data-nosnippet>801</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>((rest, time::Duration::new(secs, nanos)));
+<a href=#802 id=802 data-nosnippet>802</a>    }
+<a href=#803 id=803 data-nosnippet>803</a>
+<a href=#804 id=804 data-nosnippet>804</a>    <span class="comment">// nanos were invalid utf8. We don't expose these errors, so don't bother defining a
+<a href=#805 id=805 data-nosnippet>805</a>    // custom error type.
+<a href=#806 id=806 data-nosnippet>806</a>    </span><span class="prelude-val">Err</span>(Err::Error(<span class="macro">error_position!</span>(input, ErrorKind::Alpha)))
+<a href=#807 id=807 data-nosnippet>807</a>}
+<a href=#808 id=808 data-nosnippet>808</a>
+<a href=#809 id=809 data-nosnippet>809</a><span class="kw">type </span>FResult&lt;<span class="lifetime">'a</span>&gt; = IResult&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8], (u64, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str)&gt;;
+<a href=#810 id=810 data-nosnippet>810</a>
+<a href=#811 id=811 data-nosnippet>811</a><span class="kw">fn </span>fract_sec_tuple(input: <span class="kw-2">&amp;</span>[u8]) -&gt; FResult {
+<a href=#812 id=812 data-nosnippet>812</a>    <span class="kw">let </span>(input, secs) = map_res(
+<a href=#813 id=813 data-nosnippet>813</a>        map_res(recognize(take_until(<span class="string">"."</span>)), str::from_utf8),
+<a href=#814 id=814 data-nosnippet>814</a>        u64::from_str,
+<a href=#815 id=815 data-nosnippet>815</a>    )(input)<span class="question-mark">?</span>;
+<a href=#816 id=816 data-nosnippet>816</a>    <span class="kw">let </span>(input, <span class="kw">_</span>) = tag(<span class="string">"."</span>)(input)<span class="question-mark">?</span>;
+<a href=#817 id=817 data-nosnippet>817</a>    <span class="kw">let </span>(input, nanos_str) = map_res(complete(take_while1(is_digit)), str::from_utf8)(input)<span class="question-mark">?</span>;
+<a href=#818 id=818 data-nosnippet>818</a>    <span class="prelude-val">Ok</span>((input, (secs, nanos_str)))
+<a href=#819 id=819 data-nosnippet>819</a>}
+<a href=#820 id=820 data-nosnippet>820</a>
+<a href=#821 id=821 data-nosnippet>821</a><span class="attr">#[cfg(test)]
+<a href=#822 id=822 data-nosnippet>822</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>

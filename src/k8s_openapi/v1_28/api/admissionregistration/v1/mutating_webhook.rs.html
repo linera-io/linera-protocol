@@ -1,0 +1,473 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/k8s-openapi-0.21.1/src/v1_28/api/admissionregistration/v1/mutating_webhook.rs`."><title>mutating_webhook.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../../../" data-static-root-path="../../../../../../static.files/" data-current-crate="k8s_openapi" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../../../../src-files.js"></script><script defer src="../../../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">k8s_openapi/v1_28/api/admissionregistration/v1/</div>mutating_webhook.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Generated from definition io.k8s.api.admissionregistration.v1.MutatingWebhook
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="doccomment">/// MutatingWebhook describes an admission webhook and the resources and operations it applies to.
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="attr">#[derive(Clone, Debug, Default, PartialEq)]
+<a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">pub struct </span>MutatingWebhook {
+<a href=#6 id=6 data-nosnippet>6</a>    <span class="doccomment">/// AdmissionReviewVersions is an ordered list of preferred `AdmissionReview` versions the Webhook expects. API server will try to use first version in the list which it supports. If none of the versions specified in this list supported by API server, validation will fail for this object. If a persisted webhook configuration specifies allowed versions and does not include any versions known to the API Server, calls to the webhook will fail and be subject to the failure policy.
+<a href=#7 id=7 data-nosnippet>7</a>    </span><span class="kw">pub </span>admission_review_versions: Vec&lt;String&gt;,
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a>    <span class="doccomment">/// ClientConfig defines how to communicate with the hook. Required
+<a href=#10 id=10 data-nosnippet>10</a>    </span><span class="kw">pub </span>client_config: <span class="kw">crate</span>::api::admissionregistration::v1::WebhookClientConfig,
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a>    <span class="doccomment">/// FailurePolicy defines how unrecognized errors from the admission endpoint are handled - allowed values are Ignore or Fail. Defaults to Fail.
+<a href=#13 id=13 data-nosnippet>13</a>    </span><span class="kw">pub </span>failure_policy: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a>    <span class="doccomment">/// MatchConditions is a list of conditions that must be met for a request to be sent to this webhook. Match conditions filter requests that have already been matched by the rules, namespaceSelector, and objectSelector. An empty list of matchConditions matches all requests. There are a maximum of 64 match conditions allowed.
+<a href=#16 id=16 data-nosnippet>16</a>    ///
+<a href=#17 id=17 data-nosnippet>17</a>    /// The exact matching logic is (in order):
+<a href=#18 id=18 data-nosnippet>18</a>    ///   1. If ANY matchCondition evaluates to FALSE, the webhook is skipped.
+<a href=#19 id=19 data-nosnippet>19</a>    ///   2. If ALL matchConditions evaluate to TRUE, the webhook is called.
+<a href=#20 id=20 data-nosnippet>20</a>    ///   3. If any matchCondition evaluates to an error (but none are FALSE):
+<a href=#21 id=21 data-nosnippet>21</a>    ///      - If failurePolicy=Fail, reject the request
+<a href=#22 id=22 data-nosnippet>22</a>    ///      - If failurePolicy=Ignore, the error is ignored and the webhook is skipped
+<a href=#23 id=23 data-nosnippet>23</a>    ///
+<a href=#24 id=24 data-nosnippet>24</a>    /// This is a beta feature and managed by the AdmissionWebhookMatchConditions feature gate.
+<a href=#25 id=25 data-nosnippet>25</a>    </span><span class="kw">pub </span>match_conditions: <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">crate</span>::api::admissionregistration::v1::MatchCondition&gt;&gt;,
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a>    <span class="doccomment">/// matchPolicy defines how the "rules" list is used to match incoming requests. Allowed values are "Exact" or "Equivalent".
+<a href=#28 id=28 data-nosnippet>28</a>    ///
+<a href=#29 id=29 data-nosnippet>29</a>    /// - Exact: match a request only if it exactly matches a specified rule. For example, if deployments can be modified via apps/v1, apps/v1beta1, and extensions/v1beta1, but "rules" only included `apiGroups:\["apps"\], apiVersions:\["v1"\], resources: \["deployments"\]`, a request to apps/v1beta1 or extensions/v1beta1 would not be sent to the webhook.
+<a href=#30 id=30 data-nosnippet>30</a>    ///
+<a href=#31 id=31 data-nosnippet>31</a>    /// - Equivalent: match a request if modifies a resource listed in rules, even via another API group or version. For example, if deployments can be modified via apps/v1, apps/v1beta1, and extensions/v1beta1, and "rules" only included `apiGroups:\["apps"\], apiVersions:\["v1"\], resources: \["deployments"\]`, a request to apps/v1beta1 or extensions/v1beta1 would be converted to apps/v1 and sent to the webhook.
+<a href=#32 id=32 data-nosnippet>32</a>    ///
+<a href=#33 id=33 data-nosnippet>33</a>    /// Defaults to "Equivalent"
+<a href=#34 id=34 data-nosnippet>34</a>    </span><span class="kw">pub </span>match_policy: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#35 id=35 data-nosnippet>35</a>
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="doccomment">/// The name of the admission webhook. Name should be fully qualified, e.g., imagepolicy.kubernetes.io, where "imagepolicy" is the name of the webhook, and kubernetes.io is the name of the organization. Required.
+<a href=#37 id=37 data-nosnippet>37</a>    </span><span class="kw">pub </span>name: String,
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a>    <span class="doccomment">/// NamespaceSelector decides whether to run the webhook on an object based on whether the namespace for that object matches the selector. If the object itself is a namespace, the matching is performed on object.metadata.labels. If the object is another cluster scoped resource, it never skips the webhook.
+<a href=#40 id=40 data-nosnippet>40</a>    ///
+<a href=#41 id=41 data-nosnippet>41</a>    /// For example, to run the webhook on any objects whose namespace is not associated with "runlevel" of "0" or "1";  you will set the selector as follows: "namespaceSelector": {
+<a href=#42 id=42 data-nosnippet>42</a>    ///   "matchExpressions": \[
+<a href=#43 id=43 data-nosnippet>43</a>    ///     {
+<a href=#44 id=44 data-nosnippet>44</a>    ///       "key": "runlevel",
+<a href=#45 id=45 data-nosnippet>45</a>    ///       "operator": "NotIn",
+<a href=#46 id=46 data-nosnippet>46</a>    ///       "values": \[
+<a href=#47 id=47 data-nosnippet>47</a>    ///         "0",
+<a href=#48 id=48 data-nosnippet>48</a>    ///         "1"
+<a href=#49 id=49 data-nosnippet>49</a>    ///       \]
+<a href=#50 id=50 data-nosnippet>50</a>    ///     }
+<a href=#51 id=51 data-nosnippet>51</a>    ///   \]
+<a href=#52 id=52 data-nosnippet>52</a>    /// }
+<a href=#53 id=53 data-nosnippet>53</a>    ///
+<a href=#54 id=54 data-nosnippet>54</a>    /// If instead you want to only run the webhook on any objects whose namespace is associated with the "environment" of "prod" or "staging"; you will set the selector as follows: "namespaceSelector": {
+<a href=#55 id=55 data-nosnippet>55</a>    ///   "matchExpressions": \[
+<a href=#56 id=56 data-nosnippet>56</a>    ///     {
+<a href=#57 id=57 data-nosnippet>57</a>    ///       "key": "environment",
+<a href=#58 id=58 data-nosnippet>58</a>    ///       "operator": "In",
+<a href=#59 id=59 data-nosnippet>59</a>    ///       "values": \[
+<a href=#60 id=60 data-nosnippet>60</a>    ///         "prod",
+<a href=#61 id=61 data-nosnippet>61</a>    ///         "staging"
+<a href=#62 id=62 data-nosnippet>62</a>    ///       \]
+<a href=#63 id=63 data-nosnippet>63</a>    ///     }
+<a href=#64 id=64 data-nosnippet>64</a>    ///   \]
+<a href=#65 id=65 data-nosnippet>65</a>    /// }
+<a href=#66 id=66 data-nosnippet>66</a>    ///
+<a href=#67 id=67 data-nosnippet>67</a>    /// See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/ for more examples of label selectors.
+<a href=#68 id=68 data-nosnippet>68</a>    ///
+<a href=#69 id=69 data-nosnippet>69</a>    /// Default to the empty LabelSelector, which matches everything.
+<a href=#70 id=70 data-nosnippet>70</a>    </span><span class="kw">pub </span>namespace_selector: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::apimachinery::pkg::apis::meta::v1::LabelSelector&gt;,
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="doccomment">/// ObjectSelector decides whether to run the webhook based on if the object has matching labels. objectSelector is evaluated against both the oldObject and newObject that would be sent to the webhook, and is considered to match if either object matches the selector. A null object (oldObject in the case of create, or newObject in the case of delete) or an object that cannot have labels (like a DeploymentRollback or a PodProxyOptions object) is not considered to match. Use the object selector only if the webhook is opt-in, because end users may skip the admission webhook by setting the labels. Default to the empty LabelSelector, which matches everything.
+<a href=#73 id=73 data-nosnippet>73</a>    </span><span class="kw">pub </span>object_selector: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::apimachinery::pkg::apis::meta::v1::LabelSelector&gt;,
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="doccomment">/// reinvocationPolicy indicates whether this webhook should be called multiple times as part of a single admission evaluation. Allowed values are "Never" and "IfNeeded".
+<a href=#76 id=76 data-nosnippet>76</a>    ///
+<a href=#77 id=77 data-nosnippet>77</a>    /// Never: the webhook will not be called more than once in a single admission evaluation.
+<a href=#78 id=78 data-nosnippet>78</a>    ///
+<a href=#79 id=79 data-nosnippet>79</a>    /// IfNeeded: the webhook will be called at least one additional time as part of the admission evaluation if the object being admitted is modified by other admission plugins after the initial webhook call. Webhooks that specify this option *must* be idempotent, able to process objects they previously admitted. Note: * the number of additional invocations is not guaranteed to be exactly one. * if additional invocations result in further modifications to the object, webhooks are not guaranteed to be invoked again. * webhooks that use this option may be reordered to minimize the number of additional invocations. * to validate an object after all mutations are guaranteed complete, use a validating admission webhook instead.
+<a href=#80 id=80 data-nosnippet>80</a>    ///
+<a href=#81 id=81 data-nosnippet>81</a>    /// Defaults to "Never".
+<a href=#82 id=82 data-nosnippet>82</a>    </span><span class="kw">pub </span>reinvocation_policy: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="doccomment">/// Rules describes what operations on what resources/subresources the webhook cares about. The webhook cares about an operation if it matches _any_ Rule. However, in order to prevent ValidatingAdmissionWebhooks and MutatingAdmissionWebhooks from putting the cluster in a state which cannot be recovered from without completely disabling the plugin, ValidatingAdmissionWebhooks and MutatingAdmissionWebhooks are never called on admission requests for ValidatingWebhookConfiguration and MutatingWebhookConfiguration objects.
+<a href=#85 id=85 data-nosnippet>85</a>    </span><span class="kw">pub </span>rules: <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">crate</span>::api::admissionregistration::v1::RuleWithOperations&gt;&gt;,
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="doccomment">/// SideEffects states whether this webhook has side effects. Acceptable values are: None, NoneOnDryRun (webhooks created via v1beta1 may also specify Some or Unknown). Webhooks with side effects MUST implement a reconciliation system, since a request may be rejected by a future step in the admission chain and the side effects therefore need to be undone. Requests with the dryRun attribute will be auto-rejected if they match a webhook with sideEffects == Unknown or Some.
+<a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">pub </span>side_effects: String,
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="doccomment">/// TimeoutSeconds specifies the timeout for this webhook. After the timeout passes, the webhook call will be ignored or the API call will fail based on the failure policy. The timeout value must be between 1 and 30 seconds. Default to 10 seconds.
+<a href=#91 id=91 data-nosnippet>91</a>    </span><span class="kw">pub </span>timeout_seconds: <span class="prelude-ty">Option</span>&lt;i32&gt;,
+<a href=#92 id=92 data-nosnippet>92</a>}
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a><span class="kw">impl </span><span class="kw">crate</span>::DeepMerge <span class="kw">for </span>MutatingWebhook {
+<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">fn </span>merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="self">Self</span>) {
+<a href=#96 id=96 data-nosnippet>96</a>        <span class="kw">crate</span>::merge_strategies::list::atomic(<span class="kw-2">&amp;mut </span><span class="self">self</span>.admission_review_versions, other.admission_review_versions);
+<a href=#97 id=97 data-nosnippet>97</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.client_config, other.client_config);
+<a href=#98 id=98 data-nosnippet>98</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.failure_policy, other.failure_policy);
+<a href=#99 id=99 data-nosnippet>99</a>        <span class="kw">crate</span>::merge_strategies::list::map(
+<a href=#100 id=100 data-nosnippet>100</a>            <span class="kw-2">&amp;mut </span><span class="self">self</span>.match_conditions,
+<a href=#101 id=101 data-nosnippet>101</a>            other.match_conditions,
+<a href=#102 id=102 data-nosnippet>102</a>            <span class="kw-2">&amp;</span>[|lhs, rhs| lhs.name == rhs.name],
+<a href=#103 id=103 data-nosnippet>103</a>            |current_item, other_item| {
+<a href=#104 id=104 data-nosnippet>104</a>                <span class="kw">crate</span>::DeepMerge::merge_from(current_item, other_item);
+<a href=#105 id=105 data-nosnippet>105</a>            },
+<a href=#106 id=106 data-nosnippet>106</a>        );
+<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.match_policy, other.match_policy);
+<a href=#108 id=108 data-nosnippet>108</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.name, other.name);
+<a href=#109 id=109 data-nosnippet>109</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.namespace_selector, other.namespace_selector);
+<a href=#110 id=110 data-nosnippet>110</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.object_selector, other.object_selector);
+<a href=#111 id=111 data-nosnippet>111</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.reinvocation_policy, other.reinvocation_policy);
+<a href=#112 id=112 data-nosnippet>112</a>        <span class="kw">crate</span>::merge_strategies::list::atomic(<span class="kw-2">&amp;mut </span><span class="self">self</span>.rules, other.rules);
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.side_effects, other.side_effects);
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.timeout_seconds, other.timeout_seconds);
+<a href=#115 id=115 data-nosnippet>115</a>    }
+<a href=#116 id=116 data-nosnippet>116</a>}
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; <span class="kw">crate</span>::serde::Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>MutatingWebhook {
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; <span class="kw">where </span>D: <span class="kw">crate</span>::serde::Deserializer&lt;<span class="lifetime">'de</span>&gt; {
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="attr">#[allow(non_camel_case_types)]
+<a href=#121 id=121 data-nosnippet>121</a>        </span><span class="kw">enum </span>Field {
+<a href=#122 id=122 data-nosnippet>122</a>            Key_admission_review_versions,
+<a href=#123 id=123 data-nosnippet>123</a>            Key_client_config,
+<a href=#124 id=124 data-nosnippet>124</a>            Key_failure_policy,
+<a href=#125 id=125 data-nosnippet>125</a>            Key_match_conditions,
+<a href=#126 id=126 data-nosnippet>126</a>            Key_match_policy,
+<a href=#127 id=127 data-nosnippet>127</a>            Key_name,
+<a href=#128 id=128 data-nosnippet>128</a>            Key_namespace_selector,
+<a href=#129 id=129 data-nosnippet>129</a>            Key_object_selector,
+<a href=#130 id=130 data-nosnippet>130</a>            Key_reinvocation_policy,
+<a href=#131 id=131 data-nosnippet>131</a>            Key_rules,
+<a href=#132 id=132 data-nosnippet>132</a>            Key_side_effects,
+<a href=#133 id=133 data-nosnippet>133</a>            Key_timeout_seconds,
+<a href=#134 id=134 data-nosnippet>134</a>            Other,
+<a href=#135 id=135 data-nosnippet>135</a>        }
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a>        <span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; <span class="kw">crate</span>::serde::Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>Field {
+<a href=#138 id=138 data-nosnippet>138</a>            <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; <span class="kw">where </span>D: <span class="kw">crate</span>::serde::Deserializer&lt;<span class="lifetime">'de</span>&gt; {
+<a href=#139 id=139 data-nosnippet>139</a>                <span class="kw">struct </span>Visitor;
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a>                <span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; <span class="kw">crate</span>::serde::de::Visitor&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>Visitor {
+<a href=#142 id=142 data-nosnippet>142</a>                    <span class="kw">type </span>Value = Field;
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>                    <span class="kw">fn </span>expecting(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#145 id=145 data-nosnippet>145</a>                        f.write_str(<span class="string">"field identifier"</span>)
+<a href=#146 id=146 data-nosnippet>146</a>                    }
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a>                    <span class="kw">fn </span>visit_str&lt;E&gt;(<span class="self">self</span>, v: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Value, E&gt; <span class="kw">where </span>E: <span class="kw">crate</span>::serde::de::Error {
+<a href=#149 id=149 data-nosnippet>149</a>                        <span class="prelude-val">Ok</span>(<span class="kw">match </span>v {
+<a href=#150 id=150 data-nosnippet>150</a>                            <span class="string">"admissionReviewVersions" </span>=&gt; Field::Key_admission_review_versions,
+<a href=#151 id=151 data-nosnippet>151</a>                            <span class="string">"clientConfig" </span>=&gt; Field::Key_client_config,
+<a href=#152 id=152 data-nosnippet>152</a>                            <span class="string">"failurePolicy" </span>=&gt; Field::Key_failure_policy,
+<a href=#153 id=153 data-nosnippet>153</a>                            <span class="string">"matchConditions" </span>=&gt; Field::Key_match_conditions,
+<a href=#154 id=154 data-nosnippet>154</a>                            <span class="string">"matchPolicy" </span>=&gt; Field::Key_match_policy,
+<a href=#155 id=155 data-nosnippet>155</a>                            <span class="string">"name" </span>=&gt; Field::Key_name,
+<a href=#156 id=156 data-nosnippet>156</a>                            <span class="string">"namespaceSelector" </span>=&gt; Field::Key_namespace_selector,
+<a href=#157 id=157 data-nosnippet>157</a>                            <span class="string">"objectSelector" </span>=&gt; Field::Key_object_selector,
+<a href=#158 id=158 data-nosnippet>158</a>                            <span class="string">"reinvocationPolicy" </span>=&gt; Field::Key_reinvocation_policy,
+<a href=#159 id=159 data-nosnippet>159</a>                            <span class="string">"rules" </span>=&gt; Field::Key_rules,
+<a href=#160 id=160 data-nosnippet>160</a>                            <span class="string">"sideEffects" </span>=&gt; Field::Key_side_effects,
+<a href=#161 id=161 data-nosnippet>161</a>                            <span class="string">"timeoutSeconds" </span>=&gt; Field::Key_timeout_seconds,
+<a href=#162 id=162 data-nosnippet>162</a>                            <span class="kw">_ </span>=&gt; Field::Other,
+<a href=#163 id=163 data-nosnippet>163</a>                        })
+<a href=#164 id=164 data-nosnippet>164</a>                    }
+<a href=#165 id=165 data-nosnippet>165</a>                }
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a>                deserializer.deserialize_identifier(Visitor)
+<a href=#168 id=168 data-nosnippet>168</a>            }
+<a href=#169 id=169 data-nosnippet>169</a>        }
+<a href=#170 id=170 data-nosnippet>170</a>
+<a href=#171 id=171 data-nosnippet>171</a>        <span class="kw">struct </span>Visitor;
+<a href=#172 id=172 data-nosnippet>172</a>
+<a href=#173 id=173 data-nosnippet>173</a>        <span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; <span class="kw">crate</span>::serde::de::Visitor&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>Visitor {
+<a href=#174 id=174 data-nosnippet>174</a>            <span class="kw">type </span>Value = MutatingWebhook;
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a>            <span class="kw">fn </span>expecting(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#177 id=177 data-nosnippet>177</a>                f.write_str(<span class="string">"MutatingWebhook"</span>)
+<a href=#178 id=178 data-nosnippet>178</a>            }
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a>            <span class="kw">fn </span>visit_map&lt;A&gt;(<span class="self">self</span>, <span class="kw-2">mut </span>map: A) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Value, A::Error&gt; <span class="kw">where </span>A: <span class="kw">crate</span>::serde::de::MapAccess&lt;<span class="lifetime">'de</span>&gt; {
+<a href=#181 id=181 data-nosnippet>181</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_admission_review_versions: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt; = <span class="prelude-val">None</span>;
+<a href=#182 id=182 data-nosnippet>182</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_client_config: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::api::admissionregistration::v1::WebhookClientConfig&gt; = <span class="prelude-val">None</span>;
+<a href=#183 id=183 data-nosnippet>183</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_failure_policy: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
+<a href=#184 id=184 data-nosnippet>184</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_match_conditions: <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">crate</span>::api::admissionregistration::v1::MatchCondition&gt;&gt; = <span class="prelude-val">None</span>;
+<a href=#185 id=185 data-nosnippet>185</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_match_policy: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
+<a href=#186 id=186 data-nosnippet>186</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_name: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
+<a href=#187 id=187 data-nosnippet>187</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_namespace_selector: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::apimachinery::pkg::apis::meta::v1::LabelSelector&gt; = <span class="prelude-val">None</span>;
+<a href=#188 id=188 data-nosnippet>188</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_object_selector: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::apimachinery::pkg::apis::meta::v1::LabelSelector&gt; = <span class="prelude-val">None</span>;
+<a href=#189 id=189 data-nosnippet>189</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_reinvocation_policy: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
+<a href=#190 id=190 data-nosnippet>190</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_rules: <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">crate</span>::api::admissionregistration::v1::RuleWithOperations&gt;&gt; = <span class="prelude-val">None</span>;
+<a href=#191 id=191 data-nosnippet>191</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_side_effects: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
+<a href=#192 id=192 data-nosnippet>192</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_timeout_seconds: <span class="prelude-ty">Option</span>&lt;i32&gt; = <span class="prelude-val">None</span>;
+<a href=#193 id=193 data-nosnippet>193</a>
+<a href=#194 id=194 data-nosnippet>194</a>                <span class="kw">while let </span><span class="prelude-val">Some</span>(key) = <span class="kw">crate</span>::serde::de::MapAccess::next_key::&lt;Field&gt;(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">? </span>{
+<a href=#195 id=195 data-nosnippet>195</a>                    <span class="kw">match </span>key {
+<a href=#196 id=196 data-nosnippet>196</a>                        Field::Key_admission_review_versions =&gt; value_admission_review_versions = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#197 id=197 data-nosnippet>197</a>                        Field::Key_client_config =&gt; value_client_config = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#198 id=198 data-nosnippet>198</a>                        Field::Key_failure_policy =&gt; value_failure_policy = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#199 id=199 data-nosnippet>199</a>                        Field::Key_match_conditions =&gt; value_match_conditions = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#200 id=200 data-nosnippet>200</a>                        Field::Key_match_policy =&gt; value_match_policy = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#201 id=201 data-nosnippet>201</a>                        Field::Key_name =&gt; value_name = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#202 id=202 data-nosnippet>202</a>                        Field::Key_namespace_selector =&gt; value_namespace_selector = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#203 id=203 data-nosnippet>203</a>                        Field::Key_object_selector =&gt; value_object_selector = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#204 id=204 data-nosnippet>204</a>                        Field::Key_reinvocation_policy =&gt; value_reinvocation_policy = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#205 id=205 data-nosnippet>205</a>                        Field::Key_rules =&gt; value_rules = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#206 id=206 data-nosnippet>206</a>                        Field::Key_side_effects =&gt; value_side_effects = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#207 id=207 data-nosnippet>207</a>                        Field::Key_timeout_seconds =&gt; value_timeout_seconds = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#208 id=208 data-nosnippet>208</a>                        Field::Other =&gt; { <span class="kw">let _</span>: <span class="kw">crate</span>::serde::de::IgnoredAny = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>; },
+<a href=#209 id=209 data-nosnippet>209</a>                    }
+<a href=#210 id=210 data-nosnippet>210</a>                }
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a>                <span class="prelude-val">Ok</span>(MutatingWebhook {
+<a href=#213 id=213 data-nosnippet>213</a>                    admission_review_versions: value_admission_review_versions.unwrap_or_default(),
+<a href=#214 id=214 data-nosnippet>214</a>                    client_config: value_client_config.unwrap_or_default(),
+<a href=#215 id=215 data-nosnippet>215</a>                    failure_policy: value_failure_policy,
+<a href=#216 id=216 data-nosnippet>216</a>                    match_conditions: value_match_conditions,
+<a href=#217 id=217 data-nosnippet>217</a>                    match_policy: value_match_policy,
+<a href=#218 id=218 data-nosnippet>218</a>                    name: value_name.unwrap_or_default(),
+<a href=#219 id=219 data-nosnippet>219</a>                    namespace_selector: value_namespace_selector,
+<a href=#220 id=220 data-nosnippet>220</a>                    object_selector: value_object_selector,
+<a href=#221 id=221 data-nosnippet>221</a>                    reinvocation_policy: value_reinvocation_policy,
+<a href=#222 id=222 data-nosnippet>222</a>                    rules: value_rules,
+<a href=#223 id=223 data-nosnippet>223</a>                    side_effects: value_side_effects.unwrap_or_default(),
+<a href=#224 id=224 data-nosnippet>224</a>                    timeout_seconds: value_timeout_seconds,
+<a href=#225 id=225 data-nosnippet>225</a>                })
+<a href=#226 id=226 data-nosnippet>226</a>            }
+<a href=#227 id=227 data-nosnippet>227</a>        }
+<a href=#228 id=228 data-nosnippet>228</a>
+<a href=#229 id=229 data-nosnippet>229</a>        deserializer.deserialize_struct(
+<a href=#230 id=230 data-nosnippet>230</a>            <span class="string">"MutatingWebhook"</span>,
+<a href=#231 id=231 data-nosnippet>231</a>            <span class="kw-2">&amp;</span>[
+<a href=#232 id=232 data-nosnippet>232</a>                <span class="string">"admissionReviewVersions"</span>,
+<a href=#233 id=233 data-nosnippet>233</a>                <span class="string">"clientConfig"</span>,
+<a href=#234 id=234 data-nosnippet>234</a>                <span class="string">"failurePolicy"</span>,
+<a href=#235 id=235 data-nosnippet>235</a>                <span class="string">"matchConditions"</span>,
+<a href=#236 id=236 data-nosnippet>236</a>                <span class="string">"matchPolicy"</span>,
+<a href=#237 id=237 data-nosnippet>237</a>                <span class="string">"name"</span>,
+<a href=#238 id=238 data-nosnippet>238</a>                <span class="string">"namespaceSelector"</span>,
+<a href=#239 id=239 data-nosnippet>239</a>                <span class="string">"objectSelector"</span>,
+<a href=#240 id=240 data-nosnippet>240</a>                <span class="string">"reinvocationPolicy"</span>,
+<a href=#241 id=241 data-nosnippet>241</a>                <span class="string">"rules"</span>,
+<a href=#242 id=242 data-nosnippet>242</a>                <span class="string">"sideEffects"</span>,
+<a href=#243 id=243 data-nosnippet>243</a>                <span class="string">"timeoutSeconds"</span>,
+<a href=#244 id=244 data-nosnippet>244</a>            ],
+<a href=#245 id=245 data-nosnippet>245</a>            Visitor,
+<a href=#246 id=246 data-nosnippet>246</a>        )
+<a href=#247 id=247 data-nosnippet>247</a>    }
+<a href=#248 id=248 data-nosnippet>248</a>}
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a><span class="kw">impl </span><span class="kw">crate</span>::serde::Serialize <span class="kw">for </span>MutatingWebhook {
+<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; <span class="kw">where </span>S: <span class="kw">crate</span>::serde::Serializer {
+<a href=#252 id=252 data-nosnippet>252</a>        <span class="kw">let </span><span class="kw-2">mut </span>state = serializer.serialize_struct(
+<a href=#253 id=253 data-nosnippet>253</a>            <span class="string">"MutatingWebhook"</span>,
+<a href=#254 id=254 data-nosnippet>254</a>            <span class="number">4 </span>+
+<a href=#255 id=255 data-nosnippet>255</a>            <span class="self">self</span>.failure_policy.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#256 id=256 data-nosnippet>256</a>            <span class="self">self</span>.match_conditions.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#257 id=257 data-nosnippet>257</a>            <span class="self">self</span>.match_policy.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#258 id=258 data-nosnippet>258</a>            <span class="self">self</span>.namespace_selector.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#259 id=259 data-nosnippet>259</a>            <span class="self">self</span>.object_selector.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#260 id=260 data-nosnippet>260</a>            <span class="self">self</span>.reinvocation_policy.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#261 id=261 data-nosnippet>261</a>            <span class="self">self</span>.rules.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#262 id=262 data-nosnippet>262</a>            <span class="self">self</span>.timeout_seconds.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>),
+<a href=#263 id=263 data-nosnippet>263</a>        )<span class="question-mark">?</span>;
+<a href=#264 id=264 data-nosnippet>264</a>        <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"admissionReviewVersions"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.admission_review_versions)<span class="question-mark">?</span>;
+<a href=#265 id=265 data-nosnippet>265</a>        <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"clientConfig"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.client_config)<span class="question-mark">?</span>;
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.failure_policy {
+<a href=#267 id=267 data-nosnippet>267</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"failurePolicy"</span>, value)<span class="question-mark">?</span>;
+<a href=#268 id=268 data-nosnippet>268</a>        }
+<a href=#269 id=269 data-nosnippet>269</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.match_conditions {
+<a href=#270 id=270 data-nosnippet>270</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"matchConditions"</span>, value)<span class="question-mark">?</span>;
+<a href=#271 id=271 data-nosnippet>271</a>        }
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.match_policy {
+<a href=#273 id=273 data-nosnippet>273</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"matchPolicy"</span>, value)<span class="question-mark">?</span>;
+<a href=#274 id=274 data-nosnippet>274</a>        }
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"name"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.name)<span class="question-mark">?</span>;
+<a href=#276 id=276 data-nosnippet>276</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.namespace_selector {
+<a href=#277 id=277 data-nosnippet>277</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"namespaceSelector"</span>, value)<span class="question-mark">?</span>;
+<a href=#278 id=278 data-nosnippet>278</a>        }
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.object_selector {
+<a href=#280 id=280 data-nosnippet>280</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"objectSelector"</span>, value)<span class="question-mark">?</span>;
+<a href=#281 id=281 data-nosnippet>281</a>        }
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.reinvocation_policy {
+<a href=#283 id=283 data-nosnippet>283</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"reinvocationPolicy"</span>, value)<span class="question-mark">?</span>;
+<a href=#284 id=284 data-nosnippet>284</a>        }
+<a href=#285 id=285 data-nosnippet>285</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.rules {
+<a href=#286 id=286 data-nosnippet>286</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"rules"</span>, value)<span class="question-mark">?</span>;
+<a href=#287 id=287 data-nosnippet>287</a>        }
+<a href=#288 id=288 data-nosnippet>288</a>        <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"sideEffects"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.side_effects)<span class="question-mark">?</span>;
+<a href=#289 id=289 data-nosnippet>289</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.timeout_seconds {
+<a href=#290 id=290 data-nosnippet>290</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"timeoutSeconds"</span>, value)<span class="question-mark">?</span>;
+<a href=#291 id=291 data-nosnippet>291</a>        }
+<a href=#292 id=292 data-nosnippet>292</a>        <span class="kw">crate</span>::serde::ser::SerializeStruct::end(state)
+<a href=#293 id=293 data-nosnippet>293</a>    }
+<a href=#294 id=294 data-nosnippet>294</a>}
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a><span class="attr">#[cfg(feature = <span class="string">"schemars"</span>)]
+<a href=#297 id=297 data-nosnippet>297</a></span><span class="kw">impl </span><span class="kw">crate</span>::schemars::JsonSchema <span class="kw">for </span>MutatingWebhook {
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="kw">fn </span>schema_name() -&gt; String {
+<a href=#299 id=299 data-nosnippet>299</a>        <span class="string">"io.k8s.api.admissionregistration.v1.MutatingWebhook"</span>.to_owned()
+<a href=#300 id=300 data-nosnippet>300</a>    }
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>    <span class="kw">fn </span>json_schema(__gen: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::schemars::gen::SchemaGenerator) -&gt; <span class="kw">crate</span>::schemars::schema::Schema {
+<a href=#303 id=303 data-nosnippet>303</a>        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#304 id=304 data-nosnippet>304</a>            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#305 id=305 data-nosnippet>305</a>                description: <span class="prelude-val">Some</span>(<span class="string">"MutatingWebhook describes an admission webhook and the resources and operations it applies to."</span>.to_owned()),
+<a href=#306 id=306 data-nosnippet>306</a>                ..Default::default()
+<a href=#307 id=307 data-nosnippet>307</a>            })),
+<a href=#308 id=308 data-nosnippet>308</a>            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Object))),
+<a href=#309 id=309 data-nosnippet>309</a>            object: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::ObjectValidation {
+<a href=#310 id=310 data-nosnippet>310</a>                properties: [
+<a href=#311 id=311 data-nosnippet>311</a>                    (
+<a href=#312 id=312 data-nosnippet>312</a>                        <span class="string">"admissionReviewVersions"</span>.to_owned(),
+<a href=#313 id=313 data-nosnippet>313</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#314 id=314 data-nosnippet>314</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#315 id=315 data-nosnippet>315</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"AdmissionReviewVersions is an ordered list of preferred `AdmissionReview` versions the Webhook expects. API server will try to use first version in the list which it supports. If none of the versions specified in this list supported by API server, validation will fail for this object. If a persisted webhook configuration specifies allowed versions and does not include any versions known to the API Server, calls to the webhook will fail and be subject to the failure policy."</span>.to_owned()),
+<a href=#316 id=316 data-nosnippet>316</a>                                ..Default::default()
+<a href=#317 id=317 data-nosnippet>317</a>                            })),
+<a href=#318 id=318 data-nosnippet>318</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Array))),
+<a href=#319 id=319 data-nosnippet>319</a>                            array: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::ArrayValidation {
+<a href=#320 id=320 data-nosnippet>320</a>                                items: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(
+<a href=#321 id=321 data-nosnippet>321</a>                                    <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#322 id=322 data-nosnippet>322</a>                                        instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::String))),
+<a href=#323 id=323 data-nosnippet>323</a>                                        ..Default::default()
+<a href=#324 id=324 data-nosnippet>324</a>                                    })
+<a href=#325 id=325 data-nosnippet>325</a>                                ))),
+<a href=#326 id=326 data-nosnippet>326</a>                                ..Default::default()
+<a href=#327 id=327 data-nosnippet>327</a>                            })),
+<a href=#328 id=328 data-nosnippet>328</a>                            ..Default::default()
+<a href=#329 id=329 data-nosnippet>329</a>                        }),
+<a href=#330 id=330 data-nosnippet>330</a>                    ),
+<a href=#331 id=331 data-nosnippet>331</a>                    (
+<a href=#332 id=332 data-nosnippet>332</a>                        <span class="string">"clientConfig"</span>.to_owned(),
+<a href=#333 id=333 data-nosnippet>333</a>                        {
+<a href=#334 id=334 data-nosnippet>334</a>                            <span class="kw">let </span><span class="kw-2">mut </span>schema_obj = __gen.subschema_for::&lt;<span class="kw">crate</span>::api::admissionregistration::v1::WebhookClientConfig&gt;().into_object();
+<a href=#335 id=335 data-nosnippet>335</a>                            schema_obj.metadata = <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#336 id=336 data-nosnippet>336</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"ClientConfig defines how to communicate with the hook. Required"</span>.to_owned()),
+<a href=#337 id=337 data-nosnippet>337</a>                                ..Default::default()
+<a href=#338 id=338 data-nosnippet>338</a>                            }));
+<a href=#339 id=339 data-nosnippet>339</a>                            <span class="kw">crate</span>::schemars::schema::Schema::Object(schema_obj)
+<a href=#340 id=340 data-nosnippet>340</a>                        },
+<a href=#341 id=341 data-nosnippet>341</a>                    ),
+<a href=#342 id=342 data-nosnippet>342</a>                    (
+<a href=#343 id=343 data-nosnippet>343</a>                        <span class="string">"failurePolicy"</span>.to_owned(),
+<a href=#344 id=344 data-nosnippet>344</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#345 id=345 data-nosnippet>345</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#346 id=346 data-nosnippet>346</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"FailurePolicy defines how unrecognized errors from the admission endpoint are handled - allowed values are Ignore or Fail. Defaults to Fail."</span>.to_owned()),
+<a href=#347 id=347 data-nosnippet>347</a>                                ..Default::default()
+<a href=#348 id=348 data-nosnippet>348</a>                            })),
+<a href=#349 id=349 data-nosnippet>349</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::String))),
+<a href=#350 id=350 data-nosnippet>350</a>                            ..Default::default()
+<a href=#351 id=351 data-nosnippet>351</a>                        }),
+<a href=#352 id=352 data-nosnippet>352</a>                    ),
+<a href=#353 id=353 data-nosnippet>353</a>                    (
+<a href=#354 id=354 data-nosnippet>354</a>                        <span class="string">"matchConditions"</span>.to_owned(),
+<a href=#355 id=355 data-nosnippet>355</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#356 id=356 data-nosnippet>356</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#357 id=357 data-nosnippet>357</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"MatchConditions is a list of conditions that must be met for a request to be sent to this webhook. Match conditions filter requests that have already been matched by the rules, namespaceSelector, and objectSelector. An empty list of matchConditions matches all requests. There are a maximum of 64 match conditions allowed.\n\nThe exact matching logic is (in order):\n  1. If ANY matchCondition evaluates to FALSE, the webhook is skipped.\n  2. If ALL matchConditions evaluate to TRUE, the webhook is called.\n  3. If any matchCondition evaluates to an error (but none are FALSE):\n     - If failurePolicy=Fail, reject the request\n     - If failurePolicy=Ignore, the error is ignored and the webhook is skipped\n\nThis is a beta feature and managed by the AdmissionWebhookMatchConditions feature gate."</span>.to_owned()),
+<a href=#358 id=358 data-nosnippet>358</a>                                ..Default::default()
+<a href=#359 id=359 data-nosnippet>359</a>                            })),
+<a href=#360 id=360 data-nosnippet>360</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Array))),
+<a href=#361 id=361 data-nosnippet>361</a>                            array: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::ArrayValidation {
+<a href=#362 id=362 data-nosnippet>362</a>                                items: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(__gen.subschema_for::&lt;<span class="kw">crate</span>::api::admissionregistration::v1::MatchCondition&gt;()))),
+<a href=#363 id=363 data-nosnippet>363</a>                                ..Default::default()
+<a href=#364 id=364 data-nosnippet>364</a>                            })),
+<a href=#365 id=365 data-nosnippet>365</a>                            ..Default::default()
+<a href=#366 id=366 data-nosnippet>366</a>                        }),
+<a href=#367 id=367 data-nosnippet>367</a>                    ),
+<a href=#368 id=368 data-nosnippet>368</a>                    (
+<a href=#369 id=369 data-nosnippet>369</a>                        <span class="string">"matchPolicy"</span>.to_owned(),
+<a href=#370 id=370 data-nosnippet>370</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#371 id=371 data-nosnippet>371</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#372 id=372 data-nosnippet>372</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"matchPolicy defines how the \"rules\" list is used to match incoming requests. Allowed values are \"Exact\" or \"Equivalent\".\n\n- Exact: match a request only if it exactly matches a specified rule. For example, if deployments can be modified via apps/v1, apps/v1beta1, and extensions/v1beta1, but \"rules\" only included `apiGroups:[\"apps\"], apiVersions:[\"v1\"], resources: [\"deployments\"]`, a request to apps/v1beta1 or extensions/v1beta1 would not be sent to the webhook.\n\n- Equivalent: match a request if modifies a resource listed in rules, even via another API group or version. For example, if deployments can be modified via apps/v1, apps/v1beta1, and extensions/v1beta1, and \"rules\" only included `apiGroups:[\"apps\"], apiVersions:[\"v1\"], resources: [\"deployments\"]`, a request to apps/v1beta1 or extensions/v1beta1 would be converted to apps/v1 and sent to the webhook.\n\nDefaults to \"Equivalent\""</span>.to_owned()),
+<a href=#373 id=373 data-nosnippet>373</a>                                ..Default::default()
+<a href=#374 id=374 data-nosnippet>374</a>                            })),
+<a href=#375 id=375 data-nosnippet>375</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::String))),
+<a href=#376 id=376 data-nosnippet>376</a>                            ..Default::default()
+<a href=#377 id=377 data-nosnippet>377</a>                        }),
+<a href=#378 id=378 data-nosnippet>378</a>                    ),
+<a href=#379 id=379 data-nosnippet>379</a>                    (
+<a href=#380 id=380 data-nosnippet>380</a>                        <span class="string">"name"</span>.to_owned(),
+<a href=#381 id=381 data-nosnippet>381</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#382 id=382 data-nosnippet>382</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#383 id=383 data-nosnippet>383</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"The name of the admission webhook. Name should be fully qualified, e.g., imagepolicy.kubernetes.io, where \"imagepolicy\" is the name of the webhook, and kubernetes.io is the name of the organization. Required."</span>.to_owned()),
+<a href=#384 id=384 data-nosnippet>384</a>                                ..Default::default()
+<a href=#385 id=385 data-nosnippet>385</a>                            })),
+<a href=#386 id=386 data-nosnippet>386</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::String))),
+<a href=#387 id=387 data-nosnippet>387</a>                            ..Default::default()
+<a href=#388 id=388 data-nosnippet>388</a>                        }),
+<a href=#389 id=389 data-nosnippet>389</a>                    ),
+<a href=#390 id=390 data-nosnippet>390</a>                    (
+<a href=#391 id=391 data-nosnippet>391</a>                        <span class="string">"namespaceSelector"</span>.to_owned(),
+<a href=#392 id=392 data-nosnippet>392</a>                        {
+<a href=#393 id=393 data-nosnippet>393</a>                            <span class="kw">let </span><span class="kw-2">mut </span>schema_obj = __gen.subschema_for::&lt;<span class="kw">crate</span>::apimachinery::pkg::apis::meta::v1::LabelSelector&gt;().into_object();
+<a href=#394 id=394 data-nosnippet>394</a>                            schema_obj.metadata = <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#395 id=395 data-nosnippet>395</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"NamespaceSelector decides whether to run the webhook on an object based on whether the namespace for that object matches the selector. If the object itself is a namespace, the matching is performed on object.metadata.labels. If the object is another cluster scoped resource, it never skips the webhook.\n\nFor example, to run the webhook on any objects whose namespace is not associated with \"runlevel\" of \"0\" or \"1\";  you will set the selector as follows: \"namespaceSelector\": {\n  \"matchExpressions\": [\n    {\n      \"key\": \"runlevel\",\n      \"operator\": \"NotIn\",\n      \"values\": [\n        \"0\",\n        \"1\"\n      ]\n    }\n  ]\n}\n\nIf instead you want to only run the webhook on any objects whose namespace is associated with the \"environment\" of \"prod\" or \"staging\"; you will set the selector as follows: \"namespaceSelector\": {\n  \"matchExpressions\": [\n    {\n      \"key\": \"environment\",\n      \"operator\": \"In\",\n      \"values\": [\n        \"prod\",\n        \"staging\"\n      ]\n    }\n  ]\n}\n\nSee https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/ for more examples of label selectors.\n\nDefault to the empty LabelSelector, which matches everything."</span>.to_owned()),
+<a href=#396 id=396 data-nosnippet>396</a>                                ..Default::default()
+<a href=#397 id=397 data-nosnippet>397</a>                            }));
+<a href=#398 id=398 data-nosnippet>398</a>                            <span class="kw">crate</span>::schemars::schema::Schema::Object(schema_obj)
+<a href=#399 id=399 data-nosnippet>399</a>                        },
+<a href=#400 id=400 data-nosnippet>400</a>                    ),
+<a href=#401 id=401 data-nosnippet>401</a>                    (
+<a href=#402 id=402 data-nosnippet>402</a>                        <span class="string">"objectSelector"</span>.to_owned(),
+<a href=#403 id=403 data-nosnippet>403</a>                        {
+<a href=#404 id=404 data-nosnippet>404</a>                            <span class="kw">let </span><span class="kw-2">mut </span>schema_obj = __gen.subschema_for::&lt;<span class="kw">crate</span>::apimachinery::pkg::apis::meta::v1::LabelSelector&gt;().into_object();
+<a href=#405 id=405 data-nosnippet>405</a>                            schema_obj.metadata = <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#406 id=406 data-nosnippet>406</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"ObjectSelector decides whether to run the webhook based on if the object has matching labels. objectSelector is evaluated against both the oldObject and newObject that would be sent to the webhook, and is considered to match if either object matches the selector. A null object (oldObject in the case of create, or newObject in the case of delete) or an object that cannot have labels (like a DeploymentRollback or a PodProxyOptions object) is not considered to match. Use the object selector only if the webhook is opt-in, because end users may skip the admission webhook by setting the labels. Default to the empty LabelSelector, which matches everything."</span>.to_owned()),
+<a href=#407 id=407 data-nosnippet>407</a>                                ..Default::default()
+<a href=#408 id=408 data-nosnippet>408</a>                            }));
+<a href=#409 id=409 data-nosnippet>409</a>                            <span class="kw">crate</span>::schemars::schema::Schema::Object(schema_obj)
+<a href=#410 id=410 data-nosnippet>410</a>                        },
+<a href=#411 id=411 data-nosnippet>411</a>                    ),
+<a href=#412 id=412 data-nosnippet>412</a>                    (
+<a href=#413 id=413 data-nosnippet>413</a>                        <span class="string">"reinvocationPolicy"</span>.to_owned(),
+<a href=#414 id=414 data-nosnippet>414</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#415 id=415 data-nosnippet>415</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#416 id=416 data-nosnippet>416</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"reinvocationPolicy indicates whether this webhook should be called multiple times as part of a single admission evaluation. Allowed values are \"Never\" and \"IfNeeded\".\n\nNever: the webhook will not be called more than once in a single admission evaluation.\n\nIfNeeded: the webhook will be called at least one additional time as part of the admission evaluation if the object being admitted is modified by other admission plugins after the initial webhook call. Webhooks that specify this option *must* be idempotent, able to process objects they previously admitted. Note: * the number of additional invocations is not guaranteed to be exactly one. * if additional invocations result in further modifications to the object, webhooks are not guaranteed to be invoked again. * webhooks that use this option may be reordered to minimize the number of additional invocations. * to validate an object after all mutations are guaranteed complete, use a validating admission webhook instead.\n\nDefaults to \"Never\"."</span>.to_owned()),
+<a href=#417 id=417 data-nosnippet>417</a>                                ..Default::default()
+<a href=#418 id=418 data-nosnippet>418</a>                            })),
+<a href=#419 id=419 data-nosnippet>419</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::String))),
+<a href=#420 id=420 data-nosnippet>420</a>                            ..Default::default()
+<a href=#421 id=421 data-nosnippet>421</a>                        }),
+<a href=#422 id=422 data-nosnippet>422</a>                    ),
+<a href=#423 id=423 data-nosnippet>423</a>                    (
+<a href=#424 id=424 data-nosnippet>424</a>                        <span class="string">"rules"</span>.to_owned(),
+<a href=#425 id=425 data-nosnippet>425</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#426 id=426 data-nosnippet>426</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#427 id=427 data-nosnippet>427</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"Rules describes what operations on what resources/subresources the webhook cares about. The webhook cares about an operation if it matches _any_ Rule. However, in order to prevent ValidatingAdmissionWebhooks and MutatingAdmissionWebhooks from putting the cluster in a state which cannot be recovered from without completely disabling the plugin, ValidatingAdmissionWebhooks and MutatingAdmissionWebhooks are never called on admission requests for ValidatingWebhookConfiguration and MutatingWebhookConfiguration objects."</span>.to_owned()),
+<a href=#428 id=428 data-nosnippet>428</a>                                ..Default::default()
+<a href=#429 id=429 data-nosnippet>429</a>                            })),
+<a href=#430 id=430 data-nosnippet>430</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Array))),
+<a href=#431 id=431 data-nosnippet>431</a>                            array: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::ArrayValidation {
+<a href=#432 id=432 data-nosnippet>432</a>                                items: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(__gen.subschema_for::&lt;<span class="kw">crate</span>::api::admissionregistration::v1::RuleWithOperations&gt;()))),
+<a href=#433 id=433 data-nosnippet>433</a>                                ..Default::default()
+<a href=#434 id=434 data-nosnippet>434</a>                            })),
+<a href=#435 id=435 data-nosnippet>435</a>                            ..Default::default()
+<a href=#436 id=436 data-nosnippet>436</a>                        }),
+<a href=#437 id=437 data-nosnippet>437</a>                    ),
+<a href=#438 id=438 data-nosnippet>438</a>                    (
+<a href=#439 id=439 data-nosnippet>439</a>                        <span class="string">"sideEffects"</span>.to_owned(),
+<a href=#440 id=440 data-nosnippet>440</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#441 id=441 data-nosnippet>441</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#442 id=442 data-nosnippet>442</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"SideEffects states whether this webhook has side effects. Acceptable values are: None, NoneOnDryRun (webhooks created via v1beta1 may also specify Some or Unknown). Webhooks with side effects MUST implement a reconciliation system, since a request may be rejected by a future step in the admission chain and the side effects therefore need to be undone. Requests with the dryRun attribute will be auto-rejected if they match a webhook with sideEffects == Unknown or Some."</span>.to_owned()),
+<a href=#443 id=443 data-nosnippet>443</a>                                ..Default::default()
+<a href=#444 id=444 data-nosnippet>444</a>                            })),
+<a href=#445 id=445 data-nosnippet>445</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::String))),
+<a href=#446 id=446 data-nosnippet>446</a>                            ..Default::default()
+<a href=#447 id=447 data-nosnippet>447</a>                        }),
+<a href=#448 id=448 data-nosnippet>448</a>                    ),
+<a href=#449 id=449 data-nosnippet>449</a>                    (
+<a href=#450 id=450 data-nosnippet>450</a>                        <span class="string">"timeoutSeconds"</span>.to_owned(),
+<a href=#451 id=451 data-nosnippet>451</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#452 id=452 data-nosnippet>452</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#453 id=453 data-nosnippet>453</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"TimeoutSeconds specifies the timeout for this webhook. After the timeout passes, the webhook call will be ignored or the API call will fail based on the failure policy. The timeout value must be between 1 and 30 seconds. Default to 10 seconds."</span>.to_owned()),
+<a href=#454 id=454 data-nosnippet>454</a>                                ..Default::default()
+<a href=#455 id=455 data-nosnippet>455</a>                            })),
+<a href=#456 id=456 data-nosnippet>456</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Integer))),
+<a href=#457 id=457 data-nosnippet>457</a>                            format: <span class="prelude-val">Some</span>(<span class="string">"int32"</span>.to_owned()),
+<a href=#458 id=458 data-nosnippet>458</a>                            ..Default::default()
+<a href=#459 id=459 data-nosnippet>459</a>                        }),
+<a href=#460 id=460 data-nosnippet>460</a>                    ),
+<a href=#461 id=461 data-nosnippet>461</a>                ].into(),
+<a href=#462 id=462 data-nosnippet>462</a>                required: [
+<a href=#463 id=463 data-nosnippet>463</a>                    <span class="string">"admissionReviewVersions"</span>.to_owned(),
+<a href=#464 id=464 data-nosnippet>464</a>                    <span class="string">"clientConfig"</span>.to_owned(),
+<a href=#465 id=465 data-nosnippet>465</a>                    <span class="string">"name"</span>.to_owned(),
+<a href=#466 id=466 data-nosnippet>466</a>                    <span class="string">"sideEffects"</span>.to_owned(),
+<a href=#467 id=467 data-nosnippet>467</a>                ].into(),
+<a href=#468 id=468 data-nosnippet>468</a>                ..Default::default()
+<a href=#469 id=469 data-nosnippet>469</a>            })),
+<a href=#470 id=470 data-nosnippet>470</a>            ..Default::default()
+<a href=#471 id=471 data-nosnippet>471</a>        })
+<a href=#472 id=472 data-nosnippet>472</a>    }
+<a href=#473 id=473 data-nosnippet>473</a>}</code></pre></div></section></main></body></html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Embeds migrations into the binary by expanding to a static instance of Migrator."><title>migrate in sqlx - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sqlx" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../sqlx/index.html">sqlx</a><span class="version">0.8.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">migrate</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#triggering-recompilation-on-migration-changes" title="Triggering Recompilation on Migration Changes">Triggering Recompilation on Migration Changes</a><ul><li><a href="#stable-rust-cargo-build-script" title="Stable Rust: Cargo Build Script">Stable Rust: Cargo Build Script</a></li><li><a href="#nightly-rust-cfg-flag" title="Nightly Rust: `cfg` Flag">Nightly Rust: <code>cfg</code> Flag</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate sqlx</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">sqlx</a></div><h1>Macro <span class="macro">migrate</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/sqlx/macros/mod.rs.html#811-819">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! migrate {
+    ($dir:literal) =&gt; { ... };
+    () =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Embeds migrations into the binary by expanding to a static instance of <a href="migrate/struct.Migrator.html" title="struct sqlx::migrate::Migrator">Migrator</a>.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">sqlx::migrate!</span>(<span class="string">"db/migrations"</span>)
+    .run(<span class="kw-2">&amp;</span>pool)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sqlx::migrate::Migrator;
+
+<span class="kw">static </span>MIGRATOR: Migrator = <span class="macro">sqlx::migrate!</span>(); <span class="comment">// defaults to "./migrations"</span></code></pre></div>
+<p>The directory must be relative to the project root (the directory containing <code>Cargo.toml</code>),
+unlike <code>include_str!()</code> which uses compiler internals to get the path of the file where it
+was invoked.</p>
+<p>See <a href="migrate/trait.MigrationSource.html" title="trait sqlx::migrate::MigrationSource">MigrationSource</a> for details on structure of the ./migrations directory.</p>
+<h3 id="triggering-recompilation-on-migration-changes"><a class="doc-anchor" href="#triggering-recompilation-on-migration-changes">§</a>Triggering Recompilation on Migration Changes</h3>
+<p>In some cases when making changes to embedded migrations, such as adding a new migration without
+changing any Rust source files, you might find that <code>cargo build</code> doesn’t actually do anything,
+or when you do <code>cargo run</code> your application isn’t applying new migrations on startup.</p>
+<p>This is because our ability to tell the compiler to watch external files for changes
+from a proc-macro is very limited. The compiler by default only re-runs proc macros when
+one or more source files have changed, because normally it shouldn’t have to otherwise. SQLx is
+just weird in that external factors can change the output of proc macros, much to the chagrin of
+the compiler team and IDE plugin authors.</p>
+<p>As of 0.5.6, we emit <code>include_str!()</code> with an absolute path for each migration, but that
+only works to get the compiler to watch <em>existing</em> migration files for changes.</p>
+<p>Our only options for telling it to watch the whole <code>migrations/</code> directory are either via the
+user creating a Cargo build script in their project, or using an unstable API on nightly
+governed by a <code>cfg</code>-flag.</p>
+<h6 id="stable-rust-cargo-build-script"><a class="doc-anchor" href="#stable-rust-cargo-build-script">§</a>Stable Rust: Cargo Build Script</h6>
+<p>The only solution on stable Rust right now is to create a Cargo build script in your project
+and have it print <code>cargo:rerun-if-changed=migrations</code>:</p>
+<p><code>build.rs</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>main() {
+    <span class="macro">println!</span>(<span class="string">"cargo:rerun-if-changed=migrations"</span>);
+}</code></pre></div>
+<p>You can run <code>sqlx migrate build-script</code> to generate this file automatically.</p>
+<p>See: <a href="https://doc.rust-lang.org/stable/cargo/reference/build-scripts.html#outputs-of-the-build-script">The Cargo Book: 3.8 Build Scripts; Outputs of the Build Script</a></p>
+<h5 id="nightly-rust-cfg-flag"><a class="doc-anchor" href="#nightly-rust-cfg-flag">§</a>Nightly Rust: <code>cfg</code> Flag</h5>
+<p>The <code>migrate!()</code> macro also listens to <code>--cfg sqlx_macros_unstable</code>, which will enable
+the <code>track_path</code> feature to directly tell the compiler to watch the <code>migrations/</code> directory:</p>
+<div class="example-wrap"><pre class="language-sh"><code>$ env RUSTFLAGS=&#39;--cfg sqlx_macros_unstable&#39; cargo build</code></pre></div>
+<p>Note that this unfortunately will trigger a fully recompile of your dependency tree, at least
+for the first time you use it. It also, of course, requires using a nightly compiler.</p>
+<p>You can also set it in <code>build.rustflags</code> in <code>.cargo/config.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[build]
+rustflags = [&quot;--cfg=sqlx_macros_unstable&quot;]</code></pre></div>
+<p>And then continue building and running your project normally.</p>
+<p>If you’re building on nightly anyways, it would be extremely helpful to help us test
+this feature and find any bugs in it.</p>
+<p>Subscribe to <a href="https://github.com/rust-lang/rust/issues/73921">the <code>track_path</code> tracking issue</a>
+for discussion and the future stabilization of this feature.</p>
+<p>For brevity and because it involves the same commitment to unstable features in <code>proc_macro</code>,
+if you’re using <code>--cfg procmacro2_semver_exempt</code> it will also enable this feature
+(see <a href="https://docs.rs/proc-macro2/1.0.27/proc_macro2/#unstable-features"><code>proc-macro2</code> docs / Unstable Features</a>).</p>
+</div></details></section></div></main></body></html>

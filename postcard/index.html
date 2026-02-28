@@ -1,0 +1,120 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Postcard"><title>postcard - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="postcard" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../postcard/index.html">postcard</a><span class="version">1.1.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#postcard" title="Postcard">Postcard</a><ul><li><a href="#design-goals" title="Design Goals">Design Goals</a></li><li><a href="#format-stability" title="Format Stability">Format Stability</a></li><li><a href="#variable-length-data" title="Variable Length Data">Variable Length Data</a></li><li><a href="#example---serializationdeserialization" title="Example - Serialization/Deserialization">Example - Serialization/Deserialization</a></li><li><a href="#flavors" title="Flavors">Flavors</a></li><li><a href="#setup---cargotoml" title="Setup - `Cargo.toml`">Setup - <code>Cargo.toml</code></a></li><li><a href="#license" title="License">License</a></li></ul></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>postcard</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/postcard/lib.rs.html#1-125">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="postcard"><a class="doc-anchor" href="#postcard">§</a>Postcard</h2>
+<p><a href="https://docs.rs/postcard"><img src="https://docs.rs/postcard/badge.svg" alt="Documentation" /></a></p>
+<p>Postcard is a <code>#![no_std]</code> focused serializer and deserializer for Serde.</p>
+<p>Postcard aims to be convenient for developers in constrained environments, while
+allowing for flexibility to customize behavior as needed.</p>
+<h3 id="design-goals"><a class="doc-anchor" href="#design-goals">§</a>Design Goals</h3>
+<ol>
+<li>Design primarily for <code>#![no_std]</code> usage, in embedded or other constrained contexts</li>
+<li>Support a maximal set of <code>serde</code> features, so <code>postcard</code> can be used as a drop in replacement</li>
+<li>Avoid special differences in code between communication code written for a microcontroller or a desktop/server PC</li>
+<li>Be resource efficient - memory usage, code size, developer time, and CPU time; in that order</li>
+<li>Allow library users to customize the serialization and deserialization  behavior to fit their bespoke needs</li>
+</ol>
+<h3 id="format-stability"><a class="doc-anchor" href="#format-stability">§</a>Format Stability</h3>
+<p>As of v1.0.0, <code>postcard</code> has a documented and stable wire format. More information about this
+wire format can be found in the <code>spec/</code> folder of the Postcard repository, or viewed online
+at <a href="https://postcard.jamesmunns.com">https://postcard.jamesmunns.com</a>.</p>
+<p>Work towards the Postcard Specification and portions of the Postcard 1.0 Release
+were sponsored by Mozilla Corporation.</p>
+<h3 id="variable-length-data"><a class="doc-anchor" href="#variable-length-data">§</a>Variable Length Data</h3>
+<p>All signed and unsigned integers larger than eight bits are encoded using a <a href="https://postcard.jamesmunns.com/wire-format.html#varint-encoded-integers">Varint</a>.
+This includes the length of array slices, as well as the discriminant of <code>enums</code>.</p>
+<p>For more information, see the <a href="https://postcard.jamesmunns.com/wire-format.html#varint-encoded-integers">Varint</a> chapter of the wire specification.</p>
+<h3 id="example---serializationdeserialization"><a class="doc-anchor" href="#example---serializationdeserialization">§</a>Example - Serialization/Deserialization</h3>
+<p>Postcard can serialize and deserialize messages similar to other <code>serde</code> formats.</p>
+<p>Using the default <code>heapless</code> feature to serialize to a <code>heapless::Vec&lt;u8&gt;</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::ops::Deref;
+<span class="kw">use </span>serde::{Serialize, Deserialize};
+<span class="kw">use </span>postcard::{from_bytes, to_vec};
+<span class="kw">use </span>heapless::Vec;
+
+<span class="attr">#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+</span><span class="kw">struct </span>RefStruct&lt;<span class="lifetime">'a</span>&gt; {
+    bytes: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8],
+    str_s: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+}
+<span class="kw">let </span>message = <span class="string">"hElLo"</span>;
+<span class="kw">let </span>bytes = [<span class="number">0x01</span>, <span class="number">0x10</span>, <span class="number">0x02</span>, <span class="number">0x20</span>];
+<span class="kw">let </span>output: Vec&lt;u8, <span class="number">11</span>&gt; = to_vec(<span class="kw-2">&amp;</span>RefStruct {
+    bytes: <span class="kw-2">&amp;</span>bytes,
+    str_s: message,
+}).unwrap();
+
+<span class="macro">assert_eq!</span>(
+    <span class="kw-2">&amp;</span>[<span class="number">0x04</span>, <span class="number">0x01</span>, <span class="number">0x10</span>, <span class="number">0x02</span>, <span class="number">0x20</span>, <span class="number">0x05</span>, <span class="string">b'h'</span>, <span class="string">b'E'</span>, <span class="string">b'l'</span>, <span class="string">b'L'</span>, <span class="string">b'o'</span>,],
+    output.deref()
+);
+
+<span class="kw">let </span>out: RefStruct = from_bytes(output.deref()).unwrap();
+<span class="macro">assert_eq!</span>(
+    out,
+    RefStruct {
+        bytes: <span class="kw-2">&amp;</span>bytes,
+        str_s: message,
+    }
+);</code></pre></div>
+<p>Or the optional <code>alloc</code> feature to serialize to an <code>alloc::vec::Vec&lt;u8&gt;</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::ops::Deref;
+<span class="kw">use </span>serde::{Serialize, Deserialize};
+<span class="kw">use </span>postcard::{from_bytes, to_allocvec};
+<span class="kw">extern crate </span>alloc;
+<span class="kw">use </span>alloc::vec::Vec;
+
+<span class="attr">#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+</span><span class="kw">struct </span>RefStruct&lt;<span class="lifetime">'a</span>&gt; {
+    bytes: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8],
+    str_s: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+}
+<span class="kw">let </span>message = <span class="string">"hElLo"</span>;
+<span class="kw">let </span>bytes = [<span class="number">0x01</span>, <span class="number">0x10</span>, <span class="number">0x02</span>, <span class="number">0x20</span>];
+<span class="kw">let </span>output: Vec&lt;u8&gt; = to_allocvec(<span class="kw-2">&amp;</span>RefStruct {
+    bytes: <span class="kw-2">&amp;</span>bytes,
+    str_s: message,
+}).unwrap();
+
+<span class="macro">assert_eq!</span>(
+    <span class="kw-2">&amp;</span>[<span class="number">0x04</span>, <span class="number">0x01</span>, <span class="number">0x10</span>, <span class="number">0x02</span>, <span class="number">0x20</span>, <span class="number">0x05</span>, <span class="string">b'h'</span>, <span class="string">b'E'</span>, <span class="string">b'l'</span>, <span class="string">b'L'</span>, <span class="string">b'o'</span>,],
+    output.deref()
+);
+
+<span class="kw">let </span>out: RefStruct = from_bytes(output.deref()).unwrap();
+<span class="macro">assert_eq!</span>(
+    out,
+    RefStruct {
+        bytes: <span class="kw-2">&amp;</span>bytes,
+        str_s: message,
+    }
+);</code></pre></div>
+<h3 id="flavors"><a class="doc-anchor" href="#flavors">§</a>Flavors</h3>
+<p><code>postcard</code> supports a system called <code>Flavors</code>, which are used to modify the way
+postcard serializes or processes serialized data. These flavors act as “plugins” or “middlewares”
+during the serialization or deserialization process, and can be combined to obtain complex protocol formats.</p>
+<p>See the documentation of the <code>ser_flavors</code> or <code>de_flavors</code> modules for more information on usage.</p>
+<h3 id="setup---cargotoml"><a class="doc-anchor" href="#setup---cargotoml">§</a>Setup - <code>Cargo.toml</code></h3>
+<p>Don’t forget to add <a href="https://serde.rs/no-std.html">the <code>no-std</code> subset</a> of <code>serde</code> along with <code>postcard</code> to the <code>[dependencies]</code> section of your <code>Cargo.toml</code>!</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+postcard = &quot;1.0.0&quot;
+
+# By default, `serde` has the `std` feature enabled, which makes it unsuitable for embedded targets
+# disabling default-features fixes this
+serde = { version = &quot;1.0.*&quot;, default-features = false }</code></pre></div><h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of</p>
+<ul>
+<li>Apache License, Version 2.0 (<a href="LICENSE-APACHE">LICENSE-APACHE</a> or
+<a href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>)</li>
+<li>MIT license (<a href="LICENSE-MIT">LICENSE-MIT</a> or <a href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>)</li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="accumulator/index.html" title="mod postcard::accumulator">accumulator</a></dt><dd>An accumulator used to collect chunked COBS data and deserialize it.</dd><dt><a class="mod" href="de_flavors/index.html" title="mod postcard::de_flavors">de_<wbr>flavors</a></dt><dd>Deserialization Flavors</dd><dt><a class="mod" href="experimental/index.html" title="mod postcard::experimental">experimental</a></dt><dd>Experimental Postcard Features</dd><dt><a class="mod" href="fixint/index.html" title="mod postcard::fixint">fixint</a></dt><dd>Fixed Size Integers</dd><dt><a class="mod" href="ser_flavors/index.html" title="mod postcard::ser_flavors">ser_<wbr>flavors</a></dt><dd>Serialization Flavors</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Deserializer.html" title="struct postcard::Deserializer">Deserializer</a></dt><dd>A <code>serde</code> compatible deserializer, generic over “Flavors” of deserializing plugins.</dd><dt><a class="struct" href="struct.Serializer.html" title="struct postcard::Serializer">Serializer</a></dt><dd>A <code>serde</code> compatible serializer, generic over “Flavors” of serializing plugins.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Error.html" title="enum postcard::Error">Error</a></dt><dd>This is the error type used by Postcard</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.from_bytes.html" title="fn postcard::from_bytes">from_<wbr>bytes</a></dt><dd>Deserialize a message of type <code>T</code> from a byte slice. The unused portion (if any)
+of the byte slice is not returned.</dd><dt><a class="fn" href="fn.from_bytes_cobs.html" title="fn postcard::from_bytes_cobs">from_<wbr>bytes_<wbr>cobs</a></dt><dd>Deserialize a message of type <code>T</code> from a cobs-encoded byte slice.</dd><dt><a class="fn" href="fn.from_io.html" title="fn postcard::from_io">from_io</a></dt><dd>Deserialize a message of type <code>T</code> from a <a href="https://doc.rust-lang.org/1.86.0/std/io/trait.Read.html" title="trait std::io::Read"><code>std::io::Read</code></a>.</dd><dt><a class="fn" href="fn.serialize_with_flavor.html" title="fn postcard::serialize_with_flavor">serialize_<wbr>with_<wbr>flavor</a></dt><dd><code>serialize_with_flavor()</code> has three generic parameters, <code>T, F, O</code>.</dd><dt><a class="fn" href="fn.take_from_bytes.html" title="fn postcard::take_from_bytes">take_<wbr>from_<wbr>bytes</a></dt><dd>Deserialize a message of type <code>T</code> from a byte slice. The unused portion (if any)
+of the byte slice is returned for further usage</dd><dt><a class="fn" href="fn.take_from_bytes_cobs.html" title="fn postcard::take_from_bytes_cobs">take_<wbr>from_<wbr>bytes_<wbr>cobs</a></dt><dd>Deserialize a message of type <code>T</code> from a cobs-encoded byte slice.</dd><dt><a class="fn" href="fn.to_allocvec.html" title="fn postcard::to_allocvec">to_<wbr>allocvec</a></dt><dd>Serialize a <code>T</code> to an <code>alloc::vec::Vec&lt;u8&gt;</code>.</dd><dt><a class="fn" href="fn.to_allocvec_cobs.html" title="fn postcard::to_allocvec_cobs">to_<wbr>allocvec_<wbr>cobs</a></dt><dd>Serialize and COBS encode a <code>T</code> to an <code>alloc::vec::Vec&lt;u8&gt;</code>.</dd><dt><a class="fn" href="fn.to_extend.html" title="fn postcard::to_extend">to_<wbr>extend</a></dt><dd>Serialize a <code>T</code> to a <a href="https://doc.rust-lang.org/1.86.0/core/iter/traits/collect/trait.Extend.html" title="trait core::iter::traits::collect::Extend"><code>core::iter::Extend</code></a>,</dd><dt><a class="fn" href="fn.to_io.html" title="fn postcard::to_io">to_io</a></dt><dd>Serialize a <code>T</code> to a <a href="https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html" title="trait std::io::Write"><code>std::io::Write</code></a>,</dd><dt><a class="fn" href="fn.to_slice.html" title="fn postcard::to_slice">to_<wbr>slice</a></dt><dd>Serialize a <code>T</code> to the given slice, with the resulting slice containing
+data in a serialized format.</dd><dt><a class="fn" href="fn.to_slice_cobs.html" title="fn postcard::to_slice_cobs">to_<wbr>slice_<wbr>cobs</a></dt><dd>Serialize a <code>T</code> to the given slice, with the resulting slice containing
+data in a serialized then COBS encoded format. The terminating sentinel
+<code>0x00</code> byte is included in the output buffer.</dd><dt><a class="fn" href="fn.to_stdvec.html" title="fn postcard::to_stdvec">to_<wbr>stdvec</a></dt><dd>Serialize a <code>T</code> to a <code>std::vec::Vec&lt;u8&gt;</code>.</dd><dt><a class="fn" href="fn.to_stdvec_cobs.html" title="fn postcard::to_stdvec_cobs">to_<wbr>stdvec_<wbr>cobs</a></dt><dd>Serialize and COBS encode a <code>T</code> to a <code>std::vec::Vec&lt;u8&gt;</code>.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Result.html" title="type postcard::Result">Result</a></dt><dd>This is the Result type used by Postcard.</dd></dl></section></div></main></body></html>

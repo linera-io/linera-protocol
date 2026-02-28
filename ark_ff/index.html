@@ -1,0 +1,164 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate defines Finite Field traits and useful abstraction models that follow these traits. Implementations of concrete finite fields for some popular elliptic curves can be found in `arkworks-rs/curves` under `arkworks-rs/curves/&#60;your favourite curve&#62;/src/fields/`."><title>ark_ff - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ark_ff" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ark_ff/index.html">ark_ff</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage" title="Usage">Usage</a><ul><li><a href="#additivegroup" title="`AdditiveGroup`"><code>AdditiveGroup</code></a></li><li><a href="#field" title="`Field`"><code>Field</code></a></li><li><a href="#primefield" title="`PrimeField`"><code>PrimeField</code></a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>ark_ff</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/ark_ff/lib.rs.html#1-52">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h1 align="center">ark-ff</h1>
+<p align="center">
+    <img src="https://github.com/arkworks-rs/algebra/workflows/CI/badge.svg?branch=master">
+    <a href="https://github.com/arkworks-rs/algebra/blob/master/LICENSE-APACHE"><img src="https://img.shields.io/badge/license-APACHE-blue.svg"></a>
+    <a href="https://github.com/arkworks-rs/algebra/blob/master/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+    <a href="https://deps.rs/repo/github/arkworks-rs/algebra"><img src="https://deps.rs/repo/github/arkworks-rs/algebra/status.svg"></a>
+</p>
+<p>This crate defines Finite Field traits and useful abstraction models that follow these traits.
+Implementations of concrete finite fields for some popular elliptic curves can be found in <a href="https://github.com/arkworks-rs/algebra/blob/master/curves/README.md"><code>arkworks-rs/curves</code></a> under <code>arkworks-rs/curves/&lt;your favourite curve&gt;/src/fields/</code>.</p>
+<p>This crate contains two types of traits:</p>
+<ul>
+<li><code>Field</code> traits: These define interfaces for manipulating field elements, such as addition, multiplication, inverses, square roots, and more.</li>
+<li>Field <code>Config</code>s: specifies the parameters defining the field in question. For extension fields, it also provides additional functionality required for the field, such as operations involving a (cubic or quadratic) non-residue used for constructing the field (<code>NONRESIDUE</code>).</li>
+</ul>
+<p>The available field traits are:</p>
+<ul>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/mod.rs#L46"><code>AdditiveGroup</code></a> - Interface for additive groups that have a “scalar multiplication” operation with respect to the <code>Scalar</code> associated type. This applies to prime-order fields, field extensions, and elliptic-curve groups used in cryptography.</li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/mod.rs#L161"><code>Field</code></a> - Interface for a generic finite field.</li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/fft_friendly.rs#L2"><code>FftField</code></a> - Exposes methods that allow for performing efficient FFTs on field elements.</li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/prime.rs#L27"><code>PrimeField</code></a> - Field with a prime <code>p</code> number of elements, also referred to as <code>Fp</code>.</li>
+</ul>
+<p>The models implemented are:</p>
+<ul>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/quadratic_extension.rs"><code>Quadratic Extension</code></a>
+<ul>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/quadratic_extension.rs#L113"><code>QuadExtField</code></a> - Struct representing a quadratic extension field, in this case holding two base field elements</li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/quadratic_extension.rs#L29"><code>QuadExtConfig</code></a> - Trait defining the necessary parameters needed to instantiate a Quadratic Extension Field</li>
+</ul>
+</li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/cubic_extension.rs"><code>Cubic Extension</code></a>
+<ul>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/cubic_extension.rs#L97"><code>CubicExtField</code></a> - Struct representing a cubic extension field, holds three base field elements</li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/cubic_extension.rs#L28"><code>CubicExtConfig</code></a> - Trait defining the necessary parameters needed to instantiate a Cubic Extension Field</li>
+</ul>
+</li>
+</ul>
+<p>The above two models serve as abstractions for constructing the extension fields <code>Fp^m</code> directly (i.e. <code>m</code> equal 2 or 3) or for creating extension towers to arrive at higher <code>m</code>. The latter is done by applying the extensions iteratively, e.g. cubic extension over a quadratic extension field.</p>
+<ul>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/fp2.rs#L99"><code>Fp2</code></a> - Quadratic extension directly on the prime field, i.e. <code>BaseField == BasePrimeField</code></li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/fp3.rs#L72"><code>Fp3</code></a> - Cubic extension directly on the prime field, i.e. <code>BaseField == BasePrimeField</code></li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/fp6_2over3.rs#L59"><code>Fp6_2over3</code></a> - Extension tower: quadratic extension on a cubic extension field, i.e. <code>BaseField = Fp3</code>, but <code>BasePrimeField = Fp</code>.</li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/fp6_3over2.rs#L64"><code>Fp6_3over2</code></a> - Extension tower, similar to the above except that the towering order is reversed: it’s a cubic extension on a quadratic extension field, i.e. <code>BaseField = Fp2</code>, but <code>BasePrimeField = Fp</code>. Only this latter one is exported by default as <code>Fp6</code>.</li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ff/src/fields/models/fp12_2over3over2.rs#L66"><code>Fp12_2over3over2</code></a> - Extension tower: quadratic extension of <code>Fp6_3over2</code>, i.e. <code>BaseField = Fp6</code>.</li>
+</ul>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>There are two important traits when working with finite fields: <a href="fields/trait.Field.html" title="trait ark_ff::fields::Field"><code>Field</code></a>,
+and <a href="fields/trait.PrimeField.html" title="trait ark_ff::fields::PrimeField"><code>PrimeField</code></a>. Let’s explore these via examples.</p>
+<h4 id="additivegroup"><a class="doc-anchor" href="#additivegroup">§</a><a href="https://docs.rs/ark-ff/latest/ark_ff/fields/trait.AdditiveGroup.html"><code>AdditiveGroup</code></a></h4>
+<p>The <a href="https://docs.rs/ark-ff/latest/ark_ff/fields/trait.AdditiveGroup.html"><code>AdditiveGroup</code></a> trait provides a generic interface for additive groups that have an associated scalar multiplication operations. Types implementing this trait support common group operations such as addition, subtraction, negation, as well as scalar multiplication by the <a href="https://docs.rs/ark-ff/latest/ark_ff/fields/trait.AdditiveGroup.html#associatedtype.Scalar"><code>Scalar</code></a> associated type.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::AdditiveGroup;
+<span class="comment">// We'll use a field associated with the BLS12-381 pairing-friendly
+// group for this example.
+</span><span class="kw">use </span>ark_test_curves::bls12_381::Fq2 <span class="kw">as </span>F;
+<span class="comment">// `ark-std` is a utility crate that enables `arkworks` libraries
+// to easily support `std` and `no_std` workloads, and also re-exports
+// useful crates that should be common across the entire ecosystem, such as `rand`.
+</span><span class="kw">use </span>ark_std::{One, UniformRand};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = ark_std::test_rng();
+<span class="comment">// Let's sample uniformly random field elements:
+</span><span class="kw">let </span>a = F::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>b = F::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>c = &lt;F <span class="kw">as </span>AdditiveGroup&gt;::Scalar::rand(<span class="kw-2">&amp;mut </span>rng);
+
+<span class="comment">// We can add...
+</span><span class="kw">let </span>c = a + b;
+<span class="comment">// ... subtract ...
+</span><span class="kw">let </span>d = a - b;
+<span class="comment">// ... double elements ...
+</span><span class="macro">assert_eq!</span>(c + d, a.double());
+<span class="comment">// ... negate them ...
+</span><span class="macro">assert_ne!</span>(d, -d);
+
+<span class="comment">// ... and multiply them by scalars:
+</span><span class="kw">let </span>e = d * c;</code></pre></div>
+<h4 id="field"><a class="doc-anchor" href="#field">§</a><a href="https://docs.rs/ark-ff/latest/ark_ff/fields/trait.Field.html"><code>Field</code></a></h4>
+<p>The <a href="https://docs.rs/ark-ff/latest/ark_ff/fields/trait.Field.html"><code>Field</code></a> trait provides a generic interface for any finite field.
+Types implementing <a href="https://docs.rs/ark-ff/latest/ark_ff/fields/trait.Field.html"><code>Field</code></a> support common field operations
+such as addition, subtraction, multiplication, and inverses, and are required
+to be <a href="https://docs.rs/ark-ff/latest/ark_ff/fields/trait.AdditiveGroup.html"><code>AdditiveGroup</code></a>s too.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{AdditiveGroup, Field};
+<span class="comment">// We'll use a field associated with the BLS12-381 pairing-friendly
+// group for this example.
+</span><span class="kw">use </span>ark_test_curves::bls12_381::Fq2 <span class="kw">as </span>F;
+<span class="comment">// `ark-std` is a utility crate that enables `arkworks` libraries
+// to easily support `std` and `no_std` workloads, and also re-exports
+// useful crates that should be common across the entire ecosystem, such as `rand`.
+</span><span class="kw">use </span>ark_std::{One, UniformRand};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = ark_std::test_rng();
+<span class="comment">// Let's sample uniformly random field elements:
+</span><span class="kw">let </span>a = F::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>b = F::rand(<span class="kw-2">&amp;mut </span>rng);
+
+<span class="comment">// We can perform all the operations from the `AdditiveGroup` trait:
+// We can add...
+</span><span class="kw">let </span>c = a + b;
+<span class="comment">// ... subtract ...
+</span><span class="kw">let </span>d = a - b;
+<span class="comment">// ... double elements ...
+</span><span class="macro">assert_eq!</span>(c + d, a.double());
+
+<span class="comment">// ... multiply ...
+</span><span class="kw">let </span>e = c * d;
+<span class="comment">// ... square elements ...
+</span><span class="macro">assert_eq!</span>(e, a.square() - b.square());
+
+<span class="comment">// ... and compute inverses ...
+</span><span class="macro">assert_eq!</span>(a.inverse().unwrap() * a, F::one()); <span class="comment">// have to unwrap, as `a` could be zero.</span></code></pre></div>
+<p>In some cases, it is useful to be able to compute square roots of field elements
+(e.g.: for point compression of elliptic curve elements).
+To support this, users can implement the <code>sqrt</code>-related methods for their field type. This method
+is already implemented for prime fields (see below), and also for quadratic extension fields.</p>
+<p>The <code>sqrt</code>-related methods can be used as follows:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::Field;
+<span class="comment">// As before, we'll use a field associated with the BLS12-381 pairing-friendly
+// group for this example.
+</span><span class="kw">use </span>ark_test_curves::bls12_381::Fq2 <span class="kw">as </span>F;
+<span class="kw">use </span>ark_std::{One, UniformRand};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = ark_std::test_rng();
+<span class="kw">let </span>a = F::rand(<span class="kw-2">&amp;mut </span>rng);
+
+<span class="comment">// We can check if a field element is a square by computing its Legendre symbol...
+</span><span class="kw">if </span>a.legendre().is_qr() {
+    <span class="comment">// ... and if it is, we can compute its square root.
+    </span><span class="kw">let </span>b = a.sqrt().unwrap();
+    <span class="macro">assert_eq!</span>(b.square(), a);
+} <span class="kw">else </span>{
+    <span class="comment">// Otherwise, we can check that the square root is `None`.
+    </span><span class="macro">assert_eq!</span>(a.sqrt(), <span class="prelude-val">None</span>);
+}</code></pre></div>
+<h4 id="primefield"><a class="doc-anchor" href="#primefield">§</a><a href="https://docs.rs/ark-ff/latest/ark_ff/fields/trait.PrimeField.html"><code>PrimeField</code></a></h4>
+<p>If the field is of prime order, then users can choose
+to implement the <a href="https://docs.rs/ark-ff/latest/ark_ff/fields/trait.PrimeField.html"><code>PrimeField</code></a> trait for it. This provides access to the following
+additional APIs:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{Field, PrimeField, FpConfig, BigInteger, Zero};
+<span class="comment">// Now we'll use the prime field underlying the BLS12-381 G1 curve.
+</span><span class="kw">use </span>ark_test_curves::bls12_381::Fq <span class="kw">as </span>F;
+<span class="kw">use </span>ark_std::{One, UniformRand};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = ark_std::test_rng();
+<span class="kw">let </span>a = F::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="comment">// We can access the prime modulus associated with `F`:
+</span><span class="kw">let </span>modulus = &lt;F <span class="kw">as </span>PrimeField&gt;::MODULUS;
+<span class="macro">assert_eq!</span>(a.pow(<span class="kw-2">&amp;</span>modulus), a);
+
+<span class="comment">// We can convert field elements to integers in the range [0, MODULUS - 1]:
+</span><span class="kw">let </span>one: num_bigint::BigUint = F::one().into();
+<span class="macro">assert_eq!</span>(one, num_bigint::BigUint::one());
+
+<span class="comment">// We can construct field elements from an arbitrary sequence of bytes:
+</span><span class="kw">let </span>n = F::from_le_bytes_mod_order(<span class="kw-2">&amp;</span>modulus.to_bytes_le());
+<span class="macro">assert_eq!</span>(n, F::zero());</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.signed_mod_reduction"><code>pub use biginteger::<a class="fn" href="biginteger/fn.signed_mod_reduction.html" title="fn ark_ff::biginteger::signed_mod_reduction">signed_mod_reduction</a>;</code></dt><dt id="reexport.BigInt"><code>pub use biginteger::<a class="struct" href="biginteger/struct.BigInt.html" title="struct ark_ff::biginteger::BigInt">BigInt</a>;</code></dt><dt id="reexport.BigInteger"><code>pub use biginteger::<a class="trait" href="biginteger/trait.BigInteger.html" title="trait ark_ff::biginteger::BigInteger">BigInteger</a>;</code></dt><dt id="reexport.BigInteger128"><code>pub use biginteger::<a class="type" href="biginteger/type.BigInteger128.html" title="type ark_ff::biginteger::BigInteger128">BigInteger128</a>;</code></dt><dt id="reexport.BigInteger256"><code>pub use biginteger::<a class="type" href="biginteger/type.BigInteger256.html" title="type ark_ff::biginteger::BigInteger256">BigInteger256</a>;</code></dt><dt id="reexport.BigInteger320"><code>pub use biginteger::<a class="type" href="biginteger/type.BigInteger320.html" title="type ark_ff::biginteger::BigInteger320">BigInteger320</a>;</code></dt><dt id="reexport.BigInteger384"><code>pub use biginteger::<a class="type" href="biginteger/type.BigInteger384.html" title="type ark_ff::biginteger::BigInteger384">BigInteger384</a>;</code></dt><dt id="reexport.BigInteger448"><code>pub use biginteger::<a class="type" href="biginteger/type.BigInteger448.html" title="type ark_ff::biginteger::BigInteger448">BigInteger448</a>;</code></dt><dt id="reexport.BigInteger64"><code>pub use biginteger::<a class="type" href="biginteger/type.BigInteger64.html" title="type ark_ff::biginteger::BigInteger64">BigInteger64</a>;</code></dt><dt id="reexport.BigInteger768"><code>pub use biginteger::<a class="type" href="biginteger/type.BigInteger768.html" title="type ark_ff::biginteger::BigInteger768">BigInteger768</a>;</code></dt><dt id="reexport.BigInteger832"><code>pub use biginteger::<a class="type" href="biginteger/type.BigInteger832.html" title="type ark_ff::biginteger::BigInteger832">BigInteger832</a>;</code></dt><dt><code>pub use self::<a class="mod" href="fields/index.html" title="mod ark_ff::fields">fields</a>::*;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="biginteger/index.html" title="mod ark_ff::biginteger">biginteger</a></dt><dt><a class="mod" href="fields/index.html" title="mod ark_ff::fields">fields</a></dt><dt><a class="mod" href="prelude/index.html" title="mod ark_ff::prelude">prelude</a></dt></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.BigInt.html" title="macro ark_ff::BigInt">BigInt</a></dt><dd>Construct a <a href="biginteger/struct.BigInt.html" title="struct ark_ff::biginteger::BigInt"><code>BigInt&lt;N&gt;</code></a> element from a literal string.</dd><dt><a class="macro" href="macro.MontFp.html" title="macro ark_ff::MontFp">MontFp</a></dt><dd>Construct a <a href="fields/models/fp/struct.Fp.html" title="struct ark_ff::fields::models::fp::Fp"><code>Fp&lt;MontBackend&lt;T, N&gt;, N&gt;</code></a> element from a literal string. This
+should be used primarily for constructing constant field elements; in a
+non-const context, <a href="https://doc.rust-lang.org/1.86.0/core/str/traits/trait.FromStr.html#tymethod.from_str" title="associated function core::str::traits::FromStr::from_str"><code>Fp::from_str</code></a> is
+preferable.</dd><dt><a class="macro" href="macro.const_for.html" title="macro ark_ff::const_for">const_<wbr>for</a></dt><dd>A helper macro for emulating <code>for</code> loops in a <code>const</code> context.</dd><dt><a class="macro" href="macro.impl_additive_ops_from_ref.html" title="macro ark_ff::impl_additive_ops_from_ref">impl_<wbr>additive_<wbr>ops_<wbr>from_<wbr>ref</a></dt><dt><a class="macro" href="macro.impl_multiplicative_ops_from_ref.html" title="macro ark_ff::impl_multiplicative_ops_from_ref">impl_<wbr>multiplicative_<wbr>ops_<wbr>from_<wbr>ref</a></dt><dt><a class="macro" href="macro.sbb.html" title="macro ark_ff::sbb">sbb</a></dt></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.BitIteratorBE.html" title="struct ark_ff::BitIteratorBE">BitIteratorBE</a></dt><dd>Iterates over a slice of <code>u64</code> in <em>big-endian</em> order.</dd><dt><a class="struct" href="struct.BitIteratorLE.html" title="struct ark_ff::BitIteratorLE">BitIteratorLE</a></dt><dd>Iterates over a slice of <code>u64</code> in <em>little-endian</em> order.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.ToConstraintField.html" title="trait ark_ff::ToConstraintField">ToConstraint<wbr>Field</a></dt><dd>Types that can be converted to a vector of <code>F</code> elements. Useful for
+specifying how public inputs to a constraint system should be represented
+inside that constraint system.</dd><dt><a class="trait" href="trait.UniformRand.html" title="trait ark_ff::UniformRand">Uniform<wbr>Rand</a></dt></dl><script type="text/json" id="notable-traits-data">{"Vec<u8>":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html\" title=\"trait core::alloc::Allocator\">Allocator</a>,</div></div>"}</script></section></div></main></body></html>

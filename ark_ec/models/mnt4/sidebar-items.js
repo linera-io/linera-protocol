@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["g1","g2"],"struct":["MNT4"],"trait":["MNT4Config"],"type":["GT"]};

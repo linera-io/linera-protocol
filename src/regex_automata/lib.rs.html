@@ -1,0 +1,648 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/regex-automata-0.4.9/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">regex_automata/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">/*!
+<a href=#2 id=2 data-nosnippet>2</a>This crate exposes a variety of regex engines used by the `regex` crate.
+<a href=#3 id=3 data-nosnippet>3</a>It provides a vast, sprawling and "expert" level API to each regex engine.
+<a href=#4 id=4 data-nosnippet>4</a>The regex engines provided by this crate focus heavily on finite automata
+<a href=#5 id=5 data-nosnippet>5</a>implementations and specifically guarantee worst case `O(m * n)` time
+<a href=#6 id=6 data-nosnippet>6</a>complexity for all searches. (Where `m ~ len(regex)` and `n ~ len(haystack)`.)
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a>The primary goal of this crate is to serve as an implementation detail for the
+<a href=#9 id=9 data-nosnippet>9</a>`regex` crate. A secondary goal is to make its internals available for use by
+<a href=#10 id=10 data-nosnippet>10</a>others.
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a># Table of contents
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a>* [Should I be using this crate?](#should-i-be-using-this-crate) gives some
+<a href=#15 id=15 data-nosnippet>15</a>reasons for and against using this crate.
+<a href=#16 id=16 data-nosnippet>16</a>* [Examples](#examples) provides a small selection of things you can do with
+<a href=#17 id=17 data-nosnippet>17</a>this crate.
+<a href=#18 id=18 data-nosnippet>18</a>* [Available regex engines](#available-regex-engines) provides a hyperlinked
+<a href=#19 id=19 data-nosnippet>19</a>list of all regex engines in this crate.
+<a href=#20 id=20 data-nosnippet>20</a>* [API themes](#api-themes) discusses common elements used throughout this
+<a href=#21 id=21 data-nosnippet>21</a>crate.
+<a href=#22 id=22 data-nosnippet>22</a>* [Crate features](#crate-features) documents the extensive list of Cargo
+<a href=#23 id=23 data-nosnippet>23</a>features available.
+<a href=#24 id=24 data-nosnippet>24</a>
+<a href=#25 id=25 data-nosnippet>25</a># Should I be using this crate?
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a>If you find yourself here because you just want to use regexes, then you should
+<a href=#28 id=28 data-nosnippet>28</a>first check out whether the [`regex` crate](https://docs.rs/regex) meets
+<a href=#29 id=29 data-nosnippet>29</a>your needs. It provides a streamlined and difficult-to-misuse API for regex
+<a href=#30 id=30 data-nosnippet>30</a>searching.
+<a href=#31 id=31 data-nosnippet>31</a>
+<a href=#32 id=32 data-nosnippet>32</a>If you're here because there is something specific you want to do that can't
+<a href=#33 id=33 data-nosnippet>33</a>be easily done with `regex` crate, then you are perhaps in the right place.
+<a href=#34 id=34 data-nosnippet>34</a>It's most likely that the first stop you'll want to make is to explore the
+<a href=#35 id=35 data-nosnippet>35</a>[`meta` regex APIs](meta). Namely, the `regex` crate is just a light wrapper
+<a href=#36 id=36 data-nosnippet>36</a>over a [`meta::Regex`], so its API will probably be the easiest to transition
+<a href=#37 id=37 data-nosnippet>37</a>to. In contrast to the `regex` crate, the `meta::Regex` API supports more
+<a href=#38 id=38 data-nosnippet>38</a>search parameters and does multi-pattern searches. However, it isn't quite as
+<a href=#39 id=39 data-nosnippet>39</a>ergonomic.
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a>Otherwise, the following is an inexhaustive list of reasons to use this crate:
+<a href=#42 id=42 data-nosnippet>42</a>
+<a href=#43 id=43 data-nosnippet>43</a>* You want to analyze or use a [Thompson `NFA`](nfa::thompson::NFA) directly.
+<a href=#44 id=44 data-nosnippet>44</a>* You want more powerful multi-pattern search than what is provided by
+<a href=#45 id=45 data-nosnippet>45</a>`RegexSet` in the `regex` crate. All regex engines in this crate support
+<a href=#46 id=46 data-nosnippet>46</a>multi-pattern searches.
+<a href=#47 id=47 data-nosnippet>47</a>* You want to use one of the `regex` crate's internal engines directly because
+<a href=#48 id=48 data-nosnippet>48</a>of some interesting configuration that isn't possible via the `regex` crate.
+<a href=#49 id=49 data-nosnippet>49</a>For example, a [lazy DFA's configuration](hybrid::dfa::Config) exposes a
+<a href=#50 id=50 data-nosnippet>50</a>dizzying number of options for controlling its execution.
+<a href=#51 id=51 data-nosnippet>51</a>* You want to use the lower level search APIs. For example, both the [lazy
+<a href=#52 id=52 data-nosnippet>52</a>DFA](hybrid::dfa) and [fully compiled DFAs](dfa) support searching by exploring
+<a href=#53 id=53 data-nosnippet>53</a>the automaton one state at a time. This might be useful, for example, for
+<a href=#54 id=54 data-nosnippet>54</a>stream searches or searches of strings stored in non-contiguous in memory.
+<a href=#55 id=55 data-nosnippet>55</a>* You want to build a fully compiled DFA and then [use zero-copy
+<a href=#56 id=56 data-nosnippet>56</a>deserialization](dfa::dense::DFA::from_bytes) to load it into memory and use
+<a href=#57 id=57 data-nosnippet>57</a>it for searching. This use case is supported in core-only no-std/no-alloc
+<a href=#58 id=58 data-nosnippet>58</a>environments.
+<a href=#59 id=59 data-nosnippet>59</a>* You want to run [anchored searches](Input::anchored) without using the `^`
+<a href=#60 id=60 data-nosnippet>60</a>anchor in your regex pattern.
+<a href=#61 id=61 data-nosnippet>61</a>* You need to work-around contention issues with
+<a href=#62 id=62 data-nosnippet>62</a>sharing a regex across multiple threads. The
+<a href=#63 id=63 data-nosnippet>63</a>[`meta::Regex::search_with`](meta::Regex::search_with) API permits bypassing
+<a href=#64 id=64 data-nosnippet>64</a>any kind of synchronization at all by requiring the caller to provide the
+<a href=#65 id=65 data-nosnippet>65</a>mutable scratch spaced needed during a search.
+<a href=#66 id=66 data-nosnippet>66</a>* You want to build your own regex engine on top of the `regex` crate's
+<a href=#67 id=67 data-nosnippet>67</a>infrastructure.
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a># Examples
+<a href=#70 id=70 data-nosnippet>70</a>
+<a href=#71 id=71 data-nosnippet>71</a>This section tries to identify a few interesting things you can do with this
+<a href=#72 id=72 data-nosnippet>72</a>crate and demonstrates them.
+<a href=#73 id=73 data-nosnippet>73</a>
+<a href=#74 id=74 data-nosnippet>74</a>### Multi-pattern searches with capture groups
+<a href=#75 id=75 data-nosnippet>75</a>
+<a href=#76 id=76 data-nosnippet>76</a>One of the more frustrating limitations of `RegexSet` in the `regex` crate
+<a href=#77 id=77 data-nosnippet>77</a>(at the time of writing) is that it doesn't report match positions. With this
+<a href=#78 id=78 data-nosnippet>78</a>crate, multi-pattern support was intentionally designed in from the beginning,
+<a href=#79 id=79 data-nosnippet>79</a>which means it works in all regex engines and even for capture groups as well.
+<a href=#80 id=80 data-nosnippet>80</a>
+<a href=#81 id=81 data-nosnippet>81</a>This example shows how to search for matches of multiple regexes, where each
+<a href=#82 id=82 data-nosnippet>82</a>regex uses the same capture group names to parse different key-value formats.
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a>```
+<a href=#85 id=85 data-nosnippet>85</a>use regex_automata::{meta::Regex, PatternID};
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>let re = Regex::new_many(&amp;[
+<a href=#88 id=88 data-nosnippet>88</a>    r#"(?m)^(?&lt;key&gt;[[:word:]]+)=(?&lt;val&gt;[[:word:]]+)$"#,
+<a href=#89 id=89 data-nosnippet>89</a>    r#"(?m)^(?&lt;key&gt;[[:word:]]+)="(?&lt;val&gt;[^"]+)"$"#,
+<a href=#90 id=90 data-nosnippet>90</a>    r#"(?m)^(?&lt;key&gt;[[:word:]]+)='(?&lt;val&gt;[^']+)'$"#,
+<a href=#91 id=91 data-nosnippet>91</a>    r#"(?m)^(?&lt;key&gt;[[:word:]]+):\s*(?&lt;val&gt;[[:word:]]+)$"#,
+<a href=#92 id=92 data-nosnippet>92</a>])?;
+<a href=#93 id=93 data-nosnippet>93</a>let hay = r#"
+<a href=#94 id=94 data-nosnippet>94</a>best_album="Blow Your Face Out"
+<a href=#95 id=95 data-nosnippet>95</a>best_quote='"then as it was, then again it will be"'
+<a href=#96 id=96 data-nosnippet>96</a>best_year=1973
+<a href=#97 id=97 data-nosnippet>97</a>best_simpsons_episode: HOMR
+<a href=#98 id=98 data-nosnippet>98</a>"#;
+<a href=#99 id=99 data-nosnippet>99</a>let mut kvs = vec![];
+<a href=#100 id=100 data-nosnippet>100</a>for caps in re.captures_iter(hay) {
+<a href=#101 id=101 data-nosnippet>101</a>    // N.B. One could use capture indices '1' and '2' here
+<a href=#102 id=102 data-nosnippet>102</a>    // as well. Capture indices are local to each pattern.
+<a href=#103 id=103 data-nosnippet>103</a>    // (Just like names are.)
+<a href=#104 id=104 data-nosnippet>104</a>    let key = &amp;hay[caps.get_group_by_name("key").unwrap()];
+<a href=#105 id=105 data-nosnippet>105</a>    let val = &amp;hay[caps.get_group_by_name("val").unwrap()];
+<a href=#106 id=106 data-nosnippet>106</a>    kvs.push((key, val));
+<a href=#107 id=107 data-nosnippet>107</a>}
+<a href=#108 id=108 data-nosnippet>108</a>assert_eq!(kvs, vec![
+<a href=#109 id=109 data-nosnippet>109</a>    ("best_album", "Blow Your Face Out"),
+<a href=#110 id=110 data-nosnippet>110</a>    ("best_quote", "\"then as it was, then again it will be\""),
+<a href=#111 id=111 data-nosnippet>111</a>    ("best_year", "1973"),
+<a href=#112 id=112 data-nosnippet>112</a>    ("best_simpsons_episode", "HOMR"),
+<a href=#113 id=113 data-nosnippet>113</a>]);
+<a href=#114 id=114 data-nosnippet>114</a>
+<a href=#115 id=115 data-nosnippet>115</a># Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#116 id=116 data-nosnippet>116</a>```
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a>### Build a full DFA and walk it manually
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a>One of the regex engines in this crate is a fully compiled DFA. It takes worst
+<a href=#121 id=121 data-nosnippet>121</a>case exponential time to build, but once built, it can be easily explored and
+<a href=#122 id=122 data-nosnippet>122</a>used for searches. Here's a simple example that uses its lower level APIs to
+<a href=#123 id=123 data-nosnippet>123</a>implement a simple anchored search by hand.
+<a href=#124 id=124 data-nosnippet>124</a>
+<a href=#125 id=125 data-nosnippet>125</a>```
+<a href=#126 id=126 data-nosnippet>126</a>use regex_automata::{dfa::{Automaton, dense}, Input};
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>let dfa = dense::DFA::new(r"(?-u)\b[A-Z]\w+z\b")?;
+<a href=#129 id=129 data-nosnippet>129</a>let haystack = "Quartz";
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a>// The start state is determined by inspecting the position and the
+<a href=#132 id=132 data-nosnippet>132</a>// initial bytes of the haystack.
+<a href=#133 id=133 data-nosnippet>133</a>let mut state = dfa.start_state_forward(&amp;Input::new(haystack))?;
+<a href=#134 id=134 data-nosnippet>134</a>// Walk all the bytes in the haystack.
+<a href=#135 id=135 data-nosnippet>135</a>for &amp;b in haystack.as_bytes().iter() {
+<a href=#136 id=136 data-nosnippet>136</a>    state = dfa.next_state(state, b);
+<a href=#137 id=137 data-nosnippet>137</a>}
+<a href=#138 id=138 data-nosnippet>138</a>// DFAs in this crate require an explicit
+<a href=#139 id=139 data-nosnippet>139</a>// end-of-input transition if a search reaches
+<a href=#140 id=140 data-nosnippet>140</a>// the end of a haystack.
+<a href=#141 id=141 data-nosnippet>141</a>state = dfa.next_eoi_state(state);
+<a href=#142 id=142 data-nosnippet>142</a>assert!(dfa.is_match_state(state));
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a># Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#145 id=145 data-nosnippet>145</a>```
+<a href=#146 id=146 data-nosnippet>146</a>
+<a href=#147 id=147 data-nosnippet>147</a>Or do the same with a lazy DFA that avoids exponential worst case compile time,
+<a href=#148 id=148 data-nosnippet>148</a>but requires mutable scratch space to lazily build the DFA during the search.
+<a href=#149 id=149 data-nosnippet>149</a>
+<a href=#150 id=150 data-nosnippet>150</a>```
+<a href=#151 id=151 data-nosnippet>151</a>use regex_automata::{hybrid::dfa::DFA, Input};
+<a href=#152 id=152 data-nosnippet>152</a>
+<a href=#153 id=153 data-nosnippet>153</a>let dfa = DFA::new(r"(?-u)\b[A-Z]\w+z\b")?;
+<a href=#154 id=154 data-nosnippet>154</a>let mut cache = dfa.create_cache();
+<a href=#155 id=155 data-nosnippet>155</a>let hay = "Quartz";
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a>// The start state is determined by inspecting the position and the
+<a href=#158 id=158 data-nosnippet>158</a>// initial bytes of the haystack.
+<a href=#159 id=159 data-nosnippet>159</a>let mut state = dfa.start_state_forward(&amp;mut cache, &amp;Input::new(hay))?;
+<a href=#160 id=160 data-nosnippet>160</a>// Walk all the bytes in the haystack.
+<a href=#161 id=161 data-nosnippet>161</a>for &amp;b in hay.as_bytes().iter() {
+<a href=#162 id=162 data-nosnippet>162</a>    state = dfa.next_state(&amp;mut cache, state, b)?;
+<a href=#163 id=163 data-nosnippet>163</a>}
+<a href=#164 id=164 data-nosnippet>164</a>// DFAs in this crate require an explicit
+<a href=#165 id=165 data-nosnippet>165</a>// end-of-input transition if a search reaches
+<a href=#166 id=166 data-nosnippet>166</a>// the end of a haystack.
+<a href=#167 id=167 data-nosnippet>167</a>state = dfa.next_eoi_state(&amp;mut cache, state)?;
+<a href=#168 id=168 data-nosnippet>168</a>assert!(state.is_match());
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a># Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#171 id=171 data-nosnippet>171</a>```
+<a href=#172 id=172 data-nosnippet>172</a>
+<a href=#173 id=173 data-nosnippet>173</a>### Find all overlapping matches
+<a href=#174 id=174 data-nosnippet>174</a>
+<a href=#175 id=175 data-nosnippet>175</a>This example shows how to build a DFA and use it to find all possible matches,
+<a href=#176 id=176 data-nosnippet>176</a>including overlapping matches. A similar example will work with a lazy DFA as
+<a href=#177 id=177 data-nosnippet>177</a>well. This also works with multiple patterns and will report all matches at the
+<a href=#178 id=178 data-nosnippet>178</a>same position where multiple patterns match.
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a>```
+<a href=#181 id=181 data-nosnippet>181</a>use regex_automata::{
+<a href=#182 id=182 data-nosnippet>182</a>    dfa::{dense, Automaton, OverlappingState},
+<a href=#183 id=183 data-nosnippet>183</a>    Input, MatchKind,
+<a href=#184 id=184 data-nosnippet>184</a>};
+<a href=#185 id=185 data-nosnippet>185</a>
+<a href=#186 id=186 data-nosnippet>186</a>let dfa = dense::DFA::builder()
+<a href=#187 id=187 data-nosnippet>187</a>    .configure(dense::DFA::config().match_kind(MatchKind::All))
+<a href=#188 id=188 data-nosnippet>188</a>    .build(r"(?-u)\w{3,}")?;
+<a href=#189 id=189 data-nosnippet>189</a>let input = Input::new("homer marge bart lisa maggie");
+<a href=#190 id=190 data-nosnippet>190</a>let mut state = OverlappingState::start();
+<a href=#191 id=191 data-nosnippet>191</a>
+<a href=#192 id=192 data-nosnippet>192</a>let mut matches = vec![];
+<a href=#193 id=193 data-nosnippet>193</a>while let Some(hm) = {
+<a href=#194 id=194 data-nosnippet>194</a>    dfa.try_search_overlapping_fwd(&amp;input, &amp;mut state)?;
+<a href=#195 id=195 data-nosnippet>195</a>    state.get_match()
+<a href=#196 id=196 data-nosnippet>196</a>} {
+<a href=#197 id=197 data-nosnippet>197</a>    matches.push(hm.offset());
+<a href=#198 id=198 data-nosnippet>198</a>}
+<a href=#199 id=199 data-nosnippet>199</a>assert_eq!(matches, vec![
+<a href=#200 id=200 data-nosnippet>200</a>    3, 4, 5,        // hom, home, homer
+<a href=#201 id=201 data-nosnippet>201</a>    9, 10, 11,      // mar, marg, marge
+<a href=#202 id=202 data-nosnippet>202</a>    15, 16,         // bar, bart
+<a href=#203 id=203 data-nosnippet>203</a>    20, 21,         // lis, lisa
+<a href=#204 id=204 data-nosnippet>204</a>    25, 26, 27, 28, // mag, magg, maggi, maggie
+<a href=#205 id=205 data-nosnippet>205</a>]);
+<a href=#206 id=206 data-nosnippet>206</a>
+<a href=#207 id=207 data-nosnippet>207</a># Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#208 id=208 data-nosnippet>208</a>```
+<a href=#209 id=209 data-nosnippet>209</a>
+<a href=#210 id=210 data-nosnippet>210</a># Available regex engines
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a>The following is a complete list of all regex engines provided by this crate,
+<a href=#213 id=213 data-nosnippet>213</a>along with a very brief description of it and why you might want to use it.
+<a href=#214 id=214 data-nosnippet>214</a>
+<a href=#215 id=215 data-nosnippet>215</a>* [`dfa::regex::Regex`] is a regex engine that works on top of either
+<a href=#216 id=216 data-nosnippet>216</a>[dense](dfa::dense) or [sparse](dfa::sparse) fully compiled DFAs. You might
+<a href=#217 id=217 data-nosnippet>217</a>use a DFA if you need the fastest possible regex engine in this crate and can
+<a href=#218 id=218 data-nosnippet>218</a>afford the exorbitant memory usage usually required by DFAs. Low level APIs on
+<a href=#219 id=219 data-nosnippet>219</a>fully compiled DFAs are provided by the [`Automaton` trait](dfa::Automaton).
+<a href=#220 id=220 data-nosnippet>220</a>Fully compiled dense DFAs can handle all regexes except for searching a regex
+<a href=#221 id=221 data-nosnippet>221</a>with a Unicode word boundary on non-ASCII haystacks. A fully compiled DFA based
+<a href=#222 id=222 data-nosnippet>222</a>regex can only report the start and end of each match.
+<a href=#223 id=223 data-nosnippet>223</a>* [`hybrid::regex::Regex`] is a regex engine that works on top of a lazily
+<a href=#224 id=224 data-nosnippet>224</a>built DFA. Its performance profile is very similar to that of fully compiled
+<a href=#225 id=225 data-nosnippet>225</a>DFAs, but can be slower in some pathological cases. Fully compiled DFAs are
+<a href=#226 id=226 data-nosnippet>226</a>also amenable to more optimizations, such as state acceleration, that aren't
+<a href=#227 id=227 data-nosnippet>227</a>available in a lazy DFA. You might use this lazy DFA if you can't abide the
+<a href=#228 id=228 data-nosnippet>228</a>worst case exponential compile time of a full DFA, but still want the DFA
+<a href=#229 id=229 data-nosnippet>229</a>search performance in the vast majority of cases. A lazy DFA based regex can
+<a href=#230 id=230 data-nosnippet>230</a>only report the start and end of each match.
+<a href=#231 id=231 data-nosnippet>231</a>* [`dfa::onepass::DFA`] is a regex engine that is implemented as a DFA, but
+<a href=#232 id=232 data-nosnippet>232</a>can report the matches of each capture group in addition to the start and end
+<a href=#233 id=233 data-nosnippet>233</a>of each match. The catch is that it only works on a somewhat small subset of
+<a href=#234 id=234 data-nosnippet>234</a>regexes known as "one-pass." You'll want to use this for cases when you need
+<a href=#235 id=235 data-nosnippet>235</a>capture group matches and the regex is one-pass since it is likely to be faster
+<a href=#236 id=236 data-nosnippet>236</a>than any alternative. A one-pass DFA can handle all types of regexes, but does
+<a href=#237 id=237 data-nosnippet>237</a>have some reasonable limits on the number of capture groups it can handle.
+<a href=#238 id=238 data-nosnippet>238</a>* [`nfa::thompson::backtrack::BoundedBacktracker`] is a regex engine that uses
+<a href=#239 id=239 data-nosnippet>239</a>backtracking, but keeps track of the work it has done to avoid catastrophic
+<a href=#240 id=240 data-nosnippet>240</a>backtracking. Like the one-pass DFA, it provides the matches of each capture
+<a href=#241 id=241 data-nosnippet>241</a>group. It retains the `O(m * n)` worst case time bound. This tends to be slower
+<a href=#242 id=242 data-nosnippet>242</a>than the one-pass DFA regex engine, but faster than the PikeVM. It can handle
+<a href=#243 id=243 data-nosnippet>243</a>all types of regexes, but usually only works well with small haystacks and
+<a href=#244 id=244 data-nosnippet>244</a>small regexes due to the memory required to avoid redoing work.
+<a href=#245 id=245 data-nosnippet>245</a>* [`nfa::thompson::pikevm::PikeVM`] is a regex engine that can handle all
+<a href=#246 id=246 data-nosnippet>246</a>regexes, of all sizes and provides capture group matches. It tends to be a tool
+<a href=#247 id=247 data-nosnippet>247</a>of last resort because it is also usually the slowest regex engine.
+<a href=#248 id=248 data-nosnippet>248</a>* [`meta::Regex`] is the meta regex engine that combines *all* of the above
+<a href=#249 id=249 data-nosnippet>249</a>engines into one. The reason for this is that each of the engines above have
+<a href=#250 id=250 data-nosnippet>250</a>their own caveats such as, "only handles a subset of regexes" or "is generally
+<a href=#251 id=251 data-nosnippet>251</a>slow." The meta regex engine accounts for all of these caveats and composes
+<a href=#252 id=252 data-nosnippet>252</a>the engines in a way that attempts to mitigate each engine's weaknesses while
+<a href=#253 id=253 data-nosnippet>253</a>emphasizing its strengths. For example, it will attempt to run a lazy DFA even
+<a href=#254 id=254 data-nosnippet>254</a>if it might fail. In which case, it will restart the search with a likely
+<a href=#255 id=255 data-nosnippet>255</a>slower but more capable regex engine. The meta regex engine is what you should
+<a href=#256 id=256 data-nosnippet>256</a>default to. Use one of the above engines directly only if you have a specific
+<a href=#257 id=257 data-nosnippet>257</a>reason to.
+<a href=#258 id=258 data-nosnippet>258</a>
+<a href=#259 id=259 data-nosnippet>259</a># API themes
+<a href=#260 id=260 data-nosnippet>260</a>
+<a href=#261 id=261 data-nosnippet>261</a>While each regex engine has its own APIs and configuration options, there are
+<a href=#262 id=262 data-nosnippet>262</a>some general themes followed by all of them.
+<a href=#263 id=263 data-nosnippet>263</a>
+<a href=#264 id=264 data-nosnippet>264</a>### The `Input` abstraction
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a>Most search routines in this crate accept anything that implements
+<a href=#267 id=267 data-nosnippet>267</a>`Into&lt;Input&gt;`. Both `&amp;str` and `&amp;[u8]` haystacks satisfy this constraint, which
+<a href=#268 id=268 data-nosnippet>268</a>means that things like `engine.search("foo")` will work as you would expect.
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a>By virtue of accepting an `Into&lt;Input&gt;` though, callers can provide more than
+<a href=#271 id=271 data-nosnippet>271</a>just a haystack. Indeed, the [`Input`] type has more details, but briefly,
+<a href=#272 id=272 data-nosnippet>272</a>callers can use it to configure various aspects of the search:
+<a href=#273 id=273 data-nosnippet>273</a>
+<a href=#274 id=274 data-nosnippet>274</a>* The span of the haystack to search via [`Input::span`] or [`Input::range`],
+<a href=#275 id=275 data-nosnippet>275</a>which might be a substring of the haystack.
+<a href=#276 id=276 data-nosnippet>276</a>* Whether to run an anchored search or not via [`Input::anchored`]. This
+<a href=#277 id=277 data-nosnippet>277</a>permits one to require matches to start at the same offset that the search
+<a href=#278 id=278 data-nosnippet>278</a>started.
+<a href=#279 id=279 data-nosnippet>279</a>* Whether to ask the regex engine to stop as soon as a match is seen via
+<a href=#280 id=280 data-nosnippet>280</a>[`Input::earliest`]. This can be used to find the offset of a match as soon
+<a href=#281 id=281 data-nosnippet>281</a>as it is known without waiting for the full leftmost-first match to be found.
+<a href=#282 id=282 data-nosnippet>282</a>This can also be used to avoid the worst case `O(m * n^2)` time complexity
+<a href=#283 id=283 data-nosnippet>283</a>of iteration.
+<a href=#284 id=284 data-nosnippet>284</a>
+<a href=#285 id=285 data-nosnippet>285</a>Some lower level search routines accept an `&amp;Input` for performance reasons.
+<a href=#286 id=286 data-nosnippet>286</a>In which case, `&amp;Input::new("haystack")` can be used for a simple search.
+<a href=#287 id=287 data-nosnippet>287</a>
+<a href=#288 id=288 data-nosnippet>288</a>### Error reporting
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a>Most, but not all, regex engines in this crate can fail to execute a search.
+<a href=#291 id=291 data-nosnippet>291</a>When a search fails, callers cannot determine whether or not a match exists.
+<a href=#292 id=292 data-nosnippet>292</a>That is, the result is indeterminate.
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>Search failure, in all cases in this crate, is represented by a [`MatchError`].
+<a href=#295 id=295 data-nosnippet>295</a>Routines that can fail start with the `try_` prefix in their name. For example,
+<a href=#296 id=296 data-nosnippet>296</a>[`hybrid::regex::Regex::try_search`] can fail for a number of reasons.
+<a href=#297 id=297 data-nosnippet>297</a>Conversely, routines that either can't fail or can panic on failure lack the
+<a href=#298 id=298 data-nosnippet>298</a>`try_` prefix. For example, [`hybrid::regex::Regex::find`] will panic in
+<a href=#299 id=299 data-nosnippet>299</a>cases where [`hybrid::regex::Regex::try_search`] would return an error, and
+<a href=#300 id=300 data-nosnippet>300</a>[`meta::Regex::find`] will never panic. Therefore, callers need to pay close
+<a href=#301 id=301 data-nosnippet>301</a>attention to the panicking conditions in the documentation.
+<a href=#302 id=302 data-nosnippet>302</a>
+<a href=#303 id=303 data-nosnippet>303</a>In most cases, the reasons that a search fails are either predictable or
+<a href=#304 id=304 data-nosnippet>304</a>configurable, albeit at some additional cost.
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a>An example of predictable failure is
+<a href=#307 id=307 data-nosnippet>307</a>[`BoundedBacktracker::try_search`](nfa::thompson::backtrack::BoundedBacktracker::try_search).
+<a href=#308 id=308 data-nosnippet>308</a>Namely, it fails whenever the multiplication of the haystack, the regex and some
+<a href=#309 id=309 data-nosnippet>309</a>constant exceeds the
+<a href=#310 id=310 data-nosnippet>310</a>[configured visited capacity](nfa::thompson::backtrack::Config::visited_capacity).
+<a href=#311 id=311 data-nosnippet>311</a>Callers can predict the failure in terms of haystack length via the
+<a href=#312 id=312 data-nosnippet>312</a>[`BoundedBacktracker::max_haystack_len`](nfa::thompson::backtrack::BoundedBacktracker::max_haystack_len)
+<a href=#313 id=313 data-nosnippet>313</a>method. While this form of failure is technically avoidable by increasing the
+<a href=#314 id=314 data-nosnippet>314</a>visited capacity, it isn't practical to do so for all inputs because the
+<a href=#315 id=315 data-nosnippet>315</a>memory usage required for larger haystacks becomes impractically large. So in
+<a href=#316 id=316 data-nosnippet>316</a>practice, if one is using the bounded backtracker, you really do have to deal
+<a href=#317 id=317 data-nosnippet>317</a>with the failure.
+<a href=#318 id=318 data-nosnippet>318</a>
+<a href=#319 id=319 data-nosnippet>319</a>An example of configurable failure happens when one enables heuristic support
+<a href=#320 id=320 data-nosnippet>320</a>for Unicode word boundaries in a DFA. Namely, since the DFAs in this crate
+<a href=#321 id=321 data-nosnippet>321</a>(except for the one-pass DFA) do not support Unicode word boundaries on
+<a href=#322 id=322 data-nosnippet>322</a>non-ASCII haystacks, building a DFA from an NFA that contains a Unicode word
+<a href=#323 id=323 data-nosnippet>323</a>boundary will itself fail. However, one can configure DFAs to still be built in
+<a href=#324 id=324 data-nosnippet>324</a>this case by
+<a href=#325 id=325 data-nosnippet>325</a>[configuring heuristic support for Unicode word boundaries](hybrid::dfa::Config::unicode_word_boundary).
+<a href=#326 id=326 data-nosnippet>326</a>If the NFA the DFA is built from contains a Unicode word boundary, then the
+<a href=#327 id=327 data-nosnippet>327</a>DFA will still be built, but special transitions will be added to every state
+<a href=#328 id=328 data-nosnippet>328</a>that cause the DFA to fail if any non-ASCII byte is seen. This failure happens
+<a href=#329 id=329 data-nosnippet>329</a>at search time and it requires the caller to opt into this.
+<a href=#330 id=330 data-nosnippet>330</a>
+<a href=#331 id=331 data-nosnippet>331</a>There are other ways for regex engines to fail in this crate, but the above
+<a href=#332 id=332 data-nosnippet>332</a>two should represent the general theme of failures one can find. Dealing
+<a href=#333 id=333 data-nosnippet>333</a>with these failures is, in part, one the responsibilities of the [meta regex
+<a href=#334 id=334 data-nosnippet>334</a>engine](meta). Notice, for example, that the meta regex engine exposes an API
+<a href=#335 id=335 data-nosnippet>335</a>that never returns an error nor panics. It carefully manages all of the ways
+<a href=#336 id=336 data-nosnippet>336</a>in which the regex engines can fail and either avoids the predictable ones
+<a href=#337 id=337 data-nosnippet>337</a>entirely (e.g., the bounded backtracker) or reacts to configured failures by
+<a href=#338 id=338 data-nosnippet>338</a>falling back to a different engine (e.g., the lazy DFA quitting because it saw
+<a href=#339 id=339 data-nosnippet>339</a>a non-ASCII byte).
+<a href=#340 id=340 data-nosnippet>340</a>
+<a href=#341 id=341 data-nosnippet>341</a>### Configuration and Builders
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a>Most of the regex engines in this crate come with two types to facilitate
+<a href=#344 id=344 data-nosnippet>344</a>building the regex engine: a `Config` and a `Builder`. A `Config` is usually
+<a href=#345 id=345 data-nosnippet>345</a>specific to that particular regex engine, but other objects such as parsing and
+<a href=#346 id=346 data-nosnippet>346</a>NFA compilation have `Config` types too. A `Builder` is the thing responsible
+<a href=#347 id=347 data-nosnippet>347</a>for taking inputs (either pattern strings or already-parsed patterns or even
+<a href=#348 id=348 data-nosnippet>348</a>NFAs directly) and turning them into an actual regex engine that can be used
+<a href=#349 id=349 data-nosnippet>349</a>for searching.
+<a href=#350 id=350 data-nosnippet>350</a>
+<a href=#351 id=351 data-nosnippet>351</a>The main reason why building a regex engine is a bit complicated is because
+<a href=#352 id=352 data-nosnippet>352</a>of the desire to permit composition with de-coupled components. For example,
+<a href=#353 id=353 data-nosnippet>353</a>you might want to [manually construct a Thompson NFA](nfa::thompson::Builder)
+<a href=#354 id=354 data-nosnippet>354</a>and then build a regex engine from it without ever using a regex parser
+<a href=#355 id=355 data-nosnippet>355</a>at all. On the other hand, you might also want to build a regex engine directly
+<a href=#356 id=356 data-nosnippet>356</a>from the concrete syntax. This demonstrates why regex engine construction is
+<a href=#357 id=357 data-nosnippet>357</a>so flexible: it needs to support not just convenient construction, but also
+<a href=#358 id=358 data-nosnippet>358</a>construction from parts built elsewhere.
+<a href=#359 id=359 data-nosnippet>359</a>
+<a href=#360 id=360 data-nosnippet>360</a>This is also in turn why there are many different `Config` structs in this
+<a href=#361 id=361 data-nosnippet>361</a>crate. Let's look more closely at an example: [`hybrid::regex::Builder`]. It
+<a href=#362 id=362 data-nosnippet>362</a>accepts three different `Config` types for configuring construction of a lazy
+<a href=#363 id=363 data-nosnippet>363</a>DFA regex:
+<a href=#364 id=364 data-nosnippet>364</a>
+<a href=#365 id=365 data-nosnippet>365</a>* [`hybrid::regex::Builder::syntax`] accepts a
+<a href=#366 id=366 data-nosnippet>366</a>[`util::syntax::Config`] for configuring the options found in the
+<a href=#367 id=367 data-nosnippet>367</a>[`regex-syntax`](regex_syntax) crate. For example, whether to match
+<a href=#368 id=368 data-nosnippet>368</a>case insensitively.
+<a href=#369 id=369 data-nosnippet>369</a>* [`hybrid::regex::Builder::thompson`] accepts a [`nfa::thompson::Config`] for
+<a href=#370 id=370 data-nosnippet>370</a>configuring construction of a [Thompson NFA](nfa::thompson::NFA). For example,
+<a href=#371 id=371 data-nosnippet>371</a>whether to build an NFA that matches the reverse language described by the
+<a href=#372 id=372 data-nosnippet>372</a>regex.
+<a href=#373 id=373 data-nosnippet>373</a>* [`hybrid::regex::Builder::dfa`] accept a [`hybrid::dfa::Config`] for
+<a href=#374 id=374 data-nosnippet>374</a>configuring construction of the pair of underlying lazy DFAs that make up the
+<a href=#375 id=375 data-nosnippet>375</a>lazy DFA regex engine. For example, changing the capacity of the cache used to
+<a href=#376 id=376 data-nosnippet>376</a>store the transition table.
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a>The lazy DFA regex engine uses all three of those configuration objects for
+<a href=#379 id=379 data-nosnippet>379</a>methods like [`hybrid::regex::Builder::build`], which accepts a pattern
+<a href=#380 id=380 data-nosnippet>380</a>string containing the concrete syntax of your regex. It uses the syntax
+<a href=#381 id=381 data-nosnippet>381</a>configuration to parse it into an AST and translate it into an HIR. Then the
+<a href=#382 id=382 data-nosnippet>382</a>NFA configuration when compiling the HIR into an NFA. And then finally the DFA
+<a href=#383 id=383 data-nosnippet>383</a>configuration when lazily determinizing the NFA into a DFA.
+<a href=#384 id=384 data-nosnippet>384</a>
+<a href=#385 id=385 data-nosnippet>385</a>Notice though that the builder also has a
+<a href=#386 id=386 data-nosnippet>386</a>[`hybrid::regex::Builder::build_from_dfas`] constructor. This permits callers
+<a href=#387 id=387 data-nosnippet>387</a>to build the underlying pair of lazy DFAs themselves (one for the forward
+<a href=#388 id=388 data-nosnippet>388</a>searching to find the end of a match and one for the reverse searching to find
+<a href=#389 id=389 data-nosnippet>389</a>the start of a match), and then build the regex engine from them. The lazy
+<a href=#390 id=390 data-nosnippet>390</a>DFAs, in turn, have their own builder that permits [construction directly from
+<a href=#391 id=391 data-nosnippet>391</a>a Thompson NFA](hybrid::dfa::Builder::build_from_nfa). Continuing down the
+<a href=#392 id=392 data-nosnippet>392</a>rabbit hole, a Thompson NFA has its own compiler that permits [construction
+<a href=#393 id=393 data-nosnippet>393</a>directly from an HIR](nfa::thompson::Compiler::build_from_hir). The lazy DFA
+<a href=#394 id=394 data-nosnippet>394</a>regex engine builder lets you follow this rabbit hole all the way down, but
+<a href=#395 id=395 data-nosnippet>395</a>also provides convenience routines that do it for you when you don't need
+<a href=#396 id=396 data-nosnippet>396</a>precise control over every component.
+<a href=#397 id=397 data-nosnippet>397</a>
+<a href=#398 id=398 data-nosnippet>398</a>The [meta regex engine](meta) is a good example of something that utilizes the
+<a href=#399 id=399 data-nosnippet>399</a>full flexibility of these builders. It often needs not only precise control
+<a href=#400 id=400 data-nosnippet>400</a>over each component, but also shares them across multiple regex engines.
+<a href=#401 id=401 data-nosnippet>401</a>(Most sharing is done by internal reference accounting. For example, an
+<a href=#402 id=402 data-nosnippet>402</a>[`NFA`](nfa::thompson::NFA) is reference counted internally which makes cloning
+<a href=#403 id=403 data-nosnippet>403</a>cheap.)
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a>### Size limits
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a>Unlike the `regex` crate, the `regex-automata` crate specifically does not
+<a href=#408 id=408 data-nosnippet>408</a>enable any size limits by default. That means users of this crate need to
+<a href=#409 id=409 data-nosnippet>409</a>be quite careful when using untrusted patterns. Namely, because bounded
+<a href=#410 id=410 data-nosnippet>410</a>repetitions can grow exponentially by stacking them, it is possible to build a
+<a href=#411 id=411 data-nosnippet>411</a>very large internal regex object from just a small pattern string. For example,
+<a href=#412 id=412 data-nosnippet>412</a>the NFA built from the pattern `a{10}{10}{10}{10}{10}{10}{10}` is over 240MB.
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a>There are multiple size limit options in this crate. If one or more size limits
+<a href=#415 id=415 data-nosnippet>415</a>are relevant for the object you're building, they will be configurable via
+<a href=#416 id=416 data-nosnippet>416</a>methods on a corresponding `Config` type.
+<a href=#417 id=417 data-nosnippet>417</a>
+<a href=#418 id=418 data-nosnippet>418</a># Crate features
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>This crate has a dizzying number of features. The main idea is to be able to
+<a href=#421 id=421 data-nosnippet>421</a>control how much stuff you pull in for your specific use case, since the full
+<a href=#422 id=422 data-nosnippet>422</a>crate is quite large and can dramatically increase compile times and binary
+<a href=#423 id=423 data-nosnippet>423</a>size.
+<a href=#424 id=424 data-nosnippet>424</a>
+<a href=#425 id=425 data-nosnippet>425</a>The most barebones but useful configuration is to disable all default features
+<a href=#426 id=426 data-nosnippet>426</a>and enable only `dfa-search`. This will bring in just the DFA deserialization
+<a href=#427 id=427 data-nosnippet>427</a>and search routines without any dependency on `std` or `alloc`. This does
+<a href=#428 id=428 data-nosnippet>428</a>require generating and serializing a DFA, and then storing it somewhere, but
+<a href=#429 id=429 data-nosnippet>429</a>it permits regex searches in freestanding or embedded environments.
+<a href=#430 id=430 data-nosnippet>430</a>
+<a href=#431 id=431 data-nosnippet>431</a>Because there are so many features, they are split into a few groups.
+<a href=#432 id=432 data-nosnippet>432</a>
+<a href=#433 id=433 data-nosnippet>433</a>The default set of features is: `std`, `syntax`, `perf`, `unicode`, `meta`,
+<a href=#434 id=434 data-nosnippet>434</a>`nfa`, `dfa` and `hybrid`. Basically, the default is to enable everything
+<a href=#435 id=435 data-nosnippet>435</a>except for development related features like `logging`.
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a>### Ecosystem features
+<a href=#438 id=438 data-nosnippet>438</a>
+<a href=#439 id=439 data-nosnippet>439</a>* **std** - Enables use of the standard library. In terms of APIs, this usually
+<a href=#440 id=440 data-nosnippet>440</a>just means that error types implement the `std::error::Error` trait. Otherwise,
+<a href=#441 id=441 data-nosnippet>441</a>`std` sometimes enables the code to be faster, for example, using a `HashMap`
+<a href=#442 id=442 data-nosnippet>442</a>instead of a `BTreeMap`. (The `std` feature matters more for dependencies like
+<a href=#443 id=443 data-nosnippet>443</a>`aho-corasick` and `memchr`, where `std` is required to enable certain classes
+<a href=#444 id=444 data-nosnippet>444</a>of SIMD optimizations.) Enabling `std` automatically enables `alloc`.
+<a href=#445 id=445 data-nosnippet>445</a>* **alloc** - Enables use of the `alloc` library. This is required for most
+<a href=#446 id=446 data-nosnippet>446</a>APIs in this crate. The main exception is deserializing and searching with
+<a href=#447 id=447 data-nosnippet>447</a>fully compiled DFAs.
+<a href=#448 id=448 data-nosnippet>448</a>* **logging** - Adds a dependency on the `log` crate and makes this crate emit
+<a href=#449 id=449 data-nosnippet>449</a>log messages of varying degrees of utility. The log messages are especially
+<a href=#450 id=450 data-nosnippet>450</a>useful in trying to understand what the meta regex engine is doing.
+<a href=#451 id=451 data-nosnippet>451</a>
+<a href=#452 id=452 data-nosnippet>452</a>### Performance features
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a>* **perf** - Enables all of the below features.
+<a href=#455 id=455 data-nosnippet>455</a>* **perf-inline** - When enabled, `inline(always)` is used in (many) strategic
+<a href=#456 id=456 data-nosnippet>456</a>locations to help performance at the expense of longer compile times and
+<a href=#457 id=457 data-nosnippet>457</a>increased binary size.
+<a href=#458 id=458 data-nosnippet>458</a>* **perf-literal** - Enables all literal related optimizations.
+<a href=#459 id=459 data-nosnippet>459</a>    * **perf-literal-substring** - Enables all single substring literal
+<a href=#460 id=460 data-nosnippet>460</a>    optimizations. This includes adding a dependency on the `memchr` crate.
+<a href=#461 id=461 data-nosnippet>461</a>    * **perf-literal-multisubstring** - Enables all multiple substring literal
+<a href=#462 id=462 data-nosnippet>462</a>    optimizations. This includes adding a dependency on the `aho-corasick`
+<a href=#463 id=463 data-nosnippet>463</a>    crate.
+<a href=#464 id=464 data-nosnippet>464</a>
+<a href=#465 id=465 data-nosnippet>465</a>### Unicode features
+<a href=#466 id=466 data-nosnippet>466</a>
+<a href=#467 id=467 data-nosnippet>467</a>* **unicode** -
+<a href=#468 id=468 data-nosnippet>468</a>  Enables all Unicode features. This feature is enabled by default, and will
+<a href=#469 id=469 data-nosnippet>469</a>  always cover all Unicode features, even if more are added in the future.
+<a href=#470 id=470 data-nosnippet>470</a>* **unicode-age** -
+<a href=#471 id=471 data-nosnippet>471</a>  Provide the data for the
+<a href=#472 id=472 data-nosnippet>472</a>  [Unicode `Age` property](https://www.unicode.org/reports/tr44/tr44-24.html#Character_Age).
+<a href=#473 id=473 data-nosnippet>473</a>  This makes it possible to use classes like `\p{Age:6.0}` to refer to all
+<a href=#474 id=474 data-nosnippet>474</a>  codepoints first introduced in Unicode 6.0
+<a href=#475 id=475 data-nosnippet>475</a>* **unicode-bool** -
+<a href=#476 id=476 data-nosnippet>476</a>  Provide the data for numerous Unicode boolean properties. The full list
+<a href=#477 id=477 data-nosnippet>477</a>  is not included here, but contains properties like `Alphabetic`, `Emoji`,
+<a href=#478 id=478 data-nosnippet>478</a>  `Lowercase`, `Math`, `Uppercase` and `White_Space`.
+<a href=#479 id=479 data-nosnippet>479</a>* **unicode-case** -
+<a href=#480 id=480 data-nosnippet>480</a>  Provide the data for case insensitive matching using
+<a href=#481 id=481 data-nosnippet>481</a>  [Unicode's "simple loose matches" specification](https://www.unicode.org/reports/tr18/#Simple_Loose_Matches).
+<a href=#482 id=482 data-nosnippet>482</a>* **unicode-gencat** -
+<a href=#483 id=483 data-nosnippet>483</a>  Provide the data for
+<a href=#484 id=484 data-nosnippet>484</a>  [Unicode general categories](https://www.unicode.org/reports/tr44/tr44-24.html#General_Category_Values).
+<a href=#485 id=485 data-nosnippet>485</a>  This includes, but is not limited to, `Decimal_Number`, `Letter`,
+<a href=#486 id=486 data-nosnippet>486</a>  `Math_Symbol`, `Number` and `Punctuation`.
+<a href=#487 id=487 data-nosnippet>487</a>* **unicode-perl** -
+<a href=#488 id=488 data-nosnippet>488</a>  Provide the data for supporting the Unicode-aware Perl character classes,
+<a href=#489 id=489 data-nosnippet>489</a>  corresponding to `\w`, `\s` and `\d`. This is also necessary for using
+<a href=#490 id=490 data-nosnippet>490</a>  Unicode-aware word boundary assertions. Note that if this feature is
+<a href=#491 id=491 data-nosnippet>491</a>  disabled, the `\s` and `\d` character classes are still available if the
+<a href=#492 id=492 data-nosnippet>492</a>  `unicode-bool` and `unicode-gencat` features are enabled, respectively.
+<a href=#493 id=493 data-nosnippet>493</a>* **unicode-script** -
+<a href=#494 id=494 data-nosnippet>494</a>  Provide the data for
+<a href=#495 id=495 data-nosnippet>495</a>  [Unicode scripts and script extensions](https://www.unicode.org/reports/tr24/).
+<a href=#496 id=496 data-nosnippet>496</a>  This includes, but is not limited to, `Arabic`, `Cyrillic`, `Hebrew`,
+<a href=#497 id=497 data-nosnippet>497</a>  `Latin` and `Thai`.
+<a href=#498 id=498 data-nosnippet>498</a>* **unicode-segment** -
+<a href=#499 id=499 data-nosnippet>499</a>  Provide the data necessary to provide the properties used to implement the
+<a href=#500 id=500 data-nosnippet>500</a>  [Unicode text segmentation algorithms](https://www.unicode.org/reports/tr29/).
+<a href=#501 id=501 data-nosnippet>501</a>  This enables using classes like `\p{gcb=Extend}`, `\p{wb=Katakana}` and
+<a href=#502 id=502 data-nosnippet>502</a>  `\p{sb=ATerm}`.
+<a href=#503 id=503 data-nosnippet>503</a>* **unicode-word-boundary** -
+<a href=#504 id=504 data-nosnippet>504</a>  Enables support for Unicode word boundaries, i.e., `\b`, in regexes. When
+<a href=#505 id=505 data-nosnippet>505</a>  this and `unicode-perl` are enabled, then data tables from `regex-syntax` are
+<a href=#506 id=506 data-nosnippet>506</a>  used to implement Unicode word boundaries. However, if `regex-syntax` isn't
+<a href=#507 id=507 data-nosnippet>507</a>  enabled as a dependency then one can still enable this feature. It will
+<a href=#508 id=508 data-nosnippet>508</a>  cause `regex-automata` to bundle its own data table that would otherwise be
+<a href=#509 id=509 data-nosnippet>509</a>  redundant with `regex-syntax`'s table.
+<a href=#510 id=510 data-nosnippet>510</a>
+<a href=#511 id=511 data-nosnippet>511</a>### Regex engine features
+<a href=#512 id=512 data-nosnippet>512</a>
+<a href=#513 id=513 data-nosnippet>513</a>* **syntax** - Enables a dependency on `regex-syntax`. This makes APIs
+<a href=#514 id=514 data-nosnippet>514</a>for building regex engines from pattern strings available. Without the
+<a href=#515 id=515 data-nosnippet>515</a>`regex-syntax` dependency, the only way to build a regex engine is generally
+<a href=#516 id=516 data-nosnippet>516</a>to deserialize a previously built DFA or to hand assemble an NFA using its
+<a href=#517 id=517 data-nosnippet>517</a>[builder API](nfa::thompson::Builder). Once you have an NFA, you can build any
+<a href=#518 id=518 data-nosnippet>518</a>of the regex engines in this crate. The `syntax` feature also enables `alloc`.
+<a href=#519 id=519 data-nosnippet>519</a>* **meta** - Enables the meta regex engine. This also enables the `syntax` and
+<a href=#520 id=520 data-nosnippet>520</a>`nfa-pikevm` features, as both are the minimal requirements needed. The meta
+<a href=#521 id=521 data-nosnippet>521</a>regex engine benefits from enabling any of the other regex engines and will
+<a href=#522 id=522 data-nosnippet>522</a>use them automatically when appropriate.
+<a href=#523 id=523 data-nosnippet>523</a>* **nfa** - Enables all NFA related features below.
+<a href=#524 id=524 data-nosnippet>524</a>    * **nfa-thompson** - Enables the Thompson NFA APIs. This enables `alloc`.
+<a href=#525 id=525 data-nosnippet>525</a>    * **nfa-pikevm** - Enables the PikeVM regex engine. This enables
+<a href=#526 id=526 data-nosnippet>526</a>    `nfa-thompson`.
+<a href=#527 id=527 data-nosnippet>527</a>    * **nfa-backtrack** - Enables the bounded backtracker regex engine. This
+<a href=#528 id=528 data-nosnippet>528</a>    enables `nfa-thompson`.
+<a href=#529 id=529 data-nosnippet>529</a>* **dfa** - Enables all DFA related features below.
+<a href=#530 id=530 data-nosnippet>530</a>    * **dfa-build** - Enables APIs for determinizing DFAs from NFAs. This
+<a href=#531 id=531 data-nosnippet>531</a>    enables `nfa-thompson` and `dfa-search`.
+<a href=#532 id=532 data-nosnippet>532</a>    * **dfa-search** - Enables APIs for searching with DFAs.
+<a href=#533 id=533 data-nosnippet>533</a>    * **dfa-onepass** - Enables the one-pass DFA API. This enables
+<a href=#534 id=534 data-nosnippet>534</a>    `nfa-thompson`.
+<a href=#535 id=535 data-nosnippet>535</a>* **hybrid** - Enables the hybrid NFA/DFA or "lazy DFA" regex engine. This
+<a href=#536 id=536 data-nosnippet>536</a>enables `alloc` and `nfa-thompson`.
+<a href=#537 id=537 data-nosnippet>537</a>
+<a href=#538 id=538 data-nosnippet>538</a>*/
+<a href=#539 id=539 data-nosnippet>539</a>
+<a href=#540 id=540 data-nosnippet>540</a></span><span class="comment">// We are no_std.
+<a href=#541 id=541 data-nosnippet>541</a></span><span class="attr">#![no_std]
+<a href=#542 id=542 data-nosnippet>542</a></span><span class="comment">// All APIs need docs!
+<a href=#543 id=543 data-nosnippet>543</a></span><span class="attr">#![deny(missing_docs)]
+<a href=#544 id=544 data-nosnippet>544</a></span><span class="comment">// Some intra-doc links are broken when certain features are disabled, so we
+<a href=#545 id=545 data-nosnippet>545</a>// only bleat about it when most (all?) features are enabled. But when we do,
+<a href=#546 id=546 data-nosnippet>546</a>// we block the build. Links need to work.
+<a href=#547 id=547 data-nosnippet>547</a></span><span class="attr">#![cfg_attr(
+<a href=#548 id=548 data-nosnippet>548</a>    all(
+<a href=#549 id=549 data-nosnippet>549</a>        feature = <span class="string">"std"</span>,
+<a href=#550 id=550 data-nosnippet>550</a>        feature = <span class="string">"nfa"</span>,
+<a href=#551 id=551 data-nosnippet>551</a>        feature = <span class="string">"dfa"</span>,
+<a href=#552 id=552 data-nosnippet>552</a>        feature = <span class="string">"hybrid"
+<a href=#553 id=553 data-nosnippet>553</a>    </span>),
+<a href=#554 id=554 data-nosnippet>554</a>    deny(rustdoc::broken_intra_doc_links)
+<a href=#555 id=555 data-nosnippet>555</a>)]
+<a href=#556 id=556 data-nosnippet>556</a></span><span class="comment">// Broken rustdoc links are very easy to come by when you start disabling
+<a href=#557 id=557 data-nosnippet>557</a>// features. Namely, features tend to change imports, and imports change what's
+<a href=#558 id=558 data-nosnippet>558</a>// available to link to.
+<a href=#559 id=559 data-nosnippet>559</a>//
+<a href=#560 id=560 data-nosnippet>560</a>// Basically, we just don't support rustdoc for anything other than the maximal
+<a href=#561 id=561 data-nosnippet>561</a>// feature configuration. Other configurations will work, they just won't be
+<a href=#562 id=562 data-nosnippet>562</a>// perfect.
+<a href=#563 id=563 data-nosnippet>563</a>//
+<a href=#564 id=564 data-nosnippet>564</a>// So here, we specifically allow them so we don't even get warned about them.
+<a href=#565 id=565 data-nosnippet>565</a></span><span class="attr">#![cfg_attr(
+<a href=#566 id=566 data-nosnippet>566</a>    not(all(
+<a href=#567 id=567 data-nosnippet>567</a>        feature = <span class="string">"std"</span>,
+<a href=#568 id=568 data-nosnippet>568</a>        feature = <span class="string">"nfa"</span>,
+<a href=#569 id=569 data-nosnippet>569</a>        feature = <span class="string">"dfa"</span>,
+<a href=#570 id=570 data-nosnippet>570</a>        feature = <span class="string">"hybrid"
+<a href=#571 id=571 data-nosnippet>571</a>    </span>)),
+<a href=#572 id=572 data-nosnippet>572</a>    allow(rustdoc::broken_intra_doc_links)
+<a href=#573 id=573 data-nosnippet>573</a>)]
+<a href=#574 id=574 data-nosnippet>574</a></span><span class="comment">// Kinda similar, but eliminating all of the dead code and unused import
+<a href=#575 id=575 data-nosnippet>575</a>// warnings for every feature combo is a fool's errand. Instead, we just
+<a href=#576 id=576 data-nosnippet>576</a>// suppress those, but still let them through in a common configuration when we
+<a href=#577 id=577 data-nosnippet>577</a>// build most of everything.
+<a href=#578 id=578 data-nosnippet>578</a>//
+<a href=#579 id=579 data-nosnippet>579</a>// This does actually suggest that when features are disabled, we are actually
+<a href=#580 id=580 data-nosnippet>580</a>// compiling more code than we need to be. And this is perhaps not so great
+<a href=#581 id=581 data-nosnippet>581</a>// because disabling features is usually done in order to reduce compile times
+<a href=#582 id=582 data-nosnippet>582</a>// by reducing the amount of code one compiles... However, usually, most of the
+<a href=#583 id=583 data-nosnippet>583</a>// time this dead code is a relatively small amount from the 'util' module.
+<a href=#584 id=584 data-nosnippet>584</a>// But... I confess... There isn't a ton of visibility on this.
+<a href=#585 id=585 data-nosnippet>585</a>//
+<a href=#586 id=586 data-nosnippet>586</a>// I'm happy to try to address this in a different way, but "let's annotate
+<a href=#587 id=587 data-nosnippet>587</a>// every function in 'util' with some non-local combination of features" just
+<a href=#588 id=588 data-nosnippet>588</a>// cannot be the way forward.
+<a href=#589 id=589 data-nosnippet>589</a></span><span class="attr">#![cfg_attr(
+<a href=#590 id=590 data-nosnippet>590</a>    not(all(
+<a href=#591 id=591 data-nosnippet>591</a>        feature = <span class="string">"std"</span>,
+<a href=#592 id=592 data-nosnippet>592</a>        feature = <span class="string">"nfa"</span>,
+<a href=#593 id=593 data-nosnippet>593</a>        feature = <span class="string">"dfa"</span>,
+<a href=#594 id=594 data-nosnippet>594</a>        feature = <span class="string">"hybrid"</span>,
+<a href=#595 id=595 data-nosnippet>595</a>        feature = <span class="string">"perf-literal-substring"</span>,
+<a href=#596 id=596 data-nosnippet>596</a>        feature = <span class="string">"perf-literal-multisubstring"</span>,
+<a href=#597 id=597 data-nosnippet>597</a>    )),
+<a href=#598 id=598 data-nosnippet>598</a>    allow(dead_code, unused_imports, unused_variables)
+<a href=#599 id=599 data-nosnippet>599</a>)]
+<a href=#600 id=600 data-nosnippet>600</a></span><span class="comment">// We generally want all types to impl Debug.
+<a href=#601 id=601 data-nosnippet>601</a></span><span class="attr">#![warn(missing_debug_implementations)]
+<a href=#602 id=602 data-nosnippet>602</a></span><span class="comment">// No clue why this thing is still unstable because it's pretty amazing. This
+<a href=#603 id=603 data-nosnippet>603</a>// adds Cargo feature annotations to items in the rustdoc output. Which is
+<a href=#604 id=604 data-nosnippet>604</a>// sadly hugely beneficial for this crate due to the number of features.
+<a href=#605 id=605 data-nosnippet>605</a></span><span class="attr">#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+<a href=#606 id=606 data-nosnippet>606</a>
+<a href=#607 id=607 data-nosnippet>607</a></span><span class="comment">// I have literally never tested this crate on 16-bit, so it is quite
+<a href=#608 id=608 data-nosnippet>608</a>// suspicious to advertise support for it. But... the regex crate, at time
+<a href=#609 id=609 data-nosnippet>609</a>// of writing, at least claims to support it by not doing any conditional
+<a href=#610 id=610 data-nosnippet>610</a>// compilation based on the target pointer width. So I guess I remain
+<a href=#611 id=611 data-nosnippet>611</a>// consistent with that here.
+<a href=#612 id=612 data-nosnippet>612</a>//
+<a href=#613 id=613 data-nosnippet>613</a>// If you are here because you're on a 16-bit system and you were somehow using
+<a href=#614 id=614 data-nosnippet>614</a>// the regex crate previously, please file an issue. Please be prepared to
+<a href=#615 id=615 data-nosnippet>615</a>// provide some kind of reproduction or carve out some path to getting 16-bit
+<a href=#616 id=616 data-nosnippet>616</a>// working in CI. (Via qemu?)
+<a href=#617 id=617 data-nosnippet>617</a></span><span class="attr">#[cfg(not(any(
+<a href=#618 id=618 data-nosnippet>618</a>    target_pointer_width = <span class="string">"16"</span>,
+<a href=#619 id=619 data-nosnippet>619</a>    target_pointer_width = <span class="string">"32"</span>,
+<a href=#620 id=620 data-nosnippet>620</a>    target_pointer_width = <span class="string">"64"
+<a href=#621 id=621 data-nosnippet>621</a></span>)))]
+<a href=#622 id=622 data-nosnippet>622</a></span><span class="macro">compile_error!</span>(<span class="string">"not supported on non-{16,32,64}, please file an issue"</span>);
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a><span class="attr">#[cfg(any(test, feature = <span class="string">"std"</span>))]
+<a href=#625 id=625 data-nosnippet>625</a></span><span class="kw">extern crate </span>std;
+<a href=#626 id=626 data-nosnippet>626</a>
+<a href=#627 id=627 data-nosnippet>627</a><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#628 id=628 data-nosnippet>628</a></span><span class="kw">extern crate </span>alloc;
+<a href=#629 id=629 data-nosnippet>629</a>
+<a href=#630 id=630 data-nosnippet>630</a><span class="attr">#[cfg(doctest)]
+<a href=#631 id=631 data-nosnippet>631</a></span><span class="macro">doc_comment::doctest!</span>(<span class="string">"../README.md"</span>);
+<a href=#632 id=632 data-nosnippet>632</a>
+<a href=#633 id=633 data-nosnippet>633</a><span class="attr">#[doc(inline)]
+<a href=#634 id=634 data-nosnippet>634</a></span><span class="kw">pub use </span><span class="kw">crate</span>::util::primitives::PatternID;
+<a href=#635 id=635 data-nosnippet>635</a><span class="kw">pub use </span><span class="kw">crate</span>::util::search::<span class="kw-2">*</span>;
+<a href=#636 id=636 data-nosnippet>636</a>
+<a href=#637 id=637 data-nosnippet>637</a><span class="attr">#[macro_use]
+<a href=#638 id=638 data-nosnippet>638</a></span><span class="kw">mod </span>macros;
+<a href=#639 id=639 data-nosnippet>639</a>
+<a href=#640 id=640 data-nosnippet>640</a><span class="attr">#[cfg(any(feature = <span class="string">"dfa-search"</span>, feature = <span class="string">"dfa-onepass"</span>))]
+<a href=#641 id=641 data-nosnippet>641</a></span><span class="kw">pub mod </span>dfa;
+<a href=#642 id=642 data-nosnippet>642</a><span class="attr">#[cfg(feature = <span class="string">"hybrid"</span>)]
+<a href=#643 id=643 data-nosnippet>643</a></span><span class="kw">pub mod </span>hybrid;
+<a href=#644 id=644 data-nosnippet>644</a><span class="attr">#[cfg(feature = <span class="string">"meta"</span>)]
+<a href=#645 id=645 data-nosnippet>645</a></span><span class="kw">pub mod </span>meta;
+<a href=#646 id=646 data-nosnippet>646</a><span class="attr">#[cfg(feature = <span class="string">"nfa-thompson"</span>)]
+<a href=#647 id=647 data-nosnippet>647</a></span><span class="kw">pub mod </span>nfa;
+<a href=#648 id=648 data-nosnippet>648</a><span class="kw">pub mod </span>util;</code></pre></div></section></main></body></html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-bls12-381-0.5.0/src/curves/g1_swu_iso.rs`."><title>g1_swu_iso.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ark_bls12_381" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">ark_bls12_381/curves/</div>g1_swu_iso.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use crate</span>::{g1, Fq, Fr};
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>ark_ec::{
+<a href=#3 id=3 data-nosnippet>3</a>    hashing::curve_maps::{swu::SWUConfig, wb::IsogenyMap},
+<a href=#4 id=4 data-nosnippet>4</a>    models::{
+<a href=#5 id=5 data-nosnippet>5</a>        short_weierstrass::{Affine, SWCurveConfig},
+<a href=#6 id=6 data-nosnippet>6</a>        CurveConfig,
+<a href=#7 id=7 data-nosnippet>7</a>    },
+<a href=#8 id=8 data-nosnippet>8</a>};
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>ark_ff::MontFp;
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">type </span>G1Affine = Affine&lt;SwuIsoConfig&gt;;
+<a href=#12 id=12 data-nosnippet>12</a>
+<a href=#13 id=13 data-nosnippet>13</a><span class="attr">#[derive(Clone, Default, PartialEq, Eq)]
+<a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">pub struct </span>SwuIsoConfig;
+<a href=#15 id=15 data-nosnippet>15</a>
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">impl </span>CurveConfig <span class="kw">for </span>SwuIsoConfig {
+<a href=#17 id=17 data-nosnippet>17</a>    <span class="kw">type </span>BaseField = Fq;
+<a href=#18 id=18 data-nosnippet>18</a>    <span class="kw">type </span>ScalarField = Fr;
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="doccomment">/// COFACTOR = (x - 1)^2 / 3  = 76329603384216526031706109802092473003
+<a href=#21 id=21 data-nosnippet>21</a>    </span><span class="kw">const </span>COFACTOR: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u64] = <span class="kw-2">&amp;</span>[<span class="number">0x8c00aaab0000aaab</span>, <span class="number">0x396c8c005555e156</span>];
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a>    <span class="doccomment">/// COFACTOR_INV = COFACTOR^{-1} mod r
+<a href=#24 id=24 data-nosnippet>24</a>    /// = 52435875175126190458656871551744051925719901746859129887267498875565241663483
+<a href=#25 id=25 data-nosnippet>25</a>    </span><span class="kw">const </span>COFACTOR_INV: Fr =
+<a href=#26 id=26 data-nosnippet>26</a>        <span class="macro">MontFp!</span>(<span class="string">"52435875175126190458656871551744051925719901746859129887267498875565241663483"</span>);
+<a href=#27 id=27 data-nosnippet>27</a>}
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a><span class="comment">// https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/
+<a href=#30 id=30 data-nosnippet>30</a>// Hashing to Elliptic Curves
+<a href=#31 id=31 data-nosnippet>31</a>// 8.8.1.  BLS12-381 G1
+<a href=#32 id=32 data-nosnippet>32</a>// BLS12381G1_XMD:SHA-256_SSWU_RO_ is defined as follows:
+<a href=#33 id=33 data-nosnippet>33</a>// * E': y'^2 = x'^3 + A' * x' + B', where
+<a href=#34 id=34 data-nosnippet>34</a>//      -  A' = 0x144698a3b8e9433d693a02c96d4982b0ea985383ee66a8d8e8981aefd881ac98936f8da0e0f97f5cf428082d584c1d
+<a href=#35 id=35 data-nosnippet>35</a>//      -  B' = 0x12e2908d11688030018b12e8753eee3b2016c1f0f24f4070a0b9c14fcef35ef55a23215a316ceaa5d1cc48e98e172be0
+<a href=#36 id=36 data-nosnippet>36</a>//      -  A' = 12190336318893619529228877361869031420615612348429846051986726275283378313155663745811710833465465981901188123677
+<a href=#37 id=37 data-nosnippet>37</a>//      -  B' = 2906670324641927570491258158026293881577086121416628140204402091718288198173574630967936031029026176254968826637280
+<a href=#38 id=38 data-nosnippet>38</a>//  * Z: 11
+<a href=#39 id=39 data-nosnippet>39</a></span><span class="kw">impl </span>SWCurveConfig <span class="kw">for </span>SwuIsoConfig {
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="kw">const </span>COEFF_A: Fq = <span class="macro">MontFp!</span>(<span class="string">"12190336318893619529228877361869031420615612348429846051986726275283378313155663745811710833465465981901188123677"</span>);
+<a href=#41 id=41 data-nosnippet>41</a>
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="attr">#[rustfmt::skip]
+<a href=#43 id=43 data-nosnippet>43</a>    </span><span class="kw">const </span>COEFF_B: Fq = <span class="macro">MontFp!</span>(<span class="string">"2906670324641927570491258158026293881577086121416628140204402091718288198173574630967936031029026176254968826637280"</span>);
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a>    <span class="kw">const </span>GENERATOR: G1Affine = G1Affine::new_unchecked(G1_GENERATOR_X, G1_GENERATOR_Y);
+<a href=#46 id=46 data-nosnippet>46</a>}
+<a href=#47 id=47 data-nosnippet>47</a>
+<a href=#48 id=48 data-nosnippet>48</a><span class="doccomment">/// Lexicographically smallest, valid x-coordinate of a point P on the curve
+<a href=#49 id=49 data-nosnippet>49</a>/// (with its corresponding y) multiplied by the cofactor. P_x = 2
+<a href=#50 id=50 data-nosnippet>50</a>/// P_y = 658522096176515125667361255350269797307718222519385801637008089782287711363858559738763090642304321670226247205569
+<a href=#51 id=51 data-nosnippet>51</a>/// P = E(P_x, P_y)
+<a href=#52 id=52 data-nosnippet>52</a>/// G = P * COFACTOR
+<a href=#53 id=53 data-nosnippet>53</a></span><span class="kw">const </span>G1_GENERATOR_X: Fq = <span class="macro">MontFp!</span>(<span class="string">"1677416608493238977774703213729589714082762656433187746258164626835771660734158898989765932111853529350617333597651"</span>);
+<a href=#54 id=54 data-nosnippet>54</a><span class="kw">const </span>G1_GENERATOR_Y: Fq = <span class="macro">MontFp!</span>(<span class="string">"1405098061573104639413728190240719229571583960971553962991897960445246185035342568402755187331334546673157015627211"</span>);
+<a href=#55 id=55 data-nosnippet>55</a>
+<a href=#56 id=56 data-nosnippet>56</a><span class="kw">impl </span>SWUConfig <span class="kw">for </span>SwuIsoConfig {
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="comment">// ZETA = 0xb as per the IETF draft.
+<a href=#58 id=58 data-nosnippet>58</a>    </span><span class="kw">const </span>ZETA: Fq = <span class="macro">MontFp!</span>(<span class="string">"11"</span>);
+<a href=#59 id=59 data-nosnippet>59</a>}
+<a href=#60 id=60 data-nosnippet>60</a>
+<a href=#61 id=61 data-nosnippet>61</a><span class="kw">pub const </span>ISOGENY_MAP_TO_G1 : IsogenyMap&lt;<span class="lifetime">'_</span>, SwuIsoConfig, g1::Config, &gt; = IsogenyMap {
+<a href=#62 id=62 data-nosnippet>62</a>    x_map_numerator : <span class="kw-2">&amp;</span>[
+<a href=#63 id=63 data-nosnippet>63</a>        <span class="macro">MontFp!</span>(<span class="string">"2712959285290305970661081772124144179193819192423276218370281158706191519995889425075952244140278856085036081760695"</span>),
+<a href=#64 id=64 data-nosnippet>64</a>        <span class="macro">MontFp!</span>(<span class="string">"3564859427549639835253027846704205725951033235539816243131874237388832081954622352624080767121604606753339903542203"</span>),
+<a href=#65 id=65 data-nosnippet>65</a>        <span class="macro">MontFp!</span>(<span class="string">"2051387046688339481714726479723076305756384619135044672831882917686431912682625619320120082313093891743187631791280"</span>),
+<a href=#66 id=66 data-nosnippet>66</a>        <span class="macro">MontFp!</span>(<span class="string">"3612713941521031012780325893181011392520079402153354595775735142359240110423346445050803899623018402874731133626465"</span>),
+<a href=#67 id=67 data-nosnippet>67</a>        <span class="macro">MontFp!</span>(<span class="string">"2247053637822768981792833880270996398470828564809439728372634811976089874056583714987807553397615562273407692740057"</span>),
+<a href=#68 id=68 data-nosnippet>68</a>        <span class="macro">MontFp!</span>(<span class="string">"3415427104483187489859740871640064348492611444552862448295571438270821994900526625562705192993481400731539293415811"</span>),
+<a href=#69 id=69 data-nosnippet>69</a>        <span class="macro">MontFp!</span>(<span class="string">"2067521456483432583860405634125513059912765526223015704616050604591207046392807563217109432457129564962571408764292"</span>),
+<a href=#70 id=70 data-nosnippet>70</a>        <span class="macro">MontFp!</span>(<span class="string">"3650721292069012982822225637849018828271936405382082649291891245623305084633066170122780668657208923883092359301262"</span>),
+<a href=#71 id=71 data-nosnippet>71</a>        <span class="macro">MontFp!</span>(<span class="string">"1239271775787030039269460763652455868148971086016832054354147730155061349388626624328773377658494412538595239256855"</span>),
+<a href=#72 id=72 data-nosnippet>72</a>        <span class="macro">MontFp!</span>(<span class="string">"3479374185711034293956731583912244564891370843071137483962415222733470401948838363051960066766720884717833231600798"</span>),
+<a href=#73 id=73 data-nosnippet>73</a>        <span class="macro">MontFp!</span>(<span class="string">"2492756312273161536685660027440158956721981129429869601638362407515627529461742974364729223659746272460004902959995"</span>),
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="macro">MontFp!</span>(<span class="string">"1058488477413994682556770863004536636444795456512795473806825292198091015005841418695586811009326456605062948114985"</span>),
+<a href=#75 id=75 data-nosnippet>75</a>    ],
+<a href=#76 id=76 data-nosnippet>76</a>
+<a href=#77 id=77 data-nosnippet>77</a>    x_map_denominator : <span class="kw-2">&amp;</span>[
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="macro">MontFp!</span>(<span class="string">"1353092447850172218905095041059784486169131709710991428415161466575141675351394082965234118340787683181925558786844"</span>),
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="macro">MontFp!</span>(<span class="string">"2822220997908397120956501031591772354860004534930174057793539372552395729721474912921980407622851861692773516917759"</span>),
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="macro">MontFp!</span>(<span class="string">"1717937747208385987946072944131378949849282930538642983149296304709633281382731764122371874602115081850953846504985"</span>),
+<a href=#81 id=81 data-nosnippet>81</a>        <span class="macro">MontFp!</span>(<span class="string">"501624051089734157816582944025690868317536915684467868346388760435016044027032505306995281054569109955275640941784"</span>),
+<a href=#82 id=82 data-nosnippet>82</a>        <span class="macro">MontFp!</span>(<span class="string">"3025903087998593826923738290305187197829899948335370692927241015584233559365859980023579293766193297662657497834014"</span>),
+<a href=#83 id=83 data-nosnippet>83</a>        <span class="macro">MontFp!</span>(<span class="string">"2224140216975189437834161136818943039444741035168992629437640302964164227138031844090123490881551522278632040105125"</span>),
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="macro">MontFp!</span>(<span class="string">"1146414465848284837484508420047674663876992808692209238763293935905506532411661921697047880549716175045414621825594"</span>),
+<a href=#85 id=85 data-nosnippet>85</a>        <span class="macro">MontFp!</span>(<span class="string">"3179090966864399634396993677377903383656908036827452986467581478509513058347781039562481806409014718357094150199902"</span>),
+<a href=#86 id=86 data-nosnippet>86</a>        <span class="macro">MontFp!</span>(<span class="string">"1549317016540628014674302140786462938410429359529923207442151939696344988707002602944342203885692366490121021806145"</span>),
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="macro">MontFp!</span>(<span class="string">"1442797143427491432630626390066422021593505165588630398337491100088557278058060064930663878153124164818522816175370"</span>),
+<a href=#88 id=88 data-nosnippet>88</a>        <span class="macro">MontFp!</span>(<span class="string">"1"</span>),
+<a href=#89 id=89 data-nosnippet>89</a>    ],
+<a href=#90 id=90 data-nosnippet>90</a>
+<a href=#91 id=91 data-nosnippet>91</a>    y_map_numerator : <span class="kw-2">&amp;</span>[
+<a href=#92 id=92 data-nosnippet>92</a>        <span class="macro">MontFp!</span>(<span class="string">"1393399195776646641963150658816615410692049723305861307490980409834842911816308830479576739332720113414154429643571"</span>),
+<a href=#93 id=93 data-nosnippet>93</a>        <span class="macro">MontFp!</span>(<span class="string">"2968610969752762946134106091152102846225411740689724909058016729455736597929366401532929068084731548131227395540630"</span>),
+<a href=#94 id=94 data-nosnippet>94</a>        <span class="macro">MontFp!</span>(<span class="string">"122933100683284845219599644396874530871261396084070222155796123161881094323788483360414289333111221370374027338230"</span>),
+<a href=#95 id=95 data-nosnippet>95</a>        <span class="macro">MontFp!</span>(<span class="string">"303251954782077855462083823228569901064301365507057490567314302006681283228886645653148231378803311079384246777035"</span>),
+<a href=#96 id=96 data-nosnippet>96</a>        <span class="macro">MontFp!</span>(<span class="string">"1353972356724735644398279028378555627591260676383150667237975415318226973994509601413730187583692624416197017403099"</span>),
+<a href=#97 id=97 data-nosnippet>97</a>        <span class="macro">MontFp!</span>(<span class="string">"3443977503653895028417260979421240655844034880950251104724609885224259484262346958661845148165419691583810082940400"</span>),
+<a href=#98 id=98 data-nosnippet>98</a>        <span class="macro">MontFp!</span>(<span class="string">"718493410301850496156792713845282235942975872282052335612908458061560958159410402177452633054233549648465863759602"</span>),
+<a href=#99 id=99 data-nosnippet>99</a>        <span class="macro">MontFp!</span>(<span class="string">"1466864076415884313141727877156167508644960317046160398342634861648153052436926062434809922037623519108138661903145"</span>),
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="macro">MontFp!</span>(<span class="string">"1536886493137106337339531461344158973554574987550750910027365237255347020572858445054025958480906372033954157667719"</span>),
+<a href=#101 id=101 data-nosnippet>101</a>        <span class="macro">MontFp!</span>(<span class="string">"2171468288973248519912068884667133903101171670397991979582205855298465414047741472281361964966463442016062407908400"</span>),
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="macro">MontFp!</span>(<span class="string">"3915937073730221072189646057898966011292434045388986394373682715266664498392389619761133407846638689998746172899634"</span>),
+<a href=#103 id=103 data-nosnippet>103</a>        <span class="macro">MontFp!</span>(<span class="string">"3802409194827407598156407709510350851173404795262202653149767739163117554648574333789388883640862266596657730112910"</span>),
+<a href=#104 id=104 data-nosnippet>104</a>        <span class="macro">MontFp!</span>(<span class="string">"1707589313757812493102695021134258021969283151093981498394095062397393499601961942449581422761005023512037430861560"</span>),
+<a href=#105 id=105 data-nosnippet>105</a>        <span class="macro">MontFp!</span>(<span class="string">"349697005987545415860583335313370109325490073856352967581197273584891698473628451945217286148025358795756956811571"</span>),
+<a href=#106 id=106 data-nosnippet>106</a>        <span class="macro">MontFp!</span>(<span class="string">"885704436476567581377743161796735879083481447641210566405057346859953524538988296201011389016649354976986251207243"</span>),
+<a href=#107 id=107 data-nosnippet>107</a>        <span class="macro">MontFp!</span>(<span class="string">"3370924952219000111210625390420697640496067348723987858345031683392215988129398381698161406651860675722373763741188"</span>),
+<a href=#108 id=108 data-nosnippet>108</a>    ],
+<a href=#109 id=109 data-nosnippet>109</a>
+<a href=#110 id=110 data-nosnippet>110</a>    y_map_denominator : <span class="kw-2">&amp;</span>[
+<a href=#111 id=111 data-nosnippet>111</a>        <span class="macro">MontFp!</span>(<span class="string">"3396434800020507717552209507749485772788165484415495716688989613875369612529138640646200921379825018840894888371137"</span>),
+<a href=#112 id=112 data-nosnippet>112</a>        <span class="macro">MontFp!</span>(<span class="string">"3907278185868397906991868466757978732688957419873771881240086730384895060595583602347317992689443299391009456758845"</span>),
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="macro">MontFp!</span>(<span class="string">"854914566454823955479427412036002165304466268547334760894270240966182605542146252771872707010378658178126128834546"</span>),
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="macro">MontFp!</span>(<span class="string">"3496628876382137961119423566187258795236027183112131017519536056628828830323846696121917502443333849318934945158166"</span>),
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="macro">MontFp!</span>(<span class="string">"1828256966233331991927609917644344011503610008134915752990581590799656305331275863706710232159635159092657073225757"</span>),
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="macro">MontFp!</span>(<span class="string">"1362317127649143894542621413133849052553333099883364300946623208643344298804722863920546222860227051989127113848748"</span>),
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="macro">MontFp!</span>(<span class="string">"3443845896188810583748698342858554856823966611538932245284665132724280883115455093457486044009395063504744802318172"</span>),
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="macro">MontFp!</span>(<span class="string">"3484671274283470572728732863557945897902920439975203610275006103818288159899345245633896492713412187296754791689945"</span>),
+<a href=#119 id=119 data-nosnippet>119</a>        <span class="macro">MontFp!</span>(<span class="string">"3755735109429418587065437067067640634211015783636675372165599470771975919172394156249639331555277748466603540045130"</span>),
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="macro">MontFp!</span>(<span class="string">"3459661102222301807083870307127272890283709299202626530836335779816726101522661683404130556379097384249447658110805"</span>),
+<a href=#121 id=121 data-nosnippet>121</a>        <span class="macro">MontFp!</span>(<span class="string">"742483168411032072323733249644347333168432665415341249073150659015707795549260947228694495111018381111866512337576"</span>),
+<a href=#122 id=122 data-nosnippet>122</a>        <span class="macro">MontFp!</span>(<span class="string">"1662231279858095762833829698537304807741442669992646287950513237989158777254081548205552083108208170765474149568658"</span>),
+<a href=#123 id=123 data-nosnippet>123</a>        <span class="macro">MontFp!</span>(<span class="string">"1668238650112823419388205992952852912407572045257706138925379268508860023191233729074751042562151098884528280913356"</span>),
+<a href=#124 id=124 data-nosnippet>124</a>        <span class="macro">MontFp!</span>(<span class="string">"369162719928976119195087327055926326601627748362769544198813069133429557026740823593067700396825489145575282378487"</span>),
+<a href=#125 id=125 data-nosnippet>125</a>        <span class="macro">MontFp!</span>(<span class="string">"2164195715141237148945939585099633032390257748382945597506236650132835917087090097395995817229686247227784224263055"</span>),
+<a href=#126 id=126 data-nosnippet>126</a>        <span class="macro">MontFp!</span>(<span class="string">"1"</span>),
+<a href=#127 id=127 data-nosnippet>127</a>    ],
+<a href=#128 id=128 data-nosnippet>128</a>};
+<a href=#129 id=129 data-nosnippet>129</a>
+<a href=#130 id=130 data-nosnippet>130</a><span class="attr">#[cfg(test)]
+<a href=#131 id=131 data-nosnippet>131</a></span><span class="kw">mod </span>test {
+<a href=#132 id=132 data-nosnippet>132</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a>    <span class="attr">#[test]
+<a href=#135 id=135 data-nosnippet>135</a>    </span><span class="kw">fn </span>test_gen() {
+<a href=#136 id=136 data-nosnippet>136</a>        <span class="kw">let </span>gen: G1Affine = SwuIsoConfig::GENERATOR;
+<a href=#137 id=137 data-nosnippet>137</a>        <span class="macro">assert!</span>(gen.is_on_curve());
+<a href=#138 id=138 data-nosnippet>138</a>        <span class="macro">assert!</span>(gen.is_in_correct_subgroup_assuming_on_curve());
+<a href=#139 id=139 data-nosnippet>139</a>    }
+<a href=#140 id=140 data-nosnippet>140</a>}</code></pre></div></section></main></body></html>

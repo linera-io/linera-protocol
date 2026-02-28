@@ -1,0 +1,121 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.15/src/math/generic/scalbn.rs`."><title>scalbn.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="libm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">libm/math/generic/</div>scalbn.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">crate</span>::support::{CastFrom, CastInto, Float, IntTy, MinInt};
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a><span class="doccomment">/// Scale the exponent.
+<a href=#4 id=4 data-nosnippet>4</a>///
+<a href=#5 id=5 data-nosnippet>5</a>/// From N3220:
+<a href=#6 id=6 data-nosnippet>6</a>///
+<a href=#7 id=7 data-nosnippet>7</a>/// &gt; The scalbn and scalbln functions compute `x * b^n`, where `b = FLT_RADIX` if the return type
+<a href=#8 id=8 data-nosnippet>8</a>/// &gt; of the function is a standard floating type, or `b = 10` if the return type of the function
+<a href=#9 id=9 data-nosnippet>9</a>/// &gt; is a decimal floating type. A range error occurs for some finite x, depending on n.
+<a href=#10 id=10 data-nosnippet>10</a>/// &gt;
+<a href=#11 id=11 data-nosnippet>11</a>/// &gt; [...]
+<a href=#12 id=12 data-nosnippet>12</a>/// &gt;
+<a href=#13 id=13 data-nosnippet>13</a>/// &gt; * `scalbn(±0, n)` returns `±0`.
+<a href=#14 id=14 data-nosnippet>14</a>/// &gt; * `scalbn(x, 0)` returns `x`.
+<a href=#15 id=15 data-nosnippet>15</a>/// &gt; * `scalbn(±∞, n)` returns `±∞`.
+<a href=#16 id=16 data-nosnippet>16</a>/// &gt;
+<a href=#17 id=17 data-nosnippet>17</a>/// &gt; If the calculation does not overflow or underflow, the returned value is exact and
+<a href=#18 id=18 data-nosnippet>18</a>/// &gt; independent of the current rounding direction mode.
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="attr">#[inline]
+<a href=#20 id=20 data-nosnippet>20</a></span><span class="kw">pub fn </span>scalbn&lt;F: Float&gt;(<span class="kw-2">mut </span>x: F, <span class="kw-2">mut </span>n: i32) -&gt; F
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">where
+<a href=#22 id=22 data-nosnippet>22</a>    </span>u32: CastInto&lt;F::Int&gt;,
+<a href=#23 id=23 data-nosnippet>23</a>    F::Int: CastFrom&lt;i32&gt;,
+<a href=#24 id=24 data-nosnippet>24</a>    F::Int: CastFrom&lt;u32&gt;,
+<a href=#25 id=25 data-nosnippet>25</a>{
+<a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">let </span>zero = IntTy::&lt;F&gt;::ZERO;
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a>    <span class="comment">// Bits including the implicit bit
+<a href=#29 id=29 data-nosnippet>29</a>    </span><span class="kw">let </span>sig_total_bits = F::SIG_BITS + <span class="number">1</span>;
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="comment">// Maximum and minimum values when biased
+<a href=#32 id=32 data-nosnippet>32</a>    </span><span class="kw">let </span>exp_max = F::EXP_MAX;
+<a href=#33 id=33 data-nosnippet>33</a>    <span class="kw">let </span>exp_min = F::EXP_MIN;
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="comment">// 2 ^ Emax, maximum positive with null significand (0x1p1023 for f64)
+<a href=#36 id=36 data-nosnippet>36</a>    </span><span class="kw">let </span>f_exp_max = F::from_parts(<span class="bool-val">false</span>, F::EXP_BIAS &lt;&lt; <span class="number">1</span>, zero);
+<a href=#37 id=37 data-nosnippet>37</a>
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="comment">// 2 ^ Emin, minimum positive normal with null significand (0x1p-1022 for f64)
+<a href=#39 id=39 data-nosnippet>39</a>    </span><span class="kw">let </span>f_exp_min = F::from_parts(<span class="bool-val">false</span>, <span class="number">1</span>, zero);
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="comment">// 2 ^ sig_total_bits, moltiplier to normalize subnormals (0x1p53 for f64)
+<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="kw">let </span>f_pow_subnorm = F::from_parts(<span class="bool-val">false</span>, sig_total_bits + F::EXP_BIAS, zero);
+<a href=#43 id=43 data-nosnippet>43</a>
+<a href=#44 id=44 data-nosnippet>44</a>    <span class="comment">/*
+<a href=#45 id=45 data-nosnippet>45</a>     * The goal is to multiply `x` by a scale factor that applies `n`. However, there are cases
+<a href=#46 id=46 data-nosnippet>46</a>     * where `2^n` is not representable by `F` but the result should be, e.g. `x = 2^Emin` with
+<a href=#47 id=47 data-nosnippet>47</a>     * `n = -EMin + 2` (one out of range of 2^Emax). To get around this, reduce the magnitude of
+<a href=#48 id=48 data-nosnippet>48</a>     * the final scale operation by prescaling by the max/min power representable by `F`.
+<a href=#49 id=49 data-nosnippet>49</a>     */
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a>    </span><span class="kw">if </span>n &gt; exp_max {
+<a href=#52 id=52 data-nosnippet>52</a>        <span class="comment">// Worse case positive `n`: `x`  is the minimum subnormal value, the result is `F::MAX`.
+<a href=#53 id=53 data-nosnippet>53</a>        // This can be reached by three scaling multiplications (two here and one final).
+<a href=#54 id=54 data-nosnippet>54</a>        </span><span class="macro">debug_assert!</span>(-exp_min + F::SIG_BITS <span class="kw">as </span>i32 + exp_max &lt;= exp_max * <span class="number">3</span>);
+<a href=#55 id=55 data-nosnippet>55</a>
+<a href=#56 id=56 data-nosnippet>56</a>        x <span class="kw-2">*</span>= f_exp_max;
+<a href=#57 id=57 data-nosnippet>57</a>        n -= exp_max;
+<a href=#58 id=58 data-nosnippet>58</a>        <span class="kw">if </span>n &gt; exp_max {
+<a href=#59 id=59 data-nosnippet>59</a>            x <span class="kw-2">*</span>= f_exp_max;
+<a href=#60 id=60 data-nosnippet>60</a>            n -= exp_max;
+<a href=#61 id=61 data-nosnippet>61</a>            <span class="kw">if </span>n &gt; exp_max {
+<a href=#62 id=62 data-nosnippet>62</a>                n = exp_max;
+<a href=#63 id=63 data-nosnippet>63</a>            }
+<a href=#64 id=64 data-nosnippet>64</a>        }
+<a href=#65 id=65 data-nosnippet>65</a>    } <span class="kw">else if </span>n &lt; exp_min {
+<a href=#66 id=66 data-nosnippet>66</a>        <span class="comment">// When scaling toward 0, the prescaling is limited to a value that does not allow `x` to
+<a href=#67 id=67 data-nosnippet>67</a>        // go subnormal. This avoids double rounding.
+<a href=#68 id=68 data-nosnippet>68</a>        </span><span class="kw">if </span>F::BITS &gt; <span class="number">16 </span>{
+<a href=#69 id=69 data-nosnippet>69</a>            <span class="comment">// `mul` s.t. `!(x * mul).is_subnormal() ∀ x`
+<a href=#70 id=70 data-nosnippet>70</a>            </span><span class="kw">let </span>mul = f_exp_min * f_pow_subnorm;
+<a href=#71 id=71 data-nosnippet>71</a>            <span class="kw">let </span>add = -exp_min - sig_total_bits <span class="kw">as </span>i32;
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a>            <span class="comment">// Worse case negative `n`: `x`  is the maximum positive value, the result is `F::MIN`.
+<a href=#74 id=74 data-nosnippet>74</a>            // This must be reachable by three scaling multiplications (two here and one final).
+<a href=#75 id=75 data-nosnippet>75</a>            </span><span class="macro">debug_assert!</span>(-exp_min + F::SIG_BITS <span class="kw">as </span>i32 + exp_max &lt;= add * <span class="number">2 </span>+ -exp_min);
+<a href=#76 id=76 data-nosnippet>76</a>
+<a href=#77 id=77 data-nosnippet>77</a>            x <span class="kw-2">*</span>= mul;
+<a href=#78 id=78 data-nosnippet>78</a>            n += add;
+<a href=#79 id=79 data-nosnippet>79</a>
+<a href=#80 id=80 data-nosnippet>80</a>            <span class="kw">if </span>n &lt; exp_min {
+<a href=#81 id=81 data-nosnippet>81</a>                x <span class="kw-2">*</span>= mul;
+<a href=#82 id=82 data-nosnippet>82</a>                n += add;
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a>                <span class="kw">if </span>n &lt; exp_min {
+<a href=#85 id=85 data-nosnippet>85</a>                    n = exp_min;
+<a href=#86 id=86 data-nosnippet>86</a>                }
+<a href=#87 id=87 data-nosnippet>87</a>            }
+<a href=#88 id=88 data-nosnippet>88</a>        } <span class="kw">else </span>{
+<a href=#89 id=89 data-nosnippet>89</a>            <span class="comment">// `f16` is unique compared to other float types in that the difference between the
+<a href=#90 id=90 data-nosnippet>90</a>            // minimum exponent and the significand bits (`add = -exp_min - sig_total_bits`) is
+<a href=#91 id=91 data-nosnippet>91</a>            // small, only three. The above method depend on decrementing `n` by `add` two times;
+<a href=#92 id=92 data-nosnippet>92</a>            // for other float types this works out because `add` is a substantial fraction of
+<a href=#93 id=93 data-nosnippet>93</a>            // the exponent range. For `f16`, however, 3 is relatively small compared to the
+<a href=#94 id=94 data-nosnippet>94</a>            // exponent range (which is 39), so that requires ~10 prescale rounds rather than two.
+<a href=#95 id=95 data-nosnippet>95</a>            //
+<a href=#96 id=96 data-nosnippet>96</a>            // Work aroudn this by using a different algorithm that calculates the prescale
+<a href=#97 id=97 data-nosnippet>97</a>            // dynamically based on the maximum possible value. This adds more operations per round
+<a href=#98 id=98 data-nosnippet>98</a>            // since it needs to construct the scale, but works better in the general case.
+<a href=#99 id=99 data-nosnippet>99</a>            </span><span class="kw">let </span>add = -(n + sig_total_bits <span class="kw">as </span>i32).clamp(exp_min, sig_total_bits <span class="kw">as </span>i32);
+<a href=#100 id=100 data-nosnippet>100</a>            <span class="kw">let </span>mul = F::from_parts(<span class="bool-val">false</span>, (F::EXP_BIAS <span class="kw">as </span>i32 - add) <span class="kw">as </span>u32, zero);
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a>            x <span class="kw-2">*</span>= mul;
+<a href=#103 id=103 data-nosnippet>103</a>            n += add;
+<a href=#104 id=104 data-nosnippet>104</a>
+<a href=#105 id=105 data-nosnippet>105</a>            <span class="kw">if </span>n &lt; exp_min {
+<a href=#106 id=106 data-nosnippet>106</a>                <span class="kw">let </span>add = -(n + sig_total_bits <span class="kw">as </span>i32).clamp(exp_min, sig_total_bits <span class="kw">as </span>i32);
+<a href=#107 id=107 data-nosnippet>107</a>                <span class="kw">let </span>mul = F::from_parts(<span class="bool-val">false</span>, (F::EXP_BIAS <span class="kw">as </span>i32 - add) <span class="kw">as </span>u32, zero);
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a>                x <span class="kw-2">*</span>= mul;
+<a href=#110 id=110 data-nosnippet>110</a>                n += add;
+<a href=#111 id=111 data-nosnippet>111</a>
+<a href=#112 id=112 data-nosnippet>112</a>                <span class="kw">if </span>n &lt; exp_min {
+<a href=#113 id=113 data-nosnippet>113</a>                    n = exp_min;
+<a href=#114 id=114 data-nosnippet>114</a>                }
+<a href=#115 id=115 data-nosnippet>115</a>            }
+<a href=#116 id=116 data-nosnippet>116</a>        }
+<a href=#117 id=117 data-nosnippet>117</a>    }
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">let </span>scale = F::from_parts(<span class="bool-val">false</span>, (F::EXP_BIAS <span class="kw">as </span>i32 + n) <span class="kw">as </span>u32, zero);
+<a href=#120 id=120 data-nosnippet>120</a>    x * scale
+<a href=#121 id=121 data-nosnippet>121</a>}</code></pre></div></section></main></body></html>

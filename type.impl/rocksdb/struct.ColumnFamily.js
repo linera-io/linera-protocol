@@ -1,0 +1,9 @@
+(function() {
+    var type_impls = Object.fromEntries([["rocksdb",[["<details class=\"toggle implementors-toggle\" open><summary><section id=\"impl-AsColumnFamilyRef-for-%26ColumnFamily\" class=\"impl\"><a class=\"src rightside\" href=\"src/rocksdb/column_family.rs.html#131-135\">Source</a><a href=\"#impl-AsColumnFamilyRef-for-%26ColumnFamily\" class=\"anchor\">§</a><h3 class=\"code-header\">impl&lt;'a&gt; <a class=\"trait\" href=\"rocksdb/trait.AsColumnFamilyRef.html\" title=\"trait rocksdb::AsColumnFamilyRef\">AsColumnFamilyRef</a> for &amp;'a <a class=\"struct\" href=\"rocksdb/struct.ColumnFamily.html\" title=\"struct rocksdb::ColumnFamily\">ColumnFamily</a></h3></section></summary><div class=\"impl-items\"><section id=\"method.inner\" class=\"method trait-impl\"><a class=\"src rightside\" href=\"src/rocksdb/column_family.rs.html#132-134\">Source</a><a href=\"#method.inner\" class=\"anchor\">§</a><h4 class=\"code-header\">fn <a href=\"rocksdb/trait.AsColumnFamilyRef.html#tymethod.inner\" class=\"fn\">inner</a>(&amp;self) -&gt; <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html\">*mut </a><a class=\"struct\" href=\"librocksdb_sys/struct.rocksdb_column_family_handle_t.html\" title=\"struct librocksdb_sys::rocksdb_column_family_handle_t\">rocksdb_column_family_handle_t</a></h4></section></div></details>","AsColumnFamilyRef","rocksdb::column_family::ColumnFamilyRef"]]]]);
+    if (window.register_type_impls) {
+        window.register_type_impls(type_impls);
+    } else {
+        window.pending_type_impls = type_impls;
+    }
+})()
+//{"start":55,"fragment_lengths":[1376]}

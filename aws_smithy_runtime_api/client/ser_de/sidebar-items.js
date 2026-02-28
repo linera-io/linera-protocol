@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["SharedRequestSerializer","SharedResponseDeserializer"],"trait":["DeserializeResponse","SerializeRequest"]};
