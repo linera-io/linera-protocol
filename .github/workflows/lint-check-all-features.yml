@@ -4,6 +4,8 @@ on:
   push:
     branches: [ 'devnet_*', 'testnet_*' ]
   pull_request:
+    paths:
+      - '.github/workflows/lint-check-all-features.yml'
   merge_group:
   workflow_dispatch:
 
@@ -27,10 +29,13 @@ permissions:
   contents: read
 
 jobs:
-  lint-check-all-features:
-    if: ${{ github.event_name == 'merge_group' }}
+  check-all-features-partition:
     runs-on: linera-io-self-hosted-ci
-    timeout-minutes: 50
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3]
 
     steps:
     - uses: actions/checkout@v4
@@ -38,13 +43,21 @@ jobs:
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Install cargo-all-features
-      run: |
-        cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata --locked
+    - uses: taiki-e/install-action@cargo-hack
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Run cargo check-all-features
+    - name: Run cargo hack check (partition ${{ matrix.partition }}/3)
       run: |
-        cargo check-all-features --all-targets
+        cargo hack check --each-feature --workspace --all-targets --partition ${{ matrix.partition }}/3
+
+  lint-check-all-features:
+    needs: check-all-features-partition
+    runs-on: linera-io-self-hosted-ci
+    if: always()
+    steps:
+    - run: |
+        if [ "${{ needs.check-all-features-partition.result }}" != "success" ]; then
+          exit 1
+        fi
