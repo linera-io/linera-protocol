@@ -473,6 +473,40 @@ where
         self.update_balance(self.policy.http_request)
     }
 
+    /// Applies a storage size delta using the storage pricing policy.
+    pub(crate) fn apply_storage_size_delta(
+        &mut self,
+        delta: i32,
+        refund_limit: Amount,
+    ) -> Result<(), ExecutionError> {
+        if delta == 0 {
+            return Ok(());
+        }
+        self.tracker.as_mut().bytes_stored = self
+            .tracker
+            .as_mut()
+            .bytes_stored
+            .checked_add(delta)
+            .ok_or(ArithmeticError::Overflow)?;
+        if delta > 0 {
+            let count = u64::try_from(delta).map_err(|_| ArithmeticError::Overflow)?;
+            self.update_balance(self.policy.bytes_stored_price(count)?)?;
+        } else {
+            let count = u64::try_from(delta.checked_abs().ok_or(ArithmeticError::Overflow)?)
+                .map_err(|_| ArithmeticError::Overflow)?;
+            let refund = self.policy.bytes_stored_price(count)?;
+            let refund = if refund > refund_limit {
+                refund_limit
+            } else {
+                refund
+            };
+            if !refund.is_zero() {
+                self.account.try_add_assign(refund)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Tracks a number of fuel units used.
     pub(crate) fn track_fuel(
         &mut self,
@@ -735,19 +769,6 @@ where
         Ok(())
     }
 
-    /// Tracks a change in the number of bytes stored.
-    // TODO(#1536): This is not fully implemented.
-    #[allow(dead_code)]
-    pub(crate) fn track_stored_bytes(&mut self, delta: i32) -> Result<(), ExecutionError> {
-        self.tracker.as_mut().bytes_stored = self
-            .tracker
-            .as_mut()
-            .bytes_stored
-            .checked_add(delta)
-            .ok_or(ArithmeticError::Overflow)?;
-        Ok(())
-    }
-
     /// Returns the remaining time services can spend executing as oracles.
     pub(crate) fn remaining_service_oracle_execution_time(
         &self,
@@ -825,6 +846,17 @@ where
             tracker.block_size <= self.policy.maximum_block_size,
             ExecutionError::BlockTooLarge
         );
+        Ok(())
+    }
+
+    /// Tracks a change in the number of bytes stored.
+    pub(crate) fn track_stored_bytes(&mut self, delta: i32) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().bytes_stored = self
+            .tracker
+            .as_mut()
+            .bytes_stored
+            .checked_add(delta)
+            .ok_or(ArithmeticError::Overflow)?;
         Ok(())
     }
 }
