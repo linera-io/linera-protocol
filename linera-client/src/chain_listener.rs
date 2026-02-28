@@ -748,6 +748,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 debug!(%chain_id, "Cannot find key for chain");
             }
             Err(error) => warn!(%error, "Failed to process inbox."),
+            Ok((certs, None)) if certs.is_empty() => debug!(
+                %chain_id,
+                "done processing inbox: no blocks created",
+            ),
             Ok((certs, None)) => info!(
                 %chain_id,
                 created_block_count = %certs.len(),
