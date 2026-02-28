@@ -1015,9 +1015,9 @@ impl QueryResponseCache {
                 .inc();
             return None;
         };
-        let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
+        let mut cache = mutex.lock().expect("LRU mutex poisoned");
         let key = (*app_id, request.to_vec());
-        let result = per_chain.lru.get(&key).cloned();
+        let result = cache.lru.get(&key).cloned();
         #[cfg(with_metrics)]
         {
             if result.is_some() {
@@ -1052,28 +1052,28 @@ impl QueryResponseCache {
                 next_block_height,
             })
         });
-        let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
-        if next_block_height < per_chain.next_block_height {
+        let mut cache = mutex.lock().expect("LRU mutex poisoned");
+        if next_block_height < cache.next_block_height {
             return; // A new block arrived since this query started; discard stale response.
         }
-        if next_block_height > per_chain.next_block_height {
+        if next_block_height > cache.next_block_height {
             // The chain has advanced since the last cache update. Clear stale entries.
             // Note: This should not happen if notifications are timely and only works if
             // we had a cache miss.
             #[cfg(with_metrics)]
-            query_cache_metrics::QUERY_CACHE_ENTRIES.sub(per_chain.lru.len() as i64);
+            query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
             #[cfg(with_metrics)]
             query_cache_metrics::QUERY_CACHE_INVALIDATION
                 .with_label_values(&[])
                 .inc();
-            per_chain.lru.clear();
-            per_chain.next_block_height = next_block_height;
+            cache.lru.clear();
+            cache.next_block_height = next_block_height;
         }
         #[cfg(with_metrics)]
-        let prev_len = per_chain.lru.len();
-        per_chain.lru.put((app_id, request), response);
+        let prev_len = cache.lru.len();
+        cache.lru.put((app_id, request), response);
         #[cfg(with_metrics)]
-        if per_chain.lru.len() != prev_len {
+        if cache.lru.len() != prev_len {
             query_cache_metrics::QUERY_CACHE_ENTRIES.inc();
         }
     }
@@ -1089,11 +1089,11 @@ impl QueryResponseCache {
                 next_block_height,
             })
         });
-        let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
-        per_chain.next_block_height = next_block_height;
+        let mut cache = mutex.lock().expect("LRU mutex poisoned");
+        cache.next_block_height = next_block_height;
         #[cfg(with_metrics)]
-        query_cache_metrics::QUERY_CACHE_ENTRIES.sub(per_chain.lru.len() as i64);
-        per_chain.lru.clear();
+        query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
+        cache.lru.clear();
         #[cfg(with_metrics)]
         query_cache_metrics::QUERY_CACHE_INVALIDATION
             .with_label_values(&[])
