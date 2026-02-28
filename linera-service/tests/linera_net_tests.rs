@@ -4842,6 +4842,10 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     assert_eq!(state.local_services.len(), 1);
     assert_eq!(state.local_services[0].name, "test-service");
 
+    // Sync the service chain on node_service1 so that it downloads the ChainDescription blob
+    // from validators. Without this, the query can fail with BlobsNotFound because the chain
+    // was opened on a different node and has no blocks yet.
+    node_service1.sync(&service_chain).await?;
     let task_app = node_service1.make_application(&service_chain, &task_processor_id)?;
     let task_count: u64 = task_app.query_json("taskCount").await?;
     assert_eq!(task_count, 0, "Initial task count should be 0");
