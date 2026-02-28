@@ -1005,6 +1005,7 @@ impl QueryResponseCache {
 
     /// Looks up a cached response. Returns `Some(bytes)` on hit, `None` on miss
     /// (including when the chain has no cache entry yet).
+    #[allow(clippy::question_mark)]
     fn get(&self, chain_id: ChainId, app_id: &ApplicationId, request: &[u8]) -> Option<Vec<u8>> {
         let pinned = self.chains.pin();
         let Some(mutex) = pinned.get(&chain_id) else {
