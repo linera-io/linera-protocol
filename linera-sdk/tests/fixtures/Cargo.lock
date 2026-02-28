@@ -2202,7 +2202,7 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "linera-base"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "allocative",
  "alloy-primitives",
@@ -2254,7 +2254,7 @@ dependencies = [
 
 [[package]]
 name = "linera-chain"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "allocative",
  "anyhow",
@@ -2280,7 +2280,7 @@ dependencies = [
 
 [[package]]
 name = "linera-core"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -2319,7 +2319,7 @@ dependencies = [
 
 [[package]]
 name = "linera-execution"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "allocative",
  "anyhow",
@@ -2366,7 +2366,7 @@ checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
 
 [[package]]
 name = "linera-sdk"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -2394,7 +2394,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk-derive"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -2403,7 +2403,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "async-trait",
  "bcs",
@@ -2424,7 +2424,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage-service"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -2448,7 +2448,7 @@ dependencies = [
 
 [[package]]
 name = "linera-version"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -2468,7 +2468,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "allocative",
  "anyhow",
@@ -2503,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views-derive"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "cfg_aliases",
  "deluxe",
@@ -2651,7 +2651,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "anyhow",
  "cfg_aliases",
@@ -2665,7 +2665,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-macros"
-version = "0.15.13"
+version = "0.15.14"
 dependencies = [
  "cfg_aliases",
  "heck 0.4.1",
