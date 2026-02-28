@@ -81,7 +81,7 @@ impl QueryRoot {
     }
 
     /// Returns the pending tasks and callback requests for the task processor.
-    async fn next_actions(&self, _cursor: Option<String>, _now: Timestamp) -> ProcessorActions {
+    async fn next_actions(&self, _now: Timestamp) -> ProcessorActions {
         let mut actions = ProcessorActions::default();
 
         // Get all pending tasks from the queue.
