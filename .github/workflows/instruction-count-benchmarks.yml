@@ -1,0 +1,147 @@
+name: Instruction Count Benchmarks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'linera-views/**'
+      - 'linera-views-derive/**'
+      - '.github/workflows/instruction-count-benchmarks.yml'
+      - '.github/scripts/format-bench-results.sh'
+  pull_request:
+    branches:
+      - "**"
+    paths:
+      - 'linera-views/**'
+      - 'linera-views-derive/**'
+      - '.github/workflows/instruction-count-benchmarks.yml'
+      - '.github/scripts/format-bench-results.sh'
+  workflow_dispatch:
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  save-baseline:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: linera-io-self-hosted-ci
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install Valgrind
+      run: sudo apt-get update && sudo apt-get install -y valgrind
+    - name: Install gungraun-runner
+      run: cargo install gungraun-runner --version 0.17.2
+    - name: Build benchmarks
+      run: cargo bench -p linera-views --bench gungraun_views --no-run
+    - name: Run benchmarks and save baseline
+      run: cargo bench -p linera-views --bench gungraun_views -- --save-baseline=main
+    - name: Upload baseline artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gungraun-baseline-${{ github.sha }}
+        path: target/gungraun
+        retention-days: 14
+
+  compare:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: linera-io-self-hosted-ci
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install Valgrind
+      run: sudo apt-get update && sudo apt-get install -y valgrind
+    - name: Install gungraun-runner
+      run: cargo install gungraun-runner --version 0.17.2
+    - name: Build benchmarks
+      run: cargo bench -p linera-views --bench gungraun_views --no-run
+    - name: Download baseline artifact
+      id: download-baseline
+      run: |
+        BASE_REF="${{ github.event.pull_request.base.ref || 'main' }}"
+        MERGE_BASE=$(git merge-base HEAD "origin/$BASE_REF")
+        MERGE_BASE_DATE=$(git log -1 --format=%aI "$MERGE_BASE")
+        echo "Merge base: $MERGE_BASE (date: $MERGE_BASE_DATE)"
+
+        # Find the most recent baseline artifact created on or before the merge base date.
+        # Artifacts are returned newest-first, so the first match is the right one.
+        ARTIFACT=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+          --jq "[.artifacts[] | select(.name | startswith(\"gungraun-baseline-\")) | select(.expired == false) | select(.created_at <= \"$MERGE_BASE_DATE\")] | first // empty")
+
+        if [ -n "$ARTIFACT" ] && [ "$ARTIFACT" != "null" ]; then
+          ARTIFACT_URL=$(echo "$ARTIFACT" | jq -r '.archive_download_url')
+          ARTIFACT_SHA=$(echo "$ARTIFACT" | jq -r '.name | ltrimstr("gungraun-baseline-")')
+          echo "Using baseline from commit $ARTIFACT_SHA"
+          gh api "$ARTIFACT_URL" > /tmp/baseline.zip
+          mkdir -p target/gungraun
+          unzip -o /tmp/baseline.zip -d target/gungraun
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "baseline_sha=$ARTIFACT_SHA" >> "$GITHUB_OUTPUT"
+        else
+          echo "found=false" >> "$GITHUB_OUTPUT"
+          echo "No baseline found on or before merge base $MERGE_BASE. Please rebase onto main."
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run benchmarks and compare
+      id: bench
+      run: |
+        if [ "${{ steps.download-baseline.outputs.found }}" = "true" ]; then
+          cargo bench -p linera-views --bench gungraun_views -- --baseline=main \
+            --save-summary=json
+        else
+          echo "No baseline found, running without comparison"
+          cargo bench -p linera-views --bench gungraun_views -- --save-baseline=main \
+            --save-summary=json
+        fi
+    - name: Format benchmark results
+      if: github.event_name == 'pull_request' && always()
+      run: |
+        BASELINE_SHA="${{ steps.download-baseline.outputs.baseline_sha }}"
+        if [ -n "$BASELINE_SHA" ]; then
+          bash .github/scripts/format-bench-results.sh target/gungraun --baseline-sha "$BASELINE_SHA" > /tmp/bench-comment.md
+        else
+          bash .github/scripts/format-bench-results.sh target/gungraun > /tmp/bench-comment.md
+        fi
+    - name: Post PR comment
+      if: github.event_name == 'pull_request' && always()
+      run: |
+        COMMENT=$(cat /tmp/bench-comment.md)
+
+        PR=${{ github.event.pull_request.number }}
+        EXISTING=$(gh api "repos/${{ github.repository }}/issues/${PR}/comments" \
+          --jq '[.[] | select(.body | startswith("## Instruction Count Benchmark Results")) | .id] | last // empty')
+
+        if [ -n "$EXISTING" ]; then
+          gh api "repos/${{ github.repository }}/issues/comments/${EXISTING}" \
+            -X PATCH -f body="${COMMENT}"
+        else
+          gh pr comment "${PR}" --body "${COMMENT}"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
