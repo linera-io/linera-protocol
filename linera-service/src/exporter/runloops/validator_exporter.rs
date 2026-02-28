@@ -55,7 +55,7 @@ impl Exporter {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let address = self.destination_id.address().to_owned();
-        let destination_state = storage.load_destination_state(&self.destination_id);
+        let destination_state = storage.load_destination_state(&self.destination_id)?;
 
         let node = self.node_provider.make_node(&address)?;
 

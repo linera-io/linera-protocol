@@ -28,6 +28,9 @@ pub(crate) enum ExporterError {
     #[error("Missing certificate: {0}")]
     ReadCertificateError(CryptoHash),
 
+    #[error("Missing blob: {0}")]
+    ReadBlobError(BlobId),
+
     #[error("generic storage error: {0}")]
     ViewError(#[from] ViewError),
 

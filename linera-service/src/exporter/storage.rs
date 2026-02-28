@@ -124,7 +124,11 @@ where
             Err(guard) => {
                 #[cfg(with_metrics)]
                 metrics::GET_BLOB_HISTOGRAM.measure_latency();
-                let blob = self.storage.read_blob(blob_id).await?.unwrap();
+                let blob = self
+                    .storage
+                    .read_blob(blob_id)
+                    .await?
+                    .ok_or(ExporterError::ReadBlobError(blob_id))?;
                 let heaped_blob = Arc::new(blob);
                 guard.insert(heaped_blob.clone()).ok();
                 Ok(heaped_blob)
@@ -198,7 +202,10 @@ where
         self.shared_storage.get_blob(blob_id).await
     }
 
-    pub(crate) fn load_destination_state(&self, id: &DestinationId) -> Arc<AtomicU64> {
+    pub(crate) fn load_destination_state(
+        &self,
+        id: &DestinationId,
+    ) -> anyhow::Result<Arc<AtomicU64>> {
         self.shared_storage.destination_states.load_state(id)
     }
 

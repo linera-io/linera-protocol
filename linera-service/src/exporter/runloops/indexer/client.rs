@@ -61,6 +61,8 @@ impl IndexerClient {
     ) -> Result<(Sender<Element>, Streaming<()>), ExporterError> {
         let mut retry_count = 0;
         loop {
+            #[cfg(with_metrics)]
+            self.sent_latency.lock().unwrap().clear();
             let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
             #[cfg(with_metrics)]
             let request = {
@@ -82,15 +84,14 @@ impl IndexerClient {
                         {
                             // We assume that indexer responds with ACKs only after storing a block
                             // and that it doesn't ACK blocks out of order.
-                            let start_time = self
-                                .sent_latency
-                                .lock()
-                                .unwrap()
-                                .pop_front()
-                                .expect("have timer waiting");
-                            crate::metrics::DISPATCH_BLOCK_HISTOGRAM
-                                .with_label_values(&[&self.address])
-                                .observe(start_time.elapsed().as_secs_f64() * 1000.0);
+                            if let Some(start_time) = self.sent_latency.lock().unwrap().pop_front()
+                            {
+                                crate::metrics::DISPATCH_BLOCK_HISTOGRAM
+                                    .with_label_values(&[&self.address])
+                                    .observe(start_time.elapsed().as_secs_f64() * 1000.0);
+                            } else {
+                                tracing::warn!("received ACK without matching send timestamp");
+                            }
                         }
                         response
                     });

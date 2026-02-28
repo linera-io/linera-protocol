@@ -25,9 +25,8 @@ impl LoggingExporter {
         let log_file = Path::new(id.address());
         // Don't truncate the file to preserve previous logs
         let file = OpenOptions::new()
-            .write(true)
+            .append(true)
             .create(true)
-            .truncate(false)
             .open(log_file)
             .expect("Failed to create log file");
         LoggingExporter { id, file }
@@ -61,7 +60,7 @@ impl LoggingExporter {
     where
         S: linera_storage::Storage + Clone + Send + Sync + 'static,
     {
-        let destination_state = storage.load_destination_state(&self.id);
+        let destination_state = storage.load_destination_state(&self.id)?;
         let mut destination_height = destination_state.load(Ordering::Acquire) as usize;
         tracing::info!("starting logging exporter at height {}", destination_height);
 
@@ -84,6 +83,7 @@ impl LoggingExporter {
                 for blob in blobs {
                     writeln!(self.file, "\tBlob ID: {}", blob.id(),)?;
                 }
+                self.file.flush()?;
 
                 destination_state.fetch_add(1, Ordering::Release);
                 destination_height += 1;

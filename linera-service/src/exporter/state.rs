@@ -211,12 +211,12 @@ impl<'de> Deserialize<'de> for DestinationStates {
 }
 
 impl DestinationStates {
-    pub fn load_state(&self, id: &DestinationId) -> Arc<AtomicU64> {
+    pub fn load_state(&self, id: &DestinationId) -> anyhow::Result<Arc<AtomicU64>> {
         let pinned = self.states.pin();
         pinned
             .get(id)
-            .unwrap_or_else(|| panic!("{:?} not found in DestinationStates", id))
-            .clone()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("{:?} not found in DestinationStates", id))
     }
 
     pub fn get(&self, id: &DestinationId) -> Option<Arc<AtomicU64>> {

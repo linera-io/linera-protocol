@@ -384,7 +384,7 @@ mod test {
         let (_, _, destination_states) =
             BlockExporterStateView::initiate(context.clone(), destination_ids.clone()).await?;
         for (i, destination) in destination_ids.iter().enumerate() {
-            let state = destination_states.load_state(destination);
+            let state = destination_states.load_state(destination)?;
             // We created destinations such that odd ones were faulty.
             if i % 2 == 0 {
                 assert_eq!(state.load(Ordering::Acquire), 2);
@@ -435,7 +435,7 @@ mod test {
         for destination in destinations {
             assert_eq!(
                 destination_states
-                    .load_state(&destination.id())
+                    .load_state(&destination.id())?
                     .load(Ordering::Acquire),
                 2
             );
