@@ -2622,18 +2622,21 @@ impl<Env: Environment> ChainClient<Env> {
                     "NewEvents: processing notification"
                 );
                 let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
-                // download_certificates ensures that we will get exactly one
-                // certificate in the result.
                 let certificate = certificates
                     .pop()
                     .expect("download_certificates should have returned one certificate");
                 self.client
                     .receive_sender_certificate(
-                        certificate,
+                        certificate.clone(),
                         ReceiveCertificateMode::NeedsCheck,
                         None,
                     )
                     .await?;
+                if let ListeningMode::EventsOnly(relevant_streams) = listening_mode {
+                    self.client
+                        .download_missing_event_blocks(&remote_node, &certificate, relevant_streams)
+                        .await?;
+                }
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
@@ -2782,16 +2785,21 @@ impl<Env: Environment> ChainClient<Env> {
             };
             let address = node.address();
             let this = self.clone();
+            let listening_mode_for_sync = listening_mode.clone();
             let stream = stream::once({
                 let node = node.clone();
                 async move {
                     let stream = node.subscribe(vec![this.chain_id]).await?;
                     // Only now the notification stream is established. We may have missed
                     // notifications since the last time we synchronized.
+                    // For EventsOnly mode, skip full sync - we'll lazily download
+                    // event-relevant blocks when we receive notifications.
                     let remote_node = RemoteNode { public_key, node };
-                    this.client
-                        .synchronize_chain_state_from(&remote_node, this.chain_id)
-                        .await?;
+                    if !matches!(listening_mode_for_sync, ListeningMode::EventsOnly(_)) {
+                        this.client
+                            .synchronize_chain_state_from(&remote_node, this.chain_id)
+                            .await?;
+                    }
                     Ok::<_, Error>(stream)
                 }
             })

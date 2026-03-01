@@ -2256,13 +2256,60 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
-    notifications.wait_for_block(height2.try_add_one()?).await?;
+    let latest_height = height2.try_add_one()?;
+    notifications.wait_for_block(latest_height).await?;
     assert_eq!(app2.query(query).await?, expected_response);
 
     let tip_after_second_post = node_service2.chain_tip(chain1).await?;
     // The second post should not have moved the tip hash - client 2 should have only preprocessed
     // that block, without downloading the transfer block in between.
     assert_eq!(tip_after_first_post, tip_after_second_post);
+
+    node_service1.ensure_is_running()?;
+    node_service2.ensure_is_running()?;
+
+    // We stop the service.
+    // Client 1 will produce another post, then we will restart the service and:
+    // 1) Check that client 2 receives the post.
+    // 2) Check that the event chain is still sparse (that the tip hasn't moved).
+    node_service2.terminate().await?;
+
+    // Client 1 posts again.
+    app1.mutate("post(text: \"Third post!\")").await?;
+
+    // Restart the service for node 2.
+    let mut node_service2 = client2
+        .run_node_service(port2, ProcessInbox::Automatic)
+        .await?;
+
+    // Client 1 posts again, to trigger downloading missing events in client 2.
+    app1.mutate("post(text: \"Fourth post!\")").await?;
+
+    let query = "receivedPosts { keys { author, index } }";
+    let expected_response = json!({
+        "receivedPosts": {
+            "keys": [
+                { "author": chain1, "index": 2 },
+                { "author": chain1, "index": 1 },
+                { "author": chain1, "index": 0 }
+            ]
+        }
+    });
+
+    loop {
+        let (_, height4) = node_service2.chain_tip(chain2).await?.unwrap();
+        if height4 > latest_height {
+            break;
+        }
+        linera_base::time::timer::sleep(Duration::from_millis(500)).await;
+    }
+
+    assert_eq!(app2.query(query).await?, expected_response);
+
+    let tip_after_fourth_post = node_service2.chain_tip(chain1).await?;
+    // The third post should not have moved the tip hash, either (the block with the
+    // transfer should still not have been downloaded).
+    assert_eq!(tip_after_first_post, tip_after_fourth_post);
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
