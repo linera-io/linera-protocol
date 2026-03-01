@@ -11,9 +11,9 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 use matching_engine::{
-    MatchingEngineAbi, Message, Operation, Order, OrderNature, Parameters, Price,
+    MatchingEngineAbi, Message, Operation, Order, OrderNature, Parameters, PendingOrderInfo, Price,
 };
-use state::{MatchingEngineState, ModifyQuantity, Transfer};
+use state::{MatchingEngineState, Transfer};
 
 pub struct MatchingEngineContract {
     state: MatchingEngineState,
@@ -76,7 +76,7 @@ impl Contract for MatchingEngineContract {
                     .await
                     .expect("Failed to read existing order IDs");
                 for order_id in order_ids {
-                    match self.state.modify_order(order_id, ModifyQuantity::All).await {
+                    match self.state.modify_order(order_id, Amount::ZERO).await {
                         Some(transfer) => self.send_to(transfer),
                         // Orders with amount zero may have been cleared in an earlier iteration.
                         None => continue,
@@ -89,15 +89,16 @@ impl Contract for MatchingEngineContract {
         }
     }
 
-    /// Execution of the order on the creation chain
+    /// Execution of messages
     async fn execute_message(&mut self, message: Message) {
-        assert_eq!(
-            self.runtime.chain_id(),
-            self.runtime.application_creator_chain_id(),
-            "Action can only be executed on the chain that created the matching engine"
-        );
         match message {
             Message::ExecuteOrder { order } => {
+                // This message can only be executed on the matching engine chain
+                assert_eq!(
+                    self.runtime.chain_id(),
+                    self.runtime.application_creator_chain_id(),
+                    "ExecuteOrder can only be executed on the chain that created the matching engine"
+                );
                 let owner = order.owner();
                 let origin_chain_id = self.runtime.message_origin_chain_id().expect(
                     "Incoming message origin chain ID has to be available when executing a message",
@@ -106,6 +107,45 @@ impl Contract for MatchingEngineContract {
                     .check_account_permission(owner)
                     .expect("Permission for ExecuteOrder message");
                 self.execute_order_local(order, origin_chain_id).await;
+            }
+            Message::OrderPending {
+                owner,
+                order_id,
+                order_info,
+            } => {
+                // This message is received on the sender chain from the matching engine
+                // Order was inserted and is pending
+                let pending_orders = self
+                    .state
+                    .pending_orders
+                    .get_mut_or_default(&owner)
+                    .await
+                    .expect("Failed to load pending orders");
+                pending_orders.insert(order_id, order_info);
+            }
+            Message::OrderUpdated {
+                owner,
+                order_id,
+                new_quantity,
+            } => {
+                // This message is received on the sender chain from the matching engine
+                let pending_orders = self
+                    .state
+                    .pending_orders
+                    .get_mut(&owner)
+                    .await
+                    .expect("Failed to load pending orders")
+                    .expect("Account should have pending orders");
+
+                if new_quantity == Amount::ZERO {
+                    // Remove the pending order
+                    pending_orders.remove(&order_id);
+                } else {
+                    // Update the pending order
+                    if let Some(order) = pending_orders.get_mut(&order_id) {
+                        order.quantity = new_quantity;
+                    }
+                }
             }
         }
     }
@@ -178,35 +218,105 @@ impl MatchingEngineContract {
             } => {
                 self.receive_from_account(&owner, &quantity, &nature, &price);
                 let account = Account { chain_id, owner };
-                let transfers = self
+                let (transfers, order_id, remaining_quantity, filled_orders) = self
                     .state
                     .insert_and_uncross_market(&account, quantity, nature, &price)
                     .await;
                 for transfer in transfers {
                     self.send_to(transfer);
                 }
-            }
-            Order::Cancel { owner, order_id } => {
-                self.state.check_order_id(&order_id, &owner).await;
-                let transfer = self
-                    .state
-                    .modify_order(order_id, ModifyQuantity::All)
-                    .await
-                    .expect("Order is not present therefore cannot be cancelled");
-                self.send_to(transfer);
+
+                // Send removal notifications for filled orders
+                let matching_engine_chain = self.runtime.chain_id();
+                for (filled_chain_id, filled_owner, filled_order_id) in filled_orders {
+                    if filled_chain_id != matching_engine_chain {
+                        let removal_message = Message::OrderUpdated {
+                            owner: filled_owner,
+                            order_id: filled_order_id,
+                            new_quantity: Amount::ZERO,
+                        };
+                        self.runtime
+                            .prepare_message(removal_message)
+                            .with_authentication()
+                            .send_to(filled_chain_id);
+                    }
+                }
+
+                // Send acknowledgment to the sender chain (if different from matching engine chain)
+                if remaining_quantity > Amount::ZERO {
+                    let order_info = PendingOrderInfo {
+                        nature,
+                        price,
+                        quantity: remaining_quantity,
+                    };
+                    if chain_id != self.runtime.chain_id() {
+                        let pending_message = Message::OrderPending {
+                            owner,
+                            order_id,
+                            order_info,
+                        };
+                        self.runtime
+                            .prepare_message(pending_message)
+                            .with_authentication()
+                            .send_to(chain_id);
+                    } else {
+                        let pending_orders = self
+                            .state
+                            .pending_orders
+                            .get_mut_or_default(&owner)
+                            .await
+                            .expect("Failed to load pending orders");
+                        pending_orders.insert(order_id, order_info);
+                    }
+                }
             }
             Order::Modify {
                 owner,
                 order_id,
-                reduce_quantity,
+                new_quantity,
             } => {
                 self.state.check_order_id(&order_id, &owner).await;
+                let key_book = self
+                    .state
+                    .orders
+                    .get(&order_id)
+                    .await
+                    .expect("Failed to load order")
+                    .expect("Order should exist");
+                let sender_chain_id = key_book.account.chain_id;
+
                 let transfer = self
                     .state
-                    .modify_order(order_id, ModifyQuantity::Partial(reduce_quantity))
+                    .modify_order(order_id, new_quantity)
                     .await
-                    .expect("Order is not present therefore cannot be cancelled");
+                    .expect("Failed to modify order");
                 self.send_to(transfer);
+
+                // Order still exists with reduced amount
+                if sender_chain_id != self.runtime.chain_id() {
+                    // Send update notification to the sender chain (if different from matching engine chain)
+                    let update_message = Message::OrderUpdated {
+                        owner,
+                        order_id,
+                        new_quantity,
+                    };
+                    self.runtime
+                        .prepare_message(update_message)
+                        .with_authentication()
+                        .send_to(sender_chain_id);
+                } else {
+                    let pending_orders = self
+                        .state
+                        .pending_orders
+                        .get_mut(&owner)
+                        .await
+                        .expect("Failed to load pending orders")
+                        .expect("Account should have pending orders");
+                    // Update the pending order
+                    if let Some(order) = pending_orders.get_mut(&order_id) {
+                        order.quantity = new_quantity;
+                    }
+                }
             }
         }
     }

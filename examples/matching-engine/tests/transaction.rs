@@ -246,9 +246,10 @@ async fn single_transaction() {
     }
 
     // Cancel A's order.
-    let order = Order::Cancel {
+    let order = Order::Modify {
         owner: owner_a,
         order_id: order_ids_a[0],
+        new_quantity: Amount::ZERO,
     };
     let operation = Operation::ExecuteOrder { order };
     let (order_certificate, _) = user_chain_a
