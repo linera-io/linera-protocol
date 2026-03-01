@@ -2582,6 +2582,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "evm-bridge"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "async-graphql",
+ "fungible",
+ "hex",
+ "linera-bridge",
+ "linera-sdk",
+ "serde",
+ "tokio",
+ "wrapped-fungible",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3933,6 +3948,16 @@ dependencies = [
  "tsify",
  "wasm-bindgen",
  "zstd",
+]
+
+[[package]]
+name = "linera-bridge"
+version = "0.15.13"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-trie",
+ "anyhow",
 ]
 
 [[package]]
@@ -7971,6 +7996,18 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser 0.202.0",
+]
+
+[[package]]
+name = "wrapped-fungible"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "fungible",
+ "hex",
+ "linera-sdk",
+ "serde",
+ "tokio",
 ]
 
 [[package]]

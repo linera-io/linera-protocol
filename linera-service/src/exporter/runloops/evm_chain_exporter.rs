@@ -4,7 +4,7 @@
 use std::{future::IntoFuture, sync::atomic::Ordering};
 
 use linera_base::identifiers::BlobType;
-use linera_bridge::evm_client::EvmLightClient;
+use linera_bridge::evm::client::EvmLightClient;
 use linera_execution::{system::AdminOperation, Operation, SystemOperation};
 use linera_service::config::{Destination, DestinationId};
 use tokio::select;

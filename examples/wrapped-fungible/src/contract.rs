@@ -4,29 +4,29 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use fungible::{
-    state::FungibleTokenState, Account, FungibleOperation, FungibleResponse, FungibleTokenAbi,
-    InitialState, Message, Parameters,
+    state::FungibleTokenState, Account, FungibleOperation, FungibleResponse, InitialState, Message,
 };
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
+use wrapped_fungible::{WrappedFungibleTokenAbi, WrappedParameters};
 
-pub struct FungibleTokenContract {
+pub struct WrappedFungibleTokenContract {
     state: FungibleTokenState,
     runtime: ContractRuntime<Self>,
 }
 
-linera_sdk::contract!(FungibleTokenContract);
+linera_sdk::contract!(WrappedFungibleTokenContract);
 
-impl WithContractAbi for FungibleTokenContract {
-    type Abi = FungibleTokenAbi;
+impl WithContractAbi for WrappedFungibleTokenContract {
+    type Abi = WrappedFungibleTokenAbi;
 }
 
-impl Contract for FungibleTokenContract {
+impl Contract for WrappedFungibleTokenContract {
     type Message = Message;
-    type Parameters = Parameters;
+    type Parameters = WrappedParameters;
     type InstantiationArgument = InitialState;
     type EventValue = ();
 
@@ -34,21 +34,16 @@ impl Contract for FungibleTokenContract {
         let state = FungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        FungibleTokenContract { state, runtime }
+        WrappedFungibleTokenContract { state, runtime }
     }
 
     async fn instantiate(&mut self, state: Self::InstantiationArgument) {
-        // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
-
-        let mut total_supply = Amount::ZERO;
-        for value in state.accounts.values() {
-            total_supply.saturating_add_assign(*value);
+        for (k, v) in state.accounts {
+            if v != Amount::ZERO {
+                self.state.credit(k, v).await;
+            }
         }
-        if total_supply == Amount::ZERO {
-            panic!("The total supply is zero, therefore we cannot instantiate the contract");
-        }
-        self.state.initialize_accounts(state).await;
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
@@ -59,7 +54,7 @@ impl Contract for FungibleTokenContract {
             }
 
             FungibleOperation::TickerSymbol => {
-                let params = self.runtime.application_parameters();
+                let params: WrappedParameters = self.runtime.application_parameters();
                 FungibleResponse::TickerSymbol(params.ticker_symbol)
             }
 
@@ -70,12 +65,11 @@ impl Contract for FungibleTokenContract {
             } => {
                 self.runtime
                     .check_account_permission(owner)
-                    .expect("Permission for Transfer operation");
+                    .expect("Permission for Approve operation");
                 self.state.approve(owner, spender, allowance).await;
                 FungibleResponse::Ok
             }
 
-            // ANCHOR: execute_operation_transfer
             FungibleOperation::Transfer {
                 owner,
                 amount,
@@ -89,7 +83,7 @@ impl Contract for FungibleTokenContract {
                     .await;
                 FungibleResponse::Ok
             }
-            // ANCHOR_END: execute_operation_transfer
+
             FungibleOperation::TransferFrom {
                 owner,
                 spender,
@@ -98,7 +92,7 @@ impl Contract for FungibleTokenContract {
             } => {
                 self.runtime
                     .check_account_permission(spender)
-                    .expect("Permission for Transfer operation");
+                    .expect("Permission for TransferFrom operation");
                 self.state
                     .debit_for_transfer_from(owner, spender, amount)
                     .await;
@@ -119,19 +113,17 @@ impl Contract for FungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            FungibleOperation::Mint { .. } => {
-                panic!("Standard fungible token does not support minting");
-            }
+            FungibleOperation::Mint {
+                target_account,
+                amount,
+            } => self.execute_mint(target_account, amount).await,
 
-            FungibleOperation::Burn { .. } => {
-                panic!("Standard fungible token does not support burning");
-            }
+            FungibleOperation::Burn { owner, amount } => self.execute_burn(owner, amount).await,
         }
     }
 
     async fn execute_message(&mut self, message: Message) {
         match message {
-            // ANCHOR: execute_message_credit
             Message::Credit {
                 amount,
                 target,
@@ -144,7 +136,6 @@ impl Contract for FungibleTokenContract {
                 let receiver = if is_bouncing { source } else { target };
                 self.state.credit(receiver, amount).await;
             }
-            // ANCHOR_END: execute_message_credit
             Message::Withdraw {
                 owner,
                 amount,
@@ -165,7 +156,47 @@ impl Contract for FungibleTokenContract {
     }
 }
 
-impl FungibleTokenContract {
+impl WrappedFungibleTokenContract {
+    /// Checks that the authenticated signer is the authorized minter.
+    fn require_minter(&mut self) -> AccountOwner {
+        let signer = self
+            .runtime
+            .authenticated_signer()
+            .expect("Mint/Burn requires an authenticated signer");
+        let params: WrappedParameters = self.runtime.application_parameters();
+        assert!(
+            AccountOwner::from(signer) == params.minter,
+            "unauthorized: only the minter can perform this operation"
+        );
+        AccountOwner::from(signer)
+    }
+
+    /// Mints tokens to a target account (local or remote).
+    async fn execute_mint(&mut self, target_account: Account, amount: Amount) -> FungibleResponse {
+        let signer = self.require_minter();
+        if target_account.chain_id == self.runtime.chain_id() {
+            self.state.credit(target_account.owner, amount).await;
+        } else {
+            self.runtime
+                .prepare_message(Message::Credit {
+                    target: target_account.owner,
+                    amount,
+                    source: signer,
+                })
+                .with_authentication()
+                .with_tracking()
+                .send_to(target_account.chain_id);
+        }
+        FungibleResponse::Ok
+    }
+
+    /// Burns tokens from an account.
+    async fn execute_burn(&mut self, owner: AccountOwner, amount: Amount) -> FungibleResponse {
+        self.require_minter();
+        self.state.debit(owner, amount).await;
+        FungibleResponse::Ok
+    }
+
     async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {
         if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await;
@@ -184,8 +215,6 @@ impl FungibleTokenContract {
         }
     }
 
-    // ANCHOR: finish_transfer_to_account
-    /// Executes the final step of a transfer where the tokens are sent to the destination.
     async fn finish_transfer_to_account(
         &mut self,
         amount: Amount,
@@ -207,5 +236,4 @@ impl FungibleTokenContract {
                 .send_to(target_account.chain_id);
         }
     }
-    // ANCHOR_END: finish_transfer_to_account
 }

@@ -11,7 +11,6 @@ use std::{
     process::{Command, Stdio},
 };
 
-use alloy_primitives::keccak256;
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
@@ -34,29 +33,10 @@ use revm::{
 };
 use revm_context::result::{ExecutionResult, Output};
 
-use crate::{
-    light_client, microchain, BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, FUNGIBLE_TYPES_SOURCE,
-};
+use crate::evm;
+pub use crate::evm::client::{validator_evm_address, validator_uncompressed_key};
 
-const BRIDGE_TYPES_SOL: &str = BRIDGE_TYPES_SOURCE;
-const FUNGIBLE_TYPES_SOL: &str = FUNGIBLE_TYPES_SOURCE;
-const LIGHT_CLIENT_SOL: &str = light_client::SOURCE;
-const MICROCHAIN_SOL: &str = microchain::SOURCE;
-const FUNGIBLE_BRIDGE_SOL: &str = FUNGIBLE_BRIDGE_SOURCE;
 pub const GAS_LIMIT: u64 = 500_000_000;
-
-/// Derives the Ethereum address from a secp256k1 validator public key.
-pub fn validator_evm_address(public: &ValidatorPublicKey) -> Address {
-    let uncompressed = public.0.to_encoded_point(false);
-    let hash = keccak256(&uncompressed.as_bytes()[1..]); // skip 0x04 prefix
-    Address::from_slice(&hash[12..])
-}
-
-/// Returns the 64-byte uncompressed public key (without the 0x04 prefix).
-pub fn validator_uncompressed_key(public: &ValidatorPublicKey) -> Vec<u8> {
-    let uncompressed = public.0.to_encoded_point(false);
-    uncompressed.as_bytes()[1..].to_vec() // skip 0x04 prefix, 64 bytes
-}
 
 /// The admin chain ID used in tests.
 pub fn test_admin_chain_id() -> CryptoHash {
@@ -102,23 +82,21 @@ pub fn sign_and_serialize(
     bcs::to_bytes(&certificate).expect("BCS serialization failed")
 }
 
-/// Creates a certificate with a real signature from the given key pair.
-pub fn create_signed_certificate(
+/// Creates a certificate with custom transactions for a specific chain and height.
+pub fn create_certificate_with_transactions(
     secret: &ValidatorSecretKey,
     public: &ValidatorPublicKey,
+    chain_id: CryptoHash,
+    height: BlockHeight,
+    transactions: Vec<Transaction>,
 ) -> ConfirmedBlockCertificate {
-    let chain_id = CryptoHash::new(&TestString::new("test_chain"));
-    let transactions = vec![Transaction::ExecuteOperation(Operation::User {
-        application_id: ApplicationId::new(CryptoHash::new(&TestString::new("test_app"))),
-        bytes: vec![0xDE, 0xAD, 0xBE, 0xEF],
-    })];
-    let block = create_test_block(chain_id, Epoch::ZERO, BlockHeight(1), transactions);
+    let block = create_test_block(chain_id, Epoch::ZERO, height, transactions);
     let confirmed = ConfirmedBlock::new(block);
     let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
     ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
 }
 
-/// Creates a certificate for a specific chain and height.
+/// Creates a certificate for a specific chain and height with a default user operation.
 pub fn create_signed_certificate_for_chain(
     secret: &ValidatorSecretKey,
     public: &ValidatorPublicKey,
@@ -129,10 +107,16 @@ pub fn create_signed_certificate_for_chain(
         application_id: ApplicationId::new(CryptoHash::new(&TestString::new("test_app"))),
         bytes: vec![0xDE, 0xAD, 0xBE, 0xEF],
     })];
-    let block = create_test_block(chain_id, Epoch::ZERO, height, transactions);
-    let confirmed = ConfirmedBlock::new(block);
-    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
-    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
+    create_certificate_with_transactions(secret, public, chain_id, height, transactions)
+}
+
+/// Creates a certificate with default chain, height, and transaction.
+pub fn create_signed_certificate(
+    secret: &ValidatorSecretKey,
+    public: &ValidatorPublicKey,
+) -> ConfirmedBlockCertificate {
+    let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+    create_signed_certificate_for_chain(secret, public, chain_id, BlockHeight(1))
 }
 
 pub fn deploy_microchain(
@@ -165,7 +149,11 @@ pub fn deploy_fungible_bridge(
     application_id: CryptoHash,
     token: Address,
 ) -> Address {
-    let bytecode = compile_contract(FUNGIBLE_BRIDGE_SOL, "FungibleBridge.sol", "FungibleBridge");
+    let bytecode = compile_contract(
+        evm::FUNGIBLE_BRIDGE_SOURCE,
+        "FungibleBridge.sol",
+        "FungibleBridge",
+    );
     let constructor_args = (
         light_client,
         <[u8; 32]>::from(*chain_id.as_bytes()),
@@ -185,6 +173,7 @@ pragma solidity ^0.8.0;
 
 contract MockERC20 {
     mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
     uint256 public totalSupply;
 
     constructor(uint256 initialSupply) {
@@ -195,6 +184,20 @@ contract MockERC20 {
     function transfer(address to, uint256 amount) external returns (bool) {
         require(balanceOf[msg.sender] >= amount, "insufficient balance");
         balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        require(balanceOf[from] >= amount, "insufficient balance");
+        require(allowance[from][msg.sender] >= amount, "insufficient allowance");
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
         balanceOf[to] += amount;
         return true;
     }
@@ -250,7 +253,7 @@ pub fn deploy_light_client(
     admin_chain_id: CryptoHash,
     epoch: u32,
 ) -> Address {
-    let bytecode = compile_contract(LIGHT_CLIENT_SOL, "LightClient.sol", "LightClient");
+    let bytecode = compile_contract(evm::light_client::SOURCE, "LightClient.sol", "LightClient");
     let chain_id_bytes = <[u8; 32]>::from(*admin_chain_id.as_bytes());
     let constructor_args =
         (validators.to_vec(), weights.to_vec(), chain_id_bytes, epoch).abi_encode_params();
@@ -399,11 +402,11 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
 
     // Write shared source files so imports resolve
     for (name, content) in [
-        ("BridgeTypes.sol", BRIDGE_TYPES_SOL),
-        ("FungibleTypes.sol", FUNGIBLE_TYPES_SOL),
-        ("LightClient.sol", LIGHT_CLIENT_SOL),
-        ("Microchain.sol", MICROCHAIN_SOL),
-        ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOL),
+        ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
+        ("FungibleTypes.sol", evm::FUNGIBLE_TYPES_SOURCE),
+        ("LightClient.sol", evm::light_client::SOURCE),
+        ("Microchain.sol", evm::microchain::SOURCE),
+        ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
     ] {
         let mut f = File::create(path.join(name)).unwrap();
         writeln!(f, "{}", content).unwrap();

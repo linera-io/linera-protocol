@@ -128,7 +128,7 @@ Scans the block's `ReceiveMessages` transactions for `Message::User` entries mat
 The crate exposes typed bindings for each contract, plus the generated Solidity source as a constant:
 
 ```rust
-use linera_bridge::{light_client, microchain, BRIDGE_TYPES_SOURCE};
+use linera_bridge::evm::{light_client, microchain, BRIDGE_TYPES_SOURCE};
 
 // Encode a contract call (validators are 64-byte uncompressed public keys)
 let call = light_client::addCommitteeCall {

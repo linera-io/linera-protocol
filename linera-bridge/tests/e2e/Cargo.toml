@@ -21,6 +21,7 @@ anyhow = "1"
 bcs = "0.1.6"
 futures = "0.3"
 linera-base = { path = "../../../linera-base" }
+linera-bridge = { path = "../../../linera-bridge" }
 linera-client = { path = "../../../linera-client", default-features = false, features = [
     "wasmer",
 ] }
@@ -33,7 +34,10 @@ linera-sdk = { path = "../../../linera-sdk", default-features = false }
 linera-storage = { path = "../../../linera-storage", features = ["wasmer"] }
 linera-views = { path = "../../../linera-views" }
 rand = { version = "0.8", default-features = false, features = ["std_rng"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 testcontainers = { version = "0.27", features = ["docker-compose"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
+wrapped-fungible = { path = "../../../examples/wrapped-fungible" }

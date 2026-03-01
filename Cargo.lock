@@ -5378,8 +5378,11 @@ version = "0.15.14"
 dependencies = [
  "alloy",
  "alloy-primitives",
+ "alloy-rlp",
  "alloy-sol-types",
+ "alloy-trie",
  "anyhow",
+ "async-trait",
  "bcs",
  "clap",
  "fs-err",

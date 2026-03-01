@@ -80,6 +80,20 @@ FungibleOperation:
               TYPENAME: Amount
           - target_account:
               TYPENAME: Account
+    6:
+      Mint:
+        STRUCT:
+          - target_account:
+              TYPENAME: Account
+          - amount:
+              TYPENAME: Amount
+    7:
+      Burn:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount:
+              TYPENAME: Amount
 Message:
   ENUM:
     0:
