@@ -76,7 +76,7 @@ edition = "2021"
 
 [workspace.dependencies]
 allocative = "0.3.4"
-alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-features = false }
+alloy = { version = "1.0.42", default-features = false }
 alloy-primitives = { version = "1.4.1", default-features = false, features = [
     "serde",
     "k256",
