@@ -10,7 +10,7 @@ publish = false
 [workspace]
 
 [dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-features = false, features = [
+alloy = { version = "1.0.42", default-features = false, features = [
     "rpc-types-eth",
     "json-rpc",
     "contract",
