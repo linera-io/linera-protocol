@@ -276,6 +276,27 @@ where
         }
     }
 
+    /// Pops the front value, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(42);
+    /// queue.push_back(34);
+    /// assert_eq!(queue.pop().await.unwrap(), Some(42));
+    /// assert_eq!(queue.pop().await.unwrap(), Some(34));
+    /// assert_eq!(queue.pop().await.unwrap(), None);
+    /// # })
+    /// ```
+    pub async fn pop(&mut self) -> Result<Option<T>, ViewError> {
+        let value = self.front().await?;
+        self.delete_front();
+        Ok(value)
+    }
+
     /// Pushes a value to the end of the queue.
     /// ```rust
     /// # tokio_test::block_on(async {
