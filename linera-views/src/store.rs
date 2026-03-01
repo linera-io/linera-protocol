@@ -3,7 +3,7 @@
 
 //! This provides the trait definitions for the stores.
 
-use std::{fmt::Debug, future::Future};
+use std::{fmt::Debug, future::Future, time::Duration};
 
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -135,6 +135,32 @@ pub trait DirectWritableKeyValueStore: WithError {
 
     /// Writes the batch to the database.
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error>;
+
+    /// Obtain or renew a lease stored at the given key. Fails if a non-expired lease
+    /// exists with a different UUID.
+    ///
+    /// We expect a lease to consist of a UUID and an expiration timestamp computed from
+    /// the previous renewal time and TTL. Processes using a lease should regularly renew
+    /// it before expiration.
+    async fn obtain_lease(
+        &self,
+        key: Vec<u8>,
+        uuid: u64,
+        ttl: Duration,
+    ) -> Result<Result<(), LeaseConflict>, Self::Error>;
+
+    /// Discard the lease stored at the given key (if we ever had it). Fails if a lease
+    /// exists with a different UUID (expired or not).
+    async fn discard_lease(&self, key: Vec<u8>, uuid: u64) -> Result<(), Self::Error>;
+}
+
+/// Lease conflict: cannot obtain or discard lease due to UUID mismatch
+#[derive(Clone, Debug)]
+pub struct LeaseConflict {
+    /// The existing UUID.
+    pub uuid: u64,
+    /// The expiration date.
+    pub timestamp: u64,
 }
 
 /// The definition of a key-value database.
