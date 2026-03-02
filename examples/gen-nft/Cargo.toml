@@ -34,6 +34,9 @@ non-fungible = { workspace = true, features = ["test"] }
 serde-reflection.workspace = true
 tokio.workspace = true
 
+[package.metadata.cargo-machete]
+ignored = ["half"]
+
 [[bin]]
 name = "gen_nft_contract"
 path = "src/contract.rs"
