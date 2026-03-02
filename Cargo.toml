@@ -219,9 +219,7 @@ revm-state = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
 rocksdb = "0.21.0"
-# 0.8.2 doesn't build with Rust 1.87. Remove `=` once
-# https://github.com/linera-io/linera-protocol/issues/4742 is resolved.
-ruzstd = "=0.8.1"
+ruzstd = "0.8"
 scylla = "~1.1.0"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
@@ -283,9 +281,9 @@ url = "2.4"
 wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "=0.4.50"
 wasm-bindgen-test = "0.3.42"
-wasm-instrument = { package = "linera-wasm-instrument", version = "0.4.0-linera.1" }
-wasmer = { package = "linera-wasmer", version = "4.4.0-linera.7", default-features = false }
-wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.7", default-features = false, features = [
+wasm-instrument = { package = "linera-wasm-instrument", git = "https://github.com/linera-io/wasm-instrument", branch = "bulk-memory-support" }
+wasmer = { package = "linera-wasmer", git = "https://github.com/linera-io/wasmer", branch = "fix-rust-probestack", default-features = false }
+wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", git = "https://github.com/linera-io/wasmer", branch = "fix-rust-probestack", default-features = false, features = [
     "std",
     "unwind",
     "avx",

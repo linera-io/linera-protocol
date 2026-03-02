@@ -2361,8 +2361,6 @@ dependencies = [
 [[package]]
 name = "linera-parity-wasm"
 version = "0.45.1-linera.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
 
 [[package]]
 name = "linera-sdk"
@@ -2515,8 +2513,6 @@ dependencies = [
 [[package]]
 name = "linera-wasm-instrument"
 version = "0.4.0-linera.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80b01177f7f9e3404738607912cfe9887f0f717a8dc45adff03adc9f34f5b22e"
 dependencies = [
  "linera-parity-wasm",
 ]
@@ -2524,8 +2520,6 @@ dependencies = [
 [[package]]
 name = "linera-wasmer"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6652182476826343f0dd1e76a184ad34bcee57650a9c00c77574b993dd30529"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -2554,8 +2548,6 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4781ce9fc4a892c9a9727f51ec92d19e1c5b54259da21573671aa49211ae80f"
 dependencies = [
  "backtrace",
  "bytes",
@@ -2585,8 +2577,6 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8056c8bff8e1b5cafd21aac59b9009e93b30f35b7baab5592a6f4c7db120b490"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -2604,8 +2594,6 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3635a86dd98e2c2fd6dd603054f40b8e379f84365a2238cc177d47547a83eebc"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -2623,8 +2611,6 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-vm"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f27d020717572fdb6222324ec46b10eeb49f6f4a120ee63cf7145f4392f12fd8"
 dependencies = [
  "backtrace",
  "cc",
@@ -2642,6 +2628,7 @@ dependencies = [
  "memoffset",
  "more-asserts",
  "region",
+ "rustversion",
  "scopeguard",
  "serde",
  "thiserror 1.0.69",

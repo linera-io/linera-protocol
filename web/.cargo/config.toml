@@ -2,9 +2,11 @@
 rustflags = [
     # support threading
     "-C", "target-feature=+atomics,+mutable-globals,+reference-types",
+    # Since Rust 1.92, atomics no longer auto-enables shared memory.
+    # These link args are needed for wasm threading support.
+    "-C", "link-args=--shared-memory --max-memory=1073741824 --import-memory --export=__wasm_init_tls --export=__tls_size --export=__tls_align --export=__tls_base",
     # allow linking C code (for `rust_secp256k1`)
     "--cfg=web_sys_unstable_apis",
-    "-Z", "wasm_c_abi=spec",
 ]
 
 [unstable]

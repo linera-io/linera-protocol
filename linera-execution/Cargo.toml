@@ -99,7 +99,7 @@ tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
 url.workspace = true
-wasm-instrument = { workspace = true, features = ["sign_ext"] }
+wasm-instrument = { workspace = true, features = ["sign_ext", "bulk"] }
 wasmtime = { workspace = true, optional = true }
 web-thread-pool.workspace = true
 web-thread-select.workspace = true
