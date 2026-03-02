@@ -215,7 +215,7 @@ impl DestinationStates {
         let pinned = self.states.pin();
         pinned
             .get(id)
-            .unwrap_or_else(|| panic!("{:?} not found in DestinationStates", id))
+            .unwrap_or_else(|| panic!("{id:?} not found in DestinationStates"))
             .clone()
     }
 

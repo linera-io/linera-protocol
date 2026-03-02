@@ -665,13 +665,13 @@ impl<Env: Environment> Benchmark<Env> {
                 } else {
                     return Err(BenchmarkError::ExpectedHistogramValue(sample.value.clone()));
                 }
-            } else if sample.metric == format!("{}_count", metric_prefix) {
+            } else if sample.metric == format!("{metric_prefix}_count") {
                 if let Value::Untyped(count) = sample.value {
                     total_count = Some(count);
                 } else {
                     return Err(BenchmarkError::ExpectedUntypedValue(sample.value.clone()));
                 }
-            } else if sample.metric == format!("{}_sum", metric_prefix) {
+            } else if sample.metric == format!("{metric_prefix}_sum") {
                 if let Value::Untyped(sum) = sample.value {
                     total_sum = Some(sum);
                 } else {

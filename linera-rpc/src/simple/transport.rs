@@ -49,7 +49,7 @@ impl std::str::FromStr for TransportProtocol {
 
 impl std::fmt::Display for TransportProtocol {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

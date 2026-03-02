@@ -65,7 +65,7 @@ impl CommonCliOptions {
     pub fn suffix(&self) -> String {
         self.with_wallet
             .as_ref()
-            .map(|x| format!("_{}", x))
+            .map(|x| format!("_{x}"))
             .unwrap_or_default()
     }
 

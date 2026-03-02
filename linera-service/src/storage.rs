@@ -563,7 +563,7 @@ impl fmt::Display for StorageConfig {
         match &self.inner_storage_config {
             #[cfg(feature = "storage-service")]
             InnerStorageConfig::Service { endpoint } => {
-                write!(f, "service:tcp:{}:{}", endpoint, namespace)
+                write!(f, "service:tcp:{endpoint}:{namespace}")
             }
             InnerStorageConfig::Memory { genesis_path } => {
                 write!(f, "memory:{}:{}", genesis_path.display(), namespace)

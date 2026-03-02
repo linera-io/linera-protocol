@@ -54,7 +54,7 @@ impl From<&ChainOwnership> for ChainOwnershipMetadata {
             // Fallback to Debug format should never be needed, as ChainOwnership implements Serialize.
             // But we include it as a safety measure for GraphQL responses to always succeed.
             ownership_json: serde_json::to_string(ownership)
-                .unwrap_or_else(|_| format!("{:?}", ownership)),
+                .unwrap_or_else(|_| format!("{ownership:?}")),
         }
     }
 }
@@ -72,7 +72,7 @@ impl From<&ApplicationPermissions> for ApplicationPermissionsMetadata {
             // Fallback to Debug format should never be needed, as ApplicationPermissions implements Serialize.
             // But we include it as a safety measure for GraphQL responses to always succeed.
             permissions_json: serde_json::to_string(permissions)
-                .unwrap_or_else(|_| format!("{:?}", permissions)),
+                .unwrap_or_else(|_| format!("{permissions:?}")),
         }
     }
 }
@@ -340,7 +340,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
             } => SystemOperationMetadata {
                 create_application: Some(CreateApplicationOperationMetadata {
                     module_id: serde_json::to_string(module_id)
-                        .unwrap_or_else(|_| format!("{:?}", module_id)),
+                        .unwrap_or_else(|_| format!("{module_id:?}")),
                     parameters_hex: hex::encode(parameters),
                     instantiation_argument_hex: hex::encode(instantiation_argument),
                     required_application_ids: required_application_ids.clone(),
@@ -362,7 +362,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
             SystemOperation::PublishModule { module_id } => SystemOperationMetadata {
                 publish_module: Some(PublishModuleMetadata {
                     module_id: serde_json::to_string(module_id)
-                        .unwrap_or_else(|_| format!("{:?}", module_id)),
+                        .unwrap_or_else(|_| format!("{module_id:?}")),
                 }),
                 ..SystemOperationMetadata::new("PublishModule")
             },

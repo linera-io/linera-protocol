@@ -311,12 +311,12 @@ where
 {
     if let Ok(home) = std::env::var("HOME") {
         let docker_desktop_sock = if cfg!(target_os = "macos") {
-            format!("{}/.docker/run/docker.sock", home)
+            format!("{home}/.docker/run/docker.sock")
         } else {
-            format!("{}/var/run/docker.sock", home)
+            format!("{home}/var/run/docker.sock")
         };
         if std::path::Path::new(&docker_desktop_sock).exists() {
-            std::env::set_var("DOCKER_HOST", format!("unix://{}", docker_desktop_sock));
+            std::env::set_var("DOCKER_HOST", format!("unix://{docker_desktop_sock}"));
         }
     }
 
@@ -341,10 +341,7 @@ where
         let container = ops.handle("postgres");
         let (_, host_port) = container.host_port(5432).unwrap();
 
-        let database_url = format!(
-            "postgresql://testuser:testpass@localhost:{}/testdb",
-            host_port
-        );
+        let database_url = format!("postgresql://testuser:testpass@localhost:{host_port}/testdb");
 
         test_fn(database_url).await;
     })

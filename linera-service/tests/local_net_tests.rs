@@ -796,7 +796,7 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     std::thread::spawn(move || {
         for line in lines {
             let line = line.unwrap();
-            eprintln!("{}", line);
+            eprintln!("{line}");
         }
     });
 
@@ -816,7 +816,7 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     assert_eq!(exports.next().unwrap()?, "");
 
     // Test faucet.
-    let faucet = Faucet::new(format!("http://localhost:{}/", port));
+    let faucet = Faucet::new(format!("http://localhost:{port}/"));
     faucet.version_info().await.unwrap();
 
     // Send SIGINT to the child process.
