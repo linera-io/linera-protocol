@@ -1249,6 +1249,16 @@ impl ClientWrapper {
         name: &str,
         is_workspace: bool,
     ) -> Result<(PathBuf, PathBuf)> {
+        // Rust 1.93 enabled bulk-memory and nontrapping-fptoint by default for
+        // wasm32-unknown-unknown (opcode 0xFC), which testnet_conway validators
+        // do not support. Explicitly disable them here so that the RUSTFLAGS
+        // env variable (e.g. "-D warnings" in CI) does not override the
+        // .cargo/config.toml target-specific rustflags.
+        let rustflags = std::env::var("RUSTFLAGS").unwrap_or_default();
+        let wasm_rustflags = format!(
+            "{} -C target-feature=-bulk-memory,-nontrapping-fptoint",
+            rustflags
+        );
         Command::new("cargo")
             .current_dir(self.path_provider.path())
             .arg("build")
@@ -1256,6 +1266,7 @@ impl ClientWrapper {
             .args(["--target", "wasm32-unknown-unknown"])
             .arg("--manifest-path")
             .arg(path.join("Cargo.toml"))
+            .env("RUSTFLAGS", wasm_rustflags.trim())
             .spawn_and_wait_for_stdout()
             .await?;
 
