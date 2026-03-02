@@ -788,7 +788,7 @@ pub enum ClientCommand {
         /// Enable the application query response cache with the given per-chain capacity.
         /// Each entry stores a serialized GraphQL response keyed by
         /// (application_id, request_bytes). Incompatible with `--long-lived-services`.
-        #[arg(long)]
+        #[arg(long, env = "LINERA_QUERY_CACHE_SIZE")]
         query_cache_size: Option<usize>,
     },
 

@@ -311,10 +311,13 @@ where
             application_id: self.controller_id,
             bytes,
         };
-        let linera_execution::QueryOutcome {
-            response,
-            operations: _,
-        } = self.chain_client.query_application(query, None).await?;
+        let (
+            linera_execution::QueryOutcome {
+                response,
+                operations: _,
+            },
+            _,
+        ) = self.chain_client.query_application(query, None).await?;
         let linera_execution::QueryResponse::User(response) = response else {
             anyhow::bail!("cannot get a system response for a user query");
         };

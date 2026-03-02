@@ -1,6 +1,6 @@
 {
   "name": "@linera/metamask",
-  "version": "0.15.13",
+  "version": "0.15.14",
   "description": "MetaMask wallet integration for the Linera blockchain",
   "publishConfig": {
     "access": "public"

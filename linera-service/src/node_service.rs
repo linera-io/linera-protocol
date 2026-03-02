@@ -934,11 +934,11 @@ mod query_cache_metrics {
     });
 }
 
-/// Per-chain cache state: an LRU map plus the block height at which the cache was
-/// last invalidated. Both are behind the same mutex.
+/// Per-chain cache state: an LRU map plus the `next_block_height` at the time the
+/// cache was last invalidated. Both are behind the same mutex.
 struct PerChainCache {
     lru: LruCache<(ApplicationId, Vec<u8>), Vec<u8>>,
-    block_height: BlockHeight,
+    next_block_height: BlockHeight,
 }
 
 /// An LRU cache for application query responses, keyed per chain.
@@ -947,10 +947,14 @@ struct PerChainCache {
 /// The entire per-chain cache is invalidated when a `NewBlock` notification arrives.
 ///
 /// To prevent a race where a slow query inserts stale data *after* an invalidation,
-/// each insert carries the chain's `next_block_height` at the time the query ran.
+/// each insert carries the chain's `next_block_height` at query time.
 /// If a newer block has since been processed, the insert is silently dropped.
 struct QueryResponseCache {
     chains: papaya::HashMap<ChainId, StdMutex<PerChainCache>>,
+    /// Chains for which we have registered a notification subscription.
+    subscribed: papaya::HashSet<ChainId>,
+    /// Sender half of the notification channel, used to subscribe new chains lazily.
+    notification_sender: StdMutex<Option<tokio::sync::mpsc::UnboundedSender<Notification>>>,
     capacity_per_chain: std::num::NonZeroUsize,
 }
 
@@ -958,19 +962,62 @@ impl QueryResponseCache {
     fn new(capacity_per_chain: usize) -> Self {
         Self {
             chains: papaya::HashMap::new(),
+            subscribed: papaya::HashSet::new(),
+            notification_sender: StdMutex::new(None),
             capacity_per_chain: std::num::NonZeroUsize::new(capacity_per_chain)
                 .expect("capacity must be > 0"),
         }
     }
 
+    /// Stores the notification sender (called once during startup).
+    fn set_notification_sender(&self, sender: tokio::sync::mpsc::UnboundedSender<Notification>) {
+        *self
+            .notification_sender
+            .lock()
+            .expect("sender mutex poisoned") = Some(sender);
+    }
+
+    /// Returns the notification sender, if set.
+    fn notification_sender(&self) -> Option<tokio::sync::mpsc::UnboundedSender<Notification>> {
+        self.notification_sender
+            .lock()
+            .expect("sender mutex poisoned")
+            .clone()
+    }
+
+    /// Marks a chain as subscribed to notifications.
+    fn mark_subscribed(&self, chain_id: ChainId) {
+        self.subscribed.pin().insert(chain_id);
+    }
+
+    /// Returns `true` if the chain is not yet subscribed to notifications.
+    fn needs_subscription(&self, chain_id: &ChainId) -> bool {
+        !self.subscribed.pin().contains(chain_id)
+    }
+
+    /// Marks initial chains as subscribed (called during startup).
+    fn mark_all_subscribed(&self, chain_ids: &[ChainId]) {
+        let pinned = self.subscribed.pin();
+        for &chain_id in chain_ids {
+            pinned.insert(chain_id);
+        }
+    }
+
     /// Looks up a cached response. Returns `Some(bytes)` on hit, `None` on miss
     /// (including when the chain has no cache entry yet).
+    #[allow(clippy::question_mark)]
     fn get(&self, chain_id: ChainId, app_id: &ApplicationId, request: &[u8]) -> Option<Vec<u8>> {
         let pinned = self.chains.pin();
-        let mutex = pinned.get(&chain_id)?;
-        let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
+        let Some(mutex) = pinned.get(&chain_id) else {
+            #[cfg(with_metrics)]
+            query_cache_metrics::QUERY_CACHE_MISS
+                .with_label_values(&[])
+                .inc();
+            return None;
+        };
+        let mut cache = mutex.lock().expect("LRU mutex poisoned");
         let key = (*app_id, request.to_vec());
-        let result = per_chain.lru.get(&key).cloned();
+        let result = cache.lru.get(&key).cloned();
         #[cfg(with_metrics)]
         {
             if result.is_some() {
@@ -986,58 +1033,86 @@ impl QueryResponseCache {
         result
     }
 
-    /// Inserts a response into the cache, unless the chain's block height has advanced
-    /// past the caller's snapshot (which would mean a new block arrived and this
-    /// response is potentially stale).
+    /// Inserts a response into the cache, unless the chain's `next_block_height` has
+    /// advanced past the caller's snapshot (which would mean a new block arrived and
+    /// this response is potentially stale).
     fn insert(
         &self,
         chain_id: ChainId,
         app_id: ApplicationId,
         request: Vec<u8>,
         response: Vec<u8>,
-        block_height: BlockHeight,
+        next_block_height: BlockHeight,
     ) {
         let pinned = self.chains.pin();
         let capacity = self.capacity_per_chain;
         let mutex = pinned.get_or_insert_with(chain_id, || {
             StdMutex::new(PerChainCache {
                 lru: LruCache::new(capacity),
-                block_height,
+                next_block_height,
             })
         });
-        let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
-        if block_height < per_chain.block_height {
+        let mut cache = mutex.lock().expect("LRU mutex poisoned");
+        if next_block_height < cache.next_block_height {
             return; // A new block arrived since this query started; discard stale response.
         }
+        // If the chain has advanced since the last cache update, also clear stale entries.
+        // Note: This should not happen if notifications are timely. Also, this only
+        // works when we have a cache miss.
+        if next_block_height > cache.next_block_height {
+            debug!(
+                "Unexpected query cache invalidation for chain {chain_id}:\
+                 {next_block_height} > {}",
+                cache.next_block_height
+            );
+            #[cfg(with_metrics)]
+            {
+                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
+                query_cache_metrics::QUERY_CACHE_INVALIDATION
+                    .with_label_values(&[])
+                    .inc();
+            }
+            cache.lru.clear();
+            cache.next_block_height = next_block_height;
+        }
         #[cfg(with_metrics)]
-        let prev_len = per_chain.lru.len();
-        per_chain.lru.put((app_id, request), response);
+        let prev_len = cache.lru.len();
+        cache.lru.put((app_id, request), response);
         #[cfg(with_metrics)]
-        if per_chain.lru.len() != prev_len {
+        if cache.lru.len() != prev_len {
             query_cache_metrics::QUERY_CACHE_ENTRIES.inc();
         }
     }
 
-    /// Called when a `NewBlock` notification arrives. Sets the block height and
-    /// clears all cached responses for the chain.
-    fn invalidate_chain(&self, chain_id: &ChainId, block_height: BlockHeight) {
+    /// Called when a `NewBlock` notification arrives. Records the new
+    /// `next_block_height` and clears all cached responses for the chain.
+    fn invalidate_chain(&self, chain_id: &ChainId, next_block_height: BlockHeight) {
         let pinned = self.chains.pin();
         let capacity = self.capacity_per_chain;
         let mutex = pinned.get_or_insert_with(*chain_id, || {
             StdMutex::new(PerChainCache {
                 lru: LruCache::new(capacity),
-                block_height,
+                next_block_height,
             })
         });
-        let mut per_chain = mutex.lock().expect("LRU mutex poisoned");
-        per_chain.block_height = block_height;
-        #[cfg(with_metrics)]
-        query_cache_metrics::QUERY_CACHE_ENTRIES.sub(per_chain.lru.len() as i64);
-        per_chain.lru.clear();
-        #[cfg(with_metrics)]
-        query_cache_metrics::QUERY_CACHE_INVALIDATION
-            .with_label_values(&[])
-            .inc();
+        let mut cache = mutex.lock().expect("LRU mutex poisoned");
+        if next_block_height > cache.next_block_height {
+            #[cfg(with_metrics)]
+            {
+                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
+                query_cache_metrics::QUERY_CACHE_INVALIDATION
+                    .with_label_values(&[])
+                    .inc();
+            }
+            cache.lru.clear();
+            cache.next_block_height = next_block_height;
+        } else {
+            debug!(
+                "Query cache for chain {chain_id} was already invalidated:\
+                 {next_block_height} <= {}",
+                cache.next_block_height
+            );
+        }
     }
 }
 
@@ -1181,13 +1256,19 @@ where
         if let Some(cache) = &self.query_cache {
             let guard = self.context.lock().await;
             let chain_ids: Vec<ChainId> = guard.wallet().chain_ids().try_collect().await?;
-            let mut receiver = guard.client().subscribe(chain_ids);
+            let (tx, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+            guard.client().subscribe_extra(chain_ids.clone(), &tx);
+            cache.mark_all_subscribed(&chain_ids);
+            cache.set_notification_sender(tx);
             drop(guard);
             let cache = Arc::clone(cache);
             tokio::spawn(async move {
                 while let Some(notification) = receiver.recv().await {
                     if let Reason::NewBlock { height, .. } = notification.reason {
-                        cache.invalidate_chain(&notification.chain_id, height);
+                        let next_block_height = height
+                            .try_add_one()
+                            .expect("block height should not overflow");
+                        cache.invalidate_chain(&notification.chain_id, next_block_height);
                     }
                 }
             });
@@ -1251,6 +1332,17 @@ where
             .await?;
         if operations.is_empty() {
             if let Some(cache) = cache {
+                // Lazily subscribe to notifications for chains discovered after startup.
+                if cache.needs_subscription(&chain_id) {
+                    if let Some(sender) = cache.notification_sender() {
+                        self.context
+                            .lock()
+                            .await
+                            .client()
+                            .subscribe_extra(vec![chain_id], &sender);
+                        cache.mark_subscribed(chain_id);
+                    }
+                }
                 cache.insert(
                     chain_id,
                     application_id,
@@ -1312,17 +1404,13 @@ where
             .await
             .make_chain_client(chain_id)
             .await?;
-        let block_height = client
-            .chain_info()
-            .await
-            .map_err(ChainClientError::from)?
-            .next_block_height
-            .try_sub_one()
-            .unwrap_or(BlockHeight::ZERO);
-        let QueryOutcome {
-            response,
-            operations,
-        } = client.query_application(query, block_hash).await?;
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            next_block_height,
+        ) = client.query_application(query, block_hash).await?;
         match response {
             QueryResponse::System(_) => {
                 unreachable!("cannot get a system response for a user query")
@@ -1332,7 +1420,7 @@ where
                     response: user_response_bytes,
                     operations,
                 },
-                block_height,
+                next_block_height,
             )),
         }
     }
