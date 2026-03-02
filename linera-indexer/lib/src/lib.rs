@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
+
 //! This module defines the linera-indexer library including:
 //! - the indexer connection to the node service (service.rs)
 //! - the block processing (indexer.rs)
