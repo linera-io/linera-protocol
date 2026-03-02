@@ -4,8 +4,6 @@ on:
   push:
     branches: [ 'devnet_*', 'testnet_*' ]
   pull_request:
-    paths:
-      - '.github/workflows/lint-check-all-features.yml'
   merge_group:
   workflow_dispatch:
 
@@ -30,6 +28,7 @@ permissions:
 
 jobs:
   check-all-features-partition:
+    if: github.event_name != 'pull_request'
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 30
     strategy:
@@ -58,6 +57,7 @@ jobs:
     if: always()
     steps:
     - run: |
-        if [ "${{ needs.check-all-features-partition.result }}" != "success" ]; then
+        result="${{ needs.check-all-features-partition.result }}"
+        if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
           exit 1
         fi
