@@ -5311,27 +5311,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let task_count: u64 = task_app.query_json("taskCount").await?;
     assert_eq!(task_count, 1, "Task should have been processed");
 
-    let admin_fungible_app =
-        FungibleApp(admin_node_service.make_application(&admin_chain, &fungible_id)?);
-    admin_fungible_app
-        .transfer(
-            &admin_owner,
-            Amount::from_tokens(10),
-            Account {
-                chain_id: service_chain,
-                owner: admin_owner,
-            },
-        )
-        .await;
-
-    // Admin chain block start_h+14: the transfer operation.
-    admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 14))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should receive a notification about a block on chain {admin_chain}")
-        });
-
     // Move the service to the second worker.
     let mutation = format!(
         "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
@@ -5339,9 +5318,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block start_h+15: remove service from worker 1
+    // Admin chain block start_h+14: remove service from worker 1
     admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 15))
+        .wait_for_block(BlockHeight::from(start_h + 14))
         .await
         .unwrap_or_else(|_| {
             panic!("should receive a notification about a block on chain {admin_chain}")
@@ -5393,11 +5372,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             panic!("should get notification about a block on chain {worker2_chain}")
         });
 
-    // Service chain block 4: removal of old owners
-
-    // We start listening to notifications on the service chain via the service client's node
-    // service.
-    let mut service_notifications = service_service.notifications(service_chain).await?;
+    // Note: the RemoveOwners message may still be pending in the service chain's inbox at
+    // this point, due to a race between cross-chain message delivery and inbox processing.
+    // It will be processed together with the next incoming message.
 
     let admin_task_app = admin_node_service.make_application(&admin_chain, &task_processor_id)?;
     admin_task_app
@@ -5407,6 +5384,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         ))
         .await?;
 
+    // Admin chain block start_h+15: receive HandoffStarted, send Start to worker 2
     // Admin chain block start_h+16: the RequestTaskOn operation sends a message to
     // the service chain.
     admin_notifications
@@ -5416,28 +5394,53 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             panic!("should receive a notification about a block on chain {admin_chain}")
         });
 
-    // Service chain block 5: receive RequestTask message from admin chain
-    service_notifications
-        .wait_for_block(BlockHeight::from(5))
+    // The RemoveOwners and RequestTask messages may be processed in separate blocks or
+    // batched into one, depending on timing. Instead of waiting for specific block heights,
+    // wait for new blocks on the service chain until the second task has been processed.
+    let mut service_notifications = service_service.notifications(service_chain).await?;
+    let mut task_count: u64 = service_task_app.query_json("taskCount").await?;
+    while task_count < 2 {
+        service_notifications
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| {
+                panic!("should get notification about a block on chain {service_chain}")
+            });
+        task_count = service_task_app.query_json("taskCount").await?;
+    }
+
+    // Test that the message policy rejects non-allowed applications: a fungible transfer
+    // to the service chain should be rejected, and the tracked Credit message should
+    // bounce back, restoring the admin's balance.
+    let admin_fungible_app =
+        FungibleApp(admin_node_service.make_application(&admin_chain, &fungible_id)?);
+    admin_fungible_app
+        .transfer(
+            &admin_owner,
+            Amount::from_tokens(10),
+            Account {
+                chain_id: service_chain,
+                owner: admin_owner,
+            },
+        )
+        .await;
+
+    // Admin chain block start_h+17: the transfer operation.
+    admin_notifications
+        .wait_for_block(BlockHeight::from(start_h + 17))
         .await
         .unwrap_or_else(|_| {
-            panic!("should get notification about RequestTask block on chain {service_chain}")
+            panic!("should receive a notification about a block on chain {admin_chain}")
         });
 
-    // Service chain block 6: StoreResult
-    service_notifications
-        .wait_for_block(BlockHeight::from(6))
+    // Admin chain block start_h+18: the bounced Credit message is received back.
+    admin_notifications
+        .wait_for_block(BlockHeight::from(start_h + 18))
         .await
         .unwrap_or_else(|_| {
-            panic!("should get notification about StoreResult block on chain {service_chain}")
+            panic!("should receive a notification about a block on chain {admin_chain}")
         });
 
-    let task_count: u64 = service_task_app.query_json("taskCount").await?;
-    assert_eq!(task_count, 2, "Task should have been processed");
-
-    // The fungible transfer to the service chain should have been rejected by the message
-    // policy (fungible is not an allowed application), and the tracked Credit message
-    // bounced back, restoring the admin's balance.
     admin_fungible_app
         .assert_balances([(admin_owner, Amount::from_tokens(100))])
         .await;

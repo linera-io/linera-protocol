@@ -17,7 +17,6 @@ crate-type = ["cdylib", "rlib"]
 console_error_panic_hook.workspace = true
 futures.workspace = true
 js-sys.workspace = true
-log.workspace = true
 num-traits.workspace = true
 serde.workspace = true
 serde-wasm-bindgen.workspace = true
