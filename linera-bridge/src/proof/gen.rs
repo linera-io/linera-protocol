@@ -226,6 +226,7 @@ mod tests {
             B256::from([0xCC; 32]),
             Address::from([0xDD; 20]),
             1_000_000,
+            0,
         );
 
         let bridge_address = Address::from([0xBB; 20]);

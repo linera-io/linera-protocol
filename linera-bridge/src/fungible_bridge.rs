@@ -47,7 +47,8 @@ mod tests {
                 bytes32 target_account_owner,
                 address indexed depositor,
                 address token,
-                uint256 amount
+                uint256 amount,
+                uint256 nonce
             );
         }
     }
@@ -438,6 +439,11 @@ mod tests {
         assert_eq!(
             event.data.amount,
             alloy_primitives::U256::from(DEPOSIT_AMOUNT)
+        );
+        assert_eq!(
+            event.data.nonce,
+            alloy_primitives::U256::ZERO,
+            "first deposit should have nonce 0"
         );
     }
 

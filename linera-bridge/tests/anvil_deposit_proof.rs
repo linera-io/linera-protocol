@@ -299,6 +299,7 @@ async fn test_deposit_proof_generation() {
     assert_eq!(deposit.depositor, deployer);
     assert_eq!(deposit.token, token_address);
     assert_eq!(deposit.amount, deposit_amount);
+    assert_eq!(deposit.nonce, U256::ZERO, "first deposit nonce should be 0");
 
     // Verify the bridge contract address in the log matches
     assert_eq!(

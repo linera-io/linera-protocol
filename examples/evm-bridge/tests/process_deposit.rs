@@ -115,6 +115,7 @@ async fn test_process_deposit_mints_tokens() {
         target_owner_b256,
         token,
         deposit_amount,
+        0,
     );
 
     let depositor = Address::from([0xDD; 20]);
@@ -209,6 +210,7 @@ async fn test_replay_protection() {
         B256::from(owner_hash),
         Address::from(token_address),
         500_000,
+        0,
     );
 
     let depositor = Address::from([0xDD; 20]);
@@ -313,6 +315,7 @@ async fn test_invalid_proof_rejected() {
         B256::from(owner_hash),
         Address::from(token_address),
         100,
+        0,
     );
 
     let depositor = Address::from([0xDD; 20]);

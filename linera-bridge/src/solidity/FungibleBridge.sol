@@ -25,11 +25,13 @@ contract FungibleBridge is Microchain {
         bytes32 target_account_owner,
         address indexed depositor,
         address token,
-        uint256 amount
+        uint256 amount,
+        uint256 nonce
     );
 
     bytes32 public immutable applicationId;
     IERC20 public immutable token;
+    uint256 public depositNonce;
 
     constructor(
         address _lightClient,
@@ -63,6 +65,8 @@ contract FungibleBridge is Microchain {
         uint256 received = token.balanceOf(address(this)) - before;
         require(received == amount, "fee-on-transfer tokens unsupported");
 
+        uint256 currentNonce = depositNonce++;
+
         emit DepositInitiated(
             block.chainid,
             target_chain_id,
@@ -70,7 +74,8 @@ contract FungibleBridge is Microchain {
             target_account_owner,
             msg.sender,
             address(token),
-            amount
+            amount,
+            currentNonce
         );
     }
 

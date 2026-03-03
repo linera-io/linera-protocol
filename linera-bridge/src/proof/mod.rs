@@ -92,18 +92,19 @@ pub struct DepositEvent {
     pub depositor: Address,
     pub token: Address,
     pub amount: U256,
+    pub nonce: U256,
 }
 
 /// Returns the keccak256 hash of the `DepositInitiated` event signature.
 pub fn deposit_event_signature() -> B256 {
-    keccak256(b"DepositInitiated(uint256,bytes32,bytes32,bytes32,address,address,uint256)")
+    keccak256(b"DepositInitiated(uint256,bytes32,bytes32,bytes32,address,address,uint256,uint256)")
 }
 
 /// Known keccak256 hash of the `DepositInitiated` event signature, for regression testing.
 /// If the event signature string changes, this constant must be updated.
 pub const DEPOSIT_EVENT_SIGNATURE_HASH: [u8; 32] = [
-    0xd0, 0x8e, 0x9f, 0x73, 0x82, 0x37, 0xa2, 0x3b, 0x86, 0x33, 0xe0, 0x19, 0x3d, 0x83, 0x73, 0xb6,
-    0x47, 0xea, 0x53, 0xd5, 0x95, 0xce, 0xce, 0x4f, 0xa9, 0x2e, 0xfa, 0x76, 0xfc, 0xa7, 0x05, 0x07,
+    0x9c, 0x87, 0x81, 0x93, 0xc6, 0x46, 0xca, 0x73, 0x01, 0x76, 0xe7, 0x9b, 0x6e, 0x4e, 0x95, 0x67,
+    0x91, 0x1e, 0xfe, 0xf8, 0x12, 0xf1, 0x23, 0x01, 0x67, 0x4d, 0xa8, 0x8b, 0x38, 0x33, 0xb9, 0x23,
 ];
 
 /// Shared test helpers for building synthetic proofs.
@@ -216,8 +217,9 @@ pub mod testing {
         target_account_owner: B256,
         token: Address,
         amount: u64,
+        nonce: u64,
     ) -> Vec<u8> {
-        let mut data = Vec::with_capacity(192);
+        let mut data = Vec::with_capacity(224);
         data.extend_from_slice(&U256::from(source_chain_id).to_be_bytes::<32>());
         data.extend_from_slice(target_chain_id.as_slice());
         data.extend_from_slice(target_application_id.as_slice());
@@ -225,6 +227,7 @@ pub mod testing {
         data.extend_from_slice(&[0u8; 12]);
         data.extend_from_slice(token.as_slice());
         data.extend_from_slice(&U256::from(amount).to_be_bytes::<32>());
+        data.extend_from_slice(&U256::from(nonce).to_be_bytes::<32>());
         data
     }
 
@@ -344,8 +347,8 @@ pub fn parse_deposit_event(log: &ReceiptLog) -> Result<DepositEvent> {
         log.topics.len()
     );
     ensure!(
-        log.data.len() == 192,
-        "expected 192 bytes of event data (6 x 32), got {}",
+        log.data.len() == 224,
+        "expected 224 bytes of event data (7 x 32), got {}",
         log.data.len()
     );
 
@@ -373,6 +376,7 @@ pub fn parse_deposit_event(log: &ReceiptLog) -> Result<DepositEvent> {
         depositor,
         token: Address::from_slice(&d[140..160]),
         amount: U256::from_be_slice(&d[160..192]),
+        nonce: U256::from_be_slice(&d[192..224]),
     })
 }
 
@@ -666,6 +670,7 @@ mod tests {
             target_owner,
             token,
             1_000_000,
+            0,
         );
 
         let log = ReceiptLog {
@@ -689,7 +694,7 @@ mod tests {
         let log = ReceiptLog {
             address: Address::ZERO,
             topics: vec![B256::from([0xFF; 32]), depositor_topic(Address::ZERO)],
-            data: vec![0; 192],
+            data: vec![0; 224],
         };
         assert!(parse_deposit_event(&log).is_err());
     }
@@ -699,7 +704,7 @@ mod tests {
         let log = ReceiptLog {
             address: Address::ZERO,
             topics: vec![],
-            data: vec![0; 192],
+            data: vec![0; 224],
         };
         assert!(parse_deposit_event(&log).is_err());
     }
@@ -709,7 +714,7 @@ mod tests {
         let log = ReceiptLog {
             address: Address::ZERO,
             topics: vec![deposit_event_signature()],
-            data: vec![0; 192],
+            data: vec![0; 224],
         };
         assert!(parse_deposit_event(&log).is_err());
     }
@@ -729,7 +734,7 @@ mod tests {
         let log = ReceiptLog {
             address: Address::ZERO,
             topics: vec![deposit_event_signature(), depositor_topic(Address::ZERO)],
-            data: vec![0; 193], // one byte too many
+            data: vec![0; 225], // one byte too many
         };
         assert!(parse_deposit_event(&log).is_err());
     }
@@ -739,7 +744,7 @@ mod tests {
         let log = ReceiptLog {
             address: Address::ZERO,
             topics: vec![deposit_event_signature(), depositor_topic(Address::ZERO)],
-            data: vec![0; 191], // one byte too short
+            data: vec![0; 223], // one byte too short
         };
         assert!(parse_deposit_event(&log).is_err());
     }
@@ -755,6 +760,7 @@ mod tests {
             B256::ZERO,
             Address::from([0xAA; 20]),
             100,
+            0,
         );
         // Corrupt the padding: set byte 128 to nonzero.
         data[128] = 0xFF;
