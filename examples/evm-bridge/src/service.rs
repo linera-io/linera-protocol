@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 
-use async_graphql::{EmptyMutation, EmptySubscription, Object, Request, Response, Schema};
-use evm_bridge::{BridgeParameters, DepositKey, EvmBridgeAbi};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
 use linera_sdk::{
     linera_base_types::WithServiceAbi,
     views::{linera_views, RootView, SetView, View, ViewStorageContext},
@@ -47,7 +47,14 @@ impl Service for EvmBridgeService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(self.clone(), EmptyMutation, EmptySubscription).finish();
+        let schema = Schema::build(
+            self.clone(),
+            MutationRoot {
+                runtime: self.runtime.clone(),
+            },
+            EmptySubscription,
+        )
+        .finish();
         schema.execute(request).await
     }
 }
@@ -70,5 +77,38 @@ impl EvmBridgeService {
     async fn token_address(&self) -> String {
         let params: BridgeParameters = self.runtime.application_parameters();
         format!("0x{}", hex::encode(params.token_address))
+    }
+}
+
+struct MutationRoot {
+    runtime: Arc<ServiceRuntime<EvmBridgeService>>,
+}
+
+#[Object]
+impl MutationRoot {
+    /// Submit a deposit proof for verification.
+    ///
+    /// All binary parameters are hex-encoded (no `0x` prefix).
+    async fn process_deposit(
+        &self,
+        block_header_rlp: String,
+        receipt_rlp: String,
+        proof_nodes: Vec<String>,
+        tx_index: u64,
+        log_index: u64,
+    ) -> [u8; 0] {
+        let operation = BridgeOperation::ProcessDeposit {
+            block_header_rlp: hex::decode(&block_header_rlp)
+                .expect("invalid hex in block_header_rlp"),
+            receipt_rlp: hex::decode(&receipt_rlp).expect("invalid hex in receipt_rlp"),
+            proof_nodes: proof_nodes
+                .iter()
+                .map(|n| hex::decode(n).expect("invalid hex in proof_nodes"))
+                .collect(),
+            tx_index,
+            log_index,
+        };
+        self.runtime.schedule_operation(&operation);
+        []
     }
 }
