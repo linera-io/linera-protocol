@@ -252,6 +252,7 @@ async fn main() -> std::io::Result<()> {
         None,  // no query cache for schema export
         None,
         tokio_util::sync::CancellationToken::new(),
+        false, // memory profiling disabled for schema export
     );
     let schema = service.schema().sdl();
     print!("{}", schema);
