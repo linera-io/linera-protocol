@@ -1266,6 +1266,20 @@ impl ClientWrapper {
         // target file. Both flags require nightly cargo.
         // The toolchain must match `toolchains/nightly/rust-toolchain.toml`.
         const WASM_NIGHTLY_TOOLCHAIN: &str = "nightly-2026-03-01";
+        // -Z build-std requires the rust-src component. Use `toolchain install`
+        // rather than `component add` so that the toolchain is installed first
+        // if not already present (e.g. in a fresh CI environment). This is a
+        // no-op if the toolchain and component are already up to date.
+        Command::new("rustup")
+            .args([
+                "toolchain",
+                "install",
+                WASM_NIGHTLY_TOOLCHAIN,
+                "--component",
+                "rust-src",
+            ])
+            .spawn_and_wait_for_stdout()
+            .await?;
         Command::new("cargo")
             .current_dir(path)
             .arg(format!("+{WASM_NIGHTLY_TOOLCHAIN}"))
