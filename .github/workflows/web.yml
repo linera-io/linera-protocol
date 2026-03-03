@@ -9,11 +9,6 @@ on:
       - "**"
   workflow_dispatch:
 
-# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
-concurrency:
-  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
-  cancel-in-progress: true
-
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
@@ -35,6 +30,9 @@ permissions:
 
 jobs:
   changed-files:
+    concurrency:
+      group: 'web-changed-files @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     runs-on: linera-io-self-hosted-ci
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
@@ -55,6 +53,9 @@ jobs:
               - '!INSTALL.md'
 
   web:
+    concurrency:
+      group: 'web @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci

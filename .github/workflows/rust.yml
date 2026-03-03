@@ -9,11 +9,6 @@ on:
       - "**"
   workflow_dispatch:
 
-# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
-concurrency:
-  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
-  cancel-in-progress: true
-
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
@@ -37,6 +32,9 @@ permissions:
 jobs:
   # paths-ignore within a pull_request doesn't work well with merge_group, so we need to use a custom filter.
   changed-files:
+    concurrency:
+      group: 'changed-files @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     runs-on: linera-io-self-hosted-ci
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
@@ -55,6 +53,9 @@ jobs:
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
   changed-files-kubernetes:
+    concurrency:
+      group: 'changed-files-kubernetes @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     runs-on: linera-io-self-hosted-ci
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
@@ -71,6 +72,9 @@ jobs:
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
   execution-wasmtime-test:
+    concurrency:
+      group: 'execution-wasmtime-test @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -84,6 +88,9 @@ jobs:
         cargo test --locked -p linera-execution --features wasmtime
 
   metrics-test:
+    concurrency:
+      group: 'metrics-test @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -97,6 +104,9 @@ jobs:
         cargo test --locked -p linera-base --features metrics
 
   wasm-application-test:
+    concurrency:
+      group: 'wasm-application-test @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -118,6 +128,9 @@ jobs:
         cargo test --locked
 
   linera-sdk-tests-fixtures:
+    concurrency:
+      group: 'linera-sdk-tests-fixtures @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -144,6 +157,9 @@ jobs:
         cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
 
   default-features-and-witty-integration-test:
+    concurrency:
+      group: 'default-features-and-witty-integration-test @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -168,6 +184,9 @@ jobs:
         cargo test -p linera-witty --features wasmer,wasmtime
 
   check-outdated-cli-md:
+    concurrency:
+      group: 'check-outdated-cli-md @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -190,6 +209,9 @@ jobs:
         fi
 
   ethereum-tests:
+    concurrency:
+      group: 'ethereum-tests @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -256,6 +278,9 @@ jobs:
 
 
   storage-service-tests:
+    concurrency:
+      group: 'storage-service-tests @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -284,6 +309,9 @@ jobs:
         cargo test --features storage-service,opentelemetry -- storage_service --nocapture
 
   check-wit-files:
+    concurrency:
+      group: 'check-wit-files @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -295,6 +323,9 @@ jobs:
         cargo run --bin wit-generator -- -c
 
   lint-unexpected-chain-load-operations:
+    concurrency:
+      group: 'lint-unexpected-chain-load-operations @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -307,6 +338,9 @@ jobs:
         ./scripts/check_chain_loads.sh
 
   lint-check-copyright-headers:
+    concurrency:
+      group: 'lint-check-copyright-headers @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -324,6 +358,9 @@ jobs:
         | xargs -0 scripts/target/release/check_copyright_header
 
   lint-cargo-machete:
+    concurrency:
+      group: 'lint-cargo-machete @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -343,6 +380,9 @@ jobs:
         cargo machete
 
   lint-cargo-fmt:
+    concurrency:
+      group: 'lint-cargo-fmt @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -359,6 +399,9 @@ jobs:
         cargo fmt -- --check
 
   lint-taplo-fmt:
+    concurrency:
+      group: 'lint-taplo-fmt @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -373,6 +416,9 @@ jobs:
       run: taplo fmt --check --diff
 
   lint-check-for-outdated-readme:
+    concurrency:
+      group: 'lint-check-for-outdated-readme @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -402,6 +448,9 @@ jobs:
         done
 
   lint-wasm-applications:
+    concurrency:
+      group: 'lint-wasm-applications @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -427,6 +476,9 @@ jobs:
         cargo fmt -- --check
 
   lint-cargo-clippy:
+    concurrency:
+      group: 'lint-cargo-clippy @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -453,6 +505,9 @@ jobs:
           -p linera-views
 
   lint-cargo-doc:
+    concurrency:
+      group: 'lint-cargo-doc @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
@@ -473,6 +528,9 @@ jobs:
         cargo doc --locked --all-features
 
   lint-check-linera-service-graphql-schema:
+    concurrency:
+      group: 'lint-check-linera-service-graphql-schema @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci

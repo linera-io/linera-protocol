@@ -8,17 +8,15 @@ on:
       - completed
   workflow_dispatch:
 
-# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
-concurrency:
-  group: '${{ github.workflow }} @ ${{ github.head_ref || github.event.workflow_run.head_commit.id || github.event.workflow_run.id || github.run_id }}'
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
   performance-summary:
+    concurrency:
+      group: 'performance-summary @ ${{ github.head_ref || github.event.workflow_run.head_commit.id || github.event.workflow_run.id || github.run_id }}'
+      cancel-in-progress: true
     runs-on: linera-io-self-hosted-ci
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:

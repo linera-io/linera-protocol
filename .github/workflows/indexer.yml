@@ -7,11 +7,6 @@ on:
   merge_group:
   workflow_dispatch:
 
-# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
-concurrency:
-  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
-  cancel-in-progress: true
-
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
@@ -26,6 +21,9 @@ permissions:
 
 jobs:
   indexer-check:
+    concurrency:
+      group: 'indexer-check @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 10
 
@@ -47,6 +45,9 @@ jobs:
         cargo test --locked -p linera-indexer --lib -- --skip db::postgres
 
   indexer-integration-tests:
+    concurrency:
+      group: 'indexer-integration-tests @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+      cancel-in-progress: true
     if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 20
