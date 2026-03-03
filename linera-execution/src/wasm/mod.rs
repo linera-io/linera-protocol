@@ -85,7 +85,7 @@ impl WasmContractModule {
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
-        let contract_bytecode = add_metering(contract_bytecode)?;
+        let contract_bytecode = add_metering(&contract_bytecode)?;
         match runtime {
             #[cfg(with_wasmer)]
             WasmRuntime::Wasmer => Self::from_wasmer(contract_bytecode).await,
@@ -198,7 +198,7 @@ impl UserServiceModule for WasmServiceModule {
 }
 
 /// Instrument the [`Bytecode`] to add fuel metering.
-pub fn add_metering(bytecode: Bytecode) -> Result<Bytecode, WasmExecutionError> {
+pub fn add_metering(bytecode: &Bytecode) -> Result<Bytecode, WasmExecutionError> {
     struct WasmtimeRules;
 
     impl gas_metering::Rules for WasmtimeRules {

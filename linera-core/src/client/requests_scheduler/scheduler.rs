@@ -150,7 +150,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
     /// Creates a new `RequestsScheduler` with the provided configuration.
     pub fn new(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
-        config: RequestsSchedulerConfig,
+        config: &RequestsSchedulerConfig,
     ) -> Self {
         Self::with_config(
             nodes,

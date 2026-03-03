@@ -99,7 +99,7 @@ pub async fn create_with_accounts(
             .add_block(|block| {
                 block.with_operation(
                     application_id,
-                    FungibleOperation::Claim {
+                    &FungibleOperation::Claim {
                         source_account: Account {
                             chain_id: token_chain.id(),
                             owner: *account,

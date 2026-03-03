@@ -1609,7 +1609,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, ExecutionError> {
         let (blobs, module_id) =
-            crate::runtime::create_bytecode_blobs_sync(contract, service, vm_runtime);
+            crate::runtime::create_bytecode_blobs_sync(&contract, &service, vm_runtime);
         let this = self.inner();
         for blob in blobs {
             this.execution_state_sender
@@ -1714,7 +1714,7 @@ impl ServiceSyncRuntime {
     }
 
     /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
-    pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
+    pub fn run(&mut self, incoming_requests: &std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
         while let Ok(request) = incoming_requests.recv() {
             let ServiceRuntimeRequest::Query {
                 application_id,
@@ -1862,8 +1862,8 @@ impl From<&MessageContext> for ExecutingMessage {
 
 /// Creates a compressed contract and service bytecode synchronously.
 pub fn create_bytecode_blobs_sync(
-    contract: Bytecode,
-    service: Bytecode,
+    contract: &Bytecode,
+    service: &Bytecode,
     vm_runtime: VmRuntime,
 ) -> (Vec<Blob>, ModuleId) {
     match vm_runtime {

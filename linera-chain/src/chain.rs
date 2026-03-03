@@ -796,7 +796,7 @@ where
 
             // Restore checkpoint.
             *chain = saved_chain;
-            block_execution_tracker.restore_checkpoint(saved_tracker);
+            block_execution_tracker.restore_checkpoint(&saved_tracker);
 
             if error.is_limit_error() && i > 0 {
                 failure_count += 1;

@@ -42,7 +42,7 @@ async fn test_cross_chain_transfer() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                FungibleOperation::Transfer {
+                &FungibleOperation::Transfer {
                     owner: sender_account,
                     amount: transfer_amount,
                     target_account: Account {
@@ -97,7 +97,7 @@ async fn test_bouncing_tokens() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                FungibleOperation::Transfer {
+                &FungibleOperation::Transfer {
                     owner: sender_account,
                     amount: transfer_amount,
                     target_account: Account {

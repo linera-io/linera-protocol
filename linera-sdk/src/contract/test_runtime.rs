@@ -706,7 +706,7 @@ where
     /// application doesn't have permission to do so.
     pub fn change_application_permissions(
         &mut self,
-        application_permissions: ApplicationPermissions,
+        application_permissions: &ApplicationPermissions,
     ) -> Result<(), ManageChainError> {
         let authorized = self.can_manage_chain.expect(
             "Authorization to manage the chain has not been mocked, \
@@ -753,8 +753,8 @@ where
             .expected_open_chain_calls
             .pop_front()
             .expect("Unexpected open_chain call");
-        assert_eq!(ownership, expected_ownership);
-        assert_eq!(application_permissions, expected_permissions);
+        assert_eq!(&ownership, &expected_ownership);
+        assert_eq!(&application_permissions, &expected_permissions);
         assert_eq!(balance, expected_balance);
         chain_id
     }
@@ -780,17 +780,17 @@ where
     pub fn add_expected_create_application_call<Parameters, InstantiationArgument>(
         &mut self,
         module_id: ModuleId,
-        parameters: &Parameters,
-        argument: &InstantiationArgument,
+        parameters: Parameters,
+        argument: InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
         application_id: ApplicationId,
     ) where
         Parameters: Serialize,
         InstantiationArgument: Serialize,
     {
-        let parameters = serde_json::to_vec(parameters)
+        let parameters = serde_json::to_vec(&parameters)
             .expect("Failed to serialize `Parameters` type for a cross-application call");
-        let argument = serde_json::to_vec(argument).expect(
+        let argument = serde_json::to_vec(&argument).expect(
             "Failed to serialize `InstantiationArgument` type for a cross-application call",
         );
         self.expected_create_application_calls
@@ -825,8 +825,8 @@ where
             .expected_publish_module_calls
             .pop_front()
             .expect("Unexpected publish_module call");
-        assert_eq!(contract, expected_contract);
-        assert_eq!(service, expected_service);
+        assert_eq!(&contract, &expected_contract);
+        assert_eq!(&service, &expected_service);
         assert_eq!(vm_runtime, expected_vm_runtime);
         module_id
     }
@@ -862,7 +862,10 @@ where
         assert_eq!(module_id, expected_module_id);
         assert_eq!(parameters, expected_parameters);
         assert_eq!(argument, expected_argument);
-        assert_eq!(required_application_ids, expected_required_app_ids);
+        assert_eq!(
+            required_application_ids.as_slice(),
+            expected_required_app_ids.as_slice()
+        );
         application_id.with_abi::<Abi>()
     }
 
@@ -970,8 +973,8 @@ where
     pub fn add_expected_service_query<A: ServiceAbi + Send>(
         &mut self,
         application_id: ApplicationId<A>,
-        query: A::Query,
-        response: A::QueryResponse,
+        query: &A::Query,
+        response: &A::QueryResponse,
     ) {
         let query = serde_json::to_string(&query).expect("Failed to serialize query");
         let response = serde_json::to_string(&response).expect("Failed to serialize response");
@@ -1041,7 +1044,7 @@ where
     pub fn http_request(&mut self, request: http::Request) -> http::Response {
         let maybe_request = self.expected_http_requests.pop_front();
         let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");
-        assert_eq!(request, expected_request);
+        assert_eq!(&request, &expected_request);
         response
     }
 

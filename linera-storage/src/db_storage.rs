@@ -336,10 +336,10 @@ impl MultiPartitionBatch {
         Ok(())
     }
 
-    fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
+    fn add_event(&mut self, event_id: &EventId, value: Vec<u8>) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
-        let key = to_event_key(&event_id);
+        let key = to_event_key(event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         self.put_key_value(root_key, key, value);
         Ok(())
@@ -1076,7 +1076,7 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         for (event_id, value) in events {
-            batch.add_event(event_id, value)?;
+            batch.add_event(&event_id, value)?;
         }
         self.write_batch(batch).await
     }

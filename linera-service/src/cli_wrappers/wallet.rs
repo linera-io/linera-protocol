@@ -763,7 +763,7 @@ impl ClientWrapper {
         Ok(())
     }
 
-    fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
+    fn benchmark_command_internal(command: &mut Command, args: &BenchmarkCommand) -> Result<()> {
         let mut formatted_args = to_args(&args)?;
         let subcommand = formatted_args.remove(0);
         // The subcommand is followed by the flattened options, which are preceded by "options".
@@ -799,7 +799,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_envs_and_arguments(envs, self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 
@@ -807,7 +807,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_arguments(self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 

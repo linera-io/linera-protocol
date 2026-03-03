@@ -978,7 +978,7 @@ impl<Env: Environment> ChainClient<Env> {
             .next_outbox_heights(received_logs.chains(), self.chain_id)
             .await?;
 
-        validator_trackers.filter_out_already_known(&mut received_logs, local_next_heights);
+        validator_trackers.filter_out_already_known(&mut received_logs, &local_next_heights);
 
         debug!(
             remaining_total_certificates = %received_logs.num_certs(),

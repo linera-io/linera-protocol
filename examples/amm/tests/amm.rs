@@ -83,7 +83,7 @@ impl Setup {
             .add_block(|block| {
                 block.with_operation(
                     token0_id,
-                    FungibleOperation::Transfer {
+                    &FungibleOperation::Transfer {
                         owner: amm_chain_owner,
                         amount: Amount::from_tokens(50),
                         target_account: Account {
@@ -94,7 +94,7 @@ impl Setup {
                 );
                 block.with_operation(
                     token0_id,
-                    FungibleOperation::Transfer {
+                    &FungibleOperation::Transfer {
                         owner: amm_chain_owner,
                         amount: Amount::from_tokens(30),
                         target_account: Account {
@@ -105,7 +105,7 @@ impl Setup {
                 );
                 block.with_operation(
                     token1_id,
-                    FungibleOperation::Transfer {
+                    &FungibleOperation::Transfer {
                         owner: amm_chain_owner,
                         amount: Amount::from_tokens(50),
                         target_account: Account {
@@ -116,7 +116,7 @@ impl Setup {
                 );
                 block.with_operation(
                     token1_id,
-                    FungibleOperation::Transfer {
+                    &FungibleOperation::Transfer {
                         owner: amm_chain_owner,
                         amount: Amount::from_tokens(30),
                         target_account: Account {
@@ -172,7 +172,7 @@ async fn add_liquidity_swap_and_remove_all() {
         .add_block(|block| {
             block.with_operation(
                 setup.amm_id,
-                Operation::AddLiquidity {
+                &Operation::AddLiquidity {
                     owner: setup.liquidity_owner,
                     max_token0_amount: Amount::from_tokens(40),
                     max_token1_amount: Amount::from_tokens(40),
@@ -224,7 +224,7 @@ async fn add_liquidity_swap_and_remove_all() {
         .add_block(|block| {
             block.with_operation(
                 setup.amm_id,
-                Operation::Swap {
+                &Operation::Swap {
                     owner: setup.swapper_owner,
                     input_token_idx: 0,
                     input_amount: Amount::from_tokens(10),
@@ -265,7 +265,7 @@ async fn add_liquidity_swap_and_remove_all() {
         .add_block(|block| {
             block.with_operation(
                 setup.amm_id,
-                Operation::RemoveAllAddedLiquidity {
+                &Operation::RemoveAllAddedLiquidity {
                     owner: setup.liquidity_owner,
                 },
             );
@@ -319,7 +319,7 @@ async fn add_liquidity_with_ratio_refund() {
         .add_block(|block| {
             block.with_operation(
                 setup.amm_id,
-                Operation::AddLiquidity {
+                &Operation::AddLiquidity {
                     owner: setup.liquidity_owner,
                     max_token0_amount: Amount::from_tokens(20),
                     max_token1_amount: Amount::from_tokens(20),
@@ -343,7 +343,7 @@ async fn add_liquidity_with_ratio_refund() {
         .add_block(|block| {
             block.with_operation(
                 setup.amm_id,
-                Operation::AddLiquidity {
+                &Operation::AddLiquidity {
                     owner: setup.liquidity_owner,
                     max_token0_amount: Amount::from_tokens(30),
                     max_token1_amount: Amount::from_tokens(10),
@@ -399,7 +399,7 @@ async fn swap_from_token1() {
         .add_block(|block| {
             block.with_operation(
                 setup.amm_id,
-                Operation::AddLiquidity {
+                &Operation::AddLiquidity {
                     owner: setup.liquidity_owner,
                     max_token0_amount: Amount::from_tokens(40),
                     max_token1_amount: Amount::from_tokens(40),
@@ -423,7 +423,7 @@ async fn swap_from_token1() {
         .add_block(|block| {
             block.with_operation(
                 setup.amm_id,
-                Operation::Swap {
+                &Operation::Swap {
                     owner: setup.swapper_owner,
                     input_token_idx: 1,
                     input_amount: Amount::from_tokens(10),
@@ -469,7 +469,7 @@ async fn remove_liquidity_partial() {
         .add_block(|block| {
             block.with_operation(
                 setup.amm_id,
-                Operation::AddLiquidity {
+                &Operation::AddLiquidity {
                     owner: setup.liquidity_owner,
                     max_token0_amount: Amount::from_tokens(40),
                     max_token1_amount: Amount::from_tokens(40),
@@ -493,7 +493,7 @@ async fn remove_liquidity_partial() {
         .add_block(|block| {
             block.with_operation(
                 setup.amm_id,
-                Operation::RemoveLiquidity {
+                &Operation::RemoveLiquidity {
                     owner: setup.liquidity_owner,
                     token_to_remove_idx: 0,
                     token_to_remove_amount: Amount::from_tokens(10),
