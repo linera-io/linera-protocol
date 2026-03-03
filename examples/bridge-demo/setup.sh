@@ -193,6 +193,9 @@ BRIDGE_APP_OUTPUT=$(linera_cli publish-and-create \
 BRIDGE_APP_ID=$(echo "$BRIDGE_APP_OUTPUT" | grep -oE '[a-f0-9]{64}' | tail -1)
 echo "  EVM-bridge app: $BRIDGE_APP_ID"
 
+# Write bridge app ID to shared volume so the relay can pick it up.
+dc_exec --user root foundry-tools sh -c "echo '$BRIDGE_APP_ID' > /shared/bridge-app-id"
+
 # ── 7. Fund FungibleBridge with ERC20 tokens (for withdrawals) ──
 echo "Funding FungibleBridge with 500 tokens..."
 dc_exec foundry-tools \
