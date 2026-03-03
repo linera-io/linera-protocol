@@ -129,7 +129,7 @@ WRAPPED_APP_OUTPUT=$(linera_cli publish-and-create \
     echo "$WRAPPED_APP_OUTPUT" >&2
     exit 1
 }
-WRAPPED_APP_ID=$(echo "$WRAPPED_APP_OUTPUT" | grep -oP '[a-f0-9]{64}[a-f0-9]+' | tail -1)
+WRAPPED_APP_ID=$(echo "$WRAPPED_APP_OUTPUT" | grep -oE '[a-f0-9]{64}[a-f0-9]+' | tail -1)
 echo "  Wrapped-fungible app: $WRAPPED_APP_ID"
 
 # ── 5. Deploy FungibleBridge ──
@@ -188,7 +188,7 @@ BRIDGE_APP_OUTPUT=$(linera_cli publish-and-create \
     echo "$BRIDGE_APP_OUTPUT" >&2
     exit 1
 }
-BRIDGE_APP_ID=$(echo "$BRIDGE_APP_OUTPUT" | grep -oP '[a-f0-9]{64}[a-f0-9]+' | tail -1)
+BRIDGE_APP_ID=$(echo "$BRIDGE_APP_OUTPUT" | grep -oE '[a-f0-9]{64}[a-f0-9]+' | tail -1)
 echo "  EVM-bridge app: $BRIDGE_APP_ID"
 
 # ── 7. Fund FungibleBridge with ERC20 tokens (for withdrawals) ──
