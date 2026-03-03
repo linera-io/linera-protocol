@@ -14,7 +14,8 @@
 
 set -euo pipefail
 
-COMPOSE_FILE="../../docker/docker-compose.bridge-test.yml"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPOSE_FILE="$SCRIPT_DIR/../../docker/docker-compose.bridge-test.yml"
 PROJECT_NAME="linera-bridge-demo"
 ANVIL_PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 ANVIL_RPC_URL="http://anvil:8545"
@@ -203,7 +204,7 @@ dc_exec foundry-tools \
 
 # ── 8. Write .env.local ──
 echo "Writing .env.local..."
-cat > .env.local << EOF
+cat > "$SCRIPT_DIR/.env.local" << EOF
 LINERA_FAUCET_URL=http://localhost:8080
 LINERA_APPLICATION_ID=$WRAPPED_APP_ID
 LINERA_BRIDGE_APP_ID=$BRIDGE_APP_ID
