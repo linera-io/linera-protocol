@@ -5,7 +5,6 @@
 
 use std::{
     borrow::Cow,
-    cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},
     iter,
     sync::{self, Arc},
@@ -33,8 +32,8 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    system::EPOCH_STREAM_NAME, Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query,
-    QueryContext, QueryOutcome, ResourceTracker, ServiceRuntimeEndpoint,
+    Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, ResultReadConfirmedBlocks, Storage};
 use linera_views::{
@@ -778,137 +777,28 @@ where
     ///
     /// This handles the migration case where the `next_expected_events` field was added to
     /// `ChainStateView` after blocks had already been processed.
-    async fn initialize_next_expected_events(&mut self, block: &Block) -> Result<(), WorkerError> {
-        let chain_id = block.header.chain_id;
-        let next_block_height = self.chain.tip_state.get().next_block_height;
-
-        // Collect streams that appear in this block but have no tracking entry yet.
-        let mut uninitialized = BTreeMap::<StreamId, BTreeSet<u32>>::new();
-        for event in block.body.events.iter().flatten() {
-            if self
-                .chain
-                .next_expected_events
-                .get(&event.stream_id)
-                .await?
-                .is_none()
-            {
-                uninitialized
-                    .entry(event.stream_id.clone())
-                    .or_default()
-                    .insert(event.index);
-            }
+    async fn initialize_next_expected_events(&mut self) -> Result<(), WorkerError> {
+        if self.chain.next_expected_events.count().await? > 0 {
+            return Ok(()); // Already initialized.
         }
-        if uninitialized.is_empty() {
-            return Ok(());
+        for (stream_id, index) in self
+            .chain
+            .execution_state
+            .stream_event_counts
+            .index_values()
+            .await?
+        {
+            self.chain.next_expected_events.insert(&stream_id, index)?;
         }
-
-        // For each uninitialized stream, walk backwards through previous_event_blocks
-        // to collect event indices from locally available blocks. Once we reach a block
-        // below next_block_height (already executed), we know all earlier events are
-        // present and can stop.
-        let mut prev_pointers = BTreeMap::<StreamId, (CryptoHash, BlockHeight)>::new();
-        // Streams where we reached an executed block: all indices up through the max
-        // index found in that block are known to be contiguous.
-        let mut known_floors = BTreeMap::<StreamId, u32>::new();
-
-        for stream_id in uninitialized.keys() {
-            if let Some(pointer) = block.body.previous_event_blocks.get(stream_id) {
-                prev_pointers.insert(stream_id.clone(), *pointer);
-            }
-        }
-
-        while !prev_pointers.is_empty() {
-            let heights = prev_pointers.values().map(|(_, h)| *h).collect::<Vec<_>>();
-            let certs = self
+        let chain_id = self.chain_id();
+        for (height, hash) in self.chain.preprocessed_blocks.index_values().await? {
+            let block = self
                 .storage
-                .read_certificates_by_heights(chain_id, &heights)
-                .await?;
-
-            let mut next_pointers = BTreeMap::<StreamId, (CryptoHash, BlockHeight)>::new();
-            for (stream_id, (_hash, height)) in &prev_pointers {
-                let cert = certs
-                    .iter()
-                    .flatten()
-                    .find(|c| c.block().header.height == *height);
-                let Some(cert) = cert else {
-                    continue; // Block not available locally; stop walking this stream.
-                };
-                let prev_block = cert.block();
-                // Collect event indices for this stream from this block.
-                if let Some(indices) = uninitialized.get_mut(stream_id) {
-                    for event in prev_block.body.events.iter().flatten() {
-                        if event.stream_id == *stream_id {
-                            indices.insert(event.index);
-                        }
-                    }
-                }
-                // If this block is below next_block_height, it was fully executed, so
-                // all earlier events for this stream are contiguous. The max index in
-                // this block's events gives us a known floor. Stop walking.
-                if *height < next_block_height {
-                    let max_in_block = prev_block
-                        .body
-                        .events
-                        .iter()
-                        .flatten()
-                        .filter(|e| e.stream_id == *stream_id)
-                        .map(|e| e.index)
-                        .max();
-                    if let Some(max_index) = max_in_block {
-                        known_floors.insert(stream_id.clone(), max_index.saturating_add(1));
-                    }
-                    continue;
-                }
-                // Continue walking if there's a predecessor.
-                if let Some(pointer) = prev_block.body.previous_event_blocks.get(stream_id) {
-                    next_pointers.insert(stream_id.clone(), *pointer);
-                }
-            }
-            prev_pointers = next_pointers;
+                .read_confirmed_block(hash)
+                .await?
+                .ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound { height, chain_id })?;
+            self.chain.preprocess_block(&block).await?;
         }
-
-        // Initialize next_expected_events for each stream.
-        for (stream_id, indices) in &uninitialized {
-            let initial_index = if *stream_id == StreamId::system(EPOCH_STREAM_NAME) {
-                1
-            } else {
-                0
-            };
-            let expected = if let Some(&floor) = known_floors.get(stream_id) {
-                // We reached an executed block: all indices below `floor` are present.
-                // Check contiguity only from `floor` onwards (for any preprocessed gaps).
-                let mut expected = floor;
-                for index in indices.range(floor..) {
-                    match index.cmp(&expected) {
-                        Ordering::Equal => {
-                            expected = index.saturating_add(1);
-                        }
-                        Ordering::Greater => break,
-                        Ordering::Less => {}
-                    }
-                }
-                expected
-            } else {
-                // No executed block reached: find the first gap from initial_index.
-                let mut expected = initial_index;
-                for index in indices {
-                    match index.cmp(&expected) {
-                        Ordering::Equal => {
-                            expected = index.saturating_add(1);
-                        }
-                        Ordering::Greater => break,
-                        Ordering::Less => {}
-                    }
-                }
-                expected
-            };
-            if expected != 0 {
-                self.chain
-                    .next_expected_events
-                    .insert(stream_id, expected)?;
-            }
-        }
-
         Ok(())
     }
 
@@ -1009,7 +899,9 @@ where
         // to have a gap: do not execute this block, only update the outboxes and return.
         if tip.next_block_height < height {
             // Initialize next_expected_events for any streams that don't have entries yet.
-            self.initialize_next_expected_events(block).await?;
+            if block.body.events.iter().any(|events| !events.is_empty()) {
+                self.initialize_next_expected_events().await?;
+            }
             // Update the outboxes and track emitted events.
             let event_streams = self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
@@ -1054,8 +946,10 @@ where
             .filter_map(|blob_id| blobs.remove(blob_id))
             .collect::<Vec<_>>();
 
-        // Initialize next_expected_events for any streams that don't have entries yet.
-        self.initialize_next_expected_events(block).await?;
+        if block.body.events.iter().any(|events| !events.is_empty()) {
+            // Initialize next_expected_events for any streams that don't have entries yet.
+            self.initialize_next_expected_events().await?;
+        }
 
         // Execute the block and update inboxes.
         let local_time = self.storage.clock().current_time();

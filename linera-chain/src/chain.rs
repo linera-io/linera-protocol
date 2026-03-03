@@ -1096,6 +1096,7 @@ where
                 .insert(event.index);
         }
 
+        let next_block_height = self.tip_state.get().next_block_height;
         let mut updated_streams = BTreeSet::new();
         for (stream_id, indices) in emitted_streams {
             let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
@@ -1109,12 +1110,12 @@ where
                 .await?
                 .unwrap_or(initial_index);
             for index in indices {
-                if index == current_expected_index {
+                if index == current_expected_index || block.header.height <= next_block_height {
                     updated_streams.insert(stream_id.clone());
                     current_expected_index = index.saturating_add(1);
                 }
             }
-            if current_expected_index != 0 {
+            if current_expected_index != 0 || block.header.height <= next_block_height {
                 self.next_expected_events
                     .insert(&stream_id, current_expected_index)?;
             }
