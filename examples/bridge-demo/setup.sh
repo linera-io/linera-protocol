@@ -160,7 +160,7 @@ BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
 echo "  FungibleBridge: $BRIDGE_ADDRESS"
 
 # Write bridge address to shared volume so the relay can pick it up.
-dc_exec foundry-tools sh -c "echo '$BRIDGE_ADDRESS' > /shared/bridge-address"
+dc_exec --user root foundry-tools sh -c "echo '$BRIDGE_ADDRESS' > /shared/bridge-address"
 
 # ── 6. Publish and create evm-bridge app ──
 echo "Publishing and creating evm-bridge app..."
