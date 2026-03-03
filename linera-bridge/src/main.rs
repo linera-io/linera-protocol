@@ -16,6 +16,9 @@ enum Cli {
     InitLightClient(InitLightClientOptions),
     /// Generate a deposit proof for a given EVM transaction
     GenerateDepositProof(GenerateDepositProofOptions),
+    /// Run the relay server (proof generation + chain inbox processing + EVM forwarding)
+    #[cfg(feature = "relay")]
+    Serve(ServeOptions),
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -44,6 +47,30 @@ struct GenerateDepositProofOptions {
     output: PathBuf,
 }
 
+#[cfg(feature = "relay")]
+#[derive(clap::Args, Debug, Clone)]
+struct ServeOptions {
+    /// EVM JSON-RPC URL (e.g. http://localhost:8545)
+    #[arg(long)]
+    rpc_url: String,
+
+    /// URL of the Linera faucet
+    #[arg(long)]
+    faucet_url: String,
+
+    /// Address of the FungibleBridge contract on EVM
+    #[arg(long)]
+    bridge_address: String,
+
+    /// EVM private key for signing addBlock transactions
+    #[arg(long)]
+    evm_private_key: String,
+
+    /// Port to listen on for HTTP requests
+    #[arg(long, default_value = "3001")]
+    port: u16,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -52,6 +79,8 @@ fn main() -> Result<()> {
     match cli {
         Cli::InitLightClient(options) => runtime.block_on(options.run()),
         Cli::GenerateDepositProof(options) => runtime.block_on(options.run()),
+        #[cfg(feature = "relay")]
+        Cli::Serve(options) => runtime.block_on(options.run()),
     }
 }
 
@@ -86,6 +115,20 @@ impl GenerateDepositProofOptions {
         println!("{json_str}");
 
         Ok(())
+    }
+}
+
+#[cfg(feature = "relay")]
+impl ServeOptions {
+    async fn run(&self) -> Result<()> {
+        linera_bridge::relay::run(
+            &self.rpc_url,
+            &self.faucet_url,
+            &self.bridge_address,
+            &self.evm_private_key,
+            self.port,
+        )
+        .await
     }
 }
 
