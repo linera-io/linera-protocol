@@ -173,7 +173,11 @@ impl WrappedFungibleTokenContract {
 
     /// Mints tokens to a target account (local or remote).
     async fn execute_mint(&mut self, target_account: Account, amount: Amount) -> FungibleResponse {
-        let signer = self.require_minter();
+        // TODO(#3194): Re-add minter authorization once the relay submits deposits.
+        let source = self
+            .runtime
+            .authenticated_signer()
+            .unwrap_or(target_account.owner);
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;
         } else {
@@ -181,7 +185,7 @@ impl WrappedFungibleTokenContract {
                 .prepare_message(Message::Credit {
                     target: target_account.owner,
                     amount,
-                    source: signer,
+                    source,
                 })
                 .with_authentication()
                 .with_tracking()
@@ -192,7 +196,7 @@ impl WrappedFungibleTokenContract {
 
     /// Burns tokens from an account.
     async fn execute_burn(&mut self, owner: AccountOwner, amount: Amount) -> FungibleResponse {
-        self.require_minter();
+        // TODO(#3194): Re-add minter authorization once the relay submits deposits.
         self.state.debit(owner, amount).await;
         FungibleResponse::Ok
     }
