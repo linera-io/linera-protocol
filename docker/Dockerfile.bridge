@@ -84,20 +84,21 @@ COPY linera-views-derive linera-views-derive
 COPY linera-witty linera-witty
 COPY linera-witty-macros linera-witty-macros
 
-# Stub workspace members: Cargo.toml + empty sources.
-# Cargo needs all workspace members to exist, but only linera-bridge deps need real source.
+# Copy full source for crates needed by the relay feature.
+COPY linera-client linera-client
+COPY linera-faucet/client linera-faucet/client
+COPY linera-rpc linera-rpc
+COPY linera-metrics linera-metrics
+COPY linera-persistent linera-persistent
+COPY linera-ethereum linera-ethereum
+
+# Stub workspace members that are NOT needed for relay (but Cargo resolves their manifests).
 RUN for dir in \
-    linera-client \
-    linera-ethereum \
     linera-explorer \
-    linera-faucet/client \
     linera-faucet/server \
     linera-indexer/graphql-client \
     linera-indexer/lib \
     linera-indexer/plugins \
-    linera-metrics \
-    linera-persistent \
-    linera-rpc \
     linera-service-graphql-client \
     "web/@linera/client"; \
   do mkdir -p "$dir/src" && echo "" > "$dir/src/lib.rs"; done
@@ -151,7 +152,7 @@ ENV RUSTFLAGS=${rustflags}
 RUN cargo build ${build_flag:+"$build_flag"} \
     --bin linera-bridge \
     -p linera-bridge \
-    --features cli
+    --features relay
 
 RUN cp target/"$build_folder"/linera-bridge /usr/local/bin/linera-bridge
 

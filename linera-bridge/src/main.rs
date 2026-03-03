@@ -58,9 +58,14 @@ struct ServeOptions {
     #[arg(long)]
     faucet_url: String,
 
-    /// Address of the FungibleBridge contract on EVM
+    /// Address of the FungibleBridge contract on EVM.
+    /// If omitted, reads from --bridge-address-file (polls until available).
     #[arg(long)]
-    bridge_address: String,
+    bridge_address: Option<String>,
+
+    /// File to read bridge address from (used when bridge is deployed after relay starts)
+    #[arg(long, default_value = "/shared/bridge-address")]
+    bridge_address_file: String,
 
     /// EVM private key for signing addBlock transactions
     #[arg(long)]
@@ -124,7 +129,8 @@ impl ServeOptions {
         linera_bridge::relay::run(
             &self.rpc_url,
             &self.faucet_url,
-            &self.bridge_address,
+            self.bridge_address.as_deref(),
+            &self.bridge_address_file,
             &self.evm_private_key,
             self.port,
         )

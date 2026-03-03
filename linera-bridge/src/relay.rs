@@ -89,10 +89,37 @@ async fn generate_proof(
 
 // ── Entry point ──
 
+/// Resolve bridge address: use CLI arg if provided, otherwise poll a file.
+async fn resolve_bridge_address(
+    bridge_address: Option<&str>,
+    bridge_address_file: &str,
+) -> Result<Address> {
+    if let Some(addr) = bridge_address {
+        return addr.parse().context("invalid bridge address");
+    }
+
+    tracing::info!(
+        file = bridge_address_file,
+        "Bridge address not provided, polling file..."
+    );
+    loop {
+        if let Ok(contents) = tokio::fs::read_to_string(bridge_address_file).await {
+            let addr_str = contents.trim();
+            if !addr_str.is_empty() {
+                let addr: Address = addr_str.parse().context("invalid bridge address in file")?;
+                tracing::info!(%addr, "Read bridge address from file");
+                return Ok(addr);
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+}
+
 pub async fn run(
     rpc_url: &str,
     faucet_url: &str,
-    bridge_address: &str,
+    bridge_address: Option<&str>,
+    bridge_address_file: &str,
     evm_private_key: &str,
     port: u16,
 ) -> Result<()> {
@@ -148,7 +175,8 @@ pub async fn run(
     }
 
     // ── 3. Set up EVM provider ──
-    let bridge_addr: Address = bridge_address.parse().context("invalid bridge address")?;
+    // Resolve bridge address (may poll a file if not provided via CLI).
+    let bridge_addr = resolve_bridge_address(bridge_address, bridge_address_file).await?;
     let evm_signer: PrivateKeySigner =
         evm_private_key.parse().context("invalid EVM private key")?;
     let evm_wallet = EthereumWallet::from(evm_signer);
