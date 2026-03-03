@@ -273,13 +273,42 @@ pub fn decode_block_header(header_rlp: &[u8]) -> Result<(B256, B256)> {
     Ok((block_hash, receipts_root))
 }
 
+/// Maximum number of MPT proof nodes accepted.
+///
+/// An Ethereum block can hold at most ~30M gas / 21K gas per tx ≈ 1,400 transactions,
+/// giving a receipts trie depth of ~11 levels. 32 is ~3× that, leaving ample headroom.
+const MAX_PROOF_NODES: usize = 32;
+
+/// Maximum total bytes across all proof nodes (32 KiB).
+///
+/// Each MPT branch node has 17 children (16 nibbles + value), each a 32-byte hash
+/// plus RLP overhead, for a worst-case size of ~600 bytes per node.
+/// With 32 nodes that's ~19,200 bytes; 32 KiB (32,768) is ~1.7× the theoretical max.
+const MAX_PROOF_BYTES: usize = 32 * 1024;
+
 /// Verifies that a receipt is included in the receipts trie via MPT proof.
+///
+/// Enforces DoS limits on the proof size before forwarding to the trie verifier.
 pub fn verify_receipt_inclusion(
     receipts_root: B256,
     tx_index: u64,
     receipt_rlp: &[u8],
     proof_nodes: &[Bytes],
 ) -> Result<()> {
+    ensure!(
+        proof_nodes.len() <= MAX_PROOF_NODES,
+        "too many proof nodes: {} (max {})",
+        proof_nodes.len(),
+        MAX_PROOF_NODES
+    );
+    let total_bytes: usize = proof_nodes.iter().map(|n| n.len()).sum();
+    ensure!(
+        total_bytes <= MAX_PROOF_BYTES,
+        "proof too large: {} bytes (max {})",
+        total_bytes,
+        MAX_PROOF_BYTES
+    );
+
     let key = receipt_trie_key(tx_index);
     alloy_trie::proof::verify_proof(receipts_root, key, Some(receipt_rlp.to_vec()), proof_nodes)
         .map_err(|e| anyhow!("MPT proof verification failed: {e}"))
