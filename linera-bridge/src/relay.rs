@@ -177,6 +177,42 @@ async fn resolve_bridge_app_id(file_path: &str) -> Result<ApplicationId> {
     }
 }
 
+// ── EVM forwarding helper ──
+
+/// BCS-serialize and forward a certified block to FungibleBridge on EVM.
+async fn forward_cert_to_evm(
+    cert: &impl serde::Serialize,
+    bridge_addr: Address,
+    provider: &impl alloy::providers::Provider,
+) {
+    let cert_bytes = match bcs::to_bytes(cert) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::error!("Failed to BCS-serialize certificate: {e}");
+            return;
+        }
+    };
+
+    tracing::info!(
+        size = cert_bytes.len(),
+        "Calling addBlock on FungibleBridge..."
+    );
+
+    let bridge_contract = IFungibleBridge::new(bridge_addr, provider);
+    match bridge_contract.addBlock(cert_bytes.into()).send().await {
+        Ok(pending_tx) => match pending_tx.get_receipt().await {
+            Ok(receipt) => {
+                tracing::info!(
+                    tx = ?receipt.transaction_hash,
+                    "addBlock transaction confirmed"
+                );
+            }
+            Err(e) => tracing::error!("addBlock receipt failed: {e}"),
+        },
+        Err(e) => tracing::error!("addBlock send failed: {e}"),
+    }
+}
+
 // ── Entry point ──
 
 pub async fn run(
@@ -322,35 +358,8 @@ pub async fn run(
                 }
 
                 tracing::info!(count = certs.len(), "Processed inbox certificates");
-
-                // Forward each certificate to EVM.
                 for cert in &certs {
-                    let cert_bytes = match bcs::to_bytes(cert) {
-                        Ok(b) => b,
-                        Err(e) => {
-                            tracing::error!("Failed to BCS-serialize certificate: {e}");
-                            continue;
-                        }
-                    };
-
-                    tracing::info!(
-                        size = cert_bytes.len(),
-                        "Calling addBlock on FungibleBridge..."
-                    );
-
-                    let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
-                    match bridge_contract.addBlock(cert_bytes.into()).send().await {
-                        Ok(pending_tx) => match pending_tx.get_receipt().await {
-                            Ok(receipt) => {
-                                tracing::info!(
-                                    tx = ?receipt.transaction_hash,
-                                    "addBlock transaction confirmed"
-                                );
-                            }
-                            Err(e) => tracing::error!("addBlock receipt failed: {e}"),
-                        },
-                        Err(e) => tracing::error!("addBlock send failed: {e}"),
-                    }
+                    forward_cert_to_evm(cert, bridge_addr, &provider).await;
                 }
             }
 
@@ -381,31 +390,23 @@ pub async fn run(
                     let outcome = chain_client
                         .execute_operations(vec![operation], vec![])
                         .await?;
-                    match &outcome {
+                    let cert = match outcome {
                         linera_core::data_types::ClientOutcome::Committed(cert) => {
-                            let block = cert.block();
-                            let total_msgs: usize = block.body.messages.iter()
-                                .map(|tx_msgs| tx_msgs.len()).sum();
                             tracing::info!(
-                                height = %block.header.height,
-                                total_msgs,
+                                height = %cert.block().header.height,
                                 "ProcessDeposit committed"
                             );
-                            for (tx_idx, tx_msgs) in block.body.messages.iter().enumerate() {
-                                for (msg_idx, out) in tx_msgs.iter().enumerate() {
-                                    tracing::info!(
-                                        tx_idx,
-                                        msg_idx,
-                                        dest = %out.destination,
-                                        "outgoing message"
-                                    );
-                                }
-                            }
+                            cert
                         }
                         other => {
                             anyhow::bail!("ProcessDeposit not committed: {other:?}");
                         }
-                    }
+                    };
+
+                    // Forward the deposit block to EVM so the Microchain
+                    // height stays sequential.
+                    forward_cert_to_evm(&cert, bridge_addr, &provider).await;
+
                     Ok::<(), anyhow::Error>(())
                 }.await;
 
