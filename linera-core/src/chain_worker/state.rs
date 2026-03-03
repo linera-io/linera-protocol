@@ -867,8 +867,27 @@ where
             self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
             self.save().await?;
-            let actions = self.create_network_actions(None).await?;
+            let mut actions = self.create_network_actions(None).await?;
             trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
+            let event_streams = certificate
+                .value()
+                .block()
+                .body
+                .events
+                .iter()
+                .flatten()
+                .map(|event| event.stream_id.clone())
+                .collect::<BTreeSet<_>>();
+            if !event_streams.is_empty() {
+                actions.notifications.push(Notification {
+                    chain_id,
+                    reason: Reason::NewEvents {
+                        height,
+                        hash: certificate.hash(),
+                        event_streams,
+                    },
+                });
+            }
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
             return Ok((
@@ -964,15 +983,25 @@ where
             .iter()
             .flatten()
             .map(|event| event.stream_id.clone())
-            .collect();
+            .collect::<BTreeSet<_>>();
         actions.notifications.push(Notification {
             chain_id,
             reason: Reason::NewBlock {
                 height,
                 hash,
-                event_streams,
+                event_streams: event_streams.clone(),
             },
         });
+        if !event_streams.is_empty() {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewEvents {
+                    height,
+                    hash,
+                    event_streams,
+                },
+            });
+        }
         // Persist chain.
         self.save().await?;
 
