@@ -457,7 +457,7 @@ where
                 result = self.connection.next() => match result {
                     Some(Ok(message)) => self.handle_message(message).await,
                     Some(Err(error)) => {
-                        Self::handle_error(error);
+                        Self::handle_error(&error);
                         return;
                     }
                     None => break,
@@ -479,9 +479,9 @@ where
     ///
     /// Ignores a successful connection termination, while logging an unexpected connection
     /// termination or any other error.
-    fn handle_error(error: codec::Error) {
+    fn handle_error(error: &codec::Error) {
         if !matches!(
-            &error,
+            error,
             codec::Error::IoError(error)
                 if error.kind() == io::ErrorKind::UnexpectedEof
                 || error.kind() == io::ErrorKind::ConnectionReset

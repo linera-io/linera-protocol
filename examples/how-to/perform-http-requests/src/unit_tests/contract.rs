@@ -104,8 +104,8 @@ fn accepts_response_from_oracle() {
         .set_application_parameters(url.clone())
         .add_expected_service_query(
             application_id,
-            async_graphql::Request::new("query { performHttpRequest }"),
-            async_graphql::Response::new(async_graphql::Value::Object(
+            &async_graphql::Request::new("query { performHttpRequest }"),
+            &async_graphql::Response::new(async_graphql::Value::Object(
                 [(
                     async_graphql::Name::new("performHttpRequest"),
                     async_graphql::Value::List(http_response_graphql_list),
@@ -140,8 +140,8 @@ fn rejects_invalid_response_from_oracle() {
         .set_application_parameters(url.clone())
         .add_expected_service_query(
             application_id,
-            async_graphql::Request::new("query { performHttpRequest }"),
-            async_graphql::Response::new(async_graphql::Value::Object(
+            &async_graphql::Request::new("query { performHttpRequest }"),
+            &async_graphql::Response::new(async_graphql::Value::Object(
                 [(
                     async_graphql::Name::new("performHttpRequest"),
                     async_graphql::Value::List(http_response_graphql_list),

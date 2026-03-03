@@ -449,7 +449,7 @@ where
     /// Signs a vote to validate the proposed block.
     pub fn create_vote(
         &mut self,
-        proposal: BlockProposal,
+        proposal: &BlockProposal,
         block: Block,
         key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
