@@ -49,6 +49,7 @@ relay = [
     "dep:linera-faucet-client",
     "dep:linera-storage",
     "dep:linera-views",
+    "dep:rustls",
     "dep:tower-http",
     "dep:tracing",
     "dep:tracing-subscriber",
@@ -89,6 +90,7 @@ serde_json = { workspace = true, optional = true }
 
 # relay feature deps
 axum = { workspace = true, optional = true }
+rustls = { version = "0.23", optional = true, features = ["ring"] }
 futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
