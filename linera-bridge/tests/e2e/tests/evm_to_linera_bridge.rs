@@ -345,7 +345,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     }
 
     let query = Query::user_without_abi(fungible_app_id, &GqlRequest { query: gql_query })?;
-    let outcome = cc.query_application(query, None).await?;
+    let (outcome, _) = cc.query_application(query, None).await?;
     let response_bytes = match outcome.response {
         QueryResponse::User(bytes) => bytes,
         other => anyhow::bail!("unexpected query response: {other:?}"),
