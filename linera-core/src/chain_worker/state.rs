@@ -5,6 +5,7 @@
 
 use std::{
     borrow::Cow,
+    cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},
     iter,
     sync::{self, Arc},
@@ -769,13 +770,17 @@ where
 
     /// For each stream in `block.body.events` that has no entry in
     /// `chain.next_expected_events`, walks backwards through the `previous_event_blocks`
-    /// linked list (reading blocks from storage) to collect all locally available event
+    /// linked list (reading blocks from storage) to collect locally available event
     /// indices, then initializes `next_expected_events` to the first gap.
+    ///
+    /// Once a block below `next_block_height` is reached, all earlier events for that
+    /// stream are guaranteed present (the block was fully executed), so the walk stops.
     ///
     /// This handles the migration case where the `next_expected_events` field was added to
     /// `ChainStateView` after blocks had already been processed.
     async fn initialize_next_expected_events(&mut self, block: &Block) -> Result<(), WorkerError> {
         let chain_id = block.header.chain_id;
+        let next_block_height = self.chain.tip_state.get().next_block_height;
 
         // Collect streams that appear in this block but have no tracking entry yet.
         let mut uninitialized = BTreeMap::<StreamId, BTreeSet<u32>>::new();
@@ -798,8 +803,14 @@ where
         }
 
         // For each uninitialized stream, walk backwards through previous_event_blocks
-        // to collect all event indices from locally available blocks.
-        let mut prev_pointers: BTreeMap<StreamId, (CryptoHash, BlockHeight)> = BTreeMap::new();
+        // to collect event indices from locally available blocks. Once we reach a block
+        // below next_block_height (already executed), we know all earlier events are
+        // present and can stop.
+        let mut prev_pointers = BTreeMap::<StreamId, (CryptoHash, BlockHeight)>::new();
+        // Streams where we reached an executed block: all indices up through the max
+        // index found in that block are known to be contiguous.
+        let mut known_floors = BTreeMap::<StreamId, u32>::new();
+
         for stream_id in uninitialized.keys() {
             if let Some(pointer) = block.body.previous_event_blocks.get(stream_id) {
                 prev_pointers.insert(stream_id.clone(), *pointer);
@@ -831,6 +842,23 @@ where
                         }
                     }
                 }
+                // If this block is below next_block_height, it was fully executed, so
+                // all earlier events for this stream are contiguous. The max index in
+                // this block's events gives us a known floor. Stop walking.
+                if *height < next_block_height {
+                    let max_in_block = prev_block
+                        .body
+                        .events
+                        .iter()
+                        .flatten()
+                        .filter(|e| e.stream_id == *stream_id)
+                        .map(|e| e.index)
+                        .max();
+                    if let Some(max_index) = max_in_block {
+                        known_floors.insert(stream_id.clone(), max_index.saturating_add(1));
+                    }
+                    continue;
+                }
                 // Continue walking if there's a predecessor.
                 if let Some(pointer) = prev_block.body.previous_event_blocks.get(stream_id) {
                     next_pointers.insert(stream_id.clone(), *pointer);
@@ -839,27 +867,45 @@ where
             prev_pointers = next_pointers;
         }
 
-        // Find the first gap for each stream and initialize next_expected_events.
-        for (stream_id, indices) in uninitialized {
-            let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
+        // Initialize next_expected_events for each stream.
+        for (stream_id, indices) in &uninitialized {
+            let initial_index = if *stream_id == StreamId::system(EPOCH_STREAM_NAME) {
                 1
             } else {
                 0
             };
-            let mut expected = initial_index;
-            for index in &indices {
-                match index.cmp(&expected) {
-                    std::cmp::Ordering::Equal => {
-                        expected = index.saturating_add(1);
+            let expected = if let Some(&floor) = known_floors.get(stream_id) {
+                // We reached an executed block: all indices below `floor` are present.
+                // Check contiguity only from `floor` onwards (for any preprocessed gaps).
+                let mut expected = floor;
+                for index in indices.range(floor..) {
+                    match index.cmp(&expected) {
+                        Ordering::Equal => {
+                            expected = index.saturating_add(1);
+                        }
+                        Ordering::Greater => break,
+                        Ordering::Less => {}
                     }
-                    std::cmp::Ordering::Greater => break, // Found a gap.
-                    std::cmp::Ordering::Less => {}
                 }
-            }
+                expected
+            } else {
+                // No executed block reached: find the first gap from initial_index.
+                let mut expected = initial_index;
+                for index in indices {
+                    match index.cmp(&expected) {
+                        Ordering::Equal => {
+                            expected = index.saturating_add(1);
+                        }
+                        Ordering::Greater => break,
+                        Ordering::Less => {}
+                    }
+                }
+                expected
+            };
             if expected != 0 {
                 self.chain
                     .next_expected_events
-                    .insert(&stream_id, expected)?;
+                    .insert(stream_id, expected)?;
             }
         }
 
