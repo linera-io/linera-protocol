@@ -109,9 +109,7 @@ CHAIN="${INFO[0]}"
 Now, compile the application WebAssembly binaries, publish and create an application instance.
 
 ```bash
-(cd examples/how-to/perform-http-requests && cargo build --release \
-    --target ../../../linera-service/wasm32-mvp.json \
-    -Z build-std=std,panic_abort -Z json-target-spec)
+(cd examples/how-to/perform-http-requests && cargo build --release --target wasm32-mvp)
 
 APPLICATION_ID=$(linera publish-and-create \
   examples/target/wasm32-mvp/release/how_to_perform_http_requests_{contract,service}.wasm \

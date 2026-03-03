@@ -81,9 +81,7 @@ Now, compile the `fungible` application WebAssembly binaries, and publish them a
 bytecode:
 
 ```bash
-(cd examples/fungible && cargo build --release \
-    --target ../../linera-service/wasm32-mvp.json \
-    -Z build-std=std,panic_abort -Z json-target-spec)
+(cd examples/fungible && cargo build --release --target wasm32-mvp)
 
 MODULE_ID=$(linera publish-module \
     examples/target/wasm32-mvp/release/fungible_{contract,service}.wasm)

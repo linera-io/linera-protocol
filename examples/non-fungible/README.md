@@ -73,9 +73,7 @@ OWNER_2="${INFO_2[1]}"
 ```
 
 ```bash
-(cd examples/non-fungible && cargo build --release \
-    --target ../../linera-service/wasm32-mvp.json \
-    -Z build-std=std,panic_abort -Z json-target-spec)
+(cd examples/non-fungible && cargo build --release --target wasm32-mvp)
 
 MODULE_ID=$(linera publish-module \
     examples/target/wasm32-mvp/release/non_fungible_{contract,service}.wasm)

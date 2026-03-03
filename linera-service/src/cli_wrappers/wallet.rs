@@ -1260,11 +1260,15 @@ impl ClientWrapper {
         let target_file = target_dir.path().join("wasm32-mvp.json");
         fs_err::write(&target_file, target_json)?;
 
-        // Build with the custom target. -Z build-std rebuilds the standard
-        // library from source so it also omits the disabled opcodes.
-        // -Z json-target-spec is required to load a custom .json target file.
+        // Build with the custom target using nightly. -Z build-std rebuilds
+        // the standard library from source so it also omits the disabled
+        // opcodes. -Z json-target-spec is required to load a custom .json
+        // target file. Both flags require nightly cargo.
+        // The toolchain must match `toolchains/nightly/rust-toolchain.toml`.
+        const WASM_NIGHTLY_TOOLCHAIN: &str = "nightly-2026-03-01";
         Command::new("cargo")
             .current_dir(path)
+            .arg(format!("+{WASM_NIGHTLY_TOOLCHAIN}"))
             .arg("build")
             .arg("--release")
             .arg("--target")

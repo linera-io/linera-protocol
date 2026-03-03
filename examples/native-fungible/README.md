@@ -61,8 +61,7 @@ module:
 ```bash
 cd examples/native-fungible
 
-cargo build --release --target ../../linera-service/wasm32-mvp.json \
-    -Z build-std=std,panic_abort -Z json-target-spec
+cargo build --release --target wasm32-mvp
 
 MODULE_ID="$(linera publish-module \
     ../target/wasm32-mvp/release/native_fungible_{contract,service}.wasm)"
