@@ -1,11 +1,6 @@
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
 
-[target.wasm32-unknown-unknown]
-# Disable Wasm features that use opcode 0xFC (bulk-memory and
-# nontrapping-fptoint). These became enabled by default in Rust 1.93 but are
-# not yet supported by testnet_conway validators.
-rustflags = ["-C", "target-feature=-bulk-memory,-nontrapping-fptoint"]
 
 [build]
 # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.

@@ -1249,34 +1249,55 @@ impl ClientWrapper {
         name: &str,
         is_workspace: bool,
     ) -> Result<(PathBuf, PathBuf)> {
-        // Rust 1.93 enabled bulk-memory and nontrapping-fptoint by default for
-        // wasm32-unknown-unknown (opcode 0xFC), which testnet_conway validators
-        // do not support. Explicitly disable them here so that the RUSTFLAGS
-        // env variable (e.g. "-D warnings" in CI) does not override the
-        // .cargo/config.toml target-specific rustflags.
-        let rustflags = std::env::var("RUSTFLAGS").unwrap_or_default();
-        let wasm_rustflags = format!(
-            "{} -C target-feature=-bulk-memory,-nontrapping-fptoint",
-            rustflags
-        );
+        // Write the custom target spec to a temporary file. The spec disables
+        // bulk-memory, bulk-memory-opt, and nontrapping-fptoint — opcodes that
+        // use the 0xFC prefix and are not supported by testnet_conway validators.
+        // Using a custom target JSON (rather than -C target-feature flags) is
+        // necessary because Rust 1.93/LLVM 18 ignores the flag for these features
+        // when they are part of the target's default feature set.
+        let target_json = include_str!("../../wasm32-mvp.json");
+        let target_dir = tempfile::tempdir()?;
+        let target_file = target_dir.path().join("wasm32-mvp.json");
+        fs_err::write(&target_file, target_json)?;
+
+        // Build with the custom target. -Z build-std rebuilds the standard
+        // library from source so it also omits the disabled opcodes.
+        // -Z json-target-spec is required to load a custom .json target file.
         Command::new("cargo")
-            .current_dir(self.path_provider.path())
+            .current_dir(path)
             .arg("build")
             .arg("--release")
-            .args(["--target", "wasm32-unknown-unknown"])
+            .arg("--target")
+            .arg(&target_file)
+            .args(["-Z", "build-std=std,panic_abort"])
+            .args(["-Z", "json-target-spec"])
             .arg("--manifest-path")
             .arg(path.join("Cargo.toml"))
-            .env("RUSTFLAGS", wasm_rustflags.trim())
             .spawn_and_wait_for_stdout()
             .await?;
 
+        // The custom target places output in target/wasm32-mvp/release/.
+        // Copy to the standard target/wasm32-unknown-unknown/release/ so that
+        // the rest of the codebase can find the files without being aware of the
+        // custom target.
+        let wasm_name = name.replace('-', "_");
+        let mvp_dir = match is_workspace {
+            true => path.join("../target/wasm32-mvp/release"),
+            false => path.join("target/wasm32-mvp/release"),
+        };
         let release_dir = match is_workspace {
             true => path.join("../target/wasm32-unknown-unknown/release"),
             false => path.join("target/wasm32-unknown-unknown/release"),
         };
+        fs_err::create_dir_all(&release_dir)?;
 
-        let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
-        let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
+        let contract = release_dir.join(format!("{wasm_name}_contract.wasm"));
+        let service = release_dir.join(format!("{wasm_name}_service.wasm"));
+        fs_err::copy(
+            mvp_dir.join(format!("{wasm_name}_contract.wasm")),
+            &contract,
+        )?;
+        fs_err::copy(mvp_dir.join(format!("{wasm_name}_service.wasm")), &service)?;
 
         let contract_size = fs_err::tokio::metadata(&contract).await?.len();
         let service_size = fs_err::tokio::metadata(&service).await?.len();
