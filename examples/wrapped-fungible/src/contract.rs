@@ -165,10 +165,10 @@ impl WrappedFungibleTokenContract {
             .expect("Mint/Burn requires an authenticated signer");
         let params: WrappedParameters = self.runtime.application_parameters();
         assert!(
-            AccountOwner::from(signer) == params.minter,
+            signer == params.minter,
             "unauthorized: only the minter can perform this operation"
         );
-        AccountOwner::from(signer)
+        signer
     }
 
     /// Mints tokens to a target account (local or remote).

@@ -1,11 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{InitialState, OwnerSpender};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
+
+use crate::{InitialState, OwnerSpender};
 
 /// The application state.
 #[derive(RootView)]

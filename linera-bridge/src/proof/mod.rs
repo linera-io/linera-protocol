@@ -14,13 +14,13 @@
 //!
 //! The pipeline has four stages, each corresponding to a public function:
 //!
-//! 1. **[`decode_block_header`]** — Extract the `receipts_root` and `block_hash` from
+//! 1. **`decode_block_header`** — Extract the `receipts_root` and `block_hash` from
 //!    an RLP-encoded Ethereum block header.
-//! 2. **[`verify_receipt_inclusion`]** — Verify that a transaction receipt is included
+//! 2. **`verify_receipt_inclusion`** — Verify that a transaction receipt is included
 //!    in the block's receipt trie using an MPT proof.
-//! 3. **[`decode_receipt_logs`]** — Decode the receipt's RLP to extract its event logs.
+//! 3. **`decode_receipt_logs`** — Decode the receipt's RLP to extract its event logs.
 //!    Handles both legacy and EIP-2718 typed receipts.
-//! 4. **[`parse_deposit_event`]** — Parse and validate a `DepositInitiated` log entry,
+//! 4. **`parse_deposit_event`** — Parse and validate a `DepositInitiated` log entry,
 //!    checking the event signature and ABI-decoding the fields.
 //!
 //! # Example

@@ -3,9 +3,9 @@
 
 //! Off-chain deposit proof client for EVM→Linera deposits.
 //!
-//! The [`DepositProofClient`] trait defines the interface for generating the data
+//! The `DepositProofClient` trait defines the interface for generating the data
 //! needed for a `ProcessDeposit` operation on the evm-bridge app. The concrete
-//! [`HttpDepositProofClient`] implementation queries a standard EVM JSON-RPC endpoint
+//! `HttpDepositProofClient` implementation queries a standard EVM JSON-RPC endpoint
 //! (including Base L2).
 //!
 //! The proof generation pipeline:
