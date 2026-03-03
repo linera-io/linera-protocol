@@ -293,8 +293,8 @@
           const token = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, evmSigner);
           const bridge = new ethers.Contract(BRIDGE_ADDRESS, BRIDGE_ABI, evmSigner);
 
-          // Pad Linera chain ID to bytes32
-          const chainIdBytes = '0x' + lineraChain;
+          // Pad bridge chain ID to bytes32 (FungibleBridge tracks this chain)
+          const chainIdBytes = '0x' + BRIDGE_CHAIN_ID;
           // Pad application ID to bytes32 (take first 32 bytes if longer)
           const appIdHex = APP_ID.replace(/^0x/, '');
           const appIdBytes32 = '0x' + appIdHex.slice(0, 64).padStart(64, '0');
