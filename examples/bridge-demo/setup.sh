@@ -184,7 +184,8 @@ BRIDGE_APP_OUTPUT=$(linera_cli publish-and-create \
     "$WASM_DIR/evm_bridge_contract.wasm" \
     "$WASM_DIR/evm_bridge_service.wasm" \
     --json-parameters "$BRIDGE_PARAMS" \
-    --json-argument 'null' 2>&1) || {
+    --json-argument 'null' \
+    --required-application-ids "$WRAPPED_APP_ID" 2>&1) || {
     echo "ERROR: publish-and-create evm-bridge failed:" >&2
     echo "$BRIDGE_APP_OUTPUT" >&2
     exit 1
