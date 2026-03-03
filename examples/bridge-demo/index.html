@@ -293,9 +293,9 @@
           const token = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, evmSigner);
           const bridge = new ethers.Contract(BRIDGE_ADDRESS, BRIDGE_ABI, evmSigner);
 
-          // Pad bridge chain ID to bytes32 (FungibleBridge tracks this chain)
-          const chainIdBytes = '0x' + BRIDGE_CHAIN_ID;
-          // Pad application ID to bytes32 (take first 32 bytes if longer)
+          // Target the user's own chain (relay will mint there via cross-chain Credit)
+          const chainIdBytes = '0x' + lineraChain;
+          // Wrapped-fungible application ID as bytes32
           const appIdHex = APP_ID.replace(/^0x/, '');
           const appIdBytes32 = '0x' + appIdHex.slice(0, 64).padStart(64, '0');
           // Owner as bytes32
@@ -303,43 +303,42 @@
           const ownerBytes32 = '0x' + ownerHex.slice(0, 64).padStart(64, '0');
 
           // Step 1: Approve
-          setStatus('Step 1/4: Approving ERC-20 spend...');
+          setStatus('Step 1/3: Approving ERC-20 spend...');
           const approveTx = await token.approve(BRIDGE_ADDRESS, amountWei);
           await approveTx.wait();
 
           // Step 2: Deposit on EVM
-          setStatus('Step 2/4: Depositing to FungibleBridge...');
+          setStatus('Step 2/3: Depositing to FungibleBridge...');
           const depositTx = await bridge.deposit(chainIdBytes, appIdBytes32, ownerBytes32, amountWei);
           const receipt = await depositTx.wait();
           const txHash = receipt.hash;
 
-          // Step 3: Get proof from relay
-          setStatus('Step 3/4: Generating deposit proof...');
-          const proofResp = await fetch(`${RELAY_URL}/generate-proof`, {
+          // Step 3: Send to relay (generates proof + submits to Linera)
+          setStatus('Step 3/3: Relay processing deposit...');
+          const depositResp = await fetch(`${RELAY_URL}/deposit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tx_hash: txHash }),
           });
-          if (!proofResp.ok) throw new Error(`Proof generation failed: ${await proofResp.text()}`);
-          const proof = await proofResp.json();
-
-          // Step 4: Submit processDeposit to evm-bridge app
-          setStatus('Step 4/4: Submitting proof to Linera...');
-          const stripHex = s => s.replace(/^0x/, '');
-          const mutation = gql(`mutation {
-            processDeposit(
-              blockHeaderRlp: "${stripHex(proof.block_header_rlp)}",
-              receiptRlp: "${stripHex(proof.receipt_rlp)}",
-              proofNodes: [${proof.proof_nodes.map(n => `"${stripHex(n)}"`).join(', ')}],
-              txIndex: ${proof.tx_index},
-              logIndex: ${proof.log_index}
-            )
-          }`);
-          await bridgeApp.query(mutation);
+          if (!depositResp.ok) {
+            const body = await depositResp.json().catch(() => ({}));
+            throw new Error(body.error || `Relay returned ${depositResp.status}`);
+          }
 
           setStatus('Deposit complete! Waiting for balance update...');
           await updateEvmBalance();
-          await updateLineraBalance();
+          // Poll for balance update (cross-chain Credit may take a few seconds)
+          const depositDeadline = Date.now() + 60_000;
+          while (Date.now() < depositDeadline) {
+            await new Promise(r => setTimeout(r, 3000));
+            await updateLineraBalance();
+            const bal = parseFloat($('#linera-balance').textContent);
+            console.log('[bridge-demo] polling wrapped balance:', bal);
+            if (bal > 0) {
+              setStatus('Deposit complete! Wrapped tokens received.');
+              break;
+            }
+          }
         } catch (e) {
           console.error('Deposit failed:', e);
           addError(`Deposit failed: ${e.message}`);
@@ -432,9 +431,10 @@
         lineraChain = await faucet.claimChain(wallet, lineraOwner);
 
         const client = await new linera.Client(wallet, signer);
-        const chain = await client.chain(lineraChain);
+        const chain = await client.chain(lineraChain, { owner: lineraOwner });
         wrappedApp = await chain.application(APP_ID);
         bridgeApp = await chain.application(BRIDGE_APP_ID);
+        console.log('[bridge-demo] Linera initialized', { lineraChain, lineraOwner, APP_ID, BRIDGE_APP_ID });
 
         $('#linera-account').textContent = lineraOwner;
         $('#linera-chain').textContent = lineraChain;
@@ -444,7 +444,11 @@
 
         // Listen for chain notifications
         chain.onNotification(notification => {
-          if (notification.reason.BlockExecuted) {
+          console.log('[bridge-demo] notification:', JSON.stringify(notification));
+          if (notification.reason.NewIncomingBundle) {
+            console.log('[bridge-demo] NewIncomingBundle detected, updating balance...');
+            updateLineraBalance();
+          } else if (notification.reason.BlockExecuted) {
             updateLineraBalance(notification.reason.BlockExecuted.hash);
           } else if (notification.reason.NewBlock) {
             prependEntry($('#logs'), notification.reason.NewBlock);
