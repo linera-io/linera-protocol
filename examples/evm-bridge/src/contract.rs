@@ -110,7 +110,9 @@ impl EvmBridgeContract {
             log_index,
             logs.len()
         );
-        let deposit = proof::parse_deposit_event(&logs[log_index as usize])
+        let bridge_contract =
+            alloy_primitives::Address::from(params.bridge_contract_address);
+        let deposit = proof::parse_deposit_event(&logs[log_index as usize], bridge_contract)
             .expect("failed to parse DepositInitiated event");
 
         // 4. Validate deposit fields against bridge parameters

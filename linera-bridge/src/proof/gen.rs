@@ -258,7 +258,7 @@ mod tests {
             .expect("proof should verify");
 
         let logs = proof::decode_receipt_logs(&receipt).expect("decode logs");
-        let deposit = proof::parse_deposit_event(&logs[0]).expect("parse deposit");
+        let deposit = proof::parse_deposit_event(&logs[0], bridge_address).expect("parse deposit");
         assert_eq!(deposit.source_chain_id, U256::from(8453u64));
         assert_eq!(deposit.amount, U256::from(1_000_000u64));
     }

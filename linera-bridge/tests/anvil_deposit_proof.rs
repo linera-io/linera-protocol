@@ -289,7 +289,7 @@ async fn test_deposit_proof_generation() {
     // Decode and parse the deposit event
     let logs = decode_receipt_logs(&proof.receipt_rlp).expect("decode receipt logs");
     let deposit_log = &logs[proof.log_index as usize];
-    let deposit = parse_deposit_event(deposit_log).expect("parse deposit event");
+    let deposit = parse_deposit_event(deposit_log, bridge_address).expect("parse deposit event");
 
     // Anvil's default chain ID is 31337
     assert_eq!(deposit.source_chain_id, U256::from(31337u64));

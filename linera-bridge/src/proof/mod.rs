@@ -48,7 +48,8 @@
 //!     let logs = decode_receipt_logs(receipt_rlp)?;
 //!
 //!     // 4. Parse the deposit event from the target log.
-//!     let deposit = parse_deposit_event(&logs[log_index])?;
+//!     let bridge_contract = alloy_primitives::Address::ZERO; // your bridge address
+//!     let deposit = parse_deposit_event(&logs[log_index], bridge_contract)?;
 //!
 //!     println!(
 //!         "Verified deposit: {} tokens from chain {} in block {:?}",
@@ -362,17 +363,24 @@ pub fn decode_receipt_logs(receipt_rlp: &[u8]) -> Result<Vec<ReceiptLog>> {
 
 /// Parses a `DepositInitiated` event from a receipt log.
 ///
-/// Verifies that `topic[0]` matches the event signature and ABI-decodes the data fields.
+/// Verifies that `topic[0]` matches the event signature, that the log was emitted by
+/// the `expected_emitter` (bridge contract address), and ABI-decodes the data fields.
 /// The `depositor` field is indexed (stored in `topics[1]`); all other parameters are
 /// non-indexed and encoded in the log data.
-pub fn parse_deposit_event(log: &ReceiptLog) -> Result<DepositEvent> {
+pub fn parse_deposit_event(log: &ReceiptLog, expected_emitter: Address) -> Result<DepositEvent> {
+    ensure!(
+        log.address == expected_emitter,
+        "log emitter {:?} does not match expected bridge contract {:?}",
+        log.address,
+        expected_emitter
+    );
     ensure!(
         log.topics.first() == Some(&deposit_event_signature()),
         "event topic does not match DepositInitiated signature"
     );
     ensure!(
-        log.topics.len() >= 2,
-        "expected at least 2 topics (signature + indexed depositor), got {}",
+        log.topics.len() == 2,
+        "expected exactly 2 topics (signature + indexed depositor), got {}",
         log.topics.len()
     );
     ensure!(
@@ -684,6 +692,9 @@ mod tests {
         B256::from(topic)
     }
 
+    /// A constant bridge address used in deposit event parsing tests.
+    const TEST_BRIDGE: Address = Address::new([0xFF; 20]);
+
     #[test]
     fn test_parse_deposit_event_valid() {
         let target_chain_id = B256::from([0x11; 32]);
@@ -703,12 +714,12 @@ mod tests {
         );
 
         let log = ReceiptLog {
-            address: Address::from([0xFF; 20]),
+            address: TEST_BRIDGE,
             topics: vec![deposit_event_signature(), depositor_topic(depositor)],
             data,
         };
 
-        let event = parse_deposit_event(&log).unwrap();
+        let event = parse_deposit_event(&log, TEST_BRIDGE).unwrap();
         assert_eq!(event.source_chain_id, U256::from(8453));
         assert_eq!(event.target_chain_id, target_chain_id);
         assert_eq!(event.target_application_id, target_app_id);
@@ -719,63 +730,93 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_deposit_event_wrong_emitter() {
+        let log = ReceiptLog {
+            address: Address::from([0xAA; 20]),
+            topics: vec![deposit_event_signature(), depositor_topic(Address::ZERO)],
+            data: vec![0; 224],
+        };
+        assert!(
+            parse_deposit_event(&log, TEST_BRIDGE).is_err(),
+            "should reject log from wrong emitter"
+        );
+    }
+
+    #[test]
     fn test_parse_deposit_event_wrong_topic() {
         let log = ReceiptLog {
-            address: Address::ZERO,
+            address: TEST_BRIDGE,
             topics: vec![B256::from([0xFF; 32]), depositor_topic(Address::ZERO)],
             data: vec![0; 224],
         };
-        assert!(parse_deposit_event(&log).is_err());
+        assert!(parse_deposit_event(&log, TEST_BRIDGE).is_err());
     }
 
     #[test]
     fn test_parse_deposit_event_no_topics() {
         let log = ReceiptLog {
-            address: Address::ZERO,
+            address: TEST_BRIDGE,
             topics: vec![],
             data: vec![0; 224],
         };
-        assert!(parse_deposit_event(&log).is_err());
+        assert!(parse_deposit_event(&log, TEST_BRIDGE).is_err());
     }
 
     #[test]
     fn test_parse_deposit_event_missing_depositor_topic() {
         let log = ReceiptLog {
-            address: Address::ZERO,
+            address: TEST_BRIDGE,
             topics: vec![deposit_event_signature()],
             data: vec![0; 224],
         };
-        assert!(parse_deposit_event(&log).is_err());
+        assert!(parse_deposit_event(&log, TEST_BRIDGE).is_err());
+    }
+
+    #[test]
+    fn test_parse_deposit_event_extra_topic() {
+        let log = ReceiptLog {
+            address: TEST_BRIDGE,
+            topics: vec![
+                deposit_event_signature(),
+                depositor_topic(Address::ZERO),
+                B256::ZERO, // extra topic
+            ],
+            data: vec![0; 224],
+        };
+        assert!(
+            parse_deposit_event(&log, TEST_BRIDGE).is_err(),
+            "should reject extra topics"
+        );
     }
 
     #[test]
     fn test_parse_deposit_event_wrong_data_length() {
         let log = ReceiptLog {
-            address: Address::ZERO,
+            address: TEST_BRIDGE,
             topics: vec![deposit_event_signature(), depositor_topic(Address::ZERO)],
             data: vec![0; 100], // too short
         };
-        assert!(parse_deposit_event(&log).is_err());
+        assert!(parse_deposit_event(&log, TEST_BRIDGE).is_err());
     }
 
     #[test]
     fn test_parse_deposit_event_data_too_long() {
         let log = ReceiptLog {
-            address: Address::ZERO,
+            address: TEST_BRIDGE,
             topics: vec![deposit_event_signature(), depositor_topic(Address::ZERO)],
             data: vec![0; 225], // one byte too many
         };
-        assert!(parse_deposit_event(&log).is_err());
+        assert!(parse_deposit_event(&log, TEST_BRIDGE).is_err());
     }
 
     #[test]
     fn test_parse_deposit_event_data_off_by_one_short() {
         let log = ReceiptLog {
-            address: Address::ZERO,
+            address: TEST_BRIDGE,
             topics: vec![deposit_event_signature(), depositor_topic(Address::ZERO)],
             data: vec![0; 223], // one byte too short
         };
-        assert!(parse_deposit_event(&log).is_err());
+        assert!(parse_deposit_event(&log, TEST_BRIDGE).is_err());
     }
 
     #[test]
@@ -794,12 +835,12 @@ mod tests {
         // Corrupt the padding: set byte 128 to nonzero.
         data[128] = 0xFF;
         let log = ReceiptLog {
-            address: Address::ZERO,
+            address: TEST_BRIDGE,
             topics: vec![deposit_event_signature(), depositor_topic(Address::ZERO)],
             data,
         };
         assert!(
-            parse_deposit_event(&log).is_err(),
+            parse_deposit_event(&log, TEST_BRIDGE).is_err(),
             "should reject non-zero address padding"
         );
     }
