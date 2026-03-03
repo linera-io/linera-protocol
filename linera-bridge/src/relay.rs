@@ -3,8 +3,9 @@
 
 //! Relay server for the EVM↔Linera bridge demo.
 //!
-//! Three responsibilities:
-//! - **HTTP**: `POST /generate-proof` — generates MPT deposit proofs for browser clients.
+//! Responsibilities:
+//! - **HTTP**: `POST /deposit` — generates MPT deposit proofs and submits `ProcessDeposit`
+//!   operations on the bridge chain.
 //! - **Linera client**: claims a "bridge chain", listens for `NewIncomingBundle` notifications,
 //!   and processes the inbox so that cross-chain Credit messages are executed.
 //! - **EVM forwarder**: after processing inbox, BCS-serializes the resulting certificate and
@@ -19,15 +20,18 @@ use alloy::{
 use anyhow::{Context as _, Result};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
 use futures::StreamExt as _;
-use linera_base::{crypto::InMemorySigner, identifiers::AccountOwner};
+use linera_base::{
+    crypto::InMemorySigner,
+    identifiers::{AccountOwner, ApplicationId},
+};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{environment::wallet::Memory, worker::Reason};
-use linera_execution::WasmRuntime;
+use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
+use tokio::sync::{mpsc, oneshot};
 use tower_http::cors::CorsLayer;
-use tracing;
 
 use crate::proof::gen::{DepositProofClient, HttpDepositProofClient};
 
@@ -40,22 +44,44 @@ sol! {
     }
 }
 
+// ── BCS-compatible type matching evm_bridge::BridgeOperation ──
+
+/// Must match `evm_bridge::BridgeOperation` variant-for-variant for BCS compatibility.
+#[derive(serde::Serialize)]
+enum BridgeOperation {
+    ProcessDeposit {
+        block_header_rlp: Vec<u8>,
+        receipt_rlp: Vec<u8>,
+        proof_nodes: Vec<Vec<u8>>,
+        tx_index: u64,
+        log_index: u64,
+    },
+}
+
+// ── Channel types for deposit requests ──
+
+struct DepositRequest {
+    proof: crate::proof::gen::DepositProof,
+    response: oneshot::Sender<Result<(), String>>,
+}
+
 // ── Shared state for the HTTP server ──
 
 struct AppState {
     proof_client: HttpDepositProofClient,
+    deposit_tx: mpsc::Sender<DepositRequest>,
 }
 
 // ── HTTP handlers ──
 
 #[derive(serde::Deserialize)]
-struct GenerateProofRequest {
+struct DepositHttpRequest {
     tx_hash: String,
 }
 
-async fn generate_proof(
+async fn deposit_handler(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<GenerateProofRequest>,
+    Json(req): Json<DepositHttpRequest>,
 ) -> impl IntoResponse {
     let tx_hash = match req.tx_hash.parse() {
         Ok(h) => h,
@@ -67,27 +93,46 @@ async fn generate_proof(
         }
     };
 
-    match state.proof_client.generate_deposit_proof(tx_hash).await {
-        Ok(proof) => {
-            let result = serde_json::json!({
-                "block_header_rlp": alloy_primitives::hex::encode_prefixed(&proof.block_header_rlp),
-                "receipt_rlp": alloy_primitives::hex::encode_prefixed(&proof.receipt_rlp),
-                "proof_nodes": proof.proof_nodes.iter()
-                    .map(|n| alloy_primitives::hex::encode_prefixed(n))
-                    .collect::<Vec<_>>(),
-                "tx_index": proof.tx_index,
-                "log_index": proof.log_index,
-            });
-            (StatusCode::OK, Json(result))
+    let proof = match state.proof_client.generate_deposit_proof(tx_hash).await {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("{e:#}")})),
+            )
         }
-        Err(e) => (
+    };
+
+    let (resp_tx, resp_rx) = oneshot::channel();
+    if state
+        .deposit_tx
+        .send(DepositRequest {
+            proof,
+            response: resp_tx,
+        })
+        .await
+        .is_err()
+    {
+        return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": format!("{e:#}")})),
+            Json(serde_json::json!({"error": "relay channel closed"})),
+        );
+    }
+
+    match resp_rx.await {
+        Ok(Ok(())) => (StatusCode::OK, Json(serde_json::json!({"status": "ok"}))),
+        Ok(Err(e)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e})),
+        ),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "channel closed"})),
         ),
     }
 }
 
-// ── Entry point ──
+// ── Helpers ──
 
 /// Resolve bridge address: use CLI arg if provided, otherwise poll a file.
 async fn resolve_bridge_address(
@@ -115,11 +160,31 @@ async fn resolve_bridge_address(
     }
 }
 
+/// Poll a file for the evm-bridge ApplicationId (hex-encoded BCS).
+async fn resolve_bridge_app_id(file_path: &str) -> Result<ApplicationId> {
+    tracing::info!(file = file_path, "Polling for bridge app ID...");
+    loop {
+        if let Ok(contents) = tokio::fs::read_to_string(file_path).await {
+            let id_str = contents.trim();
+            if !id_str.is_empty() {
+                let app_id: ApplicationId =
+                    id_str.parse().context("invalid ApplicationId in file")?;
+                tracing::info!(%app_id, "Read bridge app ID from file");
+                return Ok(app_id);
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+}
+
+// ── Entry point ──
+
 pub async fn run(
     rpc_url: &str,
     faucet_url: &str,
     bridge_address: Option<&str>,
     bridge_address_file: &str,
+    bridge_app_id_file: &str,
     evm_private_key: &str,
     port: u16,
 ) -> Result<()> {
@@ -180,7 +245,6 @@ pub async fn run(
     }
 
     // ── 3. Set up EVM provider ──
-    // Resolve bridge address (may poll a file if not provided via CLI).
     let bridge_addr = resolve_bridge_address(bridge_address, bridge_address_file).await?;
     let evm_signer: PrivateKeySigner =
         evm_private_key.parse().context("invalid EVM private key")?;
@@ -189,17 +253,24 @@ pub async fn run(
         .wallet(evm_wallet)
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    // ── 4. Start notification listener ──
+    // ── 4. Resolve bridge app ID ──
+    let bridge_app_id = resolve_bridge_app_id(bridge_app_id_file).await?;
+
+    // ── 5. Start notification listener ──
     let mut notifications = chain_client.subscribe()?;
     let (listener, _abort_handle, _) = chain_client.listen().await?;
     tokio::spawn(listener);
 
-    // ── 5. Start HTTP server ──
+    // ── 6. Start HTTP server ──
     let proof_client = HttpDepositProofClient::new(rpc_url)?;
-    let app_state = Arc::new(AppState { proof_client });
+    let (deposit_tx, mut deposit_rx) = mpsc::channel::<DepositRequest>(16);
+    let app_state = Arc::new(AppState {
+        proof_client,
+        deposit_tx,
+    });
 
     let app = Router::new()
-        .route("/generate-proof", post(generate_proof))
+        .route("/deposit", post(deposit_handler))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
@@ -213,75 +284,134 @@ pub async fn run(
         }
     });
 
-    // ── 6. Background loop: process inbox → forward blocks ──
-    tracing::info!("Listening for NewIncomingBundle notifications...");
+    // ── 7. Main loop: process notifications + deposit requests ──
+    tracing::info!("Listening for notifications and deposit requests...");
     loop {
-        let notification =
-            match tokio::time::timeout(Duration::from_secs(300), notifications.next()).await {
-                Ok(Some(n)) => n,
-                Ok(None) => {
-                    tracing::warn!("Notification stream ended, exiting");
-                    break;
-                }
-                Err(_) => {
-                    // Timeout — just keep polling.
-                    continue;
-                }
-            };
-
-        if !matches!(notification.reason, Reason::NewIncomingBundle { .. }) {
-            continue;
-        }
-
-        tracing::info!("Received NewIncomingBundle, processing inbox...");
-
-        if let Err(e) = chain_client.synchronize_from_validators().await {
-            tracing::error!("Failed to synchronize: {e}");
-            continue;
-        }
-
-        let certs = match chain_client.process_inbox().await {
-            Ok((certs, _)) => certs,
-            Err(e) => {
-                tracing::error!("Failed to process inbox: {e}");
-                continue;
-            }
-        };
-
-        if certs.is_empty() {
-            tracing::info!("No certificates from inbox processing");
-            continue;
-        }
-
-        tracing::info!(count = certs.len(), "Processed inbox certificates");
-
-        // Forward each certificate to EVM.
-        for cert in &certs {
-            let cert_bytes = match bcs::to_bytes(cert) {
-                Ok(b) => b,
-                Err(e) => {
-                    tracing::error!("Failed to BCS-serialize certificate: {e}");
-                    continue;
-                }
-            };
-
-            tracing::info!(
-                size = cert_bytes.len(),
-                "Calling addBlock on FungibleBridge..."
-            );
-
-            let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
-            match bridge_contract.addBlock(cert_bytes.into()).send().await {
-                Ok(pending_tx) => match pending_tx.get_receipt().await {
-                    Ok(receipt) => {
-                        tracing::info!(
-                            tx = ?receipt.transaction_hash,
-                            "addBlock transaction confirmed"
-                        );
+        tokio::select! {
+            notification = notifications.next() => {
+                let notification = match notification {
+                    Some(n) => n,
+                    None => {
+                        tracing::warn!("Notification stream ended, exiting");
+                        break;
                     }
-                    Err(e) => tracing::error!("addBlock receipt failed: {e}"),
-                },
-                Err(e) => tracing::error!("addBlock send failed: {e}"),
+                };
+
+                if !matches!(notification.reason, Reason::NewIncomingBundle { .. }) {
+                    continue;
+                }
+
+                tracing::info!("Received NewIncomingBundle, processing inbox...");
+
+                if let Err(e) = chain_client.synchronize_from_validators().await {
+                    tracing::error!("Failed to synchronize: {e}");
+                    continue;
+                }
+
+                let certs = match chain_client.process_inbox().await {
+                    Ok((certs, _)) => certs,
+                    Err(e) => {
+                        tracing::error!("Failed to process inbox: {e}");
+                        continue;
+                    }
+                };
+
+                if certs.is_empty() {
+                    tracing::info!("No certificates from inbox processing");
+                    continue;
+                }
+
+                tracing::info!(count = certs.len(), "Processed inbox certificates");
+
+                // Forward each certificate to EVM.
+                for cert in &certs {
+                    let cert_bytes = match bcs::to_bytes(cert) {
+                        Ok(b) => b,
+                        Err(e) => {
+                            tracing::error!("Failed to BCS-serialize certificate: {e}");
+                            continue;
+                        }
+                    };
+
+                    tracing::info!(
+                        size = cert_bytes.len(),
+                        "Calling addBlock on FungibleBridge..."
+                    );
+
+                    let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
+                    match bridge_contract.addBlock(cert_bytes.into()).send().await {
+                        Ok(pending_tx) => match pending_tx.get_receipt().await {
+                            Ok(receipt) => {
+                                tracing::info!(
+                                    tx = ?receipt.transaction_hash,
+                                    "addBlock transaction confirmed"
+                                );
+                            }
+                            Err(e) => tracing::error!("addBlock receipt failed: {e}"),
+                        },
+                        Err(e) => tracing::error!("addBlock send failed: {e}"),
+                    }
+                }
+            }
+
+            Some(deposit_req) = deposit_rx.recv() => {
+                let result = async {
+                    let proof = &deposit_req.proof;
+
+                    let op = BridgeOperation::ProcessDeposit {
+                        block_header_rlp: proof.block_header_rlp.clone(),
+                        receipt_rlp: proof.receipt_rlp.clone(),
+                        proof_nodes: proof.proof_nodes.clone(),
+                        tx_index: proof.tx_index,
+                        log_index: proof.log_index,
+                    };
+                    let op_bytes = bcs::to_bytes(&op)
+                        .context("failed to BCS-serialize BridgeOperation")?;
+
+                    let operation = Operation::User {
+                        application_id: bridge_app_id,
+                        bytes: op_bytes,
+                    };
+
+                    tracing::info!("Submitting ProcessDeposit on bridge chain...");
+
+                    chain_client.synchronize_from_validators().await
+                        .context("failed to synchronize")?;
+
+                    let outcome = chain_client
+                        .execute_operations(vec![operation], vec![])
+                        .await?;
+                    match &outcome {
+                        linera_core::data_types::ClientOutcome::Committed(cert) => {
+                            let block = cert.block();
+                            let total_msgs: usize = block.body.messages.iter()
+                                .map(|tx_msgs| tx_msgs.len()).sum();
+                            tracing::info!(
+                                height = %block.header.height,
+                                total_msgs,
+                                "ProcessDeposit committed"
+                            );
+                            for (tx_idx, tx_msgs) in block.body.messages.iter().enumerate() {
+                                for (msg_idx, out) in tx_msgs.iter().enumerate() {
+                                    tracing::info!(
+                                        tx_idx,
+                                        msg_idx,
+                                        dest = %out.destination,
+                                        "outgoing message"
+                                    );
+                                }
+                            }
+                        }
+                        other => {
+                            anyhow::bail!("ProcessDeposit not committed: {other:?}");
+                        }
+                    }
+                    Ok::<(), anyhow::Error>(())
+                }.await;
+
+                let _ = deposit_req.response.send(
+                    result.map_err(|e| format!("{e:#}"))
+                );
             }
         }
     }

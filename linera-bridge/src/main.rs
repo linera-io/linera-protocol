@@ -67,6 +67,10 @@ struct ServeOptions {
     #[arg(long, default_value = "/shared/bridge-address")]
     bridge_address_file: String,
 
+    /// File to read the evm-bridge ApplicationId from (written by setup script)
+    #[arg(long, default_value = "/shared/bridge-app-id")]
+    bridge_app_id_file: String,
+
     /// EVM private key for signing addBlock transactions
     #[arg(long)]
     evm_private_key: String,
@@ -131,6 +135,7 @@ impl ServeOptions {
             &self.faucet_url,
             self.bridge_address.as_deref(),
             &self.bridge_address_file,
+            &self.bridge_app_id_file,
             &self.evm_private_key,
             self.port,
         )
