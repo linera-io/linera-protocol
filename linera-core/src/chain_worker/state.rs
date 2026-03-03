@@ -32,8 +32,8 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
-    ResourceTracker, ServiceRuntimeEndpoint,
+    system::EPOCH_STREAM_NAME, Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query,
+    QueryContext, QueryOutcome, ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, ResultReadConfirmedBlocks, Storage};
 use linera_views::{
@@ -767,6 +767,105 @@ where
         Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
     }
 
+    /// For each stream in `block.body.events` that has no entry in
+    /// `chain.next_expected_events`, walks backwards through the `previous_event_blocks`
+    /// linked list (reading blocks from storage) to collect all locally available event
+    /// indices, then initializes `next_expected_events` to the first gap.
+    ///
+    /// This handles the migration case where the `next_expected_events` field was added to
+    /// `ChainStateView` after blocks had already been processed.
+    async fn initialize_next_expected_events(&mut self, block: &Block) -> Result<(), WorkerError> {
+        let chain_id = block.header.chain_id;
+
+        // Collect streams that appear in this block but have no tracking entry yet.
+        let mut uninitialized = BTreeMap::<StreamId, BTreeSet<u32>>::new();
+        for event in block.body.events.iter().flatten() {
+            if self
+                .chain
+                .next_expected_events
+                .get(&event.stream_id)
+                .await?
+                .is_none()
+            {
+                uninitialized
+                    .entry(event.stream_id.clone())
+                    .or_default()
+                    .insert(event.index);
+            }
+        }
+        if uninitialized.is_empty() {
+            return Ok(());
+        }
+
+        // For each uninitialized stream, walk backwards through previous_event_blocks
+        // to collect all event indices from locally available blocks.
+        let mut prev_pointers: BTreeMap<StreamId, (CryptoHash, BlockHeight)> = BTreeMap::new();
+        for stream_id in uninitialized.keys() {
+            if let Some(pointer) = block.body.previous_event_blocks.get(stream_id) {
+                prev_pointers.insert(stream_id.clone(), *pointer);
+            }
+        }
+
+        while !prev_pointers.is_empty() {
+            let heights = prev_pointers.values().map(|(_, h)| *h).collect::<Vec<_>>();
+            let certs = self
+                .storage
+                .read_certificates_by_heights(chain_id, &heights)
+                .await?;
+
+            let mut next_pointers = BTreeMap::<StreamId, (CryptoHash, BlockHeight)>::new();
+            for (stream_id, (_hash, height)) in &prev_pointers {
+                let cert = certs
+                    .iter()
+                    .flatten()
+                    .find(|c| c.block().header.height == *height);
+                let Some(cert) = cert else {
+                    continue; // Block not available locally; stop walking this stream.
+                };
+                let prev_block = cert.block();
+                // Collect event indices for this stream from this block.
+                if let Some(indices) = uninitialized.get_mut(stream_id) {
+                    for event in prev_block.body.events.iter().flatten() {
+                        if event.stream_id == *stream_id {
+                            indices.insert(event.index);
+                        }
+                    }
+                }
+                // Continue walking if there's a predecessor.
+                if let Some(pointer) = prev_block.body.previous_event_blocks.get(stream_id) {
+                    next_pointers.insert(stream_id.clone(), *pointer);
+                }
+            }
+            prev_pointers = next_pointers;
+        }
+
+        // Find the first gap for each stream and initialize next_expected_events.
+        for (stream_id, indices) in uninitialized {
+            let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
+                1
+            } else {
+                0
+            };
+            let mut expected = initial_index;
+            for index in &indices {
+                match index.cmp(&expected) {
+                    std::cmp::Ordering::Equal => {
+                        expected = index.saturating_add(1);
+                    }
+                    std::cmp::Ordering::Greater => break, // Found a gap.
+                    std::cmp::Ordering::Less => {}
+                }
+            }
+            if expected != 0 {
+                self.chain
+                    .next_expected_events
+                    .insert(&stream_id, expected)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Processes a confirmed block (aka a commit).
     #[instrument(skip_all, fields(
         chain_id = %certificate.block().header.chain_id,
@@ -863,21 +962,14 @@ where
         // If this block is higher than the next expected block in this chain, we're going
         // to have a gap: do not execute this block, only update the outboxes and return.
         if tip.next_block_height < height {
-            // Update the outboxes.
-            self.chain.preprocess_block(certificate.value()).await?;
+            // Initialize next_expected_events for any streams that don't have entries yet.
+            self.initialize_next_expected_events(block).await?;
+            // Update the outboxes and track emitted events.
+            let event_streams = self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
             self.save().await?;
             let mut actions = self.create_network_actions(None).await?;
             trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
-            let event_streams = certificate
-                .value()
-                .block()
-                .body
-                .events
-                .iter()
-                .flatten()
-                .map(|event| event.stream_id.clone())
-                .collect::<BTreeSet<_>>();
             if !event_streams.is_empty() {
                 actions.notifications.push(Notification {
                     chain_id,
@@ -915,6 +1007,9 @@ where
             .iter()
             .filter_map(|blob_id| blobs.remove(blob_id))
             .collect::<Vec<_>>();
+
+        // Initialize next_expected_events for any streams that don't have entries yet.
+        self.initialize_next_expected_events(block).await?;
 
         // Execute the block and update inboxes.
         let local_time = self.storage.clock().current_time();
@@ -969,21 +1064,12 @@ where
         );
 
         // Update the rest of the chain state.
-        chain
+        let event_streams = chain
             .apply_confirmed_block(certificate.value(), local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         let hash = certificate.hash();
-        let event_streams = certificate
-            .value()
-            .block()
-            .body
-            .events
-            .iter()
-            .flatten()
-            .map(|event| event.stream_id.clone())
-            .collect::<BTreeSet<_>>();
         actions.notifications.push(Notification {
             chain_id,
             reason: Reason::NewBlock {

@@ -402,6 +402,11 @@ type ChainStateExtendedView {
 	Blocks that have been verified but not executed yet, and that may not be contiguous.
 	"""
 	preprocessedBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!
+	"""
+	The indices of next events we expect to see per stream (could be ahead of the last
+	executed block in sparse chains).
+	"""
+	nextExpectedEvents: MapView_StreamId_Int_3d7f5335!
 }
 
 """
@@ -598,6 +603,14 @@ type Entry_StreamId_BlockHeight_50cd702e {
 }
 
 """
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_StreamId_Int_459c4ec3 {
+	key: StreamId!
+	value: Int
+}
+
+"""
 A number identifying the configuration of the chain (aka the committee)
 """
 scalar Epoch
@@ -790,6 +803,13 @@ type MapView_StreamId_BlockHeight_e6657ad9 {
 	count: Int!
 	entry(key: StreamIdInput!): Entry_StreamId_BlockHeight_50cd702e!
 	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_BlockHeight_50cd702e!]!
+}
+
+type MapView_StreamId_Int_3d7f5335 {
+	keys(count: Int): [StreamId!]!
+	count: Int!
+	entry(key: StreamIdInput!): Entry_StreamId_Int_459c4ec3!
+	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_Int_459c4ec3!]!
 }
 
 """

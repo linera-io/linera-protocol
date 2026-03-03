@@ -19,9 +19,10 @@ use linera_base::{
     time::{Duration, Instant},
 };
 use linera_execution::{
-    committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, Operation,
-    OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController, ResourceTracker,
-    ServiceRuntimeEndpoint, TransactionTracker, FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE,
+    committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
+    Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
+    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE,
 };
 use linera_views::{
     bucket_queue_view::BucketQueueView,
@@ -277,6 +278,10 @@ where
 
     /// Blocks that have been verified but not executed yet, and that may not be contiguous.
     pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
+
+    /// The indices of next events we expect to see per stream (could be ahead of the last
+    /// executed block in sparse chains).
+    pub next_expected_events: MapView<C, StreamId, u32>,
 }
 
 /// Block-chaining state.
@@ -1073,6 +1078,50 @@ where
         .map(|(outcome, tracker)| (block, outcome, tracker))
     }
 
+    /// Tracks emitted events per stream and returns the set of streams where new contiguous
+    /// events were observed (starting from `next_expected_events`).
+    ///
+    /// Callers must ensure that `next_expected_events` has been initialized for every stream
+    /// present in the block's events before calling this method. See
+    /// `ChainWorkerState::initialize_next_expected_events`.
+    async fn process_emitted_events(
+        &mut self,
+        block: &Block,
+    ) -> Result<BTreeSet<StreamId>, ChainError> {
+        let mut emitted_streams = BTreeMap::<StreamId, BTreeSet<u32>>::new();
+        for event in block.body.events.iter().flatten() {
+            emitted_streams
+                .entry(event.stream_id.clone())
+                .or_default()
+                .insert(event.index);
+        }
+
+        let mut updated_streams = BTreeSet::new();
+        for (stream_id, indices) in emitted_streams {
+            let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
+                1
+            } else {
+                0
+            };
+            let mut current_expected_index = self
+                .next_expected_events
+                .get(&stream_id)
+                .await?
+                .unwrap_or(initial_index);
+            for index in indices {
+                if index == current_expected_index {
+                    updated_streams.insert(stream_id.clone());
+                    current_expected_index = index.saturating_add(1);
+                }
+            }
+            if current_expected_index != 0 {
+                self.next_expected_events
+                    .insert(&stream_id, current_expected_index)?;
+            }
+        }
+        Ok(updated_streams)
+    }
+
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
     /// manager. This does not touch the execution state itself, which must be updated separately.
     /// Returns the set of event streams that were updated as a result of applying the block.
@@ -1084,7 +1133,7 @@ where
         &mut self,
         block: &ConfirmedBlock,
         local_time: Timestamp,
-    ) -> Result<(), ChainError> {
+    ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
         self.execution_state_hash.set(Some(block.header.state_hash));
@@ -1098,6 +1147,7 @@ where
             self.previous_event_blocks
                 .insert(&event.stream_id, block.header.height)?;
         }
+        let updated_streams = self.process_emitted_events(block).await?;
         // Last, reset the consensus state based on the current ownership.
         self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
 
@@ -1108,24 +1158,29 @@ where
         tip.update_counters(&block.body.transactions, &block.body.messages)?;
         self.confirmed_log.push(hash);
         self.preprocessed_blocks.remove(&block.header.height)?;
-        Ok(())
+        Ok(updated_streams)
     }
 
     /// Adds a block to `preprocessed_blocks`, and updates the outboxes where possible.
+    /// Returns the set of event streams that were updated as a result of preprocessing the block.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.inner().inner().header.height
     ))]
-    pub async fn preprocess_block(&mut self, block: &ConfirmedBlock) -> Result<(), ChainError> {
+    pub async fn preprocess_block(
+        &mut self,
+        block: &ConfirmedBlock,
+    ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
         let height = block.header.height;
         if height < self.tip_state.get().next_block_height {
-            return Ok(());
+            return Ok(BTreeSet::new());
         }
         self.process_outgoing_messages(block).await?;
+        let updated_streams = self.process_emitted_events(block).await?;
         self.preprocessed_blocks.insert(&height, hash)?;
-        Ok(())
+        Ok(updated_streams)
     }
 
     /// Returns whether this is a child chain.

@@ -1212,10 +1212,14 @@ impl<Env: Environment> Client<Env> {
     /// Downloads blocks that contain events in the subscribed streams, walking backwards
     /// through `previous_event_blocks` to fetch event-bearing ancestors that we don't
     /// already have locally.
+    /// Downloads event-bearing blocks for the given streams by walking the
+    /// `previous_event_blocks` linked list backwards from `height`, stopping at
+    /// `local_next_block_height` (blocks below that are already executed locally).
     async fn download_event_bearing_blocks(
         &self,
         sender_chain_id: ChainId,
         height: BlockHeight,
+        local_next_block_height: BlockHeight,
         subscribed_streams: &BTreeSet<StreamId>,
         remote_node: &RemoteNode<Env::ValidatorNode>,
     ) -> Result<(), ChainClientError> {
@@ -1225,6 +1229,9 @@ impl<Env: Environment> Client<Env> {
         let mut heights_to_fetch = BTreeSet::<BlockHeight>::from([height]);
 
         while let Some(current_height) = heights_to_fetch.pop_last() {
+            if current_height < local_next_block_height {
+                continue; // Already executed locally.
+            }
             if certificates.contains_key(&current_height) {
                 continue;
             }
@@ -4272,11 +4279,10 @@ impl<Env: Environment> ChainClient<Env> {
                 ..
             } => {
                 let chain_id = notification.chain_id;
-                if self
+                let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
-                    .await?
-                    > height
-                {
+                    .await?;
+                if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
                         "Accepting redundant notification for new events"
@@ -4290,7 +4296,13 @@ impl<Env: Environment> ChainClient<Env> {
                     _ => event_streams,
                 };
                 self.client
-                    .download_event_bearing_blocks(chain_id, height, &subscribed, &remote_node)
+                    .download_event_bearing_blocks(
+                        chain_id,
+                        height,
+                        local_height,
+                        &subscribed,
+                        &remote_node,
+                    )
                     .await?;
             }
             Reason::NewRound { height, round } => {
