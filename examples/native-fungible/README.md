@@ -61,10 +61,11 @@ module:
 ```bash
 cd examples/native-fungible
 
-cargo build --release --target wasm32-unknown-unknown
+cargo build --release --target ../../linera-service/wasm32-mvp.json \
+    -Z build-std=std,panic_abort -Z json-target-spec
 
 MODULE_ID="$(linera publish-module \
-    ../target/wasm32-unknown-unknown/release/native_fungible_{contract,service}.wasm)"
+    ../target/wasm32-mvp/release/native_fungible_{contract,service}.wasm)"
 ```
 
 Here, we stored the new module ID in a variable `MODULE_ID` to be reused it later.

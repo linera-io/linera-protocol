@@ -95,7 +95,9 @@ Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WA
 Now, we can publish the fungible module and create the fungible applications.
 
 ```bash
-(cd examples/fungible && cargo build --release --target wasm32-unknown-unknown)
+(cd examples/fungible && cargo build --release \
+    --target ../../linera-service/wasm32-mvp.json \
+    -Z build-std=std,panic_abort -Z json-target-spec)
 
 APP_ID_0=$(linera --with-wallet 1 project publish-and-create \
            examples/fungible \

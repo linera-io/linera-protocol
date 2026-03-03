@@ -73,10 +73,12 @@ OWNER_2="${INFO_2[1]}"
 ```
 
 ```bash
-(cd examples/non-fungible && cargo build --release --target wasm32-unknown-unknown)
+(cd examples/non-fungible && cargo build --release \
+    --target ../../linera-service/wasm32-mvp.json \
+    -Z build-std=std,panic_abort -Z json-target-spec)
 
 MODULE_ID=$(linera publish-module \
-    examples/target/wasm32-unknown-unknown/release/non_fungible_{contract,service}.wasm)
+    examples/target/wasm32-mvp/release/non_fungible_{contract,service}.wasm)
 ```
 
 Here, we stored the new module ID in a variable `MODULE_ID` to be reused later.
