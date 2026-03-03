@@ -103,6 +103,10 @@ RUN for dir in \
     "web/@linera/client"; \
   do mkdir -p "$dir/src" && echo "" > "$dir/src/lib.rs"; done
 
+# linera-version build script hashes gql/*.graphql in linera-service-graphql-client.
+# Copy those files into the stub so the hash computation succeeds.
+COPY linera-service-graphql-client/gql linera-service-graphql-client/gql
+
 # Stubs for crates with [[bin]] targets (need main.rs too)
 RUN mkdir -p linera-service/src/cli linera-service/src/proxy linera-service/src/exporter && \
     echo "" > linera-service/src/lib.rs && \
