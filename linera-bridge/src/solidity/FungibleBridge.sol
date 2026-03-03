@@ -8,6 +8,7 @@ import "Microchain.sol";
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
 }
 
 /// Bridges ERC20 tokens between Linera and EVM.
@@ -52,9 +53,15 @@ contract FungibleBridge is Microchain {
         bytes32 target_account_owner,
         uint256 amount
     ) external {
+        require(amount > 0, "amount=0");
         require(target_chain_id == chainId, "target chain mismatch");
         require(target_application_id == applicationId, "target application mismatch");
-        require(token.transferFrom(msg.sender, address(this), amount), "transferFrom failed");
+
+        uint256 before = token.balanceOf(address(this));
+        _safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = token.balanceOf(address(this)) - before;
+        require(received == amount, "fee-on-transfer tokens unsupported");
+
         emit DepositInitiated(
             block.chainid,
             target_chain_id,
@@ -93,5 +100,13 @@ contract FungibleBridge is Microchain {
                 require(token.transfer(target, credit.amount.value), "token transfer failed");
             }
         }
+    }
+
+    /// @dev Calls transferFrom and handles tokens that don't return a boolean.
+    function _safeTransferFrom(address from, address to, uint256 amount_) internal {
+        (bool success, bytes memory data) = address(token).call(
+            abi.encodeWithSelector(token.transferFrom.selector, from, to, amount_)
+        );
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "safeTransferFrom failed");
     }
 }
