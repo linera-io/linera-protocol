@@ -229,9 +229,12 @@ mod tests {
         );
 
         let bridge_address = Address::from([0xBB; 20]);
+        let depositor = Address::from([0xEE; 20]);
+        let mut depositor_topic = [0u8; 32];
+        depositor_topic[12..32].copy_from_slice(depositor.as_slice());
         let receipt = build_test_receipt(&[ReceiptLog {
             address: bridge_address,
-            topics: vec![event_sig],
+            topics: vec![event_sig, B256::from(depositor_topic)],
             data: event_data,
         }]);
 

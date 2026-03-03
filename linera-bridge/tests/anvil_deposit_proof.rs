@@ -296,6 +296,7 @@ async fn test_deposit_proof_generation() {
     assert_eq!(deposit.target_chain_id, target_chain_id);
     assert_eq!(deposit.target_application_id, target_application_id);
     assert_eq!(deposit.target_account_owner, target_owner);
+    assert_eq!(deposit.depositor, deployer);
     assert_eq!(deposit.token, token_address);
     assert_eq!(deposit.amount, deposit_amount);
 

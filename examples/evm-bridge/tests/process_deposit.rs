@@ -117,9 +117,12 @@ async fn test_process_deposit_mints_tokens() {
         deposit_amount,
     );
 
+    let depositor = Address::from([0xDD; 20]);
+    let mut depositor_topic = [0u8; 32];
+    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
     let receipt = build_test_receipt(&[ReceiptLog {
         address: bridge_contract,
-        topics: vec![deposit_event_signature()],
+        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
         data: event_data,
     }]);
 
@@ -208,9 +211,12 @@ async fn test_replay_protection() {
         500_000,
     );
 
+    let depositor = Address::from([0xDD; 20]);
+    let mut depositor_topic = [0u8; 32];
+    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
     let receipt = build_test_receipt(&[ReceiptLog {
         address: Address::from([0xBB; 20]),
-        topics: vec![deposit_event_signature()],
+        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
         data: event_data,
     }]);
 
@@ -309,9 +315,12 @@ async fn test_invalid_proof_rejected() {
         100,
     );
 
+    let depositor = Address::from([0xDD; 20]);
+    let mut depositor_topic = [0u8; 32];
+    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
     let receipt = build_test_receipt(&[ReceiptLog {
         address: Address::from([0xBB; 20]),
-        topics: vec![deposit_event_signature()],
+        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
         data: event_data,
     }]);
 

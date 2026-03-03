@@ -23,6 +23,7 @@ contract FungibleBridge is Microchain {
         bytes32 target_chain_id,
         bytes32 target_application_id,
         bytes32 target_account_owner,
+        address indexed depositor,
         address token,
         uint256 amount
     );
@@ -67,6 +68,7 @@ contract FungibleBridge is Microchain {
             target_chain_id,
             target_application_id,
             target_account_owner,
+            msg.sender,
             address(token),
             amount
         );

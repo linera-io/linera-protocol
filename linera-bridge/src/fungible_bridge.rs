@@ -45,6 +45,7 @@ mod tests {
                 bytes32 target_chain_id,
                 bytes32 target_application_id,
                 bytes32 target_account_owner,
+                address indexed depositor,
                 address token,
                 uint256 amount
             );
@@ -424,6 +425,11 @@ mod tests {
         assert_eq!(
             event.data.target_account_owner,
             alloy_primitives::B256::from(target_owner_bytes())
+        );
+        assert_eq!(
+            event.depositor,
+            alloy_primitives::Address::from_slice(DEPOSITOR.as_slice()),
+            "depositor should be the caller"
         );
         assert_eq!(
             event.data.token,
