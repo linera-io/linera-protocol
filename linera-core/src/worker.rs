@@ -261,11 +261,6 @@ pub enum Reason {
         hash: CryptoHash,
         event_streams: BTreeSet<StreamId>,
     },
-    NewEvents {
-        height: BlockHeight,
-        hash: CryptoHash,
-        event_streams: BTreeSet<StreamId>,
-    },
     NewIncomingBundle {
         origin: ChainId,
         height: BlockHeight,
@@ -277,6 +272,14 @@ pub enum Reason {
     BlockExecuted {
         height: BlockHeight,
         hash: CryptoHash,
+    },
+    // NOTE: Keep this at the end for backward compatibility with old validators
+    // that use bincode integer-based variant indices. Old validators don't emit
+    // NewEvents, and inserting it before existing variants would shift their indices.
+    NewEvents {
+        height: BlockHeight,
+        hash: CryptoHash,
+        event_streams: BTreeSet<StreamId>,
     },
 }
 
