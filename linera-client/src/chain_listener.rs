@@ -334,6 +334,9 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                         self.maybe_process_inbox(notification.chain_id).await?;
                     }
                 }
+                // Also process events on NewBlock for compatibility with old validators
+                // that don't emit NewEvents notifications.
+                self.process_new_events(notification.chain_id).await?;
             }
             Reason::NewEvents { .. } => {
                 self.process_new_events(notification.chain_id).await?;
