@@ -30,7 +30,9 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{environment::wallet::Memory, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_sdk::abis::fungible::{self, FungibleOperation, FungibleTokenAbi};
+use wrapped_fungible::{
+    Account, InitialState, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
+};
 use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
@@ -98,16 +100,18 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     cc_a.synchronize_from_validators().await?;
     tracing::info!(%chain_a, %owner_a, "Chain A claimed");
 
-    // ── 3. Publish and create fungible app on chain A ──
-    tracing::info!("Publishing fungible module...");
+    // ── 3. Publish and create wrapped-fungible app on chain A ──
+    tracing::info!("Publishing wrapped-fungible module...");
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(3)
         .context("manifest dir has fewer than 3 ancestors")?
         .to_path_buf();
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
-    let contract_bytecode = Bytecode::load_from_file(wasm_dir.join("fungible_contract.wasm"))?;
-    let service_bytecode = Bytecode::load_from_file(wasm_dir.join("fungible_service.wasm"))?;
+    let contract_bytecode =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm"))?;
+    let service_bytecode =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm"))?;
 
     let (module_id, cert) = cc_a
         .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
@@ -118,14 +122,19 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     cc_a.synchronize_from_validators().await?;
     cc_a.process_inbox().await?;
 
-    tracing::info!("Creating fungible application...");
-    let params = fungible::Parameters::new("TEST");
-    let init_state = fungible::InitialState {
+    tracing::info!("Creating wrapped-fungible application...");
+    let params = WrappedParameters {
+        ticker_symbol: "TEST".to_string(),
+        minter: owner_a,
+        evm_token_address: [0; 20],
+        evm_source_chain_id: 0,
+    };
+    let init_state = InitialState {
         accounts: BTreeMap::from([(owner_a, Amount::from_tokens(1000))]),
     };
-    let (app_id, _cert): (linera_base::identifiers::ApplicationId<FungibleTokenAbi>, _) = cc_a
-        .create_application(
-            module_id.with_abi::<FungibleTokenAbi, _, _>(),
+    let (app_id, _cert): (linera_base::identifiers::ApplicationId<WrappedFungibleTokenAbi>, _) =
+        cc_a.create_application(
+            module_id.with_abi::<WrappedFungibleTokenAbi, _, _>(),
             &params,
             &init_state,
             vec![],
@@ -224,11 +233,11 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     let evm_recipient = "70997970C51812dc3A010C7d01b50e0d17dc79C8";
     let receiver: AccountOwner = format!("0x{evm_recipient}").parse()?;
 
-    tracing::info!("Sending fungible transfer to Address20 on chain B...");
-    let transfer_bytes = bcs::to_bytes(&FungibleOperation::Transfer {
+    tracing::info!("Sending wrapped-fungible transfer to Address20 on chain B...");
+    let transfer_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_a,
         amount: Amount::from_tokens(100),
-        target_account: fungible::Account {
+        target_account: Account {
             chain_id: chain_b,
             owner: receiver,
         },

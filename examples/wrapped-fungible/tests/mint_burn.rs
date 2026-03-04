@@ -5,7 +5,8 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use fungible::{Account, FungibleOperation, InitialState, InitialStateBuilder};
+use fungible::{InitialState, InitialStateBuilder};
+use wrapped_fungible::{Account, WrappedFungibleOperation};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
     test::TestValidator,
@@ -67,7 +68,7 @@ async fn test_mint_from_authorized_minter() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                FungibleOperation::Mint {
+                WrappedFungibleOperation::Mint {
                     target_account: Account {
                         chain_id: minter_chain.id(),
                         owner: minter_account,
@@ -108,7 +109,7 @@ async fn test_mint_from_unauthorized_signer() {
         .try_add_block(|block| {
             block.with_operation(
                 application_id,
-                FungibleOperation::Mint {
+                WrappedFungibleOperation::Mint {
                     target_account: Account {
                         chain_id: chain.id(),
                         owner: chain_owner,
@@ -146,7 +147,7 @@ async fn test_burn_from_authorized_minter() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                FungibleOperation::Burn {
+                WrappedFungibleOperation::Burn {
                     owner: minter_account,
                     amount: burn_amount,
                 },
@@ -184,7 +185,7 @@ async fn test_burn_from_unauthorized_signer() {
         .try_add_block(|block| {
             block.with_operation(
                 application_id,
-                FungibleOperation::Burn {
+                WrappedFungibleOperation::Burn {
                     owner: chain_owner,
                     amount: Amount::from_tokens(100),
                 },
@@ -218,7 +219,7 @@ async fn test_burn_insufficient_balance() {
         .try_add_block(|block| {
             block.with_operation(
                 application_id,
-                FungibleOperation::Burn {
+                WrappedFungibleOperation::Burn {
                     owner: minter_account,
                     amount: Amount::from_tokens(200),
                 },
@@ -255,7 +256,7 @@ async fn test_wrapped_fungible_standard_transfer() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                FungibleOperation::Transfer {
+                WrappedFungibleOperation::Transfer {
                     owner,
                     amount: Amount::from_tokens(300),
                     target_account: Account {

@@ -119,13 +119,6 @@ impl Contract for FungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            FungibleOperation::Mint { .. } => {
-                panic!("Standard fungible token does not support minting");
-            }
-
-            FungibleOperation::Burn { .. } => {
-                panic!("Standard fungible token does not support burning");
-            }
         }
     }
 

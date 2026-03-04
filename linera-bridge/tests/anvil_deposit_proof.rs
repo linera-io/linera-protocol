@@ -25,7 +25,7 @@ use alloy::{
 use alloy_primitives::{Bytes, B256, U256};
 use alloy_sol_types::{SolCall, SolValue};
 use linera_bridge::{
-    evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, FUNGIBLE_TYPES_SOURCE},
+    evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, WRAPPED_FUNGIBLE_TYPES_SOURCE},
     proof::{
         decode_block_header, decode_receipt_logs,
         gen::{DepositProofClient, HttpDepositProofClient},
@@ -90,7 +90,7 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
     // Write all shared Solidity files so imports resolve
     for (name, content) in [
         ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
-        ("FungibleTypes.sol", FUNGIBLE_TYPES_SOURCE),
+        ("WrappedFungibleTypes.sol", WRAPPED_FUNGIBLE_TYPES_SOURCE),
         ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
         ("LightClient.sol", linera_bridge::evm::light_client::SOURCE),
         ("Microchain.sol", linera_bridge::evm::microchain::SOURCE),

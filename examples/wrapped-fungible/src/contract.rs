@@ -3,15 +3,15 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use fungible::{
-    state::FungibleTokenState, Account, FungibleOperation, FungibleResponse, InitialState, Message,
-};
+use fungible::{state::FungibleTokenState, FungibleResponse, InitialState, Message};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use wrapped_fungible::{WrappedFungibleTokenAbi, WrappedParameters};
+use wrapped_fungible::{
+    Account, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
+};
 
 pub struct WrappedFungibleTokenContract {
     state: FungibleTokenState,
@@ -48,17 +48,17 @@ impl Contract for WrappedFungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            FungibleOperation::Balance { owner } => {
+            WrappedFungibleOperation::Balance { owner } => {
                 let balance = self.state.balance_or_default(&owner).await;
                 FungibleResponse::Balance(balance)
             }
 
-            FungibleOperation::TickerSymbol => {
+            WrappedFungibleOperation::TickerSymbol => {
                 let params: WrappedParameters = self.runtime.application_parameters();
                 FungibleResponse::TickerSymbol(params.ticker_symbol)
             }
 
-            FungibleOperation::Approve {
+            WrappedFungibleOperation::Approve {
                 owner,
                 spender,
                 allowance,
@@ -70,7 +70,7 @@ impl Contract for WrappedFungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            FungibleOperation::Transfer {
+            WrappedFungibleOperation::Transfer {
                 owner,
                 amount,
                 target_account,
@@ -84,7 +84,7 @@ impl Contract for WrappedFungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            FungibleOperation::TransferFrom {
+            WrappedFungibleOperation::TransferFrom {
                 owner,
                 spender,
                 amount,
@@ -101,7 +101,7 @@ impl Contract for WrappedFungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            FungibleOperation::Claim {
+            WrappedFungibleOperation::Claim {
                 source_account,
                 amount,
                 target_account,
@@ -113,12 +113,12 @@ impl Contract for WrappedFungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            FungibleOperation::Mint {
+            WrappedFungibleOperation::Mint {
                 target_account,
                 amount,
             } => self.execute_mint(target_account, amount).await,
 
-            FungibleOperation::Burn { owner, amount } => self.execute_burn(owner, amount).await,
+            WrappedFungibleOperation::Burn { owner, amount } => self.execute_burn(owner, amount).await,
         }
     }
 

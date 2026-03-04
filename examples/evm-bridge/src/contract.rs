@@ -5,7 +5,8 @@
 
 use alloy_primitives::Bytes;
 use evm_bridge::{BridgeOperation, BridgeParameters, BridgeResponse, DepositKey, EvmBridgeAbi};
-use fungible::{Account, FungibleOperation};
+use fungible::Account;
+use wrapped_fungible::WrappedFungibleOperation;
 use linera_bridge::proof;
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ChainId, WithContractAbi},
@@ -157,7 +158,7 @@ impl EvmBridgeContract {
             .expect("deposit amount exceeds u128");
         let amount = Amount::from_attos(amount_u128);
 
-        let mint_op = FungibleOperation::Mint {
+        let mint_op = WrappedFungibleOperation::Mint {
             target_account: Account {
                 chain_id: target_chain_id,
                 owner: target_owner,

@@ -39,20 +39,20 @@ YAML snapshot (tests/snapshots/format__format.yaml.snap)
 BridgeTypes.sol (src/solidity/BridgeTypes.sol)
 ```
 
-Application-specific types follow the same pipeline. For example, `FungibleOperation` from the fungible token application:
+Application-specific types follow the same pipeline. For example, `WrappedFungibleOperation` from the wrapped-fungible token application:
 
 ```
-Rust types (linera-sdk::abis::fungible)
+Rust types (wrapped-fungible)
     │
-    ▼  serde-reflection (tests/format_fungible.rs)
-YAML snapshot (tests/snapshots/format_fungible__format_fungible.yaml.snap)
+    ▼  serde-reflection (tests/format_wrapped_fungible.rs)
+YAML snapshot (tests/snapshots/format_wrapped_fungible__format_wrapped_fungible.yaml.snap)
     │
     ▼  serde-generate via build.rs (shared types declared as external_definitions)
-FungibleTypes.sol (src/solidity/FungibleTypes.sol)
+WrappedFungibleTypes.sol (src/solidity/WrappedFungibleTypes.sol)
     imports BridgeTypes.sol for shared types
 ```
 
-`FungibleTypes.sol` only contains types and deserializers unique to the fungible application (`FungibleOperation` and its variants). Shared types like `Account`, `AccountOwner`, and `Amount` are reused from `BridgeTypes.sol` via import — `build.rs` passes them as `external_definitions` to `serde-generate`, which emits qualified `BridgeTypes.` references and `import` statements instead of duplicate definitions.
+`WrappedFungibleTypes.sol` only contains types and deserializers unique to the wrapped-fungible application (`WrappedFungibleOperation` and its variants). Shared types like `Account`, `AccountOwner`, and `Amount` are reused from `BridgeTypes.sol` via import — `build.rs` passes them as `external_definitions` to `serde-generate`, which emits qualified `BridgeTypes.` references and `import` statements instead of duplicate definitions.
 
 All snapshots are checked in and tested via `insta`. This means the generated Solidity stays in sync with the Rust types — if a struct field is added or an enum variant reordered, the snapshot test fails and the developer must update it explicitly.
 
@@ -121,7 +121,7 @@ Binds to a specific `LightClient`, chain, initial block height, Linera applicati
 
 #### `_onBlock(BridgeTypes.Block)`
 
-Scans the block's `ReceiveMessages` transactions for `Message::User` entries matching `applicationId`. For each match, the opaque `bytes` payload is deserialized as a `FungibleTypes.Message`. Only `Credit` messages with an `Address20` target (Ethereum address) trigger an ERC-20 `transfer` from the bridge's balance to the target.
+Scans the block's `ReceiveMessages` transactions for `Message::User` entries matching `applicationId`. For each match, the opaque `bytes` payload is deserialized as a `WrappedFungibleTypes.Message`. Only `Credit` messages with an `Address20` target (Ethereum address) trigger an ERC-20 `transfer` from the bridge's balance to the target.
 
 ## Rust API
 
@@ -143,7 +143,7 @@ let calldata: Vec<u8> = call.abi_encode();
 // microchain:   addBlockCall, nextExpectedHeightCall, lightClientCall, chainIdCall
 
 // Solidity sources (for compilation or deployment tooling):
-// BRIDGE_TYPES_SOURCE, FUNGIBLE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE
+// BRIDGE_TYPES_SOURCE, WRAPPED_FUNGIBLE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE
 // light_client::SOURCE, microchain::SOURCE
 ```
 
@@ -173,7 +173,7 @@ The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis c
 
 - **Separation of concerns between LightClient and Microchain**: The `LightClient` is a singleton that only manages committees and certificate verification. It has no knowledge of individual chains or their blocks. Each `Microchain` instance tracks a single chain's block sequence and delegates verification to the `LightClient`. This means one `LightClient` deployment can serve any number of `Microchain` contracts, each following a different Linera microchain.
 
-- **Application-specific type generation with shared type reuse**: `FungibleTypes.sol` is generated from a separate serde-reflection snapshot of `FungibleOperation`. Since `FungibleOperation` references types already in `BridgeTypes.sol` (e.g., `Account`, `AccountOwner`, `Amount`), `build.rs` declares them as `external_definitions` so `serde-generate` emits qualified `BridgeTypes.` references and import statements instead of duplicate definitions. This ensures type compatibility — a `BridgeTypes.Account` from block deserialization can be directly compared with an `Account` from a deserialized `FungibleOperation`.
+- **Application-specific type generation with shared type reuse**: `WrappedFungibleTypes.sol` is generated from a separate serde-reflection snapshot of `WrappedFungibleOperation`. Since `WrappedFungibleOperation` references types already in `BridgeTypes.sol` (e.g., `Account`, `AccountOwner`, `Amount`), `build.rs` declares them as `external_definitions` so `serde-generate` emits qualified `BridgeTypes.` references and import statements instead of duplicate definitions. This ensures type compatibility — a `BridgeTypes.Account` from block deserialization can be directly compared with an `Account` from a deserialized `WrappedFungibleOperation`.
 
 - **No `previous_block_hash` chain-linking in Microchain**: The `Microchain` contract enforces chain ID and sequential heights but does not verify `previous_block_hash` to link blocks into a hash chain. This is safe because a `ConfirmedBlockCertificate` implies BFT-finalized canonicality — a quorum of validators signed this specific block at this height, so no conflicting block can exist for the same chain and height. The contract relies on this protocol-layer guarantee rather than redundantly re-checking hash linking. If the finality semantics of `ConfirmedBlockCertificate` ever change (e.g., to allow rollbacks or forks), a `previous_block_hash` check should be added.
 

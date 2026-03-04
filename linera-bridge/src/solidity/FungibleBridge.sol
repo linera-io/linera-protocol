@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "BridgeTypes.sol";
-import "FungibleTypes.sol";
+import "WrappedFungibleTypes.sol";
 import "Microchain.sol";
 
 interface IERC20 {
@@ -94,13 +94,13 @@ contract FungibleBridge is Microchain {
                 if (posted.message.choice != 1) continue;
                 if (posted.message.user.application_id.application_description_hash.value != applicationId) continue;
 
-                FungibleTypes.Message memory msg_ =
-                    FungibleTypes.bcs_deserialize_Message(posted.message.user.bytes_);
+                WrappedFungibleTypes.Message memory msg_ =
+                    WrappedFungibleTypes.bcs_deserialize_Message(posted.message.user.bytes_);
 
                 // choice==0 is Credit
                 if (msg_.choice != 0) continue;
 
-                FungibleTypes.Message_Credit memory credit = msg_.credit;
+                WrappedFungibleTypes.Message_Credit memory credit = msg_.credit;
                 // choice==2 is Address20 (Ethereum address)
                 if (credit.target.choice != 2) continue;
                 address target = address(credit.target.address20);

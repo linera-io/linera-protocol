@@ -220,7 +220,7 @@ pub fn deploy_mock_erc20(
 pub fn fungible_message_transaction(
     origin: ChainId,
     application_id: CryptoHash,
-    message: &fungible::Message,
+    message: &wrapped_fungible::Message,
 ) -> Transaction {
     Transaction::ReceiveMessages(IncomingBundle {
         origin,
@@ -403,7 +403,10 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     // Write shared source files so imports resolve
     for (name, content) in [
         ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
-        ("FungibleTypes.sol", evm::FUNGIBLE_TYPES_SOURCE),
+        (
+            "WrappedFungibleTypes.sol",
+            evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
+        ),
         ("LightClient.sol", evm::light_client::SOURCE),
         ("Microchain.sol", evm::microchain::SOURCE),
         ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
