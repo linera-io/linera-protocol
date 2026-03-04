@@ -126,8 +126,8 @@ impl ClientWrapper {
             path_provider.path().display(),
             id
         );
-        let wallet = format!("wallet_{}.json", id);
-        let keystore = format!("keystore_{}.json", id);
+        let wallet = format!("wallet_{id}.json");
+        let keystore = format!("keystore_{id}.json");
         Self {
             binary_path: sync::Mutex::new(None),
             testing_prng_seed,
@@ -389,7 +389,7 @@ impl ClientWrapper {
         let json_parameters = serde_json::to_string(parameters)?;
         let json_argument = serde_json::to_string(argument)?;
         let mut command = self.command().await?;
-        let vm_runtime = format!("{}", vm_runtime);
+        let vm_runtime = format!("{vm_runtime}");
         command
             .arg("publish-and-create")
             .args([contract, service])
@@ -422,7 +422,7 @@ impl ClientWrapper {
             .await?
             .arg("publish-module")
             .args([contract, service])
-            .args(["--vm-runtime", &format!("{}", vm_runtime).to_lowercase()])
+            .args(["--vm-runtime", &format!("{vm_runtime}").to_lowercase()])
             .args(publisher.into().iter().map(ChainId::to_string))
             .spawn_and_wait_for_stdout()
             .await?;
@@ -507,10 +507,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 info!("Node service has started");
                 return Ok(NodeService::new(port, child));
@@ -548,10 +545,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 tracing::info!("Node service has started");
                 return Ok(NodeService::new(port, child));
@@ -637,10 +631,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 info!("Faucet has started");
                 return Ok(FaucetService::new(port, child, temp_dir));
@@ -1135,10 +1126,10 @@ impl ClientWrapper {
             add_validators.iter().chain(modify_validators.iter())
         {
             let public_key = ValidatorPublicKey::from_str(public_key_str)
-                .with_context(|| format!("Invalid validator public key: {}", public_key_str))?;
+                .with_context(|| format!("Invalid validator public key: {public_key_str}"))?;
 
             let account_key = AccountPublicKey::from_str(account_key_str)
-                .with_context(|| format!("Invalid account public key: {}", account_key_str))?;
+                .with_context(|| format!("Invalid account public key: {account_key_str}"))?;
 
             let address = format!("{}:127.0.0.1:{}", self.network.short(), port)
                 .parse()
@@ -1159,7 +1150,7 @@ impl ClientWrapper {
         // Remove validators (set to None)
         for validator_key_str in remove_validators {
             let public_key = ValidatorPublicKey::from_str(validator_key_str)
-                .with_context(|| format!("Invalid validator public key: {}", validator_key_str))?;
+                .with_context(|| format!("Invalid validator public key: {validator_key_str}"))?;
             changes.insert(public_key, None);
         }
 
@@ -1258,23 +1249,73 @@ impl ClientWrapper {
         name: &str,
         is_workspace: bool,
     ) -> Result<(PathBuf, PathBuf)> {
+        // Write the custom target spec to a temporary file. The spec disables
+        // bulk-memory, bulk-memory-opt, and nontrapping-fptoint — opcodes that
+        // use the 0xFC prefix and are not supported by testnet_conway validators.
+        // Using a custom target JSON (rather than -C target-feature flags) is
+        // necessary because Rust 1.93/LLVM 18 ignores the flag for these features
+        // when they are part of the target's default feature set.
+        let target_json = include_str!("../../wasm32-mvp.json");
+        let target_dir = tempfile::tempdir()?;
+        let target_file = target_dir.path().join("wasm32-mvp.json");
+        fs_err::write(&target_file, target_json)?;
+
+        // Build with the custom target using nightly. -Z build-std rebuilds
+        // the standard library from source so it also omits the disabled
+        // opcodes. -Z json-target-spec is required to load a custom .json
+        // target file. Both flags require nightly cargo.
+        // The toolchain must match `toolchains/nightly/rust-toolchain.toml`.
+        const WASM_NIGHTLY_TOOLCHAIN: &str = "nightly-2026-03-01";
+        // -Z build-std requires the rust-src component. Use `toolchain install`
+        // rather than `component add` so that the toolchain is installed first
+        // if not already present (e.g. in a fresh CI environment). This is a
+        // no-op if the toolchain and component are already up to date.
+        Command::new("rustup")
+            .args([
+                "toolchain",
+                "install",
+                WASM_NIGHTLY_TOOLCHAIN,
+                "--component",
+                "rust-src",
+            ])
+            .spawn_and_wait_for_stdout()
+            .await?;
         Command::new("cargo")
-            .current_dir(self.path_provider.path())
+            .current_dir(path)
+            .arg(format!("+{WASM_NIGHTLY_TOOLCHAIN}"))
             .arg("build")
             .arg("--release")
-            .args(["--target", "wasm32-unknown-unknown"])
+            .arg("--target")
+            .arg(&target_file)
+            .args(["-Z", "build-std=std,panic_abort"])
+            .args(["-Z", "json-target-spec"])
             .arg("--manifest-path")
             .arg(path.join("Cargo.toml"))
             .spawn_and_wait_for_stdout()
             .await?;
 
+        // The custom target places output in target/wasm32-mvp/release/.
+        // Copy to the standard target/wasm32-unknown-unknown/release/ so that
+        // the rest of the codebase can find the files without being aware of the
+        // custom target.
+        let wasm_name = name.replace('-', "_");
+        let mvp_dir = match is_workspace {
+            true => path.join("../target/wasm32-mvp/release"),
+            false => path.join("target/wasm32-mvp/release"),
+        };
         let release_dir = match is_workspace {
             true => path.join("../target/wasm32-unknown-unknown/release"),
             false => path.join("target/wasm32-unknown-unknown/release"),
         };
+        fs_err::create_dir_all(&release_dir)?;
 
-        let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
-        let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
+        let contract = release_dir.join(format!("{wasm_name}_contract.wasm"));
+        let service = release_dir.join(format!("{wasm_name}_service.wasm"));
+        fs_err::copy(
+            mvp_dir.join(format!("{wasm_name}_contract.wasm")),
+            &contract,
+        )?;
+        fs_err::copy(mvp_dir.join(format!("{wasm_name}_service.wasm")), &service)?;
 
         let contract_size = fs_err::tokio::metadata(&contract).await?.len();
         let service_size = fs_err::tokio::metadata(&service).await?.len();
@@ -1843,7 +1884,7 @@ impl<A> ApplicationWrapper<A> {
     pub async fn multiple_mutate(&self, mutations: &[String]) -> Result<Value> {
         let mut out = String::from("mutation {\n");
         for (index, mutation) in mutations.iter().enumerate() {
-            out = format!("{}  u{}: {}\n", out, index, mutation);
+            out = format!("{out}  u{index}: {mutation}\n");
         }
         out.push_str("}\n");
         self.run_graphql_query(&out).await

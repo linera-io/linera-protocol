@@ -1,0 +1,7 @@
+[build]
+# Required for rustc to accept the custom wasm32-mvp target spec.
+rustflags = ["-Zunstable-options"]
+
+[unstable]
+build-std = ["std", "panic_abort"]
+json-target-spec = true

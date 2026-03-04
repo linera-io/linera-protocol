@@ -3,8 +3,6 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-mod state;
-
 use std::sync::Arc;
 
 use linera_sdk::{

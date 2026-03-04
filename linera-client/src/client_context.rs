@@ -100,13 +100,13 @@ impl ValidatorQueryResults {
         reference: Option<&ValidatorQueryResults>,
     ) {
         if let Some(key) = public_key {
-            println!("Public key: {}", key);
+            println!("Public key: {key}");
         }
         if let Some(address) = address {
-            println!("Address: {}", address);
+            println!("Address: {address}");
         }
         if let Some(w) = weight {
-            println!("Weight: {}", w);
+            println!("Weight: {w}");
         }
 
         let ref_version = reference.and_then(|ref_results| ref_results.version_info.as_ref().ok());
@@ -157,7 +157,7 @@ impl ValidatorQueryResults {
             Ok(info) => {
                 if ref_info.is_none_or(|ref_info| info.block_hash != ref_info.block_hash) {
                     if let Some(hash) = info.block_hash {
-                        println!("Block hash: {}", hash);
+                        println!("Block hash: {hash}");
                     } else {
                         println!("Block hash: None");
                     }

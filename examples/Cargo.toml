@@ -39,6 +39,11 @@ futures-util = "0.3.26"
 getrandom = { version = "0.2.12", default-features = false, features = [
     "custom",
 ] }
+half = { version = ">=2.3.1, <2.6", features = [
+    "rand_distr",
+    "num-traits",
+    "use-intrinsics",
+] }
 hex = "0.4.3"
 insta = { version = "1.36.1", features = ["yaml"] }
 linera-sdk = { path = "../linera-sdk" }

@@ -113,7 +113,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             admin_chain_id,
             false,
             [(chain_id0, ListeningMode::FullChain)],
-            format!("Client node for {:.8}", chain_id0),
+            format!("Client node for {chain_id0:.8}"),
             Duration::from_secs(30),
             Duration::from_secs(1),
             ChainClientOptions::test_default(),
@@ -174,7 +174,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         }
         clock.add(TimeDelta::from_secs(1));
         if i == 30 {
-            panic!("Unexpected local balance: {}", balance);
+            panic!("Unexpected local balance: {balance}");
         }
     }
 
@@ -561,7 +561,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             admin_chain_id,
             false,
             [(chain_id0, ListeningMode::FullChain)],
-            format!("Client node for {:.8}", chain_id0),
+            format!("Client node for {chain_id0:.8}"),
             Duration::from_secs(30),
             Duration::from_secs(1),
             ChainClientOptions::test_default(),
@@ -633,7 +633,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         }
         clock.add(TimeDelta::from_secs(1));
         if i == 30 {
-            panic!("Listener did not process inbox. Balance: {}", balance);
+            panic!("Listener did not process inbox. Balance: {balance}");
         }
     }
 

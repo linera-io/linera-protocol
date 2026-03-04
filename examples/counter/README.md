@@ -61,10 +61,10 @@ Now, compile the `counter` application WebAssembly binaries, publish and create 
 
 ```bash
 cd examples/counter
-cargo build --release --target wasm32-unknown-unknown
+cargo build --release --target wasm32-mvp
 
 LINERA_APPLICATION_ID=$(linera publish-and-create \
-  ../target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
+  ../target/wasm32-mvp/release/counter_{contract,service}.wasm \
   --json-argument "1")
 ```
 

@@ -81,10 +81,10 @@ Now, compile the `fungible` application WebAssembly binaries, and publish them a
 bytecode:
 
 ```bash
-(cd examples/fungible && cargo build --release --target wasm32-unknown-unknown)
+(cd examples/fungible && cargo build --release --target wasm32-mvp)
 
 MODULE_ID=$(linera publish-module \
-    examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm)
+    examples/target/wasm32-mvp/release/fungible_{contract,service}.wasm)
 ```
 
 Here, we stored the new module ID in a variable `MODULE_ID` to be reused it later.

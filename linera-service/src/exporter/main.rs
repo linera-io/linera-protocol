@@ -359,7 +359,7 @@ impl Runnable for DestinationsContext {
 
                 match matches.len() {
                     0 => {
-                        eprintln!("Error: No destination found with address \"{}\"", address);
+                        eprintln!("Error: No destination found with address \"{address}\"");
                         std::process::exit(1);
                     }
                     1 => {
@@ -371,13 +371,12 @@ impl Runnable for DestinationsContext {
                             DestinationKind::EvmChain => "evm_chain",
                         };
                         println!("Address: {}", id.address());
-                        println!("Kind:    {}", kind);
-                        println!("Index:   {}", index);
+                        println!("Kind:    {kind}");
+                        println!("Index:   {index}");
                     }
                     _ => {
                         eprintln!(
-                            "Error: Multiple destinations found for \"{}\". Specify kind with --kind validator|indexer",
-                            address
+                            "Error: Multiple destinations found for \"{address}\". Specify kind with --kind validator|indexer"
                         );
                         std::process::exit(1);
                     }
@@ -391,7 +390,7 @@ impl Runnable for DestinationsContext {
 
                 match matches.len() {
                     0 => {
-                        eprintln!("Error: No destination found with address \"{}\"", address);
+                        eprintln!("Error: No destination found with address \"{address}\"");
                         std::process::exit(1);
                     }
                     1 => {
@@ -417,8 +416,7 @@ impl Runnable for DestinationsContext {
                     }
                     _ => {
                         eprintln!(
-                            "Error: Multiple destinations found for \"{}\". Specify kind with --kind validator|indexer",
-                            address
+                            "Error: Multiple destinations found for \"{address}\". Specify kind with --kind validator|indexer"
                         );
                         std::process::exit(1);
                     }

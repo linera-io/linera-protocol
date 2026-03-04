@@ -33,7 +33,7 @@ struct ChainDetails {
 impl ChainDetails {
     fn new(chain_id: ChainId, wallet: &Data) -> Self {
         let Some(user_chain) = wallet.chains.get(chain_id) else {
-            panic!("Chain {} not found.", chain_id);
+            panic!("Chain {chain_id} not found.");
         };
         ChainDetails {
             is_default: Some(chain_id) == *wallet.default.read().unwrap(),

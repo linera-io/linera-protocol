@@ -3,8 +3,6 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-mod state;
-
 use linera_sdk::{
     linera_base_types::{DataBlobHash, WithContractAbi},
     Contract, ContractRuntime,

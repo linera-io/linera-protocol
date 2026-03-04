@@ -124,7 +124,7 @@ where
 
     fn post_save(&mut self) {
         if self.delete_storage_first {
-            self.stored_value = Box::default();
+            *self.stored_value = Default::default();
         } else if let Some(value) = self.update.take() {
             self.stored_value = value;
         }

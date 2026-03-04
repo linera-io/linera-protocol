@@ -458,14 +458,14 @@ where
             Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
                 let chain_info: ChainInfo =
                     bincode::deserialize(&response.chain_info).map_err(|e| {
-                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
+                        Status::internal(format!("Failed to deserialize ChainInfo: {e}"))
                     })?;
                 chain_info.requested_sent_certificate_hashes
             }
             Some(api::chain_info_result::Inner::Error(error)) => {
                 let error =
                     bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
-                        error: format!("failed to unmarshal error message: {}", err),
+                        error: format!("failed to unmarshal error message: {err}"),
                     });
                 return Err(Status::internal(format!(
                     "Chain info query failed: {error}"
@@ -711,7 +711,7 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Self::view_error_to_status)?;
-        let blob = blob.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+        let blob = blob.ok_or_else(|| Status::not_found(format!("Blob not found {blob_id}")))?;
         Ok(Response::new(blob.into_content().try_into()?))
     }
 
@@ -807,11 +807,11 @@ where
             .map(|raw| {
                 let lite_cert = bcs::from_bytes::<ChainLiteCertificate>(&raw.lite_certificate)
                     .map_err(|e| {
-                        Status::internal(format!("Failed to deserialize lite certificate: {}", e))
+                        Status::internal(format!("Failed to deserialize lite certificate: {e}"))
                     })?;
                 let confirmed_block = bcs::from_bytes::<ConfirmedBlock>(&raw.confirmed_block)
                     .map_err(|e| {
-                        Status::internal(format!("Failed to deserialize confirmed block: {}", e))
+                        Status::internal(format!("Failed to deserialize confirmed block: {e}"))
                     })?;
                 lite_cert
                     .with_value(confirmed_block)
@@ -946,10 +946,10 @@ where
             .await
             .map_err(Self::view_error_to_status)?;
         let blob_state =
-            blob_state.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+            blob_state.ok_or_else(|| Status::not_found(format!("Blob not found {blob_id}")))?;
         let last_used_by = blob_state
             .last_used_by
-            .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+            .ok_or_else(|| Status::not_found(format!("Blob not found {blob_id}")))?;
         Ok(Response::new(last_used_by.into()))
     }
 

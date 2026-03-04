@@ -173,12 +173,12 @@ impl GrpcClient {
         match inner {
             api::chain_info_result::Inner::ChainInfoResponse(response) => {
                 Ok(response.try_into().map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to unmarshal response: {}", err),
+                    error: format!("failed to unmarshal response: {err}"),
                 })?)
             }
             api::chain_info_result::Inner::Error(error) => Err(bincode::deserialize(&error)
                 .map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to unmarshal error message: {}", err),
+                    error: format!("failed to unmarshal error message: {err}"),
                 })?),
         }
     }
@@ -194,12 +194,12 @@ impl TryFrom<api::PendingBlobResult> for BlobContent {
         match inner {
             api::pending_blob_result::Inner::Blob(blob) => {
                 Ok(blob.try_into().map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to unmarshal response: {}", err),
+                    error: format!("failed to unmarshal response: {err}"),
                 })?)
             }
             api::pending_blob_result::Inner::Error(error) => Err(bincode::deserialize(&error)
                 .map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to unmarshal error message: {}", err),
+                    error: format!("failed to unmarshal error message: {err}"),
                 })?),
         }
     }
@@ -360,7 +360,7 @@ impl ValidatorNode for GrpcClient {
         let notification_stream = endlessly_retrying_notification_stream
             .map(|result| {
                 Option::<Notification>::try_from(result?).map_err(|err| {
-                    let message = format!("Could not deserialize notification: {}", err);
+                    let message = format!("Could not deserialize notification: {err}");
                     tonic::Status::new(Code::Internal, message)
                 })
             })

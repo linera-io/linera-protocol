@@ -192,7 +192,7 @@ impl Github {
 
         // Always print the summary to stdout, as we'll use it to set the job summary in CI.
         info!("Printing summary to stdout...");
-        println!("{}", body);
+        println!("{body}");
 
         if let Some(existing_comment_id) = existing_comment_id {
             if self.is_local {
@@ -310,7 +310,7 @@ impl Github {
         Ok(jobs_filtered)
     }
 
-    pub fn workflows_handler(&self) -> WorkflowsHandler {
+    pub fn workflows_handler(&self) -> WorkflowsHandler<'_> {
         self.octocrab.workflows(
             self.context.repository.owner.clone(),
             self.context.repository.name.clone(),
