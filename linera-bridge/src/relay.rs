@@ -287,7 +287,7 @@ pub async fn run(
     let evm_wallet = EthereumWallet::from(evm_signer);
     let provider = ProviderBuilder::new()
         .wallet(evm_wallet)
-        .with_cached_nonce_management()
+        .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
     // ── 4. Resolve bridge app ID ──
