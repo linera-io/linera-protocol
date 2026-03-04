@@ -61,6 +61,8 @@ impl IndexerClient {
     ) -> Result<(Sender<Element>, Streaming<()>), ExporterError> {
         let mut retry_count = 0;
         loop {
+            #[cfg(with_metrics)]
+            self.sent_latency.lock().unwrap().clear();
             let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
             #[cfg(with_metrics)]
             let request = {

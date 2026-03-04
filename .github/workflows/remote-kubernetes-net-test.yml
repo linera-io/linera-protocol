@@ -1,6 +1,10 @@
 name: Remote Kubernetes Net Test
 
 on:
+  push:
+    branches: [ 'devnet_*', 'testnet_*' ]
+  pull_request:
+  merge_group:
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull requests
@@ -30,6 +34,7 @@ permissions:
 
 jobs:
   remote-kubernetes-net-test:
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 90
 
@@ -66,10 +71,25 @@ jobs:
         tail -f "$LOG_FILE" 2>/dev/null &
         TAIL_PID=$!
 
+        # Fix Kind context namespace: the ARC runner pod runs in "arc-runners"
+        # namespace, which kubectl inherits as default for the Kind context.
+        # This causes helmfile to look for resources in the wrong namespace.
+        (
+          while true; do
+            KIND_CTX=$(kubectl config get-contexts -o name 2>/dev/null | grep '^kind-' | head -1)
+            if [ -n "$KIND_CTX" ]; then
+              kubectl config set-context "$KIND_CTX" --namespace=default
+              echo "Fixed namespace for context $KIND_CTX to 'default'"
+              break
+            fi
+            sleep 1
+          done
+        ) &
+
         # Wait for "READY!" message (includes Docker image build + helm sync + port-forwards).
         # No explicit timeout here; the job-level timeout-minutes: 90 is the safeguard.
         echo "Waiting for validators to deploy (PID: $NETWORK_PID)..."
-        while ! grep -q "READY!" "$LOG_FILE" 2>/dev/null; do
+        while ! grep -qF "READY!" "$LOG_FILE" 2>/dev/null; do
           if ! kill -0 "$NETWORK_PID" 2>/dev/null; then
             echo "ERROR: Network process (PID: $NETWORK_PID) died"
             cat "$LOG_FILE"
@@ -78,15 +98,6 @@ jobs:
           sleep 2
         done
         echo "Validators reported READY"
-
-        # Wait for proxy to accept TCP connections through port-forward
-        echo "Waiting for proxy at 127.0.0.1:19100..."
-        timeout 120 bash -c '
-          while ! (echo > /dev/tcp/127.0.0.1/19100) 2>/dev/null; do
-            sleep 2
-          done
-        '
-        echo "Proxy is accepting connections"
 
         kill $TAIL_PID 2>/dev/null || true
     - name: Start faucet and wait for it
