@@ -2,6 +2,7 @@
 name = "linera-bridge-e2e"
 version = "0.0.1"
 edition = "2021"
+rust-version = "1.88"
 publish = false
 
 # Separate workspace — avoids bollard version conflicts between
@@ -10,7 +11,11 @@ publish = false
 [workspace]
 
 [dependencies]
-alloy = { version = "1.0.42", default-features = false, features = [
+# Capped below 1.7: alloy >=1.7 requires Rust 1.91+, which removed
+# __rust_probestack and breaks the linera wasmer fork (v4.4.0-linera.7).
+# Remove this cap once the wasmer fork is updated with the probestack fix
+# from upstream (wasmerio/wasmer#5690).
+alloy = { version = ">=1.0.42, <1.7", default-features = false, features = [
     "rpc-types-eth",
     "json-rpc",
     "contract",
