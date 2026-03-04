@@ -809,13 +809,10 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
     // NewBlock notification at or after the subscribe cert's height.
     let subscribe_height = subscribe_cert.block().header.height;
     loop {
-        let notification = tokio::time::timeout(
-            Duration::from_secs(10),
-            notifications.recv(),
-        )
-        .await
-        .expect("Timed out waiting for receiver chain sync")
-        .expect("Notification channel closed");
+        let notification = tokio::time::timeout(Duration::from_secs(10), notifications.recv())
+            .await
+            .expect("Timed out waiting for receiver chain sync")
+            .expect("Notification channel closed");
         if let Reason::NewBlock { height, .. } = notification.reason {
             if height >= subscribe_height {
                 break;
@@ -827,7 +824,13 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
     // the sender chain listener (happens during process_notification).
     let sender_id = sender.chain_id();
     loop {
-        if context.lock().await.client().chain_mode(sender_id).is_some() {
+        if context
+            .lock()
+            .await
+            .client()
+            .chain_mode(sender_id)
+            .is_some()
+        {
             break;
         }
         tokio::task::yield_now().await;
@@ -870,13 +873,10 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
     // The receiver should create at least one block via process_inbox_without_prepare,
     // which emits a BlockExecuted notification.
     loop {
-        let notification = tokio::time::timeout(
-            Duration::from_secs(10),
-            notifications.recv(),
-        )
-        .await
-        .expect("Timed out waiting for event processing")
-        .expect("Notification channel closed");
+        let notification = tokio::time::timeout(Duration::from_secs(10), notifications.recv())
+            .await
+            .expect("Timed out waiting for event processing")
+            .expect("Notification channel closed");
         if let Reason::BlockExecuted { height, .. } = notification.reason {
             if height >= receiver_info.next_block_height {
                 break;
