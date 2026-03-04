@@ -557,6 +557,32 @@ mod tests {
         );
     }
 
+    /// Verify that build_deposit_event_data produces exactly 224 bytes (7 non-indexed
+    /// fields × 32 bytes each), matching the ABI encoding of the DepositInitiated event
+    /// in FungibleBridge.sol. If this fails, the event layout has changed and the
+    /// hard-coded length check in parse_deposit_event must be updated.
+    #[test]
+    fn test_deposit_event_data_length_matches_abi() {
+        let data = build_deposit_event_data(
+            1,             // source_chain_id (uint256)
+            B256::ZERO,    // target_chain_id (bytes32)
+            B256::ZERO,    // target_application_id (bytes32)
+            B256::ZERO,    // target_account_owner (bytes32)
+            Address::ZERO, // token (address, padded to 32)
+            0,             // amount (uint256)
+            0,             // nonce (uint256)
+        );
+        // 7 fields × 32 bytes = 224
+        assert_eq!(
+            data.len(),
+            224,
+            "DepositInitiated event ABI data size mismatch: expected 7 non-indexed fields \
+             × 32 bytes = 224, got {}. If the Solidity event changed, update both \
+             build_deposit_event_data and the length check in parse_deposit_event.",
+            data.len()
+        );
+    }
+
     // -- block header tests --
 
     #[test]
