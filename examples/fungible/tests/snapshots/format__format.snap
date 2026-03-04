@@ -1,6 +1,6 @@
 ---
 source: fungible/tests/format.rs
-expression: "fungible::formats().unwrap()"
+expression: "FungibleApplication::formats().unwrap()"
 ---
 REGISTRY:
   Account:
