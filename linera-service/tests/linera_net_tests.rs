@@ -1799,11 +1799,17 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         .await?;
 
     let app2 = node_service2.make_application(&chain2, &application_id)?;
+
+    // Subscribe to notifications before the subscribe mutation, so we can wait
+    // for chain2's NewBlock and be sure the ChainListener has been notified.
+    // This gives it time to set up the EventsOnly subscription for chain1
+    // before we post on chain1.
+    let mut notifications = node_service2.notifications(chain2).await?;
+
     app2.mutate(format!("subscribe(chainId: \"{chain1}\")"))
         .await?;
     let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
-
-    let mut notifications = node_service2.notifications(chain2).await?;
+    notifications.wait_for_block(height2).await?;
 
     let app1 = node_service1.make_application(&chain1, &application_id)?;
     app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
