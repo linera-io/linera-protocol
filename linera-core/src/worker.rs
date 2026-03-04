@@ -531,7 +531,7 @@ fn start_sweep<S: Storage + Clone + 'static>(
     };
     // The sweep holds a Weak reference so it stops when all WorkerState clones are dropped.
     let weak_handles = Arc::downgrade(chain_handles);
-    linera_base::task::spawn(async move {
+    linera_base::Task::spawn(async move {
         loop {
             linera_base::time::timer::sleep(interval).await;
             let Some(chain_handles) = weak_handles.upgrade() else {
