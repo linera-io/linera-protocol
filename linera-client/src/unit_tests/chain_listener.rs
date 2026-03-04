@@ -17,7 +17,9 @@ use linera_core::{
     test_utils::{
         ClientOutcomeResultExt as _, MemoryStorageBuilder, StorageBuilder as _, TestBuilder,
     },
-    wallet, Environment,
+    wallet,
+    worker::Reason,
+    Environment,
 };
 use linera_execution::{wasm_test, Operation, ResourceControlPolicy, WasmRuntime};
 use linera_storage::Storage;
@@ -783,6 +785,10 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
         },
     );
 
+    // Subscribe to local node notifications for the receiver chain before starting
+    // the listener, so we don't miss any notifications.
+    let mut notifications = context.client.subscribe(vec![receiver_id]);
+
     let context = Arc::new(Mutex::new(context));
     let cancellation_token = CancellationToken::new();
     let child_token = cancellation_token.child_token();
@@ -799,40 +805,32 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
 
     let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
-    // Wait for the chain listener to sync the receiver chain. Once the receiver's
-    // subscribe block is in the listener's storage, we know the subscription has
-    // been discovered and the sender chain listener has been started.
-    let subscribe_cert_hash = subscribe_cert.hash();
-    for i in 0.. {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        clock.add(TimeDelta::from_millis(100));
-        if storage
-            .read_certificate(subscribe_cert_hash)
-            .await?
-            .is_some()
-        {
-            break;
-        }
-        if i >= 100 {
-            // Debug: check what height the receiver chain is at in listener storage.
-            let wallet_height = context
-                .lock()
-                .await
-                .wallet()
-                .get(receiver_id)
-                .map(|c| c.next_block_height);
-            panic!(
-                "Chain listener did not sync receiver chain within timeout. \
-                 subscribe_cert_hash={subscribe_cert_hash}, \
-                 wallet_height: {wallet_height:?}"
-            );
+    // Wait for the chain listener to sync the receiver chain by waiting for a
+    // NewBlock notification at or after the subscribe cert's height.
+    let subscribe_height = subscribe_cert.block().header.height;
+    loop {
+        let notification = tokio::time::timeout(
+            Duration::from_secs(10),
+            notifications.recv(),
+        )
+        .await
+        .expect("Timed out waiting for receiver chain sync")
+        .expect("Notification channel closed");
+        if let Reason::NewBlock { height, .. } = notification.reason {
+            if height >= subscribe_height {
+                break;
+            }
         }
     }
-    // Allow the listener's main loop to process the NewBlock notifications and
-    // start the sender chain listener.
-    for _ in 0..20 {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        clock.add(TimeDelta::from_millis(100));
+
+    // Wait for the chain listener to discover event subscriptions and start
+    // the sender chain listener (happens during process_notification).
+    let sender_id = sender.chain_id();
+    loop {
+        if context.lock().await.client().chain_mode(sender_id).is_some() {
+            break;
+        }
+        tokio::task::yield_now().await;
     }
 
     // Now create sender blocks AFTER the listener has finished its initial sync.
@@ -869,20 +867,20 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
         .unwrap_ok_committed();
 
     // Wait for the chain listener to process the new events.
-    // The receiver should create at least one block with an UpdateStreams operation.
-    let initial_height = receiver_info.next_block_height;
-    for i in 0.. {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        clock.add(TimeDelta::from_millis(100));
-        let wallet_receiver = context.lock().await.wallet().get(receiver_id).unwrap();
-        if wallet_receiver.next_block_height > initial_height {
-            break;
-        }
-        if i >= 100 {
-            panic!(
-                "Chain listener did not process events. Receiver height: {}",
-                wallet_receiver.next_block_height
-            );
+    // The receiver should create at least one block via process_inbox_without_prepare,
+    // which emits a BlockExecuted notification.
+    loop {
+        let notification = tokio::time::timeout(
+            Duration::from_secs(10),
+            notifications.recv(),
+        )
+        .await
+        .expect("Timed out waiting for event processing")
+        .expect("Notification channel closed");
+        if let Reason::BlockExecuted { height, .. } = notification.reason {
+            if height >= receiver_info.next_block_height {
+                break;
+            }
         }
     }
 

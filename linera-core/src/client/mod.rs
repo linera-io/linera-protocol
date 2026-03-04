@@ -4403,10 +4403,10 @@ impl<Env: Environment> ChainClient<Env> {
                 // Skip this for EventsOnly chains — they don't participate in governance
                 // and re-subscribing would trigger a full sync that defeats sparse download.
                 if let Reason::NewBlock { .. } = notification.reason {
-                    let dominated = this
+                    let is_events_only = this
                         .listening_mode()
                         .is_some_and(|m| matches!(m, ListeningMode::EventsOnly(_)));
-                    if !dominated {
+                    if !is_events_only {
                         match Box::pin(await_while_polling(
                             this.update_notification_streams(&mut senders).fuse(),
                             &mut process_notifications,
