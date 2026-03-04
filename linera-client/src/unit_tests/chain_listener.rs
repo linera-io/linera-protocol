@@ -6,16 +6,20 @@ use std::{sync::Arc, time::Duration};
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
-    data_types::{Amount, BlockHeight, Epoch, TimeDelta, Timestamp},
+    data_types::{Amount, BlockHeight, Bytecode, Epoch, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
 };
 use linera_core::{
     client::{ChainClient, ChainClientOptions, Client, ListeningMode},
     environment,
-    test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
-    wallet,
+    test_utils::{
+        ClientOutcomeResultExt as _, MemoryStorageBuilder, StorageBuilder as _, TestBuilder,
+    },
+    wallet, Environment,
 };
+use linera_execution::{wasm_test, Operation, ResourceControlPolicy, WasmRuntime};
 use linera_storage::Storage;
 use tokio_util::sync::CancellationToken;
 
@@ -679,6 +683,228 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         Some(dynamic_owner),
         "User-initiated blocks should be signed by the dynamic signer"
     );
+
+    Ok(())
+}
+
+/// Helper to read Wasm bytecodes and publish them, returning the module ID.
+async fn publish_wasm_example<Env: Environment>(
+    client: &ChainClient<Env>,
+    name: &str,
+) -> anyhow::Result<linera_base::identifiers::ModuleId> {
+    let (contract_path, service_path) = wasm_test::get_example_bytecode_paths(name)?;
+    let contract_bytecode = Bytecode::load_from_file(contract_path)?;
+    let service_bytecode = Bytecode::load_from_file(service_path)?;
+    let (module_id, _cert) = client
+        .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
+        .await
+        .unwrap_ok_committed();
+    Ok(module_id)
+}
+
+/// Tests that the chain listener, when subscribed to a publisher chain's events, downloads
+/// only event-bearing blocks (sparse download) via `NewEvents` notifications.
+///
+/// The test creates a sender/receiver pair with a social-app event subscription, starts
+/// the chain listener, waits for the initial sync, then has the sender create new blocks
+/// (post, burn, post). Only the post blocks should be downloaded via sparse download.
+#[cfg(feature = "wasmer")]
+#[test_log::test(tokio::test)]
+async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
+    let signer = InMemorySigner::new(Some(42));
+    let config = ChainListenerConfig::default();
+    let storage_builder = MemoryStorageBuilder::with_wasm_runtime(WasmRuntime::Wasmer);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone())
+        .await?
+        .with_policy(ResourceControlPolicy::no_fees());
+
+    // The receiver is at index 0, making it the admin chain. This ensures the sender
+    // chain is only discovered via event subscriptions and listened to in EventsOnly mode.
+    let receiver = builder.add_root_chain(0, Amount::ONE).await?;
+    let sender = builder.add_root_chain(1, Amount::ONE).await?;
+    let receiver_id = receiver.chain_id();
+
+    // Publish and create the social app on the receiver chain.
+    let module_id = publish_wasm_example(&receiver, "social").await?;
+    let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
+
+    let (application_id, _cert) = receiver
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Subscribe to the sender's events. This is a local runtime call
+    // (subscribe_to_events); no cross-chain message to the sender.
+    let subscribe_cert = receiver
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Subscribe {
+                chain_id: sender.chain_id(),
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    // Set up a chain listener for the receiver chain.
+    // No sender posts yet — the sender chain has no blocks beyond genesis.
+    let genesis_config = GenesisConfig::new_testing(&builder);
+    let admin_chain_id = genesis_config.admin_chain_id();
+    let storage = builder.make_storage().await?;
+    let receiver_info = receiver.chain_info().await?;
+
+    let context = ClientContext {
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+                signer,
+                wallet: environment::TestWallet::default(),
+            },
+            admin_chain_id,
+            false,
+            [(receiver_id, ListeningMode::FullChain)],
+            format!("Client node for {:.8}", receiver_id),
+            Duration::from_secs(30),
+            Duration::from_secs(1),
+            ChainClientOptions::test_default(),
+            linera_core::client::RequestsSchedulerConfig::default(),
+        )),
+    };
+    context.wallet().insert(
+        receiver_id,
+        wallet::Chain {
+            owner: receiver.preferred_owner(),
+            block_hash: receiver_info.block_hash,
+            next_block_height: receiver_info.next_block_height,
+            timestamp: clock.current_time(),
+            pending_proposal: None,
+            epoch: Some(Epoch::ZERO),
+        },
+    );
+
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let chain_listener = ChainListener::new(
+        config,
+        context.clone(),
+        storage.clone(),
+        child_token,
+        tokio::sync::mpsc::unbounded_channel().1,
+        false,
+    )
+    .run()
+    .await?;
+
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
+
+    // Wait for the chain listener to sync the receiver chain. Once the receiver's
+    // subscribe block is in the listener's storage, we know the subscription has
+    // been discovered and the sender chain listener has been started.
+    let subscribe_cert_hash = subscribe_cert.hash();
+    for i in 0.. {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        clock.add(TimeDelta::from_millis(100));
+        if storage
+            .read_certificate(subscribe_cert_hash)
+            .await?
+            .is_some()
+        {
+            break;
+        }
+        if i >= 100 {
+            // Debug: check what height the receiver chain is at in listener storage.
+            let wallet_height = context
+                .lock()
+                .await
+                .wallet()
+                .get(receiver_id)
+                .map(|c| c.next_block_height);
+            panic!(
+                "Chain listener did not sync receiver chain within timeout. \
+                 subscribe_cert_hash={subscribe_cert_hash}, \
+                 wallet_height: {wallet_height:?}"
+            );
+        }
+    }
+    // Allow the listener's main loop to process the NewBlock notifications and
+    // start the sender chain listener.
+    for _ in 0..20 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        clock.add(TimeDelta::from_millis(100));
+    }
+
+    // Now create sender blocks AFTER the listener has finished its initial sync.
+    // These will be handled via NewEvents → download_event_bearing_blocks (sparse path).
+
+    // Post 1 (has events).
+    let cert_post1 = sender
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Post {
+                text: "First post".to_string(),
+                image_url: None,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    // Burn (no events).
+    let cert_burn = sender
+        .burn(AccountOwner::CHAIN, Amount::from_millis(1))
+        .await
+        .unwrap_ok_committed();
+
+    // Post 2 (has events).
+    let cert_post2 = sender
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Post {
+                text: "Second post".to_string(),
+                image_url: None,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    // Wait for the chain listener to process the new events.
+    // The receiver should create at least one block with an UpdateStreams operation.
+    let initial_height = receiver_info.next_block_height;
+    for i in 0.. {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        clock.add(TimeDelta::from_millis(100));
+        let wallet_receiver = context.lock().await.wallet().get(receiver_id).unwrap();
+        if wallet_receiver.next_block_height > initial_height {
+            break;
+        }
+        if i >= 100 {
+            panic!(
+                "Chain listener did not process events. Receiver height: {}",
+                wallet_receiver.next_block_height
+            );
+        }
+    }
+
+    // Verify sparse download: only event-bearing blocks from the new sender blocks
+    // should be stored. The burn block should NOT be stored because the listener
+    // handles the sender chain in EventsOnly mode — NewBlock notifications are ignored,
+    // only NewEvents triggers download_event_bearing_blocks.
+    assert!(
+        storage.read_certificate(cert_post1.hash()).await?.is_some(),
+        "Event-bearing post block 1 should be stored"
+    );
+    assert!(
+        storage.read_certificate(cert_burn.hash()).await?.is_none(),
+        "Non-event burn block should NOT be stored (sparse download)"
+    );
+    assert!(
+        storage.read_certificate(cert_post2.hash()).await?.is_some(),
+        "Event-bearing post block 2 should be stored"
+    );
+
+    cancellation_token.cancel();
+    handle.await;
 
     Ok(())
 }

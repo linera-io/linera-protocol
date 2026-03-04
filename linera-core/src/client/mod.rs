@@ -4399,15 +4399,23 @@ impl<Env: Environment> ChainClient<Env> {
                 await_while_polling(abortable_notifications.next(), &mut process_notifications)
                     .await
             {
+                // Re-subscribe to validators on NewBlock to handle committee changes.
+                // Skip this for EventsOnly chains — they don't participate in governance
+                // and re-subscribing would trigger a full sync that defeats sparse download.
                 if let Reason::NewBlock { .. } = notification.reason {
-                    match Box::pin(await_while_polling(
-                        this.update_notification_streams(&mut senders).fuse(),
-                        &mut process_notifications,
-                    ))
-                    .await
-                    {
-                        Ok(handler) => process_notifications.push(handler),
-                        Err(error) => error!("Failed to update committee: {error}"),
+                    let dominated = this
+                        .listening_mode()
+                        .is_some_and(|m| matches!(m, ListeningMode::EventsOnly(_)));
+                    if !dominated {
+                        match Box::pin(await_while_polling(
+                            this.update_notification_streams(&mut senders).fuse(),
+                            &mut process_notifications,
+                        ))
+                        .await
+                        {
+                            Ok(handler) => process_notifications.push(handler),
+                            Err(error) => error!("Failed to update committee: {error}"),
+                        }
                     }
                 }
             }
@@ -4452,16 +4460,23 @@ impl<Env: Environment> ChainClient<Env> {
                 continue;
             };
             let this = self.clone();
+            let events_only = this
+                .listening_mode()
+                .is_some_and(|m| matches!(m, ListeningMode::EventsOnly(_)));
             let stream = stream::once({
                 let node = node.clone();
                 async move {
                     let stream = node.subscribe(vec![this.chain_id]).await?;
                     // Only now the notification stream is established. We may have missed
                     // notifications since the last time we synchronized.
-                    let remote_node = RemoteNode { public_key, node };
-                    this.client
-                        .synchronize_chain_state_from(&remote_node, this.chain_id)
-                        .await?;
+                    // For EventsOnly chains, skip the full sync — new events will be
+                    // downloaded sparsely via NewEvents notifications.
+                    if !events_only {
+                        let remote_node = RemoteNode { public_key, node };
+                        this.client
+                            .synchronize_chain_state_from(&remote_node, this.chain_id)
+                            .await?;
+                    }
                     Ok::<_, ChainClientError>(stream)
                 }
             })
