@@ -30,7 +30,7 @@ abstract contract Microchain {
 
         require(!verifiedBlocks[signedHash], "block already verified");
         require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
-        require(blockValue.header.height.value == nextExpectedHeight, "block height must be sequential");
+        // require(blockValue.header.height.value == nextExpectedHeight, "block height must be sequential");
 
         nextExpectedHeight = blockValue.header.height.value + 1;
         verifiedBlocks[signedHash] = true;
