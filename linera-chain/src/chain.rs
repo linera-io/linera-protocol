@@ -1099,6 +1099,7 @@ where
         let next_block_height = self.tip_state.get().next_block_height;
         let mut updated_streams = BTreeSet::new();
         for (stream_id, indices) in emitted_streams {
+            // Epoch 0 is created at genesis, so the first published event is index 1.
             let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
                 1
             } else {

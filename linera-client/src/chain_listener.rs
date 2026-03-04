@@ -333,7 +333,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                         self.listen_recursively(publishers).await?;
                         self.maybe_process_inbox(notification.chain_id).await?;
                     }
-                    self.process_new_events(notification.chain_id).await?;
                 }
             }
             Reason::NewEvents { .. } => {

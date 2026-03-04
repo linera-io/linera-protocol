@@ -172,7 +172,9 @@ impl PartialOrd for ListeningMode {
             (ListeningMode::FollowChain, ListeningMode::EventsOnly(_)) => Some(Ordering::Greater),
             (ListeningMode::EventsOnly(_), ListeningMode::FollowChain) => Some(Ordering::Less),
             (ListeningMode::EventsOnly(a), ListeningMode::EventsOnly(b)) => {
-                if a.is_superset(b) {
+                if a == b {
+                    Some(Ordering::Equal)
+                } else if a.is_superset(b) {
                     Some(Ordering::Greater)
                 } else if b.is_superset(a) {
                     Some(Ordering::Less)
