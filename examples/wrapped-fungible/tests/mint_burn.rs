@@ -6,12 +6,13 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use fungible::{InitialState, InitialStateBuilder};
-use wrapped_fungible::{Account, WrappedFungibleOperation};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::{AccountOwner, Amount, ChainId},
     test::TestValidator,
 };
-use wrapped_fungible::{WrappedFungibleTokenAbi, WrappedParameters};
+use wrapped_fungible::{
+    Account, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
+};
 
 /// Helper to query an account balance via GraphQL.
 async fn query_account(
@@ -36,10 +37,11 @@ async fn query_account(
     )
 }
 
-fn test_params(minter: AccountOwner) -> WrappedParameters {
+fn test_params(minter: AccountOwner, mint_chain_id: ChainId) -> WrappedParameters {
     WrappedParameters {
         ticker_symbol: "wUSDC".to_string(),
         minter,
+        mint_chain_id,
         evm_token_address: [0xA0; 20],
         evm_source_chain_id: 8453,
     }
@@ -56,7 +58,7 @@ async fn test_mint_from_authorized_minter() {
     let mut minter_chain = validator.new_chain().await;
     let minter_account = AccountOwner::from(minter_chain.public_key());
 
-    let params = test_params(minter_account);
+    let params = test_params(minter_account, minter_chain.id());
     let initial_state = InitialStateBuilder::default().build();
     let application_id = minter_chain
         .create_application(module_id, params, initial_state, vec![])
@@ -98,7 +100,7 @@ async fn test_mint_from_unauthorized_signer() {
 
     // Minter is a different account
     let other_minter = AccountOwner::Address20([0xBB; 20]);
-    let params = test_params(other_minter);
+    let params = test_params(other_minter, chain.id());
     let initial_state = InitialStateBuilder::default().build();
     let application_id = chain
         .create_application(module_id, params, initial_state, vec![])
@@ -133,7 +135,7 @@ async fn test_burn_from_authorized_minter() {
     let mut minter_chain = validator.new_chain().await;
     let minter_account = AccountOwner::from(minter_chain.public_key());
 
-    let params = test_params(minter_account);
+    let params = test_params(minter_account, minter_chain.id());
     let initial_state = InitialStateBuilder::default()
         .with_account(minter_account, Amount::from_tokens(500))
         .build();
@@ -173,7 +175,7 @@ async fn test_burn_from_unauthorized_signer() {
     let chain_owner = AccountOwner::from(chain.public_key());
 
     let other_minter = AccountOwner::Address20([0xBB; 20]);
-    let params = test_params(other_minter);
+    let params = test_params(other_minter, chain.id());
     let initial_state = InitialStateBuilder::default()
         .with_account(chain_owner, Amount::from_tokens(500))
         .build();
@@ -206,7 +208,7 @@ async fn test_burn_insufficient_balance() {
     let mut minter_chain = validator.new_chain().await;
     let minter_account = AccountOwner::from(minter_chain.public_key());
 
-    let params = test_params(minter_account);
+    let params = test_params(minter_account, minter_chain.id());
     let initial_state = InitialStateBuilder::default()
         .with_account(minter_account, Amount::from_tokens(100))
         .build();
@@ -244,7 +246,7 @@ async fn test_wrapped_fungible_standard_transfer() {
     let owner = AccountOwner::from(chain.public_key());
     let recipient = AccountOwner::Address20([0xCC; 20]);
 
-    let params = test_params(owner);
+    let params = test_params(owner, chain.id());
     let initial_state = InitialStateBuilder::default()
         .with_account(owner, Amount::from_tokens(1000))
         .build();
@@ -276,4 +278,41 @@ async fn test_wrapped_fungible_standard_transfer() {
         query_account(application_id, &chain, recipient).await,
         Some(Amount::from_tokens(300)),
     );
+}
+
+#[tokio::test]
+async fn test_mint_on_wrong_chain() {
+    let (validator, module_id) = TestValidator::with_current_module::<
+        WrappedFungibleTokenAbi,
+        WrappedParameters,
+        InitialState,
+    >()
+    .await;
+    let mut minter_chain = validator.new_chain().await;
+    let other_chain = validator.new_chain().await;
+    let minter_account = AccountOwner::from(minter_chain.public_key());
+
+    // Designate other_chain as the mint chain, but deploy on minter_chain
+    let params = test_params(minter_account, other_chain.id());
+    let initial_state = InitialStateBuilder::default().build();
+    let application_id = minter_chain
+        .create_application(module_id, params, initial_state, vec![])
+        .await;
+
+    // Minter is authorized but on the wrong chain — should fail
+    let result = minter_chain
+        .try_add_block(|block| {
+            block.with_operation(
+                application_id,
+                WrappedFungibleOperation::Mint {
+                    target_account: Account {
+                        chain_id: minter_chain.id(),
+                        owner: minter_account,
+                    },
+                    amount: Amount::from_tokens(100),
+                },
+            );
+        })
+        .await;
+    assert!(result.is_err(), "mint on wrong chain should fail");
 }

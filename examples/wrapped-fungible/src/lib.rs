@@ -10,7 +10,7 @@ pub use linera_sdk::abis::fungible::{
 };
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, Amount, ContractAbi, ServiceAbi},
+    linera_base_types::{AccountOwner, Amount, ChainId, ContractAbi, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +21,8 @@ pub struct WrappedParameters {
     pub ticker_symbol: String,
     /// The account owner authorized to mint and burn tokens
     pub minter: AccountOwner,
+    /// The Linera chain where minting and burning are allowed
+    pub mint_chain_id: ChainId,
     /// The ERC-20 token address on the source EVM chain
     pub evm_token_address: [u8; 20],
     /// The EVM chain ID of the source chain (e.g. 8453 for Base)

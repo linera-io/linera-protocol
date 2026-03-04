@@ -159,7 +159,8 @@ impl Contract for WrappedFungibleTokenContract {
 }
 
 impl WrappedFungibleTokenContract {
-    /// Checks that the authenticated signer is the authorized minter.
+    /// Checks that the authenticated signer is the authorized minter and
+    /// that the operation is on the designated mint chain.
     fn require_minter(&mut self) -> AccountOwner {
         let signer = self
             .runtime
@@ -169,6 +170,10 @@ impl WrappedFungibleTokenContract {
         assert!(
             signer == params.minter,
             "unauthorized: only the minter can perform this operation"
+        );
+        assert!(
+            self.runtime.chain_id() == params.mint_chain_id,
+            "Mint/Burn operations are only allowed on the designated mint chain"
         );
         signer
     }
