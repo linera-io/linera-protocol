@@ -199,7 +199,10 @@ impl ListeningMode {
             (Reason::NewEvents { .. }, ListeningMode::FollowChain) => true,
             (_, ListeningMode::FollowChain) => false,
             // EventsOnly only processes events from relevant streams.
-            (Reason::NewEvents { event_streams, .. }, ListeningMode::EventsOnly(relevant)) => {
+            // Accept both NewEvents and NewBlock (for old validators that don't emit
+            // NewEvents) if they contain relevant event streams.
+            (Reason::NewEvents { event_streams, .. }, ListeningMode::EventsOnly(relevant))
+            | (Reason::NewBlock { event_streams, .. }, ListeningMode::EventsOnly(relevant)) => {
                 relevant.intersection(event_streams).next().is_some()
             }
             (_, ListeningMode::EventsOnly(_)) => false,
@@ -4251,28 +4254,48 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                 }
             }
-            Reason::NewBlock { height, .. } => {
+            Reason::NewBlock {
+                height,
+                event_streams,
+                ..
+            } => {
                 let chain_id = notification.chain_id;
-                if self
+                let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
-                    .await?
-                    > height
-                {
+                    .await?;
+                if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
                         "Accepting redundant notification for new block"
                     );
                     return Ok(());
                 }
-                self.client
-                    .synchronize_chain_state_from(&remote_node, chain_id)
-                    .await?;
-                if self
-                    .local_next_block_height(chain_id, &mut local_node)
-                    .await?
-                    <= height
-                {
-                    error!("NewBlock: Fail to synchronize new block after notification");
+                // In EventsOnly mode, download only event-bearing blocks sparsely
+                // instead of doing a full sync. This also handles old validators
+                // that emit NewBlock but not NewEvents.
+                if let Some(ListeningMode::EventsOnly(subscribed)) = self.listening_mode() {
+                    if !event_streams.is_empty() {
+                        self.client
+                            .download_event_bearing_blocks(
+                                chain_id,
+                                height,
+                                local_height,
+                                &subscribed,
+                                &remote_node,
+                            )
+                            .await?;
+                    }
+                } else {
+                    self.client
+                        .synchronize_chain_state_from(&remote_node, chain_id)
+                        .await?;
+                    if self
+                        .local_next_block_height(chain_id, &mut local_node)
+                        .await?
+                        <= height
+                    {
+                        error!("NewBlock: Fail to synchronize new block after notification");
+                    }
                 }
             }
             Reason::NewEvents {
