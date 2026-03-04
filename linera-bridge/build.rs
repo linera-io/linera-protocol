@@ -33,7 +33,7 @@ mod codegen {
             .expect("failed to generate Solidity code");
     }
 
-    /// Generates FungibleTypes.sol from the wrapped-fungible snapshot.
+    /// Generates WrappedFungibleTypes.sol from the wrapped-fungible snapshot.
     /// Primitive types shared with BridgeTypes are declared as external so the generated
     /// code imports them from BridgeTypes.sol instead of redefining them.
     fn generate_fungible_types() {
@@ -53,11 +53,11 @@ mod codegen {
 
         let out_dir = PathBuf::from("src/solidity");
         let installer = solidity::Installer::new(out_dir);
-        let config = CodeGeneratorConfig::new("FungibleTypes".to_string())
+        let config = CodeGeneratorConfig::new("WrappedFungibleTypes".to_string())
             .with_external_definitions(BTreeMap::from([("BridgeTypes".to_string(), shared_types)]));
         installer
             .install_module(&config, &fungible_registry)
-            .expect("failed to generate FungibleTypes Solidity code");
+            .expect("failed to generate WrappedFungibleTypes Solidity code");
     }
 
     /// Returns the names from `fungible_registry` that are primitive/structural types also
@@ -65,7 +65,7 @@ mod codegen {
     ///
     /// We can't simply use all names that appear in both registries because serde-reflection
     /// uses short type names (no module path), so unrelated types with the same name (e.g.
-    /// `linera_execution::Message` vs `fungible::Message`) would collide.
+    /// `linera_execution::Message` vs `wrapped_fungible::Message`) would collide.
     fn bridge_type_names(fungible_registry: &Registry, bridge_registry: &Registry) -> Vec<String> {
         // Primitive/structural types shared by both registries. These are the leaf types that
         // the fungible application's Operation and Message types are built from.

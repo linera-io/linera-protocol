@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 import "BridgeTypes.sol";
 
-library FungibleTypes {
+library WrappedFungibleTypes {
 
     struct Message {
         uint8 choice;
@@ -693,4 +693,4 @@ library FungibleTypes {
         return value;
     }
 
-} // end of library FungibleTypes
+} // end of library WrappedFungibleTypes

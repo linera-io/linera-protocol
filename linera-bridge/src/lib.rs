@@ -4,8 +4,8 @@
 /// Solidity source for the BridgeTypes library (generated).
 pub const BRIDGE_TYPES_SOURCE: &str = include_str!("solidity/BridgeTypes.sol");
 
-/// Solidity source for the FungibleTypes library (generated).
-pub const FUNGIBLE_TYPES_SOURCE: &str = include_str!("solidity/FungibleTypes.sol");
+/// Solidity source for the WrappedFungibleTypes library (generated).
+pub const WRAPPED_FUNGIBLE_TYPES_SOURCE: &str = include_str!("solidity/WrappedFungibleTypes.sol");
 
 /// Solidity source for the FungibleBridge contract.
 pub const FUNGIBLE_BRIDGE_SOURCE: &str = include_str!("solidity/FungibleBridge.sol");
