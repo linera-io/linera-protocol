@@ -1,6 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// -- On-chain (Wasm-compatible, always available) --
+
+/// EVM receipt proof verification and deposit event parsing.
+pub mod proof;
+
 // -- Off-chain only (requires `not(chain)` / default features) --
 
 /// EVM contract ABIs, relay clients, and Solidity sources.

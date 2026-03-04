@@ -45,6 +45,8 @@ workspace = true
 [dependencies]
 # Always available (lightweight, Wasm-compatible)
 alloy-primitives.workspace = true
+alloy-rlp.workspace = true
+alloy-trie.workspace = true
 anyhow.workspace = true
 
 async-trait = { workspace = true, optional = true }

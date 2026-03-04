@@ -81,7 +81,9 @@ alloy-primitives = { version = "1.4.1", default-features = false, features = [
     "serde",
     "k256",
 ] }
+alloy-rlp = "0.3.12"
 alloy-sol-types = "1.4.1"
+alloy-trie = { version = "0.9.0", default-features = false }
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
 async-graphql = "=7.0.17"
