@@ -5383,7 +5383,6 @@ dependencies = [
  "bcs",
  "clap",
  "fs-err",
- "fungible",
  "hex",
  "insta",
  "linera-base",
@@ -5404,6 +5403,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
+ "wrapped-fungible",
 ]
 
 [[package]]
@@ -12644,6 +12644,17 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser 0.217.1",
+]
+
+[[package]]
+name = "wrapped-fungible"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "fungible",
+ "hex",
+ "linera-sdk",
+ "serde",
 ]
 
 [[package]]

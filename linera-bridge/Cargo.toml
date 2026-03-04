@@ -50,7 +50,7 @@ serde_yaml = { version = "0.8.26", optional = true }
 
 [dev-dependencies]
 bcs.workspace = true
-fungible.workspace = true
+wrapped-fungible.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }

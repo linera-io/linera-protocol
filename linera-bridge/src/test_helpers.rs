@@ -217,7 +217,7 @@ pub fn deploy_mock_erc20(
 pub fn fungible_message_transaction(
     origin: ChainId,
     application_id: CryptoHash,
-    message: &fungible::Message,
+    message: &wrapped_fungible::Message,
 ) -> Transaction {
     Transaction::ReceiveMessages(IncomingBundle {
         origin,

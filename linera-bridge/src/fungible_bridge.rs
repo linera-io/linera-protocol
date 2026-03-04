@@ -110,7 +110,7 @@ mod tests {
             amount: Amount,
             source: AccountOwner,
         ) -> (Vec<revm::primitives::Log>, u64) {
-            let msg = fungible::Message::Credit {
+            let msg = wrapped_fungible::Message::Credit {
                 target,
                 amount,
                 source,
@@ -262,7 +262,7 @@ mod tests {
         let mut t = TestBridge::new();
         let other_app_id = CryptoHash::new(&TestString::new("other_app"));
 
-        let msg = fungible::Message::Credit {
+        let msg = wrapped_fungible::Message::Credit {
             target: test_target(),
             amount: Amount::from_tokens(50),
             source: test_source(),

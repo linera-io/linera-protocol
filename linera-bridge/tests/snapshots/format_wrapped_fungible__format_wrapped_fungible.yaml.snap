@@ -1,5 +1,6 @@
 ---
-source: linera-bridge/tests/format_fungible.rs
+source: linera-bridge/tests/format_wrapped_fungible.rs
+assertion_line: 23
 expression: registry
 ---
 Account:
@@ -33,7 +34,27 @@ CryptoHash:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-FungibleOperation:
+Message:
+  ENUM:
+    0:
+      Credit:
+        STRUCT:
+          - target:
+              TYPENAME: AccountOwner
+          - amount:
+              TYPENAME: Amount
+          - source:
+              TYPENAME: AccountOwner
+    1:
+      Withdraw:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount:
+              TYPENAME: Amount
+          - target_account:
+              TYPENAME: Account
+WrappedFungibleOperation:
   ENUM:
     0:
       Balance:
@@ -80,23 +101,17 @@ FungibleOperation:
               TYPENAME: Amount
           - target_account:
               TYPENAME: Account
-Message:
-  ENUM:
-    0:
-      Credit:
+    6:
+      Mint:
         STRUCT:
-          - target:
-              TYPENAME: AccountOwner
+          - target_account:
+              TYPENAME: Account
           - amount:
               TYPENAME: Amount
-          - source:
-              TYPENAME: AccountOwner
-    1:
-      Withdraw:
+    7:
+      Burn:
         STRUCT:
           - owner:
               TYPENAME: AccountOwner
           - amount:
               TYPENAME: Amount
-          - target_account:
-              TYPENAME: Account

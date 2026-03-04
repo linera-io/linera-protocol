@@ -33,13 +33,14 @@ mod codegen {
             .expect("failed to generate Solidity code");
     }
 
-    /// Generates FungibleTypes.sol from the fungible snapshot.
+    /// Generates FungibleTypes.sol from the wrapped-fungible snapshot.
     /// Primitive types shared with BridgeTypes are declared as external so the generated
     /// code imports them from BridgeTypes.sol instead of redefining them.
     fn generate_fungible_types() {
         let bridge_snap = PathBuf::from("tests/snapshots/format__format.yaml.snap");
-        let fungible_snap =
-            PathBuf::from("tests/snapshots/format_fungible__format_fungible.yaml.snap");
+        let fungible_snap = PathBuf::from(
+            "tests/snapshots/format_wrapped_fungible__format_wrapped_fungible.yaml.snap",
+        );
 
         let Some(bridge_registry) = read_snapshot_registry(&bridge_snap) else {
             return;
