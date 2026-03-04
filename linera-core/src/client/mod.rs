@@ -4438,8 +4438,19 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
+        let events_only = self
+            .listening_mode()
+            .is_some_and(|m| matches!(m, ListeningMode::EventsOnly(_)));
         let (nodes, local_node) = {
-            let committee = self.local_committee().await?;
+            // For EventsOnly chains, use the admin chain's committee: the chain's own
+            // committee may be stale (we don't track epoch changes), and
+            // `local_committee()` could trigger a full sync on `BlobsNotFound`.
+            let committee = if events_only {
+                let (_, committee) = self.admin_committee().await?;
+                committee
+            } else {
+                self.local_committee().await?
+            };
             let nodes: HashMap<_, _> = self
                 .client
                 .validator_node_provider()
@@ -4462,9 +4473,6 @@ impl<Env: Environment> ChainClient<Env> {
                 continue;
             };
             let this = self.clone();
-            let events_only = this
-                .listening_mode()
-                .is_some_and(|m| matches!(m, ListeningMode::EventsOnly(_)));
             let stream = stream::once({
                 let node = node.clone();
                 async move {
