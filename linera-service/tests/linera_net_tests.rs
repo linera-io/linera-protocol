@@ -1807,9 +1807,10 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         .await?;
 
     // The EventsOnly subscription for chain1 may not be established in time to
-    // receive the NewEvents notification, so explicitly process chain2's inbox.
-    // This calls find_received_certificates which downloads chain1's blocks
-    // from validators directly.
+    // receive the NewEvents notification. Explicitly sync chain1 on node_service2
+    // so that stream_event_counts is up-to-date, then process chain2's inbox so
+    // that collect_stream_updates discovers the new events.
+    node_service2.sync(&chain1).await?;
     node_service2.process_inbox(&chain2).await?;
 
     let query = "receivedPosts { keys { author, index } }";
@@ -1835,6 +1836,7 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 
     app1.mutate("post(text: \"Second post!\")").await?;
 
+    node_service2.sync(&chain1).await?;
     node_service2.process_inbox(&chain2).await?;
 
     let query = "receivedPosts { keys { author, index } }";
