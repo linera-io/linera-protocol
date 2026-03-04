@@ -10,6 +10,7 @@ pub mod config;
 pub mod controller;
 pub mod node_service;
 pub mod project;
+pub mod query_subscription;
 pub mod storage;
 pub mod task_processor;
 pub mod tracing;
