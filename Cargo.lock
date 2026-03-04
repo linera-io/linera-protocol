@@ -5380,6 +5380,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
  "anyhow",
+ "async-trait",
  "bcs",
  "clap",
  "fs-err",

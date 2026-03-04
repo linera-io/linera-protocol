@@ -47,7 +47,7 @@ impl InitLightClientOptions {
             crypto::ValidatorPublicKey,
             data_types::{ChainDescription, ChainOrigin, Epoch},
         };
-        use linera_bridge::evm_client::validator_evm_address;
+        use linera_bridge::evm::client::validator_evm_address;
         use linera_execution::committee::ValidatorState;
 
         // Response types for the combined GraphQL query.

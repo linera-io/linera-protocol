@@ -1,22 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Solidity source for the BridgeTypes library (generated).
-pub const BRIDGE_TYPES_SOURCE: &str = include_str!("solidity/BridgeTypes.sol");
+// -- Off-chain only (requires `not(chain)` / default features) --
 
-/// Solidity source for the WrappedFungibleTypes library (generated).
-pub const WRAPPED_FUNGIBLE_TYPES_SOURCE: &str = include_str!("solidity/WrappedFungibleTypes.sol");
+/// EVM contract ABIs, relay clients, and Solidity sources.
+#[cfg(not(feature = "chain"))]
+pub mod evm;
 
-/// Solidity source for the FungibleBridge contract.
-pub const FUNGIBLE_BRIDGE_SOURCE: &str = include_str!("solidity/FungibleBridge.sol");
+// -- Test-only modules --
 
-pub mod evm_client;
-pub mod light_client;
-pub mod microchain;
-
-#[cfg(test)]
+/// Tests for the FungibleBridge EVM contract.
+#[cfg(all(test, not(feature = "chain")))]
 mod fungible_bridge;
-#[cfg(test)]
+
+/// Gas usage measurements for LightClient and Microchain operations.
+#[cfg(all(test, not(feature = "chain")))]
 mod gas;
-#[cfg(test)]
+
+/// Shared test helpers for EVM contract deployment and interaction.
+#[cfg(all(test, not(feature = "chain")))]
 pub(crate) mod test_helpers;
