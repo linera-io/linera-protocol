@@ -1192,6 +1192,7 @@ impl Runnable for Job {
                 task_retry_delay_secs,
                 read_only,
                 query_cache_size,
+                allowed_subscriptions,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1259,6 +1260,21 @@ impl Runnable for Job {
                     "--query-cache-size is incompatible with --long-lived-services"
                 );
 
+                let query_subscriptions = if allowed_subscriptions.is_empty() {
+                    None
+                } else {
+                    use linera_service::query_subscription::parse_allowed_subscription;
+                    let registered: Vec<_> = allowed_subscriptions
+                        .iter()
+                        .map(|s| parse_allowed_subscription(s))
+                        .collect::<Result<_, _>>()?;
+                    Some(Arc::new(
+                        linera_service::query_subscription::QuerySubscriptionManager::new(
+                            registered,
+                        ),
+                    ))
+                };
+
                 let service = NodeService::new(
                     config,
                     port,
@@ -1268,6 +1284,8 @@ impl Runnable for Job {
                     context,
                     read_only,
                     query_cache_size,
+                    query_subscriptions,
+                    cancellation_token.clone(),
                 );
                 service.run(cancellation_token, command_receiver).await?;
             }

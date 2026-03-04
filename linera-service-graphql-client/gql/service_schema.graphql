@@ -696,6 +696,11 @@ type IndexAndEvent {
 }
 
 """
+A scalar that can represent any JSON value.
+"""
+scalar JSON
+
+"""
 A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
@@ -1250,6 +1255,24 @@ type SubscriptionRoot {
 	Subscribes to notifications from the specified chain.
 	"""
 	notifications(chainId: ChainId!): Notification!
+	"""
+	Subscribes to the result of a pre-registered GraphQL query.
+	Re-executes the query on every new block and pushes changed results.
+	"""
+	queryResult(
+		"""
+		Name of the registered subscription query.
+		"""
+		name: String!,
+		"""
+		The chain to watch.
+		"""
+		chainId: ChainId!,
+		"""
+		The application to query.
+		"""
+		applicationId: ApplicationId!
+	): JSON!
 }
 
 type SystemExecutionStateView {

@@ -239,6 +239,8 @@ async fn main() -> std::io::Result<()> {
         Arc::new(Mutex::new(DummyContext)),
         false, // read-only mode disabled for schema export
         None,  // no query cache for schema export
+        None,
+        tokio_util::sync::CancellationToken::new(),
     );
     let schema = service.schema().sdl();
     print!("{}", schema);
