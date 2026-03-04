@@ -40,7 +40,7 @@ down: ## Stop the bridge docker compose network and remove volumes
 	docker compose -f $(COMPOSE_FILE) -p $(PROJECT) down -v
 
 demo-setup: ## Run the bridge demo setup script (deploy contracts + Linera apps)
-	cd $(DEMO_DIR) && bash setup.sh
+	cd $(DEMO_DIR) && bash setup.sh --compose-file $(CURDIR)/$(COMPOSE_FILE)
 
 demo-frontend: ## Install deps and start the Vite dev server
 	cd $(DEMO_DIR) && pnpm install && pnpm dev
