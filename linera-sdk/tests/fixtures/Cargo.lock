@@ -3355,6 +3355,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "random-number"
+version = "0.1.0"
+dependencies = [
+ "linera-sdk",
+ "rand 0.8.5",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "rayon"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
