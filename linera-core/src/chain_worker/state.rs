@@ -6,7 +6,11 @@
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::{self, Arc},
+    sync::{
+        self,
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 use futures::future::Either;
@@ -79,6 +83,12 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
+    pub(crate) service_runtime_task: Option<web_thread_pool::Task<()>>,
+    /// Timestamp of the last access, in microseconds since the Unix epoch.
+    /// Used by the keep-alive task to determine when the worker has been idle.
+    /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
+    /// the `RwLock`.
+    last_access: Arc<AtomicU64>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -111,6 +121,7 @@ where
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
+        service_runtime_task: Option<web_thread_pool::Task<()>>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -119,6 +130,8 @@ where
             storage,
             chain,
             service_runtime_endpoint,
+            service_runtime_task,
+            last_access: Arc::new(AtomicU64::new(super::handle::current_time_micros())),
             block_values,
             execution_state_cache,
             chain_modes,
@@ -145,6 +158,17 @@ where
     /// Rolls back any uncommitted changes to the chain state.
     pub(crate) fn rollback(&mut self) {
         self.chain.rollback();
+    }
+
+    /// Updates the last-access timestamp to the current time.
+    pub(crate) fn touch(&self) {
+        self.last_access
+            .store(super::handle::current_time_micros(), Ordering::Relaxed);
+    }
+
+    /// Returns a clone of the last-access `Arc`, for use by the keep-alive task.
+    pub(crate) fn last_access_arc(&self) -> Arc<AtomicU64> {
+        Arc::clone(&self.last_access)
     }
 
     /// Drops the service runtime endpoint, signaling the runtime task to stop.

@@ -41,20 +41,19 @@ use tracing::{instrument, trace, warn};
 
 /// A read guard providing access to a chain's [`ChainStateView`].
 ///
-/// Holds a read lock on the chain handle, preventing writes for its lifetime.
-/// Also holds a strong reference to the [`ChainHandle`] to prevent the
-/// keep-alive task from shutting it down while the view is borrowed.
+/// Holds a read lock on the chain worker state, preventing writes for its
+/// lifetime. The `OwnedRwLockReadGuard` internally holds a strong `Arc`
+/// reference to the `RwLock<ChainWorkerState>`, keeping the state alive.
 /// Dereferences to `ChainStateView`.
-pub struct ChainStateViewReadGuard<S: Storage> {
-    _handle: Arc<ChainHandle<S>>,
-    guard: OwnedRwLockReadGuard<ChainWorkerState<S>, ChainStateView<S::Context>>,
-}
+pub struct ChainStateViewReadGuard<S: Storage>(
+    OwnedRwLockReadGuard<ChainWorkerState<S>, ChainStateView<S::Context>>,
+);
 
 impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
     type Target = ChainStateView<S::Context>;
 
     fn deref(&self) -> &Self::Target {
-        &self.guard
+        &self.0
     }
 }
 
@@ -62,8 +61,9 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle::ServiceRuntimeActor, state::ChainWorkerState, BlockOutcome, ChainHandle,
-        ChainWorkerConfig, DeliveryNotifier,
+        handle::{self, ServiceRuntimeActor},
+        state::ChainWorkerState,
+        BlockOutcome, ChainWorkerConfig, DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -83,9 +83,9 @@ mod worker_tests;
 /// trait signatures.
 macro_rules! chain_read {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let handle = $self.get_or_create_chain_handle($chain_id).await?;
+        let state = $self.get_or_create_chain_worker($chain_id).await?;
         Box::pin(crate::worker::wrap_future(async move {
-            let $guard = handle.read().await;
+            let $guard = crate::chain_worker::handle::read_lock(&state).await;
             $body
         }))
         .await
@@ -101,9 +101,9 @@ macro_rules! chain_read {
 /// trait signatures.
 macro_rules! chain_write {
     ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let handle = $self.get_or_create_chain_handle($chain_id).await?;
+        let state = $self.get_or_create_chain_worker($chain_id).await?;
         Box::pin(crate::worker::wrap_future(async move {
-            let mut $guard = handle.write().await;
+            let mut $guard = crate::chain_worker::handle::write_lock(&state).await;
             $body
         }))
         .await
@@ -508,23 +508,25 @@ impl WorkerError {
     }
 }
 
-type ChainHandleMap<S> = Arc<papaya::HashMap<ChainId, std::sync::Weak<ChainHandle<S>>>>;
+type ChainWorkerArc<S> = Arc<tokio::sync::RwLock<ChainWorkerState<S>>>;
+type ChainWorkerMap<S> =
+    Arc<papaya::HashMap<ChainId, std::sync::Weak<tokio::sync::RwLock<ChainWorkerState<S>>>>>;
 
 /// Starts a background task that periodically removes dead weak references
 /// from the chain handle map. The actual lifetime management is handled by
 /// each handle's keep-alive task.
 fn start_sweep<S: Storage + Clone + 'static>(
-    chain_handles: &ChainHandleMap<S>,
+    chain_workers: &ChainWorkerMap<S>,
     config: &ChainWorkerConfig,
 ) {
-    // Sweep at the smaller of the two TTLs. If both are None, handles
+    // Sweep at the smaller of the two TTLs. If both are None, workers
     // live forever so there's nothing to sweep.
     let interval = match (config.ttl, config.sender_chain_ttl) {
         (None, None) => return,
         (Some(d), None) | (None, Some(d)) => d,
         (Some(a), Some(b)) => a.min(b),
     };
-    let weak_map = Arc::downgrade(chain_handles);
+    let weak_map = Arc::downgrade(chain_workers);
     linera_base::Task::spawn(async move {
         loop {
             linera_base::time::timer::sleep(interval).await;
@@ -561,10 +563,10 @@ pub struct WorkerState<StorageClient: Storage> {
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
-    /// The cache of loaded chain handles. Stores weak references; each handle
+    /// The cache of loaded chain workers. Stores weak references; each worker
     /// manages its own lifetime via a keep-alive task. A background sweep
     /// periodically removes dead entries.
-    chain_handles: ChainHandleMap<StorageClient>,
+    chain_workers: ChainWorkerMap<StorageClient>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -579,7 +581,7 @@ where
             execution_state_cache: self.execution_state_cache.clone(),
             chain_modes: self.chain_modes.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
-            chain_handles: self.chain_handles.clone(),
+            chain_workers: self.chain_workers.clone(),
         }
     }
 }
@@ -692,8 +694,8 @@ where
         chain_worker_config: ChainWorkerConfig,
         chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     ) -> Self {
-        let chain_handles = Arc::new(papaya::HashMap::new());
-        start_sweep(&chain_handles, &chain_worker_config);
+        let chain_workers = Arc::new(papaya::HashMap::new());
+        start_sweep(&chain_workers, &chain_worker_config);
         let block_cache_size = chain_worker_config.block_cache_size;
         let execution_state_cache_size = chain_worker_config.execution_state_cache_size;
         WorkerState {
@@ -703,7 +705,7 @@ where
             execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
             chain_modes,
             delivery_notifiers: Arc::default(),
-            chain_handles,
+            chain_workers,
         }
     }
 
@@ -734,28 +736,26 @@ where
         .await
     }
 
-    /// Gets or creates a `ChainHandle` for the given chain.
+    /// Gets or creates a chain worker for the given chain.
     ///
     /// Returns a type-erased future to keep `!Sync` intermediate types (e.g.
     /// `std::sync::mpsc::Receiver` from `ServiceRuntimeActor::spawn`) out of
     /// the caller's future type.
-    fn get_or_create_chain_handle(
+    fn get_or_create_chain_worker(
         &self,
         chain_id: ChainId,
     ) -> std::pin::Pin<
         Box<
-            impl std::future::Future<Output = Result<Arc<ChainHandle<StorageClient>>, WorkerError>> + '_,
+            impl std::future::Future<Output = Result<ChainWorkerArc<StorageClient>, WorkerError>> + '_,
         >,
     > {
         Box::pin(wrap_future(async move {
-            // Fast path: check if a live handle already exists.
+            // Fast path: check if a live worker already exists.
             {
-                let guard = self.chain_handles.pin();
+                let guard = self.chain_workers.pin();
                 if let Some(weak) = guard.get(&chain_id) {
-                    if weak.strong_count() > 0 {
-                        // The keep-alive task (or an in-flight request) still holds
-                        // a strong ref, so upgrade is guaranteed to succeed.
-                        return Ok(weak.upgrade().unwrap());
+                    if let Some(strong) = weak.upgrade() {
+                        return Ok(strong);
                     }
                 }
             }
@@ -786,7 +786,7 @@ where
                     (None, None)
                 };
 
-            let worker = crate::chain_worker::state::ChainWorkerState::load(
+            let state = crate::chain_worker::state::ChainWorkerState::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.block_cache.clone(),
@@ -795,23 +795,19 @@ where
                 delivery_notifier,
                 chain_id,
                 service_runtime_endpoint,
+                service_runtime_task,
             )
             .await?;
 
-            let handle = ChainHandle::new_arc(
-                worker,
-                service_runtime_task,
-                is_tracked,
-                &self.chain_worker_config,
-            );
+            let worker = handle::create_chain_worker(state, is_tracked, &self.chain_worker_config);
 
-            // Atomically insert our weak ref, but only if no live handle exists yet.
-            let weak = Arc::downgrade(&handle);
-            let guard = self.chain_handles.guard();
-            match self.chain_handles.compute(
+            // Atomically insert our entry, but only if no live worker exists yet.
+            let weak = Arc::downgrade(&worker);
+            let guard = self.chain_workers.guard();
+            match self.chain_workers.compute(
                 chain_id,
-                |entry| match entry {
-                    Some((_, existing)) => match existing.upgrade() {
+                |existing| match existing {
+                    Some((_, e)) => match e.upgrade() {
                         Some(live) => papaya::Operation::Abort(live),
                         None => papaya::Operation::Insert(weak.clone()),
                     },
@@ -820,7 +816,7 @@ where
                 &guard,
             ) {
                 papaya::Compute::Aborted(existing, ..) => Ok(existing),
-                papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => Ok(handle),
+                papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => Ok(worker),
                 papaya::Compute::Removed { .. } => unreachable!(),
             }
         }))
@@ -888,8 +884,8 @@ where
         chain_id: ChainId,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        let handle = self.get_or_create_chain_handle(chain_id).await?;
-        let guard = handle.read_initialized().await?;
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let guard = handle::read_lock_initialized(&state).await?;
         guard.describe_application_readonly(application_id).await
     }
 
@@ -977,8 +973,8 @@ where
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        let handle = self.get_or_create_chain_handle(chain_id).await?;
-        let guard = handle.read_initialized().await?;
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let guard = handle::read_lock_initialized(&state).await?;
         guard.read_certificate(height).await
     }
 
@@ -995,12 +991,12 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainStateViewReadGuard<StorageClient>, WorkerError> {
-        let handle = self.get_or_create_chain_handle(chain_id).await?;
-        let guard = handle.read().await;
-        Ok(ChainStateViewReadGuard {
-            _handle: handle,
-            guard: OwnedRwLockReadGuard::map(guard, |state| state.chain()),
-        })
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let guard = handle::read_lock(&state).await;
+        Ok(ChainStateViewReadGuard(OwnedRwLockReadGuard::map(
+            guard,
+            |s| s.chain(),
+        )))
     }
 
     #[instrument(skip_all, fields(
