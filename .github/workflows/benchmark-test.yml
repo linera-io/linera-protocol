@@ -35,7 +35,7 @@ permissions:
 jobs:
   benchmark-test:
     if: ${{ github.event_name == 'merge_group' }}
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
     timeout-minutes: 40
 
     steps:
