@@ -505,87 +505,41 @@ impl WorkerError {
     }
 }
 
-type ChainHandleMap<S> = Arc<Mutex<BTreeMap<ChainId, Arc<ChainHandle<S>>>>>;
+type ChainHandleMap<S> = Arc<papaya::HashMap<ChainId, std::sync::Weak<ChainHandle<S>>>>;
 
-/// Starts the background TTL sweep task for a chain handle map.
-///
-/// The sweep runs periodically and evicts idle chain handles whose last access
-/// exceeds their configured TTL. Called once during `WorkerState` construction.
+/// Starts a background task that periodically removes dead weak references
+/// from the chain handle map. The actual lifetime management is handled by
+/// each handle's keep-alive task.
 fn start_sweep<S: Storage + Clone + 'static>(
     chain_handles: &ChainHandleMap<S>,
     config: &ChainWorkerConfig,
 ) {
-    let ttl = config.ttl;
-    let sender_ttl = config.sender_chain_ttl;
-    // Sweep at the smaller of the two TTLs, divided by 4 for responsiveness.
-    // If both are None, don't sweep at all (handles live forever).
-    let interval = match (ttl, sender_ttl) {
+    // Sweep at the smaller of the two TTLs. If both are None, handles
+    // live forever so there's nothing to sweep.
+    let interval = match (config.ttl, config.sender_chain_ttl) {
         (None, None) => return,
-        (Some(d), None) | (None, Some(d)) => d / 4,
-        (Some(a), Some(b)) => a.min(b) / 4,
+        (Some(d), None) | (None, Some(d)) => d,
+        (Some(a), Some(b)) => a.min(b),
     };
-    // The sweep holds a Weak reference so it stops when all WorkerState clones are dropped.
-    let weak_handles = Arc::downgrade(chain_handles);
+    let weak_map = Arc::downgrade(chain_handles);
     linera_base::Task::spawn(async move {
         loop {
             linera_base::time::timer::sleep(interval).await;
-            let Some(chain_handles) = weak_handles.upgrade() else {
-                break; // All WorkerState clones have been dropped.
+            let Some(map) = weak_map.upgrade() else {
+                break;
             };
-            // Phase 1: Identify candidates without removing them from the map.
-            let candidates: Vec<ChainId> = {
-                let handles = chain_handles.lock().unwrap();
-                handles
-                    .iter()
-                    .filter(|(_, handle)| {
-                        handle.is_expired(ttl, sender_ttl) && Arc::strong_count(handle) == 1
-                    })
-                    .map(|(chain_id, _)| *chain_id)
-                    .collect()
-            };
-            // Phase 2: For each candidate, clone the Arc (keeping the entry in
-            // the map so new requests still find it rather than creating
-            // duplicates), then acquire the write lock to wait for all
-            // outstanding guards to drain. Finally, re-lock the map and
-            // remove only if no one else grabbed a reference in the meantime.
-            for chain_id in candidates {
-                let handle = {
-                    let handles = chain_handles.lock().unwrap();
-                    let Some(handle) = handles.get(&chain_id) else {
-                        continue; // Already removed by another path.
-                    };
-                    // Quick pre-check before cloning.
-                    if !handle.is_expired(ttl, sender_ttl) {
-                        continue;
-                    }
-                    handle.clone() // strong_count: map + us
-                };
-                // Acquire write lock — blocks until all outstanding
-                // OwnedRwLock{Read,Write}Guards are released. While we wait,
-                // the handle stays in the map so new requests reuse it.
-                let mut guard = handle.write().await;
-                // Re-lock the map. We hold the write lock, so no one can
-                // acquire new guards. If strong_count == 2 (map + us), no
-                // request is currently referencing this handle.
-                {
-                    let mut handles = chain_handles.lock().unwrap();
-                    if Arc::strong_count(&handle) != 2 || !handle.is_expired(ttl, sender_ttl) {
-                        // Someone grabbed a reference or it was touched
-                        // while we waited — not safe to evict.
-                        drop(guard);
-                        continue;
-                    }
-                    handles.remove(&chain_id);
-                }
-                // Drop the service runtime endpoint so the runtime task's
-                // channel closes, allowing it to exit its loop.
-                guard.clear_service_runtime_endpoint();
-                drop(guard);
-                if let Err(err) = handle.shutdown_service_runtime().await {
-                    tracing::warn!(%chain_id, %err, "Failed to shut down service runtime");
-                }
+            let guard = map.guard();
+            let dead_keys: Vec<ChainId> = map
+                .pin_owned()
+                .iter()
+                .filter(|(_, weak)| weak.strong_count() == 0)
+                .map(|(chain_id, _)| *chain_id)
+                .collect();
+            for chain_id in dead_keys {
+                map.remove(&chain_id, &guard);
             }
-            drop(chain_handles);
+            drop(guard);
+            drop(map);
         }
     })
     .forget();
@@ -604,12 +558,9 @@ pub struct WorkerState<StorageClient: Storage> {
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
-    /// The cache of loaded chain handles.
-    ///
-    /// **Lock ordering**: Never hold this mutex while acquiring a `ChainHandle`'s
-    /// read/write lock. The TTL sweep task does the reverse (holds the handle's write
-    /// lock, then briefly locks this map to remove the entry), so violating this order
-    /// would deadlock.
+    /// The cache of loaded chain handles. Stores weak references; each handle
+    /// manages its own lifetime via a keep-alive task. A background sweep
+    /// periodically removes dead entries.
     chain_handles: ChainHandleMap<StorageClient>,
 }
 
@@ -738,7 +689,7 @@ where
         chain_worker_config: ChainWorkerConfig,
         chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     ) -> Self {
-        let chain_handles = Arc::new(Mutex::new(BTreeMap::new()));
+        let chain_handles = Arc::new(papaya::HashMap::new());
         start_sweep(&chain_handles, &chain_worker_config);
         let block_cache_size = chain_worker_config.block_cache_size;
         let execution_state_cache_size = chain_worker_config.execution_state_cache_size;
@@ -794,15 +745,19 @@ where
         >,
     > {
         Box::pin(wrap_future(async move {
-            // Fast path: check if a handle already exists.
+            // Fast path: check if a live handle already exists.
             {
-                let handles = self.chain_handles.lock().unwrap();
-                if let Some(handle) = handles.get(&chain_id) {
-                    return Ok(handle.clone());
+                let guard = self.chain_handles.pin();
+                if let Some(weak) = guard.get(&chain_id) {
+                    if weak.strong_count() > 0 {
+                        // The keep-alive task (or an in-flight request) still holds
+                        // a strong ref, so upgrade is guaranteed to succeed.
+                        return Ok(weak.upgrade().unwrap());
+                    }
                 }
             }
 
-            // Slow path: load the chain state outside the lock.
+            // Slow path: load the chain state (no lock held).
             let delivery_notifier = self
                 .delivery_notifiers
                 .lock()
@@ -840,12 +795,31 @@ where
             )
             .await?;
 
-            let handle = Arc::new(ChainHandle::new(worker, service_runtime_task, is_tracked));
+            let handle = ChainHandle::new_arc(
+                worker,
+                service_runtime_task,
+                is_tracked,
+                &self.chain_worker_config,
+            );
 
-            // Insert-if-absent under lock (another task may have raced us).
-            let mut handles = self.chain_handles.lock().unwrap();
-            let handle = handles.entry(chain_id).or_insert(handle).clone();
-            Ok(handle)
+            // Atomically insert our weak ref, but only if no live handle exists yet.
+            let weak = Arc::downgrade(&handle);
+            let guard = self.chain_handles.guard();
+            match self.chain_handles.compute(
+                chain_id,
+                |entry| match entry {
+                    Some((_, existing)) => match existing.upgrade() {
+                        Some(live) => papaya::Operation::Abort(live),
+                        None => papaya::Operation::Insert(weak.clone()),
+                    },
+                    None => papaya::Operation::Insert(weak.clone()),
+                },
+                &guard,
+            ) {
+                papaya::Compute::Aborted(existing, ..) => Ok(existing),
+                papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => Ok(handle),
+                papaya::Compute::Removed { .. } => unreachable!(),
+            }
         }))
     }
 

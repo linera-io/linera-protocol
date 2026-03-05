@@ -20,7 +20,7 @@ use linera_execution::{QueryContext, ServiceRuntimeEndpoint, ServiceSyncRuntime}
 use linera_storage::Storage;
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
-use super::state::ChainWorkerState;
+use super::{config::ChainWorkerConfig, state::ChainWorkerState};
 
 /// A handle to a chain worker's state, protected by an `RwLock`.
 ///
@@ -30,7 +30,6 @@ pub(crate) struct ChainHandle<S: Storage> {
     state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicU64>,
     service_runtime_task: Mutex<Option<web_thread_pool::Task<()>>>,
-    is_tracked: bool,
 }
 
 /// A write guard that automatically rolls back uncommitted chain state changes on drop.
@@ -101,37 +100,61 @@ impl ServiceRuntimeActor {
 
 impl<S: Storage + Clone + 'static> ChainHandle<S> {
     /// Creates a new `ChainHandle` wrapping the given worker state.
-    pub(crate) fn new(
+    ///
+    /// If the config specifies a TTL for this handle's type (tracked vs untracked),
+    /// a background keep-alive task is spawned that holds a strong `Arc` reference.
+    /// When the handle has been idle for the TTL duration, the task exits and drops
+    /// its reference. If no other strong references remain, the handle is deallocated.
+    pub(crate) fn new_arc(
         state: ChainWorkerState<S>,
         service_runtime_task: Option<web_thread_pool::Task<()>>,
         is_tracked: bool,
-    ) -> Self {
+        config: &ChainWorkerConfig,
+    ) -> Arc<Self> {
         let now_micros = current_time_micros();
-        ChainHandle {
+        let handle = Arc::new(ChainHandle {
             state: Arc::new(RwLock::new(state)),
             last_access: Arc::new(AtomicU64::new(now_micros)),
             service_runtime_task: Mutex::new(service_runtime_task),
-            is_tracked,
+        });
+        let ttl = if is_tracked {
+            config.sender_chain_ttl
+        } else {
+            config.ttl
+        };
+        if let Some(ttl) = ttl {
+            Self::spawn_keep_alive(Arc::clone(&handle), ttl);
         }
+        handle
+    }
+
+    /// Spawns a background task that keeps the handle alive for at least `ttl` after
+    /// the last access. When the handle has been idle for the full TTL, the task exits
+    /// and drops its strong reference, allowing deallocation.
+    fn spawn_keep_alive(handle: Arc<Self>, ttl: Duration) {
+        linera_base::Task::spawn(async move {
+            loop {
+                linera_base::time::timer::sleep(ttl).await;
+                let last = handle.last_access.load(Ordering::Relaxed);
+                let now = current_time_micros();
+                let idle_micros = now.saturating_sub(last);
+                let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
+                if idle_micros >= ttl_micros {
+                    break;
+                }
+                // Touched recently — sleep for the remaining time.
+                let remaining = Duration::from_micros(ttl_micros - idle_micros);
+                linera_base::time::timer::sleep(remaining).await;
+            }
+            handle.shutdown().await;
+        })
+        .forget();
     }
 
     /// Updates the last-access timestamp.
     fn touch(&self) {
         self.last_access
             .store(current_time_micros(), Ordering::Relaxed);
-    }
-
-    /// Checks whether this handle has been idle beyond its TTL.
-    ///
-    /// `None` means no expiry (the handle lives forever).
-    pub(crate) fn is_expired(&self, ttl: Option<Duration>, sender_ttl: Option<Duration>) -> bool {
-        let Some(timeout) = (if self.is_tracked { sender_ttl } else { ttl }) else {
-            return false;
-        };
-        let timeout_micros = u64::try_from(timeout.as_micros()).unwrap_or(u64::MAX);
-        let last = self.last_access.load(Ordering::Relaxed);
-        let now = current_time_micros();
-        now.saturating_sub(last) > timeout_micros
     }
 
     /// Acquires a read lock, updating the last-access timestamp.
@@ -170,13 +193,20 @@ impl<S: Storage + Clone + 'static> ChainHandle<S> {
         RollbackGuard(self.state.clone().write_owned().await)
     }
 
-    /// Shuts down the service runtime task, if any.
-    pub(crate) async fn shutdown_service_runtime(&self) -> Result<(), web_thread_pool::Error> {
+    /// Shuts down the service runtime, cleaning up resources.
+    async fn shutdown(&self) {
+        // Acquire write lock to wait for all outstanding guards to drain,
+        // then clear the endpoint so the runtime task's channel closes.
+        {
+            let mut guard = RollbackGuard(self.state.clone().write_owned().await);
+            guard.clear_service_runtime_endpoint();
+        }
         let task = self.service_runtime_task.lock().unwrap().take();
         if let Some(task) = task {
-            task.await?;
+            if let Err(err) = task.await {
+                tracing::warn!(%err, "Failed to shut down service runtime");
+            }
         }
-        Ok(())
     }
 }
 
