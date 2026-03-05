@@ -13,7 +13,7 @@ mod guard;
 
 use std::env;
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use async_graphql::InputType;
 use futures::{
     channel::mpsc,
@@ -1909,6 +1909,97 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 
     let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value + increment);
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_counter_subscription(config: impl LineraNetConfig) -> Result<()> {
+    use counter::CounterAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    let original_counter_value = 35;
+    let increment = 5;
+
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let (contract, service) = client.build_example("counter").await?;
+
+    let application_id = client
+        .publish_and_create::<CounterAbi, (), u64>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            &(),
+            &original_counter_value,
+            &[],
+            None,
+        )
+        .await?;
+
+    // Start node service with a subscription query for the counter value.
+    let port = get_node_port().await;
+    let mut node_service = client
+        .run_node_service_with_all_options(
+            port,
+            ProcessInbox::Skip,
+            &[],
+            &[],
+            false,
+            &["query CounterValue { value }".to_string()],
+        )
+        .await?;
+
+    let application = node_service.make_application(&chain, &application_id)?;
+
+    // Subscribe to query results via WebSocket.
+    let mut subscription = node_service
+        .query_result("CounterValue", chain, &application_id.forget_abi())
+        .await?;
+
+    // The watcher fires immediately with the initial value.
+    let initial = subscription
+        .next()
+        .await
+        .context("expected initial query result")??;
+    let initial_value: u64 = serde_json::from_value(initial["data"]["value"].clone())?;
+    assert_eq!(initial_value, original_counter_value);
+
+    // Increment by 0: creates a new block but doesn't change the query result.
+    application.mutate("increment(value: 0)").await?;
+
+    // The subscription should NOT push a notification for an unchanged value.
+    // Give it a moment, then verify nothing arrived.
+    let no_update =
+        tokio::time::timeout(std::time::Duration::from_secs(2), subscription.next()).await;
+    assert!(
+        no_update.is_err(),
+        "expected no notification for unchanged value"
+    );
+
+    // Increment the counter with a real change.
+    let mutation = format!("increment(value: {increment})");
+    application.mutate(mutation).await?;
+
+    // The subscription should push the updated value.
+    let updated = subscription
+        .next()
+        .await
+        .context("expected updated query result")??;
+    let updated_value: u64 = serde_json::from_value(updated["data"]["value"].clone())?;
+    assert_eq!(updated_value, original_counter_value + increment);
 
     node_service.ensure_is_running()?;
 

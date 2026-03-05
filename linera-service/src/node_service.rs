@@ -16,7 +16,7 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
-use futures::{lock::Mutex, Future, FutureExt as _, TryStreamExt as _};
+use futures::{lock::Mutex, Future, FutureExt as _, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{
@@ -76,6 +76,8 @@ pub struct QueryRoot<C> {
 /// Our root GraphQL subscription type.
 pub struct SubscriptionRoot<C> {
     context: Arc<Mutex<C>>,
+    query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
+    cancellation_token: CancellationToken,
 }
 
 /// Our root GraphQL mutation type.
@@ -130,6 +132,37 @@ where
             .make_chain_client(chain_id)
             .await?;
         Ok(client.subscribe()?)
+    }
+
+    /// Subscribes to the result of a pre-registered GraphQL query.
+    /// Re-executes the query on every new block and pushes changed results.
+    async fn query_result(
+        &self,
+        #[graphql(desc = "Name of the registered subscription query.")] name: String,
+        #[graphql(desc = "The chain to watch.")] chain_id: ChainId,
+        #[graphql(desc = "The application to query.")] application_id: ApplicationId,
+    ) -> Result<impl Stream<Item = serde_json::Value>, Error> {
+        let manager = self
+            .query_subscriptions
+            .as_ref()
+            .ok_or_else(|| Error::new("no subscription queries registered"))?;
+
+        let key = crate::query_subscription::SubscriptionKey {
+            name,
+            chain_id,
+            application_id,
+        };
+
+        let receiver = manager
+            .subscribe(
+                key,
+                Arc::clone(&self.context),
+                self.cancellation_token.clone(),
+            )
+            .map_err(|e| Error::new(e.to_string()))?;
+
+        Ok(tokio_stream::wrappers::BroadcastStream::new(receiver)
+            .filter_map(|result| async move { result.ok() }))
     }
 }
 
@@ -1168,6 +1201,8 @@ where
     read_only: bool,
     /// Optional LRU cache for application query responses. `None` when caching is disabled.
     query_cache: Option<Arc<QueryResponseCache>>,
+    query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
+    cancellation_token: CancellationToken,
 }
 
 impl<C> Clone for NodeService<C>
@@ -1184,6 +1219,8 @@ where
             context: Arc::clone(&self.context),
             read_only: self.read_only,
             query_cache: self.query_cache.clone(),
+            query_subscriptions: self.query_subscriptions.clone(),
+            cancellation_token: self.cancellation_token.clone(),
         }
     }
 }
@@ -1197,6 +1234,7 @@ where
     /// `query_cache_size` controls the per-chain LRU cache capacity for application query
     /// responses. Pass `None` to disable the cache (the default). Enable with
     /// `--query-cache-size <N>`. Incompatible with `--long-lived-services`.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,
@@ -1205,6 +1243,8 @@ where
         context: Arc<Mutex<C>>,
         read_only: bool,
         query_cache_size: Option<usize>,
+        query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
+        cancellation_token: CancellationToken,
     ) -> Self {
         let query_cache = query_cache_size.map(|size| Arc::new(QueryResponseCache::new(size)));
         Self {
@@ -1216,6 +1256,8 @@ where
             context,
             read_only,
             query_cache,
+            query_subscriptions,
+            cancellation_token,
         }
     }
 
@@ -1232,6 +1274,8 @@ where
         };
         let subscription = SubscriptionRoot {
             context: Arc::clone(&self.context),
+            query_subscriptions: self.query_subscriptions.clone(),
+            cancellation_token: self.cancellation_token.clone(),
         };
 
         if self.read_only {

@@ -764,6 +764,13 @@ pub enum ClientCommand {
         /// (application_id, request_bytes). Incompatible with `--long-lived-services`.
         #[arg(long, env = "LINERA_QUERY_CACHE_SIZE")]
         query_cache_size: Option<usize>,
+
+        /// Allow a named GraphQL subscription query.
+        /// The operation name is extracted from the query string.
+        /// Repeatable.
+        /// Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
+        #[arg(long = "allow-subscription")]
+        allowed_subscriptions: Vec<String>,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.
