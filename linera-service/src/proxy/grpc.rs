@@ -78,7 +78,7 @@ mod metrics {
         register_histogram_vec(
             "proxy_request_latency",
             "Proxy request latency",
-            &[TRAFFIC_TYPE_LABEL],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
             linear_bucket_interval(1.0, 50.0, 2000.0),
         )
     });
@@ -86,7 +86,7 @@ mod metrics {
         register_int_counter_vec(
             "proxy_request_count",
             "Proxy request count",
-            &[TRAFFIC_TYPE_LABEL],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
         )
     });
 
@@ -141,14 +141,20 @@ where
         #[cfg(with_metrics)]
         let start = linera_base::time::Instant::now();
 
+        // Extract the gRPC method name from the URI path. gRPC paths have the form
+        // `/{package}.{Service}/{Method}` — the first segment always contains a dot.
+        // Non-gRPC requests (bot probes, health checks, etc.) are bucketed as
+        // "non_grpc" to prevent unbounded label cardinality.
         #[cfg(with_metrics)]
-        let method_name = request
-            .uri()
-            .path()
-            .rsplit('/')
-            .next()
-            .unwrap_or("unknown")
-            .to_owned();
+        let method_name = {
+            let path = request.uri().path();
+            let parts: Vec<&str> = path.splitn(3, '/').collect();
+            if parts.len() == 3 && parts[1].contains('.') {
+                parts[2].to_owned()
+            } else {
+                "non_grpc".to_owned()
+            }
+        };
 
         #[cfg(all(with_metrics, feature = "opentelemetry"))]
         let traffic_type: &'static str = get_traffic_type_from_request(&request);
@@ -161,10 +167,10 @@ where
             #[cfg(with_metrics)]
             {
                 metrics::PROXY_REQUEST_LATENCY
-                    .with_label_values(&[traffic_type])
+                    .with_label_values(&[&method_name, traffic_type])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
                 metrics::PROXY_REQUEST_COUNT
-                    .with_label_values(&[traffic_type])
+                    .with_label_values(&[&method_name, traffic_type])
                     .inc();
 
                 let is_error = !response.status().is_success()
