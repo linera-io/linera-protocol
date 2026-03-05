@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   indexer-check:
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 10
 
     steps:
@@ -51,7 +51,7 @@ jobs:
 
   indexer-integration-tests:
     if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 20
 
     steps:
