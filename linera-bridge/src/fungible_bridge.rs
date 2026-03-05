@@ -9,7 +9,7 @@ mod tests {
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
         data_types::{Amount, BlockHeight},
-        identifiers::{AccountOwner, ChainId},
+        identifiers::AccountOwner,
     };
     use linera_chain::data_types::Transaction;
     use revm::{
@@ -63,7 +63,6 @@ mod tests {
         app_id: CryptoHash,
         bridge: Address,
         token: Address,
-        origin: ChainId,
         next_height: u64,
     }
 
@@ -98,7 +97,6 @@ mod tests {
             let app_id = CryptoHash::new(&TestString::new("fungible_app"));
             let bridge =
                 deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, 1, app_id, token);
-            let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
 
             // Fund the bridge with the full token supply
             call_contract(
@@ -120,24 +118,17 @@ mod tests {
                 app_id,
                 bridge,
                 token,
-                origin,
                 next_height: 1,
             }
         }
 
-        /// Submits a block containing a single credit message, returns logs and gas used.
-        fn submit_credit(
+        /// Submits a block containing a single burn operation, returns logs and gas used.
+        fn submit_burn(
             &mut self,
-            target: AccountOwner,
+            owner: AccountOwner,
             amount: Amount,
-            source: AccountOwner,
         ) -> (Vec<revm::primitives::Log>, u64) {
-            let msg = wrapped_fungible::Message::Credit {
-                target,
-                amount,
-                source,
-            };
-            let txn = fungible_message_transaction(self.origin, self.app_id, &msg);
+            let txn = fungible_burn_transaction(self.app_id, owner, amount);
             self.submit_block(vec![txn])
         }
 
@@ -182,14 +173,9 @@ mod tests {
     use crate::test_helpers::create_certificate_with_transactions;
 
     const TEST_TARGET: [u8; 20] = [0xAB; 20];
-    const TEST_SOURCE_NAME: &str = "source_owner";
 
     fn test_target() -> AccountOwner {
         AccountOwner::Address20(TEST_TARGET)
-    }
-
-    fn test_source() -> AccountOwner {
-        AccountOwner::Address32(CryptoHash::new(&TestString::new(TEST_SOURCE_NAME)))
     }
 
     fn test_target_evm_address() -> Address {
@@ -197,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fungible_bridge_transfers_on_credit() {
+    fn test_fungible_bridge_releases_on_burn() {
         let mut t = TestBridge::new();
 
         assert_eq!(
@@ -208,11 +194,7 @@ mod tests {
 
         let transfer_amount = 100_000_000_000_000_000_000u128;
 
-        t.submit_credit(
-            test_target(),
-            Amount::from_attos(transfer_amount),
-            test_source(),
-        );
+        t.submit_burn(test_target(), Amount::from_attos(transfer_amount));
 
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
@@ -222,27 +204,26 @@ mod tests {
     }
 
     #[test]
-    fn test_fungible_bridge_accumulates_transfers() {
+    fn test_fungible_bridge_accumulates_burns() {
         let mut t = TestBridge::new();
         let target = test_target();
-        let source = test_source();
 
         let transfer_amount = 100_000_000_000_000_000_000u128;
 
-        t.submit_credit(target, Amount::from_attos(transfer_amount), source);
+        t.submit_burn(target, Amount::from_attos(transfer_amount));
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
             alloy_primitives::U256::from(transfer_amount),
-            "balance should be 100 tokens after first credit"
+            "balance should be 100 tokens after first burn"
         );
 
         let second_transfer = 50_000_000_000_000_000_000u128;
 
-        t.submit_credit(target, Amount::from_attos(second_transfer), source);
+        t.submit_burn(target, Amount::from_attos(second_transfer));
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
             alloy_primitives::U256::from(transfer_amount + second_transfer),
-            "balance should be 150 tokens after two credits"
+            "balance should be 150 tokens after two burns"
         );
 
         // Bridge balance should have decreased accordingly
@@ -258,7 +239,7 @@ mod tests {
         let mut t = TestBridge::new();
         let target = AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner")));
 
-        t.submit_credit(target, Amount::from_tokens(100), test_source());
+        t.submit_burn(target, Amount::from_tokens(100));
 
         // Bridge balance should be unchanged
         assert_eq!(
@@ -273,12 +254,7 @@ mod tests {
         let mut t = TestBridge::new();
         let other_app_id = CryptoHash::new(&TestString::new("other_app"));
 
-        let msg = wrapped_fungible::Message::Credit {
-            target: test_target(),
-            amount: Amount::from_tokens(50),
-            source: test_source(),
-        };
-        let txn = fungible_message_transaction(t.origin, other_app_id, &msg);
+        let txn = fungible_burn_transaction(other_app_id, test_target(), Amount::from_tokens(50));
         t.submit_block(vec![txn]);
 
         assert_eq!(
@@ -292,9 +268,9 @@ mod tests {
     fn test_fungible_bridge_gas_measurement() {
         let mut t = TestBridge::new();
 
-        let (_, gas_used) = t.submit_credit(test_target(), Amount::from_tokens(100), test_source());
+        let (_, gas_used) = t.submit_burn(test_target(), Amount::from_tokens(100));
 
-        println!("Gas used for fungible bridge addBlock with Credit message: {gas_used}");
+        println!("Gas used for fungible bridge addBlock with Burn operation: {gas_used}");
     }
 
     // --- EVM→Linera deposit tests ---
@@ -336,7 +312,6 @@ mod tests {
         let app_id = CryptoHash::new(&TestString::new("fungible_app"));
         let bridge =
             deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, 1, app_id, token);
-        let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
 
         // Give depositor tokens (instead of funding the bridge)
         call_contract(
@@ -358,7 +333,6 @@ mod tests {
             app_id,
             bridge,
             token,
-            origin,
             next_height: 1,
         }
     }

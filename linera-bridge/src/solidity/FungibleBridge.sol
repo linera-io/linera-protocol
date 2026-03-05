@@ -12,7 +12,7 @@ interface IERC20 {
 }
 
 /// Bridges ERC20 tokens between Linera and EVM.
-/// Linera→EVM: processes Credit messages from Linera blocks and releases ERC-20 tokens.
+/// Linera→EVM: processes Burn operations from Linera blocks and releases ERC-20 tokens.
 /// EVM→Linera: accepts deposits via deposit() and emits DepositInitiated events.
 contract FungibleBridge is Microchain {
     /// Emitted when a user deposits ERC-20 tokens for bridging to Linera.
@@ -78,33 +78,29 @@ contract FungibleBridge is Microchain {
         );
     }
 
-    /// Processes a Linera block and releases ERC-20 tokens for any Credit
-    /// messages targeting an Ethereum address (Address20).
+    /// Processes a Linera block and releases ERC-20 tokens for any Burn
+    /// operations targeting an Ethereum address (Address20).
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
         for (uint i = 0; i < blockValue.body.transactions.length; i++) {
             BridgeTypes.Transaction memory txn = blockValue.body.transactions[i];
-            // choice==0 is ReceiveMessages
-            if (txn.choice != 0) continue;
+            // choice==1 is ExecuteOperation
+            if (txn.choice != 1) continue;
 
-            BridgeTypes.IncomingBundle memory bundle = txn.receive_messages;
-            for (uint j = 0; j < bundle.bundle.messages.length; j++) {
-                BridgeTypes.PostedMessage memory posted = bundle.bundle.messages[j];
-                // choice==1 is User
-                if (posted.message.choice != 1) continue;
-                if (posted.message.user.application_id.application_description_hash.value != applicationId) continue;
+            BridgeTypes.Operation memory op = txn.execute_operation;
+            // choice==1 is User
+            if (op.choice != 1) continue;
+            if (op.user.application_id.application_description_hash.value != applicationId) continue;
 
-                WrappedFungibleTypes.Message memory msg_ =
-                    WrappedFungibleTypes.bcs_deserialize_Message(posted.message.user.bytes_);
+            WrappedFungibleTypes.WrappedFungibleOperation memory userOp =
+                WrappedFungibleTypes.bcs_deserialize_WrappedFungibleOperation(op.user.bytes_);
 
-                // choice==0 is Credit
-                if (msg_.choice != 0) continue;
+            // choice==7 is Burn
+            if (userOp.choice != 7) continue;
+            // choice==2 is Address20 (Ethereum address)
+            if (userOp.burn.owner.choice != 2) continue;
 
-                WrappedFungibleTypes.Message_Credit memory credit = msg_.credit;
-                // choice==2 is Address20 (Ethereum address)
-                if (credit.target.choice != 2) continue;
-                address target = address(credit.target.address20);
-                require(token.transfer(target, credit.amount.value), "token transfer failed");
-            }
+            address target = address(userOp.burn.owner.address20);
+            require(token.transfer(target, userOp.burn.amount.value), "token transfer failed");
         }
     }
 

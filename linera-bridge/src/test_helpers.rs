@@ -245,6 +245,20 @@ pub fn fungible_message_transaction(
     })
 }
 
+/// Creates a Transaction::ExecuteOperation containing a WrappedFungibleOperation::Burn
+/// as a user operation.
+pub fn fungible_burn_transaction(
+    application_id: CryptoHash,
+    owner: linera_base::identifiers::AccountOwner,
+    amount: Amount,
+) -> Transaction {
+    let op = wrapped_fungible::WrappedFungibleOperation::Burn { owner, amount };
+    Transaction::ExecuteOperation(Operation::User {
+        application_id: ApplicationId::new(application_id),
+        bytes: bcs::to_bytes(&op).unwrap(),
+    })
+}
+
 pub fn deploy_light_client(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
