@@ -57,7 +57,6 @@ contract FungibleBridge is Microchain {
         uint256 amount
     ) external {
         require(amount > 0, "amount=0");
-        require(target_chain_id == chainId, "target chain mismatch");
         require(target_application_id == applicationId, "target application mismatch");
 
         uint256 before = token.balanceOf(address(this));
