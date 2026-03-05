@@ -54,7 +54,7 @@ metrics = [
 ]
 jemalloc = [
     "tikv-jemallocator",
-    "tikv-jemallocator/profiling",
+    "tikv-jemallocator/profiling_libunwind",
     "linera-metrics/jemalloc",
 ]
 opentelemetry = ["linera-base/opentelemetry", "linera-rpc/opentelemetry"]
