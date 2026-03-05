@@ -73,6 +73,8 @@ impl ServiceRuntimeActor {
             },
             task: thread_pool
                 .run((), move |()| async move {
+                    // The dummy context is overwritten by `prepare_for_query`
+                    // before the first actual query is executed.
                     ServiceSyncRuntime::new(
                         execution_state_sender,
                         QueryContext {
