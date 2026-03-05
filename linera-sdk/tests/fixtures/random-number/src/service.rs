@@ -5,11 +5,7 @@
 
 mod state;
 
-use linera_sdk::{
-    linera_base_types::WithServiceAbi,
-    views::View,
-    Service, ServiceRuntime,
-};
+use linera_sdk::{linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
 use random_number::{Query, QueryResponse, RandomNumberAbi};
 
 use self::state::RandomNumberState;

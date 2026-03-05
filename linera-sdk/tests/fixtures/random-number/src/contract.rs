@@ -44,13 +44,19 @@ impl Contract for RandomNumberContract {
     async fn execute_operation(&mut self, _operation: ()) {
         let seed1 = self.runtime.random_number();
         let seed2 = self.runtime.random_number();
-        assert_ne!(seed1, seed2, "Two consecutive random seeds must be distinct");
+        assert_ne!(
+            seed1, seed2,
+            "Two consecutive random seeds must be distinct"
+        );
 
         let mut rng1 = StdRng::seed_from_u64(seed1);
         let mut rng2 = StdRng::seed_from_u64(seed2);
         let val1: u64 = rng1.gen();
         let val2: u64 = rng2.gen();
-        assert_ne!(val1, val2, "Random values from differently seeded RNGs must be distinct");
+        assert_ne!(
+            val1, val2,
+            "Random values from differently seeded RNGs must be distinct"
+        );
 
         self.state.seed1.set(seed1);
         self.state.seed2.set(seed2);
