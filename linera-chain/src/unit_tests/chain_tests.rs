@@ -30,9 +30,11 @@ use linera_execution::{
     SystemOperation, TestExecutionRuntimeContext, FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE,
 };
 use linera_views::{
-    context::{Context as _, MemoryContext, ViewContext},
+    context::{Context, MemoryContext, ViewContext},
+    map_view::MapView,
     memory::MemoryStore,
-    views::View,
+    register_view::RegisterView,
+    views::{RootView, View},
 };
 use test_case::test_case;
 
@@ -934,4 +936,63 @@ async fn prepare_test_with_dummy_mock_application(
     });
 
     Ok((application, application_id, chain, block, time))
+}
+
+/// View struct without a trailing field, simulating the `ChainStateView` layout
+/// on `testnet_conway` (18 fields, positions 0–17).
+#[derive(RootView)]
+struct OldView<C>
+where
+    C: Clone + Context + 'static,
+{
+    pub field_a: RegisterView<C, u32>,
+    pub field_b: MapView<C, String, String>,
+}
+
+/// View struct with an additional `MapView` appended at the end, simulating the
+/// `ChainStateView` layout on `conway-sparse-events` where `next_expected_events`
+/// was appended at position 18.
+#[derive(RootView)]
+struct NewView<C>
+where
+    C: Clone + Context + 'static,
+{
+    pub field_a: RegisterView<C, u32>,
+    pub field_b: MapView<C, String, String>,
+    pub field_c: MapView<C, String, u32>,
+}
+
+/// Verifies that data saved with an old view layout (N fields) can be loaded
+/// with a new layout that has a `MapView` appended at the end. This is the
+/// mechanism that keeps `ChainStateView` backward-compatible after
+/// `next_expected_events` was appended as field 18.
+#[tokio::test]
+async fn test_backward_compatible_view_field_append() {
+    let store = MemoryStore::new_for_testing();
+
+    // Save with the old layout.
+    {
+        let context = ViewContext::new_unchecked(store.clone(), Vec::new(), ());
+        let mut old_view = OldView::load(context).await.unwrap();
+        old_view.field_a.set(42);
+        old_view
+            .field_b
+            .insert(&"hello".to_string(), "world".to_string())
+            .unwrap();
+        old_view.save().await.unwrap();
+    }
+
+    // Load with the new layout that has an appended MapView field.
+    {
+        let context = ViewContext::new_unchecked(store, Vec::new(), ());
+        let new_view = NewView::load(context).await.unwrap();
+        // Existing fields retain their values.
+        assert_eq!(*new_view.field_a.get(), 42);
+        assert_eq!(
+            new_view.field_b.get(&"hello".to_string()).await.unwrap(),
+            Some("world".to_string()),
+        );
+        // The appended field is empty.
+        assert_eq!(new_view.field_c.count().await.unwrap(), 0);
+    }
 }

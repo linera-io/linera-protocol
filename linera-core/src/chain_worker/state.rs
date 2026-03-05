@@ -767,6 +767,37 @@ where
         Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
     }
 
+    /// Initializes `next_expected_events` from `stream_event_counts` (which reflects
+    /// all executed blocks), then replays any preprocessed-but-not-yet-executed blocks to
+    /// advance the indices further.
+    ///
+    /// This handles the migration case where the `next_expected_events` field was added to
+    /// `ChainStateView` after blocks had already been processed.
+    async fn initialize_next_expected_events(&mut self) -> Result<(), WorkerError> {
+        if self.chain.next_expected_events.count().await? > 0 {
+            return Ok(()); // Already initialized.
+        }
+        for (stream_id, index) in self
+            .chain
+            .execution_state
+            .stream_event_counts
+            .index_values()
+            .await?
+        {
+            self.chain.next_expected_events.insert(&stream_id, index)?;
+        }
+        let chain_id = self.chain_id();
+        for (height, hash) in self.chain.preprocessed_blocks.index_values().await? {
+            let block = self
+                .storage
+                .read_confirmed_block(hash)
+                .await?
+                .ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound { height, chain_id })?;
+            self.chain.preprocess_block(&block).await?;
+        }
+        Ok(())
+    }
+
     /// Processes a confirmed block (aka a commit).
     #[instrument(skip_all, fields(
         chain_id = %certificate.block().header.chain_id,
@@ -863,12 +894,26 @@ where
         // If this block is higher than the next expected block in this chain, we're going
         // to have a gap: do not execute this block, only update the outboxes and return.
         if tip.next_block_height < height {
-            // Update the outboxes.
-            self.chain.preprocess_block(certificate.value()).await?;
+            // Initialize next_expected_events for any streams that don't have entries yet.
+            if block.body.events.iter().any(|events| !events.is_empty()) {
+                self.initialize_next_expected_events().await?;
+            }
+            // Update the outboxes and track emitted events.
+            let event_streams = self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
             self.save().await?;
-            let actions = self.create_network_actions(None).await?;
+            let mut actions = self.create_network_actions(None).await?;
             trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
+            if !event_streams.is_empty() {
+                actions.notifications.push(Notification {
+                    chain_id,
+                    reason: Reason::NewEvents {
+                        height,
+                        hash: certificate.hash(),
+                        event_streams,
+                    },
+                });
+            }
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
             return Ok((
@@ -896,6 +941,11 @@ where
             .iter()
             .filter_map(|blob_id| blobs.remove(blob_id))
             .collect::<Vec<_>>();
+
+        if block.body.events.iter().any(|events| !events.is_empty()) {
+            // Initialize next_expected_events for any streams that don't have entries yet.
+            self.initialize_next_expected_events().await?;
+        }
 
         // Execute the block and update inboxes.
         let local_time = self.storage.clock().current_time();
@@ -950,29 +1000,30 @@ where
         );
 
         // Update the rest of the chain state.
-        chain
+        let event_streams = chain
             .apply_confirmed_block(certificate.value(), local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         let hash = certificate.hash();
-        let event_streams = certificate
-            .value()
-            .block()
-            .body
-            .events
-            .iter()
-            .flatten()
-            .map(|event| event.stream_id.clone())
-            .collect();
         actions.notifications.push(Notification {
             chain_id,
             reason: Reason::NewBlock {
                 height,
                 hash,
-                event_streams,
+                event_streams: event_streams.clone(),
             },
         });
+        if !event_streams.is_empty() {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewEvents {
+                    height,
+                    hash,
+                    event_streams,
+                },
+            });
+        }
         // Persist chain.
         self.save().await?;
 
