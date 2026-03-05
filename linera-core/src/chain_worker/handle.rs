@@ -176,8 +176,7 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
         // clear the endpoint and await the runtime task.
         let task = {
             let mut guard = RollbackGuard(state.clone().write_owned().await);
-            guard.clear_service_runtime_endpoint();
-            guard.service_runtime_task.take()
+            guard.clear_service_runtime()
         };
         if let Some(task) = task {
             if let Err(err) = task.await {

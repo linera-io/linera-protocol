@@ -83,7 +83,7 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
-    pub(crate) service_runtime_task: Option<web_thread_pool::Task<()>>,
+    service_runtime_task: Option<web_thread_pool::Task<()>>,
     /// Timestamp of the last access, in microseconds since the Unix epoch.
     /// Used by the keep-alive task to determine when the worker has been idle.
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
@@ -172,8 +172,10 @@ where
     }
 
     /// Drops the service runtime endpoint, signaling the runtime task to stop.
-    pub(crate) fn clear_service_runtime_endpoint(&mut self) {
+    /// Returns the runtime task so the caller can await it outside the lock.
+    pub(crate) fn clear_service_runtime(&mut self) -> Option<web_thread_pool::Task<()>> {
         self.service_runtime_endpoint.take();
+        self.service_runtime_task.take()
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
