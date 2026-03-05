@@ -150,7 +150,15 @@ impl EvmBridgeContract {
         // 6. Convert deposit fields to Linera types and call Mint
         let target_chain_id =
             ChainId::try_from(deposit.target_chain_id.as_slice()).expect("invalid target chain ID");
-        let target_owner = AccountOwner::Address32(deposit.target_account_owner.0.into());
+        // Detect Address20 vs Address32: if first 12 bytes are zero, treat as Address20.
+        let owner_bytes = deposit.target_account_owner.0;
+        let target_owner = if owner_bytes[..12].iter().all(|&b| b == 0) {
+            let mut addr20 = [0u8; 20];
+            addr20.copy_from_slice(&owner_bytes[12..]);
+            AccountOwner::Address20(addr20.into())
+        } else {
+            AccountOwner::Address32(owner_bytes.into())
+        };
         let amount_u128: u128 = deposit
             .amount
             .try_into()
