@@ -141,14 +141,20 @@ where
         #[cfg(with_metrics)]
         let start = linera_base::time::Instant::now();
 
+        // Extract the gRPC method name from the URI path. gRPC paths have the form
+        // `/{package}.{Service}/{Method}` — the first segment always contains a dot.
+        // Non-gRPC requests (bot probes, health checks, etc.) are bucketed as
+        // "non_grpc" to prevent unbounded label cardinality.
         #[cfg(with_metrics)]
-        let method_name = request
-            .uri()
-            .path()
-            .rsplit('/')
-            .next()
-            .unwrap_or("unknown")
-            .to_owned();
+        let method_name = {
+            let path = request.uri().path();
+            let parts: Vec<&str> = path.splitn(3, '/').collect();
+            if parts.len() == 3 && parts[1].contains('.') {
+                parts[2].to_owned()
+            } else {
+                "non_grpc".to_owned()
+            }
+        };
 
         #[cfg(all(with_metrics, feature = "opentelemetry"))]
         let traffic_type: &'static str = get_traffic_type_from_request(&request);
@@ -167,12 +173,22 @@ where
                     .with_label_values(&[traffic_type])
                     .inc();
 
-                let is_error = !response.status().is_success()
-                    || response
-                        .headers()
-                        .get("grpc-status")
-                        .and_then(|v| v.to_str().ok())
-                        .is_some_and(|s| s != "0");
+                let grpc_status = response
+                    .headers()
+                    .get("grpc-status")
+                    .and_then(|v| v.to_str().ok());
+
+                // If tonic's router didn't recognize the method, it returns
+                // grpc-status 12 (UNIMPLEMENTED). Override the label to "unknown"
+                // so that crafted requests can't create unbounded cardinality.
+                let method_name = if grpc_status == Some("12") {
+                    "unknown".into()
+                } else {
+                    method_name
+                };
+
+                let is_error =
+                    !response.status().is_success() || grpc_status.is_some_and(|s| s != "0");
 
                 if is_error {
                     metrics::PROXY_REQUEST_ERROR
