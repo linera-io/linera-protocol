@@ -12,6 +12,10 @@ pub mod proof;
 #[cfg(not(feature = "chain"))]
 pub mod evm;
 
+/// Relay server: HTTP proof endpoint + Linera chain inbox processing + EVM block forwarding.
+#[cfg(feature = "relay")]
+pub mod relay;
+
 // -- Test-only modules --
 
 /// Tests for the FungibleBridge EVM contract.
