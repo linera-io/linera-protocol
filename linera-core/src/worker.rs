@@ -42,16 +42,19 @@ use tracing::{instrument, trace, warn};
 /// A read guard providing access to a chain's [`ChainStateView`].
 ///
 /// Holds a read lock on the chain handle, preventing writes for its lifetime.
+/// Also holds a strong reference to the [`ChainHandle`] to prevent the
+/// keep-alive task from shutting it down while the view is borrowed.
 /// Dereferences to `ChainStateView`.
-pub struct ChainStateViewReadGuard<S: Storage>(
-    OwnedRwLockReadGuard<ChainWorkerState<S>, ChainStateView<S::Context>>,
-);
+pub struct ChainStateViewReadGuard<S: Storage> {
+    _handle: Arc<ChainHandle<S>>,
+    guard: OwnedRwLockReadGuard<ChainWorkerState<S>, ChainStateView<S::Context>>,
+}
 
 impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
     type Target = ChainStateView<S::Context>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.guard
     }
 }
 
@@ -994,10 +997,10 @@ where
     ) -> Result<ChainStateViewReadGuard<StorageClient>, WorkerError> {
         let handle = self.get_or_create_chain_handle(chain_id).await?;
         let guard = handle.read().await;
-        Ok(ChainStateViewReadGuard(OwnedRwLockReadGuard::map(
-            guard,
-            |state| state.chain(),
-        )))
+        Ok(ChainStateViewReadGuard {
+            _handle: handle,
+            guard: OwnedRwLockReadGuard::map(guard, |state| state.chain()),
+        })
     }
 
     #[instrument(skip_all, fields(
