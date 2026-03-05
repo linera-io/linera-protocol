@@ -12,7 +12,7 @@ env:
 
 jobs:
   benchmark:
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
     steps:

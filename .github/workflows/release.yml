@@ -8,7 +8,7 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     steps:
       - uses: actions/checkout@v4
 
