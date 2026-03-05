@@ -900,7 +900,7 @@ where
         chain_id: ChainId,
         query: Query,
         block_hash: Option<CryptoHash>,
-    ) -> Result<QueryOutcome, WorkerError> {
+    ) -> Result<(QueryOutcome, BlockHeight), WorkerError> {
         chain_write!(self, chain_id, |guard| {
             guard.query_application(query, block_hash).await
         })

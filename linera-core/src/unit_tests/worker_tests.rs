@@ -2297,7 +2297,8 @@ where
     assert_eq!(
         env.executing_worker()
             .query_application(chain_1, Query::System(SystemQuery), None)
-            .await?,
+            .await?
+            .0,
         QueryOutcome {
             response: QueryResponse::System(SystemResponse {
                 chain_id: chain_1,
@@ -2309,7 +2310,8 @@ where
     assert_eq!(
         env.executing_worker()
             .query_application(chain_2, Query::System(SystemQuery), None)
-            .await?,
+            .await?
+            .0,
         QueryOutcome {
             response: QueryResponse::System(SystemResponse {
                 chain_id: chain_2,
@@ -2343,7 +2345,8 @@ where
     assert_eq!(
         env.executing_worker()
             .query_application(chain_1, Query::System(SystemQuery), None)
-            .await?,
+            .await?
+            .0,
         QueryOutcome {
             response: QueryResponse::System(SystemResponse {
                 chain_id: chain_1,
@@ -2382,7 +2385,8 @@ where
     assert_eq!(
         env.executing_worker()
             .query_application(chain_2, Query::System(SystemQuery), None)
-            .await?,
+            .await?
+            .0,
         QueryOutcome {
             response: QueryResponse::System(SystemResponse {
                 chain_id: chain_2,
@@ -4066,7 +4070,8 @@ where
         assert_eq!(
             env.executing_worker()
                 .query_application(chain_id, query.clone(), None)
-                .await?,
+                .await?
+                .0,
             QueryOutcome {
                 response: QueryResponse::User(vec![]),
                 operations: vec![],
@@ -4158,7 +4163,8 @@ where
         assert_eq!(
             env.executing_worker()
                 .query_application(chain_1, query.clone(), None)
-                .await?,
+                .await?
+                .0,
             QueryOutcome {
                 response: QueryResponse::User(vec![]),
                 operations: vec![],
@@ -4187,7 +4193,8 @@ where
         assert_eq!(
             env.executing_worker()
                 .query_application(chain_1, query.clone(), None)
-                .await?,
+                .await?
+                .0,
             QueryOutcome {
                 response: QueryResponse::User(vec![]),
                 operations: vec![],
@@ -4230,7 +4237,8 @@ where
         assert_eq!(
             env.executing_worker()
                 .query_application(chain_1, query.clone(), None)
-                .await?,
+                .await?
+                .0,
             QueryOutcome {
                 response: QueryResponse::User(vec![]),
                 operations: vec![],

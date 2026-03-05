@@ -1415,7 +1415,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         query: Query,
         block_hash: Option<CryptoHash>,
-    ) -> Result<QueryOutcome, Error> {
+    ) -> Result<(QueryOutcome, BlockHeight), Error> {
         loop {
             let result = self
                 .client
@@ -1439,10 +1439,13 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         query: SystemQuery,
     ) -> Result<QueryOutcome<SystemResponse>, Error> {
-        let QueryOutcome {
-            response,
-            operations,
-        } = self.query_application(Query::System(query), None).await?;
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            _,
+        ) = self.query_application(Query::System(query), None).await?;
         match response {
             QueryResponse::System(response) => Ok(QueryOutcome {
                 response,
@@ -1461,10 +1464,13 @@ impl<Env: Environment> ChainClient<Env> {
         query: &A::Query,
     ) -> Result<QueryOutcome<A::QueryResponse>, Error> {
         let query = Query::user(application_id, query)?;
-        let QueryOutcome {
-            response,
-            operations,
-        } = self.query_application(query, None).await?;
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            _,
+        ) = self.query_application(query, None).await?;
         match response {
             QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;
