@@ -69,6 +69,7 @@ services:
       - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
       - "13001:13001"
       - "9090:9090"
+      - "${RELAY_PORT:-3001}:${RELAY_PORT:-3001}"
     command: >
       sh -c "mkdir -p ${LINERA_NET_PATH:-/tmp/wallet} &&
       ./linera net
@@ -184,8 +185,8 @@ services:
           --via-ir \
           --optimize \
           --optimizer-runs 1 \
-          --ignored-error-codes 6321 \
           --evm-version shanghai \
+          --ignored-error-codes 6321 \
           --out /tmp/forge-out \
           --cache-path /tmp/forge-cache \
           --rpc-url http://anvil:8545 \
@@ -264,6 +265,31 @@ services:
       start_period: 20s
     networks:
       - linera-network
+
+  # 6. Relay server - claims bridge chain, processes inbox, forwards blocks to EVM
+  #    Bridge address is resolved from /shared/bridge-address (written by setup script).
+  # Uses network_mode: service:linera-network so that localhost:13001 reaches the
+  # validator (whose address is hardcoded as "localhost" in the genesis config).
+  linera-relay:
+    image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
+    network_mode: "service:linera-network"
+    command:
+      - linera-bridge
+      - serve
+      - --rpc-url=http://anvil:8545
+      - --faucet-url=http://localhost:${FAUCET_PORT:-8080}
+      - --bridge-address-file=/shared/bridge-address
+      - --evm-private-key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+      - --port=${RELAY_PORT:-3001}
+    environment:
+      - RUST_LOG=linera=info,linera_bridge=debug
+    volumes:
+      - bridge-shared:/shared
+    depends_on:
+      linera-network:
+        condition: service_healthy
+      anvil:
+        condition: service_healthy
 
 volumes:
   scylla-data:
