@@ -78,7 +78,7 @@ mod metrics {
         register_histogram_vec(
             "proxy_request_latency",
             "Proxy request latency",
-            &[TRAFFIC_TYPE_LABEL],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
             linear_bucket_interval(1.0, 50.0, 2000.0),
         )
     });
@@ -86,7 +86,7 @@ mod metrics {
         register_int_counter_vec(
             "proxy_request_count",
             "Proxy request count",
-            &[TRAFFIC_TYPE_LABEL],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
         )
     });
 
@@ -167,10 +167,10 @@ where
             #[cfg(with_metrics)]
             {
                 metrics::PROXY_REQUEST_LATENCY
-                    .with_label_values(&[traffic_type])
+                    .with_label_values(&[&method_name, traffic_type])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
                 metrics::PROXY_REQUEST_COUNT
-                    .with_label_values(&[traffic_type])
+                    .with_label_values(&[&method_name, traffic_type])
                     .inc();
 
                 let grpc_status = response
