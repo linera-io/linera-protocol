@@ -75,41 +75,6 @@ use crate::{
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
-/// Acquires a read lock on a chain handle, executes `$body` with the guard named `$guard`,
-/// and returns the result.
-///
-/// The body is boxed to keep deeply nested future types off the stack. On non-web
-/// targets it is also wrapped in `SyncFuture` to satisfy `Sync` bounds from async
-/// trait signatures.
-macro_rules! chain_read {
-    ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let state = $self.get_or_create_chain_worker($chain_id).await?;
-        Box::pin(crate::worker::wrap_future(async move {
-            let $guard = crate::chain_worker::handle::read_lock(&state).await;
-            $body
-        }))
-        .await
-    }};
-}
-
-/// Acquires a write lock on a chain handle, executes `$body` with the guard named `$guard`,
-/// and returns the result. The [`RollbackGuard`] automatically rolls back uncommitted
-/// chain state changes when dropped, ensuring cancellation safety.
-///
-/// The body is boxed to keep deeply nested future types off the stack. On non-web
-/// targets it is also wrapped in `SyncFuture` to satisfy `Sync` bounds from async
-/// trait signatures.
-macro_rules! chain_write {
-    ($self:expr, $chain_id:expr, |$guard:ident| $body:expr) => {{
-        let state = $self.get_or_create_chain_worker($chain_id).await?;
-        Box::pin(crate::worker::wrap_future(async move {
-            let mut $guard = crate::chain_worker::handle::write_lock(&state).await;
-            $body
-        }))
-        .await
-    }};
-}
-
 /// Wraps a future in `SyncFuture` on non-web targets so that it satisfies `Sync` bounds.
 /// On web targets the future is returned as-is.
 #[cfg(not(web))]
@@ -736,6 +701,41 @@ where
         .await
     }
 
+    /// Acquires a read lock on the chain worker and executes the given closure.
+    ///
+    /// The future is boxed to keep deeply nested types off the stack. On non-web
+    /// targets it is also wrapped in `SyncFuture` to satisfy `Sync` bounds.
+    async fn chain_read<R, F, Fut>(&self, chain_id: ChainId, f: F) -> Result<R, WorkerError>
+    where
+        F: FnOnce(OwnedRwLockReadGuard<ChainWorkerState<StorageClient>>) -> Fut,
+        Fut: std::future::Future<Output = Result<R, WorkerError>>,
+    {
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        Box::pin(wrap_future(async move {
+            let guard = handle::read_lock(&state).await;
+            f(guard).await
+        }))
+        .await
+    }
+
+    /// Acquires a write lock on the chain worker and executes the given closure.
+    ///
+    /// The [`RollbackGuard`] automatically rolls back uncommitted chain state changes
+    /// when dropped, ensuring cancellation safety. The future is boxed to keep deeply
+    /// nested types off the stack.
+    async fn chain_write<R, F, Fut>(&self, chain_id: ChainId, f: F) -> Result<R, WorkerError>
+    where
+        F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut,
+        Fut: std::future::Future<Output = Result<R, WorkerError>>,
+    {
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        Box::pin(wrap_future(async move {
+            let guard = handle::write_lock(&state).await;
+            f(guard).await
+        }))
+        .await
+    }
+
     /// Gets or creates a chain worker for the given chain.
     ///
     /// Returns a type-erased future to keep `!Sync` intermediate types (e.g.
@@ -831,11 +831,12 @@ where
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         let chain_id = block.chain_id;
-        chain_write!(self, chain_id, |guard| {
+        self.chain_write(chain_id, |mut guard| async move {
             guard
                 .stage_block_execution(block, round, &published_blobs)
                 .await
         })
+        .await
     }
 
     /// Tries to execute a block proposal with a policy for handling bundle failures.
@@ -851,11 +852,12 @@ where
         policy: BundleExecutionPolicy,
     ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         let chain_id = block.chain_id;
-        chain_write!(self, chain_id, |guard| {
+        self.chain_write(chain_id, |mut guard| async move {
             guard
                 .stage_block_execution_with_policy(block, round, &published_blobs, policy)
                 .await
         })
+        .await
     }
 
     /// Executes a [`Query`] for an application's state on a specific chain.
@@ -869,9 +871,10 @@ where
         query: Query,
         block_hash: Option<CryptoHash>,
     ) -> Result<(QueryOutcome, BlockHeight), WorkerError> {
-        chain_write!(self, chain_id, |guard| {
+        self.chain_write(chain_id, |mut guard| async move {
             guard.query_application(query, block_hash).await
         })
+        .await
     }
 
     #[instrument(level = "trace", skip(self, chain_id, application_id), fields(
@@ -905,11 +908,12 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        chain_write!(self, chain_id, |guard| {
+        self.chain_write(chain_id, |mut guard| async move {
             guard
                 .process_confirmed_block(certificate, notify_when_messages_are_delivered)
                 .await
         })
+        .await
     }
 
     /// Processes a validated block issued from a multi-owner chain.
@@ -923,9 +927,10 @@ where
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        chain_write!(self, chain_id, |guard| {
+        self.chain_write(chain_id, |mut guard| async move {
             guard.process_validated_block(certificate).await
         })
+        .await
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
@@ -939,9 +944,10 @@ where
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let chain_id = certificate.value().chain_id();
-        chain_write!(self, chain_id, |guard| {
+        self.chain_write(chain_id, |mut guard| async move {
             guard.process_timeout(certificate).await
         })
+        .await
     }
 
     #[instrument(level = "trace", skip(self, origin, recipient, bundles), fields(
@@ -956,9 +962,10 @@ where
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
-        chain_write!(self, recipient, |guard| {
+        self.chain_write(recipient, |mut guard| async move {
             guard.process_cross_chain_update(origin, bundles).await
         })
+        .await
     }
 
     /// Returns a stored [`ConfirmedBlockCertificate`] for a chain's block.
@@ -1025,9 +1032,11 @@ where
             self.storage.clock().sleep_until(block_timestamp).await;
         }
 
-        let response = chain_write!(self, chain_id, |guard| {
-            guard.handle_block_proposal(proposal).await
-        })?;
+        let response = self
+            .chain_write(chain_id, |mut guard| async move {
+                guard.handle_block_proposal(proposal).await
+            })
+            .await?;
         #[cfg(with_metrics)]
         metrics::NUM_ROUNDS_IN_BLOCK_PROPOSAL
             .with_label_values(&[round.type_name()])
@@ -1146,9 +1155,11 @@ where
         #[cfg(with_metrics)]
         metrics::CHAIN_INFO_QUERIES.inc();
         let chain_id = query.chain_id;
-        let result = chain_write!(self, chain_id, |guard| {
-            guard.handle_chain_info_query(query).await
-        });
+        let result = self
+            .chain_write(chain_id, |mut guard| async move {
+                guard.handle_chain_info_query(query).await
+            })
+            .await;
         trace!("{} --> {:?}", self.nickname(), result);
         result
     }
@@ -1166,9 +1177,11 @@ where
             "{} <-- download_pending_blob({chain_id:8}, {blob_id:8})",
             self.nickname()
         );
-        let result = chain_read!(self, chain_id, |guard| {
-            guard.download_pending_blob(blob_id).await
-        });
+        let result = self
+            .chain_read(chain_id, |guard| async move {
+                guard.download_pending_blob(blob_id).await
+            })
+            .await;
         trace!(
             "{} --> {:?}",
             self.nickname(),
@@ -1191,9 +1204,11 @@ where
             "{} <-- handle_pending_blob({chain_id:8}, {blob_id:8})",
             self.nickname()
         );
-        let result = chain_write!(self, chain_id, |guard| {
-            guard.handle_pending_blob(blob).await
-        });
+        let result = self
+            .chain_write(chain_id, |mut guard| async move {
+                guard.handle_pending_blob(blob).await
+            })
+            .await;
         trace!(
             "{} --> {:?}",
             self.nickname(),
@@ -1243,11 +1258,12 @@ where
                 recipient,
                 latest_height,
             } => {
-                chain_write!(self, sender, |guard| {
+                self.chain_write(sender, |mut guard| async move {
                     guard
                         .confirm_updated_recipient(recipient, latest_height)
                         .await
-                })?;
+                })
+                .await?;
                 Ok(NetworkActions::default())
             }
         }
@@ -1264,11 +1280,12 @@ where
         chain_id: ChainId,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
-        chain_write!(self, chain_id, |guard| {
+        self.chain_write(chain_id, |mut guard| async move {
             guard
                 .update_received_certificate_trackers(new_trackers)
                 .await
         })
+        .await
     }
 
     /// Gets preprocessed block hashes in a given height range.
@@ -1284,9 +1301,10 @@ where
         start: BlockHeight,
         end: BlockHeight,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_preprocessed_block_hashes(start, end).await
         })
+        .await
     }
 
     /// Gets the next block height to receive from an inbox.
@@ -1300,9 +1318,10 @@ where
         chain_id: ChainId,
         origin: ChainId,
     ) -> Result<BlockHeight, WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_inbox_next_height(origin).await
         })
+        .await
     }
 
     /// Gets locking blobs for specific blob IDs.
@@ -1317,9 +1336,10 @@ where
         chain_id: ChainId,
         blob_ids: Vec<BlobId>,
     ) -> Result<Option<Vec<Blob>>, WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_locking_blobs(blob_ids).await
         })
+        .await
     }
 
     /// Gets block hashes for the given heights.
@@ -1328,9 +1348,10 @@ where
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_block_hashes(heights).await
         })
+        .await
     }
 
     /// Gets proposed blobs from the manager for specified blob IDs.
@@ -1339,9 +1360,10 @@ where
         chain_id: ChainId,
         blob_ids: Vec<BlobId>,
     ) -> Result<Vec<Blob>, WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_proposed_blobs(blob_ids).await
         })
+        .await
     }
 
     /// Gets event subscriptions from the chain.
@@ -1349,9 +1371,10 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<EventSubscriptionsResult, WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_event_subscriptions().await
         })
+        .await
     }
 
     /// Gets the next expected event index for a stream.
@@ -1360,9 +1383,10 @@ where
         chain_id: ChainId,
         stream_id: StreamId,
     ) -> Result<Option<u32>, WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_next_expected_event(stream_id).await
         })
+        .await
     }
 
     /// Gets received certificate trackers.
@@ -1370,9 +1394,10 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_received_certificate_trackers().await
         })
+        .await
     }
 
     /// Gets tip state and outbox info for next_outbox_heights calculation.
@@ -1381,9 +1406,10 @@ where
         chain_id: ChainId,
         receiver_id: ChainId,
     ) -> Result<(BlockHeight, Option<BlockHeight>), WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_tip_state_and_outbox_info(receiver_id).await
         })
+        .await
     }
 
     /// Gets the next height to preprocess.
@@ -1391,9 +1417,10 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<BlockHeight, WorkerError> {
-        chain_read!(self, chain_id, |guard| {
+        self.chain_read(chain_id, |guard| async move {
             guard.get_next_height_to_preprocess().await
         })
+        .await
     }
 }
 
