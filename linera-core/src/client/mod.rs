@@ -1229,7 +1229,7 @@ impl<Env: Environment> Client<Env> {
         let (max_epoch, committees) = self.admin_committees().await?;
 
         let mut certificates = BTreeMap::new();
-        let mut heights_to_fetch = BTreeSet::<_>::from([(hash, height)]);
+        let mut blocks_to_fetch = BTreeSet::<_>::from([(height, hash)]);
         let next_expected_events = subscribed_streams
             .iter()
             .zip(
@@ -1244,7 +1244,7 @@ impl<Env: Environment> Client<Env> {
             )
             .collect::<BTreeMap<_, _>>();
 
-        while let Some((current_hash, current_height)) = heights_to_fetch.pop_last() {
+        while let Some((current_height, current_hash)) = blocks_to_fetch.pop_last() {
             if current_height < local_next_block_height {
                 continue; // Already executed locally.
             }
@@ -1262,7 +1262,7 @@ impl<Env: Environment> Client<Env> {
                     .download_certificates(remote_node, sender_chain_id, current_height, 1)
                     .await?;
                 let Some(certificate) = downloaded.into_iter().next() else {
-                    break;
+                    continue;
                 };
 
                 Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
@@ -1288,7 +1288,7 @@ impl<Env: Environment> Client<Env> {
                         continue;
                     }
                     if !certificates.contains_key(prev_height) {
-                        heights_to_fetch.insert((*prev_hash, *prev_height));
+                        blocks_to_fetch.insert((*prev_height, *prev_hash));
                     }
                 }
             }
