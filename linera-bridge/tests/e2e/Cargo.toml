@@ -34,7 +34,6 @@ linera-core = { path = "../../../linera-core", default-features = false, feature
 ] }
 linera-execution = { path = "../../../linera-execution" }
 linera-faucet-client = { path = "../../../linera-faucet/client" }
-linera-sdk = { path = "../../../linera-sdk", default-features = false }
 wrapped-fungible = { path = "../../../examples/wrapped-fungible" }
 linera-storage = { path = "../../../linera-storage", features = ["wasmer"] }
 linera-views = { path = "../../../linera-views" }

@@ -3664,7 +3664,6 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
- "linera-sdk",
  "linera-storage",
  "linera-views",
  "rand 0.8.5",
