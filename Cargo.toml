@@ -250,7 +250,7 @@ test-log = { version = "0.2.15", default-features = false, features = [
 test-strategy = "0.3.1"
 thiserror = "1.0.65"
 thiserror-context = "0.1.1"
-tikv-jemallocator = "0.6.0"
+tikv-jemallocator = { git = "https://github.com/linera-io/jemallocator.git", rev = "f84df98b7ec552c31c26f334beabbdab4982d1cb" }
 tokio = "1.36.0"
 tokio-stream = "0.1.14"
 tokio-test = "0.4.3"
@@ -387,3 +387,7 @@ range_minus_one = "deny"
 range_plus_one = "deny"
 ref_option_ref = "deny"
 str_split_at_newline = "deny"
+
+[patch.crates-io]
+tikv-jemallocator = { git = "https://github.com/linera-io/jemallocator.git", rev = "f84df98b7ec552c31c26f334beabbdab4982d1cb" }
+tikv-jemalloc-sys = { git = "https://github.com/linera-io/jemallocator.git", rev = "f84df98b7ec552c31c26f334beabbdab4982d1cb" }

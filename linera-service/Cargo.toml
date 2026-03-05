@@ -55,6 +55,7 @@ metrics = [
 jemalloc = [
     "tikv-jemallocator",
     "tikv-jemallocator/profiling",
+    "tikv-jemallocator/profiling_libunwind",
     "linera-metrics/jemalloc",
 ]
 storage-service = ["linera-storage-service"]
