@@ -19,6 +19,7 @@ interface base-runtime-api {
     read-data-blob: func(hash: data-blob-hash) -> list<u8>;
     assert-data-blob-exists: func(hash: data-blob-hash);
     log: func(message: string, level: log-level);
+    random-number: func() -> u64;
     contains-key-new: func(key: list<u8>) -> u32;
     contains-key-wait: func(promise-id: u32) -> bool;
     contains-keys-new: func(keys: list<list<u8>>) -> u32;
