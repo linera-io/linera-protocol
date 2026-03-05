@@ -7,9 +7,9 @@
 //! - **HTTP**: `POST /deposit` — generates MPT deposit proofs and submits `ProcessDeposit`
 //!   operations on the bridge chain.
 //! - **Linera client**: claims a "bridge chain", listens for `NewIncomingBundle` notifications,
-//!   and processes the inbox so that cross-chain Credit messages are executed.
-//! - **EVM forwarder**: after processing inbox, BCS-serializes the resulting certificate and
-//!   calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
+//!   processes the inbox, and burns any Address20 credits so the EVM contract can release tokens.
+//! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
+//!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
 
 use std::{sync::Arc, time::Duration};
 
@@ -22,11 +22,13 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::po
 use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
+    data_types::Amount,
     identifiers::{AccountOwner, ApplicationId},
 };
+use linera_chain::data_types::Transaction;
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{environment::wallet::Memory, worker::Reason};
-use linera_execution::{Operation, WasmRuntime};
+use linera_execution::{Message, Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
@@ -177,6 +179,52 @@ async fn resolve_bridge_app_id(file_path: &str) -> Result<ApplicationId> {
     }
 }
 
+/// Poll a file for the wrapped-fungible ApplicationId (hex-encoded BCS).
+async fn resolve_fungible_app_id(file_path: &str) -> Result<ApplicationId> {
+    tracing::info!(file = file_path, "Polling for wrapped-fungible app ID...");
+    loop {
+        if let Ok(contents) = tokio::fs::read_to_string(file_path).await {
+            let id_str = contents.trim();
+            if !id_str.is_empty() {
+                let app_id: ApplicationId =
+                    id_str.parse().context("invalid ApplicationId in file")?;
+                tracing::info!(%app_id, "Read wrapped-fungible app ID from file");
+                return Ok(app_id);
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+}
+
+/// Extract (owner, amount) from a fungible Credit message if the target is Address20.
+///
+/// BCS layout: variant 0 (Credit) + target: AccountOwner + amount: Amount + source: AccountOwner
+fn try_parse_credit_to_address20(bytes: &[u8]) -> Option<(AccountOwner, Amount)> {
+    // Variant 0 = Credit
+    if bytes.first() != Some(&0) {
+        return None;
+    }
+    #[derive(serde::Deserialize)]
+    struct Credit {
+        target: AccountOwner,
+        amount: Amount,
+        _source: AccountOwner,
+    }
+    let credit: Credit = bcs::from_bytes(&bytes[1..]).ok()?;
+    if !matches!(credit.target, AccountOwner::Address20(_)) {
+        return None;
+    }
+    Some((credit.target, credit.amount))
+}
+
+/// BCS-serialize a WrappedFungibleOperation::Burn (variant index 7).
+fn serialize_burn_operation(owner: &AccountOwner, amount: &Amount) -> Vec<u8> {
+    let mut buf = vec![7u8];
+    buf.extend(bcs::to_bytes(owner).unwrap());
+    buf.extend(bcs::to_bytes(amount).unwrap());
+    buf
+}
+
 // ── EVM forwarding helper ──
 
 /// BCS-serialize and forward a certified block to FungibleBridge on EVM.
@@ -221,6 +269,7 @@ pub async fn run(
     bridge_address: Option<&str>,
     bridge_address_file: &str,
     bridge_app_id_file: &str,
+    fungible_app_id_file: &str,
     evm_private_key: &str,
     port: u16,
 ) -> Result<()> {
@@ -293,8 +342,9 @@ pub async fn run(
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    // ── 4. Resolve bridge app ID ──
+    // ── 4. Resolve app IDs ──
     let bridge_app_id = resolve_bridge_app_id(bridge_app_id_file).await?;
+    let fungible_app_id = resolve_fungible_app_id(fungible_app_id_file).await?;
 
     // ── 5. Start notification listener ──
     let mut notifications = chain_client.subscribe()?;
@@ -364,6 +414,46 @@ pub async fn run(
                 tracing::info!(count = certs.len(), "Processed inbox certificates");
                 for cert in &certs {
                     forward_cert_to_evm(cert, bridge_addr, &provider).await;
+                }
+
+                // Scan inbox certs for Credit messages to Address20 and submit Burns.
+                let mut burn_ops = vec![];
+                for cert in &certs {
+                    for txn in &cert.block().body.transactions {
+                        if let Transaction::ReceiveMessages(bundle) = txn {
+                            for posted in &bundle.bundle.messages {
+                                if let Message::User { application_id, bytes } = &posted.message {
+                                    if application_id == &fungible_app_id {
+                                        if let Some((owner, amount)) = try_parse_credit_to_address20(bytes.as_slice()) {
+                                            burn_ops.push(Operation::User {
+                                                application_id: fungible_app_id,
+                                                bytes: serialize_burn_operation(&owner, &amount),
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !burn_ops.is_empty() {
+                    tracing::info!(count = burn_ops.len(), "Submitting burn operations...");
+                    if let Err(e) = chain_client.synchronize_from_validators().await {
+                        tracing::error!("Failed to synchronize before burn: {e}");
+                        continue;
+                    }
+                    match chain_client.execute_operations(burn_ops, vec![]).await {
+                        Ok(linera_core::data_types::ClientOutcome::Committed(cert)) => {
+                            tracing::info!(
+                                height = %cert.block().header.height,
+                                "Burn operations committed"
+                            );
+                            forward_cert_to_evm(&cert, bridge_addr, &provider).await;
+                        }
+                        Ok(other) => tracing::error!("Burn not committed: {other:?}"),
+                        Err(e) => tracing::error!("Burn submission failed: {e}"),
+                    }
                 }
             }
 

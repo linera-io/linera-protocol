@@ -294,6 +294,11 @@ WRAPPED_APP_ID=$(echo "$WRAPPED_APP_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -
 validate_hex64 "Wrapped-fungible app ID" "$WRAPPED_APP_ID"
 echo "  Wrapped-fungible app: $WRAPPED_APP_ID"
 
+# Write wrapped-fungible app ID to shared volume (Docker mode only).
+if [[ -n "$COMPOSE_FILE" ]]; then
+    dc_exec --user root foundry-tools sh -c "echo '$WRAPPED_APP_ID' > /shared/wrapped-app-id"
+fi
+
 # ── 5. Deploy FungibleBridge ──
 echo "Deploying FungibleBridge..."
 APP_ID_BYTES32="0x${WRAPPED_APP_ID:0:64}"
