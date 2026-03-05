@@ -44,6 +44,7 @@ relay = [
     "dep:axum",
     "dep:futures",
     "dep:hex",
+    "dep:linera-chain",
     "dep:linera-client",
     "dep:linera-core",
     "dep:linera-faucet-client",
@@ -92,6 +93,7 @@ serde_json = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
+linera-chain = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
 linera-core = { workspace = true, optional = true }
 linera-faucet-client = { workspace = true, optional = true }

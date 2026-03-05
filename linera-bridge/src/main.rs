@@ -71,6 +71,10 @@ struct ServeOptions {
     #[arg(long, default_value = "/shared/bridge-app-id")]
     bridge_app_id_file: String,
 
+    /// File to read the wrapped-fungible ApplicationId from (written by setup script)
+    #[arg(long, default_value = "/shared/wrapped-app-id")]
+    fungible_app_id_file: String,
+
     /// EVM private key for signing addBlock transactions
     #[arg(long)]
     evm_private_key: String,
@@ -102,6 +106,7 @@ impl ServeOptions {
             self.bridge_address.as_deref(),
             &self.bridge_address_file,
             &self.bridge_app_id_file,
+            &self.fungible_app_id_file,
             &self.evm_private_key,
             self.port,
         )
