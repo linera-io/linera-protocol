@@ -1,11 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible::{InitialState, OwnerSpender};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
+
+use crate::{InitialState, OwnerSpender};
 
 /// The application state.
 #[derive(RootView)]
@@ -18,7 +19,7 @@ pub struct FungibleTokenState {
 #[allow(dead_code)]
 impl FungibleTokenState {
     /// Initializes the application state with some accounts with initial balances.
-    pub(crate) async fn initialize_accounts(&mut self, state: InitialState) {
+    pub async fn initialize_accounts(&mut self, state: InitialState) {
         for (k, v) in state.accounts {
             if v != Amount::ZERO {
                 self.accounts
@@ -29,7 +30,7 @@ impl FungibleTokenState {
     }
 
     /// Obtains the balance for an `account`, returning `None` if there's no entry for the account.
-    pub(crate) async fn balance(&self, account: &AccountOwner) -> Option<Amount> {
+    pub async fn balance(&self, account: &AccountOwner) -> Option<Amount> {
         self.accounts
             .get(account)
             .await
@@ -37,17 +38,12 @@ impl FungibleTokenState {
     }
 
     /// Obtains the balance for an `account`.
-    pub(crate) async fn balance_or_default(&self, account: &AccountOwner) -> Amount {
+    pub async fn balance_or_default(&self, account: &AccountOwner) -> Amount {
         self.balance(account).await.unwrap_or_default()
     }
 
     /// Credits an `account` with the provided `amount`.
-    pub(crate) async fn approve(
-        &mut self,
-        owner: AccountOwner,
-        spender: AccountOwner,
-        allowance: Amount,
-    ) {
+    pub async fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, allowance: Amount) {
         if allowance == Amount::ZERO {
             return;
         }
@@ -60,7 +56,7 @@ impl FungibleTokenState {
         total_allowance.saturating_add_assign(allowance);
     }
 
-    pub(crate) async fn debit_for_transfer_from(
+    pub async fn debit_for_transfer_from(
         &mut self,
         owner: AccountOwner,
         spender: AccountOwner,
@@ -109,7 +105,7 @@ impl FungibleTokenState {
     }
 
     /// Credits an `account` with the provided `amount`.
-    pub(crate) async fn credit(&mut self, account: AccountOwner, amount: Amount) {
+    pub async fn credit(&mut self, account: AccountOwner, amount: Amount) {
         if amount == Amount::ZERO {
             return;
         }
@@ -121,7 +117,7 @@ impl FungibleTokenState {
     }
 
     /// Tries to debit the requested `amount` from an `account`.
-    pub(crate) async fn debit(&mut self, account: AccountOwner, amount: Amount) {
+    pub async fn debit(&mut self, account: AccountOwner, amount: Amount) {
         if amount == Amount::ZERO {
             return;
         }
