@@ -106,6 +106,7 @@ wrapped-fungible.workspace = true
 alloy = { workspace = true, default-features = false, features = [
     "rpc-types-eth",
     "json-rpc",
+    "node-bindings",
     "signer-local",
     "contract",
     "reqwest",

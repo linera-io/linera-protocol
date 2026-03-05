@@ -23,7 +23,8 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_bridge_e2e::{
-    compose_file_path, exec_ok, exec_output, light_client_address, start_compose, ANVIL_PRIVATE_KEY,
+    compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
+    start_compose, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{environment::wallet::Memory, worker::Reason};
@@ -47,16 +48,6 @@ sol! {
     interface IFungibleBridge {
         function addBlock(bytes calldata data) external;
     }
-}
-
-/// Parse a "Deployed to: 0x..." address from forge create output.
-fn parse_deployed_address(output: &str) -> anyhow::Result<Address> {
-    for line in output.lines() {
-        if let Some(addr) = line.strip_prefix("Deployed to: ") {
-            return Ok(addr.trim().parse()?);
-        }
-    }
-    anyhow::bail!("Could not find 'Deployed to:' in forge output:\n{output}");
 }
 
 #[tokio::test]
@@ -109,8 +100,8 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     cc_a.synchronize_from_validators().await?;
     tracing::info!(%chain_a, %owner_a, "Chain A claimed");
 
-    // ── 3. Publish and create fungible app on chain A ──
-    tracing::info!("Publishing fungible module...");
+    // ── 3. Publish and create wrapped-fungible app on chain A ──
+    tracing::info!("Publishing wrapped-fungible module...");
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(3)
@@ -131,8 +122,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     cc_a.synchronize_from_validators().await?;
     cc_a.process_inbox().await?;
 
-    tracing::info!("Creating wrapped fungible application...");
-    let evm_recipient = "70997970C51812dc3A010C7d01b50e0d17dc79C8";
+    tracing::info!("Creating wrapped-fungible application...");
     let params = WrappedParameters {
         ticker_symbol: "TEST".to_string(),
         minter: owner_a,
@@ -179,6 +169,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         &format!(
             "forge create /contracts/MockERC20.sol:MockERC20 \
              --root /contracts --via-ir --optimize \
+             --evm-version shanghai \
              --out /tmp/forge-out --cache-path /tmp/forge-cache \
              --rpc-url http://anvil:8545 \
              --broadcast \
@@ -205,6 +196,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
             "forge create /contracts/FungibleBridge.sol:FungibleBridge \
              --root /contracts --via-ir --optimize \
              --ignored-error-codes 6321 \
+             --evm-version shanghai \
              --out /tmp/forge-out --cache-path /tmp/forge-cache \
              --rpc-url http://anvil:8545 \
              --private-key {ANVIL_PRIVATE_KEY} \
@@ -242,9 +234,10 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     .await;
 
     // ── 8. Transfer tokens from chain A to Address20 on chain B ──
+    let evm_recipient = "70997970C51812dc3A010C7d01b50e0d17dc79C8";
     let receiver: AccountOwner = format!("0x{evm_recipient}").parse()?;
 
-    tracing::info!("Sending fungible transfer to Address20 on chain B...");
+    tracing::info!("Sending wrapped-fungible transfer to Address20 on chain B...");
     let transfer_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_a,
         amount: Amount::from_tokens(100),

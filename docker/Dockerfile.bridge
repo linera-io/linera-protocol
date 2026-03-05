@@ -42,6 +42,7 @@ COPY examples/rfq/Cargo.toml examples/rfq/Cargo.toml
 COPY examples/social/Cargo.toml examples/social/Cargo.toml
 COPY examples/task-processor/Cargo.toml examples/task-processor/Cargo.toml
 COPY examples/time-expiry/Cargo.toml examples/time-expiry/Cargo.toml
+COPY examples/wrapped-fungible/Cargo.toml examples/wrapped-fungible/Cargo.toml
 RUN for dir in \
     examples/amm \
     examples/call-evm-counter \
@@ -61,7 +62,8 @@ RUN for dir in \
     examples/rfq \
     examples/social \
     examples/task-processor \
-    examples/time-expiry; \
+    examples/time-expiry \
+    examples/wrapped-fungible; \
   do mkdir -p "$dir/src" && \
      echo "" > "$dir/src/lib.rs" && \
      echo "fn main(){}" > "$dir/src/contract.rs" && \
