@@ -36,10 +36,10 @@ pub fn parse_allowed_subscription(s: &str) -> anyhow::Result<RegisteredQuery> {
     );
     let rest = rest.trim_start();
     // Extract the operation name: sequence of alphanumeric/underscore chars.
-    let name_end = rest
-        .find(|c: char| !c.is_alphanumeric() && c != '_')
-        .unwrap_or(rest.len());
-    let name = &rest[..name_end];
+    let name = rest
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .next()
+        .unwrap_or_default();
     anyhow::ensure!(
         !name.is_empty(),
         "expected an operation name after 'query', e.g. 'query MyQuery {{ ... }}'"
