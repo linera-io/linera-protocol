@@ -100,7 +100,7 @@ impl ServerContext {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             block_time_grace_period: self.block_time_grace_period,
-            ttl: self.chain_worker_ttl,
+            ttl: util::non_zero_duration(self.chain_worker_ttl),
             chain_info_max_received_log_entries: self.chain_info_max_received_log_entries,
             block_cache_size: self.block_cache_size,
             execution_state_cache_size: self.execution_state_cache_size,
@@ -398,6 +398,7 @@ enum ServerCommand {
         wasm_runtime: Option<WasmRuntime>,
 
         /// The duration in milliseconds after which an idle chain worker will free its memory.
+        /// Use 0 to disable expiry.
         #[arg(
             long = "chain-worker-ttl-ms",
             default_value = "30000",

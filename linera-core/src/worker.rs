@@ -518,16 +518,11 @@ fn start_sweep<S: Storage + Clone + 'static>(
     let ttl = config.ttl;
     let sender_ttl = config.sender_chain_ttl;
     // Sweep at the smaller of the two TTLs, divided by 4 for responsiveness.
-    // If both TTLs are zero, don't sweep at all (handles live forever).
-    let min_ttl = ttl.min(sender_ttl);
-    let interval = if min_ttl.is_zero() {
-        if ttl.is_zero() && sender_ttl.is_zero() {
-            return; // No TTL configured — nothing to sweep.
-        }
-        // One of them is zero (infinite); use the non-zero one.
-        ttl.max(sender_ttl) / 4
-    } else {
-        min_ttl / 4
+    // If both are None, don't sweep at all (handles live forever).
+    let interval = match (ttl, sender_ttl) {
+        (None, None) => return,
+        (Some(d), None) | (None, Some(d)) => d / 4,
+        (Some(a), Some(b)) => a.min(b) / 4,
     };
     // The sweep holds a Weak reference so it stops when all WorkerState clones are dropped.
     let weak_handles = Arc::downgrade(chain_handles);

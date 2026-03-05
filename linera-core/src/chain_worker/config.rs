@@ -27,11 +27,11 @@ pub struct ChainWorkerConfig {
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     pub block_time_grace_period: Duration,
-    /// Idle chain workers free their memory after that duration without requests.
-    pub ttl: Duration,
-    /// TTL for sender chains.
-    // We don't want them to keep in memory forever since usually they're short-lived.
-    pub sender_chain_ttl: Duration,
+    /// Idle chain workers free their memory after this duration without requests.
+    /// `None` means no expiry (handle lives forever).
+    pub ttl: Option<Duration>,
+    /// TTL for sender chains. `None` means no expiry.
+    pub sender_chain_ttl: Option<Duration>,
     /// The size to truncate receive log entries in chain info responses.
     pub chain_info_max_received_log_entries: usize,
     /// Maximum number of entries in the block cache.
@@ -69,8 +69,8 @@ impl Default for ChainWorkerConfig {
             allow_messages_from_deprecated_epochs: false,
             long_lived_services: false,
             block_time_grace_period: Default::default(),
-            ttl: Default::default(),
-            sender_chain_ttl: Duration::from_secs(1),
+            ttl: None,
+            sender_chain_ttl: Some(Duration::from_secs(1)),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
             block_cache_size: 5000,
             execution_state_cache_size: 10_000,

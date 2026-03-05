@@ -123,12 +123,11 @@ impl<S: Storage + Clone + 'static> ChainHandle<S> {
 
     /// Checks whether this handle has been idle beyond its TTL.
     ///
-    /// A zero TTL means "no expiry" (the handle lives forever).
-    pub(crate) fn is_expired(&self, ttl: Duration, sender_ttl: Duration) -> bool {
-        let timeout = if self.is_tracked { sender_ttl } else { ttl };
-        if timeout.is_zero() {
-            return false; // Zero means no expiry.
-        }
+    /// `None` means no expiry (the handle lives forever).
+    pub(crate) fn is_expired(&self, ttl: Option<Duration>, sender_ttl: Option<Duration>) -> bool {
+        let Some(timeout) = (if self.is_tracked { sender_ttl } else { ttl }) else {
+            return false;
+        };
         let timeout_micros = u64::try_from(timeout.as_micros()).unwrap_or(u64::MAX);
         let last = self.last_access.load(Ordering::Relaxed);
         let now = current_time_micros();
