@@ -767,13 +767,9 @@ where
         Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
     }
 
-    /// For each stream in `block.body.events` that has no entry in
-    /// `chain.next_expected_events`, walks backwards through the `previous_event_blocks`
-    /// linked list (reading blocks from storage) to collect locally available event
-    /// indices, then initializes `next_expected_events` to the first gap.
-    ///
-    /// Once a block below `next_block_height` is reached, all earlier events for that
-    /// stream are guaranteed present (the block was fully executed), so the walk stops.
+    /// Initializes `next_expected_events` from `stream_event_counts` (which reflects
+    /// all executed blocks), then replays any preprocessed-but-not-yet-executed blocks to
+    /// advance the indices further.
     ///
     /// This handles the migration case where the `next_expected_events` field was added to
     /// `ChainStateView` after blocks had already been processed.
