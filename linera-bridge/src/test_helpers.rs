@@ -35,11 +35,12 @@ use revm::{
 use revm_context::result::{ExecutionResult, Output};
 
 use crate::{
-    light_client, microchain, BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, FUNGIBLE_TYPES_SOURCE,
+    light_client, microchain, BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE,
+    WRAPPED_FUNGIBLE_TYPES_SOURCE,
 };
 
 const BRIDGE_TYPES_SOL: &str = BRIDGE_TYPES_SOURCE;
-const FUNGIBLE_TYPES_SOL: &str = FUNGIBLE_TYPES_SOURCE;
+const WRAPPED_FUNGIBLE_TYPES_SOL: &str = WRAPPED_FUNGIBLE_TYPES_SOURCE;
 const LIGHT_CLIENT_SOL: &str = light_client::SOURCE;
 const MICROCHAIN_SOL: &str = microchain::SOURCE;
 const FUNGIBLE_BRIDGE_SOL: &str = FUNGIBLE_BRIDGE_SOURCE;
@@ -217,7 +218,7 @@ pub fn deploy_mock_erc20(
 pub fn fungible_message_transaction(
     origin: ChainId,
     application_id: CryptoHash,
-    message: &fungible::Message,
+    message: &wrapped_fungible::Message,
 ) -> Transaction {
     Transaction::ReceiveMessages(IncomingBundle {
         origin,
@@ -400,7 +401,7 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     // Write shared source files so imports resolve
     for (name, content) in [
         ("BridgeTypes.sol", BRIDGE_TYPES_SOL),
-        ("FungibleTypes.sol", FUNGIBLE_TYPES_SOL),
+        ("WrappedFungibleTypes.sol", WRAPPED_FUNGIBLE_TYPES_SOL),
         ("LightClient.sol", LIGHT_CLIENT_SOL),
         ("Microchain.sol", MICROCHAIN_SOL),
         ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOL),

@@ -2666,6 +2666,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fungible"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "serde-reflection",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3653,7 +3664,6 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
- "linera-sdk",
  "linera-storage",
  "linera-views",
  "rand 0.8.5",
@@ -3661,6 +3671,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "wrapped-fungible",
 ]
 
 [[package]]
@@ -8103,6 +8114,17 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser 0.244.0",
+]
+
+[[package]]
+name = "wrapped-fungible"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "fungible",
+ "hex",
+ "linera-sdk",
+ "serde",
 ]
 
 [[package]]
