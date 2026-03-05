@@ -1096,7 +1096,6 @@ where
                 .insert(event.index);
         }
 
-        let next_block_height = self.tip_state.get().next_block_height;
         let mut updated_streams = BTreeSet::new();
         for (stream_id, indices) in emitted_streams {
             // Epoch 0 is created at genesis, so the first published event is index 1.
@@ -1116,7 +1115,7 @@ where
                     current_expected_index = index.saturating_add(1);
                 }
             }
-            if current_expected_index != 0 || block.header.height <= next_block_height {
+            if current_expected_index != 0 {
                 self.next_expected_events
                     .insert(&stream_id, current_expected_index)?;
             }

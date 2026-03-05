@@ -1214,12 +1214,9 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Downloads blocks that contain events in the subscribed streams, walking backwards
-    /// through `previous_event_blocks` to fetch event-bearing ancestors that we don't
-    /// already have locally.
     /// Downloads event-bearing blocks for the given streams by walking the
-    /// `previous_event_blocks` linked list backwards from `height`, stopping at
-    /// `local_next_block_height` (blocks below that are already executed locally).
+    /// `previous_event_blocks` linked list backwards from `height`, stopping when we
+    /// reach blocks that are already executed locally or whose events we already track.
     async fn download_event_bearing_blocks(
         &self,
         sender_chain_id: ChainId,
