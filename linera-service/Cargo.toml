@@ -65,8 +65,8 @@ metrics = [
     "linera-metrics",
 ]
 jemalloc = [
-    "tikv-jemallocator",
-    "tikv-jemallocator/profiling",
+    "linera-jemallocator",
+    "linera-jemallocator/profiling_libunwind",
     "linera-metrics/jemalloc",
 ]
 storage-service = [
@@ -115,6 +115,10 @@ linera-execution = { workspace = true, features = ["fs"] }
 linera-exporter = { workspace = true, default-features = false }
 linera-faucet-client.workspace = true
 linera-faucet-server.workspace = true
+linera-jemallocator = { workspace = true, features = [
+    "profiling",
+    "unprefixed_malloc_on_supported_platforms",
+], optional = true }
 linera-metrics = { workspace = true, optional = true }
 linera-persistent = { workspace = true, features = ["fs"] }
 linera-rpc = { workspace = true, features = [
@@ -147,10 +151,6 @@ serde_json.workspace = true
 stdext = { workspace = true, optional = true }
 tempfile.workspace = true
 thiserror.workspace = true
-tikv-jemallocator = { workspace = true, features = [
-    "profiling",
-    "unprefixed_malloc_on_supported_platforms",
-], optional = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tokio-util.workspace = true
