@@ -1224,6 +1224,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         sender_chain_id: ChainId,
         height: BlockHeight,
+        hash: CryptoHash,
         local_next_block_height: BlockHeight,
         subscribed_streams: &BTreeSet<StreamId>,
         remote_node: &RemoteNode<Env::ValidatorNode>,
@@ -1231,9 +1232,22 @@ impl<Env: Environment> Client<Env> {
         let (max_epoch, committees) = self.admin_committees().await?;
 
         let mut certificates = BTreeMap::new();
-        let mut heights_to_fetch = BTreeSet::<BlockHeight>::from([height]);
+        let mut heights_to_fetch = BTreeSet::<_>::from([(hash, height)]);
+        let next_expected_events = subscribed_streams
+            .iter()
+            .zip(
+                self.local_node
+                    .chain_state_view(sender_chain_id)
+                    .await?
+                    .next_expected_events
+                    .multi_get(subscribed_streams)
+                    .await?
+                    .into_iter()
+                    .map(|maybe_index| maybe_index.unwrap_or_default()),
+            )
+            .collect::<BTreeMap<_, _>>();
 
-        while let Some(current_height) = heights_to_fetch.pop_last() {
+        while let Some((current_hash, current_height)) = heights_to_fetch.pop_last() {
             if current_height < local_next_block_height {
                 continue; // Already executed locally.
             }
@@ -1241,29 +1255,43 @@ impl<Env: Environment> Client<Env> {
                 continue;
             }
 
-            let downloaded = self
-                .requests_scheduler
-                .download_certificates_by_heights(
-                    remote_node,
-                    sender_chain_id,
-                    vec![current_height],
-                )
-                .await?;
-            let Some(certificate) = downloaded.into_iter().next() else {
-                break;
+            let certificate = if let Some(certificate) =
+                self.storage_client().read_certificate(current_hash).await?
+            {
+                certificate
+            } else {
+                let downloaded = self
+                    .requests_scheduler
+                    .download_certificates(remote_node, sender_chain_id, current_height, 1)
+                    .await?;
+                let Some(certificate) = downloaded.into_iter().next() else {
+                    break;
+                };
+
+                Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
+                    .into_result()?;
+
+                certificate
             };
-
-            Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
-                .into_result()?;
-
-            // Walk previous_event_blocks for subscribed streams.
             let block = certificate.block();
+            // Walk previous_event_blocks for subscribed streams.
             for stream_id in subscribed_streams {
-                if let Some((_prev_hash, prev_height)) =
+                if let Some((prev_hash, prev_height)) =
                     block.body.previous_event_blocks.get(stream_id)
                 {
+                    if next_expected_events.get(stream_id).is_some_and(|index| {
+                        block
+                            .body
+                            .events
+                            .iter()
+                            .flatten()
+                            .find(|event| event.stream_id == *stream_id)
+                            .is_some_and(|event| event.index == *index)
+                    }) {
+                        continue;
+                    }
                     if !certificates.contains_key(prev_height) {
-                        heights_to_fetch.insert(*prev_height);
+                        heights_to_fetch.insert((*prev_hash, *prev_height));
                     }
                 }
             }
@@ -4256,6 +4284,7 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewBlock {
                 height,
+                hash,
                 event_streams,
                 ..
             } => {
@@ -4279,6 +4308,7 @@ impl<Env: Environment> ChainClient<Env> {
                             .download_event_bearing_blocks(
                                 chain_id,
                                 height,
+                                hash,
                                 local_height,
                                 &subscribed,
                                 &remote_node,
@@ -4300,6 +4330,7 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewEvents {
                 height,
+                hash,
                 event_streams,
                 ..
             } => {
@@ -4324,6 +4355,7 @@ impl<Env: Environment> ChainClient<Env> {
                     .download_event_bearing_blocks(
                         chain_id,
                         height,
+                        hash,
                         local_height,
                         &subscribed,
                         &remote_node,

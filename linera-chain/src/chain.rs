@@ -1111,7 +1111,7 @@ where
                 .await?
                 .unwrap_or(initial_index);
             for index in indices {
-                if index == current_expected_index || block.header.height <= next_block_height {
+                if index == current_expected_index {
                     updated_streams.insert(stream_id.clone());
                     current_expected_index = index.saturating_add(1);
                 }
