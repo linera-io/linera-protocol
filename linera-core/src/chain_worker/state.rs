@@ -808,10 +808,9 @@ where
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
-        // Check that the chain is active and ready for this confirmation.
+        // Check if we already processed this block.
         let tip = self.chain.tip_state.get().clone();
         if tip.next_block_height > height {
-            // We already processed this block.
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
@@ -1850,7 +1849,7 @@ fn missing_indices_blob_ids(maybe_blobs: &[(BlobId, Option<Blob>)]) -> (Vec<usiz
     (missing_indices, missing_blob_ids)
 }
 
-/// Returns the keys whose value is `None`.
+/// Returns the blob IDs whose corresponding value is `None`.
 fn missing_blob_ids<'a>(
     maybe_blobs: impl IntoIterator<Item = (&'a BlobId, &'a Option<Blob>)>,
 ) -> Vec<BlobId> {
