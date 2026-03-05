@@ -167,8 +167,14 @@ where
                 callback,
             } => callback
                 .send(
-                    self.stage_block_execution(block, round, &published_blobs)
-                        .await,
+                    self.stage_block_execution_with_policy(
+                        block,
+                        round,
+                        &published_blobs,
+                        BundleExecutionPolicy::Abort,
+                    )
+                    .await
+                    .map(|(_, block, response, tracker)| (block, response, tracker)),
                 )
                 .is_ok(),
             ChainWorkerRequest::StageBlockExecutionWithPolicy {
@@ -1467,28 +1473,6 @@ where
         self.initialize_and_save_if_needed().await?;
         let response = self.chain.describe_application(application_id).await?;
         Ok(response)
-    }
-
-    /// Executes a block without persisting any changes to the state.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        block_height = %block.height
-    ))]
-    async fn stage_block_execution(
-        &mut self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
-        let (_, executed_block, response, resource_tracker) = self
-            .stage_block_execution_with_policy(
-                block,
-                round,
-                published_blobs,
-                BundleExecutionPolicy::Abort,
-            )
-            .await?;
-        Ok((executed_block, response, resource_tracker))
     }
 
     /// Executes a block without persisting any changes to the state, with a specified
