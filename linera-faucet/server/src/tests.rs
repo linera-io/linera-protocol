@@ -111,11 +111,12 @@ async fn test_faucet_rate_limiting() {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create the BatchProcessor configuration and instance
     let batch_config = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
@@ -236,7 +237,6 @@ async fn test_batch_size_reduction_on_limit_errors() {
     // Create batch processor with initial batch size of 3 and disabled rate limiting
     let initial_batch_size = 3;
     let config = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         start_balance: Amount::from_tokens(100),
         start_timestamp: Timestamp::from(0),
         end_timestamp: Timestamp::from(0), // All tokens are unlocked: no rate limiting.
@@ -266,6 +266,10 @@ async fn test_batch_size_reduction_on_limit_errors() {
             let (tx, _rx) = oneshot::channel();
             pending_requests_guard.push_back(super::PendingRequest {
                 owner,
+                target_chain_id: None,
+                amount: Amount::from_tokens(1),
+                claim_type: super::ClaimType::Initial,
+                daily_period: 0,
                 responder: tx,
                 #[cfg(with_metrics)]
                 queued_at: std::time::Instant::now(),
@@ -319,11 +323,12 @@ async fn test_faucet_persistence() {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create the BatchProcessor configuration
     let batch_config = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
@@ -443,11 +448,12 @@ async fn test_faucet_persistence() {
         pending_requests: Arc::clone(&pending_requests_2),
         request_notifier: Arc::clone(&request_notifier_2),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create new batch processor for the second instance
     let batch_config_2 = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
@@ -551,11 +557,12 @@ async fn test_blockchain_sync_after_database_deletion() {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create the BatchProcessor configuration
     let batch_config = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
@@ -639,11 +646,12 @@ async fn test_blockchain_sync_after_database_deletion() {
         pending_requests: Arc::clone(&pending_requests_2),
         request_notifier: Arc::clone(&request_notifier_2),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create new batch processor for the second instance
     let batch_config_2 = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),

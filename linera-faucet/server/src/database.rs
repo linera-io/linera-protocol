@@ -1,14 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! SQLite database module for storing chain assignments.
+//! SQLite database module for storing chain assignments and daily claim tracking.
 
 use std::{collections::BTreeMap, path::PathBuf};
 
 use anyhow::Context as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::BlockHeight,
+    data_types::{BlockHeight, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
 use linera_core::client::ChainClient;
@@ -19,9 +19,18 @@ use sqlx::{
 };
 use tracing::info;
 
-/// SQLite database for persistent storage of chain assignments.
+/// SQLite database for persistent storage of chain assignments and daily claims.
 pub struct FaucetDatabase {
     pool: SqlitePool,
+}
+
+/// Information about a previous chain creation.
+#[derive(Clone, Debug)]
+pub struct ClaimRecord {
+    /// The chain ID that was created.
+    pub chain_id: ChainId,
+    /// The timestamp when the chain was created.
+    pub timestamp: Timestamp,
 }
 
 /// Schema for creating the chains table.
@@ -33,6 +42,15 @@ CREATE TABLE IF NOT EXISTS chains (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chains_chain_id ON chains(chain_id);
+"#;
+
+/// Schema for creating the daily_claims table.
+const CREATE_DAILY_CLAIMS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS daily_claims (
+    owner TEXT PRIMARY KEY NOT NULL,
+    chain_id TEXT NOT NULL,
+    last_period INTEGER NOT NULL
+);
 "#;
 
 impl FaucetDatabase {
@@ -69,6 +87,10 @@ impl FaucetDatabase {
             .execute(&self.pool)
             .await
             .context("Failed to create chains table")?;
+        sqlx::query(CREATE_DAILY_CLAIMS_TABLE)
+            .execute(&self.pool)
+            .await
+            .context("Failed to create daily_claims table")?;
         info!("Database schema initialized");
         Ok(())
     }
@@ -210,6 +232,32 @@ impl FaucetDatabase {
         Ok(Some(chain_id))
     }
 
+    /// Gets the claim record for an owner, if they have claimed a chain.
+    /// Returns the chain ID and timestamp of the claim.
+    pub async fn last_claim(&self, owner: &AccountOwner) -> anyhow::Result<Option<ClaimRecord>> {
+        let owner_str = owner.to_string();
+
+        let Some(row) = sqlx::query("SELECT chain_id, created_at FROM chains WHERE owner = ?")
+            .bind(&owner_str)
+            .fetch_optional(&self.pool)
+            .await?
+        else {
+            return Ok(None);
+        };
+
+        let chain_id_str: String = row.get("chain_id");
+        let chain_id: ChainId = chain_id_str.parse()?;
+
+        // SQLite stores timestamps as strings in ISO 8601 format
+        let created_at_str: String = row.get("created_at");
+        let timestamp = parse_sqlite_datetime(&created_at_str)?;
+
+        Ok(Some(ClaimRecord {
+            chain_id,
+            timestamp,
+        }))
+    }
+
     /// Stores multiple chain mappings in a single transaction
     pub async fn store_chains_batch(
         &self,
@@ -236,4 +284,65 @@ impl FaucetDatabase {
         tx.commit().await?;
         Ok(())
     }
+
+    /// Gets the last daily claim period for an owner, if they have made a daily claim.
+    pub async fn last_daily_claim_period(
+        &self,
+        owner: &AccountOwner,
+    ) -> anyhow::Result<Option<u64>> {
+        let owner_str = owner.to_string();
+
+        let Some(row) = sqlx::query("SELECT last_period FROM daily_claims WHERE owner = ?")
+            .bind(&owner_str)
+            .fetch_optional(&self.pool)
+            .await?
+        else {
+            return Ok(None);
+        };
+
+        let last_period: i64 = row.get("last_period");
+        Ok(Some(last_period as u64))
+    }
+
+    /// Stores multiple daily claim records in a single transaction.
+    /// Uses `INSERT OR REPLACE` to update `last_period` on subsequent daily claims.
+    pub async fn store_daily_claims_batch(
+        &self,
+        claims: Vec<(AccountOwner, ChainId, u64)>,
+    ) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        for (owner, chain_id, period) in claims {
+            let owner_str = owner.to_string();
+            let chain_id_str = chain_id.to_string();
+
+            sqlx::query(
+                r#"
+                INSERT OR REPLACE INTO daily_claims (owner, chain_id, last_period)
+                VALUES (?, ?, ?)
+                "#,
+            )
+            .bind(&owner_str)
+            .bind(&chain_id_str)
+            .bind(period as i64)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+}
+
+/// Parses a SQLite datetime string (e.g., "2024-01-15 10:30:45") to a Timestamp.
+/// SQLite stores CURRENT_TIMESTAMP in UTC.
+fn parse_sqlite_datetime(s: &str) -> anyhow::Result<Timestamp> {
+    use chrono::NaiveDateTime;
+
+    // SQLite datetime format: "YYYY-MM-DD HH:MM:SS"
+    let dt = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
+        .with_context(|| format!("Invalid SQLite datetime format: {}", s))?;
+
+    let micros = dt.and_utc().timestamp_micros();
+    Ok(Timestamp::from(micros as u64))
 }

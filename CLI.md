@@ -766,6 +766,9 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 
   Default value: `8080`
 * `--amount <AMOUNT>` — The number of tokens to send to each new chain
+* `--daily-claim-amount <DAILY_CLAIM_AMOUNT>` — The number of tokens to send per daily claim. Set to 0 to disable daily claims
+
+  Default value: `0`
 * `--limit-rate-until <LIMIT_RATE_UNTIL>` — The end timestamp: The faucet will rate-limit the token supply so it runs out of money no earlier than this
 * `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
 * `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)
