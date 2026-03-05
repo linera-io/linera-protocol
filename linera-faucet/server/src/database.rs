@@ -38,7 +38,7 @@ const CREATE_CHAINS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS chains (
     owner TEXT PRIMARY KEY NOT NULL,
     chain_id TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_chains_chain_id ON chains(chain_id);
@@ -199,6 +199,7 @@ impl FaucetDatabase {
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Certificate not found for hash {}", hash))?;
 
+            let block_timestamp = certificate.block().header.timestamp;
             let chains_to_store = super::extract_opened_single_owner_chains(&certificate)?
                 .into_iter()
                 .map(|(owner, description)| (owner, description.id()))
@@ -209,7 +210,8 @@ impl FaucetDatabase {
                     "Processing block at height {height} with {} new chains",
                     chains_to_store.len()
                 );
-                self.store_chains_batch(chains_to_store).await?;
+                self.store_chains_batch(chains_to_store, block_timestamp)
+                    .await?;
             }
         }
 
@@ -248,9 +250,8 @@ impl FaucetDatabase {
         let chain_id_str: String = row.get("chain_id");
         let chain_id: ChainId = chain_id_str.parse()?;
 
-        // SQLite stores timestamps as strings in ISO 8601 format
-        let created_at_str: String = row.get("created_at");
-        let timestamp = parse_sqlite_datetime(&created_at_str)?;
+        let created_at_micros: i64 = row.get("created_at");
+        let timestamp = Timestamp::from(created_at_micros as u64);
 
         Ok(Some(ClaimRecord {
             chain_id,
@@ -258,12 +259,15 @@ impl FaucetDatabase {
         }))
     }
 
-    /// Stores multiple chain mappings in a single transaction
+    /// Stores multiple chain mappings in a single transaction.
+    /// The `timestamp` is the logical time (from the storage clock) when the chains were created.
     pub async fn store_chains_batch(
         &self,
         chains: Vec<(AccountOwner, ChainId)>,
+        timestamp: Timestamp,
     ) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
+        let micros = timestamp.micros() as i64;
 
         for (owner, chain_id) in chains {
             let owner_str = owner.to_string();
@@ -271,12 +275,13 @@ impl FaucetDatabase {
 
             sqlx::query(
                 r#"
-                INSERT OR REPLACE INTO chains (owner, chain_id)
-                VALUES (?, ?)
+                INSERT OR REPLACE INTO chains (owner, chain_id, created_at)
+                VALUES (?, ?, ?)
                 "#,
             )
             .bind(&owner_str)
             .bind(&chain_id_str)
+            .bind(micros)
             .execute(&mut *tx)
             .await?;
         }
@@ -332,17 +337,4 @@ impl FaucetDatabase {
         tx.commit().await?;
         Ok(())
     }
-}
-
-/// Parses a SQLite datetime string (e.g., "2024-01-15 10:30:45") to a Timestamp.
-/// SQLite stores CURRENT_TIMESTAMP in UTC.
-fn parse_sqlite_datetime(s: &str) -> anyhow::Result<Timestamp> {
-    use chrono::NaiveDateTime;
-
-    // SQLite datetime format: "YYYY-MM-DD HH:MM:SS"
-    let dt = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
-        .with_context(|| format!("Invalid SQLite datetime format: {}", s))?;
-
-    let micros = dt.and_utc().timestamp_micros();
-    Ok(Timestamp::from(micros as u64))
 }

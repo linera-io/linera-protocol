@@ -28,7 +28,6 @@ anyhow.workspace = true
 async-graphql.workspace = true
 async-graphql-axum.workspace = true
 axum.workspace = true
-chrono.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true

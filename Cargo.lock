@@ -5539,7 +5539,6 @@ dependencies = [
  "async-trait",
  "axum",
  "cfg_aliases",
- "chrono",
  "derive_more 1.0.0",
  "futures",
  "linera-base",

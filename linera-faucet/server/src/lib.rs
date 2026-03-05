@@ -514,8 +514,8 @@ where
             .map_err(|e| Error::new(e.to_string()))?
             .ok_or_else(|| Error::new("You must claim a chain before making daily claims"))?;
 
-        let period =
-            current_daily_period(initial_claim.timestamp.micros(), Timestamp::now().micros());
+        let now = self.storage.clock().current_time();
+        let period = current_daily_period(initial_claim.timestamp.micros(), now.micros());
         let last_period = self
             .faucet_storage
             .last_daily_claim_period(&owner)
@@ -803,10 +803,8 @@ where
                 };
 
                 // Verify the daily claim period.
-                let period = current_daily_period(
-                    initial_claim.timestamp.micros(),
-                    Timestamp::now().micros(),
-                );
+                let now = self.client.storage_client().clock().current_time();
+                let period = current_daily_period(initial_claim.timestamp.micros(), now.micros());
                 let last_period = self
                     .faucet_storage
                     .last_daily_claim_period(&request.owner)
@@ -998,6 +996,7 @@ where
         };
 
         let certificate_hash = certificate.hash();
+        let block_timestamp = certificate.block().header.timestamp;
 
         // Parse chain descriptions from the block's blobs (for initial claims only).
         let chain_descriptions = extract_opened_single_owner_chains(&certificate)?;
@@ -1027,7 +1026,9 @@ where
             if initial_chains.is_empty() {
                 return Ok(());
             }
-            self.faucet_storage.store_chains_batch(initial_chains).await
+            self.faucet_storage
+                .store_chains_batch(initial_chains, block_timestamp)
+                .await
         };
         let store_daily = async {
             if daily_claims.is_empty() {
