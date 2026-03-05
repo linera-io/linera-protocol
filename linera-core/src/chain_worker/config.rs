@@ -36,14 +36,7 @@ pub struct ChainWorkerConfig {
 impl ChainWorkerConfig {
     /// Configures the `key_pair` in this [`ChainWorkerConfig`].
     pub fn with_key_pair(mut self, key_pair: Option<ValidatorSecretKey>) -> Self {
-        match key_pair {
-            Some(validator_secret) => {
-                self.key_pair = Some(Arc::new(validator_secret));
-            }
-            None => {
-                self.key_pair = None;
-            }
-        }
+        self.key_pair = key_pair.map(Arc::new);
         self
     }
 
