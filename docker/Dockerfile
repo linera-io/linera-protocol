@@ -30,7 +30,8 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     protobuf-compiler \
     clang \
-    make
+    make \
+    libunwind-dev
 
 COPY examples examples
 COPY linera-base linera-base
@@ -98,7 +99,8 @@ LABEL build_date=$build_date
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    openssl
+    openssl \
+    libunwind8
 RUN update-ca-certificates
 
 COPY --from=binaries \
