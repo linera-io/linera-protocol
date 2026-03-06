@@ -119,12 +119,13 @@ pub(super) mod metrics {
 /// };
 /// let manager = RequestsScheduler::with_config(
 ///     validator_nodes,
-///     15,                      // max 15 concurrent requests per node
-///     latency_weights,         // custom scoring weights
-///     0.2,                     // higher alpha for faster adaptation
-///     3000.0,                  // max expected latency (3 seconds)
-///     Duration::from_secs(60), // 60 second cache TTL
-///     200,                     // cache up to 200 entries
+///     latency_weights,               // custom scoring weights
+///     0.2,                           // higher alpha for faster adaptation
+///     3000.0,                        // max expected latency (3 seconds)
+///     Duration::from_secs(60),       // 60 second cache TTL
+///     200,                           // cache up to 200 entries
+///     Duration::from_millis(200),    // max request TTL
+///     Duration::from_millis(150),    // retry delay
 /// );
 /// ```
 #[derive(Debug, Clone)]
@@ -852,14 +853,13 @@ impl<Env: Environment> RequestsScheduler<Env> {
     /// Selects the best available peer using weighted random selection from top performers.
     ///
     /// This method:
-    /// 1. Filters nodes that have available request capacity
-    /// 2. Sorts them by performance score
-    /// 3. Performs weighted random selection from the top 3 performers
+    /// 1. Sorts nodes by performance score
+    /// 2. Performs weighted random selection from the top 3 performers
     ///
     /// This approach balances between choosing high-performing nodes and distributing
     /// load across multiple validators to avoid creating hotspots.
     ///
-    /// Returns `None` if no nodes are available or all are at capacity.
+    /// Returns `None` if no nodes are available.
     async fn select_best_peer(&self) -> Option<RemoteNode<Env::ValidatorNode>> {
         let scored_nodes = self.peers_by_score().await;
 

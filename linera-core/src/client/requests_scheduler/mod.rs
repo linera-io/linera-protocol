@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module manages communication with validator nodes, including connection pooling,
+//! This module manages communication with validator nodes, including
 //! load balancing, request deduplication, caching, and performance tracking.
 
 mod cache;
