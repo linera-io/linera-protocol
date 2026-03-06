@@ -36,6 +36,9 @@ pub mod set_view;
 /// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
 pub mod collection_view;
 
+/// Count-tracking variants of map, set and collection views.
+pub mod count_view;
+
 /// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
 pub mod reentrant_collection_view;
 
