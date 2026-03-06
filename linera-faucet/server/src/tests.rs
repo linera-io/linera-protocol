@@ -111,11 +111,12 @@ async fn test_faucet_rate_limiting() {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create the BatchProcessor configuration and instance
     let batch_config = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
@@ -236,7 +237,6 @@ async fn test_batch_size_reduction_on_limit_errors() {
     // Create batch processor with initial batch size of 3 and disabled rate limiting
     let initial_batch_size = 3;
     let config = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         start_balance: Amount::from_tokens(100),
         start_timestamp: Timestamp::from(0),
         end_timestamp: Timestamp::from(0), // All tokens are unlocked: no rate limiting.
@@ -266,6 +266,10 @@ async fn test_batch_size_reduction_on_limit_errors() {
             let (tx, _rx) = oneshot::channel();
             pending_requests_guard.push_back(super::PendingRequest {
                 owner,
+                target_chain_id: None,
+                amount: Amount::from_tokens(1),
+                claim_type: super::ClaimType::Initial,
+                daily_period: 0,
                 responder: tx,
                 #[cfg(with_metrics)]
                 queued_at: std::time::Instant::now(),
@@ -319,11 +323,12 @@ async fn test_faucet_persistence() {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create the BatchProcessor configuration
     let batch_config = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
@@ -443,11 +448,12 @@ async fn test_faucet_persistence() {
         pending_requests: Arc::clone(&pending_requests_2),
         request_notifier: Arc::clone(&request_notifier_2),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create new batch processor for the second instance
     let batch_config_2 = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
@@ -551,11 +557,12 @@ async fn test_blockchain_sync_after_database_deletion() {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create the BatchProcessor configuration
     let batch_config = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
@@ -639,11 +646,12 @@ async fn test_blockchain_sync_after_database_deletion() {
         pending_requests: Arc::clone(&pending_requests_2),
         request_notifier: Arc::clone(&request_notifier_2),
         storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: Amount::ZERO,
     };
 
     // Create new batch processor for the second instance
     let batch_config_2 = super::BatchProcessorConfig {
-        amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
@@ -725,4 +733,126 @@ async fn test_blockchain_sync_after_database_deletion() {
     // Clean up
     cancellation_token_2.cancel();
     processor_task_2.await.unwrap();
+}
+
+#[test_log::test(tokio::test)]
+async fn test_daily_claim_flow() {
+    // Test the full daily claim flow: create a chain, then make a daily claim.
+
+    let storage_builder = MemoryStorageBuilder::default();
+    let keys = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    clock.set(Timestamp::from(0));
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await.unwrap();
+    let client = builder
+        .add_root_chain(1, Amount::from_tokens(100))
+        .await
+        .unwrap();
+
+    let context = ClientContext {
+        client: client.clone(),
+        update_calls: 0,
+    };
+    let context = Arc::new(Mutex::new(context));
+
+    let temp_dir = tempdir().unwrap();
+    let faucet_storage = Arc::new(
+        FaucetDatabase::new(&temp_dir.path().join("test_daily_claim_flow.sqlite"))
+            .await
+            .unwrap(),
+    );
+
+    let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
+    let request_notifier = Arc::new(Notify::new());
+
+    let daily_amount = Amount::from_millis(500);
+    let root = super::MutationRoot {
+        faucet_storage: Arc::clone(&faucet_storage),
+        pending_requests: Arc::clone(&pending_requests),
+        request_notifier: Arc::clone(&request_notifier),
+        storage: client.storage_client().clone(),
+        amount: Amount::from_tokens(1),
+        daily_claim_amount: daily_amount,
+    };
+
+    // Disable rate limiting by making all tokens immediately available.
+    let batch_config = super::BatchProcessorConfig {
+        end_timestamp: Timestamp::from(0),
+        start_timestamp: Timestamp::from(0),
+        start_balance: Amount::from_tokens(100),
+        max_batch_size: 10,
+    };
+
+    let batch_processor = super::BatchProcessor::new(
+        batch_config,
+        Arc::clone(&context),
+        client,
+        Arc::clone(&faucet_storage),
+        Arc::clone(&pending_requests),
+        Arc::clone(&request_notifier),
+    );
+
+    let cancellation_token = CancellationToken::new();
+    let processor_task = {
+        let mut batch_processor = batch_processor;
+        let token = cancellation_token.clone();
+        tokio::spawn(async move { batch_processor.run(token).await })
+    };
+
+    let test_owner = AccountPublicKey::test_key(200).into();
+
+    // Step 1: Daily claim should fail before initial claim.
+    let daily_before_initial = root.do_daily_claim(test_owner).await;
+    assert!(
+        daily_before_initial.is_err(),
+        "Daily claim should fail without an initial chain claim"
+    );
+
+    // Step 2: Do the initial claim to create a chain.
+    let description = root
+        .do_claim(test_owner)
+        .await
+        .expect("Initial claim should succeed");
+    let chain_id = description.id();
+
+    // Step 3: Daily claim should fail in period 0 (same period as initial claim).
+    let daily_same_period = root.do_daily_claim(test_owner).await;
+    assert!(
+        daily_same_period.is_err(),
+        "Daily claim should fail in the same period as initial claim"
+    );
+
+    // Step 4: Advance clock by 25 hours to enter period 1.
+    let twenty_five_hours = 25 * 60 * 60 * 1_000_000u64;
+    clock.set(Timestamp::from(twenty_five_hours));
+
+    // Step 5: Daily claim should now succeed.
+    let outcome = root
+        .do_daily_claim(test_owner)
+        .await
+        .expect("Daily claim should succeed after 25 hours");
+    assert_eq!(outcome.chain_id, chain_id);
+    assert_eq!(outcome.amount, daily_amount);
+
+    // Step 6: Second daily claim in the same period should fail.
+    let daily_duplicate = root.do_daily_claim(test_owner).await;
+    assert!(
+        daily_duplicate.is_err(),
+        "Second daily claim in same period should fail"
+    );
+
+    // Step 7: Advance clock by another 24 hours to enter period 2.
+    let forty_nine_hours = 49 * 60 * 60 * 1_000_000u64;
+    clock.set(Timestamp::from(forty_nine_hours));
+
+    let outcome_2 = root
+        .do_daily_claim(test_owner)
+        .await
+        .expect("Daily claim should succeed in period 2");
+    assert_eq!(outcome_2.chain_id, chain_id);
+    assert_eq!(outcome_2.amount, daily_amount);
+
+    // Clean up
+    cancellation_token.cancel();
+    processor_task.await.unwrap();
 }
