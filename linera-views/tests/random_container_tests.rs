@@ -7,6 +7,7 @@ use anyhow::Result;
 use linera_views::{
     bucket_queue_view::HashedBucketQueueView,
     collection_view::{CollectionView, HashedCollectionView},
+    count_view::{CollectionCountView, MapCountView},
     context::{Context, MemoryContext},
     key_value_store_view::{KeyValueStoreView, SizeData},
     map_view::{HashedByteMapView, MapView},
@@ -116,6 +117,110 @@ async fn classic_collection_view_check() -> Result<()> {
                 assert_eq!(test_view, test_map);
             }
             // Checking the keys
+            let key_values = view.key_values().await;
+            assert_eq!(key_values, new_map);
+        }
+        if save {
+            if map != new_map {
+                assert!(view.has_pending_changes().await);
+            }
+            map = new_map.clone();
+            view.save().await?;
+            assert!(!view.has_pending_changes().await);
+        }
+    }
+    Ok(())
+}
+
+#[derive(CryptoHashRootView)]
+struct CollectionCountStateView<C> {
+    pub v: CollectionCountView<C, u8, RegisterView<C, u32>>,
+}
+
+impl<C> CollectionCountStateView<C>
+where
+    C: Context,
+{
+    async fn key_values(&self) -> BTreeMap<u8, u32> {
+        let mut map = BTreeMap::new();
+        let keys = self.v.indices().await.unwrap();
+        for key in keys {
+            let subview = self.v.try_load_entry(&key).await.unwrap().unwrap();
+            let value = subview.get();
+            map.insert(key, *value);
+        }
+        map
+    }
+}
+
+#[tokio::test]
+async fn classic_collection_count_view_check() -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    let mut rng = make_deterministic_rng();
+    let mut map = BTreeMap::<u8, u32>::new();
+    let n = 20;
+    let nmax: u8 = 25;
+    for _ in 0..n {
+        let mut view = CollectionCountStateView::load(context.clone()).await?;
+        let hash = view.crypto_hash_mut().await?;
+        let save = rng.gen::<bool>();
+        let count_oper = rng.gen_range(0..25);
+        let mut new_map = map.clone();
+        for _ in 0..count_oper {
+            let choice = rng.gen_range(0..6);
+            if choice == 0 {
+                let pos = rng.gen_range(0..nmax);
+                view.v.remove_entry(&pos).await?;
+                new_map.remove(&pos);
+            }
+            if choice == 1 {
+                let n_ins = rng.gen_range(0..5);
+                for _i in 0..n_ins {
+                    let pos = rng.gen_range(0..nmax);
+                    let value = rng.gen::<u32>();
+                    let subview = view.v.load_entry_mut(&pos).await?;
+                    *subview.get_mut() = value;
+                    new_map.insert(pos, value);
+                }
+            }
+            if choice == 2 {
+                let n_load = rng.gen_range(0..5);
+                for _i in 0..n_load {
+                    let pos = rng.gen_range(0..nmax);
+                    let _subview = view.v.load_entry_mut(&pos).await?;
+                    new_map.entry(pos).or_insert(0);
+                }
+            }
+            if choice == 3 {
+                let n_reset = rng.gen_range(0..5);
+                for _i in 0..n_reset {
+                    let pos = rng.gen_range(0..nmax);
+                    view.v.reset_entry_to_default(&pos).await?;
+                    new_map.insert(pos, 0);
+                }
+            }
+            if choice == 4 {
+                view.clear();
+                new_map.clear();
+            }
+            if choice == 5 {
+                view.rollback();
+                assert!(!view.has_pending_changes().await);
+                new_map = map.clone();
+            }
+            assert_eq!(view.v.count().await?, new_map.len());
+            let new_hash = view.crypto_hash_mut().await?;
+            if map == new_map {
+                assert_eq!(new_hash, hash);
+            } else {
+                assert_ne!(new_hash, hash);
+            }
+            for _ in 0..10 {
+                let pos = rng.gen::<u8>();
+                let test_view = view.v.try_load_entry(&pos).await?.is_some();
+                let test_map = new_map.contains_key(&pos);
+                assert_eq!(test_view, test_map);
+            }
             let key_values = view.key_values().await;
             assert_eq!(key_values, new_map);
         }
@@ -398,6 +503,143 @@ async fn map_view_mutability() -> Result<()> {
     let mut rng = make_deterministic_rng();
     for _ in 0..5 {
         run_map_view_mutability(&mut rng).await?;
+    }
+    Ok(())
+}
+
+#[derive(CryptoHashRootView)]
+pub struct MapCountStateView<C> {
+    pub map: MapCountView<C, Vec<u8>, u8>,
+}
+
+async fn run_map_count_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    let mut state_map = BTreeMap::new();
+    let mut all_keys = BTreeSet::new();
+    let n = 10;
+    for _ in 0..n {
+        let mut view = MapCountStateView::load(context.clone()).await?;
+        let save = rng.gen::<bool>();
+        let read_state = view
+            .map
+            .index_values()
+            .await?
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
+        let read_hash = view.crypto_hash_mut().await?;
+        let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
+        assert_eq!(state_map, read_state);
+        let count_oper = rng.gen_range(0..25);
+        let mut new_state_map = state_map.clone();
+        let mut new_state_vec = state_vec.clone();
+        for _ in 0..count_oper {
+            let choice = rng.gen_range(0..6);
+            let count = view.map.count().await?;
+            if choice == 0 {
+                let n_ins = rng.gen_range(0..10);
+                for _ in 0..n_ins {
+                    let len = rng.gen_range(1..6);
+                    let key = rng
+                        .clone()
+                        .sample_iter(Uniform::from(0..4))
+                        .take(len)
+                        .collect::<Vec<_>>();
+                    all_keys.insert(key.clone());
+                    let value = rng.gen::<u8>();
+                    view.map.insert(&key, value).await?;
+                    new_state_map.insert(key, value);
+                }
+            }
+            if choice == 1 && count > 0 {
+                let n_remove = rng.gen_range(0..count);
+                for _ in 0..n_remove {
+                    let pos = rng.gen_range(0..new_state_vec.len());
+                    let vec = new_state_vec[pos].clone();
+                    view.map.remove(&vec.0).await?;
+                    new_state_map.remove(&vec.0);
+                }
+            }
+            if choice == 2 {
+                view.clear();
+                new_state_map.clear();
+            }
+            if choice == 3 {
+                view.rollback();
+                assert!(!view.has_pending_changes().await);
+                new_state_map = state_map.clone();
+            }
+            if choice == 4 && count > 0 {
+                let pos = rng.gen_range(0..new_state_vec.len());
+                let vec = new_state_vec[pos].clone();
+                let key = vec.0;
+                let result = view.map.get_mut(&key).await?.unwrap();
+                let new_value = rng.gen::<u8>();
+                *result = new_value;
+                new_state_map.insert(key, new_value);
+            }
+            if choice == 5 {
+                let key = if rng.gen::<bool>() && !new_state_vec.is_empty() {
+                    let pos = rng.gen_range(0..new_state_vec.len());
+                    new_state_vec[pos].0.clone()
+                } else {
+                    let len = rng.gen_range(1..6);
+                    rng.clone()
+                        .sample_iter(Uniform::from(0..4))
+                        .take(len)
+                        .collect::<Vec<_>>()
+                };
+                let test_view = view.map.contains_key(&key).await?;
+                let test_map = new_state_map.contains_key(&key);
+                assert_eq!(test_view, test_map);
+                let result = view.map.get_mut_or_default(&key).await?;
+                let new_value = rng.gen::<u8>();
+                *result = new_value;
+                new_state_map.insert(key, new_value);
+            }
+            new_state_vec = new_state_map.clone().into_iter().collect();
+            assert_eq!(view.map.count().await?, new_state_vec.len());
+            let new_hash = view.crypto_hash_mut().await?;
+            if state_map == new_state_map {
+                assert_eq!(new_hash, read_hash);
+            } else {
+                assert_ne!(new_hash, read_hash);
+            }
+            let new_key_values = view
+                .map
+                .index_values()
+                .await?
+                .into_iter()
+                .collect::<BTreeMap<_, _>>();
+            assert_eq!(new_state_map, new_key_values);
+            let keys_vec = all_keys.iter().cloned().collect::<Vec<_>>();
+            let values = view.map.multi_get(keys_vec.iter()).await?;
+            for i in 0..keys_vec.len() {
+                let key = &keys_vec[i];
+                let test_map = new_state_map.contains_key(key);
+                let test_view1 = view.map.get(key).await?.is_some();
+                let test_view2 = view.map.contains_key(key).await?;
+                assert_eq!(test_map, test_view1);
+                assert_eq!(test_map, test_view2);
+                assert_eq!(test_map, values[i].is_some());
+            }
+        }
+        if save {
+            if state_map != new_state_map {
+                assert!(view.has_pending_changes().await);
+            }
+            state_map = new_state_map.clone();
+            view.save().await?;
+            assert!(!view.has_pending_changes().await);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn map_count_view_mutability() -> Result<()> {
+    let mut rng = make_deterministic_rng();
+    for _ in 0..5 {
+        run_map_count_view_mutability(&mut rng).await?;
     }
     Ok(())
 }

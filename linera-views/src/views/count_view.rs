@@ -193,6 +193,26 @@ where
     }
 }
 
+impl<C, I, V> MapCountView<C, I, V>
+where
+    C: Context,
+    I: Serialize,
+    V: Default + DeserializeOwned + 'static,
+{
+    /// Obtains a mutable reference to a value at a given position, creating it with default
+    /// if missing, and updates the count in O(1).
+    pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Sync + Send + Serialize + ?Sized,
+    {
+        if !self.map.contains_key(index).await? {
+            self.count += 1;
+        }
+        self.map.get_mut_or_default(index).await
+    }
+}
+
 impl<C, I, V> HashableView for MapCountView<C, I, V>
 where
     Self: View,
