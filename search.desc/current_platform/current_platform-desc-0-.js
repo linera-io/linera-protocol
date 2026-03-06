@@ -1,0 +1,1 @@
+searchState.loadedDescShard("current_platform", 0, "<strong>Find out what platform your code is running on:</strong>\nThe platform on which your code was compiled.\nThe platform on which your code is running.")

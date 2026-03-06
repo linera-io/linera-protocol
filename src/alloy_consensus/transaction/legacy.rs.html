@@ -1,0 +1,808 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/alloy-consensus-1.0.24/src/transaction/legacy.rs`."><title>legacy.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="alloy_consensus" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">alloy_consensus/transaction/</div>legacy.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use crate</span>::{
+<a href=#2 id=2 data-nosnippet>2</a>    transaction::{RlpEcdsaDecodableTx, RlpEcdsaEncodableTx},
+<a href=#3 id=3 data-nosnippet>3</a>    SignableTransaction, Signed, Transaction, TxType,
+<a href=#4 id=4 data-nosnippet>4</a>};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>alloc::vec::Vec;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>alloy_eips::{
+<a href=#7 id=7 data-nosnippet>7</a>    eip2718::IsTyped2718, eip2930::AccessList, eip7702::SignedAuthorization, Typed2718,
+<a href=#8 id=8 data-nosnippet>8</a>};
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>alloy_primitives::{keccak256, Bytes, ChainId, Signature, TxKind, B256, U256};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>alloy_rlp::{length_of_length, BufMut, Decodable, Encodable, Header, <span class="prelude-ty">Result</span>};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>core::mem;
+<a href=#12 id=12 data-nosnippet>12</a>
+<a href=#13 id=13 data-nosnippet>13</a><span class="doccomment">/// Legacy transaction.
+<a href=#14 id=14 data-nosnippet>14</a></span><span class="attr">#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+<a href=#15 id=15 data-nosnippet>15</a>#[cfg_attr(any(test, feature = <span class="string">"arbitrary"</span>), derive(arbitrary::Arbitrary))]
+<a href=#16 id=16 data-nosnippet>16</a>#[cfg_attr(feature = <span class="string">"serde"</span>, derive(serde::Serialize, serde::Deserialize))]
+<a href=#17 id=17 data-nosnippet>17</a>#[cfg_attr(feature = <span class="string">"serde"</span>, serde(rename_all = <span class="string">"camelCase"</span>))]
+<a href=#18 id=18 data-nosnippet>18</a>#[doc(alias = <span class="string">"LegacyTransaction"</span>, alias = <span class="string">"TransactionLegacy"</span>, alias = <span class="string">"LegacyTx"</span>)]
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">pub struct </span>TxLegacy {
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="doccomment">/// Added as EIP-155: Simple replay attack protection
+<a href=#21 id=21 data-nosnippet>21</a>    </span><span class="attr">#[cfg_attr(
+<a href=#22 id=22 data-nosnippet>22</a>        feature = <span class="string">"serde"</span>,
+<a href=#23 id=23 data-nosnippet>23</a>        serde(
+<a href=#24 id=24 data-nosnippet>24</a>            default,
+<a href=#25 id=25 data-nosnippet>25</a>            with = <span class="string">"alloy_serde::quantity::opt"</span>,
+<a href=#26 id=26 data-nosnippet>26</a>            skip_serializing_if = <span class="string">"Option::is_none"</span>,
+<a href=#27 id=27 data-nosnippet>27</a>        )
+<a href=#28 id=28 data-nosnippet>28</a>    )]
+<a href=#29 id=29 data-nosnippet>29</a>    </span><span class="kw">pub </span>chain_id: <span class="prelude-ty">Option</span>&lt;ChainId&gt;,
+<a href=#30 id=30 data-nosnippet>30</a>    <span class="doccomment">/// A scalar value equal to the number of transactions sent by the sender; formally Tn.
+<a href=#31 id=31 data-nosnippet>31</a>    </span><span class="attr">#[cfg_attr(feature = <span class="string">"serde"</span>, serde(with = <span class="string">"alloy_serde::quantity"</span>))]
+<a href=#32 id=32 data-nosnippet>32</a>    </span><span class="kw">pub </span>nonce: u64,
+<a href=#33 id=33 data-nosnippet>33</a>    <span class="doccomment">/// A scalar value equal to the number of
+<a href=#34 id=34 data-nosnippet>34</a>    /// Wei to be paid per unit of gas for all computation
+<a href=#35 id=35 data-nosnippet>35</a>    /// costs incurred as a result of the execution of this transaction; formally Tp.
+<a href=#36 id=36 data-nosnippet>36</a>    ///
+<a href=#37 id=37 data-nosnippet>37</a>    /// As ethereum circulation is around 120mil eth as of 2022 that is around
+<a href=#38 id=38 data-nosnippet>38</a>    /// 120000000000000000000000000 wei we are safe to use u128 as its max number is:
+<a href=#39 id=39 data-nosnippet>39</a>    /// 340282366920938463463374607431768211455
+<a href=#40 id=40 data-nosnippet>40</a>    </span><span class="attr">#[cfg_attr(feature = <span class="string">"serde"</span>, serde(with = <span class="string">"alloy_serde::quantity"</span>))]
+<a href=#41 id=41 data-nosnippet>41</a>    </span><span class="kw">pub </span>gas_price: u128,
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="doccomment">/// A scalar value equal to the maximum
+<a href=#43 id=43 data-nosnippet>43</a>    /// amount of gas that should be used in executing
+<a href=#44 id=44 data-nosnippet>44</a>    /// this transaction. This is paid up-front, before any
+<a href=#45 id=45 data-nosnippet>45</a>    /// computation is done and may not be increased
+<a href=#46 id=46 data-nosnippet>46</a>    /// later; formally Tg.
+<a href=#47 id=47 data-nosnippet>47</a>    </span><span class="attr">#[cfg_attr(
+<a href=#48 id=48 data-nosnippet>48</a>        feature = <span class="string">"serde"</span>,
+<a href=#49 id=49 data-nosnippet>49</a>        serde(with = <span class="string">"alloy_serde::quantity"</span>, rename = <span class="string">"gas"</span>, alias = <span class="string">"gasLimit"</span>)
+<a href=#50 id=50 data-nosnippet>50</a>    )]
+<a href=#51 id=51 data-nosnippet>51</a>    </span><span class="kw">pub </span>gas_limit: u64,
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="doccomment">/// The 160-bit address of the message call’s recipient or, for a contract creation
+<a href=#53 id=53 data-nosnippet>53</a>    /// transaction, ∅, used here to denote the only member of B0 ; formally Tt.
+<a href=#54 id=54 data-nosnippet>54</a>    </span><span class="attr">#[cfg_attr(feature = <span class="string">"serde"</span>, serde(default))]
+<a href=#55 id=55 data-nosnippet>55</a>    </span><span class="kw">pub </span>to: TxKind,
+<a href=#56 id=56 data-nosnippet>56</a>    <span class="doccomment">/// A scalar value equal to the number of Wei to
+<a href=#57 id=57 data-nosnippet>57</a>    /// be transferred to the message call’s recipient or,
+<a href=#58 id=58 data-nosnippet>58</a>    /// in the case of contract creation, as an endowment
+<a href=#59 id=59 data-nosnippet>59</a>    /// to the newly created account; formally Tv.
+<a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">pub </span>value: U256,
+<a href=#61 id=61 data-nosnippet>61</a>    <span class="doccomment">/// Input has two uses depending if `to` field is Create or Call.
+<a href=#62 id=62 data-nosnippet>62</a>    /// pub init: An unlimited size byte array specifying the
+<a href=#63 id=63 data-nosnippet>63</a>    /// EVM-code for the account initialisation procedure CREATE,
+<a href=#64 id=64 data-nosnippet>64</a>    /// data: An unlimited size byte array specifying the
+<a href=#65 id=65 data-nosnippet>65</a>    /// input data of the message call, formally Td.
+<a href=#66 id=66 data-nosnippet>66</a>    </span><span class="kw">pub </span>input: Bytes,
+<a href=#67 id=67 data-nosnippet>67</a>}
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a><span class="kw">impl </span>TxLegacy {
+<a href=#70 id=70 data-nosnippet>70</a>    <span class="doccomment">/// The EIP-2718 transaction type.
+<a href=#71 id=71 data-nosnippet>71</a>    </span><span class="kw">pub const </span>TX_TYPE: isize = <span class="number">0</span>;
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="doccomment">/// Calculates a heuristic for the in-memory size of the [TxLegacy] transaction.
+<a href=#74 id=74 data-nosnippet>74</a>    </span><span class="attr">#[inline]
+<a href=#75 id=75 data-nosnippet>75</a>    </span><span class="kw">pub fn </span>size(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#76 id=76 data-nosnippet>76</a>        mem::size_of::&lt;<span class="prelude-ty">Option</span>&lt;ChainId&gt;&gt;() + <span class="comment">// chain_id
+<a href=#77 id=77 data-nosnippet>77</a>        </span>mem::size_of::&lt;u64&gt;() + <span class="comment">// nonce
+<a href=#78 id=78 data-nosnippet>78</a>        </span>mem::size_of::&lt;u128&gt;() + <span class="comment">// gas_price
+<a href=#79 id=79 data-nosnippet>79</a>        </span>mem::size_of::&lt;u64&gt;() + <span class="comment">// gas_limit
+<a href=#80 id=80 data-nosnippet>80</a>        </span><span class="self">self</span>.to.size() + <span class="comment">// to
+<a href=#81 id=81 data-nosnippet>81</a>        </span>mem::size_of::&lt;U256&gt;() + <span class="comment">// value
+<a href=#82 id=82 data-nosnippet>82</a>        </span><span class="self">self</span>.input.len() <span class="comment">// input
+<a href=#83 id=83 data-nosnippet>83</a>    </span>}
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="doccomment">/// Outputs the length of EIP-155 fields. Only outputs a non-zero value for EIP-155 legacy
+<a href=#86 id=86 data-nosnippet>86</a>    /// transactions.
+<a href=#87 id=87 data-nosnippet>87</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>eip155_fields_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#88 id=88 data-nosnippet>88</a>        <span class="self">self</span>.chain_id.map_or(
+<a href=#89 id=89 data-nosnippet>89</a>            <span class="comment">// this is either a pre-EIP-155 legacy transaction or a typed transaction
+<a href=#90 id=90 data-nosnippet>90</a>            </span><span class="number">0</span>,
+<a href=#91 id=91 data-nosnippet>91</a>            <span class="comment">// EIP-155 encodes the chain ID and two zeroes, so we add 2 to the length of the chain
+<a href=#92 id=92 data-nosnippet>92</a>            // ID to get the length of all 3 fields
+<a href=#93 id=93 data-nosnippet>93</a>            // len(chain_id) + (0x00) + (0x00)
+<a href=#94 id=94 data-nosnippet>94</a>            </span>|id| id.length() + <span class="number">2</span>,
+<a href=#95 id=95 data-nosnippet>95</a>        )
+<a href=#96 id=96 data-nosnippet>96</a>    }
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="doccomment">/// Encodes EIP-155 arguments into the desired buffer. Only encodes values
+<a href=#99 id=99 data-nosnippet>99</a>    /// for legacy transactions.
+<a href=#100 id=100 data-nosnippet>100</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>encode_eip155_signing_fields(<span class="kw-2">&amp;</span><span class="self">self</span>, out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>BufMut) {
+<a href=#101 id=101 data-nosnippet>101</a>        <span class="comment">// if this is a legacy transaction without a chain ID, it must be pre-EIP-155
+<a href=#102 id=102 data-nosnippet>102</a>        // and does not need to encode the chain ID for the signature hash encoding
+<a href=#103 id=103 data-nosnippet>103</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(id) = <span class="self">self</span>.chain_id {
+<a href=#104 id=104 data-nosnippet>104</a>            <span class="comment">// EIP-155 encodes the chain ID and two zeroes
+<a href=#105 id=105 data-nosnippet>105</a>            </span>id.encode(out);
+<a href=#106 id=106 data-nosnippet>106</a>            <span class="number">0x00u8</span>.encode(out);
+<a href=#107 id=107 data-nosnippet>107</a>            <span class="number">0x00u8</span>.encode(out);
+<a href=#108 id=108 data-nosnippet>108</a>        }
+<a href=#109 id=109 data-nosnippet>109</a>    }
+<a href=#110 id=110 data-nosnippet>110</a>}
+<a href=#111 id=111 data-nosnippet>111</a>
+<a href=#112 id=112 data-nosnippet>112</a><span class="comment">// Legacy transaction network and 2718 encodings are identical to the RLP
+<a href=#113 id=113 data-nosnippet>113</a>// encoding.
+<a href=#114 id=114 data-nosnippet>114</a></span><span class="kw">impl </span>RlpEcdsaEncodableTx <span class="kw">for </span>TxLegacy {
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">fn </span>rlp_encoded_fields_length(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="self">self</span>.nonce.length()
+<a href=#117 id=117 data-nosnippet>117</a>            + <span class="self">self</span>.gas_price.length()
+<a href=#118 id=118 data-nosnippet>118</a>            + <span class="self">self</span>.gas_limit.length()
+<a href=#119 id=119 data-nosnippet>119</a>            + <span class="self">self</span>.to.length()
+<a href=#120 id=120 data-nosnippet>120</a>            + <span class="self">self</span>.value.length()
+<a href=#121 id=121 data-nosnippet>121</a>            + <span class="self">self</span>.input.<span class="number">0</span>.length()
+<a href=#122 id=122 data-nosnippet>122</a>    }
+<a href=#123 id=123 data-nosnippet>123</a>
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">fn </span>rlp_encode_fields(<span class="kw-2">&amp;</span><span class="self">self</span>, out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>alloy_rlp::BufMut) {
+<a href=#125 id=125 data-nosnippet>125</a>        <span class="self">self</span>.nonce.encode(out);
+<a href=#126 id=126 data-nosnippet>126</a>        <span class="self">self</span>.gas_price.encode(out);
+<a href=#127 id=127 data-nosnippet>127</a>        <span class="self">self</span>.gas_limit.encode(out);
+<a href=#128 id=128 data-nosnippet>128</a>        <span class="self">self</span>.to.encode(out);
+<a href=#129 id=129 data-nosnippet>129</a>        <span class="self">self</span>.value.encode(out);
+<a href=#130 id=130 data-nosnippet>130</a>        <span class="self">self</span>.input.<span class="number">0</span>.encode(out);
+<a href=#131 id=131 data-nosnippet>131</a>    }
+<a href=#132 id=132 data-nosnippet>132</a>
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">fn </span>rlp_header_signed(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature) -&gt; Header {
+<a href=#134 id=134 data-nosnippet>134</a>        <span class="kw">let </span>payload_length = <span class="self">self</span>.rlp_encoded_fields_length()
+<a href=#135 id=135 data-nosnippet>135</a>            + signature.rlp_rs_len()
+<a href=#136 id=136 data-nosnippet>136</a>            + to_eip155_value(signature.v(), <span class="self">self</span>.chain_id).length();
+<a href=#137 id=137 data-nosnippet>137</a>        Header { list: <span class="bool-val">true</span>, payload_length }
+<a href=#138 id=138 data-nosnippet>138</a>    }
+<a href=#139 id=139 data-nosnippet>139</a>
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">fn </span>rlp_encoded_length_with_signature(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature) -&gt; usize {
+<a href=#141 id=141 data-nosnippet>141</a>        <span class="comment">// Enforce correct parity for legacy transactions (EIP-155, 27 or 28).
+<a href=#142 id=142 data-nosnippet>142</a>        </span><span class="self">self</span>.rlp_header_signed(signature).length_with_payload()
+<a href=#143 id=143 data-nosnippet>143</a>    }
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">fn </span>rlp_encode_signed(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature, out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>BufMut) {
+<a href=#146 id=146 data-nosnippet>146</a>        <span class="comment">// Enforce correct parity for legacy transactions (EIP-155, 27 or 28).
+<a href=#147 id=147 data-nosnippet>147</a>        </span><span class="self">self</span>.rlp_header_signed(signature).encode(out);
+<a href=#148 id=148 data-nosnippet>148</a>        <span class="self">self</span>.rlp_encode_fields(out);
+<a href=#149 id=149 data-nosnippet>149</a>        signature.write_rlp_vrs(out, to_eip155_value(signature.v(), <span class="self">self</span>.chain_id));
+<a href=#150 id=150 data-nosnippet>150</a>    }
+<a href=#151 id=151 data-nosnippet>151</a>
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">fn </span>eip2718_encoded_length(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature) -&gt; usize {
+<a href=#153 id=153 data-nosnippet>153</a>        <span class="self">self</span>.rlp_encoded_length_with_signature(signature)
+<a href=#154 id=154 data-nosnippet>154</a>    }
+<a href=#155 id=155 data-nosnippet>155</a>
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">fn </span>eip2718_encode_with_type(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature, _ty: u8, out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>BufMut) {
+<a href=#157 id=157 data-nosnippet>157</a>        <span class="self">self</span>.rlp_encode_signed(signature, out);
+<a href=#158 id=158 data-nosnippet>158</a>    }
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">fn </span>network_header(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature) -&gt; Header {
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="self">self</span>.rlp_header_signed(signature)
+<a href=#162 id=162 data-nosnippet>162</a>    }
+<a href=#163 id=163 data-nosnippet>163</a>
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">fn </span>network_encoded_length(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature) -&gt; usize {
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="self">self</span>.rlp_encoded_length_with_signature(signature)
+<a href=#166 id=166 data-nosnippet>166</a>    }
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">fn </span>network_encode_with_type(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature, _ty: u8, out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>BufMut) {
+<a href=#169 id=169 data-nosnippet>169</a>        <span class="self">self</span>.rlp_encode_signed(signature, out);
+<a href=#170 id=170 data-nosnippet>170</a>    }
+<a href=#171 id=171 data-nosnippet>171</a>
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="kw">fn </span>tx_hash_with_type(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature, _ty: u8) -&gt; alloy_primitives::TxHash {
+<a href=#173 id=173 data-nosnippet>173</a>        <span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::with_capacity(<span class="self">self</span>.rlp_encoded_length_with_signature(signature));
+<a href=#174 id=174 data-nosnippet>174</a>        <span class="self">self</span>.rlp_encode_signed(signature, <span class="kw-2">&amp;mut </span>buf);
+<a href=#175 id=175 data-nosnippet>175</a>        keccak256(<span class="kw-2">&amp;</span>buf)
+<a href=#176 id=176 data-nosnippet>176</a>    }
+<a href=#177 id=177 data-nosnippet>177</a>}
+<a href=#178 id=178 data-nosnippet>178</a>
+<a href=#179 id=179 data-nosnippet>179</a><span class="kw">impl </span>RlpEcdsaDecodableTx <span class="kw">for </span>TxLegacy {
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">const </span>DEFAULT_TX_TYPE: u8 = { <span class="self">Self</span>::TX_TYPE <span class="kw">as </span>u8 };
+<a href=#181 id=181 data-nosnippet>181</a>
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">fn </span>rlp_decode_fields(buf: <span class="kw-2">&amp;mut &amp;</span>[u8]) -&gt; alloy_rlp::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#184 id=184 data-nosnippet>184</a>            nonce: Decodable::decode(buf)<span class="question-mark">?</span>,
+<a href=#185 id=185 data-nosnippet>185</a>            gas_price: Decodable::decode(buf)<span class="question-mark">?</span>,
+<a href=#186 id=186 data-nosnippet>186</a>            gas_limit: Decodable::decode(buf)<span class="question-mark">?</span>,
+<a href=#187 id=187 data-nosnippet>187</a>            to: Decodable::decode(buf)<span class="question-mark">?</span>,
+<a href=#188 id=188 data-nosnippet>188</a>            value: Decodable::decode(buf)<span class="question-mark">?</span>,
+<a href=#189 id=189 data-nosnippet>189</a>            input: Decodable::decode(buf)<span class="question-mark">?</span>,
+<a href=#190 id=190 data-nosnippet>190</a>            chain_id: <span class="prelude-val">None</span>,
+<a href=#191 id=191 data-nosnippet>191</a>        })
+<a href=#192 id=192 data-nosnippet>192</a>    }
+<a href=#193 id=193 data-nosnippet>193</a>
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">fn </span>rlp_decode_with_signature(buf: <span class="kw-2">&amp;mut &amp;</span>[u8]) -&gt; alloy_rlp::Result&lt;(<span class="self">Self</span>, Signature)&gt; {
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">let </span>header = Header::decode(buf)<span class="question-mark">?</span>;
+<a href=#196 id=196 data-nosnippet>196</a>        <span class="kw">if </span>!header.list {
+<a href=#197 id=197 data-nosnippet>197</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(alloy_rlp::Error::UnexpectedString);
+<a href=#198 id=198 data-nosnippet>198</a>        }
+<a href=#199 id=199 data-nosnippet>199</a>
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="kw">let </span>remaining = buf.len();
+<a href=#201 id=201 data-nosnippet>201</a>        <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">Self</span>::rlp_decode_fields(buf)<span class="question-mark">?</span>;
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="kw">let </span>signature = Signature::decode_rlp_vrs(buf, |buf| {
+<a href=#203 id=203 data-nosnippet>203</a>            <span class="kw">let </span>value = Decodable::decode(buf)<span class="question-mark">?</span>;
+<a href=#204 id=204 data-nosnippet>204</a>            <span class="kw">let </span>(parity, chain_id) =
+<a href=#205 id=205 data-nosnippet>205</a>                from_eip155_value(value).ok_or(alloy_rlp::Error::Custom(<span class="string">"invalid parity value"</span>))<span class="question-mark">?</span>;
+<a href=#206 id=206 data-nosnippet>206</a>            tx.chain_id = chain_id;
+<a href=#207 id=207 data-nosnippet>207</a>            <span class="prelude-val">Ok</span>(parity)
+<a href=#208 id=208 data-nosnippet>208</a>        })<span class="question-mark">?</span>;
+<a href=#209 id=209 data-nosnippet>209</a>
+<a href=#210 id=210 data-nosnippet>210</a>        <span class="kw">if </span>buf.len() + header.payload_length != remaining {
+<a href=#211 id=211 data-nosnippet>211</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(alloy_rlp::Error::ListLengthMismatch {
+<a href=#212 id=212 data-nosnippet>212</a>                expected: header.payload_length,
+<a href=#213 id=213 data-nosnippet>213</a>                got: remaining - buf.len(),
+<a href=#214 id=214 data-nosnippet>214</a>            });
+<a href=#215 id=215 data-nosnippet>215</a>        }
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="prelude-val">Ok</span>((tx, signature))
+<a href=#218 id=218 data-nosnippet>218</a>    }
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a>    <span class="kw">fn </span>eip2718_decode_with_type(
+<a href=#221 id=221 data-nosnippet>221</a>        buf: <span class="kw-2">&amp;mut &amp;</span>[u8],
+<a href=#222 id=222 data-nosnippet>222</a>        _ty: u8,
+<a href=#223 id=223 data-nosnippet>223</a>    ) -&gt; alloy_eips::eip2718::Eip2718Result&lt;Signed&lt;<span class="self">Self</span>&gt;&gt; {
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="self">Self</span>::rlp_decode_signed(buf).map_err(Into::into)
+<a href=#225 id=225 data-nosnippet>225</a>    }
+<a href=#226 id=226 data-nosnippet>226</a>
+<a href=#227 id=227 data-nosnippet>227</a>    <span class="kw">fn </span>eip2718_decode(buf: <span class="kw-2">&amp;mut &amp;</span>[u8]) -&gt; alloy_eips::eip2718::Eip2718Result&lt;Signed&lt;<span class="self">Self</span>&gt;&gt; {
+<a href=#228 id=228 data-nosnippet>228</a>        <span class="self">Self</span>::rlp_decode_signed(buf).map_err(Into::into)
+<a href=#229 id=229 data-nosnippet>229</a>    }
+<a href=#230 id=230 data-nosnippet>230</a>
+<a href=#231 id=231 data-nosnippet>231</a>    <span class="kw">fn </span>network_decode_with_type(
+<a href=#232 id=232 data-nosnippet>232</a>        buf: <span class="kw-2">&amp;mut &amp;</span>[u8],
+<a href=#233 id=233 data-nosnippet>233</a>        _ty: u8,
+<a href=#234 id=234 data-nosnippet>234</a>    ) -&gt; alloy_eips::eip2718::Eip2718Result&lt;Signed&lt;<span class="self">Self</span>&gt;&gt; {
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="self">Self</span>::rlp_decode_signed(buf).map_err(Into::into)
+<a href=#236 id=236 data-nosnippet>236</a>    }
+<a href=#237 id=237 data-nosnippet>237</a>}
+<a href=#238 id=238 data-nosnippet>238</a>
+<a href=#239 id=239 data-nosnippet>239</a><span class="kw">impl </span>Transaction <span class="kw">for </span>TxLegacy {
+<a href=#240 id=240 data-nosnippet>240</a>    <span class="attr">#[inline]
+<a href=#241 id=241 data-nosnippet>241</a>    </span><span class="kw">fn </span>chain_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ChainId&gt; {
+<a href=#242 id=242 data-nosnippet>242</a>        <span class="self">self</span>.chain_id
+<a href=#243 id=243 data-nosnippet>243</a>    }
+<a href=#244 id=244 data-nosnippet>244</a>
+<a href=#245 id=245 data-nosnippet>245</a>    <span class="attr">#[inline]
+<a href=#246 id=246 data-nosnippet>246</a>    </span><span class="kw">fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#247 id=247 data-nosnippet>247</a>        <span class="self">self</span>.nonce
+<a href=#248 id=248 data-nosnippet>248</a>    }
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="attr">#[inline]
+<a href=#251 id=251 data-nosnippet>251</a>    </span><span class="kw">fn </span>gas_limit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#252 id=252 data-nosnippet>252</a>        <span class="self">self</span>.gas_limit
+<a href=#253 id=253 data-nosnippet>253</a>    }
+<a href=#254 id=254 data-nosnippet>254</a>
+<a href=#255 id=255 data-nosnippet>255</a>    <span class="attr">#[inline]
+<a href=#256 id=256 data-nosnippet>256</a>    </span><span class="kw">fn </span>gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u128&gt; {
+<a href=#257 id=257 data-nosnippet>257</a>        <span class="prelude-val">Some</span>(<span class="self">self</span>.gas_price)
+<a href=#258 id=258 data-nosnippet>258</a>    }
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>    <span class="attr">#[inline]
+<a href=#261 id=261 data-nosnippet>261</a>    </span><span class="kw">fn </span>max_fee_per_gas(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u128 {
+<a href=#262 id=262 data-nosnippet>262</a>        <span class="self">self</span>.gas_price
+<a href=#263 id=263 data-nosnippet>263</a>    }
+<a href=#264 id=264 data-nosnippet>264</a>
+<a href=#265 id=265 data-nosnippet>265</a>    <span class="attr">#[inline]
+<a href=#266 id=266 data-nosnippet>266</a>    </span><span class="kw">fn </span>max_priority_fee_per_gas(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u128&gt; {
+<a href=#267 id=267 data-nosnippet>267</a>        <span class="prelude-val">None
+<a href=#268 id=268 data-nosnippet>268</a>    </span>}
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a>    <span class="attr">#[inline]
+<a href=#271 id=271 data-nosnippet>271</a>    </span><span class="kw">fn </span>max_fee_per_blob_gas(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u128&gt; {
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="prelude-val">None
+<a href=#273 id=273 data-nosnippet>273</a>    </span>}
+<a href=#274 id=274 data-nosnippet>274</a>
+<a href=#275 id=275 data-nosnippet>275</a>    <span class="attr">#[inline]
+<a href=#276 id=276 data-nosnippet>276</a>    </span><span class="kw">fn </span>priority_fee_or_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u128 {
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="self">self</span>.gas_price
+<a href=#278 id=278 data-nosnippet>278</a>    }
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">fn </span>effective_gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>, _base_fee: <span class="prelude-ty">Option</span>&lt;u64&gt;) -&gt; u128 {
+<a href=#281 id=281 data-nosnippet>281</a>        <span class="self">self</span>.gas_price
+<a href=#282 id=282 data-nosnippet>282</a>    }
+<a href=#283 id=283 data-nosnippet>283</a>
+<a href=#284 id=284 data-nosnippet>284</a>    <span class="attr">#[inline]
+<a href=#285 id=285 data-nosnippet>285</a>    </span><span class="kw">fn </span>is_dynamic_fee(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#286 id=286 data-nosnippet>286</a>        <span class="bool-val">false
+<a href=#287 id=287 data-nosnippet>287</a>    </span>}
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a>    <span class="attr">#[inline]
+<a href=#290 id=290 data-nosnippet>290</a>    </span><span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TxKind {
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="self">self</span>.to
+<a href=#292 id=292 data-nosnippet>292</a>    }
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="attr">#[inline]
+<a href=#295 id=295 data-nosnippet>295</a>    </span><span class="kw">fn </span>is_create(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#296 id=296 data-nosnippet>296</a>        <span class="self">self</span>.to.is_create()
+<a href=#297 id=297 data-nosnippet>297</a>    }
+<a href=#298 id=298 data-nosnippet>298</a>
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="attr">#[inline]
+<a href=#300 id=300 data-nosnippet>300</a>    </span><span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; U256 {
+<a href=#301 id=301 data-nosnippet>301</a>        <span class="self">self</span>.value
+<a href=#302 id=302 data-nosnippet>302</a>    }
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a>    <span class="attr">#[inline]
+<a href=#305 id=305 data-nosnippet>305</a>    </span><span class="kw">fn </span>input(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Bytes {
+<a href=#306 id=306 data-nosnippet>306</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.input
+<a href=#307 id=307 data-nosnippet>307</a>    }
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="attr">#[inline]
+<a href=#310 id=310 data-nosnippet>310</a>    </span><span class="kw">fn </span>access_list(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>AccessList&gt; {
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="prelude-val">None
+<a href=#312 id=312 data-nosnippet>312</a>    </span>}
+<a href=#313 id=313 data-nosnippet>313</a>
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="attr">#[inline]
+<a href=#315 id=315 data-nosnippet>315</a>    </span><span class="kw">fn </span>blob_versioned_hashes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[B256]&gt; {
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="prelude-val">None
+<a href=#317 id=317 data-nosnippet>317</a>    </span>}
+<a href=#318 id=318 data-nosnippet>318</a>
+<a href=#319 id=319 data-nosnippet>319</a>    <span class="attr">#[inline]
+<a href=#320 id=320 data-nosnippet>320</a>    </span><span class="kw">fn </span>authorization_list(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[SignedAuthorization]&gt; {
+<a href=#321 id=321 data-nosnippet>321</a>        <span class="prelude-val">None
+<a href=#322 id=322 data-nosnippet>322</a>    </span>}
+<a href=#323 id=323 data-nosnippet>323</a>}
+<a href=#324 id=324 data-nosnippet>324</a>
+<a href=#325 id=325 data-nosnippet>325</a><span class="kw">impl </span>SignableTransaction&lt;Signature&gt; <span class="kw">for </span>TxLegacy {
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="kw">fn </span>set_chain_id(<span class="kw-2">&amp;mut </span><span class="self">self</span>, chain_id: ChainId) {
+<a href=#327 id=327 data-nosnippet>327</a>        <span class="self">self</span>.chain_id = <span class="prelude-val">Some</span>(chain_id);
+<a href=#328 id=328 data-nosnippet>328</a>    }
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>    <span class="kw">fn </span>encode_for_signing(<span class="kw-2">&amp;</span><span class="self">self</span>, out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>BufMut) {
+<a href=#331 id=331 data-nosnippet>331</a>        Header {
+<a href=#332 id=332 data-nosnippet>332</a>            list: <span class="bool-val">true</span>,
+<a href=#333 id=333 data-nosnippet>333</a>            payload_length: <span class="self">self</span>.rlp_encoded_fields_length() + <span class="self">self</span>.eip155_fields_len(),
+<a href=#334 id=334 data-nosnippet>334</a>        }
+<a href=#335 id=335 data-nosnippet>335</a>        .encode(out);
+<a href=#336 id=336 data-nosnippet>336</a>        <span class="self">self</span>.rlp_encode_fields(out);
+<a href=#337 id=337 data-nosnippet>337</a>        <span class="self">self</span>.encode_eip155_signing_fields(out);
+<a href=#338 id=338 data-nosnippet>338</a>    }
+<a href=#339 id=339 data-nosnippet>339</a>
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">fn </span>payload_len_for_signature(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="kw">let </span>payload_length = <span class="self">self</span>.rlp_encoded_fields_length() + <span class="self">self</span>.eip155_fields_len();
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="comment">// 'header length' + 'payload length'
+<a href=#343 id=343 data-nosnippet>343</a>        </span>Header { list: <span class="bool-val">true</span>, payload_length }.length_with_payload()
+<a href=#344 id=344 data-nosnippet>344</a>    }
+<a href=#345 id=345 data-nosnippet>345</a>}
+<a href=#346 id=346 data-nosnippet>346</a>
+<a href=#347 id=347 data-nosnippet>347</a><span class="kw">impl </span>Typed2718 <span class="kw">for </span>TxLegacy {
+<a href=#348 id=348 data-nosnippet>348</a>    <span class="kw">fn </span>ty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u8 {
+<a href=#349 id=349 data-nosnippet>349</a>        TxType::Legacy <span class="kw">as </span>u8
+<a href=#350 id=350 data-nosnippet>350</a>    }
+<a href=#351 id=351 data-nosnippet>351</a>}
+<a href=#352 id=352 data-nosnippet>352</a>
+<a href=#353 id=353 data-nosnippet>353</a><span class="kw">impl </span>IsTyped2718 <span class="kw">for </span>TxLegacy {
+<a href=#354 id=354 data-nosnippet>354</a>    <span class="kw">fn </span>is_type(type_id: u8) -&gt; bool {
+<a href=#355 id=355 data-nosnippet>355</a>        <span class="macro">matches!</span>(type_id, <span class="number">0x00</span>)
+<a href=#356 id=356 data-nosnippet>356</a>    }
+<a href=#357 id=357 data-nosnippet>357</a>}
+<a href=#358 id=358 data-nosnippet>358</a>
+<a href=#359 id=359 data-nosnippet>359</a><span class="kw">impl </span>Encodable <span class="kw">for </span>TxLegacy {
+<a href=#360 id=360 data-nosnippet>360</a>    <span class="kw">fn </span>encode(<span class="kw-2">&amp;</span><span class="self">self</span>, out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>BufMut) {
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="self">self</span>.encode_for_signing(out)
+<a href=#362 id=362 data-nosnippet>362</a>    }
+<a href=#363 id=363 data-nosnippet>363</a>
+<a href=#364 id=364 data-nosnippet>364</a>    <span class="kw">fn </span>length(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#365 id=365 data-nosnippet>365</a>        <span class="kw">let </span>payload_length = <span class="self">self</span>.rlp_encoded_fields_length() + <span class="self">self</span>.eip155_fields_len();
+<a href=#366 id=366 data-nosnippet>366</a>        <span class="comment">// 'header length' + 'payload length'
+<a href=#367 id=367 data-nosnippet>367</a>        </span>length_of_length(payload_length) + payload_length
+<a href=#368 id=368 data-nosnippet>368</a>    }
+<a href=#369 id=369 data-nosnippet>369</a>}
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a><span class="kw">impl </span>Decodable <span class="kw">for </span>TxLegacy {
+<a href=#372 id=372 data-nosnippet>372</a>    <span class="kw">fn </span>decode(data: <span class="kw-2">&amp;mut &amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="kw">let </span>header = Header::decode(data)<span class="question-mark">?</span>;
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">let </span>remaining_len = data.len();
+<a href=#375 id=375 data-nosnippet>375</a>
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">let </span>transaction_payload_len = header.payload_length;
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="kw">if </span>transaction_payload_len &gt; remaining_len {
+<a href=#379 id=379 data-nosnippet>379</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(alloy_rlp::Error::InputTooShort);
+<a href=#380 id=380 data-nosnippet>380</a>        }
+<a href=#381 id=381 data-nosnippet>381</a>
+<a href=#382 id=382 data-nosnippet>382</a>        <span class="kw">let </span><span class="kw-2">mut </span>transaction = <span class="self">Self</span>::rlp_decode_fields(data)<span class="question-mark">?</span>;
+<a href=#383 id=383 data-nosnippet>383</a>
+<a href=#384 id=384 data-nosnippet>384</a>        <span class="comment">// If we still have data, it should be an eip-155 encoded chain_id
+<a href=#385 id=385 data-nosnippet>385</a>        </span><span class="kw">if </span>!data.is_empty() {
+<a href=#386 id=386 data-nosnippet>386</a>            transaction.chain_id = <span class="prelude-val">Some</span>(Decodable::decode(data)<span class="question-mark">?</span>);
+<a href=#387 id=387 data-nosnippet>387</a>            <span class="kw">let _</span>: U256 = Decodable::decode(data)<span class="question-mark">?</span>; <span class="comment">// r
+<a href=#388 id=388 data-nosnippet>388</a>            </span><span class="kw">let _</span>: U256 = Decodable::decode(data)<span class="question-mark">?</span>; <span class="comment">// s
+<a href=#389 id=389 data-nosnippet>389</a>        </span>}
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">let </span>decoded = remaining_len - data.len();
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">if </span>decoded != transaction_payload_len {
+<a href=#393 id=393 data-nosnippet>393</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(alloy_rlp::Error::UnexpectedLength);
+<a href=#394 id=394 data-nosnippet>394</a>        }
+<a href=#395 id=395 data-nosnippet>395</a>
+<a href=#396 id=396 data-nosnippet>396</a>        <span class="prelude-val">Ok</span>(transaction)
+<a href=#397 id=397 data-nosnippet>397</a>    }
+<a href=#398 id=398 data-nosnippet>398</a>}
+<a href=#399 id=399 data-nosnippet>399</a>
+<a href=#400 id=400 data-nosnippet>400</a><span class="doccomment">/// Helper for encoding `y_parity` boolean and optional `chain_id` into EIP-155 `v` value.
+<a href=#401 id=401 data-nosnippet>401</a></span><span class="kw">pub const fn </span>to_eip155_value(y_parity: bool, chain_id: <span class="prelude-ty">Option</span>&lt;ChainId&gt;) -&gt; u128 {
+<a href=#402 id=402 data-nosnippet>402</a>    <span class="kw">match </span>chain_id {
+<a href=#403 id=403 data-nosnippet>403</a>        <span class="prelude-val">Some</span>(id) =&gt; <span class="number">35 </span>+ id <span class="kw">as </span>u128 * <span class="number">2 </span>+ y_parity <span class="kw">as </span>u128,
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="prelude-val">None </span>=&gt; <span class="number">27 </span>+ y_parity <span class="kw">as </span>u128,
+<a href=#405 id=405 data-nosnippet>405</a>    }
+<a href=#406 id=406 data-nosnippet>406</a>}
+<a href=#407 id=407 data-nosnippet>407</a>
+<a href=#408 id=408 data-nosnippet>408</a><span class="doccomment">/// Helper for decoding EIP-155 `v` value into `y_parity` boolean and optional `chain_id`.
+<a href=#409 id=409 data-nosnippet>409</a></span><span class="kw">pub const fn </span>from_eip155_value(value: u128) -&gt; <span class="prelude-ty">Option</span>&lt;(bool, <span class="prelude-ty">Option</span>&lt;ChainId&gt;)&gt; {
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="kw">match </span>value {
+<a href=#411 id=411 data-nosnippet>411</a>        <span class="number">27 </span>=&gt; <span class="prelude-val">Some</span>((<span class="bool-val">false</span>, <span class="prelude-val">None</span>)),
+<a href=#412 id=412 data-nosnippet>412</a>        <span class="number">28 </span>=&gt; <span class="prelude-val">Some</span>((<span class="bool-val">true</span>, <span class="prelude-val">None</span>)),
+<a href=#413 id=413 data-nosnippet>413</a>        v @ <span class="number">35</span>.. =&gt; {
+<a href=#414 id=414 data-nosnippet>414</a>            <span class="kw">let </span>y_parity = ((v - <span class="number">35</span>) % <span class="number">2</span>) != <span class="number">0</span>;
+<a href=#415 id=415 data-nosnippet>415</a>            <span class="kw">let </span>chain_id = (v - <span class="number">35</span>) / <span class="number">2</span>;
+<a href=#416 id=416 data-nosnippet>416</a>
+<a href=#417 id=417 data-nosnippet>417</a>            <span class="kw">if </span>chain_id &gt; u64::MAX <span class="kw">as </span>u128 {
+<a href=#418 id=418 data-nosnippet>418</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#419 id=419 data-nosnippet>419</a>            }
+<a href=#420 id=420 data-nosnippet>420</a>            <span class="prelude-val">Some</span>((y_parity, <span class="prelude-val">Some</span>(chain_id <span class="kw">as </span>u64)))
+<a href=#421 id=421 data-nosnippet>421</a>        }
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#423 id=423 data-nosnippet>423</a>    }
+<a href=#424 id=424 data-nosnippet>424</a>}
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a><span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
+<a href=#427 id=427 data-nosnippet>427</a></span><span class="kw">pub mod </span>signed_legacy_serde {
+<a href=#428 id=428 data-nosnippet>428</a>    <span class="doccomment">//! Helper module for encoding signatures of transactions wrapped into [`Signed`] in legacy
+<a href=#429 id=429 data-nosnippet>429</a>    //! format.
+<a href=#430 id=430 data-nosnippet>430</a>    //!
+<a href=#431 id=431 data-nosnippet>431</a>    //! By default, signatures are encoded as a single boolean under `yParity` key. However, for
+<a href=#432 id=432 data-nosnippet>432</a>    //! legacy transactions parity byte is encoded as `v` key respecting EIP-155 format.
+<a href=#433 id=433 data-nosnippet>433</a>    </span><span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#434 id=434 data-nosnippet>434</a>    <span class="kw">use </span>alloc::borrow::Cow;
+<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw">use </span>alloy_primitives::U128;
+<a href=#436 id=436 data-nosnippet>436</a>    <span class="kw">use </span>serde::{Deserialize, Serialize};
+<a href=#437 id=437 data-nosnippet>437</a>
+<a href=#438 id=438 data-nosnippet>438</a>    <span class="kw">struct </span>LegacySignature {
+<a href=#439 id=439 data-nosnippet>439</a>        r: U256,
+<a href=#440 id=440 data-nosnippet>440</a>        s: U256,
+<a href=#441 id=441 data-nosnippet>441</a>        v: U128,
+<a href=#442 id=442 data-nosnippet>442</a>    }
+<a href=#443 id=443 data-nosnippet>443</a>
+<a href=#444 id=444 data-nosnippet>444</a>    <span class="attr">#[derive(Serialize, Deserialize)]
+<a href=#445 id=445 data-nosnippet>445</a>    </span><span class="kw">struct </span>HumanReadableRepr {
+<a href=#446 id=446 data-nosnippet>446</a>        r: U256,
+<a href=#447 id=447 data-nosnippet>447</a>        s: U256,
+<a href=#448 id=448 data-nosnippet>448</a>        v: U128,
+<a href=#449 id=449 data-nosnippet>449</a>    }
+<a href=#450 id=450 data-nosnippet>450</a>
+<a href=#451 id=451 data-nosnippet>451</a>    <span class="attr">#[derive(Serialize, Deserialize)]
+<a href=#452 id=452 data-nosnippet>452</a>    #[serde(transparent)]
+<a href=#453 id=453 data-nosnippet>453</a>    </span><span class="kw">struct </span>NonHumanReadableRepr((U256, U256, U128));
+<a href=#454 id=454 data-nosnippet>454</a>
+<a href=#455 id=455 data-nosnippet>455</a>    <span class="kw">impl </span>Serialize <span class="kw">for </span>LegacySignature {
+<a href=#456 id=456 data-nosnippet>456</a>        <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+<a href=#457 id=457 data-nosnippet>457</a>        <span class="kw">where
+<a href=#458 id=458 data-nosnippet>458</a>            </span>S: serde::Serializer,
+<a href=#459 id=459 data-nosnippet>459</a>        {
+<a href=#460 id=460 data-nosnippet>460</a>            <span class="kw">if </span>serializer.is_human_readable() {
+<a href=#461 id=461 data-nosnippet>461</a>                HumanReadableRepr { r: <span class="self">self</span>.r, s: <span class="self">self</span>.s, v: <span class="self">self</span>.v }.serialize(serializer)
+<a href=#462 id=462 data-nosnippet>462</a>            } <span class="kw">else </span>{
+<a href=#463 id=463 data-nosnippet>463</a>                NonHumanReadableRepr((<span class="self">self</span>.r, <span class="self">self</span>.s, <span class="self">self</span>.v)).serialize(serializer)
+<a href=#464 id=464 data-nosnippet>464</a>            }
+<a href=#465 id=465 data-nosnippet>465</a>        }
+<a href=#466 id=466 data-nosnippet>466</a>    }
+<a href=#467 id=467 data-nosnippet>467</a>
+<a href=#468 id=468 data-nosnippet>468</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>LegacySignature {
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+<a href=#470 id=470 data-nosnippet>470</a>        <span class="kw">where
+<a href=#471 id=471 data-nosnippet>471</a>            </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+<a href=#472 id=472 data-nosnippet>472</a>        {
+<a href=#473 id=473 data-nosnippet>473</a>            <span class="kw">if </span>deserializer.is_human_readable() {
+<a href=#474 id=474 data-nosnippet>474</a>                HumanReadableRepr::deserialize(deserializer).map(|repr| <span class="self">Self </span>{
+<a href=#475 id=475 data-nosnippet>475</a>                    r: repr.r,
+<a href=#476 id=476 data-nosnippet>476</a>                    s: repr.s,
+<a href=#477 id=477 data-nosnippet>477</a>                    v: repr.v,
+<a href=#478 id=478 data-nosnippet>478</a>                })
+<a href=#479 id=479 data-nosnippet>479</a>            } <span class="kw">else </span>{
+<a href=#480 id=480 data-nosnippet>480</a>                NonHumanReadableRepr::deserialize(deserializer).map(|repr| <span class="self">Self </span>{
+<a href=#481 id=481 data-nosnippet>481</a>                    r: repr.<span class="number">0 </span>.<span class="number">0</span>,
+<a href=#482 id=482 data-nosnippet>482</a>                    s: repr.<span class="number">0 </span>.<span class="number">1</span>,
+<a href=#483 id=483 data-nosnippet>483</a>                    v: repr.<span class="number">0 </span>.<span class="number">2</span>,
+<a href=#484 id=484 data-nosnippet>484</a>                })
+<a href=#485 id=485 data-nosnippet>485</a>            }
+<a href=#486 id=486 data-nosnippet>486</a>        }
+<a href=#487 id=487 data-nosnippet>487</a>    }
+<a href=#488 id=488 data-nosnippet>488</a>
+<a href=#489 id=489 data-nosnippet>489</a>    <span class="attr">#[derive(Serialize, Deserialize)]
+<a href=#490 id=490 data-nosnippet>490</a>    </span><span class="kw">struct </span>SignedLegacy&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="attr">#[serde(flatten)]
+<a href=#492 id=492 data-nosnippet>492</a>        </span>tx: Cow&lt;<span class="lifetime">'a</span>, TxLegacy&gt;,
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="attr">#[serde(flatten)]
+<a href=#494 id=494 data-nosnippet>494</a>        </span>signature: LegacySignature,
+<a href=#495 id=495 data-nosnippet>495</a>        hash: B256,
+<a href=#496 id=496 data-nosnippet>496</a>    }
+<a href=#497 id=497 data-nosnippet>497</a>
+<a href=#498 id=498 data-nosnippet>498</a>    <span class="doccomment">/// Serializes signed transaction with `v` key for signature parity.
+<a href=#499 id=499 data-nosnippet>499</a>    </span><span class="kw">pub fn </span>serialize&lt;S&gt;(signed: <span class="kw-2">&amp;</span><span class="kw">crate</span>::Signed&lt;TxLegacy&gt;, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+<a href=#500 id=500 data-nosnippet>500</a>    <span class="kw">where
+<a href=#501 id=501 data-nosnippet>501</a>        </span>S: serde::Serializer,
+<a href=#502 id=502 data-nosnippet>502</a>    {
+<a href=#503 id=503 data-nosnippet>503</a>        SignedLegacy {
+<a href=#504 id=504 data-nosnippet>504</a>            tx: Cow::Borrowed(signed.tx()),
+<a href=#505 id=505 data-nosnippet>505</a>            signature: LegacySignature {
+<a href=#506 id=506 data-nosnippet>506</a>                v: U128::from(to_eip155_value(signed.signature().v(), signed.tx().chain_id())),
+<a href=#507 id=507 data-nosnippet>507</a>                r: signed.signature().r(),
+<a href=#508 id=508 data-nosnippet>508</a>                s: signed.signature().s(),
+<a href=#509 id=509 data-nosnippet>509</a>            },
+<a href=#510 id=510 data-nosnippet>510</a>            hash: <span class="kw-2">*</span>signed.hash(),
+<a href=#511 id=511 data-nosnippet>511</a>        }
+<a href=#512 id=512 data-nosnippet>512</a>        .serialize(serializer)
+<a href=#513 id=513 data-nosnippet>513</a>    }
+<a href=#514 id=514 data-nosnippet>514</a>
+<a href=#515 id=515 data-nosnippet>515</a>    <span class="doccomment">/// Deserializes signed transaction expecting `v` key for signature parity.
+<a href=#516 id=516 data-nosnippet>516</a>    </span><span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">crate</span>::Signed&lt;TxLegacy&gt;, D::Error&gt;
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">where
+<a href=#518 id=518 data-nosnippet>518</a>        </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+<a href=#519 id=519 data-nosnippet>519</a>    {
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">let </span>SignedLegacy { <span class="kw-2">mut </span>tx, signature, hash } = SignedLegacy::deserialize(deserializer)<span class="question-mark">?</span>;
+<a href=#521 id=521 data-nosnippet>521</a>
+<a href=#522 id=522 data-nosnippet>522</a>        <span class="comment">// Optimism pre-Bedrock (and some other L2s) injected system transactions into the chain
+<a href=#523 id=523 data-nosnippet>523</a>        // where the signature fields (v, r, s) are all zero.
+<a href=#524 id=524 data-nosnippet>524</a>        // These transactions do not have a valid ECDSA signature, but are valid on-chain.
+<a href=#525 id=525 data-nosnippet>525</a>        // See: https://github.com/alloy-rs/alloy/issues/2348
+<a href=#526 id=526 data-nosnippet>526</a>        //
+<a href=#527 id=527 data-nosnippet>527</a>        // Here, we detect (v=0, r=0, s=0) and treat them as system transactions,
+<a href=#528 id=528 data-nosnippet>528</a>        // bypassing EIP-155 signature validation.
+<a href=#529 id=529 data-nosnippet>529</a>        </span><span class="kw">let </span>is_fake_system_signature =
+<a href=#530 id=530 data-nosnippet>530</a>            signature.r.is_zero() &amp;&amp; signature.s.is_zero() &amp;&amp; signature.v.is_zero();
+<a href=#531 id=531 data-nosnippet>531</a>
+<a href=#532 id=532 data-nosnippet>532</a>        <span class="kw">let </span>signature = <span class="kw">if </span>is_fake_system_signature {
+<a href=#533 id=533 data-nosnippet>533</a>            Signature::new(U256::ZERO, U256::ZERO, <span class="bool-val">false</span>)
+<a href=#534 id=534 data-nosnippet>534</a>        } <span class="kw">else </span>{
+<a href=#535 id=535 data-nosnippet>535</a>            <span class="kw">let </span>(parity, chain_id) = from_eip155_value(signature.v.to()).ok_or_else(|| {
+<a href=#536 id=536 data-nosnippet>536</a>                serde::de::Error::custom(<span class="string">"invalid EIP-155 signature parity value"</span>)
+<a href=#537 id=537 data-nosnippet>537</a>            })<span class="question-mark">?</span>;
+<a href=#538 id=538 data-nosnippet>538</a>
+<a href=#539 id=539 data-nosnippet>539</a>            <span class="comment">// Note: some implementations always set the chain id in the response, so we only check
+<a href=#540 id=540 data-nosnippet>540</a>            // if they differ if both are set.
+<a href=#541 id=541 data-nosnippet>541</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>((tx_chain_id, chain_id)) = tx.chain_id().zip(chain_id) {
+<a href=#542 id=542 data-nosnippet>542</a>                <span class="kw">if </span>tx_chain_id != chain_id {
+<a href=#543 id=543 data-nosnippet>543</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(serde::de::Error::custom(<span class="string">"chain id mismatch"</span>));
+<a href=#544 id=544 data-nosnippet>544</a>                }
+<a href=#545 id=545 data-nosnippet>545</a>            }
+<a href=#546 id=546 data-nosnippet>546</a>
+<a href=#547 id=547 data-nosnippet>547</a>            <span class="comment">// update the chain id from decoding the eip155 value
+<a href=#548 id=548 data-nosnippet>548</a>            </span>tx.to_mut().chain_id = chain_id;
+<a href=#549 id=549 data-nosnippet>549</a>
+<a href=#550 id=550 data-nosnippet>550</a>            Signature::new(signature.r, signature.s, parity)
+<a href=#551 id=551 data-nosnippet>551</a>        };
+<a href=#552 id=552 data-nosnippet>552</a>        <span class="prelude-val">Ok</span>(Signed::new_unchecked(tx.into_owned(), signature, hash))
+<a href=#553 id=553 data-nosnippet>553</a>    }
+<a href=#554 id=554 data-nosnippet>554</a>}
+<a href=#555 id=555 data-nosnippet>555</a>
+<a href=#556 id=556 data-nosnippet>556</a><span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
+<a href=#557 id=557 data-nosnippet>557</a></span><span class="kw">pub mod </span>untagged_legacy_serde {
+<a href=#558 id=558 data-nosnippet>558</a>    <span class="doccomment">//! Helper module for deserializing legacy transactions and ensuring that the `type` field is
+<a href=#559 id=559 data-nosnippet>559</a>    //! not present.
+<a href=#560 id=560 data-nosnippet>560</a>    //!
+<a href=#561 id=561 data-nosnippet>561</a>    //! This is expected to be used as a fallback for deserializing legacy transactions without a
+<a href=#562 id=562 data-nosnippet>562</a>    //! tag, and is needed to make sure that unknown transaction variants are explicitly rejected
+<a href=#563 id=563 data-nosnippet>563</a>    //! instead of being treated as legacy transactions.
+<a href=#564 id=564 data-nosnippet>564</a>
+<a href=#565 id=565 data-nosnippet>565</a>    </span><span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#566 id=566 data-nosnippet>566</a>    <span class="kw">use </span>serde::Deserialize;
+<a href=#567 id=567 data-nosnippet>567</a>
+<a href=#568 id=568 data-nosnippet>568</a>    <span class="attr">#[derive(Deserialize)]
+<a href=#569 id=569 data-nosnippet>569</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>UntaggedLegacy {
+<a href=#570 id=570 data-nosnippet>570</a>        <span class="attr">#[serde(default, rename = <span class="string">"type"</span>, deserialize_with = <span class="string">"alloy_serde::reject_if_some"</span>)]
+<a href=#571 id=571 data-nosnippet>571</a>        </span>_ty: <span class="prelude-ty">Option</span>&lt;()&gt;,
+<a href=#572 id=572 data-nosnippet>572</a>        <span class="attr">#[serde(flatten, with = <span class="string">"crate::transaction::signed_legacy_serde"</span>)]
+<a href=#573 id=573 data-nosnippet>573</a>        </span>tx: Signed&lt;TxLegacy&gt;,
+<a href=#574 id=574 data-nosnippet>574</a>    }
+<a href=#575 id=575 data-nosnippet>575</a>
+<a href=#576 id=576 data-nosnippet>576</a>    <span class="doccomment">/// Deserializes a legacy transaction without a tag.
+<a href=#577 id=577 data-nosnippet>577</a>    </span><span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;Signed&lt;TxLegacy&gt;, D::Error&gt;
+<a href=#578 id=578 data-nosnippet>578</a>    <span class="kw">where
+<a href=#579 id=579 data-nosnippet>579</a>        </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+<a href=#580 id=580 data-nosnippet>580</a>    {
+<a href=#581 id=581 data-nosnippet>581</a>        UntaggedLegacy::deserialize(deserializer).map(|tx| tx.tx)
+<a href=#582 id=582 data-nosnippet>582</a>    }
+<a href=#583 id=583 data-nosnippet>583</a>}
+<a href=#584 id=584 data-nosnippet>584</a>
+<a href=#585 id=585 data-nosnippet>585</a><span class="doccomment">/// Bincode-compatible [`TxLegacy`] serde implementation.
+<a href=#586 id=586 data-nosnippet>586</a></span><span class="attr">#[cfg(all(feature = <span class="string">"serde"</span>, feature = <span class="string">"serde-bincode-compat"</span>))]
+<a href=#587 id=587 data-nosnippet>587</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>serde_bincode_compat {
+<a href=#588 id=588 data-nosnippet>588</a>    <span class="kw">use </span>alloc::borrow::Cow;
+<a href=#589 id=589 data-nosnippet>589</a>    <span class="kw">use </span>alloy_primitives::{Bytes, ChainId, TxKind, U256};
+<a href=#590 id=590 data-nosnippet>590</a>    <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
+<a href=#591 id=591 data-nosnippet>591</a>    <span class="kw">use </span>serde_with::{DeserializeAs, SerializeAs};
+<a href=#592 id=592 data-nosnippet>592</a>
+<a href=#593 id=593 data-nosnippet>593</a>    <span class="doccomment">/// Bincode-compatible [`super::TxLegacy`] serde implementation.
+<a href=#594 id=594 data-nosnippet>594</a>    ///
+<a href=#595 id=595 data-nosnippet>595</a>    /// Intended to use with the [`serde_with::serde_as`] macro in the following way:
+<a href=#596 id=596 data-nosnippet>596</a>    /// ```rust
+<a href=#597 id=597 data-nosnippet>597</a>    /// use alloy_consensus::{serde_bincode_compat, TxLegacy};
+<a href=#598 id=598 data-nosnippet>598</a>    /// use serde::{Deserialize, Serialize};
+<a href=#599 id=599 data-nosnippet>599</a>    /// use serde_with::serde_as;
+<a href=#600 id=600 data-nosnippet>600</a>    ///
+<a href=#601 id=601 data-nosnippet>601</a>    /// #[serde_as]
+<a href=#602 id=602 data-nosnippet>602</a>    /// #[derive(Serialize, Deserialize)]
+<a href=#603 id=603 data-nosnippet>603</a>    /// struct Data {
+<a href=#604 id=604 data-nosnippet>604</a>    ///     #[serde_as(as = "serde_bincode_compat::transaction::TxLegacy")]
+<a href=#605 id=605 data-nosnippet>605</a>    ///     header: TxLegacy,
+<a href=#606 id=606 data-nosnippet>606</a>    /// }
+<a href=#607 id=607 data-nosnippet>607</a>    /// ```
+<a href=#608 id=608 data-nosnippet>608</a>    </span><span class="attr">#[derive(Debug, Serialize, Deserialize)]
+<a href=#609 id=609 data-nosnippet>609</a>    </span><span class="kw">pub struct </span>TxLegacy&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#610 id=610 data-nosnippet>610</a>        <span class="attr">#[serde(default, with = <span class="string">"alloy_serde::quantity::opt"</span>)]
+<a href=#611 id=611 data-nosnippet>611</a>        </span>chain_id: <span class="prelude-ty">Option</span>&lt;ChainId&gt;,
+<a href=#612 id=612 data-nosnippet>612</a>        nonce: u64,
+<a href=#613 id=613 data-nosnippet>613</a>        gas_price: u128,
+<a href=#614 id=614 data-nosnippet>614</a>        gas_limit: u64,
+<a href=#615 id=615 data-nosnippet>615</a>        <span class="attr">#[serde(default)]
+<a href=#616 id=616 data-nosnippet>616</a>        </span>to: TxKind,
+<a href=#617 id=617 data-nosnippet>617</a>        value: U256,
+<a href=#618 id=618 data-nosnippet>618</a>        input: Cow&lt;<span class="lifetime">'a</span>, Bytes&gt;,
+<a href=#619 id=619 data-nosnippet>619</a>    }
+<a href=#620 id=620 data-nosnippet>620</a>
+<a href=#621 id=621 data-nosnippet>621</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; From&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">super</span>::TxLegacy&gt; <span class="kw">for </span>TxLegacy&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#622 id=622 data-nosnippet>622</a>        <span class="kw">fn </span>from(value: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">super</span>::TxLegacy) -&gt; <span class="self">Self </span>{
+<a href=#623 id=623 data-nosnippet>623</a>            <span class="self">Self </span>{
+<a href=#624 id=624 data-nosnippet>624</a>                chain_id: value.chain_id,
+<a href=#625 id=625 data-nosnippet>625</a>                nonce: value.nonce,
+<a href=#626 id=626 data-nosnippet>626</a>                gas_price: value.gas_price,
+<a href=#627 id=627 data-nosnippet>627</a>                gas_limit: value.gas_limit,
+<a href=#628 id=628 data-nosnippet>628</a>                to: value.to,
+<a href=#629 id=629 data-nosnippet>629</a>                value: value.value,
+<a href=#630 id=630 data-nosnippet>630</a>                input: Cow::Borrowed(<span class="kw-2">&amp;</span>value.input),
+<a href=#631 id=631 data-nosnippet>631</a>            }
+<a href=#632 id=632 data-nosnippet>632</a>        }
+<a href=#633 id=633 data-nosnippet>633</a>    }
+<a href=#634 id=634 data-nosnippet>634</a>
+<a href=#635 id=635 data-nosnippet>635</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; From&lt;TxLegacy&lt;<span class="lifetime">'a</span>&gt;&gt; <span class="kw">for </span><span class="kw">super</span>::TxLegacy {
+<a href=#636 id=636 data-nosnippet>636</a>        <span class="kw">fn </span>from(value: TxLegacy&lt;<span class="lifetime">'a</span>&gt;) -&gt; <span class="self">Self </span>{
+<a href=#637 id=637 data-nosnippet>637</a>            <span class="self">Self </span>{
+<a href=#638 id=638 data-nosnippet>638</a>                chain_id: value.chain_id,
+<a href=#639 id=639 data-nosnippet>639</a>                nonce: value.nonce,
+<a href=#640 id=640 data-nosnippet>640</a>                gas_price: value.gas_price,
+<a href=#641 id=641 data-nosnippet>641</a>                gas_limit: value.gas_limit,
+<a href=#642 id=642 data-nosnippet>642</a>                to: value.to,
+<a href=#643 id=643 data-nosnippet>643</a>                value: value.value,
+<a href=#644 id=644 data-nosnippet>644</a>                input: value.input.into_owned(),
+<a href=#645 id=645 data-nosnippet>645</a>            }
+<a href=#646 id=646 data-nosnippet>646</a>        }
+<a href=#647 id=647 data-nosnippet>647</a>    }
+<a href=#648 id=648 data-nosnippet>648</a>
+<a href=#649 id=649 data-nosnippet>649</a>    <span class="kw">impl </span>SerializeAs&lt;<span class="kw">super</span>::TxLegacy&gt; <span class="kw">for </span>TxLegacy&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#650 id=650 data-nosnippet>650</a>        <span class="kw">fn </span>serialize_as&lt;S&gt;(source: <span class="kw-2">&amp;</span><span class="kw">super</span>::TxLegacy, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+<a href=#651 id=651 data-nosnippet>651</a>        <span class="kw">where
+<a href=#652 id=652 data-nosnippet>652</a>            </span>S: Serializer,
+<a href=#653 id=653 data-nosnippet>653</a>        {
+<a href=#654 id=654 data-nosnippet>654</a>            TxLegacy::from(source).serialize(serializer)
+<a href=#655 id=655 data-nosnippet>655</a>        }
+<a href=#656 id=656 data-nosnippet>656</a>    }
+<a href=#657 id=657 data-nosnippet>657</a>
+<a href=#658 id=658 data-nosnippet>658</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; DeserializeAs&lt;<span class="lifetime">'de</span>, <span class="kw">super</span>::TxLegacy&gt; <span class="kw">for </span>TxLegacy&lt;<span class="lifetime">'de</span>&gt; {
+<a href=#659 id=659 data-nosnippet>659</a>        <span class="kw">fn </span>deserialize_as&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">super</span>::TxLegacy, D::Error&gt;
+<a href=#660 id=660 data-nosnippet>660</a>        <span class="kw">where
+<a href=#661 id=661 data-nosnippet>661</a>            </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+<a href=#662 id=662 data-nosnippet>662</a>        {
+<a href=#663 id=663 data-nosnippet>663</a>            TxLegacy::deserialize(deserializer).map(Into::into)
+<a href=#664 id=664 data-nosnippet>664</a>        }
+<a href=#665 id=665 data-nosnippet>665</a>    }
+<a href=#666 id=666 data-nosnippet>666</a>
+<a href=#667 id=667 data-nosnippet>667</a>    <span class="attr">#[cfg(test)]
+<a href=#668 id=668 data-nosnippet>668</a>    </span><span class="kw">mod </span>tests {
+<a href=#669 id=669 data-nosnippet>669</a>        <span class="kw">use </span>arbitrary::Arbitrary;
+<a href=#670 id=670 data-nosnippet>670</a>        <span class="kw">use </span>bincode::config;
+<a href=#671 id=671 data-nosnippet>671</a>        <span class="kw">use </span>rand::Rng;
+<a href=#672 id=672 data-nosnippet>672</a>        <span class="kw">use </span>serde::{Deserialize, Serialize};
+<a href=#673 id=673 data-nosnippet>673</a>        <span class="kw">use </span>serde_with::serde_as;
+<a href=#674 id=674 data-nosnippet>674</a>
+<a href=#675 id=675 data-nosnippet>675</a>        <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::{serde_bincode_compat, TxLegacy};
+<a href=#676 id=676 data-nosnippet>676</a>
+<a href=#677 id=677 data-nosnippet>677</a>        <span class="attr">#[test]
+<a href=#678 id=678 data-nosnippet>678</a>        </span><span class="kw">fn </span>test_tx_legacy_bincode_roundtrip() {
+<a href=#679 id=679 data-nosnippet>679</a>            <span class="attr">#[serde_as]
+<a href=#680 id=680 data-nosnippet>680</a>            #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+<a href=#681 id=681 data-nosnippet>681</a>            </span><span class="kw">struct </span>Data {
+<a href=#682 id=682 data-nosnippet>682</a>                <span class="attr">#[serde_as(<span class="kw">as </span>= <span class="string">"serde_bincode_compat::TxLegacy"</span>)]
+<a href=#683 id=683 data-nosnippet>683</a>                </span>transaction: TxLegacy,
+<a href=#684 id=684 data-nosnippet>684</a>            }
+<a href=#685 id=685 data-nosnippet>685</a>
+<a href=#686 id=686 data-nosnippet>686</a>            <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">1024</span>];
+<a href=#687 id=687 data-nosnippet>687</a>            rand::thread_rng().fill(bytes.as_mut_slice());
+<a href=#688 id=688 data-nosnippet>688</a>            <span class="kw">let </span>data = Data {
+<a href=#689 id=689 data-nosnippet>689</a>                transaction: TxLegacy::arbitrary(<span class="kw-2">&amp;mut </span>arbitrary::Unstructured::new(<span class="kw-2">&amp;</span>bytes))
+<a href=#690 id=690 data-nosnippet>690</a>                    .unwrap(),
+<a href=#691 id=691 data-nosnippet>691</a>            };
+<a href=#692 id=692 data-nosnippet>692</a>
+<a href=#693 id=693 data-nosnippet>693</a>            <span class="kw">let </span>encoded = bincode::serde::encode_to_vec(<span class="kw-2">&amp;</span>data, config::legacy()).unwrap();
+<a href=#694 id=694 data-nosnippet>694</a>            <span class="kw">let </span>(decoded, <span class="kw">_</span>) =
+<a href=#695 id=695 data-nosnippet>695</a>                bincode::serde::decode_from_slice::&lt;Data, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;</span>encoded, config::legacy()).unwrap();
+<a href=#696 id=696 data-nosnippet>696</a>            <span class="macro">assert_eq!</span>(decoded, data);
+<a href=#697 id=697 data-nosnippet>697</a>        }
+<a href=#698 id=698 data-nosnippet>698</a>    }
+<a href=#699 id=699 data-nosnippet>699</a>}
+<a href=#700 id=700 data-nosnippet>700</a>
+<a href=#701 id=701 data-nosnippet>701</a><span class="attr">#[cfg(all(test, feature = <span class="string">"k256"</span>))]
+<a href=#702 id=702 data-nosnippet>702</a></span><span class="kw">mod </span>tests {
+<a href=#703 id=703 data-nosnippet>703</a>    <span class="kw">use </span><span class="kw">super</span>::signed_legacy_serde;
+<a href=#704 id=704 data-nosnippet>704</a>    <span class="kw">use crate</span>::{
+<a href=#705 id=705 data-nosnippet>705</a>        transaction::{from_eip155_value, to_eip155_value},
+<a href=#706 id=706 data-nosnippet>706</a>        SignableTransaction, TxLegacy,
+<a href=#707 id=707 data-nosnippet>707</a>    };
+<a href=#708 id=708 data-nosnippet>708</a>    <span class="kw">use </span>alloy_primitives::{address, b256, hex, Address, Signature, TxKind, B256, U256};
+<a href=#709 id=709 data-nosnippet>709</a>
+<a href=#710 id=710 data-nosnippet>710</a>    <span class="attr">#[test]
+<a href=#711 id=711 data-nosnippet>711</a>    </span><span class="kw">fn </span>recover_signer_legacy() {
+<a href=#712 id=712 data-nosnippet>712</a>        <span class="kw">let </span>signer: Address = <span class="macro">hex!</span>(<span class="string">"398137383b3d25c92898c656696e41950e47316b"</span>).into();
+<a href=#713 id=713 data-nosnippet>713</a>        <span class="kw">let </span>hash: B256 =
+<a href=#714 id=714 data-nosnippet>714</a>            <span class="macro">hex!</span>(<span class="string">"bb3a336e3f823ec18197f1e13ee875700f08f03e2cab75f0d0b118dabb44cba0"</span>).into();
+<a href=#715 id=715 data-nosnippet>715</a>
+<a href=#716 id=716 data-nosnippet>716</a>        <span class="kw">let </span>tx = TxLegacy {
+<a href=#717 id=717 data-nosnippet>717</a>            chain_id: <span class="prelude-val">Some</span>(<span class="number">1</span>),
+<a href=#718 id=718 data-nosnippet>718</a>            nonce: <span class="number">0x18</span>,
+<a href=#719 id=719 data-nosnippet>719</a>            gas_price: <span class="number">0xfa56ea00</span>,
+<a href=#720 id=720 data-nosnippet>720</a>            gas_limit: <span class="number">119902</span>,
+<a href=#721 id=721 data-nosnippet>721</a>            to: TxKind::Call(<span class="macro">hex!</span>(<span class="string">"06012c8cf97bead5deae237070f9587f8e7a266d"</span>).into()),
+<a href=#722 id=722 data-nosnippet>722</a>            value: U256::from(<span class="number">0x1c6bf526340000u64</span>),
+<a href=#723 id=723 data-nosnippet>723</a>            input:  <span class="macro">hex!</span>(<span class="string">"f7d8c88300000000000000000000000000000000000000000000000000000000000cee6100000000000000000000000000000000000000000000000000000000000ac3e1"</span>).into(),
+<a href=#724 id=724 data-nosnippet>724</a>        };
+<a href=#725 id=725 data-nosnippet>725</a>
+<a href=#726 id=726 data-nosnippet>726</a>        <span class="kw">let </span>sig = Signature::from_scalars_and_parity(
+<a href=#727 id=727 data-nosnippet>727</a>            <span class="macro">b256!</span>(<span class="string">"2a378831cf81d99a3f06a18ae1b6ca366817ab4d88a70053c41d7a8f0368e031"</span>),
+<a href=#728 id=728 data-nosnippet>728</a>            <span class="macro">b256!</span>(<span class="string">"450d831a05b6e418724436c05c155e0a1b7b921015d0fbc2f667aed709ac4fb5"</span>),
+<a href=#729 id=729 data-nosnippet>729</a>            <span class="bool-val">false</span>,
+<a href=#730 id=730 data-nosnippet>730</a>        );
+<a href=#731 id=731 data-nosnippet>731</a>
+<a href=#732 id=732 data-nosnippet>732</a>        <span class="kw">let </span>signed_tx = tx.into_signed(sig);
+<a href=#733 id=733 data-nosnippet>733</a>
+<a href=#734 id=734 data-nosnippet>734</a>        <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>signed_tx.hash(), hash, <span class="string">"Expected same hash"</span>);
+<a href=#735 id=735 data-nosnippet>735</a>        <span class="macro">assert_eq!</span>(signed_tx.recover_signer().unwrap(), signer, <span class="string">"Recovering signer should pass."</span>);
+<a href=#736 id=736 data-nosnippet>736</a>    }
+<a href=#737 id=737 data-nosnippet>737</a>
+<a href=#738 id=738 data-nosnippet>738</a>    <span class="attr">#[test]
+<a href=#739 id=739 data-nosnippet>739</a>    </span><span class="comment">// Test vector from https://github.com/alloy-rs/alloy/issues/125
+<a href=#740 id=740 data-nosnippet>740</a>    </span><span class="kw">fn </span>decode_legacy_and_recover_signer() {
+<a href=#741 id=741 data-nosnippet>741</a>        <span class="kw">use </span><span class="kw">crate</span>::transaction::RlpEcdsaDecodableTx;
+<a href=#742 id=742 data-nosnippet>742</a>        <span class="kw">let </span>raw_tx = <span class="macro">alloy_primitives::bytes!</span>(<span class="string">"f9015482078b8505d21dba0083022ef1947a250d5630b4cf539739df2c5dacb4c659f2488d880c46549a521b13d8b8e47ff36ab50000000000000000000000000000000000000000000066ab5a608bd00a23f2fe000000000000000000000000000000000000000000000000000000000000008000000000000000000000000048c04ed5691981c42154c6167398f95e8f38a7ff00000000000000000000000000000000000000000000000000000000632ceac70000000000000000000000000000000000000000000000000000000000000002000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000006c6ee5e31d828de241282b9606c8e98ea48526e225a0c9077369501641a92ef7399ff81c21639ed4fd8fc69cb793cfa1dbfab342e10aa0615facb2f1bcf3274a354cfe384a38d0cc008a11c2dd23a69111bc6930ba27a8"</span>);
+<a href=#743 id=743 data-nosnippet>743</a>
+<a href=#744 id=744 data-nosnippet>744</a>        <span class="kw">let </span>tx = TxLegacy::rlp_decode_signed(<span class="kw-2">&amp;mut </span>raw_tx.as_ref()).unwrap();
+<a href=#745 id=745 data-nosnippet>745</a>
+<a href=#746 id=746 data-nosnippet>746</a>        <span class="kw">let </span>recovered = tx.recover_signer().unwrap();
+<a href=#747 id=747 data-nosnippet>747</a>        <span class="kw">let </span>expected = <span class="macro">address!</span>(<span class="string">"a12e1462d0ceD572f396F58B6E2D03894cD7C8a4"</span>);
+<a href=#748 id=748 data-nosnippet>748</a>
+<a href=#749 id=749 data-nosnippet>749</a>        <span class="macro">assert_eq!</span>(tx.tx().chain_id, <span class="prelude-val">Some</span>(<span class="number">1</span>), <span class="string">"Expected same chain id"</span>);
+<a href=#750 id=750 data-nosnippet>750</a>        <span class="macro">assert_eq!</span>(expected, recovered, <span class="string">"Expected same signer"</span>);
+<a href=#751 id=751 data-nosnippet>751</a>    }
+<a href=#752 id=752 data-nosnippet>752</a>
+<a href=#753 id=753 data-nosnippet>753</a>    <span class="attr">#[test]
+<a href=#754 id=754 data-nosnippet>754</a>    </span><span class="kw">fn </span>eip155_roundtrip() {
+<a href=#755 id=755 data-nosnippet>755</a>        <span class="macro">assert_eq!</span>(from_eip155_value(to_eip155_value(<span class="bool-val">false</span>, <span class="prelude-val">None</span>)), <span class="prelude-val">Some</span>((<span class="bool-val">false</span>, <span class="prelude-val">None</span>)));
+<a href=#756 id=756 data-nosnippet>756</a>        <span class="macro">assert_eq!</span>(from_eip155_value(to_eip155_value(<span class="bool-val">true</span>, <span class="prelude-val">None</span>)), <span class="prelude-val">Some</span>((<span class="bool-val">true</span>, <span class="prelude-val">None</span>)));
+<a href=#757 id=757 data-nosnippet>757</a>
+<a href=#758 id=758 data-nosnippet>758</a>        <span class="kw">for </span>chain_id <span class="kw">in </span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">10</span>, u64::MAX] {
+<a href=#759 id=759 data-nosnippet>759</a>            <span class="macro">assert_eq!</span>(
+<a href=#760 id=760 data-nosnippet>760</a>                from_eip155_value(to_eip155_value(<span class="bool-val">false</span>, <span class="prelude-val">Some</span>(chain_id))),
+<a href=#761 id=761 data-nosnippet>761</a>                <span class="prelude-val">Some</span>((<span class="bool-val">false</span>, <span class="prelude-val">Some</span>(chain_id)))
+<a href=#762 id=762 data-nosnippet>762</a>            );
+<a href=#763 id=763 data-nosnippet>763</a>            <span class="macro">assert_eq!</span>(
+<a href=#764 id=764 data-nosnippet>764</a>                from_eip155_value(to_eip155_value(<span class="bool-val">true</span>, <span class="prelude-val">Some</span>(chain_id))),
+<a href=#765 id=765 data-nosnippet>765</a>                <span class="prelude-val">Some</span>((<span class="bool-val">true</span>, <span class="prelude-val">Some</span>(chain_id)))
+<a href=#766 id=766 data-nosnippet>766</a>            );
+<a href=#767 id=767 data-nosnippet>767</a>        }
+<a href=#768 id=768 data-nosnippet>768</a>    }
+<a href=#769 id=769 data-nosnippet>769</a>
+<a href=#770 id=770 data-nosnippet>770</a>    <span class="attr">#[test]
+<a href=#771 id=771 data-nosnippet>771</a>    </span><span class="kw">fn </span>can_deserialize_system_transaction_with_zero_signature() {
+<a href=#772 id=772 data-nosnippet>772</a>        <span class="kw">let </span>raw_tx = <span class="macro">serde_json::json!</span>({
+<a href=#773 id=773 data-nosnippet>773</a>            <span class="string">"blockHash"</span>: <span class="string">"0x5307b5c812a067f8bc1ed1cc89d319ae6f9a0c9693848bd25c36b5191de60b85"</span>,
+<a href=#774 id=774 data-nosnippet>774</a>            <span class="string">"blockNumber"</span>: <span class="string">"0x45a59bb"</span>,
+<a href=#775 id=775 data-nosnippet>775</a>            <span class="string">"from"</span>: <span class="string">"0x0000000000000000000000000000000000000000"</span>,
+<a href=#776 id=776 data-nosnippet>776</a>            <span class="string">"gas"</span>: <span class="string">"0x1e8480"</span>,
+<a href=#777 id=777 data-nosnippet>777</a>            <span class="string">"gasPrice"</span>: <span class="string">"0x0"</span>,
+<a href=#778 id=778 data-nosnippet>778</a>            <span class="string">"hash"</span>: <span class="string">"0x16ef68aa8f35add3a03167a12b5d1268e344f6605a64ecc3f1c3aa68e98e4e06"</span>,
+<a href=#779 id=779 data-nosnippet>779</a>            <span class="string">"input"</span>: <span class="string">"0xcbd4ece900000000000000000000000032155c9d39084f040ba17890fe8134dbe2a0453f0000000000000000000000004a0126ee88018393b1ad2455060bc350ead9908a000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000469f700000000000000000000000000000000000000000000000000000000000000644ff746f60000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002043e908a4e862aebb10e7e27db0b892b58a7e32af11d64387a414dabc327b00e200000000000000000000000000000000000000000000000000000000"</span>,
+<a href=#780 id=780 data-nosnippet>780</a>            <span class="string">"nonce"</span>: <span class="string">"0x469f7"</span>,
+<a href=#781 id=781 data-nosnippet>781</a>            <span class="string">"to"</span>: <span class="string">"0x4200000000000000000000000000000000000007"</span>,
+<a href=#782 id=782 data-nosnippet>782</a>            <span class="string">"transactionIndex"</span>: <span class="string">"0x0"</span>,
+<a href=#783 id=783 data-nosnippet>783</a>            <span class="string">"value"</span>: <span class="string">"0x0"</span>,
+<a href=#784 id=784 data-nosnippet>784</a>            <span class="string">"v"</span>: <span class="string">"0x0"</span>,
+<a href=#785 id=785 data-nosnippet>785</a>            <span class="string">"r"</span>: <span class="string">"0x0"</span>,
+<a href=#786 id=786 data-nosnippet>786</a>            <span class="string">"s"</span>: <span class="string">"0x0"</span>,
+<a href=#787 id=787 data-nosnippet>787</a>            <span class="string">"queueOrigin"</span>: <span class="string">"l1"</span>,
+<a href=#788 id=788 data-nosnippet>788</a>            <span class="string">"l1TxOrigin"</span>: <span class="string">"0x36bde71c97b33cc4729cf772ae268934f7ab70b2"</span>,
+<a href=#789 id=789 data-nosnippet>789</a>            <span class="string">"l1BlockNumber"</span>: <span class="string">"0xfd1a6c"</span>,
+<a href=#790 id=790 data-nosnippet>790</a>            <span class="string">"l1Timestamp"</span>: <span class="string">"0x63e434ff"</span>,
+<a href=#791 id=791 data-nosnippet>791</a>            <span class="string">"index"</span>: <span class="string">"0x45a59ba"</span>,
+<a href=#792 id=792 data-nosnippet>792</a>            <span class="string">"queueIndex"</span>: <span class="string">"0x469f7"</span>,
+<a href=#793 id=793 data-nosnippet>793</a>            <span class="string">"rawTransaction"</span>: <span class="string">"0xcbd4ece900000000000000000000000032155c9d39084f040ba17890fe8134dbe2a0453f0000000000000000000000004a0126ee88018393b1ad2455060bc350ead9908a000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000469f700000000000000000000000000000000000000000000000000000000000000644ff746f60000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002043e908a4e862aebb10e7e27db0b892b58a7e32af11d64387a414dabc327b00e200000000000000000000000000000000000000000000000000000000"
+<a href=#794 id=794 data-nosnippet>794</a>        </span>});
+<a href=#795 id=795 data-nosnippet>795</a>
+<a href=#796 id=796 data-nosnippet>796</a>        <span class="kw">let </span>signed: <span class="kw">crate</span>::Signed&lt;TxLegacy&gt; = signed_legacy_serde::deserialize(raw_tx).unwrap();
+<a href=#797 id=797 data-nosnippet>797</a>
+<a href=#798 id=798 data-nosnippet>798</a>        <span class="macro">assert_eq!</span>(signed.signature().r(), U256::ZERO);
+<a href=#799 id=799 data-nosnippet>799</a>        <span class="macro">assert_eq!</span>(signed.signature().s(), U256::ZERO);
+<a href=#800 id=800 data-nosnippet>800</a>        <span class="macro">assert!</span>(!signed.signature().v());
+<a href=#801 id=801 data-nosnippet>801</a>
+<a href=#802 id=802 data-nosnippet>802</a>        <span class="macro">assert_eq!</span>(
+<a href=#803 id=803 data-nosnippet>803</a>            signed.hash(),
+<a href=#804 id=804 data-nosnippet>804</a>            <span class="kw-2">&amp;</span><span class="macro">b256!</span>(<span class="string">"0x16ef68aa8f35add3a03167a12b5d1268e344f6605a64ecc3f1c3aa68e98e4e06"</span>),
+<a href=#805 id=805 data-nosnippet>805</a>            <span class="string">"hash should match the transaction hash"
+<a href=#806 id=806 data-nosnippet>806</a>        </span>);
+<a href=#807 id=807 data-nosnippet>807</a>    }
+<a href=#808 id=808 data-nosnippet>808</a>}</code></pre></div></section></main></body></html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derive macro that makes a smart pointer usable with trait objects."><title>CoercePointee in wasmtime_environ::__core::marker - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Coerce<wbr>Pointee</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#what-this-macro-does" title="What this macro does">What this macro does</a><ul><li><a href="#unsizing-coercions-of-the-pointee" title="Unsizing coercions of the pointee">Unsizing coercions of the pointee</a></li><li><a href="#dyn-compatibility-1" title="Dyn compatibility">Dyn compatibility</a></li></ul></li><li><a href="#requirements-for-using-the-macro" title="Requirements for using the macro">Requirements for using the macro</a><ul><li><a href="#multiple-type-parameters" title="Multiple type parameters">Multiple type parameters</a></li></ul></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>marker</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">marker</a></div><h1>Derive Macro <span class="derive">CoercePointee</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/marker.rs.html#1306">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(CoercePointee)]</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>derive_coerce_pointee</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Derive macro that makes a smart pointer usable with trait objects.</p>
+<h2 id="what-this-macro-does"><a class="doc-anchor" href="#what-this-macro-does">§</a>What this macro does</h2>
+<p>This macro is intended to be used with user-defined pointer types, and makes it possible to
+perform coercions on the pointee of the user-defined pointer. There are two aspects to this:</p>
+<h3 id="unsizing-coercions-of-the-pointee"><a class="doc-anchor" href="#unsizing-coercions-of-the-pointee">§</a>Unsizing coercions of the pointee</h3>
+<p>By using the macro, the following example will compile:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(derive_coerce_pointee)]
+</span><span class="kw">use </span>std::marker::CoercePointee;
+<span class="kw">use </span>std::ops::Deref;
+
+<span class="attr">#[derive(CoercePointee)]
+#[repr(transparent)]
+</span><span class="kw">struct </span>MySmartPointer&lt;T: <span class="question-mark">?</span>Sized&gt;(Box&lt;T&gt;);
+
+<span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Deref <span class="kw">for </span>MySmartPointer&lt;T&gt; {
+    <span class="kw">type </span>Target = T;
+    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>T {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">trait </span>MyTrait {}
+
+<span class="kw">impl </span>MyTrait <span class="kw">for </span>i32 {}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>ptr: MySmartPointer&lt;i32&gt; = MySmartPointer(Box::new(<span class="number">4</span>));
+
+    <span class="comment">// This coercion would be an error without the derive.
+    </span><span class="kw">let </span>ptr: MySmartPointer&lt;<span class="kw">dyn </span>MyTrait&gt; = ptr;
+}</code></pre></div>
+<p>Without the <code>#[derive(CoercePointee)]</code> macro, this example would fail with the following error:</p>
+<div class="example-wrap"><pre class="language-text"><code>error[E0308]: mismatched types
+  --&gt; src/main.rs:11:44
+   |
+11 |     let ptr: MySmartPointer&lt;dyn MyTrait&gt; = ptr;
+   |              ---------------------------   ^^^ expected `MySmartPointer&lt;dyn MyTrait&gt;`, found `MySmartPointer&lt;i32&gt;`
+   |              |
+   |              expected due to this
+   |
+   = note: expected struct `MySmartPointer&lt;dyn MyTrait&gt;`
+              found struct `MySmartPointer&lt;i32&gt;`
+   = help: `i32` implements `MyTrait` so you could box the found value and coerce it to the trait object `Box&lt;dyn MyTrait&gt;`, you will have to change the expected type as well</code></pre></div><h3 id="dyn-compatibility-1"><a class="doc-anchor" href="#dyn-compatibility-1">§</a>Dyn compatibility</h3>
+<p>This macro allows you to dispatch on the user-defined pointer type. That is, traits using the
+type as a receiver are dyn-compatible. For example, this compiles:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(arbitrary_self_types, derive_coerce_pointee)]
+</span><span class="kw">use </span>std::marker::CoercePointee;
+<span class="kw">use </span>std::ops::Deref;
+
+<span class="attr">#[derive(CoercePointee)]
+#[repr(transparent)]
+</span><span class="kw">struct </span>MySmartPointer&lt;T: <span class="question-mark">?</span>Sized&gt;(Box&lt;T&gt;);
+
+<span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Deref <span class="kw">for </span>MySmartPointer&lt;T&gt; {
+    <span class="kw">type </span>Target = T;
+    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>T {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="comment">// You can always define this trait. (as long as you have #![feature(arbitrary_self_types)])
+</span><span class="kw">trait </span>MyTrait {
+    <span class="kw">fn </span>func(<span class="self">self</span>: MySmartPointer&lt;<span class="self">Self</span>&gt;);
+}
+
+<span class="comment">// But using `dyn MyTrait` requires #[derive(CoercePointee)].
+</span><span class="kw">fn </span>call_func(value: MySmartPointer&lt;<span class="kw">dyn </span>MyTrait&gt;) {
+    value.func();
+}</code></pre></div>
+<p>If you remove the <code>#[derive(CoercePointee)]</code> annotation from the struct, then the above example
+will fail with this error message:</p>
+<div class="example-wrap"><pre class="language-text"><code>error[E0038]: the trait `MyTrait` is not dyn compatible
+  --&gt; src/lib.rs:21:36
+   |
+17 |     fn func(self: MySmartPointer&lt;Self&gt;);
+   |                   -------------------- help: consider changing method `func`&#39;s `self` parameter to be `&amp;self`: `&amp;Self`
+...
+21 | fn call_func(value: MySmartPointer&lt;dyn MyTrait&gt;) {
+   |                                    ^^^^^^^^^^^ `MyTrait` is not dyn compatible
+   |
+note: for a trait to be dyn compatible it needs to allow building a vtable
+      for more information, visit &lt;https://doc.rust-lang.org/reference/items/traits.html#object-safety&gt;
+  --&gt; src/lib.rs:17:19
+   |
+16 | trait MyTrait {
+   |       ------- this trait is not dyn compatible...
+17 |     fn func(self: MySmartPointer&lt;Self&gt;);
+   |                   ^^^^^^^^^^^^^^^^^^^^ ...because method `func`&#39;s `self` parameter cannot be dispatched on</code></pre></div><h2 id="requirements-for-using-the-macro"><a class="doc-anchor" href="#requirements-for-using-the-macro">§</a>Requirements for using the macro</h2>
+<p>This macro can only be used if:</p>
+<ul>
+<li>The type is a <code>#[repr(transparent)]</code> struct.</li>
+<li>The type of its non-zero-sized field must either be a standard library pointer type
+(reference, raw pointer, <code>NonNull</code>, <code>Box</code>, <code>Rc</code>, <code>Arc</code>, etc.) or another user-defined type
+also using the <code>#[derive(CoercePointee)]</code> macro.</li>
+<li>Zero-sized fields must not mention any generic parameters unless the zero-sized field has
+type <a href="struct.PhantomData.html" title="struct wasmtime_environ::__core::marker::PhantomData"><code>PhantomData</code></a>.</li>
+</ul>
+<h3 id="multiple-type-parameters"><a class="doc-anchor" href="#multiple-type-parameters">§</a>Multiple type parameters</h3>
+<p>If the type has multiple type parameters, then you must explicitly specify which one should be
+used for dynamic dispatch. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(CoercePointee)]
+#[repr(transparent)]
+</span><span class="kw">struct </span>MySmartPointer&lt;<span class="attr">#[pointee] </span>T: <span class="question-mark">?</span>Sized, U&gt; {
+    ptr: Box&lt;T&gt;,
+    _phantom: PhantomData&lt;U&gt;,
+}</code></pre></div>
+<p>Specifying <code>#[pointee]</code> when the struct has only one type parameter is allowed, but not required.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>A custom implementation of the <code>Rc</code> type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(derive_coerce_pointee)]
+</span><span class="kw">use </span>std::marker::CoercePointee;
+<span class="kw">use </span>std::ops::Deref;
+<span class="kw">use </span>std::ptr::NonNull;
+
+<span class="attr">#[derive(CoercePointee)]
+#[repr(transparent)]
+</span><span class="kw">pub struct </span>Rc&lt;T: <span class="question-mark">?</span>Sized&gt; {
+    inner: NonNull&lt;RcInner&lt;T&gt;&gt;,
+}
+
+<span class="kw">struct </span>RcInner&lt;T: <span class="question-mark">?</span>Sized&gt; {
+    refcount: usize,
+    value: T,
+}
+
+<span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Deref <span class="kw">for </span>Rc&lt;T&gt; {
+    <span class="kw">type </span>Target = T;
+    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>T {
+        <span class="kw">let </span>ptr = <span class="self">self</span>.inner.as_ptr();
+        <span class="kw">unsafe </span>{ <span class="kw-2">&amp;</span>(<span class="kw-2">*</span>ptr).value }
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; Rc&lt;T&gt; {
+    <span class="kw">pub fn </span>new(value: T) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>inner = Box::new(RcInner {
+            refcount: <span class="number">1</span>,
+            value,
+        });
+        <span class="self">Self </span>{
+            inner: NonNull::from(Box::leak(inner)),
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Clone <span class="kw">for </span>Rc&lt;T&gt; {
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="comment">// A real implementation would handle overflow here.
+        </span><span class="kw">unsafe </span>{ (<span class="kw-2">*</span><span class="self">self</span>.inner.as_ptr()).refcount += <span class="number">1 </span>};
+        <span class="self">Self </span>{ inner: <span class="self">self</span>.inner }
+    }
+}
+
+<span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Drop <span class="kw">for </span>Rc&lt;T&gt; {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span>ptr = <span class="self">self</span>.inner.as_ptr();
+        <span class="kw">unsafe </span>{ (<span class="kw-2">*</span>ptr).refcount -= <span class="number">1 </span>};
+        <span class="kw">if unsafe </span>{ (<span class="kw-2">*</span>ptr).refcount } == <span class="number">0 </span>{
+            drop(<span class="kw">unsafe </span>{ Box::from_raw(ptr) });
+        }
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

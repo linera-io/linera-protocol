@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Action"],"fn":["clone_body_fn","redirect_fn"],"struct":["And","Attempt","CloneBodyFn","FilterCredentials","Limited","Or","RedirectFn","SameOrigin"],"trait":["Policy","PolicyExt"],"type":["Standard"]};

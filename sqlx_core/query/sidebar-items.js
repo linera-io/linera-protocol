@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["query","query_statement","query_statement_with","query_with","query_with_result"],"struct":["Map","Query"]};

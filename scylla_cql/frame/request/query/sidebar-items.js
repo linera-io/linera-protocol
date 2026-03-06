@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PagingStateResponse","QueryParametersSerializationError","QuerySerializationError"],"struct":["PagingState","Query","QueryParameters"]};

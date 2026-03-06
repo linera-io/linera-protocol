@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Direction"],"fn":["ioctl"],"mod":["opcode"],"struct":["Getter","IntegerSetter","NoArg","Setter","Updater"],"trait":["Ioctl"],"type":["IoctlOutput","Opcode"]};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("enum_iterator_derive", 0, "Overview\nDerives <code>IntoEnumIterator</code> for field-less enums.")

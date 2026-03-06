@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SearchStep","Utf8Pattern"],"struct":["CharArrayRefSearcher","CharArraySearcher","CharPredicateSearcher","CharSearcher","CharSliceSearcher","StrSearcher"],"trait":["DoubleEndedSearcher","Pattern","ReverseSearcher","Searcher"]};

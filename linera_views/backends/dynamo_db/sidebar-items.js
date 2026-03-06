@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DynamoDbStoreInternalError","InvalidNamespace"],"struct":["DynamoDbDatabaseInternal","DynamoDbStoreInternal","DynamoDbStoreInternalConfig"],"type":["DynamoDbDatabase","DynamoDbStoreConfig","DynamoDbStoreError"]};

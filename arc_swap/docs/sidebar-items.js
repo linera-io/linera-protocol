@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["internal","limitations","patterns","performance"]};
