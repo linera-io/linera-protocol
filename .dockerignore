@@ -13,8 +13,7 @@ node_modules
 README-secret.md
 # github related files
 .github/
-scripts/target
-examples/target
+**/target
 Dockerfile
 .dockerignore
 .gitignore
