@@ -1162,15 +1162,9 @@ pub enum NetCommand {
         #[arg(long, default_value = "grpc")]
         external_protocol: String,
 
-        /// If present, a faucet is started using the chain provided by --faucet-chain, or
-        /// the first non-admin chain if not provided.
+        /// If present, a faucet is started on a dedicated chain with its own wallet.
         #[arg(long, default_value = "false")]
         with_faucet: bool,
-
-        /// When using --with-faucet, this specifies the chain on which the faucet will be started.
-        /// If this is `n`, the `n`-th non-admin chain (lexicographically) in the wallet is selected.
-        #[arg(long)]
-        faucet_chain: Option<u32>,
 
         /// The port on which to run the faucet server
         #[arg(long, default_value = "8080")]
