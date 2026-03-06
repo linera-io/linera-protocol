@@ -150,11 +150,18 @@ struct RunOptions {
     /// Port for the metrics server.
     #[arg(long)]
     pub metrics_port: Option<u16>,
+
+    /// Enable jemalloc memory profiling endpoints on the metrics server.
+    #[cfg(feature = "jemalloc")]
+    #[arg(long, env = "LINERA_ENABLE_MEMORY_PROFILING")]
+    pub enable_memory_profiling: bool,
 }
 
 struct ExporterContext {
     node_options: NodeOptions,
     config: BlockExporterConfig,
+    #[cfg(with_metrics)]
+    enable_memory_profiling: bool,
 }
 
 #[async_trait]
@@ -169,7 +176,12 @@ impl Runnable for ExporterContext {
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(self.config.metrics_address(), shutdown_notifier.clone());
+        monitoring_server::start_metrics_with_profiling(
+            self.config.metrics_address(),
+            shutdown_notifier.clone(),
+            self.enable_memory_profiling,
+        )
+        .await;
 
         let (sender, handle) = start_block_processor_task(
             storage,
@@ -202,15 +214,6 @@ impl Runnable for ExporterContext {
     }
 }
 
-impl ExporterContext {
-    fn new(node_options: NodeOptions, config: BlockExporterConfig) -> ExporterContext {
-        Self {
-            config,
-            node_options,
-        }
-    }
-}
-
 fn main() -> Result<()> {
     linera_service::tracing::init("linera-exporter");
     let cli = <Cli as clap::Parser>::parse();
@@ -221,6 +224,18 @@ fn main() -> Result<()> {
 }
 
 impl RunOptions {
+    #[cfg(with_metrics)]
+    fn enable_memory_profiling(&self) -> bool {
+        #[cfg(feature = "jemalloc")]
+        {
+            self.enable_memory_profiling
+        }
+        #[cfg(not(feature = "jemalloc"))]
+        {
+            false
+        }
+    }
+
     fn run(&self) -> anyhow::Result<()> {
         let config_string = fs_err::read_to_string(&self.config_path)
             .expect("Unable to read the configuration file");
@@ -246,7 +261,12 @@ impl RunOptions {
             }
         }
 
-        let context = ExporterContext::new(node_options, config);
+        let context = ExporterContext {
+            node_options,
+            config,
+            #[cfg(with_metrics)]
+            enable_memory_profiling: self.enable_memory_profiling(),
+        };
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .thread_name("block-exporter-worker")

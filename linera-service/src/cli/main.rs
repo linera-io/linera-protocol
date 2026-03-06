@@ -8,22 +8,6 @@
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-// jemalloc configuration for memory profiling with jemalloc_pprof
-// prof:true,prof_active:true - Enable profiling from start
-// lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
-
-// Linux/other platforms: use unprefixed malloc (with unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", not(target_os = "macos")))]
-#[allow(non_upper_case_globals)]
-#[export_name = "malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
-
-// macOS: use prefixed malloc (without unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", target_os = "macos"))]
-#[allow(non_upper_case_globals)]
-#[export_name = "_rjem_malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
-
 mod options;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -827,6 +811,7 @@ impl Runnable for Job {
                             monitoring_server::start_metrics(
                                 metrics_address,
                                 shutdown_notifier.clone(),
+                                monitoring_server::MemoryProfiling::Disabled,
                             );
                         }
 
@@ -1135,6 +1120,7 @@ impl Runnable for Job {
                             monitoring_server::start_metrics(
                                 metrics_address,
                                 shutdown_notifier.clone(),
+                                monitoring_server::MemoryProfiling::Disabled,
                             );
                         }
 
@@ -1319,6 +1305,7 @@ impl Runnable for Job {
                     query_cache_size,
                     query_subscriptions,
                     cancellation_token.clone(),
+                    options.enable_memory_profiling(),
                 );
                 service.run(cancellation_token, command_receiver).await?;
             }
@@ -1351,6 +1338,7 @@ impl Runnable for Job {
                         u64::try_from(et.timestamp_micros()).expect("End timestamp before 1970");
                     Timestamp::from(micros)
                 });
+
                 let config = FaucetConfig {
                     port,
                     #[cfg(with_metrics)]
@@ -1362,6 +1350,7 @@ impl Runnable for Job {
                     chain_listener_config: config,
                     storage_path,
                     max_batch_size,
+                    enable_memory_profiling: options.enable_memory_profiling(),
                 };
                 let faucet = FaucetService::new(config, context).await?;
                 let cancellation_token = CancellationToken::new();
