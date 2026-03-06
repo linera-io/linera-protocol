@@ -63,7 +63,8 @@ RUN for dir in \
     examples/rfq \
     examples/social \
     examples/task-processor \
-    examples/time-expiry; \
+    examples/time-expiry \
+    examples/wrapped-fungible; \
   do mkdir -p "$dir/src" && \
      echo "" > "$dir/src/lib.rs" && \
      echo "fn main(){}" > "$dir/src/contract.rs" && \

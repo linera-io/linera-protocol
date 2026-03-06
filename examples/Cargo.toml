@@ -5,6 +5,7 @@ members = [
     "call-evm-counter",
     "controller",
     "counter",
+    "evm-bridge",
     "counter-no-graphql",
     "crowd-funding",
     "ethereum-tracker",
@@ -65,6 +66,7 @@ amm = { path = "./amm" }
 counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
 ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
+evm-bridge = { path = "./evm-bridge" }
 fungible = { path = "./fungible" }
 matching-engine = { path = "./matching-engine" }
 native-fungible = { path = "./native-fungible" }
