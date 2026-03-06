@@ -34,8 +34,6 @@ enum KeyTag {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I, V: Allocative")]
 pub struct MapCountView<C, I, V> {
-    #[allocative(skip)]
-    context: C,
     map: MapView<C, I, V>,
     stored_count: usize,
     count: usize,
@@ -54,11 +52,11 @@ where
         &mut self,
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
-        let context = ctx(&self.context);
+        let old_context = self.context();
+        let context = ctx(&old_context);
         let subview_base = context.base_key().base_tag(KeyTag::Subview as u8);
         let subview_context = context.clone_with_base_key(subview_base);
         MapCountView {
-            context,
             map: self.map.with_context(|_| subview_context.clone()).await,
             stored_count: self.stored_count,
             count: self.count,
@@ -77,7 +75,8 @@ where
     type Context = C;
 
     fn context(&self) -> C {
-        self.context.clone()
+        // The inner context has our base key + the KeyTag::Subview byte.
+        self.map.context().clone_with_trimmed_key(1)
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -91,7 +90,6 @@ where
         let subview_context = context.clone_with_base_key(subview_base);
         let map = MapView::post_load(subview_context, &[])?;
         Ok(Self {
-            context,
             map,
             stored_count,
             count: stored_count,
@@ -110,7 +108,7 @@ where
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let delete_subview = self.map.pre_save(batch)?;
         if self.count != self.stored_count {
-            let count_key = self.context.base_key().base_tag(KeyTag::Count as u8);
+            let count_key = self.context().base_key().base_tag(KeyTag::Count as u8);
             if self.count == 0 {
                 batch.delete_key(count_key);
             } else {
@@ -139,7 +137,6 @@ where
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(Self {
-            context: self.context.clone(),
             map: self.map.clone_unchecked()?,
             stored_count: self.stored_count,
             count: self.count,
@@ -216,8 +213,6 @@ where
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I")]
 pub struct SetCountView<C, I> {
-    #[allocative(skip)]
-    context: C,
     set: SetView<C, I>,
     stored_count: usize,
     count: usize,
@@ -232,11 +227,11 @@ impl<C: Context, C2: Context, I: Send + Sync + Serialize> ReplaceContext<C2>
         &mut self,
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
-        let context = ctx(&self.context);
+        let old_context = self.context();
+        let context = ctx(&old_context);
         let subview_base = context.base_key().base_tag(KeyTag::Subview as u8);
         let subview_context = context.clone_with_base_key(subview_base);
         SetCountView {
-            context,
             set: self.set.with_context(|_| subview_context.clone()).await,
             stored_count: self.stored_count,
             count: self.count,
@@ -250,7 +245,8 @@ impl<C: Context, I: Send + Sync + Serialize> View for SetCountView<C, I> {
     type Context = C;
 
     fn context(&self) -> C {
-        self.context.clone()
+        // The inner context has our base key + the KeyTag::Subview byte.
+        self.set.context().clone_with_trimmed_key(1)
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -264,7 +260,6 @@ impl<C: Context, I: Send + Sync + Serialize> View for SetCountView<C, I> {
         let subview_context = context.clone_with_base_key(subview_base);
         let set = SetView::post_load(subview_context, &[])?;
         Ok(Self {
-            context,
             set,
             stored_count,
             count: stored_count,
@@ -283,7 +278,7 @@ impl<C: Context, I: Send + Sync + Serialize> View for SetCountView<C, I> {
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let delete_subview = self.set.pre_save(batch)?;
         if self.count != self.stored_count {
-            let count_key = self.context.base_key().base_tag(KeyTag::Count as u8);
+            let count_key = self.context().base_key().base_tag(KeyTag::Count as u8);
             if self.count == 0 {
                 batch.delete_key(count_key);
             } else {
@@ -311,7 +306,6 @@ where
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(Self {
-            context: self.context.clone(),
             set: self.set.clone_unchecked()?,
             stored_count: self.stored_count,
             count: self.count,
@@ -384,8 +378,6 @@ where
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I, W: Allocative")]
 pub struct CollectionCountView<C, I, W> {
-    #[allocative(skip)]
-    context: C,
     collection: CollectionView<C, I, W>,
     stored_count: usize,
     count: usize,
@@ -402,7 +394,8 @@ where
     type Context = C;
 
     fn context(&self) -> C {
-        self.context.clone()
+        // The inner context has our base key + the KeyTag::Subview byte.
+        self.collection.context().clone_with_trimmed_key(1)
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -416,7 +409,6 @@ where
         let subview_context = context.clone_with_base_key(subview_base);
         let collection = CollectionView::post_load(subview_context, &[])?;
         Ok(Self {
-            context,
             collection,
             stored_count,
             count: stored_count,
@@ -435,7 +427,7 @@ where
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let delete_subview = self.collection.pre_save(batch)?;
         if self.count != self.stored_count {
-            let count_key = self.context.base_key().base_tag(KeyTag::Count as u8);
+            let count_key = self.context().base_key().base_tag(KeyTag::Count as u8);
             if self.count == 0 {
                 batch.delete_key(count_key);
             } else {
@@ -464,7 +456,6 @@ where
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(Self {
-            context: self.context.clone(),
             collection: self.collection.clone_unchecked()?,
             stored_count: self.stored_count,
             count: self.count,
