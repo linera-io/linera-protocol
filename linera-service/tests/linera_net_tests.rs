@@ -2364,15 +2364,19 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains), "fungible" ; "remote_net_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains), "native-fungible" ; "native_remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) -> Result<()> {
+async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig, example_name: &str) -> Result<()> {
     use std::collections::BTreeMap;
 
-    use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use fungible::{InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -2418,19 +2422,19 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example("fungible").await?;
-    let params = Parameters::new("DEL");
-    let application_id = client1
-        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
-            contract,
-            service,
-            VmRuntime::Wasm,
-            &params,
-            &state,
-            &[],
-            Some(chain2),
-        )
-        .await?;
+    let params = if example_name == "native-fungible" {
+        Parameters::new("NAT")
+    } else {
+        Parameters::new("DEL")
+    };
+    let application_id = publish_and_create_native_fungible(
+        &client1,
+        example_name,
+        &params,
+        &state,
+        Some(chain2),
+    )
+    .await?;
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;

@@ -768,6 +768,18 @@ pub trait BaseRuntime {
     /// Reads balance owners.
     fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError>;
 
+    /// Reads the allowance for a given owner-spender pair.
+    fn read_allowance(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+    ) -> Result<Amount, ExecutionError>;
+
+    /// Reads all allowances.
+    fn read_allowances(
+        &mut self,
+    ) -> Result<Vec<(AccountOwner, AccountOwner, Amount)>, ExecutionError>;
+
     /// Reads the current ownership configuration for this chain.
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError>;
 

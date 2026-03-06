@@ -15,7 +15,9 @@ use linera_base::{
         Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
+    identifiers::{
+        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, OwnerSpender, StreamId,
+    },
     ownership::ChainOwnership,
     time::Instant,
 };
@@ -186,6 +188,35 @@ where
             BalanceOwners { callback } => {
                 let owners = self.state.system.balances.indices().await?;
                 callback.respond(owners);
+            }
+
+            Allowance {
+                owner,
+                spender,
+                callback,
+            } => {
+                let owner_spender = OwnerSpender::new(owner, spender);
+                let allowance = self
+                    .state
+                    .system
+                    .allowances
+                    .get(&owner_spender)
+                    .await?
+                    .unwrap_or_default();
+                callback.respond(allowance);
+            }
+
+            Allowances { callback } => {
+                let entries: Vec<_> = self
+                    .state
+                    .system
+                    .allowances
+                    .index_values()
+                    .await?
+                    .into_iter()
+                    .map(|(os, amount)| (os.owner, os.spender, amount))
+                    .collect();
+                callback.respond(entries);
             }
 
             Transfer {
@@ -1222,6 +1253,18 @@ pub enum ExecutionRequest {
     BalanceOwners {
         #[debug(skip)]
         callback: Sender<Vec<AccountOwner>>,
+    },
+
+    Allowance {
+        owner: AccountOwner,
+        spender: AccountOwner,
+        #[debug(skip)]
+        callback: Sender<Amount>,
+    },
+
+    Allowances {
+        #[debug(skip)]
+        callback: Sender<Vec<(AccountOwner, AccountOwner, Amount)>>,
     },
 
     Transfer {

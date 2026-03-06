@@ -146,6 +146,19 @@ where
         })
     }
 
+    /// Returns the allowance for a given owner-spender pair.
+    pub fn allowance(&self, owner: AccountOwner, spender: AccountOwner) -> Amount {
+        base_wit::read_allowance(owner.into(), spender.into()).into()
+    }
+
+    /// Returns all allowances on this chain.
+    pub fn allowances(&self) -> Vec<(AccountOwner, AccountOwner, Amount)> {
+        base_wit::read_allowances()
+            .into_iter()
+            .map(|(owner, spender, amount)| (owner.into(), spender.into(), amount.into()))
+            .collect()
+    }
+
     /// Makes an HTTP request to the given URL as an oracle and returns the answer, if any.
     ///
     /// Should only be used with queries where it is very likely that all validators will receive
