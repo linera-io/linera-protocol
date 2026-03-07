@@ -285,12 +285,15 @@ pub async fn run(
     // ── 1. Set up Linera client ──
     tracing::info!("Connecting to Linera faucet at {faucet_url}...");
     let faucet = Faucet::new(faucet_url.to_string());
+    tracing::info!("Fetching genesis config...");
     let genesis_config = faucet.genesis_config().await?;
+    tracing::info!("Genesis config received");
 
     let config = MemoryStoreConfig {
         max_stream_queries: 10,
         kill_on_drop: true,
     };
+    tracing::info!("Creating storage...");
     let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(
         &config,
         "bridge-relay",
@@ -298,10 +301,14 @@ pub async fn run(
     )
     .await?;
 
+    tracing::info!("Initializing storage from genesis...");
     genesis_config.initialize_storage(&mut storage).await?;
+    tracing::info!("Storage initialized");
 
+    let admin_chain_id = genesis_config.admin_chain_id();
     let mut signer = InMemorySigner::new(None);
 
+    tracing::info!("Creating client context...");
     let mut ctx = ClientContext::new(
         storage,
         Memory::default(),
@@ -311,14 +318,30 @@ pub async fn run(
         genesis_config,
     )
     .await?;
+    tracing::info!("Client context created");
+
+    // ── 1b. Sync admin chain from validators ──
+    tracing::info!(%admin_chain_id, "Syncing admin chain from validators...");
+    let committee = faucet.current_committee().await?;
+    tracing::info!(
+        validators = committee.validators().into_iter().count(),
+        "Fetched current committee, downloading chain state..."
+    );
+    let admin_client = ctx.make_chain_client(admin_chain_id).await?;
+    admin_client
+        .synchronize_chain_state_from_committee(committee)
+        .await?;
+    tracing::info!("Admin chain synced");
 
     // ── 2. Claim bridge chain ──
     tracing::info!("Claiming bridge chain from faucet...");
     let owner = AccountOwner::from(signer.generate_new());
     let chain_desc = faucet.claim(&owner).await?;
     let chain_id = chain_desc.id();
+    tracing::info!(%chain_id, %owner, "Chain claimed, extending wallet...");
     ctx.extend_with_chain(chain_desc, Some(owner)).await?;
 
+    tracing::info!("Synchronizing bridge chain from validators...");
     let chain_client = ctx.make_chain_client(chain_id).await?;
     chain_client.synchronize_from_validators().await?;
 
