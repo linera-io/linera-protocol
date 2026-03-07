@@ -25,6 +25,7 @@ use alloy::{
 use alloy_rlp::Encodable;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
+use op_alloy_network::Optimism;
 
 /// All data needed to submit a `ProcessDeposit` operation to the evm-bridge app.
 #[derive(Debug, Clone)]
@@ -57,8 +58,10 @@ pub trait DepositProofClient {
 /// HTTP-based deposit proof client that queries an EVM JSON-RPC endpoint.
 ///
 /// Works with any standard Ethereum-compatible RPC (including Base L2).
+/// Uses the `Optimism` network type so OP Stack deposit receipts (type 0x7e)
+/// deserialize correctly.
 pub struct HttpDepositProofClient {
-    provider: Box<dyn Provider>,
+    provider: Box<dyn Provider<Optimism>>,
 }
 
 impl HttpDepositProofClient {
@@ -67,7 +70,7 @@ impl HttpDepositProofClient {
         let url = rpc_url
             .parse()
             .with_context(|| format!("invalid RPC URL: {rpc_url}"))?;
-        let provider = ProviderBuilder::new().connect_http(url);
+        let provider = ProviderBuilder::<_, _, Optimism>::default().connect_http(url);
         Ok(Self {
             provider: Box::new(provider),
         })
@@ -87,14 +90,17 @@ impl DepositProofClient for HttpDepositProofClient {
             .with_context(|| format!("transaction receipt not found for {tx_hash}"))?;
 
         let block_hash = receipt
+            .inner
             .block_hash
             .context("receipt missing block_hash (pending tx?)")?;
         let tx_index = receipt
+            .inner
             .transaction_index
             .context("receipt missing transaction_index")?;
 
         // Find the DepositInitiated event in the receipt logs
         let log_index = receipt
+            .inner
             .inner
             .logs()
             .iter()
@@ -130,13 +136,13 @@ impl DepositProofClient for HttpDepositProofClient {
             .with_context(|| format!("block receipts not found for block {block_hash}"))?;
 
         // 4. Encode each receipt to canonical EIP-2718 form (as stored in the trie).
-        //    RPC receipts use alloy_rpc_types::Log; we convert to alloy_primitives::Log
-        //    so that Encodable2718 is available.
+        //    Convert RPC logs → primitives logs so Encodable2718 is available.
+        //    OpReceiptEnvelope handles both standard types and OP deposit (0x7e).
         let canonical_receipts: Vec<(u64, Vec<u8>)> = all_receipts
-            .iter()
+            .into_iter()
             .enumerate()
             .map(|(idx, r)| {
-                let consensus_receipt = r.inner.clone().into_primitives_receipt();
+                let consensus_receipt = r.inner.inner.map_logs(|log| log.inner);
                 let encoded = consensus_receipt.encoded_2718();
                 (idx as u64, encoded)
             })

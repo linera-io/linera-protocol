@@ -165,6 +165,7 @@ num-format = "0.4.4"
 num-traits = "0.2.18"
 octocrab = "0.42.1"
 oneshot = "0.1.6"
+op-alloy-network = { version = "0.22.0", default-features = false }
 opentelemetry = { version = "0.30.0", features = ["trace"] }
 opentelemetry-http = "0.30.0"
 opentelemetry-otlp = { version = "0.30.0", features = [
