@@ -255,6 +255,28 @@ where
         contract_wit::claim(source.into(), destination.into(), amount.into())
     }
 
+    /// Approves `spender` to withdraw `amount` of native tokens from `owner`'s account.
+    pub fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, amount: Amount) {
+        contract_wit::approve(owner.into(), spender.into(), amount.into())
+    }
+
+    /// Transfers `amount` of native tokens from `owner` to `destination` using `spender`'s
+    /// allowance.
+    pub fn transfer_from(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        destination: Account,
+        amount: Amount,
+    ) {
+        contract_wit::transfer_from(
+            owner.into(),
+            spender.into(),
+            destination.into(),
+            amount.into(),
+        )
+    }
+
     /// Calls another application.
     pub fn call_application<A: ContractAbi + Send>(
         &mut self,

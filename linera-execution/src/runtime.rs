@@ -707,6 +707,34 @@ where
         Ok(owners)
     }
 
+    fn read_allowance(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+    ) -> Result<Amount, ExecutionError> {
+        let this = self.inner();
+        let allowance = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::Allowance {
+                owner,
+                spender,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(allowance)
+    }
+
+    fn read_allowances(
+        &mut self,
+    ) -> Result<Vec<(AccountOwner, AccountOwner, Amount)>, ExecutionError> {
+        let this = self.inner();
+        let allowances = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::Allowances { callback })?
+            .recv_response()?;
+        Ok(allowances)
+    }
+
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
         let mut this = self.inner();
         let chain_ownership = this
@@ -1319,6 +1347,56 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::Claim {
                 source,
+                destination,
+                amount,
+                signer,
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
+    fn approve(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let current_application = this.current_application();
+        let application_id = current_application.id;
+        let signer = current_application.signer;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::Approve {
+                owner,
+                spender,
+                amount,
+                signer,
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
+    fn transfer_from(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let current_application = this.current_application();
+        let application_id = current_application.id;
+        let signer = current_application.signer;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::TransferFrom {
+                owner,
+                spender,
                 destination,
                 amount,
                 signer,
