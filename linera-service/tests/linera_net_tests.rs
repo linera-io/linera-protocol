@@ -2373,7 +2373,10 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains), "fungible" ; "remote_net_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains), "native-fungible" ; "native_remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig, example_name: &str) -> Result<()> {
+async fn test_wasm_end_to_end_allowances_fungible(
+    config: impl LineraNetConfig,
+    example_name: &str,
+) -> Result<()> {
     use std::collections::BTreeMap;
 
     use fungible::{InitialState, Parameters};
@@ -2433,14 +2436,9 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig, 
     } else {
         Parameters::new("DEL")
     };
-    let application_id = publish_and_create_native_fungible(
-        &client1,
-        example_name,
-        &params,
-        &state,
-        Some(chain2),
-    )
-    .await?;
+    let application_id =
+        publish_and_create_native_fungible(&client1, example_name, &params, &state, Some(chain2))
+            .await?;
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;

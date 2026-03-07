@@ -287,7 +287,14 @@ where
                 let maybe_message = self
                     .state
                     .system
-                    .transfer_from(signer, Some(application_id), owner, spender, destination, amount)
+                    .transfer_from(
+                        signer,
+                        Some(application_id),
+                        owner,
+                        spender,
+                        destination,
+                        amount,
+                    )
                     .await?;
                 self.txn_tracker.add_outgoing_messages(maybe_message);
                 callback.respond(());

@@ -1203,7 +1203,10 @@ doc_scalar!(
     BlobId,
     "A content-addressed blob ID i.e. the hash of the `BlobContent`"
 );
-bcs_scalar!(OwnerSpender, "A pair of owner and spender accounts for managing allowances");
+bcs_scalar!(
+    OwnerSpender,
+    "A pair of owner and spender accounts for managing allowances"
+);
 
 #[cfg(test)]
 mod tests {

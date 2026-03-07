@@ -17,7 +17,9 @@ use linera_base::{
         ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, OwnerSpender, StreamId},
+    identifiers::{
+        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, OwnerSpender, StreamId,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_views::{

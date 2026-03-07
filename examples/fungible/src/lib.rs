@@ -41,7 +41,6 @@ pub enum Message {
     },
 }
 
-
 /// Creates a fungible token application and distributes `initial_amounts` to new individual
 /// chains.
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
