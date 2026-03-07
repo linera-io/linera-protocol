@@ -1,0 +1,227 @@
+# .github/workflows/release-binaries.yml
+#
+# Builds and uploads prebuilt Linera CLI binaries on every tagged release.
+# Targets: Linux x86_64, macOS x86_64, macOS ARM (Apple Silicon)
+#
+# Usage:
+#   1. Push a tag:  git tag linera-v0.15.12 && git push origin linera-v0.15.12
+#   2. This workflow creates a GitHub Release with binaries attached
+#   3. Users install with:
+#        curl -fsSL https://github.com/linera-io/linera-protocol/releases/latest/download/linera-$(uname -s)-$(uname -m).tar.gz | tar xz
+#        sudo mv linera /usr/local/bin/
+#
+# Context: This was created to address developer onboarding friction.
+# Building from source takes ~35 minutes and requires protoc workarounds.
+# Prebuilt binaries reduce "install CLI" from 35 min to 30 seconds.
+
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - 'linera-v*'      # matches linera-v0.15.11, linera-v1.0.0, etc.
+  workflow_dispatch:       # manual trigger for testing
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., linera-v0.15.11)'
+        required: true
+
+permissions:
+  contents: write          # needed to create releases and upload assets
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+
+jobs:
+  # ============================================================
+  # Build matrix — one job per target platform
+  # ============================================================
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false     # don't cancel other builds if one fails
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest-8-cores
+            archive: tar.gz
+            name_suffix: Linux-x86_64
+
+          - target: x86_64-apple-darwin
+            os: macos-13          # Intel Mac runner
+            archive: tar.gz
+            name_suffix: Darwin-x86_64
+
+          - target: aarch64-apple-darwin
+            os: macos-14          # Apple Silicon runner (M1)
+            archive: tar.gz
+            name_suffix: Darwin-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Linux-only: install system dependencies
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Build release binaries
+        run: |
+          cargo build \
+            --locked \
+            --release \
+            --target ${{ matrix.target }} \
+            -p linera-service \
+            -p linera-storage-service
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          # Strip 'linera-v' prefix to get semver
+          SEMVER="${VERSION#linera-v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+      - name: Package binaries
+        id: package
+        run: |
+          STAGING="linera-${{ steps.version.outputs.semver }}-${{ matrix.name_suffix }}"
+          mkdir -p "$STAGING"
+
+          # Copy binaries
+          cp target/${{ matrix.target }}/release/linera "$STAGING/"
+          cp target/${{ matrix.target }}/release/linera-server "$STAGING/" 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/linera-proxy "$STAGING/" 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/linera-storage-service "$STAGING/" 2>/dev/null || true
+
+          # Strip debug symbols to reduce size
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            strip "$STAGING"/linera*
+          fi
+
+          # macOS: ad-hoc code sign (prevents Gatekeeper kill)
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            for bin in "$STAGING"/linera*; do
+              codesign -s - "$bin"
+            done
+          fi
+
+          # Create archive
+          ARCHIVE="linera-${{ steps.version.outputs.semver }}-${{ matrix.name_suffix }}.${{ matrix.archive }}"
+          tar czf "$ARCHIVE" "$STAGING"
+
+          # Generate checksum
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+          else
+            sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+          fi
+
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "checksum=$ARCHIVE.sha256" >> "$GITHUB_OUTPUT"
+
+          # Print binary info for verification
+          echo "=== Binary info ==="
+          ls -lh "$STAGING"/linera*
+          "$STAGING/linera" --version || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.name_suffix }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}
+
+  # ============================================================
+  # Create GitHub Release and attach all binaries
+  # ============================================================
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          SEMVER="${VERSION#linera-v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lhR artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Linera v${{ steps.version.outputs.semver }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.semver, 'rc') || contains(steps.version.outputs.semver, 'beta') }}
+          generate_release_notes: true
+          files: |
+            artifacts/*
+          body: |
+            ## Install
+
+            **macOS (Apple Silicon):**
+            ```bash
+            curl -fsSL https://github.com/linera-io/linera-protocol/releases/download/${{ steps.version.outputs.version }}/linera-${{ steps.version.outputs.semver }}-Darwin-arm64.tar.gz | tar xz
+            sudo mv linera-${{ steps.version.outputs.semver }}-Darwin-arm64/linera /usr/local/bin/
+            ```
+
+            **macOS (Intel):**
+            ```bash
+            curl -fsSL https://github.com/linera-io/linera-protocol/releases/download/${{ steps.version.outputs.version }}/linera-${{ steps.version.outputs.semver }}-Darwin-x86_64.tar.gz | tar xz
+            sudo mv linera-${{ steps.version.outputs.semver }}-Darwin-x86_64/linera /usr/local/bin/
+            ```
+
+            **Linux (x86_64):**
+            ```bash
+            curl -fsSL https://github.com/linera-io/linera-protocol/releases/download/${{ steps.version.outputs.version }}/linera-${{ steps.version.outputs.semver }}-Linux-x86_64.tar.gz | tar xz
+            sudo mv linera-${{ steps.version.outputs.semver }}-Linux-x86_64/linera /usr/local/bin/
+            ```
+
+            **Verify:**
+            ```bash
+            linera --version
+            ```
+
+            ## SHA-256 Checksums
+            See the `.sha256` files attached to this release.
