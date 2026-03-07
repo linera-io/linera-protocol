@@ -63,9 +63,6 @@ jobs:
     steps:
       # Install dependencies
     - uses: actions/checkout@v4
-    - name: Switch to nightly Rust toolchain
-      run: |
-        ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         rustflags: ""
@@ -107,6 +104,20 @@ jobs:
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 1000
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
 
+    - name: Deploy the counter application
+      env:
+          LINERA_WALLET: /tmp/local-linera-net/wallet_2.json
+          LINERA_KEYSTORE: /tmp/local-linera-net/keystore_2.json
+          LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_2.db
+      run: |
+        cargo run --bin linera -- wallet init
+        cargo run --bin linera -- wallet request-chain
+        echo LINERA_COUNTER_APPLICATION_ID=$(cargo run --bin linera -- project publish-and-create examples/counter --json-argument 0) >> "$GITHUB_ENV"
+
+    - name: Switch to nightly Rust toolchain
+      run: |
+        ln -sf toolchains/nightly/rust-toolchain.toml
+
     # Run tests
     - name: Test the npm packages
       run: |
@@ -118,3 +129,8 @@ jobs:
       run: |
         cd linera-views
         WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
+    - name: Test the `counter` example
+      run: |
+        cd examples/counter
+        pnpm install --frozen-lockfile
+        LINERA_APPLICATION_ID=$LINERA_COUNTER_APPLICATION_ID pnpm test
