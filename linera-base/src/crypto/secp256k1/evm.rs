@@ -472,6 +472,32 @@ impl EvmSignature {
         Ok(())
     }
 
+    /// Signs a raw prehash directly without EIP-191 wrapping.
+    /// Used for EIP-712 signing where the caller provides the final signing hash.
+    pub fn sign_raw_prehash(secret: &EvmSecretKey, prehash: [u8; 32]) -> Self {
+        let (signature, rid) = secret
+            .0
+            .sign_prehash_recoverable(&prehash)
+            .expect("Failed to sign prehashed data");
+        EvmSignature((signature, rid).into())
+    }
+
+    /// Recovers an EVM address from a raw prehash without EIP-191 wrapping.
+    /// Used for EIP-712 verification where the caller provides the final signing hash.
+    pub fn recover_address_from_raw_prehash(
+        &self,
+        prehash: [u8; 32],
+    ) -> Result<[u8; 20], CryptoError> {
+        let address = self
+            .0
+            .recover_address_from_prehash(&alloy_primitives::B256::from(prehash))
+            .map_err(|_| CryptoError::InvalidSignature {
+                error: "Failed to recover address from raw prehash".to_string(),
+                type_name: "EvmSignature".to_string(),
+            })?;
+        Ok(address.0 .0)
+    }
+
     /// Returns the byte representation of the signature.
     pub fn as_bytes(&self) -> [u8; EVM_SECP256K1_SIGNATURE_SIZE] {
         self.0.as_bytes()
@@ -734,5 +760,37 @@ mod tests {
 
         let public_key = EvmPublicKey::recover_from_msg(&sig, &msg).unwrap();
         assert_eq!(public_key, key_pair.public_key);
+    }
+
+    #[test]
+    fn test_sign_raw_prehash_roundtrip() {
+        use crate::crypto::secp256k1::evm::{EvmKeyPair, EvmSignature};
+
+        let key_pair = EvmKeyPair::generate();
+        let prehash = [0xABu8; 32];
+
+        let sig = EvmSignature::sign_raw_prehash(&key_pair.secret_key, prehash);
+        let recovered_address = sig.recover_address_from_raw_prehash(prehash).unwrap();
+
+        let expected_address: [u8; 20] = key_pair.public_key.address().into();
+        assert_eq!(recovered_address, expected_address);
+    }
+
+    #[test]
+    fn test_raw_vs_eip191_differ() {
+        use crate::crypto::{
+            secp256k1::evm::{EvmKeyPair, EvmSignature},
+            CryptoHash, TestString,
+        };
+
+        let key_pair = EvmKeyPair::generate();
+        let prehash = CryptoHash::new(&TestString("test".into()));
+
+        // EIP-191 signature (wraps with prefix)
+        let eip191_sig = EvmSignature::sign_prehash(&key_pair.secret_key, prehash);
+        // Raw prehash signature (no wrapping)
+        let raw_sig = EvmSignature::sign_raw_prehash(&key_pair.secret_key, prehash.as_bytes().0);
+
+        assert_ne!(eip191_sig, raw_sig);
     }
 }
