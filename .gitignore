@@ -49,3 +49,6 @@ docs/
 
 # Git worktrees
 .worktrees/
+
+# macOS
+.DS_Store

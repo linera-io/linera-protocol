@@ -32,7 +32,7 @@ permissions:
 jobs:
 
   publish-docs:
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 20
 
     # We only publish docs for the main branch.
@@ -57,7 +57,7 @@ jobs:
         force_orphan: true
 
   test-crates-and-docrs:
-    runs-on: ubuntu-latest-8-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 60
 
     steps:

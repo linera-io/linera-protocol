@@ -1045,7 +1045,7 @@ where
     }
 
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
-    // Other fields will be included in handle_certificate's span.
+    // Other fields will be included in the caller's span.
     #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
     pub async fn handle_lite_certificate(
         &self,
@@ -1440,7 +1440,7 @@ where
             .key_pair()
             .expect(
                 "Test validator should have a key pair assigned to it \
-                in order to obtain it's public key",
+                in order to obtain its public key",
             )
             .public()
     }

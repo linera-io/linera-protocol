@@ -947,7 +947,6 @@ impl<Env: Environment> Client<Env> {
 
     /// Processes the confirmed block in the local node, possibly without executing it.
     #[instrument(level = "trace", skip_all)]
-    #[allow(dead_code)] // Otherwise CI fails when built for docker.
     async fn receive_sender_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,

@@ -27,7 +27,7 @@ permissions:
 jobs:
   # paths-ignore within a pull_request doesn't work well with merge_group, so we need to use a custom filter.
   changed-files:
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
@@ -47,7 +47,7 @@ jobs:
   test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 10
 
     steps:

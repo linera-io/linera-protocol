@@ -29,7 +29,7 @@ permissions:
 jobs:
   check-all-features-partition:
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest-16-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -53,7 +53,7 @@ jobs:
 
   lint-check-all-features:
     needs: check-all-features-partition
-    runs-on: ubuntu-latest-16-cores
+    runs-on: linera-io-self-hosted-ci
     if: always()
     steps:
     - run: |
