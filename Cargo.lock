@@ -5391,6 +5391,7 @@ dependencies = [
  "serde_json",
  "sha3",
  "social",
+ "sync_wrapper 1.0.2",
  "test-case",
  "test-log",
  "test-strategy",
