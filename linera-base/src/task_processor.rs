@@ -14,7 +14,7 @@ use crate::data_types::Timestamp;
 /// On-chain applications should be ready to respond to GraphQL queries of the form:
 /// ```ignore
 /// query {
-///   nextActions(lastRequestedCallback: Timestamp, now: Timestamp!): ProcessorActions!
+///   nextActions(now: Timestamp!): ProcessorActions!
 /// }
 ///
 /// query {
@@ -25,9 +25,6 @@ use crate::data_types::Timestamp;
 pub struct ProcessorActions {
     /// The application is requesting to be called back no later than the given timestamp.
     pub request_callback: Option<Timestamp>,
-    /// An optional cursor for the task processor to store and pass to the application
-    /// upon the next query for actions.
-    pub set_cursor: Option<String>,
     /// The application is requesting the execution of the given tasks.
     pub execute_tasks: Vec<Task>,
 }
