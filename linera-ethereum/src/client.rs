@@ -174,7 +174,7 @@ where
             .await?;
         events
             .into_iter()
-            .map(|x| parse_log(event_name_expanded, x))
+            .map(|x| parse_log(event_name_expanded, &x))
             .collect::<Result<_, _>>()
     }
 

@@ -104,7 +104,7 @@ impl<'input> WitExportGenerator<'input> {
                 function.generate_for_wasmer(&self.namespace, self.type_name, &target_caller_type)
             });
 
-            self.generate_for(export_target, &target_caller_type, exported_functions)
+            self.generate_for(&export_target, &target_caller_type, exported_functions)
         }
         #[cfg(not(with_wasmer))]
         {
@@ -124,7 +124,7 @@ impl<'input> WitExportGenerator<'input> {
                 function.generate_for_wasmtime(&self.namespace, self.type_name, &target_caller_type)
             });
 
-            self.generate_for(export_target, &target_caller_type, exported_functions)
+            self.generate_for(&export_target, &target_caller_type, exported_functions)
         }
         #[cfg(not(with_wasmtime))]
         {
@@ -148,7 +148,7 @@ impl<'input> WitExportGenerator<'input> {
                 )
             });
 
-            self.generate_for(export_target, &target_caller_type, exported_functions)
+            self.generate_for(&export_target, &target_caller_type, exported_functions)
         }
         #[cfg(not(with_testing))]
         {
@@ -160,7 +160,7 @@ impl<'input> WitExportGenerator<'input> {
     /// `exported_functions`.
     fn generate_for(
         &self,
-        export_target: TokenStream,
+        export_target: &TokenStream,
         target_caller_type: &Type,
         exported_functions: impl Iterator<Item = TokenStream>,
     ) -> TokenStream {
@@ -222,10 +222,11 @@ impl<'input> WitExportGenerator<'input> {
     fn generate_wit_interface(&self) -> TokenStream {
         let self_type = &self.implementation.self_ty;
         let type_name = self.type_name;
+        let wit_interface_name = self.parameters.interface_name(type_name);
 
         let wit_interface_implementation = wit_interface::generate(
             self.parameters.package_name(),
-            self.parameters.interface_name(type_name),
+            &wit_interface_name,
             &self.functions,
         );
 

@@ -1664,7 +1664,7 @@ where
             .await?;
         let key_pair = self.config.key_pair();
         let manager = &mut self.chain.manager;
-        match manager.create_vote(proposal, block, key_pair, local_time, blobs)? {
+        match manager.create_vote(&proposal, block, key_pair, local_time, blobs)? {
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
                 self.block_values.insert(Cow::Borrowed(vote.value.inner()));

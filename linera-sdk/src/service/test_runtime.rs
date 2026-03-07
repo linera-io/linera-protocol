@@ -467,7 +467,7 @@ where
     pub fn http_request(&self, request: http::Request) -> http::Response {
         let maybe_request = self.expected_http_requests.lock().unwrap().pop_front();
         let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");
-        assert_eq!(request, expected_request);
+        assert_eq!(&request, &expected_request);
         response
     }
 

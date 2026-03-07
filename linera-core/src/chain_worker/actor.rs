@@ -332,7 +332,7 @@ impl ServiceRuntimeActor {
                             local_time: Timestamp::from(0),
                         },
                     )
-                    .run(runtime_request_receiver)
+                    .run(&runtime_request_receiver)
                 })
                 .await,
         }
