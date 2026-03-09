@@ -100,6 +100,9 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     cc_a.synchronize_from_validators().await?;
     tracing::info!(%chain_a, %owner_a, "Chain A claimed");
 
+    // Collect all chain A certificate bytes to submit to the bridge in sequential order.
+    let mut chain_a_cert_bytes: Vec<Vec<u8>> = Vec::new();
+
     // ── 3. Publish and create wrapped-fungible app on chain A ──
     tracing::info!("Publishing wrapped-fungible module...");
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -118,9 +121,13 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .await?
         .expect("publish module committed");
     tracing::info!(height=?cert.inner().block().header.height, "Module published");
+    chain_a_cert_bytes.push(bcs::to_bytes(&cert)?);
 
     cc_a.synchronize_from_validators().await?;
-    cc_a.process_inbox().await?;
+    let (inbox_certs, _) = cc_a.process_inbox().await?;
+    for c in &inbox_certs {
+        chain_a_cert_bytes.push(bcs::to_bytes(c)?);
+    }
 
     tracing::info!("Creating wrapped-fungible application...");
     let params = WrappedParameters {
@@ -133,7 +140,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     let init_state = InitialState {
         accounts: BTreeMap::from([(owner_a, Amount::from_tokens(1000))]),
     };
-    let (app_id, _cert): (
+    let (app_id, create_cert): (
         linera_base::identifiers::ApplicationId<WrappedFungibleTokenAbi>,
         _,
     ) = cc_a
@@ -147,8 +154,10 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .expect("create application committed");
     let app_id = app_id.forget_abi();
     tracing::info!(%app_id, "Application created");
+    chain_a_cert_bytes.push(bcs::to_bytes(&create_cert)?);
 
-    // ── 4. Claim chain B (bridge chain) from faucet and subscribe to notifications ──
+
+    // ── 4. Claim chain B (user chain) from faucet and subscribe to notifications ──
     tracing::info!("Claiming chain B from faucet...");
     let owner_b = AccountOwner::from(signer.generate_new());
     let chain_b_desc = faucet.claim(&owner_b).await?;
@@ -185,7 +194,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
 
     // ── 6. Deploy FungibleBridge on Anvil ──
     let app_id_bytes32 = format!("0x{}", app_id.application_description_hash);
-    let chain_b_bytes32 = format!("0x{chain_b}");
+    let chain_a_bytes32 = format!("0x{chain_a}");
 
     tracing::info!("Deploying FungibleBridge...");
     let light_client = light_client_address();
@@ -203,7 +212,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
              --broadcast \
              --constructor-args \
              {light_client} \
-             {chain_b_bytes32} \
+             {chain_a_bytes32} \
              0 \
              {app_id_bytes32} \
              {erc20_addr}"
@@ -233,17 +242,17 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     )
     .await;
 
-    // ── 8. Transfer tokens from chain A to Address20 on chain B ──
+    // ── 8. Transfer tokens from chain A to owner_b on chain B ──
     let evm_recipient = "70997970C51812dc3A010C7d01b50e0d17dc79C8";
     let receiver: AccountOwner = format!("0x{evm_recipient}").parse()?;
 
-    tracing::info!("Sending wrapped-fungible transfer to Address20 on chain B...");
+    tracing::info!("Sending wrapped-fungible transfer to owner_b on chain B...");
     let transfer_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_a,
         amount: Amount::from_tokens(100),
         target_account: Account {
             chain_id: chain_b,
-            owner: receiver,
+            owner: owner_b,
         },
     })?;
     let transfer_op = Operation::User {
@@ -261,6 +270,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         recipients=?transfer_block.recipients(),
         "Transfer block submitted"
     );
+    chain_a_cert_bytes.push(bcs::to_bytes(&transfer_cert)?);
 
     // ── 9. Wait for incoming bundle notification, then process inbox on chain B ──
     tracing::info!("Waiting for NewIncomingBundle notification on chain B...");
@@ -284,13 +294,52 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         "process_inbox should produce at least one certificate"
     );
 
-    // ── 10. Get certificate bytes for addBlock ──
-    let cert = certs.last().context("no certificates from inbox")?;
-    let cert_bytes = bcs::to_bytes(cert)?;
-    tracing::info!(size = cert_bytes.len(), "Certificate serialized");
+    // ── 10. Withdraw: owner_b transfers tokens from chain B to evm_recipient on chain A ──
+    tracing::info!("Withdrawing tokens from chain B to evm_recipient on chain A...");
+    let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
+        owner: owner_b,
+        amount: Amount::from_tokens(100),
+        target_account: Account {
+            chain_id: chain_a,
+            owner: receiver,
+        },
+    })?;
+    let withdraw_op = Operation::User {
+        application_id: app_id,
+        bytes: withdraw_bytes,
+    };
+    cc_b.execute_operations(vec![withdraw_op], vec![])
+        .await?
+        .expect("withdrawal committed");
 
-    // ── 11. Call addBlock() on FungibleBridge ──
-    tracing::info!("Calling addBlock on FungibleBridge...");
+    // ── 11. Process inbox on chain A to receive the withdrawal ──
+    tracing::info!("Processing inbox on chain A...");
+    cc_a.synchronize_from_validators().await?;
+    let (inbox_a_certs, _) = cc_a.process_inbox().await?;
+    for c in &inbox_a_certs {
+        chain_a_cert_bytes.push(bcs::to_bytes(c)?);
+    }
+
+    // ── 12. Burn tokens on chain A as minter ──
+    tracing::info!("Burning tokens on chain A...");
+    let burn_bytes = bcs::to_bytes(&WrappedFungibleOperation::Burn {
+        owner: receiver,
+        amount: Amount::from_tokens(100),
+    })?;
+    let burn_op = Operation::User {
+        application_id: app_id,
+        bytes: burn_bytes,
+    };
+    let burn_cert = cc_a
+        .execute_operations(vec![burn_op], vec![])
+        .await?
+        .expect("burn committed");
+    tracing::info!("Burn certificate obtained");
+    chain_a_cert_bytes.push(bcs::to_bytes(&burn_cert)?);
+
+    // ── 13. Submit all chain A blocks to FungibleBridge sequentially ──
+    tracing::info!(count = chain_a_cert_bytes.len(), "Submitting all chain A blocks to bridge");
+
     let rpc_url = "http://localhost:8545".parse()?;
     let evm_signer: PrivateKeySigner = ANVIL_PRIVATE_KEY.parse()?;
     let evm_wallet = EthereumWallet::from(evm_signer);
@@ -299,11 +348,16 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .connect_http(rpc_url);
 
     let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
-    let tx = bridge_contract.addBlock(cert_bytes.into()).send().await?;
-    let receipt = tx.get_receipt().await?;
-    tracing::info!(tx=?receipt.transaction_hash, "addBlock transaction submitted");
+    for (i, cert_bytes) in chain_a_cert_bytes.iter().enumerate() {
+        let tx = bridge_contract
+            .addBlock(cert_bytes.clone().into())
+            .send()
+            .await?;
+        let receipt = tx.get_receipt().await?;
+        tracing::info!(i, tx=?receipt.transaction_hash, "addBlock transaction submitted");
+    }
 
-    // ── 12. Verify ERC20 balance ──
+    // ── 14. Verify ERC20 balance ──
     let evm_recipient_addr: Address = format!("0x{evm_recipient}").parse()?;
     let erc20_contract = IERC20::new(erc20_addr, &provider);
     let balance = erc20_contract.balanceOf(evm_recipient_addr).call().await?;
