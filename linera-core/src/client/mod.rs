@@ -4577,13 +4577,53 @@ impl<Env: Environment> ChainClient<Env> {
                     let stream = node.subscribe(vec![this.chain_id]).await?;
                     // Only now the notification stream is established. We may have missed
                     // notifications since the last time we synchronized.
-                    // For EventsOnly chains, skip the full sync — new events will be
-                    // downloaded sparsely via NewEvents notifications.
                     if !events_only {
                         let remote_node = RemoteNode { public_key, node };
                         this.client
                             .synchronize_chain_state_from(&remote_node, this.chain_id)
                             .await?;
+                    } else {
+                        // For EventsOnly chains, skip the full sync but catch up on
+                        // any existing events we haven't seen yet.
+                        let remote_node = RemoteNode { public_key, node };
+                        if let Some(ListeningMode::EventsOnly(ref subscribed)) =
+                            this.listening_mode()
+                        {
+                            let query = ChainInfoQuery::new(this.chain_id);
+                            let info = remote_node
+                                .handle_chain_info_query(query)
+                                .await?;
+                            if let Some(remote_hash) = info.block_hash {
+                                let remote_height = info
+                                    .next_block_height
+                                    .try_sub_one()
+                                    .expect("block_hash is Some so height > 0");
+                                let local_height = this
+                                    .client
+                                    .local_node
+                                    .chain_state_view(this.chain_id)
+                                    .await
+                                    .map(|view| view.tip_state.get().next_block_height)
+                                    .unwrap_or(BlockHeight::ZERO);
+                                if remote_height >= local_height {
+                                    info!(
+                                        chain_id = %this.chain_id,
+                                        %remote_height, %local_height,
+                                        "EventsOnly: catching up on existing events"
+                                    );
+                                    this.client
+                                        .download_event_bearing_blocks(
+                                            this.chain_id,
+                                            remote_height,
+                                            remote_hash,
+                                            local_height,
+                                            subscribed,
+                                            &remote_node,
+                                        )
+                                        .await?;
+                                }
+                            }
+                        }
                     }
                     Ok::<_, ChainClientError>(stream)
                 }
