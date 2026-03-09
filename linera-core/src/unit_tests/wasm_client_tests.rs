@@ -1873,9 +1873,7 @@ async fn test_memory_read_event_downloads_publisher_chain(
 
 /// Tests that when a contract tries to read an event from a publisher chain that isn't
 /// locally available, the client automatically downloads the publisher chain and retries.
-async fn run_test_read_event_downloads_publisher_chain<B>(
-    storage_builder: B,
-) -> anyhow::Result<()>
+async fn run_test_read_event_downloads_publisher_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
@@ -1925,12 +1923,7 @@ where
     };
     receiver
         .execute_operations(
-            vec![SystemOperation::UpdateStreams(vec![(
-                sender.chain_id(),
-                stream_id,
-                1,
-            )])
-            .into()],
+            vec![SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 1)]).into()],
             vec![],
         )
         .await

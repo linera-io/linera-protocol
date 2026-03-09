@@ -77,9 +77,7 @@ impl From<WorkerError> for LocalNodeError {
     fn from(error: WorkerError) -> Self {
         match error {
             WorkerError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
-            WorkerError::EventsNotFound(event_ids) => {
-                LocalNodeError::EventsNotFound(event_ids)
-            }
+            WorkerError::EventsNotFound(event_ids) => LocalNodeError::EventsNotFound(event_ids),
             error => LocalNodeError::WorkerError(error),
         }
     }

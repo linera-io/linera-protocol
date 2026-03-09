@@ -191,12 +191,14 @@ impl ListeningMode {
     /// mode.
     pub fn is_relevant(&self, reason: &Reason) -> bool {
         match (reason, self) {
+            (Reason::NewEvents { .. }, ListeningMode::FollowChain | ListeningMode::FullChain) => {
+                false
+            }
             // FullChain processes everything.
             (_, ListeningMode::FullChain) => true,
             // FollowChain processes new blocks on the chain itself, including blocks that
             // produced events.
             (Reason::NewBlock { .. }, ListeningMode::FollowChain) => true,
-            (Reason::NewEvents { .. }, ListeningMode::FollowChain) => true,
             (_, ListeningMode::FollowChain) => false,
             // EventsOnly only processes events from relevant streams.
             // Accept both NewEvents and NewBlock (for old validators that don't emit
@@ -459,11 +461,7 @@ impl<Env: Environment> Client<Env> {
             return Ok(info);
         }
         if let Some(new_info) = self
-            .download_certificates_using_all(
-                &validators,
-                chain_id,
-                target_next_block_height,
-            )
+            .download_certificates_using_all(&validators, chain_id, target_next_block_height)
             .await?
         {
             info = new_info;
@@ -1819,8 +1817,7 @@ impl<Env: Environment> Client<Env> {
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
                 if !events_downloaded {
-                    self.download_publisher_chains_for_events(event_ids)
-                        .await?;
+                    self.download_publisher_chains_for_events(event_ids).await?;
                     events_downloaded = true;
                     continue; // We downloaded the publisher chain: retry.
                 }
@@ -1865,8 +1862,7 @@ impl<Env: Environment> Client<Env> {
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
                 if !events_downloaded {
-                    self.download_publisher_chains_for_events(event_ids)
-                        .await?;
+                    self.download_publisher_chains_for_events(event_ids).await?;
                     events_downloaded = true;
                     continue; // We downloaded the publisher chain: retry.
                 }
@@ -4501,12 +4497,7 @@ impl<Env: Environment> ChainClient<Env> {
                     }
                 }
             }
-            Reason::NewEvents {
-                height,
-                hash,
-                event_streams,
-                ..
-            } => {
+            Reason::NewEvents { height, hash, .. } => {
                 let chain_id = notification.chain_id;
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -4518,11 +4509,9 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                // Use the subscribed streams from EventsOnly mode, or fall back
-                // to the streams from the notification itself.
                 let subscribed = match self.listening_mode() {
                     Some(ListeningMode::EventsOnly(streams)) => streams,
-                    _ => event_streams,
+                    _ => return Ok(()),
                 };
                 self.client
                     .download_event_bearing_blocks(
