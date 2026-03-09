@@ -1596,6 +1596,18 @@ async fn test_wasm_end_to_end_counter_subscription(config: impl LineraNetConfig)
     let updated_value: u64 = serde_json::from_value(updated["data"]["value"].clone())?;
     assert_eq!(updated_value, original_counter_value + increment);
 
+    // A second subscriber should immediately receive the current value without
+    // needing a new block.
+    let mut subscription2 = node_service
+        .query_result("CounterValue", chain, &application_id.forget_abi())
+        .await?;
+    let immediate = subscription2
+        .next()
+        .await
+        .context("expected immediate value for second subscriber")??;
+    let immediate_value: u64 = serde_json::from_value(immediate["data"]["value"].clone())?;
+    assert_eq!(immediate_value, original_counter_value + increment);
+
     node_service.ensure_is_running()?;
 
     net.ensure_is_running().await?;
