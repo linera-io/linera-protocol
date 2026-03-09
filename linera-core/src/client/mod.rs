@@ -665,9 +665,9 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Downloads certificates for `chain_id` starting from the local chain height,
-    /// in batches, stopping as soon as all `event_ids` are found in local storage.
-    /// Uses all validators with staggered concurrent requests.
+    /// Downloads certificates for `chain_id` one at a time, stopping as soon as all
+    /// validators fail to provide the next height (i.e. the chain is exhausted).
+    /// Uses all validators with staggered concurrent requests for each height.
     #[instrument(level = "trace", skip_all, fields(chain_id, num_events = event_ids.len()))]
     async fn download_chain_until_events_found(
         &self,
@@ -677,23 +677,21 @@ impl<Env: Environment> Client<Env> {
         let validators = self.validator_nodes().await?;
         let info = Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
         let mut next_height = info.next_block_height;
-        // Download batches using all validators until all events are found or no
-        // validator can provide more certificates for this chain.
+        // Download one certificate at a time so we never overshoot the chain length.
         loop {
-            let limit = self.options.certificate_download_batch_size;
             let result = self
                 .requests_scheduler
                 .download_certificates_from_validators(
                     &validators,
                     chain_id,
                     next_height,
-                    limit,
+                    1,
                     self.options.certificate_batch_download_timeout,
                 )
                 .await;
             let certificates = match result {
                 Ok(certificates) => certificates,
-                Err(_) => break, // No validator has certificates at this height.
+                Err(_) => break, // No validator has a certificate at this height.
             };
             let Some(batch_info) = self
                 .process_certificates_using_all(&validators, certificates)
@@ -703,21 +701,8 @@ impl<Env: Environment> Client<Env> {
             };
             assert!(batch_info.next_block_height > next_height);
             next_height = batch_info.next_block_height;
-            if self.has_all_events(event_ids).await? {
-                return Ok(());
-            }
         }
         Ok(())
-    }
-
-    /// Returns `true` if all the given events exist in local storage.
-    async fn has_all_events(&self, event_ids: &[EventId]) -> Result<bool, ChainClientError> {
-        for event_id in event_ids {
-            if !self.storage_client().contains_event(event_id.clone()).await? {
-                return Ok(false);
-            }
-        }
-        Ok(true)
     }
 
     /// Tries to process all the certificates, requesting any missing blobs from the given node.
@@ -1815,6 +1800,7 @@ impl<Env: Environment> Client<Env> {
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+        let mut events_downloaded = false;
         loop {
             let result = self
                 .local_node
@@ -1832,9 +1818,13 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                self.download_publisher_chains_for_events(event_ids)
-                    .await?;
-                continue; // We downloaded the publisher chain: retry.
+                if !events_downloaded {
+                    self.download_publisher_chains_for_events(event_ids)
+                        .await?;
+                    events_downloaded = true;
+                    continue; // We downloaded the publisher chain: retry.
+                }
+                // Already tried downloading; don't loop forever.
             }
             if let Ok((_, executed_block, _, _)) = &result {
                 let hash = CryptoHash::new(executed_block);
@@ -1861,6 +1851,7 @@ impl<Env: Environment> Client<Env> {
         round: Option<u32>,
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+        let mut events_downloaded = false;
         loop {
             let result = self
                 .local_node
@@ -1873,9 +1864,13 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                self.download_publisher_chains_for_events(event_ids)
-                    .await?;
-                continue; // We downloaded the publisher chain: retry.
+                if !events_downloaded {
+                    self.download_publisher_chains_for_events(event_ids)
+                        .await?;
+                    events_downloaded = true;
+                    continue; // We downloaded the publisher chain: retry.
+                }
+                // Already tried downloading; don't loop forever.
             }
             if let Ok((block, _, _)) = &result {
                 let hash = CryptoHash::new(block);
