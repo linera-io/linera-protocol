@@ -11,7 +11,7 @@ use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
-    identifiers::{BlobId, ChainId, StreamId},
+    identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
@@ -68,12 +68,18 @@ pub enum LocalNodeError {
 
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+
+    #[error("Events not found: {0:?}")]
+    EventsNotFound(Vec<EventId>),
 }
 
 impl From<WorkerError> for LocalNodeError {
     fn from(error: WorkerError) -> Self {
         match error {
             WorkerError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
+            WorkerError::EventsNotFound(event_ids) => {
+                LocalNodeError::EventsNotFound(event_ids)
+            }
             error => LocalNodeError::WorkerError(error),
         }
     }
