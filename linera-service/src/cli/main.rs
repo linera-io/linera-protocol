@@ -320,6 +320,18 @@ impl Runnable for Job {
                 context.change_ownership(chain_id, ownership_config).await?
             }
 
+            ChangeSuperOwnership {
+                chain_id,
+                ownership_config,
+            } => {
+                let mut context = options
+                    .create_client_context(storage, wallet, signer.into_value())
+                    .await?;
+                context
+                    .change_super_ownership(chain_id, ownership_config)
+                    .await?
+            }
+
             SetPreferredOwner { chain_id, owner } => {
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())

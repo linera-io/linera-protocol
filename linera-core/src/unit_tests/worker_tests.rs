@@ -3375,13 +3375,14 @@ where
     // Add another owner and use the leader-based protocol in all rounds.
     // Set owner0 as the first leader to test the first_leader configuration.
     let proposed_block0 = make_first_block(chain_1)
-        .with_operation(SystemOperation::ChangeOwnership {
-            super_owners: Vec::new(),
+        .with_operation(SystemOperation::ChangeOwners {
             owners: vec![(owner0, 100), (owner1, 100)],
             first_leader: Some(owner0),
             multi_leader_rounds: 0,
             open_multi_leader_rounds: false,
-            timeout_config: TimeoutConfig::default(),
+            base_timeout: TimeoutConfig::default().base_timeout,
+            timeout_increment: TimeoutConfig::default().timeout_increment,
+            fallback_duration: TimeoutConfig::default().fallback_duration,
         })
         .with_authenticated_owner(Some(owner0));
     let (block0, _, _) = env
@@ -3637,22 +3638,32 @@ where
     let owner1 = AccountOwner::from(key_pairs[1]);
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let clock = storage_builder.clock();
-    let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
+    let chain_1_desc = env
+        .add_root_chain_with_ownership(
+            1,
+            Amount::from_tokens(2),
+            ChainOwnership::single_super(owner0),
+        )
+        .await;
     let small_transfer = Amount::from_micros(1);
     let chain_id = chain_1_desc.id();
 
     // Add another owner and configure two multi-leader rounds.
-    let proposed_block0 =
-        make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
+    let tc = TimeoutConfig::default();
+    let proposed_block0 = make_first_block(chain_id)
+        .with_authenticated_owner(Some(owner0))
+        .with_operation(SystemOperation::ChangeSuperOwners {
             super_owners: vec![owner0],
+            fast_round_duration: Some(TimeDelta::from_secs(5)),
+        })
+        .with_operation(SystemOperation::ChangeOwners {
             owners: vec![(owner0, 100), (owner1, 100)],
             first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
-            timeout_config: TimeoutConfig {
-                fast_round_duration: Some(TimeDelta::from_secs(5)),
-                ..TimeoutConfig::default()
-            },
+            base_timeout: tc.base_timeout,
+            timeout_increment: tc.timeout_increment,
+            fallback_duration: tc.fallback_duration,
         });
     let (block0, _, _) = env
         .executing_worker()
@@ -3671,6 +3682,7 @@ where
 
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal = make_child_block(&value0)
+        .with_authenticated_owner(None)
         .with_simple_transfer(chain_id, small_transfer)
         .into_proposal_with_round(owner1, &signer, Round::Fast)
         .await
@@ -3678,6 +3690,7 @@ where
     let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
+        .with_authenticated_owner(None)
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
@@ -3756,7 +3769,13 @@ where
     let owner1 = AccountOwner::from(key_pairs[1]);
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let clock = storage_builder.clock();
-    let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
+    let chain_1_desc = env
+        .add_root_chain_with_ownership(
+            1,
+            Amount::from_tokens(2),
+            ChainOwnership::single_super(owner0),
+        )
+        .await;
     let chain_id = chain_1_desc.id();
 
     // Add another owner and configure two multi-leader rounds.
@@ -3767,16 +3786,18 @@ where
             Amount::from_tokens(1),
         )
         .with_authenticated_owner(Some(owner0))
-        .with_operation(SystemOperation::ChangeOwnership {
+        .with_operation(SystemOperation::ChangeSuperOwners {
             super_owners: vec![owner0],
+            fast_round_duration: Some(TimeDelta::from_millis(5)),
+        })
+        .with_operation(SystemOperation::ChangeOwners {
             owners: vec![(owner0, 100), (owner1, 100)],
             first_leader: None,
             multi_leader_rounds: 3,
             open_multi_leader_rounds: false,
-            timeout_config: TimeoutConfig {
-                fast_round_duration: Some(TimeDelta::from_millis(5)),
-                ..TimeoutConfig::default()
-            },
+            base_timeout: TimeoutConfig::default().base_timeout,
+            timeout_increment: TimeoutConfig::default().timeout_increment,
+            fallback_duration: TimeoutConfig::default().fallback_duration,
         });
     let (block0, _, _) = env
         .executing_worker()

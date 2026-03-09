@@ -1224,11 +1224,8 @@ SystemOperation:
     3:
       CloseChain: UNIT
     4:
-      ChangeOwnership:
+      ChangeOwners:
         STRUCT:
-          - super_owners:
-              SEQ:
-                TYPENAME: AccountOwner
           - owners:
               SEQ:
                 TUPLE:
@@ -1239,28 +1236,41 @@ SystemOperation:
                 TYPENAME: AccountOwner
           - multi_leader_rounds: U32
           - open_multi_leader_rounds: BOOL
-          - timeout_config:
-              TYPENAME: TimeoutConfig
+          - base_timeout:
+              TYPENAME: TimeDelta
+          - timeout_increment:
+              TYPENAME: TimeDelta
+          - fallback_duration:
+              TYPENAME: TimeDelta
     5:
+      ChangeSuperOwners:
+        STRUCT:
+          - super_owners:
+              SEQ:
+                TYPENAME: AccountOwner
+          - fast_round_duration:
+              OPTION:
+                TYPENAME: TimeDelta
+    6:
       ChangeApplicationPermissions:
         NEWTYPE:
           TYPENAME: ApplicationPermissions
-    6:
+    7:
       PublishModule:
         STRUCT:
           - module_id:
               TYPENAME: ModuleId
-    7:
+    8:
       PublishDataBlob:
         STRUCT:
           - blob_hash:
               TYPENAME: CryptoHash
-    8:
+    9:
       VerifyBlob:
         STRUCT:
           - blob_id:
               TYPENAME: BlobId
-    9:
+    10:
       CreateApplication:
         STRUCT:
           - module_id:
@@ -1270,19 +1280,19 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
-    10:
+    11:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
-    11:
+    12:
       ProcessNewEpoch:
         NEWTYPE:
           TYPENAME: Epoch
-    12:
+    13:
       ProcessRemovedEpoch:
         NEWTYPE:
           TYPENAME: Epoch
-    13:
+    14:
       UpdateStreams:
         NEWTYPE:
           SEQ:

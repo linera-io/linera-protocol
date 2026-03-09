@@ -88,8 +88,10 @@ pub struct SystemOperationMetadata {
     pub claim: Option<ClaimOperationMetadata>,
     /// Open chain operation details
     pub open_chain: Option<OpenChainOperationMetadata>,
-    /// Change ownership operation details
-    pub change_ownership: Option<ChangeOwnershipOperationMetadata>,
+    /// Change owners operation details
+    pub change_owners: Option<ChangeOwnersOperationMetadata>,
+    /// Change super owners operation details
+    pub change_super_owners: Option<ChangeSuperOwnersOperationMetadata>,
     /// Change application permissions operation details
     pub change_application_permissions: Option<ChangeApplicationPermissionsMetadata>,
     /// Admin operation details
@@ -116,7 +118,8 @@ impl SystemOperationMetadata {
             transfer: None,
             claim: None,
             open_chain: None,
-            change_ownership: None,
+            change_owners: None,
+            change_super_owners: None,
             change_application_permissions: None,
             admin: None,
             create_application: None,
@@ -154,15 +157,23 @@ pub struct OpenChainOperationMetadata {
     pub application_permissions: ApplicationPermissionsMetadata,
 }
 
-/// Change ownership operation metadata.
+/// Change owners operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-pub struct ChangeOwnershipOperationMetadata {
-    pub super_owners: Vec<AccountOwner>,
+pub struct ChangeOwnersOperationMetadata {
     pub owners: Vec<OwnerWithWeight>,
     pub first_leader: Option<AccountOwner>,
     pub multi_leader_rounds: i32,
     pub open_multi_leader_rounds: bool,
-    pub timeout_config: TimeoutConfigMetadata,
+    pub base_timeout_ms: String,
+    pub timeout_increment_ms: String,
+    pub fallback_duration_ms: String,
+}
+
+/// Change super owners operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct ChangeSuperOwnersOperationMetadata {
+    pub super_owners: Vec<AccountOwner>,
+    pub fast_round_ms: Option<String>,
 }
 
 /// Owner with weight metadata.
@@ -301,16 +312,16 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 ..SystemOperationMetadata::new("OpenChain")
             },
             SystemOperation::CloseChain => SystemOperationMetadata::new("CloseChain"),
-            SystemOperation::ChangeOwnership {
-                super_owners,
+            SystemOperation::ChangeOwners {
                 owners,
                 first_leader,
                 multi_leader_rounds,
                 open_multi_leader_rounds,
-                timeout_config,
+                base_timeout,
+                timeout_increment,
+                fallback_duration,
             } => SystemOperationMetadata {
-                change_ownership: Some(ChangeOwnershipOperationMetadata {
-                    super_owners: super_owners.clone(),
+                change_owners: Some(ChangeOwnersOperationMetadata {
                     owners: owners
                         .iter()
                         .map(|(owner, weight)| OwnerWithWeight {
@@ -321,9 +332,22 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                     first_leader: *first_leader,
                     multi_leader_rounds: *multi_leader_rounds as i32,
                     open_multi_leader_rounds: *open_multi_leader_rounds,
-                    timeout_config: TimeoutConfigMetadata::from(timeout_config),
+                    base_timeout_ms: (base_timeout.as_micros() / 1000).to_string(),
+                    timeout_increment_ms: (timeout_increment.as_micros() / 1000).to_string(),
+                    fallback_duration_ms: (fallback_duration.as_micros() / 1000).to_string(),
                 }),
-                ..SystemOperationMetadata::new("ChangeOwnership")
+                ..SystemOperationMetadata::new("ChangeOwners")
+            },
+            SystemOperation::ChangeSuperOwners {
+                super_owners,
+                fast_round_duration,
+            } => SystemOperationMetadata {
+                change_super_owners: Some(ChangeSuperOwnersOperationMetadata {
+                    super_owners: super_owners.clone(),
+                    fast_round_ms: fast_round_duration
+                        .map(|d| (d.as_micros() / 1000).to_string()),
+                }),
+                ..SystemOperationMetadata::new("ChangeSuperOwners")
             },
             SystemOperation::ChangeApplicationPermissions(permissions) => SystemOperationMetadata {
                 change_application_permissions: Some(ChangeApplicationPermissionsMetadata {

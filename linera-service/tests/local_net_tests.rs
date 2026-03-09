@@ -1170,7 +1170,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         *user_chain.owner.as_ref().unwrap()
     };
 
-    client.change_ownership(chain, vec![], vec![owner1]).await?;
+    client.change_ownership(chain, vec![owner1]).await?;
     let (contract, service) = client.build_example("ethereum-tracker").await?;
 
     tracing::info!("Publishing Ethereum tracker contract");
