@@ -27,6 +27,22 @@ use linera_chain::{
         LiteCertificate, Timeout, ValidatedBlock,
     },
 };
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::register_int_counter_vec;
+    use prometheus::IntCounterVec;
+
+    pub static VALIDATOR_SUBSCRIPTION_ERRORS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "validator_subscription_errors",
+            "Number of notification subscription stream errors per validator",
+            &["address"],
+        )
+    });
+}
+
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -355,6 +371,8 @@ impl ValidatorNode for GrpcClient {
         .flatten();
 
         let span = tracing::info_span!("notification stream");
+        #[cfg(with_metrics)]
+        let address_for_metrics = address.clone();
         // The stream of `Notification`s that inserts increasing delays after retriable errors, and
         // terminates after unexpected or fatal errors.
         let notification_stream = endlessly_retrying_notification_stream
@@ -369,6 +387,11 @@ impl ValidatorNode for GrpcClient {
                     retry_count.store(0, Ordering::Relaxed);
                     return future::Either::Left(future::ready(true));
                 };
+
+                #[cfg(with_metrics)]
+                metrics::VALIDATOR_SUBSCRIPTION_ERRORS
+                    .with_label_values(&[&address_for_metrics])
+                    .inc();
 
                 let current_retry_count = retry_count.load(Ordering::Relaxed);
                 if !span.in_scope(|| Self::is_retryable(status))
