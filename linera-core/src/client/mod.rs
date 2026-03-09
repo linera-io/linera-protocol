@@ -48,7 +48,7 @@ use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
-    node::{CrossChainMessageDelivery, NodeError, ValidatorNode as _, ValidatorNodeProvider as _},
+    node::{CrossChainMessageDelivery, NodeError, ValidatorNodeProvider as _},
     notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
@@ -968,68 +968,6 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Downloads any missing event blocks that the given certificate references in its
-    /// `previous_event_blocks` field, for the specified streams.
-    ///
-    /// This is used for lazy synchronization of `EventsOnly` chains: instead of downloading
-    /// all blocks upfront, we only download blocks that contain events for streams we care about.
-    #[instrument(level = "trace", skip_all)]
-    pub(crate) async fn download_missing_event_blocks(
-        &self,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
-        certificate: &ConfirmedBlockCertificate,
-        relevant_streams: &BTreeSet<StreamId>,
-    ) -> Result<(), chain_client::Error> {
-        let mut pending: BTreeMap<BlockHeight, CryptoHash> = BTreeMap::new();
-
-        self.collect_missing_event_block_predecessors(certificate, relevant_streams, &mut pending)
-            .await?;
-
-        while let Some((_, hash)) = pending.pop_last() {
-            let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
-            let prev_cert = certificates
-                .pop()
-                .ok_or_else(|| NodeError::MissingCertificates(vec![hash]))?;
-
-            self.handle_certificate(prev_cert.clone()).await?;
-
-            self.collect_missing_event_block_predecessors(
-                &prev_cert,
-                relevant_streams,
-                &mut pending,
-            )
-            .await?;
-        }
-
-        Ok(())
-    }
-
-    /// Collects missing predecessor blocks from `previous_event_blocks` for the given streams.
-    async fn collect_missing_event_block_predecessors(
-        &self,
-        certificate: &ConfirmedBlockCertificate,
-        relevant_streams: &BTreeSet<StreamId>,
-        pending: &mut BTreeMap<BlockHeight, CryptoHash>,
-    ) -> Result<(), chain_client::Error> {
-        for stream_id in relevant_streams {
-            if let Some((prev_hash, prev_height)) = certificate
-                .block()
-                .body
-                .previous_event_blocks
-                .get(stream_id)
-            {
-                if !self
-                    .storage_client()
-                    .contains_certificate(*prev_hash)
-                    .await?
-                {
-                    pending.insert(*prev_height, *prev_hash);
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Downloads and processes certificates for sender chain blocks.
     #[instrument(level = "trace", skip_all)]
     async fn download_and_process_sender_chain(
@@ -1278,6 +1216,105 @@ impl<Env: Environment> Client<Env> {
         }
 
         // Process certificates in ascending block height order (BTreeMap keeps them sorted).
+        for certificate in certificates.into_values() {
+            self.receive_sender_certificate(
+                certificate,
+                ReceiveCertificateMode::AlreadyChecked,
+                Some(vec![remote_node.clone()]),
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Downloads blocks that contain events in the subscribed streams, walking backwards
+    /// through `previous_event_blocks` to fetch event-bearing ancestors that we don't
+    /// already have locally.
+    /// Downloads event-bearing blocks for the given streams by walking the
+    /// `previous_event_blocks` linked list backwards from `height`, stopping at
+    /// `local_next_block_height` (blocks below that are already executed locally).
+    async fn download_event_bearing_blocks(
+        &self,
+        sender_chain_id: ChainId,
+        height: BlockHeight,
+        hash: CryptoHash,
+        local_next_block_height: BlockHeight,
+        subscribed_streams: &BTreeSet<StreamId>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+    ) -> Result<(), chain_client::Error> {
+        let (max_epoch, committees) = self.admin_committees().await?;
+
+        let mut certificates = BTreeMap::new();
+        let mut blocks_to_fetch = BTreeSet::<_>::from([(height, hash)]);
+        let next_expected_events = subscribed_streams
+            .iter()
+            .zip(
+                self.local_node
+                    .chain_state_view(sender_chain_id)
+                    .await?
+                    .next_expected_events
+                    .multi_get(subscribed_streams)
+                    .await?
+                    .into_iter()
+                    .map(|maybe_index| maybe_index.unwrap_or_default()),
+            )
+            .collect::<BTreeMap<_, _>>();
+
+        while let Some((current_height, current_hash)) = blocks_to_fetch.pop_last() {
+            if current_height < local_next_block_height {
+                continue; // Already executed locally.
+            }
+            if certificates.contains_key(&current_height) {
+                continue;
+            }
+
+            let certificate = if let Some(certificate) =
+                self.storage_client().read_certificate(current_hash).await?
+            {
+                certificate
+            } else {
+                let downloaded = self
+                    .requests_scheduler
+                    .download_certificates(remote_node, sender_chain_id, current_height, 1)
+                    .await?;
+                let Some(certificate) = downloaded.into_iter().next() else {
+                    continue;
+                };
+
+                Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
+                    .into_result()?;
+
+                certificate
+            };
+
+            let block = certificate.block();
+            // Walk previous_event_blocks for subscribed streams.
+            for stream_id in subscribed_streams {
+                if let Some((prev_hash, prev_height)) =
+                    block.body.previous_event_blocks.get(stream_id)
+                {
+                    if next_expected_events.get(stream_id).is_some_and(|index| {
+                        block
+                            .body
+                            .events
+                            .iter()
+                            .flatten()
+                            .find(|event| event.stream_id == *stream_id)
+                            .is_some_and(|event| event.index == *index)
+                    }) {
+                        continue;
+                    }
+                    if !certificates.contains_key(prev_height) {
+                        blocks_to_fetch.insert((*prev_height, *prev_hash));
+                    }
+                }
+            }
+
+            certificates.insert(current_height, certificate);
+        }
+
+        // Process in ascending height order.
         for certificate in certificates.into_values() {
             self.receive_sender_certificate(
                 certificate,

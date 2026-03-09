@@ -65,7 +65,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use super::{
     received_log::ReceivedLogs, validator_trackers::ValidatorTrackers, AbortOnDrop, Client,
-    ListeningMode, PendingProposal, ReceiveCertificateMode, TimingType,
+    ListeningMode, PendingProposal, TimingType,
 };
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
@@ -2575,28 +2575,40 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                 }
             }
-            Reason::NewBlock { height, .. } => {
+            Reason::NewBlock { height, hash, .. } => {
                 let chain_id = notification.chain_id;
-                if self
+                let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
-                    .await?
-                    > height
-                {
+                    .await?;
+                if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
                         "Accepting redundant notification for new block"
                     );
                     return Ok(());
                 }
-                self.client
-                    .synchronize_chain_state_from(&remote_node, chain_id)
-                    .await?;
-                if self
-                    .local_next_block_height(chain_id, &mut local_node)
-                    .await?
-                    <= height
-                {
-                    info!("NewBlock: Fail to synchronize new block after notification");
+                if let Some(ListeningMode::EventsOnly(subscribed)) = self.listening_mode() {
+                    self.client
+                        .download_event_bearing_blocks(
+                            chain_id,
+                            height,
+                            hash,
+                            local_height,
+                            &subscribed,
+                            &remote_node,
+                        )
+                        .await?;
+                } else {
+                    self.client
+                        .synchronize_chain_state_from(&remote_node, chain_id)
+                        .await?;
+                    if self
+                        .local_next_block_height(chain_id, &mut local_node)
+                        .await?
+                        <= height
+                    {
+                        error!("NewBlock: Fail to synchronize new block after notification");
+                    }
                 }
                 trace!(
                     chain_id = %self.chain_id,
@@ -2604,15 +2616,20 @@ impl<Env: Environment> ChainClient<Env> {
                     "NewBlock: processed notification",
                 );
             }
-            Reason::NewEvents { height, hash, .. } => {
-                if self
-                    .local_next_block_height(notification.chain_id, &mut local_node)
-                    .await?
-                    > height
-                {
+            Reason::NewEvents {
+                height,
+                hash,
+                event_streams,
+                ..
+            } => {
+                let chain_id = notification.chain_id;
+                let local_height = self
+                    .local_next_block_height(chain_id, &mut local_node)
+                    .await?;
+                if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
-                        "Accepting redundant notification for new block"
+                        "Accepting redundant notification for new events"
                     );
                     return Ok(());
                 }
@@ -2621,26 +2638,22 @@ impl<Env: Environment> ChainClient<Env> {
                     %height,
                     "NewEvents: processing notification"
                 );
-                let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
-                let certificate = certificates
-                    .pop()
-                    .expect("download_certificates should have returned one certificate");
+                // Use the subscribed streams from EventsOnly mode, or fall back
+                // to the streams from the notification itself.
+                let subscribed = match self.listening_mode() {
+                    Some(ListeningMode::EventsOnly(streams)) => streams,
+                    _ => event_streams,
+                };
                 self.client
-                    .receive_sender_certificate(
-                        certificate.clone(),
-                        ReceiveCertificateMode::NeedsCheck,
-                        None,
+                    .download_event_bearing_blocks(
+                        self.chain_id,
+                        height,
+                        hash,
+                        local_height,
+                        &subscribed,
+                        &remote_node,
                     )
                     .await?;
-                if let Some(ListeningMode::EventsOnly(relevant_streams)) = listening_mode {
-                    self.client
-                        .download_missing_event_blocks(
-                            &remote_node,
-                            &certificate,
-                            &relevant_streams,
-                        )
-                        .await?;
-                }
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
