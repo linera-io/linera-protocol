@@ -75,10 +75,10 @@ OWNER_2="${INFO_2[1]}"
 Next, compile the `non-fungible` application WebAssembly binaries, and publish them as an application module:
 
 ```bash
-(cd examples/gen-nft && cargo build --release --target wasm32-unknown-unknown)
+(cd examples/gen-nft && cargo build --release --target wasm32-linera-chain)
 
 MODULE_ID=$(linera publish-module \
-    examples/target/wasm32-unknown-unknown/release/gen_nft_{contract,service}.wasm)
+    examples/target/wasm32-linera-chain/release/gen_nft_{contract,service}.wasm)
 ```
 
 Here, we stored the new module ID in a variable `MODULE_ID` to be reused later.

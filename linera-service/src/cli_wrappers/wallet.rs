@@ -1283,22 +1283,23 @@ impl ClientWrapper {
         is_workspace: bool,
     ) -> Result<(PathBuf, PathBuf)> {
         Command::new("cargo")
-            .current_dir(self.path_provider.path())
+            .current_dir(path)
             .arg("build")
             .arg("--release")
-            .args(["--target", "wasm32-unknown-unknown"])
+            .args(["--target", "wasm32-linera-chain"])
             .arg("--manifest-path")
             .arg(path.join("Cargo.toml"))
             .spawn_and_wait_for_stdout()
             .await?;
 
+        let wasm_name = name.replace('-', "_");
         let release_dir = match is_workspace {
-            true => path.join("../target/wasm32-unknown-unknown/release"),
-            false => path.join("target/wasm32-unknown-unknown/release"),
+            true => path.join("../target/wasm32-linera-chain/release"),
+            false => path.join("target/wasm32-linera-chain/release"),
         };
 
-        let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
-        let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
+        let contract = release_dir.join(format!("{wasm_name}_contract.wasm"));
+        let service = release_dir.join(format!("{wasm_name}_service.wasm"));
 
         let contract_size = fs_err::tokio::metadata(&contract).await?.len();
         let service_size = fs_err::tokio::metadata(&service).await?.len();

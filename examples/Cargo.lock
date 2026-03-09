@@ -3050,6 +3050,7 @@ dependencies = [
  "candle-transformers",
  "fungible",
  "getrandom 0.2.15",
+ "half",
  "insta",
  "linera-sdk",
  "log",
@@ -4245,8 +4246,7 @@ dependencies = [
 [[package]]
 name = "linera-wasm-instrument"
 version = "0.4.0-linera.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80b01177f7f9e3404738607912cfe9887f0f717a8dc45adff03adc9f34f5b22e"
+source = "git+https://github.com/linera-io/wasm-instrument?branch=bulk-memory-support#c29d43d43e5b4340c274320ac76bac3f4fe6dc45"
 dependencies = [
  "linera-parity-wasm",
 ]
@@ -4254,8 +4254,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6652182476826343f0dd1e76a184ad34bcee57650a9c00c77574b993dd30529"
+source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -4284,8 +4283,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4781ce9fc4a892c9a9727f51ec92d19e1c5b54259da21573671aa49211ae80f"
+source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
 dependencies = [
  "backtrace",
  "bytes",
@@ -4315,8 +4313,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8056c8bff8e1b5cafd21aac59b9009e93b30f35b7baab5592a6f4c7db120b490"
+source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -4334,8 +4331,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3635a86dd98e2c2fd6dd603054f40b8e379f84365a2238cc177d47547a83eebc"
+source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -4353,8 +4349,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-vm"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f27d020717572fdb6222324ec46b10eeb49f6f4a120ee63cf7145f4392f12fd8"
+source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
 dependencies = [
  "backtrace",
  "cc",
@@ -4372,6 +4367,7 @@ dependencies = [
  "memoffset",
  "more-asserts",
  "region",
+ "rustversion",
  "scopeguard",
  "serde",
  "thiserror 1.0.65",
@@ -4431,6 +4427,7 @@ dependencies = [
  "candle-core",
  "candle-transformers",
  "getrandom 0.2.15",
+ "half",
  "insta",
  "linera-sdk",
  "log",

@@ -79,10 +79,10 @@ OWNER_2="${INFO_2[1]}"
 Now we have to publish and create the fungible applications. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.
 
 ```bash
-(cd examples/fungible && cargo build --release --target wasm32-unknown-unknown)
+(cd examples/fungible && cargo build --release --target wasm32-linera-chain)
 
 FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
-  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+  publish-and-create examples/target/wasm32-linera-chain/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
         \"$OWNER_AMM\": \"100.\"
     } }" \
@@ -90,16 +90,16 @@ FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
 )
 
 FUN2_APP_ID=$(linera --wait-for-outgoing-messages \
-  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+  publish-and-create examples/target/wasm32-linera-chain/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
         \"$OWNER_AMM\": \"100.\"
     } }" \
     --json-parameters "{ \"ticker_symbol\": \"FUN2\" }" \
 )
 
-(cd examples/amm && cargo build --release --target wasm32-unknown-unknown)
+(cd examples/amm && cargo build --release --target wasm32-linera-chain)
 AMM_APPLICATION_ID=$(linera --wait-for-outgoing-messages \
-  publish-and-create examples/target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm \
+  publish-and-create examples/target/wasm32-linera-chain/release/amm_{contract,service}.wasm \
   --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}" \
   --required-application-ids $FUN1_APP_ID $FUN2_APP_ID)
 ```
