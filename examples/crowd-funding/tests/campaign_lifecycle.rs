@@ -14,7 +14,7 @@ use linera_sdk::{
         AccountOwner, AccountSecretKey, Amount, ApplicationId, Ed25519SecretKey,
         Secp256k1SecretKey, Timestamp,
     },
-    test::TestValidator,
+    test::{query_account, TestValidator},
 };
 
 /// Test creating a campaign and collecting pledges.
@@ -94,7 +94,7 @@ async fn collect_pledges() {
         .await;
 
     assert_eq!(
-        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
+        query_account(token_id, &campaign_chain, campaign_account).await,
         None
     );
 
@@ -105,17 +105,17 @@ async fn collect_pledges() {
         .await;
 
     assert_eq!(
-        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
+        query_account(token_id, &campaign_chain, campaign_account).await,
         Some(pledge_amount.saturating_mul(backers.len() as u128)),
     );
 
     for (backer_chain, backer_account, initial_amount) in backers {
         assert_eq!(
-            fungible::query_account(token_id, &backer_chain, backer_account).await,
+            query_account(token_id, &backer_chain, backer_account).await,
             Some(initial_amount.saturating_sub(pledge_amount)),
         );
         assert_eq!(
-            fungible::query_account(token_id, &campaign_chain, backer_account).await,
+            query_account(token_id, &campaign_chain, backer_account).await,
             None,
         );
     }
@@ -196,7 +196,7 @@ async fn cancel_successful_campaign() {
         .await;
 
     assert_eq!(
-        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
+        query_account(token_id, &campaign_chain, campaign_account).await,
         None
     );
 
@@ -209,17 +209,17 @@ async fn cancel_successful_campaign() {
         .await;
 
     assert_eq!(
-        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
+        query_account(token_id, &campaign_chain, campaign_account).await,
         None,
     );
 
     for (backer_chain, backer_account, initial_amount) in backers {
         assert_eq!(
-            fungible::query_account(token_id, &backer_chain, backer_account).await,
+            query_account(token_id, &backer_chain, backer_account).await,
             Some(initial_amount.saturating_sub(pledge_amount)),
         );
         assert_eq!(
-            fungible::query_account(token_id, &campaign_chain, backer_account).await,
+            query_account(token_id, &campaign_chain, backer_account).await,
             Some(pledge_amount),
         );
     }

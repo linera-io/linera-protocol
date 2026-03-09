@@ -10,7 +10,7 @@ use fungible::{InitialStateBuilder, Parameters as FungibleParameters};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
     linera_base_types::{Account, AccountOwner, Amount, ApplicationId},
-    test::{ActiveChain, TestValidator},
+    test::{query_account, ActiveChain, TestValidator},
 };
 
 struct Setup {
@@ -132,19 +132,19 @@ impl Setup {
         swapper_chain.handle_received_messages().await;
 
         assert_eq!(
-            fungible::query_account(token0_id, &liquidity_chain, liquidity_owner).await,
+            query_account(token0_id, &liquidity_chain, liquidity_owner).await,
             Some(Amount::from_tokens(50))
         );
         assert_eq!(
-            fungible::query_account(token1_id, &liquidity_chain, liquidity_owner).await,
+            query_account(token1_id, &liquidity_chain, liquidity_owner).await,
             Some(Amount::from_tokens(50))
         );
         assert_eq!(
-            fungible::query_account(token0_id, &swapper_chain, swapper_owner).await,
+            query_account(token0_id, &swapper_chain, swapper_owner).await,
             Some(Amount::from_tokens(30))
         );
         assert_eq!(
-            fungible::query_account(token1_id, &swapper_chain, swapper_owner).await,
+            query_account(token1_id, &swapper_chain, swapper_owner).await,
             Some(Amount::from_tokens(30))
         );
 
@@ -193,7 +193,7 @@ async fn add_liquidity_swap_and_remove_all() {
     setup.amm_chain.handle_received_messages().await;
 
     assert_eq!(
-        fungible::query_account(
+        query_account(
             setup.token0_id,
             &setup.liquidity_chain,
             setup.liquidity_owner
@@ -202,7 +202,7 @@ async fn add_liquidity_swap_and_remove_all() {
         Some(Amount::from_tokens(10))
     );
     assert_eq!(
-        fungible::query_account(
+        query_account(
             setup.token1_id,
             &setup.liquidity_chain,
             setup.liquidity_owner
@@ -211,11 +211,11 @@ async fn add_liquidity_swap_and_remove_all() {
         Some(Amount::from_tokens(10))
     );
     assert_eq!(
-        fungible::query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(40))
     );
     assert_eq!(
-        fungible::query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(40))
     );
 
@@ -244,19 +244,19 @@ async fn add_liquidity_swap_and_remove_all() {
     setup.amm_chain.handle_received_messages().await;
 
     assert_eq!(
-        fungible::query_account(setup.token0_id, &setup.swapper_chain, setup.swapper_owner).await,
+        query_account(setup.token0_id, &setup.swapper_chain, setup.swapper_owner).await,
         Some(Amount::from_tokens(20))
     );
     assert_eq!(
-        fungible::query_account(setup.token1_id, &setup.swapper_chain, setup.swapper_owner).await,
+        query_account(setup.token1_id, &setup.swapper_chain, setup.swapper_owner).await,
         Some(Amount::from_tokens(38))
     );
     assert_eq!(
-        fungible::query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(50))
     );
     assert_eq!(
-        fungible::query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(32))
     );
 
@@ -283,7 +283,7 @@ async fn add_liquidity_swap_and_remove_all() {
     setup.amm_chain.handle_received_messages().await;
 
     assert_eq!(
-        fungible::query_account(
+        query_account(
             setup.token0_id,
             &setup.liquidity_chain,
             setup.liquidity_owner
@@ -292,7 +292,7 @@ async fn add_liquidity_swap_and_remove_all() {
         Some(Amount::from_tokens(60))
     );
     assert_eq!(
-        fungible::query_account(
+        query_account(
             setup.token1_id,
             &setup.liquidity_chain,
             setup.liquidity_owner
@@ -301,11 +301,11 @@ async fn add_liquidity_swap_and_remove_all() {
         Some(Amount::from_tokens(42))
     );
     assert_eq!(
-        fungible::query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
         None
     );
     assert_eq!(
-        fungible::query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
         None
     );
 }
@@ -363,7 +363,7 @@ async fn add_liquidity_with_ratio_refund() {
     setup.amm_chain.handle_received_messages().await;
 
     assert_eq!(
-        fungible::query_account(
+        query_account(
             setup.token0_id,
             &setup.liquidity_chain,
             setup.liquidity_owner
@@ -372,7 +372,7 @@ async fn add_liquidity_with_ratio_refund() {
         Some(Amount::from_tokens(20))
     );
     assert_eq!(
-        fungible::query_account(
+        query_account(
             setup.token1_id,
             &setup.liquidity_chain,
             setup.liquidity_owner
@@ -381,11 +381,11 @@ async fn add_liquidity_with_ratio_refund() {
         Some(Amount::from_tokens(20))
     );
     assert_eq!(
-        fungible::query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(30))
     );
     assert_eq!(
-        fungible::query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(30))
     );
 }
@@ -443,19 +443,19 @@ async fn swap_from_token1() {
     setup.amm_chain.handle_received_messages().await;
 
     assert_eq!(
-        fungible::query_account(setup.token0_id, &setup.swapper_chain, setup.swapper_owner).await,
+        query_account(setup.token0_id, &setup.swapper_chain, setup.swapper_owner).await,
         Some(Amount::from_tokens(38))
     );
     assert_eq!(
-        fungible::query_account(setup.token1_id, &setup.swapper_chain, setup.swapper_owner).await,
+        query_account(setup.token1_id, &setup.swapper_chain, setup.swapper_owner).await,
         Some(Amount::from_tokens(20))
     );
     assert_eq!(
-        fungible::query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(32))
     );
     assert_eq!(
-        fungible::query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(50))
     );
 }
@@ -513,7 +513,7 @@ async fn remove_liquidity_partial() {
     setup.amm_chain.handle_received_messages().await;
 
     assert_eq!(
-        fungible::query_account(
+        query_account(
             setup.token0_id,
             &setup.liquidity_chain,
             setup.liquidity_owner
@@ -522,7 +522,7 @@ async fn remove_liquidity_partial() {
         Some(Amount::from_tokens(20))
     );
     assert_eq!(
-        fungible::query_account(
+        query_account(
             setup.token1_id,
             &setup.liquidity_chain,
             setup.liquidity_owner
@@ -531,11 +531,11 @@ async fn remove_liquidity_partial() {
         Some(Amount::from_tokens(20))
     );
     assert_eq!(
-        fungible::query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token0_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(30))
     );
     assert_eq!(
-        fungible::query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
+        query_account(setup.token1_id, &setup.amm_chain, setup.amm_pool_owner).await,
         Some(Amount::from_tokens(30))
     );
 }
