@@ -331,11 +331,13 @@ async fn print_messages_and_create_faucet(
     );
 
     // Run the faucet using a separate wallet so it doesn't lock the admin wallet.
+    // Keep half the balance on the admin chain for fee payments (e.g. committee changes).
     let faucet_service = if with_faucet {
         let faucet_client = net.make_client().await;
         faucet_client.wallet_init(None).await?;
+        let faucet_balance = Amount::from_attos(initial_amount.to_attos() / 2);
         let faucet_chain = client
-            .open_and_assign(&faucet_client, initial_amount)
+            .open_and_assign(&faucet_client, faucet_balance)
             .await?;
 
         eprintln!("To connect to this network, you can use the following faucet URL:");
