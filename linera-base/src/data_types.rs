@@ -1228,6 +1228,11 @@ impl CompressedBytecode {
         let _decompression_latency = metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
         let bytes = zstd::stream::decode_all(&**self.compressed_bytes)?;
 
+        #[cfg(with_metrics)]
+        metrics::BYTECODE_DECOMPRESSED_SIZE_BYTES
+            .with_label_values(&[])
+            .observe(bytes.len() as f64);
+
         Ok(Bytecode { bytes })
     }
 }
@@ -1271,6 +1276,11 @@ impl CompressedBytecode {
                 .read_to_end(&mut bytes)
                 .expect("Reading from a slice in memory should not result in I/O errors");
         }
+
+        #[cfg(with_metrics)]
+        BYTECODE_DECOMPRESSED_SIZE_BYTES
+            .with_label_values(&[])
+            .observe(bytes.len() as f64);
 
         Ok(Bytecode { bytes })
     }
@@ -1689,7 +1699,9 @@ mod metrics {
 
     use prometheus::HistogramVec;
 
-    use crate::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use crate::prometheus_util::{
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
+    };
 
     /// The time it takes to compress a bytecode.
     pub static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -1708,6 +1720,15 @@ mod metrics {
             "Bytecode decompression latency",
             &[],
             exponential_bucket_latencies(10.0),
+        )
+    });
+
+    pub static BYTECODE_DECOMPRESSED_SIZE_BYTES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "wasm_bytecode_decompressed_size_bytes",
+            "Decompressed size in bytes of WASM bytecodes stored on-chain",
+            &[],
+            exponential_bucket_interval(10_000.0, 100_000_000.0),
         )
     });
 }
