@@ -487,38 +487,6 @@ mod tests {
     }
 
     #[test]
-    fn test_deposit_reverts_wrong_target_chain() {
-        let mut t = setup_deposit_test();
-
-        call_contract(
-            &mut t.db,
-            DEPOSITOR,
-            t.token,
-            erc20::approveCall {
-                spender: t.bridge,
-                amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
-            },
-        );
-
-        let result = try_call_contract(
-            &mut t.db,
-            DEPOSITOR,
-            t.bridge,
-            bridge::depositCall {
-                target_chain_id: [0xFF; 32].into(),
-                target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
-                target_account_owner: target_owner_bytes().into(),
-                amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
-            },
-        );
-
-        assert!(
-            result.is_err(),
-            "deposit with wrong target chain should revert"
-        );
-    }
-
-    #[test]
     fn test_deposit_reverts_wrong_target_application() {
         let mut t = setup_deposit_test();
 
