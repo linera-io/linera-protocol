@@ -4,7 +4,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     sync::{Arc, RwLock},
@@ -664,7 +664,8 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Downloads certificates for `chain_id` one at a time, stopping as soon as all
-    /// validators fail to provide the next height (i.e. the chain is exhausted).
+    /// requested events are locally available or all validators fail to provide the
+    /// next height (i.e. the chain is exhausted).
     /// Uses all validators with staggered concurrent requests for each height.
     #[instrument(level = "trace", skip_all, fields(chain_id, num_events = event_ids.len()))]
     async fn download_chain_until_events_found(
@@ -1843,7 +1844,7 @@ impl<Env: Environment> Client<Env> {
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
-        let mut events_downloaded = false;
+        let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self
                 .local_node
@@ -1861,12 +1862,18 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                if !events_downloaded {
-                    self.download_publisher_chains_for_events(event_ids).await?;
-                    events_downloaded = true;
-                    continue; // We downloaded the publisher chain: retry.
+                let new_events: Vec<_> = event_ids
+                    .iter()
+                    .filter(|id| !downloaded_events.contains(id))
+                    .cloned()
+                    .collect();
+                if !new_events.is_empty() {
+                    self.download_publisher_chains_for_events(&new_events)
+                        .await?;
+                    downloaded_events.extend(new_events);
+                    continue; // We downloaded new publisher chain data: retry.
                 }
-                // Already tried downloading; don't loop forever.
+                // All reported events were already downloaded; don't loop forever.
             }
             if let Ok((_, executed_block, _, _)) = &result {
                 let hash = CryptoHash::new(executed_block);
@@ -1893,7 +1900,7 @@ impl<Env: Environment> Client<Env> {
         round: Option<u32>,
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
-        let mut events_downloaded = false;
+        let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self
                 .local_node
@@ -1906,12 +1913,18 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                if !events_downloaded {
-                    self.download_publisher_chains_for_events(event_ids).await?;
-                    events_downloaded = true;
-                    continue; // We downloaded the publisher chain: retry.
+                let new_events: Vec<_> = event_ids
+                    .iter()
+                    .filter(|id| !downloaded_events.contains(id))
+                    .cloned()
+                    .collect();
+                if !new_events.is_empty() {
+                    self.download_publisher_chains_for_events(&new_events)
+                        .await?;
+                    downloaded_events.extend(new_events);
+                    continue; // We downloaded new publisher chain data: retry.
                 }
-                // Already tried downloading; don't loop forever.
+                // All reported events were already downloaded; don't loop forever.
             }
             if let Ok((block, _, _)) = &result {
                 let hash = CryptoHash::new(block);
