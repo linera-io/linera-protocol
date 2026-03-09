@@ -4723,16 +4723,14 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
     // Generate an owner for which we don't have a secret key in the Signer.
     let owner2 = AccountPublicKey::test_key(2).into();
 
-    // Make both keys owners.
-    client
-        .change_ownership(chain, vec![], vec![owner1, owner2])
-        .await?;
+    // Make both keys regular owners.
+    client.change_ownership(chain, vec![owner1, owner2]).await?;
 
-    // Make owner2 the only (super) owner.
-    client.change_ownership(chain, vec![owner2], vec![]).await?;
+    // Make owner2 the only regular owner.
+    client.change_ownership(chain, vec![owner2]).await?;
     client.set_preferred_owner(chain, Some(owner2)).await?;
     // Now we're not the owner anymore.
-    let result = client.change_ownership(chain, vec![], vec![owner1]).await;
+    let result = client.change_ownership(chain, vec![owner1]).await;
     assert_matches::assert_matches!(result, Err(_));
 
     net.ensure_is_running().await?;

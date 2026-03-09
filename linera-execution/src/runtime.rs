@@ -1598,7 +1598,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let this = self.inner();
         let application_id = this.current_application().id;
         this.execution_state_sender
-            .send_request(|callback| ExecutionRequest::ChangeOwnership {
+            .send_request(|callback| ExecutionRequest::ChangeOwners {
                 application_id,
                 ownership,
                 callback,
