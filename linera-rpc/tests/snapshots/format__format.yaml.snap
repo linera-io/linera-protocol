@@ -242,6 +242,12 @@ BlockHeader:
           TYPENAME: AccountOwner
 BlockHeight:
   NEWTYPESTRUCT: U64
+BlockHeightRange:
+  STRUCT:
+    - start:
+        TYPENAME: BlockHeight
+    - limit:
+        OPTION: U64
 BlockProposal:
   STRUCT:
     - content:
@@ -344,6 +350,9 @@ ChainInfoQuery:
         TYPENAME: AccountOwner
     - request_committees: BOOL
     - request_pending_message_bundles: BOOL
+    - request_sent_certificate_hashes_in_range:
+        OPTION:
+          TYPENAME: BlockHeightRange
     - request_received_log_excluding_first_n:
         OPTION: U64
     - request_manager_values: BOOL

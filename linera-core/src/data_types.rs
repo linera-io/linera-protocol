@@ -26,6 +26,39 @@ use serde::{Deserialize, Serialize};
 
 use crate::client::ChainClientError;
 
+/// A range of block heights as used in `ChainInfoQuery`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Eq, PartialEq))]
+pub struct BlockHeightRange {
+    /// Starting point
+    pub start: BlockHeight,
+    /// Optional limit on the number of elements.
+    #[debug(skip_if = Option::is_none)]
+    pub limit: Option<u64>,
+}
+
+impl BlockHeightRange {
+    /// Creates a range containing only the single specified block height.
+    pub fn single(start: BlockHeight) -> BlockHeightRange {
+        let limit = Some(1);
+        BlockHeightRange { start, limit }
+    }
+
+    /// Creates a range starting at the specified block height and containing up to `limit` elements.
+    pub fn multi(start: BlockHeight, limit: u64) -> BlockHeightRange {
+        BlockHeightRange {
+            start,
+            limit: Some(limit),
+        }
+    }
+
+    /// Returns the highest block height in the range.
+    pub fn highest(&self) -> BlockHeight {
+        self.limit
+            .map_or(self.start, |limit| BlockHeight(self.start.0 + limit - 1))
+    }
+}
+
 /// Request information about a chain.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Eq, PartialEq))]
@@ -43,6 +76,11 @@ pub struct ChainInfoQuery {
     /// Query the received messages that are waiting to be picked in the next block.
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
+    /// Query a range of certificate hashes sent from the chain.
+    //  dev: this field is left and unused to maintain backwards compatibility
+    //  after hotfixing Testnet Conway.
+    #[debug(skip_if = Option::is_none)]
+    pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
     #[debug(skip_if = Option::is_none)]
     pub request_received_log_excluding_first_n: Option<u64>,
@@ -76,6 +114,7 @@ impl ChainInfoQuery {
             request_committees: false,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
+            request_sent_certificate_hashes_in_range: None,
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: None,
@@ -169,7 +208,7 @@ pub struct ChainInfo {
     /// The received messages that are waiting be picked in the next block (if requested).
     #[debug(skip_if = Vec::is_empty)]
     pub requested_pending_message_bundles: Vec<IncomingBundle>,
-    /// The response to `request_sent_certificate_hashes_by_heights`.
+    /// The response to `request_sent_certificate_hashes_in_range`
     #[debug(skip_if = Vec::is_empty)]
     pub requested_sent_certificate_hashes: Vec<CryptoHash>,
     /// The current number of received certificates (useful for `request_received_log_excluding_first_n`)
