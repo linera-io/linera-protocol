@@ -2638,22 +2638,28 @@ impl<Env: Environment> ChainClient<Env> {
                     %height,
                     "NewEvents: processing notification"
                 );
-                // Use the subscribed streams from EventsOnly mode, or fall back
-                // to the streams from the notification itself.
-                let subscribed = match self.listening_mode() {
-                    Some(ListeningMode::EventsOnly(streams)) => streams,
-                    _ => event_streams,
+                // Use the subscribed streams from EventsOnly mode to figure out which
+                // streams we are interested in.
+                // If the listening mode is not EventsOnly, we will process the
+                // certificate when we get the NewBlock notification about this block.
+                let relevant_streams = match self.listening_mode() {
+                    Some(ListeningMode::EventsOnly(subscribed)) => {
+                        subscribed.intersection(&event_streams).cloned().collect()
+                    }
+                    _ => BTreeSet::new(),
                 };
-                self.client
-                    .download_event_bearing_blocks(
-                        self.chain_id,
-                        height,
-                        hash,
-                        local_height,
-                        &subscribed,
-                        &remote_node,
-                    )
-                    .await?;
+                if !relevant_streams.is_empty() {
+                    self.client
+                        .download_event_bearing_blocks(
+                            self.chain_id,
+                            height,
+                            hash,
+                            local_height,
+                            &relevant_streams,
+                            &remote_node,
+                        )
+                        .await?;
+                }
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
