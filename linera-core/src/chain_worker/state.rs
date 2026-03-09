@@ -1248,11 +1248,19 @@ where
             .await?)
     }
 
-    /// Gets the stream event count for a stream.
+    /// Gets the stream event count for a stream, including preprocessed blocks.
     async fn get_stream_event_count(
         &self,
         stream_id: StreamId,
     ) -> Result<Option<u32>, WorkerError> {
+        // Use next_expected_events which accounts for both fully executed and
+        // preprocessed (sparsely downloaded) blocks, falling back to
+        // stream_event_counts for the case where next_expected_events hasn't
+        // been initialized yet.
+        let next_expected = self.chain.next_expected_events.get(&stream_id).await?;
+        if next_expected.is_some() {
+            return Ok(next_expected);
+        }
         Ok(self
             .chain
             .execution_state
