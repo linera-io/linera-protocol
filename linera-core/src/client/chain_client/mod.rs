@@ -2575,7 +2575,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                 }
             }
-            Reason::NewBlock { height, hash, .. } => {
+            Reason::NewBlock { height, .. } => {
                 let chain_id = notification.chain_id;
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -2587,18 +2587,10 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                if let Some(ListeningMode::EventsOnly(subscribed)) = self.listening_mode() {
-                    self.client
-                        .download_event_bearing_blocks(
-                            chain_id,
-                            height,
-                            hash,
-                            local_height,
-                            &subscribed,
-                            &remote_node,
-                        )
-                        .await?;
-                } else {
+                // Only synchronize the chain state if the listening mode is not
+                // EventsOnly. In EventsOnly mode, we'll only react to the NewEvents
+                // notifications.
+                if !matches!(self.listening_mode(), Some(ListeningMode::EventsOnly(_))) {
                     self.client
                         .synchronize_chain_state_from(&remote_node, chain_id)
                         .await?;
