@@ -61,11 +61,11 @@ alloy = { workspace = true, optional = true, default-features = false, features 
     "reqwest",
     "reqwest-rustls-tls",
 ] }
-op-alloy-network = { workspace = true, optional = true }
 alloy-sol-types = { workspace = true, optional = true }
 bcs = { workspace = true, optional = true }
 linera-base = { workspace = true, optional = true }
 linera-execution = { workspace = true, optional = true }
+op-alloy-network = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
 url = { workspace = true, optional = true }
 

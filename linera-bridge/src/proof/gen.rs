@@ -187,6 +187,116 @@ mod tests {
         ReceiptLog,
     };
 
+    /// One-off fixture generator: fetches Base block 10M via RPC, encodes all receipts
+    /// to canonical EIP-2718 form, and writes a JSON fixture for offline testing.
+    ///
+    /// Run with: `cargo test -p linera-bridge -- --ignored generate_base_block_fixture`
+    ///
+    /// Set `BASE_RPC_URL` env var to use a different RPC endpoint (the public Base
+    /// RPC does not support `eth_getBlockReceipts`, so this falls back to fetching
+    /// each receipt individually via `eth_getTransactionReceipt`).
+    #[test]
+    #[ignore]
+    fn generate_base_block_fixture() {
+        use alloy::{
+            eips::{eip2718::Encodable2718, BlockNumberOrTag},
+            providers::{Provider, ProviderBuilder},
+        };
+        use alloy_rlp::Encodable;
+        use op_alloy_network::Optimism;
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let rpc_url = std::env::var("BASE_RPC_URL")
+                .unwrap_or_else(|_| "https://mainnet.base.org".to_string());
+            let provider =
+                ProviderBuilder::<_, _, Optimism>::default().connect_http(rpc_url.parse().unwrap());
+
+            // Fetch block 10M
+            let block = provider
+                .get_block_by_number(BlockNumberOrTag::Number(10_000_000))
+                .await
+                .unwrap()
+                .expect("block 10M not found");
+
+            // RLP-encode header
+            let mut header_rlp = Vec::new();
+            block.header.inner.encode(&mut header_rlp);
+
+            let block_hash = alloy_primitives::keccak256(&header_rlp);
+            let receipts_root = block.header.inner.receipts_root;
+
+            // Fetch all receipts — try batch first, fall back to per-tx
+            let all_receipts = match provider
+                .get_block_receipts(block.header.number.into())
+                .await
+            {
+                Ok(Some(receipts)) => receipts,
+                _ => {
+                    eprintln!(
+                        "eth_getBlockReceipts unsupported, fetching receipts individually..."
+                    );
+                    let tx_hashes: Vec<B256> = block.transactions.hashes().collect();
+                    let mut receipts = Vec::with_capacity(tx_hashes.len());
+                    for (i, hash) in tx_hashes.iter().enumerate() {
+                        if i % 50 == 0 {
+                            eprintln!("  fetching receipt {}/{}", i + 1, tx_hashes.len());
+                        }
+                        let receipt = provider
+                            .get_transaction_receipt(*hash)
+                            .await
+                            .unwrap()
+                            .unwrap_or_else(|| panic!("receipt not found for tx {hash}"));
+                        receipts.push(receipt);
+                    }
+                    receipts
+                }
+            };
+
+            // Encode receipts to canonical EIP-2718 form
+            let canonical_receipts: Vec<serde_json::Value> = all_receipts
+                .into_iter()
+                .enumerate()
+                .map(|(idx, r)| {
+                    let consensus_receipt = r.inner.inner.map_logs(|log| log.inner);
+                    let encoded = consensus_receipt.encoded_2718();
+                    // EIP-2718: first byte < 0x80 is a type prefix (e.g. 0x02 = EIP-1559,
+                    // 0x7e = OP deposit); first byte >= 0x80 starts an RLP list header,
+                    // meaning legacy (type 0) with no prefix.
+                    let tx_type = if encoded[0] < 0x80 {
+                        encoded[0] as u64
+                    } else {
+                        0
+                    };
+                    serde_json::json!({
+                        "tx_index": idx,
+                        "tx_type": tx_type,
+                        "encoded": format!("0x{}", hex::encode(&encoded))
+                    })
+                })
+                .collect();
+
+            let fixture = serde_json::json!({
+                "block_number": 10_000_000u64,
+                "block_hash": format!("{block_hash}"),
+                "receipts_root": format!("{receipts_root}"),
+                "header_rlp": format!("0x{}", hex::encode(&header_rlp)),
+                "receipts": canonical_receipts
+            });
+
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/proof/testdata/base_block_10000000.json");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let json = serde_json::to_string_pretty(&fixture).unwrap();
+            std::fs::write(&path, json.as_bytes()).unwrap();
+
+            println!("Wrote fixture to {}", path.display());
+            println!("Block hash: {block_hash}");
+            println!("Receipts root: {receipts_root}");
+            println!("Total receipts: {}", canonical_receipts.len());
+        });
+    }
+
     #[test]
     fn test_build_receipt_proof_single_receipt() {
         let receipt = build_test_receipt(&[]);

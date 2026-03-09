@@ -539,6 +539,8 @@ fn decode_log(data: &mut &[u8]) -> Result<ReceiptLog> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::{
         testing::{
             build_deposit_event_data, build_receipt_trie, build_test_header, build_test_receipt,
@@ -869,6 +871,78 @@ mod tests {
             parse_deposit_event(&log, TEST_BRIDGE).is_err(),
             "should reject non-zero address padding"
         );
+    }
+
+    // -- Base mainnet regression test (offline, uses checked-in fixture) --
+
+    /// End-to-end regression test using a real Base mainnet block (block 10M).
+    ///
+    /// Verifies the full proof pipeline against real OP Stack data, including
+    /// a type 0x7e deposit receipt. Runs offline — the fixture was generated
+    /// once by the `generate_base_block_fixture` test in gen.rs.
+    #[test]
+    fn test_base_mainnet_receipt_proof() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("testdata/base_block_10000000.json")).unwrap();
+
+        // Parse header
+        let header_rlp = hex::decode(
+            fixture["header_rlp"]
+                .as_str()
+                .unwrap()
+                .strip_prefix("0x")
+                .unwrap(),
+        )
+        .unwrap();
+        let expected_hash = B256::from_str(fixture["block_hash"].as_str().unwrap()).unwrap();
+        let expected_root = B256::from_str(fixture["receipts_root"].as_str().unwrap()).unwrap();
+
+        // Verify header decoding
+        let (decoded_hash, decoded_root) = decode_block_header(&header_rlp).unwrap();
+        assert_eq!(decoded_hash, expected_hash, "block hash mismatch");
+        assert_eq!(decoded_root, expected_root, "receipts root mismatch");
+
+        // Parse all receipts
+        let receipts: Vec<(u64, Vec<u8>)> = fixture["receipts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                let idx = r["tx_index"].as_u64().unwrap();
+                let encoded =
+                    hex::decode(r["encoded"].as_str().unwrap().strip_prefix("0x").unwrap())
+                        .unwrap();
+                (idx, encoded)
+            })
+            .collect();
+
+        // Verify at least one is type 0x7e (OP deposit)
+        assert!(
+            receipts.iter().any(|(_, enc)| enc[0] == 0x7e),
+            "fixture should contain at least one OP deposit receipt (type 0x7e)"
+        );
+
+        // Build trie and verify root matches header
+        let deposit_tx_index = 0u64; // the deposit receipt
+        let (computed_root, proof_nodes) = build_receipt_proof(&receipts, deposit_tx_index);
+        assert_eq!(
+            computed_root, expected_root,
+            "computed receipts root doesn't match header — receipt encoding may be wrong for type 0x7e"
+        );
+
+        // Verify MPT inclusion proof for the deposit receipt
+        let proof_bytes: Vec<Bytes> = proof_nodes.into_iter().map(Bytes::from).collect();
+        verify_receipt_inclusion(
+            computed_root,
+            deposit_tx_index,
+            &receipts[deposit_tx_index as usize].1,
+            &proof_bytes,
+        )
+        .expect("MPT proof should verify for deposit receipt");
+
+        // Verify we can decode logs from the 0x7e receipt
+        decode_receipt_logs(&receipts[deposit_tx_index as usize].1)
+            .expect("should decode logs from type 0x7e deposit receipt");
     }
 
     // -- block header edge cases --
