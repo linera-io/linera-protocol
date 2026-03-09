@@ -1235,6 +1235,9 @@ impl<Env: Environment> Client<Env> {
         );
         let mut certificates = BTreeMap::new();
         let mut blocks_to_fetch = BTreeSet::<_>::from([(height, hash)]);
+        // Track which subscribed streams have been seen (have events or
+        // previous_event_blocks entries in any downloaded block).
+        let mut found_streams = BTreeSet::<StreamId>::new();
         let next_expected_events = subscribed_streams
             .iter()
             .zip(
@@ -1298,6 +1301,7 @@ impl<Env: Environment> Client<Env> {
                 if let Some((prev_hash, prev_height)) =
                     block.body.previous_event_blocks.get(stream_id)
                 {
+                    found_streams.insert(stream_id.clone());
                     if next_expected_events.get(stream_id).is_some_and(|index| {
                         block
                             .body
@@ -1325,8 +1329,151 @@ impl<Env: Environment> Client<Env> {
                     }
                 }
             }
+            // Also mark streams that have events in this block (even without
+            // previous_event_blocks entries, e.g. the first event ever).
+            for event in block.body.events.iter().flatten() {
+                if subscribed_streams.contains(&event.stream_id) {
+                    found_streams.insert(event.stream_id.clone());
+                }
+            }
 
             certificates.insert(current_height, certificate);
+        }
+
+        // If some subscribed streams were not found in any downloaded block's
+        // previous_event_blocks, scan backward from the starting height to find
+        // blocks that have events for those streams. This handles the case where
+        // the starting block doesn't have events for all subscribed streams
+        // (because previous_event_blocks in the block body only contains entries
+        // for streams that have events in that specific block).
+        let mut missing_streams: BTreeSet<_> = subscribed_streams
+            .difference(&found_streams)
+            .cloned()
+            .collect();
+        if !missing_streams.is_empty() {
+            info!(
+                %sender_chain_id, ?missing_streams,
+                "download_event_bearing_blocks: scanning backward for missing streams"
+            );
+            // Scan backward one block at a time from the starting height.
+            // Once we find a block containing events or previous_event_blocks
+            // entries for a missing stream, we follow those pointers using the
+            // same walk logic as the main loop above.
+            let mut scan_height = height;
+            while !missing_streams.is_empty() {
+                let Ok(prev) = scan_height.try_sub_one() else {
+                    break;
+                };
+                scan_height = prev;
+                if scan_height < local_next_block_height {
+                    break;
+                }
+                if certificates.contains_key(&scan_height) {
+                    continue; // Already downloaded in the main walk.
+                }
+                let downloaded = self
+                    .requests_scheduler
+                    .download_certificates(
+                        remote_node,
+                        sender_chain_id,
+                        scan_height,
+                        1,
+                    )
+                    .await?;
+                let Some(certificate) = downloaded.into_iter().next() else {
+                    continue;
+                };
+                Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
+                    .into_result()?;
+                let block = certificate.block();
+                // Check if this block has events or back-pointers for missing streams.
+                for stream_id in &missing_streams {
+                    if block.body.previous_event_blocks.contains_key(stream_id)
+                        || block
+                            .body
+                            .events
+                            .iter()
+                            .flatten()
+                            .any(|e| &e.stream_id == stream_id)
+                    {
+                        found_streams.insert(stream_id.clone());
+                    }
+                }
+                // Follow previous_event_blocks for all subscribed streams in this block.
+                for stream_id in subscribed_streams.iter() {
+                    if let Some((prev_hash, prev_height)) =
+                        block.body.previous_event_blocks.get(stream_id)
+                    {
+                        if next_expected_events.get(stream_id).is_some_and(|index| {
+                            block
+                                .body
+                                .events
+                                .iter()
+                                .flatten()
+                                .find(|event| event.stream_id == *stream_id)
+                                .is_some_and(|event| event.index == *index)
+                        }) {
+                            continue;
+                        }
+                        if !certificates.contains_key(prev_height) {
+                            blocks_to_fetch.insert((*prev_height, *prev_hash));
+                        }
+                    }
+                }
+                certificates.insert(scan_height, certificate);
+                missing_streams.retain(|s| !found_streams.contains(s));
+            }
+            // Walk any newly discovered previous_event_blocks.
+            while let Some((current_height, current_hash)) = blocks_to_fetch.pop_last() {
+                if current_height < local_next_block_height
+                    || certificates.contains_key(&current_height)
+                {
+                    continue;
+                }
+                let certificate = if let Some(certificate) =
+                    self.storage_client().read_certificate(current_hash).await?
+                {
+                    certificate
+                } else {
+                    let downloaded = self
+                        .requests_scheduler
+                        .download_certificates(
+                            remote_node,
+                            sender_chain_id,
+                            current_height,
+                            1,
+                        )
+                        .await?;
+                    let Some(certificate) = downloaded.into_iter().next() else {
+                        continue;
+                    };
+                    Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
+                        .into_result()?;
+                    certificate
+                };
+                let block = certificate.block();
+                for stream_id in subscribed_streams {
+                    if let Some((prev_hash, prev_height)) =
+                        block.body.previous_event_blocks.get(stream_id)
+                    {
+                        if next_expected_events.get(stream_id).is_some_and(|index| {
+                            block
+                                .body
+                                .events
+                                .iter()
+                                .flatten()
+                                .find(|event| event.stream_id == *stream_id)
+                                .is_some_and(|event| event.index == *index)
+                        }) {
+                            continue;
+                        }
+                        if !certificates.contains_key(prev_height) {
+                            blocks_to_fetch.insert((*prev_height, *prev_hash));
+                        }
+                    }
+                }
+                certificates.insert(current_height, certificate);
+            }
         }
 
         info!(
