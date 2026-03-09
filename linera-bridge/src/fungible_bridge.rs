@@ -41,11 +41,11 @@ mod tests {
             ) external;
 
             event DepositInitiated(
+                address indexed depositor,
                 uint256 source_chain_id,
                 bytes32 target_chain_id,
                 bytes32 target_application_id,
                 bytes32 target_account_owner,
-                address indexed depositor,
                 address token,
                 uint256 amount,
                 uint256 nonce

@@ -19,11 +19,11 @@ contract FungibleBridge is Microchain {
     /// The off-chain relayer uses this event (plus an MPT receipt proof) to
     /// mint the corresponding tokens on the target Linera chain.
     event DepositInitiated(
+        address indexed depositor,
         uint256 source_chain_id,
         bytes32 target_chain_id,
         bytes32 target_application_id,
         bytes32 target_account_owner,
-        address indexed depositor,
         address token,
         uint256 amount,
         uint256 nonce
@@ -67,11 +67,11 @@ contract FungibleBridge is Microchain {
         uint256 currentNonce = depositNonce++;
 
         emit DepositInitiated(
+            msg.sender,
             block.chainid,
             target_chain_id,
             target_application_id,
             target_account_owner,
-            msg.sender,
             address(token),
             amount,
             currentNonce

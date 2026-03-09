@@ -116,11 +116,11 @@ impl DepositProofClient for HttpDepositProofClient {
             .await?
             .with_context(|| format!("block not found for hash {block_hash}"))?;
 
-        let mut header_rlp = Vec::new();
-        block.header.inner.encode(&mut header_rlp);
+        let mut block_header_rlp = Vec::new();
+        block.header.inner.encode(&mut block_header_rlp);
 
         // Sanity check: header RLP hashes to the expected block hash
-        let computed_hash = alloy_primitives::keccak256(&header_rlp);
+        let computed_hash = alloy_primitives::keccak256(&block_header_rlp);
         if computed_hash != block_hash {
             bail!(
                 "header RLP hash mismatch: computed {computed_hash}, expected {block_hash}. \
@@ -149,7 +149,7 @@ impl DepositProofClient for HttpDepositProofClient {
             .collect();
 
         // 5. Build receipt trie and generate proof
-        let target_receipt_rlp = canonical_receipts
+        let receipt_rlp = canonical_receipts
             .iter()
             .find(|(idx, _)| *idx == tx_index)
             .map(|(_, rlp)| rlp.clone())
@@ -168,8 +168,8 @@ impl DepositProofClient for HttpDepositProofClient {
         }
 
         Ok(DepositProof {
-            block_header_rlp: header_rlp,
-            receipt_rlp: target_receipt_rlp,
+            block_header_rlp,
+            receipt_rlp,
             proof_nodes,
             tx_index,
             log_index,

@@ -4,7 +4,7 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use alloy_primitives::Bytes;
-use evm_bridge::{BridgeOperation, BridgeParameters, BridgeResponse, DepositKey, EvmBridgeAbi};
+use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
 use fungible::Account;
 use linera_bridge::proof;
 use linera_sdk::{
@@ -50,7 +50,7 @@ impl Contract for EvmBridgeContract {
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: BridgeOperation) -> BridgeResponse {
+    async fn execute_operation(&mut self, operation: BridgeOperation) {
         match operation {
             BridgeOperation::ProcessDeposit {
                 block_header_rlp,
@@ -67,7 +67,6 @@ impl Contract for EvmBridgeContract {
                     log_index,
                 )
                 .await;
-                BridgeResponse::Ok
             }
         }
     }
@@ -88,7 +87,7 @@ impl EvmBridgeContract {
         tx_index: u64,
         log_index: u64,
     ) {
-        let params: BridgeParameters = self.runtime.application_parameters();
+        let params = self.runtime.application_parameters();
 
         // 1. Decode block header → (block_hash, receipts_root)
         let (block_hash, receipts_root) =
@@ -150,20 +149,8 @@ impl EvmBridgeContract {
         // 6. Convert deposit fields to Linera types and call Mint
         let target_chain_id =
             ChainId::try_from(deposit.target_chain_id.as_slice()).expect("invalid target chain ID");
-        // Detect Address20 vs Address32: if first 12 bytes are zero, treat as Address20.
-        let owner_bytes = deposit.target_account_owner.0;
-        let target_owner = if owner_bytes[..12].iter().all(|&b| b == 0) {
-            let mut addr20 = [0u8; 20];
-            addr20.copy_from_slice(&owner_bytes[12..]);
-            AccountOwner::Address20(addr20.into())
-        } else {
-            AccountOwner::Address32(owner_bytes.into())
-        };
-        let amount_u128: u128 = deposit
-            .amount
-            .try_into()
-            .expect("deposit amount exceeds u128");
-        let amount = Amount::from_attos(amount_u128);
+        let target_owner = AccountOwner::from(deposit.target_account_owner.0);
+        let amount = Amount::try_from(deposit.amount).expect("deposit amount exceeds u128");
 
         let mint_op = WrappedFungibleOperation::Mint {
             target_account: Account {

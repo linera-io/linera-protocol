@@ -96,6 +96,15 @@ impl From<Amount> for U256 {
     }
 }
 
+impl TryFrom<U256> for Amount {
+    type Error = ArithmeticError;
+
+    fn try_from(value: U256) -> Result<Amount, ArithmeticError> {
+        let value: u128 = value.try_into().map_err(|_| ArithmeticError::Overflow)?;
+        Ok(Amount::from_attos(value))
+    }
+}
+
 /// A block height to identify blocks in a chain.
 #[derive(
     Eq,

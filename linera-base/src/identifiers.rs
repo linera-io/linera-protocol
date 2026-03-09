@@ -88,6 +88,22 @@ impl AccountOwner {
     }
 }
 
+impl From<[u8; 32]> for AccountOwner {
+    /// Converts a 32-byte array to an `AccountOwner`.
+    ///
+    /// If the first 12 bytes are zero, the remaining 20 bytes are treated as an
+    /// EVM-compatible `Address20`. Otherwise, the full 32 bytes become an `Address32`.
+    fn from(bytes: [u8; 32]) -> Self {
+        if bytes[..12].iter().all(|&b| b == 0) {
+            let mut addr = [0u8; 20];
+            addr.copy_from_slice(&bytes[12..]);
+            AccountOwner::Address20(addr)
+        } else {
+            AccountOwner::Address32(CryptoHash::from(bytes))
+        }
+    }
+}
+
 #[cfg(with_testing)]
 impl From<CryptoHash> for AccountOwner {
     fn from(address: CryptoHash) -> Self {

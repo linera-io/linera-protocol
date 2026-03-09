@@ -98,14 +98,14 @@ pub struct DepositEvent {
 
 /// Returns the keccak256 hash of the `DepositInitiated` event signature.
 pub fn deposit_event_signature() -> B256 {
-    keccak256(b"DepositInitiated(uint256,bytes32,bytes32,bytes32,address,address,uint256,uint256)")
+    keccak256(b"DepositInitiated(address,uint256,bytes32,bytes32,bytes32,address,uint256,uint256)")
 }
 
 /// Known keccak256 hash of the `DepositInitiated` event signature, for regression testing.
 /// If the event signature string changes, this constant must be updated.
 pub const DEPOSIT_EVENT_SIGNATURE_HASH: [u8; 32] = [
-    0x9c, 0x87, 0x81, 0x93, 0xc6, 0x46, 0xca, 0x73, 0x01, 0x76, 0xe7, 0x9b, 0x6e, 0x4e, 0x95, 0x67,
-    0x91, 0x1e, 0xfe, 0xf8, 0x12, 0xf1, 0x23, 0x01, 0x67, 0x4d, 0xa8, 0x8b, 0x38, 0x33, 0xb9, 0x23,
+    0x1e, 0x44, 0xe7, 0x59, 0x99, 0x75, 0x1e, 0x63, 0x23, 0x0d, 0x65, 0xd9, 0x34, 0x2e, 0x1c, 0xe4,
+    0xec, 0x66, 0x53, 0xca, 0x67, 0xc5, 0xad, 0x8b, 0xf4, 0xa9, 0x1b, 0x18, 0x9a, 0xfd, 0xa1, 0xab,
 ];
 
 /// Shared test helpers for building synthetic proofs.
@@ -318,6 +318,12 @@ pub fn verify_receipt_inclusion(
 /// Decodes a receipt's RLP and extracts its logs.
 ///
 /// Handles EIP-2718 typed receipts (type byte prefix < 0x80).
+///
+/// This variant exists because when tests build MPT tries
+/// with multiple receipts (e.g. test_build_receipt_proof_multiple_receipts),
+/// each receipt needs a distinct cumulative_gas_used to produce different
+/// RLP encodings. Without that, all empty-log receipts would be byte-identical,
+/// making the trie degenerate.
 pub fn decode_receipt_logs(receipt_rlp: &[u8]) -> Result<Vec<ReceiptLog>> {
     ensure!(!receipt_rlp.is_empty(), "empty receipt RLP");
 

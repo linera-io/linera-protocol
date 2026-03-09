@@ -151,26 +151,21 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
 
 #[tokio::test]
 #[ignore] // Requires `anvil` and `solc`
-async fn test_deposit_proof_generation() {
+async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Spawn Anvil
     // Use Shanghai hardfork to avoid header field mismatches with older Anvil versions
     // (Anvil v0.2.0 doesn't return all Cancun header fields via JSON-RPC).
-    let anvil = Anvil::new()
-        .arg("--hardfork")
-        .arg("shanghai")
-        .try_spawn()
-        .expect("anvil must be installed");
+    let anvil = Anvil::new().arg("--hardfork").arg("shanghai").try_spawn()?;
     let endpoint = anvil.endpoint();
 
     // Default Anvil account 0
-    let pk: PrivateKeySigner = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-        .parse()
-        .unwrap();
+    let pk: PrivateKeySigner =
+        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".parse()?;
     let deployer = pk.address();
     let wallet = EthereumWallet::from(pk);
     let provider = ProviderBuilder::new()
         .wallet(wallet)
-        .connect_http(endpoint.parse().unwrap());
+        .connect_http(endpoint.parse()?);
 
     // 2. Compile and deploy MockERC20
     let erc20_bytecode = compile_contract(MOCK_ERC20_SOL, "MockERC20.sol", "MockERC20");
@@ -179,14 +174,8 @@ async fn test_deposit_proof_generation() {
     erc20_deploy.extend_from_slice(&(initial_supply,).abi_encode_params());
 
     let tx = TransactionRequest::default().with_deploy_code(Bytes::from(erc20_deploy));
-    let receipt = provider
-        .send_transaction(tx)
-        .await
-        .expect("send erc20 deploy")
-        .get_receipt()
-        .await
-        .expect("erc20 deploy receipt");
-    let token_address = receipt.contract_address.expect("erc20 address");
+    let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+    let token_address = receipt.contract_address.ok_or("missing erc20 address")?;
 
     // 3. Compile and deploy FungibleBridge
     let target_chain_id = B256::from([0xAA; 32]);
@@ -210,14 +199,8 @@ async fn test_deposit_proof_generation() {
     bridge_deploy.extend_from_slice(&bridge_constructor);
 
     let tx = TransactionRequest::default().with_deploy_code(Bytes::from(bridge_deploy));
-    let receipt = provider
-        .send_transaction(tx)
-        .await
-        .expect("send bridge deploy")
-        .get_receipt()
-        .await
-        .expect("bridge deploy receipt");
-    let bridge_address = receipt.contract_address.expect("bridge address");
+    let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+    let bridge_address = receipt.contract_address.ok_or("missing bridge address")?;
 
     // 4. Approve bridge to spend tokens, then deposit
     let deposit_amount = U256::from(1_000_000u64);
@@ -231,13 +214,7 @@ async fn test_deposit_proof_generation() {
     let tx = TransactionRequest::default()
         .to(token_address)
         .input(approve_data.into());
-    provider
-        .send_transaction(tx)
-        .await
-        .expect("send approve")
-        .get_receipt()
-        .await
-        .expect("approve receipt");
+    provider.send_transaction(tx).await?.get_receipt().await?;
 
     let deposit_data = depositCall {
         target_chain_id,
@@ -249,27 +226,17 @@ async fn test_deposit_proof_generation() {
     let tx = TransactionRequest::default()
         .to(bridge_address)
         .input(deposit_data.into());
-    let deposit_receipt = provider
-        .send_transaction(tx)
-        .await
-        .expect("send deposit")
-        .get_receipt()
-        .await
-        .expect("deposit receipt");
+    let deposit_receipt = provider.send_transaction(tx).await?.get_receipt().await?;
     let deposit_tx_hash = deposit_receipt.transaction_hash;
 
     // 5. Generate deposit proof using HttpDepositProofClient
-    let client = HttpDepositProofClient::new(&endpoint).expect("create proof client");
-    let proof = client
-        .generate_deposit_proof(deposit_tx_hash)
-        .await
-        .expect("generate deposit proof");
+    let client = HttpDepositProofClient::new(&endpoint)?;
+    let proof = client.generate_deposit_proof(deposit_tx_hash).await?;
 
     // 6. Verify the proof using on-chain verification functions
 
     // Block header decoding
-    let (block_hash, receipts_root) =
-        decode_block_header(&proof.block_header_rlp).expect("decode block header");
+    let (block_hash, receipts_root) = decode_block_header(&proof.block_header_rlp)?;
     assert_ne!(block_hash, B256::ZERO, "block hash should be non-zero");
 
     // Receipt inclusion proof
@@ -283,13 +250,12 @@ async fn test_deposit_proof_generation() {
         proof.tx_index,
         &proof.receipt_rlp,
         &proof_bytes,
-    )
-    .expect("receipt inclusion proof should verify");
+    )?;
 
     // Decode and parse the deposit event
-    let logs = decode_receipt_logs(&proof.receipt_rlp).expect("decode receipt logs");
+    let logs = decode_receipt_logs(&proof.receipt_rlp)?;
     let deposit_log = &logs[proof.log_index as usize];
-    let deposit = parse_deposit_event(deposit_log, bridge_address).expect("parse deposit event");
+    let deposit = parse_deposit_event(deposit_log, bridge_address)?;
 
     // Anvil's default chain ID is 31337
     assert_eq!(deposit.source_chain_id, U256::from(31337u64));
@@ -306,4 +272,6 @@ async fn test_deposit_proof_generation() {
         deposit_log.address, bridge_address,
         "event should come from bridge contract"
     );
+
+    Ok(())
 }

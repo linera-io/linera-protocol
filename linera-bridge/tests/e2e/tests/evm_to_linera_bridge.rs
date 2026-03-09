@@ -150,8 +150,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing::info!(%erc20_addr, "MockERC20 deployed");
 
     let chain_id_bytes32 = format!("0x{chain_id}");
-    let zero_bytes32 =
-        "0x0000000000000000000000000000000000000000000000000000000000000000";
+    let zero_bytes32 = format!("{}", FixedBytes::<32>::ZERO);
 
     tracing::info!("Deploying FungibleBridge (applicationId = 0x0)...");
     let light_client = light_client_address();

@@ -45,17 +45,11 @@ pub enum BridgeOperation {
     },
 }
 
-/// Responses from the bridge contract.
-#[derive(Debug, Deserialize, Serialize)]
-pub enum BridgeResponse {
-    Ok,
-}
-
 pub struct EvmBridgeAbi;
 
 impl ContractAbi for EvmBridgeAbi {
     type Operation = BridgeOperation;
-    type Response = BridgeResponse;
+    type Response = ();
 }
 
 impl ServiceAbi for EvmBridgeAbi {
