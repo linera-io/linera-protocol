@@ -12,7 +12,7 @@ use linera_client::chain_listener::ClientContext;
 use linera_core::worker::Reason;
 use linera_execution::{Query, QueryResponse};
 use serde_json::Value;
-use tokio::sync::broadcast;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
@@ -58,9 +58,9 @@ pub struct SubscriptionKey {
     pub application_id: ApplicationId,
 }
 
-/// State for an active watcher: the broadcast sender and a handle for cleanup detection.
+/// State for an active watcher: the watch sender for the latest query result.
 struct WatcherState {
-    sender: broadcast::Sender<Value>,
+    sender: watch::Sender<Option<Value>>,
 }
 
 /// Manages registered query names and active per-key watchers.
@@ -89,13 +89,15 @@ impl QuerySubscriptionManager {
         self.queries.get(name).map(|s| s.as_str())
     }
 
-    /// Returns a broadcast receiver for the given key. Lazily spawns a watcher if needed.
+    /// Returns a watch receiver for the given key. Lazily spawns a watcher if needed.
+    /// The receiver initially holds `None`; the watcher populates it with `Some(value)`
+    /// after the first query. Callers should filter out `None` values from the stream.
     pub fn subscribe<C: ClientContext + 'static>(
         self: &Arc<Self>,
         key: SubscriptionKey,
         context: Arc<futures::lock::Mutex<C>>,
         token: CancellationToken,
-    ) -> anyhow::Result<broadcast::Receiver<Value>> {
+    ) -> anyhow::Result<watch::Receiver<Option<Value>>> {
         let query_string = self
             .get_query(&key.name)
             .ok_or_else(|| {
@@ -105,13 +107,13 @@ impl QuerySubscriptionManager {
 
         let mut watchers = self.watchers.lock().unwrap();
 
-        // If a watcher already exists, reuse it.
+        // If a watcher already exists, reuse it. The current value is always available.
         if let Some(state) = watchers.get(&key) {
             return Ok(state.sender.subscribe());
         }
 
-        // Create a new broadcast channel and spawn a watcher.
-        let (sender, receiver) = broadcast::channel(64);
+        // Create a new watch channel (initial value is None until the first query completes).
+        let (sender, receiver) = watch::channel(None);
         watchers.insert(
             key.clone(),
             WatcherState {
@@ -140,7 +142,7 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
     manager: Arc<QuerySubscriptionManager>,
     key: SubscriptionKey,
     query_string: String,
-    sender: broadcast::Sender<Value>,
+    sender: watch::Sender<Option<Value>>,
     token: CancellationToken,
 ) {
     debug!(
@@ -171,11 +173,11 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
 
     let mut notification_stream = Box::pin(notification_stream);
 
-    // Cache the last result to deduplicate.
+    // Cache the last raw result to deduplicate (compared before JSON parsing).
     let mut last_result: Option<Vec<u8>> = None;
 
     // Execute the query once immediately so the first subscriber gets a value.
-    execute_and_maybe_broadcast(&context, &key, &query_string, &sender, &mut last_result).await;
+    execute_and_maybe_send(&context, &key, &query_string, &sender, &mut last_result).await;
 
     loop {
         tokio::select! {
@@ -187,7 +189,7 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
                 match notification {
                     Some(n) => {
                         if matches!(n.reason, Reason::NewBlock { .. }) {
-                            execute_and_maybe_broadcast(
+                            execute_and_maybe_send(
                                 &context,
                                 &key,
                                 &query_string,
@@ -204,7 +206,7 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
                 }
 
                 // If no receivers remain, stop the watcher.
-                if sender.receiver_count() == 0 {
+                if sender.is_closed() {
                     debug!(name = %key.name, "no more subscribers, stopping watcher");
                     break;
                 }
@@ -215,12 +217,12 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
     cleanup_watcher(&manager, &key);
 }
 
-/// Executes the query against the application and broadcasts if the result changed.
-async fn execute_and_maybe_broadcast<C: ClientContext + 'static>(
+/// Executes the query against the application and updates the watch channel if the result changed.
+async fn execute_and_maybe_send<C: ClientContext + 'static>(
     context: &Arc<futures::lock::Mutex<C>>,
     key: &SubscriptionKey,
     query_string: &str,
-    sender: &broadcast::Sender<Value>,
+    sender: &watch::Sender<Option<Value>>,
     last_result: &mut Option<Vec<u8>>,
 ) {
     // The application service expects a JSON-encoded GraphQL request.
@@ -252,18 +254,17 @@ async fn execute_and_maybe_broadcast<C: ClientContext + 'static>(
                 }
             };
 
-            // Deduplicate: only broadcast if the result changed.
+            // Deduplicate: only send if the result changed.
             if last_result.as_ref() == Some(&response_bytes) {
                 return;
             }
 
             *last_result = Some(response_bytes.clone());
 
-            // Parse the response as JSON and broadcast.
+            // Parse the response as JSON and update the watch channel.
             match serde_json::from_slice::<Value>(&response_bytes) {
                 Ok(value) => {
-                    // Ignore send errors (no receivers).
-                    if let Err(e) = sender.send(value) {
+                    if let Err(e) = sender.send(Some(value)) {
                         debug!(name = %key.name, "Failed to send graphql response: {e}");
                     }
                 }

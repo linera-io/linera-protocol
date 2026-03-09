@@ -161,8 +161,8 @@ where
             )
             .map_err(|e| Error::new(e.to_string()))?;
 
-        Ok(tokio_stream::wrappers::BroadcastStream::new(receiver)
-            .filter_map(|result| async move { result.ok() }))
+        Ok(tokio_stream::wrappers::WatchStream::new(receiver)
+            .filter_map(|value| async move { value }))
     }
 }
 
