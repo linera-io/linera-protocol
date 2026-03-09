@@ -1870,7 +1870,11 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     let client2 = net.make_client().await;
     client2.wallet_init(None).await?;
 
-    let chain1 = client1.load_wallet()?.default_chain().unwrap();
+    // We use a newly opened chain for the publisher, so that client2 will not be listening to that
+    // chain by default.
+    let chain1 = client1
+        .open_and_assign(&client1, Amount::from_tokens(100))
+        .await?;
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
     let (contract, service) = client1.build_example("social").await?;
     let module_id = client1
@@ -1892,17 +1896,13 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     let app2 = node_service2.make_application(&chain2, &application_id)?;
     app2.mutate(format!("subscribe(chainId: \"{chain1}\")"))
         .await?;
+    let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
+
+    let mut notifications = node_service2.notifications(chain2).await?;
 
     let app1 = node_service1.make_application(&chain1, &application_id)?;
     app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
         .await?;
-
-    // The EventsOnly subscription for chain1 may not be established in time to
-    // receive the NewEvents notification. Explicitly sync chain1 on node_service2
-    // so that stream_event_counts is up-to-date, then process chain2's inbox so
-    // that collect_stream_updates discovers the new events.
-    node_service2.sync(&chain1).await?;
-    node_service2.process_inbox(&chain2).await?;
 
     let query = "receivedPosts { keys { author, index } }";
     let expected_response = json!({
@@ -1912,7 +1912,10 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
+    notifications.wait_for_block(height2.try_add_one()?).await?;
     assert_eq!(app2.query(query).await?, expected_response);
+
+    let tip_after_first_post = node_service2.chain_tip(chain1).await?;
 
     // Perform an operation that does not emit events, or messages that client 2 listens to - to be
     // safe, we just transfer from chain1 to itself.
@@ -1925,10 +1928,8 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         )
         .await?;
 
+    let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
     app1.mutate("post(text: \"Second post!\")").await?;
-
-    node_service2.sync(&chain1).await?;
-    node_service2.process_inbox(&chain2).await?;
 
     let query = "receivedPosts { keys { author, index } }";
     let expected_response = json!({
@@ -1939,7 +1940,13 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
+    notifications.wait_for_block(height2.try_add_one()?).await?;
     assert_eq!(app2.query(query).await?, expected_response);
+
+    let tip_after_second_post = node_service2.chain_tip(chain1).await?;
+    // The second post should not have moved the tip hash - client 2 should have only preprocessed
+    // that block, without downloading the transfer block in between.
+    assert_eq!(tip_after_first_post, tip_after_second_post);
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
