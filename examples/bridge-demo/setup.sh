@@ -32,6 +32,7 @@ RELAY_URL=""
 RELAY_OWNER=""
 TICKER_SYMBOL="wTT"
 FUND_AMOUNT="500000000000000000000"
+SHARED_DIR=""
 WALLET_DIR="/tmp/wallet"
 EXTRA_WALLET_ID=1
 
@@ -63,7 +64,7 @@ Docker mode (local dev):
 
 Direct mode (real networks):
   $(basename "$0") --evm-rpc-url URL --evm-private-key KEY \\
-    --light-client-address ADDR --bridge-chain-id ID
+    --bridge-chain-id ID --relay-owner OWNER --faucet-url URL
 
 Options:
   --compose-file PATH       Docker Compose file (enables Docker mode)
@@ -73,14 +74,15 @@ Options:
   --evm-private-key KEY     Private key for EVM transactions
                             Docker default: Anvil account 0
   --evm-chain-id ID         EVM chain ID (default: 31337)
-  --light-client-address ADDR  LightClient contract address
+  --light-client-address ADDR  LightClient contract address (skip deploy)
                             Docker mode reads from /shared/
+                            Direct mode deploys if not provided
   --bridge-chain-id ID      Linera bridge chain ID (64 hex chars)
                             Docker mode polls /shared/
   --token-address ADDR      ERC20 token address (skip MockERC20 deploy)
   --wasm-dir PATH           Directory with .wasm binaries
                             Docker default: /wasm
-                            Direct default: ../../target/wasm32-unknown-unknown/release
+                            Direct default: ../../examples/target/wasm32-unknown-unknown/release
   --contracts-dir PATH      Solidity source root for forge --root
                             Docker default: /contracts
                             Direct default: ../../linera-bridge/src/solidity
@@ -92,6 +94,9 @@ Options:
   --ticker-symbol SYM       Wrapped token ticker (default: wTT)
   --fund-amount WEI         Fund bridge with this many tokens; 0 to skip
                             (default: 500000000000000000000)
+  --shared-dir PATH         Directory for shared state files (bridge-address,
+                            app IDs). Relay polls these files.
+                            Default: /tmp/bridge-demo-<timestamp>
   --help                    Show this help
 EOF
     exit 0
@@ -115,6 +120,7 @@ while [[ $# -gt 0 ]]; do
         --relay-owner)       RELAY_OWNER="$2"; shift 2 ;;
         --ticker-symbol)     TICKER_SYMBOL="$2"; shift 2 ;;
         --fund-amount)       FUND_AMOUNT="$2"; shift 2 ;;
+        --shared-dir)        SHARED_DIR="$2"; shift 2 ;;
         --help)              usage ;;
         *) die "Unknown option: $1" ;;
     esac
@@ -149,6 +155,9 @@ linera_exec() {
             LINERA_STORAGE="rocksdb:$WALLET_DIR/client_${EXTRA_WALLET_ID}.db" \
             ./linera "$@"
     else
+        LINERA_WALLET="$LINERA_TMP_DIR/wallet.json" \
+        LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json" \
+        LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db" \
         linera "$@"
     fi
 }
@@ -168,25 +177,79 @@ if [[ -n "$COMPOSE_FILE" ]]; then
     OUTPUT_FILE="${OUTPUT_FILE:-$SCRIPT_DIR/.env.local}"
     FAUCET_URL="${FAUCET_URL:-http://localhost:8080}"
     RELAY_URL="${RELAY_URL:-http://localhost:3001}"
+    # Docker container has its own solc; don't force a version download.
+    FORGE_USE_SOLC=()
 else
     echo "Mode: Direct"
     [[ -z "$EVM_PRIVATE_KEY" ]] && die "--evm-private-key is required in direct mode"
-    [[ -z "$LIGHT_CLIENT_ADDR" ]] && die "--light-client-address is required in direct mode"
     [[ -z "$BRIDGE_CHAIN_ID" ]] && die "--bridge-chain-id is required in direct mode"
     EVM_RPC_URL="${EVM_RPC_URL:-http://localhost:8545}"
-    WASM_DIR="${WASM_DIR:-$SCRIPT_DIR/../../target/wasm32-unknown-unknown/release}"
+    WASM_DIR="${WASM_DIR:-$SCRIPT_DIR/../../examples/target/wasm32-unknown-unknown/release}"
     CONTRACTS_DIR="${CONTRACTS_DIR:-$SCRIPT_DIR/../../linera-bridge/src/solidity}"
     OUTPUT_FILE="${OUTPUT_FILE:-$SCRIPT_DIR/.env.local}"
     FAUCET_URL="${FAUCET_URL:-http://localhost:8080}"
     RELAY_URL="${RELAY_URL:-http://localhost:3001}"
+    FORGE_USE_SOLC=(--use 0.8.33)
 fi
+
+# ── Shared dir for relay coordination ──
+if [[ -z "$SHARED_DIR" ]]; then
+    SHARED_DIR="/tmp/bridge-demo-$(date +%Y%m%d-%H%M%S)"
+fi
+mkdir -p "$SHARED_DIR"
+echo "  Shared dir: $SHARED_DIR"
 
 echo "=== Bridge Demo Setup ==="
 
-# ── 1. Read LightClient address (Docker mode only) ──
+# ── 0. Initialize Linera wallet (direct mode only) ──
+if [[ -z "$COMPOSE_FILE" ]]; then
+    LINERA_TMP_DIR="$SHARED_DIR/linera-wallet"
+    mkdir -p "$LINERA_TMP_DIR"
+    if [[ ! -f "$LINERA_TMP_DIR/wallet.json" ]]; then
+        echo "Initializing Linera wallet from faucet..."
+        linera_exec wallet init --faucet "$FAUCET_URL"
+        echo "Requesting a chain from faucet..."
+        linera_exec wallet request-chain --faucet "$FAUCET_URL"
+    else
+        echo "  Using existing wallet at $LINERA_TMP_DIR"
+    fi
+fi
+
+# ── 1. Deploy or read LightClient ──
 if [[ -n "$COMPOSE_FILE" && -z "$LIGHT_CLIENT_ADDR" ]]; then
     echo "Reading LightClient address from /shared/..."
     LIGHT_CLIENT_ADDR=$(dc_exec foundry-tools cat /shared/light-client-address | tr -d '[:space:]')
+elif [[ -z "$LIGHT_CLIENT_ADDR" ]]; then
+    echo "Fetching LightClient constructor args from faucet..."
+    LC_ARGS_JSON=$(linera-bridge init-light-client --faucet-url "$FAUCET_URL" --output /dev/null)
+    LC_VALIDATORS=$(echo "$LC_ARGS_JSON" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print('[' + ','.join(d['validators']) + ']')
+")
+    LC_WEIGHTS=$(echo "$LC_ARGS_JSON" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print('[' + ','.join(str(w) for w in d['weights']) + ']')
+")
+    LC_ADMIN_CHAIN=$(echo "$LC_ARGS_JSON" | python3 -c "
+import sys, json; print(json.load(sys.stdin)['admin_chain_id'])
+")
+    LC_EPOCH=$(echo "$LC_ARGS_JSON" | python3 -c "
+import sys, json; print(json.load(sys.stdin)['epoch'])
+")
+    echo "  Deploying LightClient (epoch=$LC_EPOCH)..."
+    LC_OUTPUT=$(evm_exec \
+        forge create "LightClient.sol:LightClient" \
+        --root "$CONTRACTS_DIR" --via-ir --optimize --optimizer-runs 1 \
+        "${FORGE_USE_SOLC[@]}" --evm-version shanghai \
+        --out /tmp/forge-out --cache-path /tmp/forge-cache \
+        --rpc-url "$EVM_RPC_URL" \
+        --private-key "$EVM_PRIVATE_KEY" \
+        --broadcast \
+        --constructor-args \
+        "$LC_VALIDATORS" "$LC_WEIGHTS" "$LC_ADMIN_CHAIN" "$LC_EPOCH")
+    LIGHT_CLIENT_ADDR=$(echo "$LC_OUTPUT" | parse_address)
 fi
 validate_eth_address "LightClient address" "$LIGHT_CLIENT_ADDR"
 echo "  LightClient: $LIGHT_CLIENT_ADDR"
@@ -227,8 +290,8 @@ if [[ -z "$TOKEN_ADDRESS" ]]; then
     echo "Deploying MockERC20..."
     ERC20_OUTPUT=$(evm_exec \
         forge create "$CONTRACTS_DIR/MockERC20.sol:MockERC20" \
-        --root "$CONTRACTS_DIR" --via-ir --optimize \
-        --evm-version shanghai \
+        --root "$CONTRACTS_DIR" --via-ir --optimize --optimizer-runs 1 \
+        "${FORGE_USE_SOLC[@]}" --evm-version shanghai \
         --out /tmp/forge-out --cache-path /tmp/forge-cache \
         --rpc-url "$EVM_RPC_URL" \
         --private-key "$EVM_PRIVATE_KEY" \
@@ -294,10 +357,11 @@ WRAPPED_APP_ID=$(echo "$WRAPPED_APP_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -
 validate_hex64 "Wrapped-fungible app ID" "$WRAPPED_APP_ID"
 echo "  Wrapped-fungible app: $WRAPPED_APP_ID"
 
-# Write wrapped-fungible app ID to shared volume (Docker mode only).
+# Write wrapped-fungible app ID to shared dir for relay.
 if [[ -n "$COMPOSE_FILE" ]]; then
     dc_exec --user root foundry-tools sh -c "echo '$WRAPPED_APP_ID' > /shared/wrapped-app-id"
 fi
+echo "$WRAPPED_APP_ID" > "$SHARED_DIR/wrapped-app-id"
 
 # ── 5. Deploy FungibleBridge ──
 echo "Deploying FungibleBridge..."
@@ -306,8 +370,8 @@ CHAIN_BYTES32="0x${BRIDGE_CHAIN_ID}"
 
 BRIDGE_OUTPUT=$(evm_exec \
     forge create "$CONTRACTS_DIR/FungibleBridge.sol:FungibleBridge" \
-    --root "$CONTRACTS_DIR" --via-ir --optimize \
-    --ignored-error-codes 6321 \
+    --root "$CONTRACTS_DIR" --via-ir --optimize --optimizer-runs 1 \
+    "${FORGE_USE_SOLC[@]}" --ignored-error-codes 6321 \
     --evm-version shanghai \
     --out /tmp/forge-out --cache-path /tmp/forge-cache \
     --rpc-url "$EVM_RPC_URL" \
@@ -324,10 +388,11 @@ validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
 BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
 echo "  FungibleBridge: $BRIDGE_ADDRESS"
 
-# Write bridge address to shared volume (Docker mode only).
+# Write bridge address to shared dir for relay.
 if [[ -n "$COMPOSE_FILE" ]]; then
     dc_exec --user root foundry-tools sh -c "echo '$BRIDGE_ADDRESS' > /shared/bridge-address"
 fi
+echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 
 # ── 6. Publish and create evm-bridge app ──
 echo "Publishing and creating evm-bridge app..."
@@ -363,10 +428,11 @@ BRIDGE_APP_ID=$(echo "$BRIDGE_APP_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -1)
 validate_hex64 "EVM-bridge app ID" "$BRIDGE_APP_ID"
 echo "  EVM-bridge app: $BRIDGE_APP_ID"
 
-# Write bridge app ID to shared volume (Docker mode only).
+# Write bridge app ID to shared dir for relay.
 if [[ -n "$COMPOSE_FILE" ]]; then
     dc_exec --user root foundry-tools sh -c "echo '$BRIDGE_APP_ID' > /shared/bridge-app-id"
 fi
+echo "$BRIDGE_APP_ID" > "$SHARED_DIR/bridge-app-id"
 
 # ── 7. Fund FungibleBridge with ERC20 tokens ──
 if [[ "$FUND_AMOUNT" != "0" ]]; then
@@ -392,12 +458,21 @@ LINERA_RELAY_URL=$RELAY_URL
 LINERA_BRIDGE_ADDRESS=$BRIDGE_ADDRESS
 LINERA_TOKEN_ADDRESS=$TOKEN_ADDRESS
 LINERA_BRIDGE_CHAIN_ID=$BRIDGE_CHAIN_ID
+LINERA_EVM_CHAIN_ID=$EVM_CHAIN_ID
 EOF
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Environment written to: $OUTPUT_FILE"
+echo "Shared state dir:       $SHARED_DIR"
+echo ""
+echo "Start the relay (point --*-file flags at the shared dir):"
+echo "  linera-bridge serve --rpc-url \$EVM_RPC_URL --faucet-url \$FAUCET_URL \\"
+echo "    --evm-private-key \$KEY \\"
+echo "    --bridge-address-file $SHARED_DIR/bridge-address \\"
+echo "    --bridge-app-id-file $SHARED_DIR/bridge-app-id \\"
+echo "    --fungible-app-id-file $SHARED_DIR/wrapped-app-id"
 echo ""
 echo "Start the frontend:"
 echo "  cd examples/bridge-demo"
