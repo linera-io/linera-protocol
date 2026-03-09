@@ -250,9 +250,39 @@ where
         contract_wit::transfer(source.into(), destination.into(), amount.into())
     }
 
+    /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
+    /// balance) to `destination`, using the application ID at the given depth in the call stack
+    /// for authentication. Depth 0 is the current application, depth 1 is the caller, etc.
+    /// If the depth exceeds the call stack size, `None` is used as the authenticated
+    /// application ID.
+    pub fn transfer_auth_depth(
+        &mut self,
+        source: AccountOwner,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
+    ) {
+        contract_wit::transfer_auth_depth(source.into(), destination.into(), amount.into(), auth_depth)
+    }
+
     /// Claims an `amount` of native tokens from a `source` account to a `destination` account.
     pub fn claim(&mut self, source: Account, destination: Account, amount: Amount) {
         contract_wit::claim(source.into(), destination.into(), amount.into())
+    }
+
+    /// Claims an `amount` of native tokens from a `source` account to a `destination` account,
+    /// using the application ID at the given depth in the call stack for authentication.
+    /// Depth 0 is the current application, depth 1 is the caller, etc.
+    /// If the depth exceeds the call stack size, `None` is used as the authenticated
+    /// application ID.
+    pub fn claim_auth_depth(
+        &mut self,
+        source: Account,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
+    ) {
+        contract_wit::claim_auth_depth(source.into(), destination.into(), amount.into(), auth_depth)
     }
 
     /// Calls another application.
