@@ -766,14 +766,14 @@ impl<Env: Environment> Client<Env> {
 
     /// Registers publisher chains in `EventsOnly` listening mode based on the event
     /// subscriptions of the given chain.
-    async fn update_publisher_chain_modes(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<(), LocalNodeError> {
+    async fn update_publisher_chain_modes(&self, chain_id: ChainId) -> Result<(), LocalNodeError> {
         let subscriptions = self.local_node.get_event_subscriptions(chain_id).await?;
         let mut publishers = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
         for ((publisher_id, stream_name), _) in subscriptions {
-            publishers.entry(publisher_id).or_default().insert(stream_name);
+            publishers
+                .entry(publisher_id)
+                .or_default()
+                .insert(stream_name);
         }
         if chain_id != self.admin_chain_id {
             publishers.entry(self.admin_chain_id).or_default();
