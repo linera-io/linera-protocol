@@ -699,8 +699,25 @@ impl<Env: Environment> Client<Env> {
             };
             assert!(batch_info.next_block_height > next_height);
             next_height = batch_info.next_block_height;
+            if self.has_all_events(event_ids).await? {
+                return Ok(());
+            }
         }
         Ok(())
+    }
+
+    /// Returns `true` if all the given events exist in local storage.
+    async fn has_all_events(&self, event_ids: &[EventId]) -> Result<bool, ChainClientError> {
+        for event_id in event_ids {
+            if !self
+                .storage_client()
+                .contains_event(event_id.clone())
+                .await?
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     /// Tries to process all the certificates, requesting any missing blobs from the given node.
