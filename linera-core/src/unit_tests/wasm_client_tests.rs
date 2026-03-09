@@ -1013,8 +1013,8 @@ where
         .await?
         .with_policy(ResourceControlPolicy::no_fees());
 
-    let sender = builder.add_root_chain(0, Amount::ONE).await?;
-    let receiver = builder.add_root_chain(1, Amount::ONE).await?;
+    let sender = builder.add_root_chain(1, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(2, Amount::ONE).await?;
 
     let module_id = receiver.publish_wasm_example("social").await?;
     let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();

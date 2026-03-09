@@ -753,9 +753,37 @@ impl<Env: Environment> Client<Env> {
         &self,
         certificate: GenericCertificate<T>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        self.local_node
+        let chain_id = certificate.inner().chain_id();
+        let response = self
+            .local_node
             .handle_certificate(certificate, &self.notifier)
-            .await
+            .await?;
+        if self.is_tracked(chain_id) {
+            self.update_publisher_chain_modes(chain_id).await?;
+        }
+        Ok(response)
+    }
+
+    /// Registers publisher chains in `EventsOnly` listening mode based on the event
+    /// subscriptions of the given chain.
+    async fn update_publisher_chain_modes(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<(), LocalNodeError> {
+        let subscriptions = self.local_node.get_event_subscriptions(chain_id).await?;
+        let mut publishers = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
+        for ((publisher_id, stream_name), _) in subscriptions {
+            publishers.entry(publisher_id).or_default().insert(stream_name);
+        }
+        if chain_id != self.admin_chain_id {
+            publishers.entry(self.admin_chain_id).or_default();
+        }
+        for (publisher_id, streams) in publishers {
+            if publisher_id != chain_id {
+                self.extend_chain_mode(publisher_id, ListeningMode::EventsOnly(streams));
+            }
+        }
+        Ok(())
     }
 
     async fn chain_info_with_committees(
@@ -2638,12 +2666,12 @@ impl<Env: Environment> ChainClient<Env> {
             .local_node
             .get_event_subscriptions(self.chain_id)
             .await?;
-        let chain_ids = subscriptions
+        let chain_ids: BTreeSet<_> = subscriptions
             .iter()
             .map(|((chain_id, _), _)| *chain_id)
             .chain(iter::once(self.client.admin_chain_id))
             .filter(|chain_id| *chain_id != self.chain_id)
-            .collect::<BTreeSet<_>>();
+            .collect();
         stream::iter(
             chain_ids
                 .into_iter()
@@ -4415,14 +4443,15 @@ impl<Env: Environment> ChainClient<Env> {
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) -> Result<(), ChainClientError> {
-        let dominated = self
-            .listening_mode()
+        let mode = self.client.chain_mode(notification.chain_id);
+        let dominated = mode
+            .as_ref()
             .is_none_or(|mode| !mode.is_relevant(&notification.reason));
         if dominated {
             debug!(
-                chain_id = %self.chain_id,
+                chain_id = %notification.chain_id,
                 reason = ?notification.reason,
-                listening_mode = ?self.listening_mode(),
+                listening_mode = ?mode,
                 "Ignoring notification due to listening mode"
             );
             return Ok(());
@@ -4471,7 +4500,9 @@ impl<Env: Environment> ChainClient<Env> {
                 // In EventsOnly mode, download only event-bearing blocks sparsely
                 // instead of doing a full sync. This also handles old validators
                 // that emit NewBlock but not NewEvents.
-                if let Some(ListeningMode::EventsOnly(subscribed)) = self.listening_mode() {
+                if let Some(ListeningMode::EventsOnly(subscribed)) =
+                    self.client.chain_mode(chain_id)
+                {
                     if !event_streams.is_empty() {
                         self.client
                             .download_event_bearing_blocks(
@@ -4509,7 +4540,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                let subscribed = match self.listening_mode() {
+                let subscribed = match self.client.chain_mode(chain_id) {
                     Some(ListeningMode::EventsOnly(streams)) => streams,
                     _ => return Ok(()),
                 };
