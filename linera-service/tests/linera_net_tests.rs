@@ -2402,11 +2402,7 @@ async fn test_wasm_end_to_end_allowances_fungible(
 
     // Open a chain owned by both clients.
     // Native fungible needs enough chain balance for the initial account transfers.
-    let initial_balance = if example_name == "native-fungible" {
-        Amount::from_tokens(30)
-    } else {
-        Amount::from_tokens(6)
-    };
+    let initial_balance = Amount::from_tokens(30);
     let chain2 = client1
         .open_multi_owner_chain(
             chain1,
