@@ -334,6 +334,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                         self.maybe_process_inbox(notification.chain_id).await?;
                     }
                 }
+                // Also process events on NewBlock for compatibility with old validators
+                // that don't emit NewEvents notifications.
+                self.process_new_events(notification.chain_id).await?;
+            }
+            Reason::NewEvents { .. } => {
                 self.process_new_events(notification.chain_id).await?;
             }
             Reason::BlockExecuted { .. } => {}
@@ -527,7 +532,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .event_stream_publishers()
             .await?
             .into_iter()
-            .map(|chain_id| (chain_id, ListeningMode::FollowChain))
+            .map(|(chain_id, streams)| (chain_id, ListeningMode::EventsOnly(streams)))
             .collect();
         for publisher_id in publishing_chains.keys() {
             self.event_subscribers

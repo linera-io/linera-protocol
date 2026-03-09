@@ -273,6 +273,14 @@ pub enum Reason {
         height: BlockHeight,
         hash: CryptoHash,
     },
+    // NOTE: Keep this at the end for backward compatibility with old validators
+    // that use bincode integer-based variant indices. Old validators don't emit
+    // NewEvents, and inserting it before existing variants would shift their indices.
+    NewEvents {
+        height: BlockHeight,
+        hash: CryptoHash,
+        event_streams: BTreeSet<StreamId>,
+    },
 }
 
 /// Error type for worker operations.

@@ -13,7 +13,7 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use assert_matches::assert_matches;
 use async_graphql::Request;
@@ -27,7 +27,9 @@ use linera_base::{
         Amount, BlanketMessagePolicy, BlobContent, BlockHeight, Bytecode, ChainDescription, Event,
         MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName},
+    identifiers::{
+        AccountOwner, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -55,7 +57,7 @@ use crate::{
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},
-    worker::WorkerError,
+    worker::{Notification, Reason, WorkerError},
     Environment,
 };
 
@@ -988,6 +990,126 @@ where
     assert_eq!(
         **op,
         SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 8)])
+    );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_memory_sparse_event_chain(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_sparse_event_chain(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+/// Tests that when processing `NewEvents` notifications in `EventsOnly` listening mode,
+/// only the event-bearing blocks are downloaded from the sender chain (sparse download).
+async fn run_test_sparse_event_chain<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::no_fees());
+
+    let sender = builder.add_root_chain(0, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(1, Amount::ONE).await?;
+
+    let module_id = receiver.publish_wasm_example("social").await?;
+    let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
+
+    let (application_id, _cert) = receiver
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Subscribe to the sender's events.
+    let request_subscribe = social::Operation::Subscribe {
+        chain_id: sender.chain_id(),
+    };
+    receiver
+        .execute_operation(Operation::user(application_id, &request_subscribe)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Sender processes the subscription message.
+    sender.synchronize_from_validators().await.unwrap();
+    sender.process_inbox().await?;
+
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+
+    // Block 0: Post (has events).
+    let cert0 = sender
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Post {
+                text: "First post".to_string(),
+                image_url: None,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    // Block 1: Burn (no events).
+    let cert1 = sender
+        .burn(AccountOwner::CHAIN, Amount::from_millis(1))
+        .await
+        .unwrap_ok_committed();
+
+    // Block 2: Post (has events).
+    let cert2 = sender
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Post {
+                text: "Second post".to_string(),
+                image_url: None,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    // Create a NewEvents notification for the latest block.
+    let notification = Notification {
+        chain_id: sender.chain_id(),
+        reason: Reason::NewEvents {
+            height: cert2.block().header.height,
+            hash: cert2.hash(),
+            event_streams: BTreeSet::from([stream_id]),
+        },
+    };
+
+    let validator = builder
+        .initial_committee
+        .validator_addresses()
+        .next()
+        .unwrap();
+    receiver
+        .process_notification_from(notification, validator)
+        .await;
+
+    // The first and last blocks have events. The middle one doesn't.
+    // With sparse downloading, only event-bearing blocks should be stored.
+    assert!(
+        receiver
+            .storage_client()
+            .contains_certificate(cert0.hash())
+            .await?
+    );
+    assert!(
+        !receiver
+            .storage_client()
+            .contains_certificate(cert1.hash())
+            .await?
+    );
+    assert!(
+        receiver
+            .storage_client()
+            .contains_certificate(cert2.hash())
+            .await?
     );
 
     Ok(())

@@ -1970,7 +1970,7 @@ pub trait NotificationsExt {
     ) -> impl Future<Output = Result<BTreeSet<StreamId>>> {
         let expected_height = expected_height.into();
         self.wait_for(move |notification| {
-            if let Reason::NewBlock {
+            if let Reason::NewEvents {
                 height,
                 event_streams,
                 ..

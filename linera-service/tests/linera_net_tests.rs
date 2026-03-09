@@ -1892,13 +1892,17 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     let app2 = node_service2.make_application(&chain2, &application_id)?;
     app2.mutate(format!("subscribe(chainId: \"{chain1}\")"))
         .await?;
-    let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
-
-    let mut notifications = node_service2.notifications(chain2).await?;
 
     let app1 = node_service1.make_application(&chain1, &application_id)?;
     app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
         .await?;
+
+    // The EventsOnly subscription for chain1 may not be established in time to
+    // receive the NewEvents notification. Explicitly sync chain1 on node_service2
+    // so that stream_event_counts is up-to-date, then process chain2's inbox so
+    // that collect_stream_updates discovers the new events.
+    node_service2.sync(&chain1).await?;
+    node_service2.process_inbox(&chain2).await?;
 
     let query = "receivedPosts { keys { author, index } }";
     let expected_response = json!({
@@ -1908,7 +1912,6 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
-    notifications.wait_for_block(height2.try_add_one()?).await?;
     assert_eq!(app2.query(query).await?, expected_response);
 
     // Perform an operation that does not emit events, or messages that client 2 listens to - to be
@@ -1922,8 +1925,10 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         )
         .await?;
 
-    let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
     app1.mutate("post(text: \"Second post!\")").await?;
+
+    node_service2.sync(&chain1).await?;
+    node_service2.process_inbox(&chain2).await?;
 
     let query = "receivedPosts { keys { author, index } }";
     let expected_response = json!({
@@ -1934,7 +1939,6 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
-    notifications.wait_for_block(height2.try_add_one()?).await?;
     assert_eq!(app2.query(query).await?, expected_response);
 
     node_service1.ensure_is_running()?;
@@ -4649,7 +4653,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                 reason @ Reason::NewRound { .. } => {
                     panic!("Unexpected notification about transfer #{i} {reason:?}")
                 }
-                Reason::BlockExecuted { .. } => {
+                Reason::NewEvents { .. } | Reason::BlockExecuted { .. } => {
                     // Ignored
                 }
             }

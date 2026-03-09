@@ -53,7 +53,9 @@ pub fn parse_app_set(s: &str) -> anyhow::Result<HashSet<GenericApplicationId>> {
 /// Returns after the specified time or if we receive a notification that a new round has started.
 pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: RoundTimeout) {
     let mut stream = stream.filter(|notification| match &notification.reason {
-        Reason::NewBlock { height, .. } => *height >= timeout.next_block_height,
+        Reason::NewBlock { height, .. } | Reason::NewEvents { height, .. } => {
+            *height >= timeout.next_block_height
+        }
         Reason::NewRound { round, .. } => *round > timeout.current_round,
         Reason::NewIncomingBundle { .. } | Reason::BlockExecuted { .. } => false,
     });
