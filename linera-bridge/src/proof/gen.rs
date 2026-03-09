@@ -38,8 +38,8 @@ pub struct DepositProof {
     pub proof_nodes: Vec<Vec<u8>>,
     /// Transaction index within the block.
     pub tx_index: u64,
-    /// Log index within the receipt.
-    pub log_index: u64,
+    /// Indices of all `DepositInitiated` logs within the receipt.
+    pub log_indices: Vec<u64>,
 }
 
 /// Client interface for generating deposit proofs.
@@ -80,9 +80,7 @@ impl HttpDepositProofClient {
 #[async_trait]
 impl DepositProofClient for HttpDepositProofClient {
     async fn generate_deposit_proof(&self, tx_hash: B256) -> Result<DepositProof> {
-        let event_sig = crate::proof::deposit_event_signature();
-
-        // 1. Get transaction receipt → block hash, tx index, log index
+        // 1. Get transaction receipt → block hash, tx index
         let receipt = self
             .provider
             .get_transaction_receipt(tx_hash)
@@ -97,17 +95,6 @@ impl DepositProofClient for HttpDepositProofClient {
             .inner
             .transaction_index
             .context("receipt missing transaction_index")?;
-
-        // Find the DepositInitiated event in the receipt logs
-        let log_index = receipt
-            .inner
-            .inner
-            .logs()
-            .iter()
-            .position(|log| log.topics().first() == Some(&event_sig))
-            .with_context(|| {
-                format!("no DepositInitiated event found in receipt for tx {tx_hash}")
-            })? as u64;
 
         // 2. Get full block → header RLP
         let block = self
@@ -167,12 +154,21 @@ impl DepositProofClient for HttpDepositProofClient {
             );
         }
 
+        // Find all DepositInitiated log indices from the canonical receipt
+        let logs = crate::proof::decode_receipt_logs(&receipt_rlp)
+            .context("failed to decode receipt logs")?;
+        let log_indices = crate::proof::find_deposit_log_indices(&logs);
+        anyhow::ensure!(
+            !log_indices.is_empty(),
+            "no DepositInitiated event found in receipt for tx {tx_hash}"
+        );
+
         Ok(DepositProof {
             block_header_rlp,
             receipt_rlp,
             proof_nodes,
             tx_index,
-            log_index,
+            log_indices,
         })
     }
 }
@@ -377,6 +373,52 @@ mod tests {
         let deposit = proof::parse_deposit_event(&logs[0], bridge_address).expect("parse deposit");
         assert_eq!(deposit.source_chain_id, U256::from(8453u64));
         assert_eq!(deposit.amount, U256::from(1_000_000u64));
+    }
+
+    /// `find_deposit_log_indices` returns indices of all `DepositInitiated` logs.
+    #[test]
+    fn test_finds_all_deposit_events_in_receipt() {
+        let event_sig = proof::deposit_event_signature();
+        let bridge_address = Address::from([0xBB; 20]);
+        let depositor = Address::from([0xEE; 20]);
+        let mut depositor_topic = [0u8; 32];
+        depositor_topic[12..32].copy_from_slice(depositor.as_slice());
+
+        let make_log = |amount: u64, nonce: u64| ReceiptLog {
+            address: bridge_address,
+            topics: vec![event_sig, B256::from(depositor_topic)],
+            data: build_deposit_event_data(
+                8453,
+                B256::ZERO,
+                B256::ZERO,
+                B256::ZERO,
+                Address::from([0xAA; 20]),
+                amount,
+                nonce,
+            ),
+        };
+
+        // All logs are deposit events
+        let logs = vec![make_log(100, 0), make_log(200, 1)];
+        assert_eq!(proof::find_deposit_log_indices(&logs), vec![0, 1]);
+
+        // Non-deposit logs interspersed
+        let non_deposit_log = ReceiptLog {
+            address: Address::from([0xCC; 20]),
+            topics: vec![B256::from([0xFF; 32])],
+            data: vec![1, 2, 3],
+        };
+        let mixed_logs = vec![
+            non_deposit_log.clone(),
+            make_log(100, 0),
+            non_deposit_log,
+            make_log(200, 1),
+        ];
+        assert_eq!(proof::find_deposit_log_indices(&mixed_logs), vec![1, 3]);
+
+        // No deposit logs
+        let empty: Vec<ReceiptLog> = vec![];
+        assert!(proof::find_deposit_log_indices(&empty).is_empty());
     }
 
     #[test]

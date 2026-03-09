@@ -77,7 +77,7 @@ impl GenerateDepositProofOptions {
                 .map(|n| alloy_primitives::hex::encode_prefixed(n))
                 .collect::<Vec<_>>(),
             "tx_index": proof.tx_index,
-            "log_index": proof.log_index,
+            "log_indices": proof.log_indices,
         });
 
         let json_str = serde_json::to_string_pretty(&result)?;

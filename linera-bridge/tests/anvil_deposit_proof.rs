@@ -254,7 +254,7 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
 
     // Decode and parse the deposit event
     let logs = decode_receipt_logs(&proof.receipt_rlp)?;
-    let deposit_log = &logs[proof.log_index as usize];
+    let deposit_log = &logs[proof.log_indices[0] as usize];
     let deposit = parse_deposit_event(deposit_log, bridge_address)?;
 
     // Anvil's default chain ID is 31337

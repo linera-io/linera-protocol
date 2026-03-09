@@ -540,7 +540,7 @@ async fn test_replay_different_log_index_succeeds() {
             block.with_operation(
                 tb.bridge_app_id,
                 BridgeOperation::ProcessDeposit {
-                    block_header_rlp: block_header,
+                    block_header_rlp,
                     receipt_rlp,
                     proof_nodes,
                     tx_index,

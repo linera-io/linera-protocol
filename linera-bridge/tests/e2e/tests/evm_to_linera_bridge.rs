@@ -303,7 +303,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     let proof = proof_client.generate_deposit_proof(deposit_tx_hash).await?;
     tracing::info!(
         tx_index = proof.tx_index,
-        log_index = proof.log_index,
+        log_indices = ?proof.log_indices,
         proof_nodes = proof.proof_nodes.len(),
         "Deposit proof generated"
     );
@@ -315,7 +315,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         receipt_rlp: proof.receipt_rlp,
         proof_nodes: proof.proof_nodes,
         tx_index: proof.tx_index,
-        log_index: proof.log_index,
+        log_index: proof.log_indices[0],
     };
     let op_bytes = bcs::to_bytes(&bridge_op)?;
     let op = Operation::User {

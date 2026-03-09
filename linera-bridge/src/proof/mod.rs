@@ -423,6 +423,16 @@ pub fn parse_deposit_event(log: &ReceiptLog, expected_emitter: Address) -> Resul
     })
 }
 
+/// Returns the indices of all logs that match the `DepositInitiated` event signature.
+pub fn find_deposit_log_indices(logs: &[ReceiptLog]) -> Vec<u64> {
+    let event_sig = deposit_event_signature();
+    logs.iter()
+        .enumerate()
+        .filter(|(_, log)| log.topics.first() == Some(&event_sig))
+        .map(|(i, _)| i as u64)
+        .collect()
+}
+
 // -- internal helpers --
 
 /// Computes the receipt trie key for a given transaction index.
