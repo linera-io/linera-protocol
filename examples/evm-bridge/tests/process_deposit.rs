@@ -5,7 +5,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use alloy_primitives::{Address, B256};
+use alloy_primitives::{Address, B256, U256};
 use evm_bridge::{BridgeOperation, BridgeParameters, EvmBridgeAbi};
 use fungible::{InitialState, InitialStateBuilder};
 use linera_bridge::proof::{
@@ -16,15 +16,15 @@ use linera_bridge::proof::{
     ReceiptLog,
 };
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
-    test::TestValidator,
+    linera_base_types::{AccountOwner, Amount, ApplicationId},
+    test::{ActiveChain, TestValidator},
 };
 use wrapped_fungible::{WrappedFungibleTokenAbi, WrappedParameters};
 
 /// Helper to query an account balance on the wrapped-fungible app.
 async fn query_balance(
-    app_id: linera_sdk::linera_base_types::ApplicationId<WrappedFungibleTokenAbi>,
-    chain: &linera_sdk::test::ActiveChain,
+    app_id: ApplicationId<WrappedFungibleTokenAbi>,
+    chain: &ActiveChain,
     owner: AccountOwner,
 ) -> Option<Amount> {
     use async_graphql::InputType;
@@ -43,107 +43,151 @@ async fn query_balance(
     )
 }
 
+/// Common setup for bridge integration tests.
+struct TestBridge {
+    chain: ActiveChain,
+    chain_owner: AccountOwner,
+    bridge_app_id: ApplicationId<EvmBridgeAbi>,
+    fungible_app_id: ApplicationId<WrappedFungibleTokenAbi>,
+    source_chain_id: u64,
+    bridge_contract: Address,
+    token: Address,
+    target_chain_b256: B256,
+    target_owner_b256: B256,
+}
+
+impl TestBridge {
+    async fn setup() -> Self {
+        let (validator, bridge_module_id) =
+            TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
+        let mut chain = validator.new_chain().await;
+        let chain_owner = AccountOwner::from(chain.public_key());
+
+        let fungible_module_id = chain
+            .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
+                "../wrapped-fungible",
+            )
+            .await;
+
+        let token_address = [0xA0; 20];
+        let source_chain_id = 8453u64;
+
+        let wrapped_params = WrappedParameters {
+            ticker_symbol: "wUSDC".to_string(),
+            minter: chain_owner,
+            mint_chain_id: chain.id(),
+            evm_token_address: token_address,
+            evm_source_chain_id: source_chain_id,
+        };
+        let fungible_app_id = chain
+            .create_application(
+                fungible_module_id,
+                wrapped_params,
+                InitialStateBuilder::default().build(),
+                vec![],
+            )
+            .await;
+
+        let bridge_params = BridgeParameters {
+            source_chain_id,
+            bridge_contract_address: [0xBB; 20],
+            fungible_app_id: fungible_app_id.forget_abi(),
+            token_address,
+        };
+        let bridge_app_id = chain
+            .create_application(bridge_module_id, bridge_params, (), vec![])
+            .await;
+
+        let chain_id_bytes: [u8; 32] = chain.id().0.into();
+        let target_chain_b256 = B256::from(chain_id_bytes);
+
+        let owner_hash = match chain_owner {
+            AccountOwner::Address32(hash) => <[u8; 32]>::from(hash),
+            _ => panic!("expected Address32"),
+        };
+        let target_owner_b256 = B256::from(owner_hash);
+
+        let bridge_contract = Address::from([0xBB; 20]);
+        let token = Address::from(token_address);
+
+        TestBridge {
+            chain,
+            chain_owner,
+            bridge_app_id,
+            fungible_app_id,
+            source_chain_id,
+            bridge_contract,
+            token,
+            target_chain_b256,
+            target_owner_b256,
+        }
+    }
+
+    /// Builds a valid deposit receipt and MPT proof.
+    ///
+    /// Returns `(block_header, receipt, proof_nodes, tx_index, log_index)`.
+    fn build_valid_deposit(&self) -> (Vec<u8>, Vec<u8>, Vec<Vec<u8>>, u64, u64) {
+        self.build_deposit_with_logs(&[self.build_valid_log(0)])
+    }
+
+    /// Builds a valid `ReceiptLog` for a deposit event with the given nonce.
+    fn build_valid_log(&self, nonce: u64) -> ReceiptLog {
+        let event_data = build_deposit_event_data(
+            self.source_chain_id,
+            self.target_chain_b256,
+            B256::ZERO, // target_application_id placeholder
+            self.target_owner_b256,
+            self.token,
+            1_000_000,
+            nonce,
+        );
+        let depositor = Address::from([0xDD; 20]);
+        let mut depositor_topic = [0u8; 32];
+        depositor_topic[12..32].copy_from_slice(depositor.as_slice());
+
+        ReceiptLog {
+            address: self.bridge_contract,
+            topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
+            data: event_data,
+        }
+    }
+
+    /// Builds a deposit receipt and proof from the given logs.
+    ///
+    /// Returns `(block_header, receipt, proof_nodes, tx_index, log_index)`.
+    /// `log_index` defaults to 0.
+    fn build_deposit_with_logs(
+        &self,
+        logs: &[ReceiptLog],
+    ) -> (Vec<u8>, Vec<u8>, Vec<Vec<u8>>, u64, u64) {
+        let receipt = build_test_receipt(logs);
+        let tx_index = 1u64;
+        let (receipts_root, proof_bytes) =
+            build_receipt_trie(&[(tx_index, receipt.clone())], tx_index);
+        let proof_nodes: Vec<Vec<u8>> = proof_bytes.into_iter().map(|b| b.to_vec()).collect();
+        let block_header = build_test_header(receipts_root);
+        (block_header, receipt, proof_nodes, tx_index, 0)
+    }
+}
+
 // -- integration tests --
 
 #[tokio::test]
 async fn test_process_deposit() {
-    let (validator, bridge_module_id) =
-        TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
-    let mut chain = validator.new_chain().await;
-    let chain_owner = AccountOwner::from(chain.public_key());
-
-    // Deploy wrapped-fungible app with chain owner as minter
-    let fungible_module_id = chain
-        .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
-            "../wrapped-fungible",
-        )
-        .await;
-
-    let token_address = [0xA0; 20];
-    let source_chain_id = 8453u64;
-
-    let wrapped_params = WrappedParameters {
-        ticker_symbol: "wUSDC".to_string(),
-        minter: chain_owner,
-        mint_chain_id: chain.id(),
-        evm_token_address: token_address,
-        evm_source_chain_id: source_chain_id,
-    };
-    let fungible_app_id = chain
-        .create_application(
-            fungible_module_id,
-            wrapped_params,
-            InitialStateBuilder::default().build(),
-            vec![],
-        )
-        .await;
-
-    // Deploy bridge app
-    let bridge_params = BridgeParameters {
-        source_chain_id,
-        bridge_contract_address: [0xBB; 20],
-        fungible_app_id: fungible_app_id.forget_abi(),
-        token_address,
-    };
-    let bridge_app_id = chain
-        .create_application(bridge_module_id, bridge_params, (), vec![])
-        .await;
-
-    // Build a synthetic deposit event and proof
-    let deposit_amount = 1_000_000u64;
-
-    // ChainId(CryptoHash) → [u8; 32] via CryptoHash's From impl
-    let chain_id_bytes: [u8; 32] = chain.id().0.into();
-    let target_chain_b256 = B256::from(chain_id_bytes);
-
-    // The application id as bytes32 — use the forget_abi hash
-    let app_id_bytes: [u8; 32] = [0; 32]; // placeholder, bridge doesn't check this yet
-
-    // The target account owner as bytes32 (Address32 = CryptoHash)
-    let owner_hash = match chain_owner {
-        AccountOwner::Address32(hash) => <[u8; 32]>::from(hash),
-        _ => panic!("expected Address32"),
-    };
-    let target_owner_b256 = B256::from(owner_hash);
-
-    let bridge_contract = Address::from([0xBB; 20]);
-    let token = Address::from(token_address);
-
-    let event_data = build_deposit_event_data(
-        source_chain_id,
-        target_chain_b256,
-        B256::from(app_id_bytes),
-        target_owner_b256,
-        token,
-        deposit_amount,
-        0,
-    );
-
-    let depositor = Address::from([0xDD; 20]);
-    let mut depositor_topic = [0u8; 32];
-    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
-    let receipt = build_test_receipt(&[ReceiptLog {
-        address: bridge_contract,
-        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
-        data: event_data,
-    }]);
-
-    let tx_index = 1u64;
-    let (receipts_root, proof_bytes) = build_receipt_trie(&[(tx_index, receipt.clone())], tx_index);
-    let proof_nodes: Vec<Vec<u8>> = proof_bytes.into_iter().map(|b| b.to_vec()).collect();
-    let block_header = build_test_header(receipts_root);
+    let tb = TestBridge::setup().await;
+    let (block_header, receipt, proof_nodes, tx_index, log_index) = tb.build_valid_deposit();
 
     // Submit ProcessDeposit
-    chain
+    tb.chain
         .add_block(|block| {
             block.with_operation(
-                bridge_app_id,
+                tb.bridge_app_id,
                 BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header.clone(),
                     receipt_rlp: receipt.clone(),
                     proof_nodes: proof_nodes.clone(),
                     tx_index,
-                    log_index: 0,
+                    log_index,
                 },
             );
         })
@@ -151,21 +195,22 @@ async fn test_process_deposit() {
 
     // Verify tokens were minted
     assert_eq!(
-        query_balance(fungible_app_id, &chain, chain_owner).await,
-        Some(Amount::from_attos(deposit_amount as u128)),
+        query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
+        Some(Amount::from_attos(1_000_000u128)),
     );
 
     // Second deposit with same proof should fail (replay)
-    let result = chain
+    let result = tb
+        .chain
         .try_add_block(|block| {
             block.with_operation(
-                bridge_app_id,
+                tb.bridge_app_id,
                 BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header,
                     receipt_rlp: receipt.clone(),
                     proof_nodes: proof_nodes.clone(),
                     tx_index,
-                    log_index: 0,
+                    log_index,
                 },
             );
         })
@@ -176,14 +221,307 @@ async fn test_process_deposit() {
     // Use a different (wrong) receipts root in the block header
     let wrong_header = build_test_header(B256::from([0xFF; 32]));
 
-    let result = chain
+    let result = tb
+        .chain
         .try_add_block(|block| {
             block.with_operation(
-                bridge_app_id,
+                tb.bridge_app_id,
                 BridgeOperation::ProcessDeposit {
                     block_header_rlp: wrong_header,
                     receipt_rlp: receipt,
                     proof_nodes,
+                    tx_index,
+                    log_index,
+                },
+            );
+        })
+        .await;
+
+    assert!(result.is_err(), "invalid proof should be rejected");
+}
+
+#[tokio::test]
+async fn test_source_chain_id_mismatch() {
+    let tb = TestBridge::setup().await;
+
+    // Build event data with wrong source_chain_id (1 instead of 8453)
+    let event_data = build_deposit_event_data(
+        1, // wrong source chain ID
+        tb.target_chain_b256,
+        B256::ZERO,
+        tb.target_owner_b256,
+        tb.token,
+        1_000_000,
+        0,
+    );
+    let depositor = Address::from([0xDD; 20]);
+    let mut depositor_topic = [0u8; 32];
+    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
+
+    let log = ReceiptLog {
+        address: tb.bridge_contract,
+        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
+        data: event_data,
+    };
+    let (block_header, receipt, proof_nodes, tx_index, log_index) =
+        tb.build_deposit_with_logs(&[log]);
+
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp: block_header,
+                    receipt_rlp: receipt,
+                    proof_nodes,
+                    tx_index,
+                    log_index,
+                },
+            );
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "source chain ID mismatch should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn test_token_address_mismatch() {
+    let tb = TestBridge::setup().await;
+
+    // Build event data with wrong token address
+    let wrong_token = Address::from([0xCC; 20]);
+    let event_data = build_deposit_event_data(
+        tb.source_chain_id,
+        tb.target_chain_b256,
+        B256::ZERO,
+        tb.target_owner_b256,
+        wrong_token, // wrong token
+        1_000_000,
+        0,
+    );
+    let depositor = Address::from([0xDD; 20]);
+    let mut depositor_topic = [0u8; 32];
+    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
+
+    let log = ReceiptLog {
+        address: tb.bridge_contract,
+        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
+        data: event_data,
+    };
+    let (block_header, receipt, proof_nodes, tx_index, log_index) =
+        tb.build_deposit_with_logs(&[log]);
+
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp: block_header,
+                    receipt_rlp: receipt,
+                    proof_nodes,
+                    tx_index,
+                    log_index,
+                },
+            );
+        })
+        .await;
+
+    assert!(result.is_err(), "token address mismatch should be rejected");
+}
+
+#[tokio::test]
+async fn test_wrong_emitter_address() {
+    let tb = TestBridge::setup().await;
+
+    // Build valid event data but emit from the wrong contract address
+    let event_data = build_deposit_event_data(
+        tb.source_chain_id,
+        tb.target_chain_b256,
+        B256::ZERO,
+        tb.target_owner_b256,
+        tb.token,
+        1_000_000,
+        0,
+    );
+    let depositor = Address::from([0xDD; 20]);
+    let mut depositor_topic = [0u8; 32];
+    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
+
+    let wrong_emitter = Address::from([0xCC; 20]);
+    let log = ReceiptLog {
+        address: wrong_emitter, // wrong emitter
+        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
+        data: event_data,
+    };
+    let (block_header, receipt, proof_nodes, tx_index, log_index) =
+        tb.build_deposit_with_logs(&[log]);
+
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp: block_header,
+                    receipt_rlp: receipt,
+                    proof_nodes,
+                    tx_index,
+                    log_index,
+                },
+            );
+        })
+        .await;
+
+    assert!(result.is_err(), "wrong emitter address should be rejected");
+}
+
+#[tokio::test]
+async fn test_wrong_event_signature() {
+    let tb = TestBridge::setup().await;
+
+    // Build valid event data but with a garbage event signature
+    let event_data = build_deposit_event_data(
+        tb.source_chain_id,
+        tb.target_chain_b256,
+        B256::ZERO,
+        tb.target_owner_b256,
+        tb.token,
+        1_000_000,
+        0,
+    );
+    let depositor = Address::from([0xDD; 20]);
+    let mut depositor_topic = [0u8; 32];
+    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
+
+    let log = ReceiptLog {
+        address: tb.bridge_contract,
+        topics: vec![
+            B256::from([0xFF; 32]), // garbage event signature
+            B256::from(depositor_topic),
+        ],
+        data: event_data,
+    };
+    let (block_header_rlp, receipt_rlp, proof_nodes, tx_index, log_index) =
+        tb.build_deposit_with_logs(&[log]);
+
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp,
+                    receipt_rlp,
+                    proof_nodes,
+                    tx_index,
+                    log_index,
+                },
+            );
+        })
+        .await;
+
+    assert!(result.is_err(), "wrong event signature should be rejected");
+}
+
+#[tokio::test]
+async fn test_log_index_out_of_range() {
+    let tb = TestBridge::setup().await;
+
+    // Build receipt with 1 log, but submit with log_index: 1 (out of range)
+    let (block_header_rlp, receipt_rlp, proof_nodes, tx_index, _) = tb.build_valid_deposit();
+
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp,
+                    receipt_rlp,
+                    proof_nodes,
+                    tx_index,
+                    log_index: 1, // out of range
+                },
+            );
+        })
+        .await;
+
+    assert!(result.is_err(), "log_index out of range should be rejected");
+}
+
+#[tokio::test]
+async fn test_deposit_amount_exceeds_u128() {
+    let tb = TestBridge::setup().await;
+
+    // Manually construct 224-byte event data with U256::MAX in the amount slot
+    let mut event_data = Vec::with_capacity(224);
+    event_data.extend_from_slice(&U256::from(tb.source_chain_id).to_be_bytes::<32>());
+    event_data.extend_from_slice(tb.target_chain_b256.as_slice());
+    event_data.extend_from_slice(B256::ZERO.as_slice()); // target_application_id
+    event_data.extend_from_slice(tb.target_owner_b256.as_slice());
+    event_data.extend_from_slice(&[0u8; 12]); // address padding
+    event_data.extend_from_slice(tb.token.as_slice());
+    event_data.extend_from_slice(&U256::MAX.to_be_bytes::<32>()); // amount overflows u128
+    event_data.extend_from_slice(&U256::from(0u64).to_be_bytes::<32>()); // nonce
+
+    let depositor = Address::from([0xDD; 20]);
+    let mut depositor_topic = [0u8; 32];
+    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
+
+    let log = ReceiptLog {
+        address: tb.bridge_contract,
+        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
+        data: event_data,
+    };
+    let (block_header_rlp, receipt_rlp, proof_nodes, tx_index, log_index) =
+        tb.build_deposit_with_logs(&[log]);
+
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp,
+                    receipt_rlp,
+                    proof_nodes,
+                    tx_index,
+                    log_index,
+                },
+            );
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "deposit amount exceeding u128 should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn test_replay_different_log_index_succeeds() {
+    let tb = TestBridge::setup().await;
+
+    // Build receipt with two valid deposit logs (different nonces)
+    let log0 = tb.build_valid_log(0);
+    let log1 = tb.build_valid_log(1);
+    let (block_header_rlp, receipt_rlp, proof_nodes, tx_index, _) =
+        tb.build_deposit_with_logs(&[log0, log1]);
+
+    // Process log_index: 0
+    tb.chain
+        .add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp: block_header_rlp.clone(),
+                    receipt_rlp: receipt_rlp.clone(),
+                    proof_nodes: proof_nodes.clone(),
                     tx_index,
                     log_index: 0,
                 },
@@ -191,5 +529,30 @@ async fn test_process_deposit() {
         })
         .await;
 
-    assert!(result.is_err(), "invalid proof should be rejected");
+    assert_eq!(
+        query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
+        Some(Amount::from_attos(1_000_000u128)),
+    );
+
+    // Process log_index: 1 — should also succeed (different DepositKey)
+    tb.chain
+        .add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp: block_header,
+                    receipt_rlp,
+                    proof_nodes,
+                    tx_index,
+                    log_index: 1,
+                },
+            );
+        })
+        .await;
+
+    // Both deposits should have been minted
+    assert_eq!(
+        query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
+        Some(Amount::from_attos(2_000_000u128)),
+    );
 }
