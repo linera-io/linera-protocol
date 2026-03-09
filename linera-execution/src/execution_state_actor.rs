@@ -22,7 +22,7 @@ use linera_base::{
 use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
-use tracing::{info_span, instrument, Instrument as _};
+use tracing::{info, info_span, instrument, Instrument as _};
 
 use crate::{
     execution::UserAction,
@@ -563,6 +563,10 @@ where
                 subscriber_app_id,
                 callback,
             } => {
+                info!(
+                    %chain_id, ?stream_id, %subscriber_app_id,
+                    "SubscribeToEvents: adding event subscription in execution state"
+                );
                 let subscriptions = self
                     .state
                     .system

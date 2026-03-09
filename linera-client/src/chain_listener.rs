@@ -534,6 +534,13 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .into_iter()
             .map(|(chain_id, streams)| (chain_id, ListeningMode::EventsOnly(streams)))
             .collect();
+        if !publishing_chains.is_empty() {
+            info!(
+                %chain_id,
+                ?publishing_chains,
+                "update_event_subscriptions: discovered subscriptions"
+            );
+        }
         for publisher_id in publishing_chains.keys() {
             self.event_subscribers
                 .entry(*publisher_id)
