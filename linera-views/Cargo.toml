@@ -24,9 +24,8 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 [features]
 metrics = ["dep:hex", "linera-base/metrics", "linera-views-derive/metrics"]
 test = ["tokio/macros"]
-web = ["linera-base/web", "gloo-utils"]
 indexeddb = ["indexed-db", "wasm-bindgen"]
-web-default = ["web", "indexeddb"]
+web-default = ["indexeddb"]
 
 dynamodb = ["aws-config", "aws-sdk-dynamodb", "aws-smithy-types"]
 scylladb = ["scylla"]
@@ -65,13 +64,13 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 tracing.workspace = true
 trait-variant.workspace = true
 
-[target.wasm32-unknown-unknown.dependencies]
-gloo-utils = { workspace = true, optional = true }
+[target.'cfg(target_os = "web")'.dependencies]
+gloo-utils.workspace = true
 indexed-db = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, features = ["console"] }
 
-[target.wasm32-unknown-unknown.dev-dependencies]
+[target.'cfg(target_os = "web")'.dev-dependencies]
 wasm-bindgen-test.workspace = true
 
 [dev-dependencies]

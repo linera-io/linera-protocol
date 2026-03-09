@@ -36,35 +36,33 @@ features = ["ansi", "fmt", "std"]
 workspace = true
 
 [dependencies.linera-base]
-features = ["web"]
 workspace = true
 
 [dependencies.linera-client]
 default-features = false
-features = ["web", "wasmer", "indexed-db"]
+features = ["wasmer", "indexed-db"]
 workspace = true
 
 [dependencies.linera-core]
-features = ["web", "wasmer"]
+features = ["wasmer"]
 workspace = true
 
 [dependencies.linera-execution]
-features = ["web", "wasmer"]
+features = ["wasmer"]
 workspace = true
 
 [dependencies.linera-faucet-client]
 workspace = true
 
 [dependencies.linera-rpc]
-features = ["web"]
 workspace = true
 
 [dependencies.linera-storage]
-features = ["web", "wasmer"]
+features = ["wasmer"]
 workspace = true
 
 [dependencies.linera-views]
-features = ["web", "indexeddb"]
+features = ["indexeddb"]
 workspace = true
 
 [dependencies.web-sys]

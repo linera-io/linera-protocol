@@ -3,7 +3,7 @@
 
 fn main() {
     cfg_aliases::cfg_aliases! {
-        web: { all(target_arch = "wasm32", feature = "web") },
+        web: { target_os = "web" },
 
         with_fs: { all(not(target_arch = "wasm32"), feature = "fs") },
         with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },

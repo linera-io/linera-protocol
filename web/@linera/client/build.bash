@@ -26,10 +26,10 @@ else
     profile_dir=debug
 fi
 
-cargo build --lib --target wasm32-unknown-unknown $profile_flag
+cargo build --lib $profile_flag
 
 wasm-bindgen \
-    "$target_dir"/wasm32-unknown-unknown/$profile_dir/linera_web.wasm \
+    "$target_dir"/wasm32-unknown-js-web/$profile_dir/linera_web.wasm \
     --out-dir src/wasm \
     --out-name index \
     --typescript \

@@ -28,20 +28,8 @@ metrics = [
     "linera-rpc/metrics",
     "linera-views/metrics",
 ]
-web = [
-    "dep:web-sys",
-    "dep:wasm-bindgen-futures",
-    "linera-base/web",
-    "linera-execution/web",
-    "linera-chain/web",
-    "linera-client/web",
-    "linera-core/web",
-    "linera-rpc/web",
-    "linera-storage/web",
-    "linera-views/web",
-]
-indexed-db = ["web", "serde-wasm-bindgen", "gloo-utils"]
-web-default = ["web", "wasmer", "indexed-db"]
+indexed-db = ["serde-wasm-bindgen", "gloo-utils"]
+web-default = ["wasmer", "indexed-db"]
 
 [dependencies]
 anyhow.workspace = true
@@ -75,12 +63,12 @@ trait-variant.workspace = true
 tsify.workspace = true
 wasm-bindgen.workspace = true
 
-[target.wasm32-unknown-unknown.dependencies]
+[target.'cfg(target_os = "web")'.dependencies]
 flarch = { workspace = true, optional = true }
 gloo-utils = { workspace = true, optional = true }
 serde-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen-futures = { workspace = true, optional = true }
-web-sys = { workspace = true, optional = true }
+wasm-bindgen-futures.workspace = true
+web-sys.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 fs-err = { workspace = true, optional = true }
