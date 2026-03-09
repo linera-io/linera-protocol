@@ -1203,6 +1203,7 @@ where
     query_cache: Option<Arc<QueryResponseCache>>,
     query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
     cancellation_token: CancellationToken,
+    enable_memory_profiling: bool,
 }
 
 impl<C> Clone for NodeService<C>
@@ -1221,6 +1222,7 @@ where
             query_cache: self.query_cache.clone(),
             query_subscriptions: self.query_subscriptions.clone(),
             cancellation_token: self.cancellation_token.clone(),
+            enable_memory_profiling: self.enable_memory_profiling,
         }
     }
 }
@@ -1245,6 +1247,7 @@ where
         query_cache_size: Option<usize>,
         query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
         cancellation_token: CancellationToken,
+        enable_memory_profiling: bool,
     ) -> Self {
         let query_cache = query_cache_size.map(|size| Arc::new(QueryResponseCache::new(size)));
         Self {
@@ -1258,6 +1261,7 @@ where
             query_cache,
             query_subscriptions,
             cancellation_token,
+            enable_memory_profiling,
         }
     }
 
@@ -1307,7 +1311,12 @@ where
             axum::routing::get(util::graphiql).post(Self::application_handler);
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(self.metrics_address(), cancellation_token.clone());
+        monitoring_server::start_metrics_with_profiling(
+            self.metrics_address(),
+            cancellation_token.clone(),
+            self.enable_memory_profiling,
+        )
+        .await;
 
         let base_router = Router::new()
             .route("/", index_handler)
