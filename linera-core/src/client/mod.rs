@@ -1228,11 +1228,6 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), ChainClientError> {
         let (max_epoch, committees) = self.admin_committees().await?;
 
-        info!(
-            %sender_chain_id, %height, %hash, %local_next_block_height,
-            streams = subscribed_streams.len(),
-            "download_event_bearing_blocks: start"
-        );
         let mut certificates = BTreeMap::new();
         let mut blocks_to_fetch = BTreeSet::<_>::from([(height, hash)]);
         let next_expected_events = subscribed_streams
@@ -1248,24 +1243,12 @@ impl<Env: Environment> Client<Env> {
                     .map(|maybe_index| maybe_index.unwrap_or_default()),
             )
             .collect::<BTreeMap<_, _>>();
-        info!(
-            ?next_expected_events,
-            "download_event_bearing_blocks: initial expected event indices"
-        );
 
         while let Some((current_height, current_hash)) = blocks_to_fetch.pop_last() {
             if current_height < local_next_block_height {
-                info!(
-                    %current_height,
-                    "download_event_bearing_blocks: skipping block below local height"
-                );
                 continue; // Already executed locally.
             }
             if certificates.contains_key(&current_height) {
-                info!(
-                    %current_height,
-                    "download_event_bearing_blocks: skipping already-fetched block"
-                );
                 continue;
             }
 
@@ -1288,11 +1271,6 @@ impl<Env: Environment> Client<Env> {
                 certificate
             };
             let block = certificate.block();
-            info!(
-                %current_height, %current_hash,
-                previous_event_blocks = block.body.previous_event_blocks.len(),
-                "download_event_bearing_blocks: processing block"
-            );
             // Walk previous_event_blocks for subscribed streams.
             for stream_id in subscribed_streams {
                 if let Some((prev_hash, prev_height)) =
@@ -1307,20 +1285,9 @@ impl<Env: Environment> Client<Env> {
                             .find(|event| event.stream_id == *stream_id)
                             .is_some_and(|event| event.index == *index)
                     }) {
-                        info!(
-                            %current_height, ?stream_id,
-                            "download_event_bearing_blocks: stop walking, \
-                             found contiguous event for stream"
-                        );
                         continue;
                     }
                     if !certificates.contains_key(prev_height) {
-                        info!(
-                            %current_height, ?stream_id,
-                            prev_height = %prev_height, %prev_hash,
-                            "download_event_bearing_blocks: enqueuing \
-                             previous event-bearing block"
-                        );
                         blocks_to_fetch.insert((*prev_height, *prev_hash));
                     }
                 }
@@ -1329,12 +1296,6 @@ impl<Env: Environment> Client<Env> {
             certificates.insert(current_height, certificate);
         }
 
-        info!(
-            %sender_chain_id,
-            fetched = certificates.len(),
-            heights = ?certificates.keys().collect::<Vec<_>>(),
-            "download_event_bearing_blocks: done walking, processing certificates"
-        );
         // Process in ascending height order.
         for certificate in certificates.into_values() {
             self.receive_sender_certificate(
@@ -4294,13 +4255,6 @@ impl<Env: Environment> ChainClient<Env> {
             );
             return Ok(());
         }
-        info!(
-            chain_id = %self.chain_id,
-            sender = %notification.chain_id,
-            reason = ?std::mem::discriminant(&notification.reason),
-            listening_mode = ?self.listening_mode(),
-            "handle_notification: processing"
-        );
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
                 if self.local_next_height_to_receive(origin).await? > height {
