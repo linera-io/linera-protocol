@@ -383,7 +383,7 @@ where
     ) -> Result<(), std::io::Error> {
         let listener = TcpListener::bind(address).await?;
 
-        let mut accept_stream = stream::try_unfold(listener, |listener| async move {
+        let accept_stream = stream::try_unfold(listener, |listener| async move {
             let (socket, _) = listener.accept().await?;
             Ok::<_, io::Error>(Some((socket, listener)))
         });
