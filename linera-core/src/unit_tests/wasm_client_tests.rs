@@ -1013,8 +1013,8 @@ where
         .await?
         .with_policy(ResourceControlPolicy::no_fees());
 
-    let sender = builder.add_root_chain(0, Amount::ONE).await?;
-    let receiver = builder.add_root_chain(1, Amount::ONE).await?;
+    let sender = builder.add_root_chain(1, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(2, Amount::ONE).await?;
 
     let module_id = receiver.publish_wasm_example("social").await?;
     let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
@@ -1852,6 +1852,99 @@ where
         response: async_graphql::Response::new(async_graphql::Value::from_json(
             json!({"value": 5}),
         )?),
+        operations: vec![],
+    };
+    assert_eq!(outcome, expected);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_read_event_downloads_publisher_chain(
+    wasm_runtime: WasmRuntime,
+) -> anyhow::Result<()> {
+    run_test_read_event_downloads_publisher_chain(MemoryStorageBuilder::with_wasm_runtime(
+        wasm_runtime,
+    ))
+    .await
+}
+
+/// Tests that when a contract tries to read an event from a publisher chain that isn't
+/// locally available, the client automatically downloads the publisher chain and retries.
+async fn run_test_read_event_downloads_publisher_chain<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+
+    let sender = builder.add_root_chain(0, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(1, Amount::ONE).await?;
+
+    // Deploy the social app on the receiver chain.
+    let module_id = receiver.publish_wasm_example("social").await?;
+    let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
+    let (application_id, _cert) = receiver
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Subscribe the receiver to the sender's events.
+    let request_subscribe = social::Operation::Subscribe {
+        chain_id: sender.chain_id(),
+    };
+    receiver
+        .execute_operation(Operation::user(application_id, &request_subscribe)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Sender creates a post, which emits an event. Validators confirm this.
+    let post = social::Operation::Post {
+        text: "Hello from sender!".to_string(),
+        image_url: None,
+    };
+    sender
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Do NOT call receiver.synchronize_from_validators().
+    // Instead, directly execute an UpdateStreams operation that references the
+    // sender's event. The receiver doesn't have the sender's chain locally, so
+    // this will fail with EventsNotFound. Our retry logic should download the
+    // publisher chain and succeed.
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    receiver
+        .execute_operations(
+            vec![SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 1)]).into()],
+            vec![],
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Verify that the event was processed: query the received posts.
+    let query = Request::new("{ receivedPosts { keys { author, index } } }");
+    let outcome = receiver
+        .query_user_application(application_id, &query)
+        .await?;
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({
+                "receivedPosts": {
+                    "keys": [
+                        { "author": sender.chain_id, "index": 0 }
+                    ]
+                }
+            }))
+            .unwrap(),
+        ),
         operations: vec![],
     };
     assert_eq!(outcome, expected);

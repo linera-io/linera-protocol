@@ -4,7 +4,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     sync::{Arc, RwLock},
@@ -191,12 +191,14 @@ impl ListeningMode {
     /// mode.
     pub fn is_relevant(&self, reason: &Reason) -> bool {
         match (reason, self) {
+            (Reason::NewEvents { .. }, ListeningMode::FollowChain | ListeningMode::FullChain) => {
+                false
+            }
             // FullChain processes everything.
             (_, ListeningMode::FullChain) => true,
             // FollowChain processes new blocks on the chain itself, including blocks that
             // produced events.
             (Reason::NewBlock { .. }, ListeningMode::FollowChain) => true,
-            (Reason::NewEvents { .. }, ListeningMode::FollowChain) => true,
             (_, ListeningMode::FollowChain) => false,
             // EventsOnly only processes events from relevant streams.
             // Accept both NewEvents and NewBlock (for old validators that don't emit
@@ -453,26 +455,16 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let mut validators = self.validator_nodes().await?;
-        // Sequentially try each validator in random order.
-        validators.shuffle(&mut rand::thread_rng());
+        let validators = self.validator_nodes().await?;
         let mut info = Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
-        for remote_node in validators {
-            if target_next_block_height <= info.next_block_height {
-                return Ok(info);
-            }
-            match self
-                .download_certificates_from(&remote_node, chain_id, target_next_block_height)
-                .await
-            {
-                Err(error) => info!(
-                    remote_node = remote_node.address(),
-                    %error,
-                    "failed to download certificates from validator",
-                ),
-                Ok(Some(new_info)) => info = new_info,
-                Ok(None) => {}
-            }
+        if target_next_block_height <= info.next_block_height {
+            return Ok(info);
+        }
+        if let Some(new_info) = self
+            .download_certificates_using_all(&validators, chain_id, target_next_block_height)
+            .await?
+        {
+            info = new_info;
         }
         ensure!(
             target_next_block_height <= info.next_block_height,
@@ -533,6 +525,105 @@ impl<Env: Environment> Client<Env> {
         Ok(last_info)
     }
 
+    /// Downloads and processes certificates up to `stop`, using all validators with
+    /// staggered concurrent requests for each batch. First loads locally available
+    /// certificates from storage, then downloads the rest.
+    #[instrument(level = "trace", skip_all)]
+    async fn download_certificates_using_all(
+        &self,
+        validators: &[RemoteNode<Env::ValidatorNode>],
+        chain_id: ChainId,
+        stop: BlockHeight,
+    ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
+        let mut last_info = None;
+        // First load any blocks from local storage, if available.
+        let chain_info = self.local_node.chain_info(chain_id).await?;
+        let mut next_height = chain_info.next_block_height;
+        let hashes = self
+            .local_node
+            .get_preprocessed_block_hashes(chain_id, next_height, stop)
+            .await?;
+        let certificates = self.storage_client().read_certificates(&hashes).await?;
+        let certificates = match ResultReadCertificates::new(certificates, hashes) {
+            ResultReadCertificates::Certificates(certificates) => certificates,
+            ResultReadCertificates::InvalidHashes(hashes) => {
+                return Err(ChainClientError::ReadCertificatesError(hashes))
+            }
+        };
+        for certificate in certificates {
+            last_info = Some(self.handle_certificate(certificate).await?.info);
+        }
+        // Download remaining batches using all validators with staggered fallback.
+        while next_height < stop {
+            let limit = u64::from(stop)
+                .checked_sub(u64::from(next_height))
+                .ok_or(ArithmeticError::Overflow)?
+                .min(self.options.certificate_download_batch_size);
+            let certificates = self
+                .requests_scheduler
+                .download_certificates_from_validators(
+                    validators,
+                    chain_id,
+                    next_height,
+                    limit,
+                    self.options.certificate_batch_download_timeout,
+                )
+                .await?;
+            let Some(info) = self
+                .process_certificates_using_all(validators, certificates)
+                .await?
+            else {
+                break;
+            };
+            assert!(info.next_block_height > next_height);
+            next_height = info.next_block_height;
+            last_info = Some(info);
+        }
+        Ok(last_info)
+    }
+
+    /// Processes certificates, downloading missing blobs from any of the given validators.
+    #[instrument(level = "trace", skip_all)]
+    async fn process_certificates_using_all(
+        &self,
+        validators: &[RemoteNode<Env::ValidatorNode>],
+        certificates: Vec<ConfirmedBlockCertificate>,
+    ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
+        let mut info = None;
+        let required_blob_ids: Vec<_> = certificates
+            .iter()
+            .flat_map(|certificate| certificate.value().required_blob_ids())
+            .collect();
+
+        match self
+            .local_node
+            .read_blob_states_from_storage(&required_blob_ids)
+            .await
+        {
+            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                self.download_blobs(validators, &blob_ids).await?;
+            }
+            x => {
+                x?;
+            }
+        }
+
+        for certificate in certificates {
+            info = Some(
+                match self.handle_certificate(certificate.clone()).await {
+                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                        self.download_blobs(validators, &blob_ids).await?;
+                        self.handle_certificate(certificate).await?
+                    }
+                    x => x?,
+                }
+                .info,
+            );
+        }
+
+        Ok(info)
+    }
+
     async fn download_blobs(
         &self,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
@@ -546,6 +637,88 @@ impl<Env: Environment> Client<Env> {
                 ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(blob_ids.to_vec()))
             })?;
         self.local_node.store_blobs(blobs).await.map_err(Into::into)
+    }
+
+    /// Downloads publisher chain certificates starting from height 0 until all the
+    /// given events are locally available. For each unique publisher chain referenced
+    /// in the event IDs, certificates are downloaded in batches and after each batch
+    /// we check whether the missing events have been found, stopping early.
+    #[instrument(level = "trace", skip_all)]
+    async fn download_publisher_chains_for_events(
+        &self,
+        event_ids: &[EventId],
+    ) -> Result<(), ChainClientError> {
+        // Group events by publisher chain.
+        let mut events_by_chain: BTreeMap<ChainId, Vec<EventId>> = BTreeMap::new();
+        for event_id in event_ids {
+            events_by_chain
+                .entry(event_id.chain_id)
+                .or_default()
+                .push(event_id.clone());
+        }
+        for (chain_id, chain_event_ids) in events_by_chain {
+            self.download_chain_until_events_found(chain_id, &chain_event_ids)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Downloads certificates for `chain_id` one at a time, stopping as soon as all
+    /// requested events are locally available or all validators fail to provide the
+    /// next height (i.e. the chain is exhausted).
+    /// Uses all validators with staggered concurrent requests for each height.
+    #[instrument(level = "trace", skip_all, fields(chain_id, num_events = event_ids.len()))]
+    async fn download_chain_until_events_found(
+        &self,
+        chain_id: ChainId,
+        event_ids: &[EventId],
+    ) -> Result<(), ChainClientError> {
+        let validators = self.validator_nodes().await?;
+        let info = Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
+        let mut next_height = info.next_block_height;
+        // Download one certificate at a time so we never overshoot the chain length.
+        loop {
+            let result = self
+                .requests_scheduler
+                .download_certificates_from_validators(
+                    &validators,
+                    chain_id,
+                    next_height,
+                    1,
+                    self.options.certificate_batch_download_timeout,
+                )
+                .await;
+            let certificates = match result {
+                Ok(certificates) => certificates,
+                Err(_) => break, // No validator has a certificate at this height.
+            };
+            let Some(batch_info) = self
+                .process_certificates_using_all(&validators, certificates)
+                .await?
+            else {
+                break;
+            };
+            assert!(batch_info.next_block_height > next_height);
+            next_height = batch_info.next_block_height;
+            if self.has_all_events(event_ids).await? {
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns `true` if all the given events exist in local storage.
+    async fn has_all_events(&self, event_ids: &[EventId]) -> Result<bool, ChainClientError> {
+        for event_id in event_ids {
+            if !self
+                .storage_client()
+                .contains_event(event_id.clone())
+                .await?
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     /// Tries to process all the certificates, requesting any missing blobs from the given node.
@@ -598,9 +771,37 @@ impl<Env: Environment> Client<Env> {
         &self,
         certificate: GenericCertificate<T>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        self.local_node
+        let chain_id = certificate.inner().chain_id();
+        let response = self
+            .local_node
             .handle_certificate(certificate, &self.notifier)
-            .await
+            .await?;
+        if self.is_tracked(chain_id) {
+            self.update_publisher_chain_modes(chain_id).await?;
+        }
+        Ok(response)
+    }
+
+    /// Registers publisher chains in `EventsOnly` listening mode based on the event
+    /// subscriptions of the given chain.
+    async fn update_publisher_chain_modes(&self, chain_id: ChainId) -> Result<(), LocalNodeError> {
+        let subscriptions = self.local_node.get_event_subscriptions(chain_id).await?;
+        let mut publishers = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
+        for ((publisher_id, stream_name), _) in subscriptions {
+            publishers
+                .entry(publisher_id)
+                .or_default()
+                .insert(stream_name);
+        }
+        if chain_id != self.admin_chain_id {
+            publishers.entry(self.admin_chain_id).or_default();
+        }
+        for (publisher_id, streams) in publishers {
+            if publisher_id != chain_id {
+                self.extend_chain_mode(publisher_id, ListeningMode::EventsOnly(streams));
+            }
+        }
+        Ok(())
     }
 
     async fn chain_info_with_committees(
@@ -1643,6 +1844,7 @@ impl<Env: Environment> Client<Env> {
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+        let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self
                 .local_node
@@ -1658,6 +1860,20 @@ impl<Env: Environment> Client<Env> {
                 self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
                     .await?;
                 continue; // We found the missing blob: retry.
+            }
+            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
+                let new_events: Vec<_> = event_ids
+                    .iter()
+                    .filter(|id| !downloaded_events.contains(id))
+                    .cloned()
+                    .collect();
+                if !new_events.is_empty() {
+                    self.download_publisher_chains_for_events(&new_events)
+                        .await?;
+                    downloaded_events.extend(new_events);
+                    continue; // We downloaded new publisher chain data: retry.
+                }
+                // All reported events were already downloaded; don't loop forever.
             }
             if let Ok((_, executed_block, _, _)) = &result {
                 let hash = CryptoHash::new(executed_block);
@@ -1675,8 +1891,8 @@ impl<Env: Environment> Client<Env> {
         }
     }
 
-    /// Attempts to execute the block locally. If any attempt to read a blob fails, the blob is
-    /// downloaded and execution is retried.
+    /// Attempts to execute the block locally. If any attempt to read a blob or event fails,
+    /// the missing data is downloaded and execution is retried.
     #[instrument(level = "trace", skip(self, block))]
     async fn stage_block_execution(
         &self,
@@ -1684,6 +1900,7 @@ impl<Env: Environment> Client<Env> {
         round: Option<u32>,
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+        let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self
                 .local_node
@@ -1694,6 +1911,20 @@ impl<Env: Environment> Client<Env> {
                 self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
                     .await?;
                 continue; // We found the missing blob: retry.
+            }
+            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
+                let new_events: Vec<_> = event_ids
+                    .iter()
+                    .filter(|id| !downloaded_events.contains(id))
+                    .cloned()
+                    .collect();
+                if !new_events.is_empty() {
+                    self.download_publisher_chains_for_events(&new_events)
+                        .await?;
+                    downloaded_events.extend(new_events);
+                    continue; // We downloaded new publisher chain data: retry.
+                }
+                // All reported events were already downloaded; don't loop forever.
             }
             if let Ok((block, _, _)) = &result {
                 let hash = CryptoHash::new(block);
@@ -2465,12 +2696,12 @@ impl<Env: Environment> ChainClient<Env> {
             .local_node
             .get_event_subscriptions(self.chain_id)
             .await?;
-        let chain_ids = subscriptions
+        let chain_ids: BTreeSet<_> = subscriptions
             .iter()
             .map(|((chain_id, _), _)| *chain_id)
             .chain(iter::once(self.client.admin_chain_id))
             .filter(|chain_id| *chain_id != self.chain_id)
-            .collect::<BTreeSet<_>>();
+            .collect();
         stream::iter(
             chain_ids
                 .into_iter()
@@ -4242,14 +4473,15 @@ impl<Env: Environment> ChainClient<Env> {
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) -> Result<(), ChainClientError> {
-        let dominated = self
-            .listening_mode()
+        let mode = self.client.chain_mode(notification.chain_id);
+        let dominated = mode
+            .as_ref()
             .is_none_or(|mode| !mode.is_relevant(&notification.reason));
         if dominated {
             debug!(
-                chain_id = %self.chain_id,
+                chain_id = %notification.chain_id,
                 reason = ?notification.reason,
-                listening_mode = ?self.listening_mode(),
+                listening_mode = ?mode,
                 "Ignoring notification due to listening mode"
             );
             return Ok(());
@@ -4298,7 +4530,9 @@ impl<Env: Environment> ChainClient<Env> {
                 // In EventsOnly mode, download only event-bearing blocks sparsely
                 // instead of doing a full sync. This also handles old validators
                 // that emit NewBlock but not NewEvents.
-                if let Some(ListeningMode::EventsOnly(subscribed)) = self.listening_mode() {
+                if let Some(ListeningMode::EventsOnly(subscribed)) =
+                    self.client.chain_mode(chain_id)
+                {
                     if !event_streams.is_empty() {
                         self.client
                             .download_event_bearing_blocks(
@@ -4324,12 +4558,7 @@ impl<Env: Environment> ChainClient<Env> {
                     }
                 }
             }
-            Reason::NewEvents {
-                height,
-                hash,
-                event_streams,
-                ..
-            } => {
+            Reason::NewEvents { height, hash, .. } => {
                 let chain_id = notification.chain_id;
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -4341,11 +4570,9 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                // Use the subscribed streams from EventsOnly mode, or fall back
-                // to the streams from the notification itself.
-                let subscribed = match self.listening_mode() {
+                let subscribed = match self.client.chain_mode(chain_id) {
                     Some(ListeningMode::EventsOnly(streams)) => streams,
-                    _ => event_streams,
+                    _ => return Ok(()),
                 };
                 self.client
                     .download_event_bearing_blocks(
