@@ -2692,28 +2692,94 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Synchronizes all chains that any application on this chain subscribes to.
     /// We always consider the admin chain a relevant publishing chain, for new epochs.
+    /// For event publisher chains, only event-bearing blocks are downloaded (partial sync).
     async fn synchronize_publisher_chains(&self) -> Result<(), ChainClientError> {
         let subscriptions = self
             .client
             .local_node
             .get_event_subscriptions(self.chain_id)
             .await?;
-        let chain_ids: BTreeSet<_> = subscriptions
-            .iter()
-            .map(|((chain_id, _), _)| *chain_id)
-            .chain(iter::once(self.client.admin_chain_id))
-            .filter(|chain_id| *chain_id != self.chain_id)
+        // Group subscribed streams by publisher chain.
+        let mut streams_by_chain: BTreeMap<ChainId, BTreeSet<StreamId>> = BTreeMap::new();
+        for ((chain_id, stream_id), _) in &subscriptions {
+            if *chain_id != self.chain_id {
+                streams_by_chain
+                    .entry(*chain_id)
+                    .or_default()
+                    .insert(stream_id.clone());
+            }
+        }
+        // Always fully sync the admin chain for epoch changes.
+        let admin_chain_id = self.client.admin_chain_id;
+        if admin_chain_id != self.chain_id {
+            self.client.synchronize_chain_state(admin_chain_id).await?;
+        }
+        // For event publisher chains, do a partial sync using previous_event_blocks.
+        let (_, committee) = self.admin_committee().await?;
+        let nodes = self.client.make_nodes(&committee)?;
+        let tasks: Vec<_> = streams_by_chain
+            .into_iter()
+            .filter(|(chain_id, _)| *chain_id != admin_chain_id)
+            .map(|(chain_id, stream_ids)| {
+                self.sync_publisher_chain_events(chain_id, stream_ids, &nodes)
+            })
             .collect();
-        stream::iter(
-            chain_ids
-                .into_iter()
-                .map(|chain_id| self.client.synchronize_chain_state(chain_id)),
-        )
-        .buffer_unordered(self.options.max_joined_tasks)
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?;
+        stream::iter(tasks)
+            .buffer_unordered(self.options.max_joined_tasks)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(())
+    }
+
+    /// Downloads only event-bearing blocks for the given publisher chain and streams.
+    async fn sync_publisher_chain_events(
+        &self,
+        publisher_chain_id: ChainId,
+        stream_ids: BTreeSet<StreamId>,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
+    ) -> Result<(), ChainClientError> {
+        let stream_ids_vec: Vec<_> = stream_ids.iter().cloned().collect();
+        // Try each validator until one succeeds.
+        let mut previous_blocks = None;
+        for remote_node in nodes {
+            if let Ok(result) = remote_node
+                .node
+                .previous_event_blocks(publisher_chain_id, stream_ids_vec.clone())
+                .await
+            {
+                previous_blocks = Some(result);
+                break;
+            }
+        }
+        let Some(previous_blocks) = previous_blocks else {
+            return Ok(());
+        };
+        if previous_blocks.is_empty() {
+            return Ok(());
+        }
+        let initial_blocks: BTreeSet<_> = previous_blocks
+            .into_values()
+            .map(|(hash, height)| (height, hash))
+            .collect();
+        let local_height = self
+            .client
+            .local_node
+            .chain_state_view(publisher_chain_id)
+            .await
+            .map(|view| view.tip_state.get().next_block_height)
+            .unwrap_or(BlockHeight::ZERO);
+        let remote_node = &nodes[0];
+        self.client
+            .download_event_bearing_blocks(
+                publisher_chain_id,
+                initial_blocks,
+                local_height,
+                &stream_ids,
+                remote_node,
+            )
+            .await?;
         Ok(())
     }
 
