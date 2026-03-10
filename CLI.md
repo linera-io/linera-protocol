@@ -10,6 +10,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
 * [`linera show-ownership`↴](#linera-show-ownership)
 * [`linera change-ownership`↴](#linera-change-ownership)
+* [`linera change-super-ownership`↴](#linera-change-super-ownership)
 * [`linera set-preferred-owner`↴](#linera-set-preferred-owner)
 * [`linera change-application-permissions`↴](#linera-change-application-permissions)
 * [`linera close-chain`↴](#linera-close-chain)
@@ -88,7 +89,8 @@ Client implementation and command-line tool for the Linera blockchain
 * `open-chain` — Open (i.e. activate) a new chain deriving the UID from an existing one
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `show-ownership` — Display who owns the chain, and how the owners work together proposing blocks
-* `change-ownership` — Change who owns the chain, and how the owners work together proposing blocks
+* `change-ownership` — Change the regular owners of the chain
+* `change-super-ownership` — Change the super owners of the chain
 * `set-preferred-owner` — Change the preferred owner of a chain
 * `change-application-permissions` — Changes the application permissions configuration
 * `close-chain` — Close an existing chain
@@ -347,24 +349,38 @@ Display who owns the chain, and how the owners work together proposing blocks
 
 ## `linera change-ownership`
 
-Change who owns the chain, and how the owners work together proposing blocks.
+Change the regular owners of the chain.
 
-Specify the complete set of new owners, by public key. Existing owners that are not included will be removed.
+Any owner can use this command. Specify the complete set of new regular owners, by public key. Existing regular owners that are not included will be removed.
 
 **Usage:** `linera change-ownership [OPTIONS]`
 
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
-* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the option leaves the current set of super owners unchanged
 * `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the option leaves the current set of owners unchanged
 * `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the option leaves the current setting unchanged
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
-* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
 * `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the option leaves the current setting unchanged
 * `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the option leaves the current setting unchanged
 * `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the option leaves the current setting unchanged
+
+
+
+## `linera change-super-ownership`
+
+Change the super owners of the chain.
+
+Only a super owner can use this command. Specify the complete set of new super owners, by public key. Existing super owners that are not included will be removed.
+
+**Usage:** `linera change-super-ownership [OPTIONS]`
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — The ID of the chain whose super owners will be changed
+* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners
+* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
 
 
 

@@ -609,7 +609,7 @@ impl<Env: Environment> ClientContext<Env> {
                 async move {
                     let tc = &ownership.timeout_config;
                     chain_client
-                        .execute_operation(SystemOperation::ChangeOwners {
+                        .execute_operation(linera_execution::SystemOperation::ChangeOwners {
                             owners: ownership.owners.into_iter().collect(),
                             first_leader: ownership.first_leader,
                             multi_leader_rounds: ownership.multi_leader_rounds,
@@ -653,7 +653,7 @@ impl<Env: Environment> ClientContext<Env> {
                 async move {
                     let tc = &ownership.timeout_config;
                     chain_client
-                        .execute_operation(SystemOperation::ChangeSuperOwners {
+                        .execute_operation(linera_execution::SystemOperation::ChangeSuperOwners {
                             super_owners: ownership.super_owners.into_iter().collect(),
                             fast_round_duration: tc.fast_round_duration,
                         })

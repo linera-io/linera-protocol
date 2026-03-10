@@ -3617,7 +3617,7 @@ where
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     // Chain with only a regular owner (no super owners).
-    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
 
     // Trying to add super owners should fail because the chain has none.
     let result = client
@@ -3643,7 +3643,7 @@ where
     let new_super_owner_key = signer.generate_new();
     let new_super_owner = AccountOwner::from(new_super_owner_key);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let mut sender = builder
+    let sender = builder
         .add_root_super_owner_chain(1, Amount::from_tokens(4))
         .await?;
     let old_super_owner = sender.identity().await?;
@@ -3678,7 +3678,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let regular_owner = AccountOwner::from(signer.generate_new());
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let mut sender = builder
+    let sender = builder
         .add_root_super_owner_chain(1, Amount::from_tokens(4))
         .await?;
     let super_owner = sender.identity().await?;
