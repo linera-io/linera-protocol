@@ -166,7 +166,10 @@ impl RocksDbStoreExecutor {
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
-    fn get_find_prefix_iterator(&self, prefix: &[u8]) -> rocksdb::DBRawIteratorWithThreadMode<'_, DB> {
+    fn get_find_prefix_iterator(
+        &self,
+        prefix: &[u8],
+    ) -> rocksdb::DBRawIteratorWithThreadMode<'_, DB> {
         // Configure ReadOptions optimized for SSDs and iterator performance
         let mut read_opts = rocksdb::ReadOptions::default();
         // Enable async I/O for better concurrency

@@ -454,7 +454,7 @@ where
         key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
         blobs: BTreeMap<BlobId, Blob>,
-    ) -> Result<Option<ValidatedOrConfirmedVote>, ChainError> {
+    ) -> Result<Option<ValidatedOrConfirmedVote<'_>>, ChainError> {
         let round = proposal.content.round;
 
         match &proposal.original_proposal {
