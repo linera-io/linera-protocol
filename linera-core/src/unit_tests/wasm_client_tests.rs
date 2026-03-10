@@ -1112,6 +1112,53 @@ where
             .await?
     );
 
+    // Now test synchronize_publisher_chains: a second receiver subscribes after events
+    // already exist, and gets them via partial sync (not full chain download).
+    let receiver2 = builder.add_root_chain(3, Amount::ONE).await?;
+
+    // Subscribe to the sender's events using the same application as the first receiver.
+    let request_subscribe2 = social::Operation::Subscribe {
+        chain_id: sender.chain_id(),
+    };
+    receiver2
+        .execute_operation(Operation::user(application_id, &request_subscribe2)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Verify receiver2 doesn't have the sender's blocks yet.
+    assert!(
+        !receiver2
+            .storage_client()
+            .contains_certificate(cert0.hash())
+            .await?
+    );
+
+    // synchronize_from_validators calls synchronize_publisher_chains, which should
+    // do a partial sync: only download event-bearing blocks from the sender.
+    receiver2.synchronize_from_validators().await.unwrap();
+
+    // Event-bearing blocks should be downloaded.
+    assert!(
+        receiver2
+            .storage_client()
+            .contains_certificate(cert0.hash())
+            .await?
+    );
+    // Non-event block should NOT be downloaded (partial sync).
+    assert!(
+        !receiver2
+            .storage_client()
+            .contains_certificate(cert1.hash())
+            .await?
+    );
+    // Latest event-bearing block should be downloaded.
+    assert!(
+        receiver2
+            .storage_client()
+            .contains_certificate(cert2.hash())
+            .await?
+    );
+
     Ok(())
 }
 
