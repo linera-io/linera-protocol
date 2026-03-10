@@ -1284,6 +1284,12 @@ impl ClientWrapper {
     ) -> Result<(PathBuf, PathBuf)> {
         Command::new("cargo")
             .current_dir(path)
+            // Clear these so that the examples' `.cargo/config.toml` (which sets
+            // `-Zunstable-options` via rustflags) and `rust-toolchain.toml` (which
+            // selects nightly) take effect. Both are required for `build-std` and
+            // the custom `wasm32-linera-chain` JSON target spec.
+            .env_remove("RUSTFLAGS")
+            .env_remove("RUSTUP_TOOLCHAIN")
             .arg("build")
             .arg("--release")
             .args(["--target", "wasm32-linera-chain"])
