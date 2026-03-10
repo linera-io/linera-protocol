@@ -430,12 +430,12 @@ message BlockHeight {
 // Request for previous event blocks.
 message PreviousEventBlocksRequest {
   ChainId chain_id = 1;
-  // bincode-encoded Vec<StreamId>
+  // bincode-encoded `Vec<StreamId>`
   bytes stream_ids = 2;
 }
 
 // Response for previous event blocks.
 message PreviousEventBlocksResponse {
-  // bincode-encoded BTreeMap<StreamId, (BlockHeight, CryptoHash)>
+  // bincode-encoded `BTreeMap<StreamId, (BlockHeight, CryptoHash)>`
   bytes previous_event_blocks = 1;
 }
