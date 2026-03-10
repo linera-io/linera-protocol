@@ -178,12 +178,16 @@ impl ListeningMode {
     /// mode.
     pub fn is_relevant(&self, reason: &Reason) -> bool {
         match (reason, self) {
+            // NewEvents is only processed in EventsOnly mode, the other modes depend on
+            // the NewBlock notification.
+            (Reason::NewEvents { .. }, ListeningMode::FollowChain | ListeningMode::FullChain) => {
+                false
+            }
             // FullChain processes everything.
             (_, ListeningMode::FullChain) => true,
             // FollowChain processes new blocks on the chain itself, including blocks that
             // produced events.
             (Reason::NewBlock { .. }, ListeningMode::FollowChain) => true,
-            (Reason::NewEvents { .. }, ListeningMode::FollowChain) => true,
             (_, ListeningMode::FollowChain) => false,
             // EventsOnly only processes events from relevant streams.
             (Reason::NewEvents { event_streams, .. }, ListeningMode::EventsOnly(relevant)) => {

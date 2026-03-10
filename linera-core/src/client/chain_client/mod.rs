@@ -2587,20 +2587,17 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                // Only synchronize the chain state if the listening mode is not
-                // EventsOnly. In EventsOnly mode, we'll only react to the NewEvents
-                // notifications.
-                if !matches!(self.listening_mode(), Some(ListeningMode::EventsOnly(_))) {
-                    self.client
-                        .synchronize_chain_state_from(&remote_node, chain_id)
-                        .await?;
-                    if self
-                        .local_next_block_height(chain_id, &mut local_node)
-                        .await?
-                        <= height
-                    {
-                        error!("NewBlock: Fail to synchronize new block after notification");
-                    }
+                // The below will only happen in modes other than EventsOnly, as the
+                // NewBlock notification is only relevant to other modes.
+                self.client
+                    .synchronize_chain_state_from(&remote_node, chain_id)
+                    .await?;
+                if self
+                    .local_next_block_height(chain_id, &mut local_node)
+                    .await?
+                    <= height
+                {
+                    error!("NewBlock: Fail to synchronize new block after notification");
                 }
                 trace!(
                     chain_id = %self.chain_id,
@@ -2608,12 +2605,7 @@ impl<Env: Environment> ChainClient<Env> {
                     "NewBlock: processed notification",
                 );
             }
-            Reason::NewEvents {
-                height,
-                hash,
-                event_streams,
-                ..
-            } => {
+            Reason::NewEvents { height, hash, .. } => {
                 let chain_id = notification.chain_id;
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -2632,26 +2624,22 @@ impl<Env: Environment> ChainClient<Env> {
                 );
                 // Use the subscribed streams from EventsOnly mode to figure out which
                 // streams we are interested in.
-                // If the listening mode is not EventsOnly, we will process the
-                // certificate when we get the NewBlock notification about this block.
                 let relevant_streams = match self.listening_mode() {
-                    Some(ListeningMode::EventsOnly(subscribed)) => {
-                        subscribed.intersection(&event_streams).cloned().collect()
-                    }
-                    _ => BTreeSet::new(),
+                    Some(ListeningMode::EventsOnly(subscribed)) => subscribed,
+                    // other cases should be unreachable, as the NewEvents notification is
+                    // only relevant in the EventsOnly mode
+                    _ => unreachable!(),
                 };
-                if !relevant_streams.is_empty() {
-                    self.client
-                        .download_event_bearing_blocks(
-                            self.chain_id,
-                            height,
-                            hash,
-                            local_height,
-                            &relevant_streams,
-                            &remote_node,
-                        )
-                        .await?;
-                }
+                self.client
+                    .download_event_bearing_blocks(
+                        self.chain_id,
+                        height,
+                        hash,
+                        local_height,
+                        &relevant_streams,
+                        &remote_node,
+                    )
+                    .await?;
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
