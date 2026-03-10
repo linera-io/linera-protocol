@@ -793,7 +793,7 @@ where
 
     /// Tracks the size of a response produced by an oracle.
     pub(crate) fn track_service_oracle_response(
-        &mut self,
+        &self,
         response_bytes: usize,
     ) -> Result<(), ExecutionError> {
         ensure!(

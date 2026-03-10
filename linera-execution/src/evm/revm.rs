@@ -859,6 +859,7 @@ impl<Runtime> Clone for CallInterceptorContract<Runtime> {
 impl<'a, Runtime: ContractRuntime> Inspector<ContractCtx<'a, Runtime>>
     for CallInterceptorContract<Runtime>
 {
+    #[allow(clippy::needless_pass_by_ref_mut)]
     fn create(
         &mut self,
         context: &mut ContractCtx<'a, Runtime>,
@@ -868,6 +869,7 @@ impl<'a, Runtime: ContractRuntime> Inspector<ContractCtx<'a, Runtime>>
         map_result_create_outcome(&self.db.inner, result)
     }
 
+    #[allow(clippy::needless_pass_by_ref_mut)]
     fn call(
         &mut self,
         context: &mut ContractCtx<'a, Runtime>,
@@ -919,7 +921,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// There is no need for a separate blob for the service.
     fn publish_create_inputs(
         context: &mut ContractCtx<'_, Runtime>,
-        inputs: &mut CreateInputs,
+        inputs: &CreateInputs,
     ) -> Result<ModuleId, ExecutionError> {
         let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
         let service = linera_base::data_types::Bytecode::new(vec![]);
@@ -1074,9 +1076,9 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// However, the block is accepted completely or not at all.
     /// Therefore, we can ensure the atomicity of the operations.
     fn call_or_fail(
-        &mut self,
+        &self,
         _context: &mut ContractCtx<'_, Runtime>,
-        inputs: &mut CallInputs,
+        inputs: &CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let is_precompile = self.precompile_addresses.contains(&inputs.target_address);
         let is_first_call = inputs.target_address == self.contract_address;
@@ -1130,6 +1132,7 @@ impl<'a, Runtime: ServiceRuntime> Inspector<ServiceCtx<'a, Runtime>>
     for CallInterceptorService<Runtime>
 {
     /// See below on `fn create_or_fail`.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     fn create(
         &mut self,
         context: &mut ServiceCtx<'a, Runtime>,
@@ -1527,12 +1530,12 @@ where
         Ok(process_execution_result(result)?)
     }
 
-    fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
+    fn consume_fuel(&self, gas_final: u64) -> Result<(), ExecutionError> {
         let mut runtime = self.db.lock_runtime();
         runtime.consume_fuel(gas_final, VmRuntime::Evm)
     }
 
-    fn write_logs(&mut self, logs: &[Log], origin: &str) -> Result<(), ExecutionError> {
+    fn write_logs(&self, logs: &[Log], origin: &str) -> Result<(), ExecutionError> {
         // TODO(#3758): Extracting Ethereum events from the Linera events.
         if !logs.is_empty() {
             let mut runtime = self.db.lock_runtime();
