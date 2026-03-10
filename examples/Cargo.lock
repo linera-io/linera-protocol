@@ -4286,12 +4286,12 @@ dependencies = [
 [[package]]
 name = "linera-wasmer"
 version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+source = "git+https://github.com/linera-io/wasmer?branch=wasmer-types-indexmap2#7e3d9eba53439ecde8754a3d2e5b1c14e329b1a7"
 dependencies = [
  "bytes",
  "cfg-if",
  "derivative",
- "indexmap 1.9.3",
+ "indexmap 2.5.0",
  "js-sys",
  "linera-wasmer-compiler",
  "linera-wasmer-compiler-cranelift",
@@ -4315,7 +4315,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler"
 version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+source = "git+https://github.com/linera-io/wasmer?branch=wasmer-types-indexmap2#7e3d9eba53439ecde8754a3d2e5b1c14e329b1a7"
 dependencies = [
  "backtrace",
  "bytes",
@@ -4345,7 +4345,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
 version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+source = "git+https://github.com/linera-io/wasmer?branch=wasmer-types-indexmap2#7e3d9eba53439ecde8754a3d2e5b1c14e329b1a7"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -4363,7 +4363,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
 version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+source = "git+https://github.com/linera-io/wasmer?branch=wasmer-types-indexmap2#7e3d9eba53439ecde8754a3d2e5b1c14e329b1a7"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -4381,7 +4381,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-vm"
 version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+source = "git+https://github.com/linera-io/wasmer?branch=wasmer-types-indexmap2#7e3d9eba53439ecde8754a3d2e5b1c14e329b1a7"
 dependencies = [
  "backtrace",
  "cc",
@@ -4392,7 +4392,7 @@ dependencies = [
  "derivative",
  "enum-iterator",
  "fnv",
- "indexmap 1.9.3",
+ "indexmap 2.5.0",
  "lazy_static",
  "libc",
  "mach2",
@@ -5726,7 +5726,6 @@ dependencies = [
  "bytecheck",
  "bytes",
  "hashbrown 0.12.3",
- "indexmap 1.9.3",
  "ptr_meta",
  "rend",
  "rkyv_derive",
@@ -7526,16 +7525,15 @@ dependencies = [
 
 [[package]]
 name = "wasmer-types"
-version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fb32f0d231b591e4c8a65e81d4647fa3180496d71a123d4948dba8551bba9c2"
+version = "4.4.0-linera.7"
+source = "git+https://github.com/linera-io/wasmer?branch=wasmer-types-indexmap2#7e3d9eba53439ecde8754a3d2e5b1c14e329b1a7"
 dependencies = [
  "bytecheck",
  "enum-iterator",
  "enumset",
  "getrandom 0.2.15",
  "hex",
- "indexmap 1.9.3",
+ "indexmap 2.5.0",
  "more-asserts",
  "rkyv",
  "serde",

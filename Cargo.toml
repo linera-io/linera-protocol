@@ -285,8 +285,8 @@ wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "=0.4.50"
 wasm-bindgen-test = "0.3.42"
 wasm-instrument = { package = "linera-wasm-instrument", git = "https://github.com/linera-io/wasm-instrument", branch = "bulk-memory-support" }
-wasmer = { package = "linera-wasmer", git = "https://github.com/linera-io/wasmer", branch = "fix-rust-probestack", default-features = false }
-wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", git = "https://github.com/linera-io/wasmer", branch = "fix-rust-probestack", default-features = false, features = [
+wasmer = { package = "linera-wasmer", git = "https://github.com/linera-io/wasmer", branch = "wasmer-types-indexmap2", default-features = false }
+wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", git = "https://github.com/linera-io/wasmer", branch = "wasmer-types-indexmap2", default-features = false, features = [
     "std",
     "unwind",
     "avx",
