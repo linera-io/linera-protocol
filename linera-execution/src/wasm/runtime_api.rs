@@ -503,6 +503,23 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
+    /// balance) to `destination`, using the application ID at the given depth in the call stack
+    /// for authentication.
+    fn transfer_auth_depth(
+        caller: &mut Caller,
+        source: AccountOwner,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .transfer_auth_depth(source, destination, amount, auth_depth)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Claims an `amount` of native tokens from a `source` account to a `destination` account.
     fn claim(
         caller: &mut Caller,
@@ -514,6 +531,22 @@ where
             .user_data_mut()
             .runtime
             .claim(source, destination, amount)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Claims an `amount` of native tokens from a `source` account to a `destination` account,
+    /// using the application ID at the given depth in the call stack for authentication.
+    fn claim_auth_depth(
+        caller: &mut Caller,
+        source: Account,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .claim_auth_depth(source, destination, amount, auth_depth)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

@@ -1807,6 +1807,7 @@ dependencies = [
  "async-graphql",
  "fungible",
  "linera-sdk",
+ "native-fungible",
  "serde",
  "serde_json",
  "tokio",

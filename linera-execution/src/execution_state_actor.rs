@@ -199,7 +199,7 @@ where
                 let maybe_message = self
                     .state
                     .system
-                    .transfer(signer, Some(application_id), source, destination, amount)
+                    .transfer(signer, application_id, source, destination, amount)
                     .await?;
                 self.txn_tracker.add_outgoing_messages(maybe_message);
                 callback.respond(());
@@ -218,7 +218,7 @@ where
                     .system
                     .claim(
                         signer,
-                        Some(application_id),
+                        application_id,
                         source.owner,
                         source.chain_id,
                         destination,
@@ -1197,7 +1197,8 @@ pub enum ExecutionRequest {
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<AccountOwner>,
-        application_id: ApplicationId,
+        #[debug(skip_if = Option::is_none)]
+        application_id: Option<ApplicationId>,
         #[debug(skip)]
         callback: Sender<()>,
     },
@@ -1208,7 +1209,8 @@ pub enum ExecutionRequest {
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<AccountOwner>,
-        application_id: ApplicationId,
+        #[debug(skip_if = Option::is_none)]
+        application_id: Option<ApplicationId>,
         #[debug(skip)]
         callback: Sender<()>,
     },

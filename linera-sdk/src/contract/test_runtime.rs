@@ -584,6 +584,19 @@ where
             .expect("Account balance overflow");
     }
 
+    /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
+    /// balance) to `destination`, using the application ID at the given depth in the call stack
+    /// for authentication. In tests, this behaves the same as `transfer`.
+    pub fn transfer_auth_depth(
+        &mut self,
+        source: AccountOwner,
+        destination: Account,
+        amount: Amount,
+        _auth_depth: u32,
+    ) {
+        self.transfer(source, destination, amount)
+    }
+
     /// Returns the outgoing transfers scheduled during the test so far.
     pub fn outgoing_transfers(&self) -> &HashMap<Account, Amount> {
         &self.outgoing_transfers
@@ -604,6 +617,19 @@ where
             amount,
             destination,
         });
+    }
+
+    /// Claims an `amount` of native tokens from a `source` account to a `destination` account,
+    /// using the application ID at the given depth in the call stack for authentication.
+    /// In tests, this behaves the same as `claim`.
+    pub fn claim_auth_depth(
+        &mut self,
+        source: Account,
+        destination: Account,
+        amount: Amount,
+        _auth_depth: u32,
+    ) {
+        self.claim(source, destination, amount)
     }
 
     /// Returns the list of claims made during the test so far.

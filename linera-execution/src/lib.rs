@@ -961,12 +961,36 @@ pub trait ContractRuntime: BaseRuntime {
         amount: Amount,
     ) -> Result<(), ExecutionError>;
 
+    /// Transfers amount from source to destination, using the application ID at the
+    /// given depth in the call stack for authentication. Depth 0 is the immediate caller,
+    /// depth 1 is the caller before that, etc. If the depth exceeds the call stack size,
+    /// `None` is used as the authenticated application ID.
+    fn transfer_auth_depth(
+        &mut self,
+        source: AccountOwner,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
+    ) -> Result<(), ExecutionError>;
+
     /// Claims amount from source to destination.
     fn claim(
         &mut self,
         source: Account,
         destination: Account,
         amount: Amount,
+    ) -> Result<(), ExecutionError>;
+
+    /// Claims amount from source to destination, using the application ID at the
+    /// given depth in the call stack for authentication. Depth 0 is the immediate caller,
+    /// depth 1 is the caller before that, etc. If the depth exceeds the call stack size,
+    /// `None` is used as the authenticated application ID.
+    fn claim_auth_depth(
+        &mut self,
+        source: Account,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
     ) -> Result<(), ExecutionError>;
 
     /// Calls another application. Forwarded sessions will now be visible to

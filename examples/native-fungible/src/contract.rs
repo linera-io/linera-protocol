@@ -69,10 +69,6 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.runtime
-                    .check_account_permission(owner)
-                    .expect("Permission for Transfer operation");
-
                 let fungible_target_account = target_account;
                 let target_account = self.normalize_account(target_account);
 
@@ -83,7 +79,8 @@ impl Contract for NativeFungibleTokenContract {
                     amount
                 );
 
-                self.runtime.transfer(owner, target_account, amount);
+                self.runtime
+                    .transfer_auth_depth(owner, target_account, amount, 1);
 
                 self.transfer(fungible_target_account.chain_id);
                 FungibleResponse::Ok
@@ -98,17 +95,14 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.runtime
-                    .check_account_permission(source_account.owner)
-                    .expect("Permission for Claim operation");
-
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
 
                 let source_account = self.normalize_account(source_account);
                 let target_account = self.normalize_account(target_account);
 
-                self.runtime.claim(source_account, target_account, amount);
+                self.runtime
+                    .claim_auth_depth(source_account, target_account, amount, 1);
                 self.claim(
                     fungible_source_account.chain_id,
                     fungible_target_account.chain_id,
