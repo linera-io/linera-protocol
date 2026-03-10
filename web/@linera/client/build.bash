@@ -29,7 +29,7 @@ fi
 cargo build --lib $profile_flag
 
 wasm-bindgen \
-    "$target_dir"/wasm32-unknown-js-web/$profile_dir/linera_web.wasm \
+    "$target_dir"/wasm32-web-unknown/$profile_dir/linera_web.wasm \
     --out-dir src/wasm \
     --out-name index \
     --typescript \

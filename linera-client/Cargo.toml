@@ -63,7 +63,7 @@ trait-variant.workspace = true
 tsify.workspace = true
 wasm-bindgen.workspace = true
 
-[target.'cfg(target_os = "web")'.dependencies]
+[target.'cfg(target_env = "web")'.dependencies]
 flarch = { workspace = true, optional = true }
 gloo-utils = { workspace = true, optional = true }
 serde-wasm-bindgen = { workspace = true, optional = true }

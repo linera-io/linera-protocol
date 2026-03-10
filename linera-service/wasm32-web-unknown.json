@@ -25,7 +25,8 @@
     "tier": 2
   },
   "only-cdylib": true,
-  "os": "web",
+  "env": "web",
+  "os": "unknown",
   "panic-strategy": "abort",
   "pre-link-args": {
     "wasm-lld": [

@@ -64,13 +64,13 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 tracing.workspace = true
 trait-variant.workspace = true
 
-[target.'cfg(target_os = "web")'.dependencies]
+[target.'cfg(target_env = "web")'.dependencies]
 gloo-utils.workspace = true
 indexed-db = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, features = ["console"] }
 
-[target.'cfg(target_os = "web")'.dev-dependencies]
+[target.'cfg(target_env = "web")'.dev-dependencies]
 wasm-bindgen-test.workspace = true
 
 [dev-dependencies]

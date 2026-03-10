@@ -62,7 +62,7 @@ wasm-bindgen.workspace = true
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ruzstd.workspace = true
 
-[target.'cfg(target_os = "web")'.dependencies]
+[target.'cfg(target_env = "web")'.dependencies]
 clap.workspace = true
 getrandom = { workspace = true, features = ["js"] }
 linera-kywasmtime.workspace = true

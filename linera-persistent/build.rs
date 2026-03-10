@@ -3,7 +3,7 @@
 
 fn main() {
     cfg_aliases::cfg_aliases! {
-        web: { target_os = "web" },
+        web: { target_env = "web" },
         with_indexed_db: { all(web, feature = "indexed-db") },
     };
 }

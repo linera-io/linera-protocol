@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     cfg_aliases::cfg_aliases! {
         with_testing: { any(test, feature = "test") },
-        web: { target_os = "web" },
+        web: { target_env = "web" },
         with_metrics: { all(not(web), feature = "metrics") },
         with_server: { all(not(web), feature = "server") },
         with_simple_network: { all(not(web), feature = "simple-network") },

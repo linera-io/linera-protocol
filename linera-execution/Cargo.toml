@@ -101,7 +101,7 @@ wasmtime = { workspace = true, optional = true }
 web-thread-pool.workspace = true
 web-thread-select.workspace = true
 
-[target.'cfg(target_os = "web")'.dependencies]
+[target.'cfg(target_env = "web")'.dependencies]
 js-sys.workspace = true
 web-thread-select = { workspace = true, features = ["web"] }
 

@@ -2,8 +2,9 @@
 RUST_TARGET_PATH = { value = "../linera-service", relative = true }
 
 [build]
-target = "wasm32-unknown-js-web"
-rustflags = ["--cfg=web_sys_unstable_apis"]
+target = "wasm32-web-unknown"
+# -Zunstable-options is required for rustc to accept the custom target spec.
+rustflags = ["-Zunstable-options", "--cfg=web_sys_unstable_apis"]
 
 [unstable]
 build-std = ["panic_abort", "std"]
