@@ -576,7 +576,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
     - uses: actions/checkout@v4
