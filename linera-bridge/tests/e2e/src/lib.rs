@@ -151,6 +151,16 @@ pub async fn create_extra_wallet(
     .await;
 }
 
+/// Parse a "Deployed to: 0x..." address from `forge create` output.
+pub fn parse_deployed_address(output: &str) -> anyhow::Result<Address> {
+    for line in output.lines() {
+        if let Some(addr) = line.strip_prefix("Deployed to: ") {
+            return Ok(addr.trim().parse()?);
+        }
+    }
+    anyhow::bail!("Could not find 'Deployed to:' in forge output:\n{output}");
+}
+
 /// Starts docker compose stack with pre-cleanup of stale state.
 pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -> DockerCompose {
     let compose_file_str = compose_file

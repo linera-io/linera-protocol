@@ -4,7 +4,7 @@
 use alloy_sol_types::sol;
 
 /// Solidity source for the LightClient contract.
-pub const SOURCE: &str = include_str!("solidity/LightClient.sol");
+pub const SOURCE: &str = include_str!("../solidity/LightClient.sol");
 
 sol! {
     function addCommittee(

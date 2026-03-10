@@ -14,6 +14,11 @@ use clap::Parser;
 enum Cli {
     /// Query a Linera faucet and output LightClient constructor args for EVM deployment
     InitLightClient(InitLightClientOptions),
+    /// Generate a deposit proof for a given EVM transaction
+    GenerateDepositProof(GenerateDepositProofOptions),
+    /// Run the relay server (proof generation + chain inbox processing + EVM forwarding)
+    #[cfg(feature = "relay")]
+    Serve(ServeOptions),
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -27,15 +32,119 @@ struct InitLightClientOptions {
     output: PathBuf,
 }
 
+#[derive(clap::Args, Debug, Clone)]
+struct GenerateDepositProofOptions {
+    /// EVM JSON-RPC URL (e.g. https://mainnet.base.org)
+    #[arg(long)]
+    rpc_url: String,
+
+    /// Transaction hash containing the DepositInitiated event
+    #[arg(long)]
+    tx_hash: String,
+
+    /// Path to write the proof JSON file
+    #[arg(long, default_value = "deposit-proof.json")]
+    output: PathBuf,
+}
+
+#[cfg(feature = "relay")]
+#[derive(clap::Args, Debug, Clone)]
+struct ServeOptions {
+    /// EVM JSON-RPC URL (e.g. http://localhost:8545)
+    #[arg(long)]
+    rpc_url: String,
+
+    /// URL of the Linera faucet
+    #[arg(long)]
+    faucet_url: String,
+
+    /// Address of the FungibleBridge contract on EVM.
+    /// If omitted, reads from --bridge-address-file (polls until available).
+    #[arg(long)]
+    bridge_address: Option<String>,
+
+    /// File to read bridge address from (used when bridge is deployed after relay starts)
+    #[arg(long, default_value = "/shared/bridge-address")]
+    bridge_address_file: String,
+
+    /// File to read the evm-bridge ApplicationId from (written by setup script)
+    #[arg(long, default_value = "/shared/bridge-app-id")]
+    bridge_app_id_file: String,
+
+    /// File to read the wrapped-fungible ApplicationId from (written by setup script)
+    #[arg(long, default_value = "/shared/wrapped-app-id")]
+    fungible_app_id_file: String,
+
+    /// EVM private key for signing addBlock transactions
+    #[arg(long)]
+    evm_private_key: String,
+
+    /// Port to listen on for HTTP requests
+    #[arg(long, default_value = "3001")]
+    port: u16,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     match cli {
-        Cli::InitLightClient(options) => {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()?;
-            runtime.block_on(options.run())
-        }
+        Cli::InitLightClient(options) => runtime.block_on(options.run()),
+        Cli::GenerateDepositProof(options) => runtime.block_on(options.run()),
+        #[cfg(feature = "relay")]
+        Cli::Serve(options) => runtime.block_on(options.run()),
+    }
+}
+
+#[cfg(feature = "relay")]
+impl ServeOptions {
+    async fn run(&self) -> Result<()> {
+        linera_bridge::relay::run(
+            &self.rpc_url,
+            &self.faucet_url,
+            self.bridge_address.as_deref(),
+            &self.bridge_address_file,
+            &self.bridge_app_id_file,
+            &self.fungible_app_id_file,
+            &self.evm_private_key,
+            self.port,
+        )
+        .await
+    }
+}
+
+impl GenerateDepositProofOptions {
+    async fn run(&self) -> Result<()> {
+        use alloy_primitives::B256;
+        use linera_bridge::proof::gen::{DepositProofClient, HttpDepositProofClient};
+
+        let tx_hash: B256 = self
+            .tx_hash
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid tx hash: {}", self.tx_hash))?;
+
+        eprintln!("Generating deposit proof for tx {}...", self.tx_hash);
+
+        let client = HttpDepositProofClient::new(&self.rpc_url)?;
+        let proof = client.generate_deposit_proof(tx_hash).await?;
+
+        let result = serde_json::json!({
+            "block_header_rlp": alloy_primitives::hex::encode_prefixed(&proof.block_header_rlp),
+            "receipt_rlp": alloy_primitives::hex::encode_prefixed(&proof.receipt_rlp),
+            "proof_nodes": proof.proof_nodes.iter()
+                .map(|n| alloy_primitives::hex::encode_prefixed(n))
+                .collect::<Vec<_>>(),
+            "tx_index": proof.tx_index,
+            "log_indices": proof.log_indices,
+        });
+
+        let json_str = serde_json::to_string_pretty(&result)?;
+        eprintln!("Writing deposit proof to {:?}", self.output);
+        fs_err::write(&self.output, &json_str)?;
+        println!("{json_str}");
+
+        Ok(())
     }
 }
 
@@ -47,7 +156,7 @@ impl InitLightClientOptions {
             crypto::ValidatorPublicKey,
             data_types::{ChainDescription, ChainOrigin, Epoch},
         };
-        use linera_bridge::evm_client::validator_evm_address;
+        use linera_bridge::evm::client::validator_evm_address;
         use linera_execution::committee::ValidatorState;
 
         // Response types for the combined GraphQL query.
