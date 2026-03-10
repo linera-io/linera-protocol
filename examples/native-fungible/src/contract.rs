@@ -83,7 +83,8 @@ impl Contract for NativeFungibleTokenContract {
                     amount
                 );
 
-                self.runtime.transfer_auth_depth(owner, target_account, amount, 1);
+                self.runtime
+                    .transfer_auth_depth(owner, target_account, amount, 1);
 
                 self.transfer(fungible_target_account.chain_id);
                 FungibleResponse::Ok
@@ -108,7 +109,8 @@ impl Contract for NativeFungibleTokenContract {
                 let source_account = self.normalize_account(source_account);
                 let target_account = self.normalize_account(target_account);
 
-                self.runtime.claim_auth_depth(source_account, target_account, amount, 1);
+                self.runtime
+                    .claim_auth_depth(source_account, target_account, amount, 1);
                 self.claim(
                     fungible_source_account.chain_id,
                     fungible_target_account.chain_id,

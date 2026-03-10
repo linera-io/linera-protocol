@@ -13,9 +13,7 @@
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Operation};
 use fungible::{FungibleTokenAbi, InitialState, Parameters};
 use linera_sdk::{
-    linera_base_types::{
-        Account, AccountOwner, Amount, ApplicationId, Timestamp,
-    },
+    linera_base_types::{Account, AccountOwner, Amount, ApplicationId, Timestamp},
     test::TestValidator,
 };
 
@@ -93,11 +91,7 @@ async fn collect_pledges_native_fungible() {
         let recipient = Account::new(backer_chain.id(), backer_account);
         let (transfer_cert, _) = admin_chain
             .add_block(|block| {
-                block.with_native_token_transfer(
-                    AccountOwner::CHAIN,
-                    recipient,
-                    initial_amount,
-                );
+                block.with_native_token_transfer(AccountOwner::CHAIN, recipient, initial_amount);
             })
             .await;
 
@@ -169,6 +163,9 @@ async fn collect_pledges_native_fungible() {
     // Verify backer balances: each should have (initial - pledge) in their owner account.
     for (backer_chain, backer_account) in &backers {
         let remaining = backer_chain.owner_balance(backer_account).await;
-        assert_eq!(remaining, Some(initial_amount.saturating_sub(pledge_amount)));
+        assert_eq!(
+            remaining,
+            Some(initial_amount.saturating_sub(pledge_amount))
+        );
     }
 }

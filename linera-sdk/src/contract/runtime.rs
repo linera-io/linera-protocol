@@ -262,7 +262,12 @@ where
         amount: Amount,
         auth_depth: u32,
     ) {
-        contract_wit::transfer_auth_depth(source.into(), destination.into(), amount.into(), auth_depth)
+        contract_wit::transfer_auth_depth(
+            source.into(),
+            destination.into(),
+            amount.into(),
+            auth_depth,
+        )
     }
 
     /// Claims an `amount` of native tokens from a `source` account to a `destination` account.
