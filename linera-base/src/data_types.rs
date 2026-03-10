@@ -1150,7 +1150,10 @@ impl Bytecode {
 
     /// Load bytecode from a Wasm module file.
     pub fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
-        let bytes = fs::read(path)?;
+        let path = path.as_ref();
+        let bytes = fs::read(path).map_err(|error| {
+            std::io::Error::new(error.kind(), format!("{}: {error}", path.display()))
+        })?;
         Ok(Bytecode { bytes })
     }
 
