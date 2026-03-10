@@ -436,6 +436,6 @@ message PreviousEventBlocksRequest {
 
 // Response for previous event blocks.
 message PreviousEventBlocksResponse {
-  // bincode-encoded BTreeMap<StreamId, (CryptoHash, BlockHeight)>
+  // bincode-encoded BTreeMap<StreamId, (BlockHeight, CryptoHash)>
   bytes previous_event_blocks = 1;
 }

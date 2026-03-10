@@ -1509,7 +1509,7 @@ where
         &self,
         chain_id: ChainId,
         stream_ids: Vec<StreamId>,
-    ) -> Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, WorkerError> {
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::GetPreviousEventBlocks {
                 stream_ids,

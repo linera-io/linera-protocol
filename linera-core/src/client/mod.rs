@@ -1527,15 +1527,12 @@ impl<Env: Environment> Client<Env> {
         if previous_blocks.is_empty() {
             return Ok(());
         }
-        let initial_blocks: BTreeSet<_> = previous_blocks
-            .into_values()
-            .map(|(hash, height)| (height, hash))
-            .collect();
+        let initial_blocks = previous_blocks.into_values().collect();
         let local_height = self
             .local_node
-            .chain_state_view(chain_id)
+            .chain_info(chain_id)
             .await
-            .map(|view| view.tip_state.get().next_block_height)
+            .map(|info| info.next_block_height)
             .unwrap_or(BlockHeight::ZERO);
         self.download_event_bearing_blocks(
             chain_id,
@@ -2736,7 +2733,7 @@ impl<Env: Environment> ChainClient<Env> {
             .get_event_subscriptions(self.chain_id)
             .await?;
         // Group subscribed streams by publisher chain.
-        let mut streams_by_chain: BTreeMap<ChainId, BTreeSet<StreamId>> = BTreeMap::new();
+        let mut streams_by_chain = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
         for ((chain_id, stream_id), _) in &subscriptions {
             if *chain_id != self.chain_id {
                 streams_by_chain
@@ -2776,18 +2773,26 @@ impl<Env: Environment> ChainClient<Env> {
         stream_ids: BTreeSet<StreamId>,
         nodes: &[RemoteNode<Env::ValidatorNode>],
     ) -> Result<(), ChainClientError> {
-        // Try each validator until one succeeds.
-        for remote_node in nodes {
-            if self
-                .client
-                .sync_events_from_node(publisher_chain_id, &stream_ids, remote_node)
-                .await
-                .is_ok()
-            {
-                return Ok(());
-            }
+        let mut nodes = nodes.to_vec();
+        nodes.shuffle(&mut rand::thread_rng());
+        let result = communicate_concurrently(
+            &nodes,
+            async move |remote_node| {
+                self.client
+                    .sync_events_from_node(publisher_chain_id, &stream_ids, &remote_node)
+                    .await
+            },
+            |errors| {
+                let (_, error) = errors.into_iter().next_back().unwrap();
+                error
+            },
+            self.options.certificate_batch_download_timeout,
+        )
+        .await;
+        if let Err(error) = &result {
+            debug!(%publisher_chain_id, %error, "Failed to sync events from publisher chain");
         }
-        Ok(())
+        result
     }
 
     /// Attempts to download new received certificates.
@@ -4841,10 +4846,17 @@ impl<Env: Environment> ChainClient<Env> {
                         // for our subscribed streams, then download them sparsely.
                         let remote_node = RemoteNode { public_key, node };
                         if let Some(ListeningMode::EventsOnly(subscribed)) = this.listening_mode() {
-                            let _ = this
+                            if let Err(error) = this
                                 .client
                                 .sync_events_from_node(this.chain_id, &subscribed, &remote_node)
-                                .await;
+                                .await
+                            {
+                                debug!(
+                                    chain_id = %this.chain_id,
+                                    %error,
+                                    "Failed initial sparse sync for EventsOnly chain"
+                                );
+                            }
                         }
                     }
                     Ok::<_, ChainClientError>(stream)

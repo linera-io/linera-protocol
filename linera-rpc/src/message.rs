@@ -69,7 +69,7 @@ pub enum RpcMessage {
     BlobLastUsedByCertificateResponse(Box<ConfirmedBlockCertificate>),
 
     PreviousEventBlocks(Box<(ChainId, Vec<StreamId>)>),
-    PreviousEventBlocksResponse(Box<BTreeMap<StreamId, (CryptoHash, BlockHeight)>>),
+    PreviousEventBlocksResponse(Box<BTreeMap<StreamId, (BlockHeight, CryptoHash)>>),
 }
 
 impl RpcMessage {
@@ -138,8 +138,6 @@ impl RpcMessage {
             | MissingBlobIds(_)
             | DownloadCertificates(_)
             | DownloadCertificatesByHeights(_, _) => true,
-            // PreviousEventBlocks requires chain state, so it's routed to workers.
-            PreviousEventBlocks(_) => false,
             BlockProposal(_)
             | LiteCertificate(_)
             | TimeoutCertificate(_)
@@ -163,6 +161,7 @@ impl RpcMessage {
             | MissingBlobIdsResponse(_)
             | DownloadCertificatesResponse(_)
             | DownloadCertificatesByHeightsResponse(_)
+            | PreviousEventBlocks(_)
             | PreviousEventBlocksResponse(_) => false,
         }
     }
@@ -279,7 +278,7 @@ impl TryFrom<RpcMessage> for BlobId {
     }
 }
 
-impl TryFrom<RpcMessage> for BTreeMap<StreamId, (CryptoHash, BlockHeight)> {
+impl TryFrom<RpcMessage> for BTreeMap<StreamId, (BlockHeight, CryptoHash)> {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {

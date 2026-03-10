@@ -179,7 +179,7 @@ pub trait ValidatorNode {
         &self,
         chain_id: ChainId,
         stream_ids: Vec<StreamId>,
-    ) -> Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, NodeError>;
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError>;
 }
 
 /// Turn an address into a validator node.

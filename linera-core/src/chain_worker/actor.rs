@@ -299,7 +299,7 @@ where
         #[debug(skip)]
         #[allow(clippy::type_complexity)]
         callback:
-            oneshot::Sender<Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, WorkerError>>,
+            oneshot::Sender<Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError>>,
     },
 }
 

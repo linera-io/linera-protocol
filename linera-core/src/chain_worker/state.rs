@@ -1252,7 +1252,7 @@ where
     async fn get_previous_event_blocks(
         &self,
         stream_ids: Vec<StreamId>,
-    ) -> Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, WorkerError> {
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError> {
         let heights = self
             .chain
             .previous_event_blocks
@@ -1271,7 +1271,7 @@ where
         let hashes = self.chain.confirmed_log.multi_get(indices).await?;
         for (hash, (stream_id, height)) in hashes.into_iter().zip(streams_with_heights) {
             if let Some(hash) = hash {
-                result.insert(stream_id, (hash, height));
+                result.insert(stream_id, (height, hash));
             }
         }
         Ok(result)

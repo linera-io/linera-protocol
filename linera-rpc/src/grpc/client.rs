@@ -582,7 +582,7 @@ impl ValidatorNode for GrpcClient {
         &self,
         chain_id: ChainId,
         stream_ids: Vec<StreamId>,
-    ) -> Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, NodeError> {
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError> {
         let request = (chain_id, stream_ids);
         let response: api::PreviousEventBlocksResponse =
             client_delegate!(self, previous_event_blocks, request)?;

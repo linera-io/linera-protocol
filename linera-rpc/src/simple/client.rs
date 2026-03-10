@@ -271,7 +271,7 @@ impl ValidatorNode for SimpleClient {
         &self,
         chain_id: ChainId,
         stream_ids: Vec<StreamId>,
-    ) -> Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, NodeError> {
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError> {
         self.query(RpcMessage::PreviousEventBlocks(Box::new((
             chain_id, stream_ids,
         ))))

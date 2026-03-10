@@ -163,7 +163,7 @@ impl ValidatorNode for DummyValidatorNode {
         _: ChainId,
         _: Vec<linera_base::identifiers::StreamId>,
     ) -> Result<
-        std::collections::BTreeMap<linera_base::identifiers::StreamId, (CryptoHash, BlockHeight)>,
+        std::collections::BTreeMap<linera_base::identifiers::StreamId, (BlockHeight, CryptoHash)>,
         NodeError,
     > {
         Err(NodeError::UnexpectedMessage)

@@ -282,7 +282,7 @@ where
         &self,
         chain_id: ChainId,
         stream_ids: Vec<StreamId>,
-    ) -> Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, NodeError> {
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_previous_event_blocks(chain_id, stream_ids, sender)
         })
@@ -707,8 +707,8 @@ where
         self,
         chain_id: ChainId,
         stream_ids: Vec<StreamId>,
-        sender: oneshot::Sender<Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, NodeError>>,
-    ) -> Result<(), Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, NodeError>> {
+        sender: oneshot::Sender<Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError>>,
+    ) -> Result<(), Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError>> {
         let validator = self.client.lock().await;
         let result = validator
             .state
