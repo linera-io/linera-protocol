@@ -2848,15 +2848,9 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer)
         .await?
         .with_policy(policy.clone());
-    let mut client1 = builder
-        .add_root_super_owner_chain(1, Amount::ONE)
-        .await?;
-    let mut client2 = builder
-        .add_root_super_owner_chain(2, Amount::ONE)
-        .await?;
-    let mut client3 = builder
-        .add_root_super_owner_chain(3, Amount::ONE)
-        .await?;
+    let mut client1 = builder.add_root_super_owner_chain(1, Amount::ONE).await?;
+    let mut client2 = builder.add_root_super_owner_chain(2, Amount::ONE).await?;
+    let mut client3 = builder.add_root_super_owner_chain(3, Amount::ONE).await?;
     let chain_id3 = client3.chain_id();
 
     // Enable fast blocks for all clients.
@@ -3605,6 +3599,97 @@ where
         .await
         .unwrap_ok_committed();
     assert_eq!(certificate.round, Round::MultiLeader(0));
+
+    Ok(())
+}
+
+/// A regular owner cannot change super owners via the client API.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_regular_owner_cannot_change_super_owners<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    // Chain with only a regular owner (no super owners).
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+
+    // Trying to add super owners should fail because the chain has none.
+    let result = client
+        .change_super_ownership(vec![client.identity().await?], None)
+        .await;
+    assert_matches!(result, Err(_));
+
+    Ok(())
+}
+
+/// A super owner can transfer super ownership.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_super_owner_can_transfer_super_ownership<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let new_super_owner_key = signer.generate_new();
+    let new_super_owner = AccountOwner::from(new_super_owner_key);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut sender = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
+    let old_super_owner = sender.identity().await?;
+
+    // Transfer super ownership to another key.
+    sender
+        .transfer_super_ownership(new_super_owner)
+        .await
+        .unwrap();
+
+    // Verify the new super owner is set and old one is gone.
+    let ownership = sender.query_chain_ownership().await?;
+    assert!(ownership.super_owners.contains(&new_super_owner));
+    assert!(!ownership.super_owners.contains(&old_super_owner));
+    // transfer_super_ownership also clears regular owners.
+    assert!(ownership.owners.is_empty());
+
+    Ok(())
+}
+
+/// ChangeOwners does not affect super owners.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_change_owners_preserves_super_owners<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let regular_owner = AccountOwner::from(signer.generate_new());
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut sender = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
+    let super_owner = sender.identity().await?;
+
+    // Add a regular owner.
+    sender.share_ownership(regular_owner, 100).await.unwrap();
+
+    // Query ownership to verify super owner is still there.
+    let ownership = sender.query_chain_ownership().await?;
+    assert!(ownership.super_owners.contains(&super_owner));
+    assert!(ownership.owners.contains_key(&regular_owner));
 
     Ok(())
 }

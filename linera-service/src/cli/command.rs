@@ -14,8 +14,8 @@ use linera_base::{
 use linera_client::{
     chain_listener::ChainListenerConfig,
     client_options::{
-        ApplicationPermissionsConfig, ChangeOwnershipConfig, ChangeSuperOwnershipConfig,
-        ChainOwnershipConfig, ResourceControlPolicyConfig,
+        ApplicationPermissionsConfig, ChainOwnershipConfig, ChangeOwnershipConfig,
+        ChangeSuperOwnershipConfig, ResourceControlPolicyConfig,
     },
     util,
 };

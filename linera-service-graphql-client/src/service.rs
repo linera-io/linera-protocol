@@ -236,15 +236,11 @@ mod from {
                     multi_leader_rounds: change_owners.multi_leader_rounds as u32,
                     open_multi_leader_rounds: change_owners.open_multi_leader_rounds,
                     base_timeout: TimeDelta::from_micros(
-                        change_owners
-                            .base_timeout_ms
-                            .parse::<u64>()
-                            .map_err(|_| {
-                                ConversionError::UnexpectedCertificateType(
-                                    "Invalid base_timeout_ms value".to_string(),
-                                )
-                            })?
-                            * 1000,
+                        change_owners.base_timeout_ms.parse::<u64>().map_err(|_| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Invalid base_timeout_ms value".to_string(),
+                            )
+                        })? * 1000,
                     ),
                     timeout_increment: TimeDelta::from_micros(
                         change_owners

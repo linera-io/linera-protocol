@@ -4450,9 +4450,7 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
     let owner2 = AccountPublicKey::test_key(2).into();
 
     // Make both keys regular owners.
-    client
-        .change_ownership(chain, vec![owner1, owner2])
-        .await?;
+    client.change_ownership(chain, vec![owner1, owner2]).await?;
 
     // Make owner2 the only regular owner.
     client.change_ownership(chain, vec![owner2]).await?;

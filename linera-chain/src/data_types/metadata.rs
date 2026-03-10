@@ -344,8 +344,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
             } => SystemOperationMetadata {
                 change_super_owners: Some(ChangeSuperOwnersOperationMetadata {
                     super_owners: super_owners.clone(),
-                    fast_round_ms: fast_round_duration
-                        .map(|d| (d.as_micros() / 1000).to_string()),
+                    fast_round_ms: fast_round_duration.map(|d| (d.as_micros() / 1000).to_string()),
                 }),
                 ..SystemOperationMetadata::new("ChangeSuperOwners")
             },

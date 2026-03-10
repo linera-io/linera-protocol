@@ -497,10 +497,7 @@ where
     ) -> Result<CryptoHash, Error> {
         let certificate = self
             .apply_client_command(&chain_id, move |client| async move {
-                let result = client
-                    .change_owner(new_owner)
-                    .await
-                    .map_err(Error::from);
+                let result = client.change_owner(new_owner).await.map_err(Error::from);
                 (result, client)
             })
             .await?;

@@ -4425,3 +4425,124 @@ where
 
     Ok(())
 }
+
+/// A regular owner on a chain with super owners cannot add or change super owners.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_regular_owner_cannot_change_super_owners<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let key_pairs = generate_key_pairs(&mut signer, 2);
+    let super_owner = AccountOwner::from(key_pairs[0]);
+    let regular_owner = AccountOwner::from(key_pairs[1]);
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+
+    // Create a chain with a super owner.
+    let chain_desc = env
+        .add_root_chain_with_ownership(
+            1,
+            Amount::from_tokens(2),
+            ChainOwnership::single_super(super_owner),
+        )
+        .await;
+    let chain_id = chain_desc.id();
+
+    // Add a regular owner (done by super owner).
+    let tc = TimeoutConfig::default();
+    let block0 = make_first_block(chain_id)
+        .with_authenticated_owner(Some(super_owner))
+        .with_operation(SystemOperation::ChangeOwners {
+            owners: vec![(regular_owner, 100)],
+            first_leader: None,
+            multi_leader_rounds: 2,
+            open_multi_leader_rounds: false,
+            base_timeout: tc.base_timeout,
+            timeout_increment: tc.timeout_increment,
+            fallback_duration: tc.fallback_duration,
+        });
+    let (executed0, _, _) = env
+        .executing_worker()
+        .stage_block_execution(block0, None, vec![])
+        .await?;
+    let value0 = ConfirmedBlock::new(executed0);
+    let cert0 = env.make_certificate(value0.clone());
+    env.executing_worker()
+        .fully_handle_certificate_with_notifications(cert0, &())
+        .await?;
+
+    // Now the regular owner tries to change super owners — should fail at execution.
+    let block1 = make_child_block(&value0)
+        .with_authenticated_owner(Some(regular_owner))
+        .with_operation(SystemOperation::ChangeSuperOwners {
+            super_owners: vec![regular_owner],
+            fast_round_duration: None,
+        });
+    let result = env
+        .executing_worker()
+        .stage_block_execution(block1, None, vec![])
+        .await;
+    assert_matches!(
+        result,
+        Err(WorkerError::ChainError(ref error))
+            if matches!(&**error, ChainError::ExecutionError(
+                err,
+                ChainExecutionContext::Operation(_),
+            ) if matches!(**err, ExecutionError::UnauthorizedChangeSuperOwners))
+    );
+
+    Ok(())
+}
+
+/// A chain without super owners cannot gain super owners.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_chain_without_super_owners_cannot_add_super_owners<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let key_pairs = generate_key_pairs(&mut signer, 1);
+    let owner = AccountOwner::from(key_pairs[0]);
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+
+    // Create a chain with only a regular owner (no super owners).
+    let chain_desc = env
+        .add_root_chain_with_ownership(1, Amount::from_tokens(2), ChainOwnership::single(owner))
+        .await;
+    let chain_id = chain_desc.id();
+
+    // The regular owner tries to add a super owner — should fail at execution.
+    let block0 = make_first_block(chain_id)
+        .with_authenticated_owner(Some(owner))
+        .with_operation(SystemOperation::ChangeSuperOwners {
+            super_owners: vec![owner],
+            fast_round_duration: None,
+        });
+    let proposal = block0
+        .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
+        .await
+        .unwrap();
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
+    assert_matches!(
+        result,
+        Err(WorkerError::ChainError(ref error))
+            if matches!(&**error, ChainError::ExecutionError(
+                err,
+                ChainExecutionContext::Operation(_),
+            ) if matches!(**err, ExecutionError::UnauthorizedChangeSuperOwners))
+    );
+
+    Ok(())
+}
