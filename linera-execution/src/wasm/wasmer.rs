@@ -60,7 +60,7 @@ impl WasmContractModule {
     pub async fn from_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let (engine, module) = contract_cache
-            .get_or_insert_with(contract_bytecode, CachedContractModule::new)
+            .get_or_insert_with(contract_bytecode, "contract", CachedContractModule::new)
             .map_err(WasmExecutionError::LoadContractModule)?
             .create_execution_instance()
             .map_err(WasmExecutionError::LoadContractModule)?;
@@ -95,7 +95,7 @@ impl WasmServiceModule {
     pub async fn from_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
-            .get_or_insert_with(service_bytecode, |bytecode| {
+            .get_or_insert_with(service_bytecode, "service", |bytecode| {
                 wasmer::Module::new(&*SERVICE_ENGINE, bytecode).map_err(anyhow::Error::from)
             })
             .map_err(WasmExecutionError::LoadServiceModule)?;
