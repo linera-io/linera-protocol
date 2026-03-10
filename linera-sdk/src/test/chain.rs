@@ -762,6 +762,31 @@ impl ActiveChain {
 
         Ok(certificate)
     }
+
+    /// Queries the balance of an account owned by `account_owner` on this chain.
+    pub async fn query_account<Abi>(
+        &self,
+        application_id: ApplicationId<Abi>,
+        account_owner: AccountOwner,
+    ) -> Option<Amount>
+    where
+        Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
+    {
+        use async_graphql::InputType as _;
+
+        let query = format!(
+            "query {{ accounts {{ entry(key: {}) {{ value }} }} }}",
+            account_owner.to_value()
+        );
+        let QueryOutcome { response, .. } = self.graphql_query(application_id, query).await;
+        let balance = response.pointer("/accounts/entry/value")?.as_str()?;
+
+        Some(
+            balance
+                .parse()
+                .expect("Account balance cannot be parsed as a number"),
+        )
+    }
 }
 
 /// Failure to query an application's service on a chain.

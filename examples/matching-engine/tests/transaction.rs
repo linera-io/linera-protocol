@@ -8,7 +8,7 @@
 use async_graphql::InputType;
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ApplicationId, ApplicationPermissions},
-    test::{query_account, ActiveChain, QueryOutcome, TestValidator},
+    test::{ActiveChain, QueryOutcome, TestValidator},
 };
 use matching_engine::{
     MatchingEngineAbi, Operation, Order, OrderId, OrderNature, Parameters, Price,
@@ -109,7 +109,7 @@ async fn single_transaction() {
         (owner_a, Some(Amount::from_tokens(10))),
         (owner_b, None),
     ] {
-        let value = query_account(token_id_a, &user_chain_a, owner).await;
+        let value = user_chain_a.query_account(token_id_a, owner).await;
         assert_eq!(value, amount);
     }
     for (owner, amount) in [
@@ -117,7 +117,7 @@ async fn single_transaction() {
         (owner_a, None),
         (owner_b, Some(Amount::from_tokens(9))),
     ] {
-        let value = query_account(token_id_b, &user_chain_b, owner).await;
+        let value = user_chain_b.query_account(token_id_b, owner).await;
         assert_eq!(value, amount);
     }
 
@@ -174,15 +174,12 @@ async fn single_transaction() {
         (owner_a, Some(Amount::ONE)),
         (owner_b, None),
     ] {
-        let value = query_account(token_id_a, &user_chain_a, owner).await;
+        let value = user_chain_a.query_account(token_id_a, owner).await;
         assert_eq!(value, amount);
     }
     for owner in [admin_account, owner_a, owner_b] {
-        assert_eq!(query_account(token_id_a, &user_chain_b, owner).await, None);
-        assert_eq!(
-            query_account(token_id_a, &matching_chain, owner).await,
-            None
-        );
+        assert_eq!(user_chain_b.query_account(token_id_a, owner).await, None);
+        assert_eq!(matching_chain.query_account(token_id_a, owner).await, None);
     }
 
     let mut ask_certificates = Vec::new();
@@ -229,17 +226,11 @@ async fn single_transaction() {
 
     // Checking the balances on chain A
     for (owner, amount) in [(owner_a, Some(Amount::from_tokens(1))), (owner_b, None)] {
-        assert_eq!(
-            query_account(token_id_a, &user_chain_a, owner).await,
-            amount
-        );
+        assert_eq!(user_chain_a.query_account(token_id_a, owner).await, amount);
     }
     // Checking the balances on chain B
     for (owner, amount) in [(owner_a, None), (owner_b, Some(Amount::from_tokens(1)))] {
-        assert_eq!(
-            query_account(token_id_b, &user_chain_b, owner).await,
-            amount
-        );
+        assert_eq!(user_chain_b.query_account(token_id_b, owner).await, amount);
     }
 
     // Cancel A's order.
@@ -283,7 +274,7 @@ async fn single_transaction() {
         (owner_a, &user_chain_a, Some(Amount::from_tokens(4))),
         (owner_b, &user_chain_b, Some(Amount::from_tokens(6))),
     ] {
-        assert_eq!(query_account(token_id_a, user_chain, owner).await, amount);
+        assert_eq!(user_chain.query_account(token_id_a, owner).await, amount);
     }
     for (owner, user_chain, amount) in [
         (owner_a, &matching_chain, None),
@@ -291,6 +282,6 @@ async fn single_transaction() {
         (owner_a, &user_chain_a, Some(Amount::from_tokens(3))),
         (owner_b, &user_chain_b, Some(Amount::from_tokens(6))),
     ] {
-        assert_eq!(query_account(token_id_b, user_chain, owner).await, amount);
+        assert_eq!(user_chain.query_account(token_id_b, owner).await, amount);
     }
 }
