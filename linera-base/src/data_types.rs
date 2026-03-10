@@ -1153,11 +1153,20 @@ impl Bytecode {
         Bytecode { bytes }
     }
 
-    /// Loads bytecode from a Wasm module file.
+    /// Loads bytecode from a Wasm module file asynchronously.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
         let path = path.as_ref();
         let bytes = tokio::fs::read(path).await.map_err(|error| {
+            std::io::Error::new(error.kind(), format!("{}: {error}", path.display()))
+        })?;
+        Ok(Bytecode { bytes })
+    }
+
+    /// Loads bytecode from a Wasm module file synchronously.
+    pub fn load_from_file_sync(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
+        let path = path.as_ref();
+        let bytes = fs::read(path).map_err(|error| {
             std::io::Error::new(error.kind(), format!("{}: {error}", path.display()))
         })?;
         Ok(Bytecode { bytes })
