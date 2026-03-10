@@ -326,7 +326,7 @@ where
             options.to_chain_client_options(),
             block_cache_size,
             execution_state_cache_size,
-            options.to_requests_scheduler_config(),
+            &options.to_requests_scheduler_config(),
         );
 
         #[cfg(not(web))]
@@ -1123,7 +1123,7 @@ impl<Env: Environment> ClientContext<Env> {
                         chain_id,
                         None,
                         BlockHeight::ZERO,
-                        None,
+                        &None,
                         Some(owner),
                         self.timing_sender(),
                         false,

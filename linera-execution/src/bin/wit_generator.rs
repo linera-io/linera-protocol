@@ -39,16 +39,16 @@ fn main() -> Result<()> {
     let options = WitGeneratorOptions::parse();
 
     if options.check {
-        run_operation(options, CheckFile)?;
+        run_operation(&options, CheckFile)?;
     } else {
-        run_operation(options, WriteToFile)?;
+        run_operation(&options, WriteToFile)?;
     }
 
     Ok(())
 }
 
 /// Runs the main `operation` on all the WIT files.
-fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) -> Result<()> {
+fn run_operation(options: &WitGeneratorOptions, mut operation: impl Operation) -> Result<()> {
     let contract_entrypoints = WitInterfaceWriter::new::<ContractEntrypoints<StubInstance>>();
     let service_entrypoints = WitInterfaceWriter::new::<ServiceEntrypoints<StubInstance>>();
 

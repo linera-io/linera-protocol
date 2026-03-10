@@ -539,44 +539,44 @@ mod tests {
 
     #[test]
     fn roundtrip_account_pk_bytes_repr() {
-        fn roundtrip_test(secret: AccountSecretKey) {
+        fn roundtrip_test(secret: &AccountSecretKey) {
             let public = secret.public();
             let bytes = public.as_bytes();
             let parsed = AccountPublicKey::from_slice(&bytes).unwrap();
             assert_eq!(public, parsed);
         }
-        roundtrip_test(AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
-        roundtrip_test(AccountSecretKey::Secp256k1(
+        roundtrip_test(&AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
+        roundtrip_test(&AccountSecretKey::Secp256k1(
             Secp256k1KeyPair::generate().secret_key,
         ));
     }
 
     #[test]
     fn roundtrip_signature_bytes_repr() {
-        fn roundtrip_test(secret: AccountSecretKey) {
+        fn roundtrip_test(secret: &AccountSecretKey) {
             let test_string = TestString::new("test");
             let signature = secret.sign(&test_string);
             let bytes = signature.to_bytes();
             let parsed = AccountSignature::from_slice(&bytes).unwrap();
             assert_eq!(signature, parsed);
         }
-        roundtrip_test(AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
-        roundtrip_test(AccountSecretKey::Secp256k1(
+        roundtrip_test(&AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
+        roundtrip_test(&AccountSecretKey::Secp256k1(
             Secp256k1KeyPair::generate().secret_key,
         ));
-        roundtrip_test(AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()));
+        roundtrip_test(&AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()));
     }
 
     #[test]
     fn roundtrip_display_from_str_pk() {
-        fn test(secret: AccountSecretKey) {
+        fn test(secret: &AccountSecretKey) {
             let public = secret.public();
             let display = public.to_string();
             let parsed = AccountPublicKey::from_str(&display).unwrap();
             assert_eq!(public, parsed);
         }
-        test(AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
-        test(AccountSecretKey::Secp256k1(
+        test(&AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
+        test(&AccountSecretKey::Secp256k1(
             Secp256k1KeyPair::generate().secret_key,
         ));
     }
