@@ -121,7 +121,13 @@ jobs:
           load: true
           tags: linera-bridge:latest
 
-      - name: Build example Wasm for bridge tests
+      - name: Push bridge image to registry
+        if: steps.build-bridge.outcome == 'success'
+        run: |
+          BRANCH="${{ github.base_ref || github.ref_name }}"
+          docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
+
+      - name: Build example Wasm modules for bridge tests
         run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible -p evm-bridge
         working-directory: examples
 
