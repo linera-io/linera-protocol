@@ -51,7 +51,7 @@ fn opentelemetry_skip_filter() -> FilterFn<impl Fn(&tracing::Metadata<'_>) -> bo
 /// Initializes tracing with a custom OpenTelemetry tracer provider.
 ///
 /// This is an internal function used by both production and test code.
-fn init_with_tracer_provider(log_name: &str, tracer_provider: SdkTracerProvider) {
+fn init_with_tracer_provider(log_name: &str, tracer_provider: &SdkTracerProvider) {
     global::set_tracer_provider(tracer_provider.clone());
     let tracer = tracer_provider.tracer("linera");
 
@@ -170,5 +170,5 @@ pub fn init(log_name: &str, otlp_endpoint: Option<&str>) {
         .with_sampler(opentelemetry_sdk::trace::Sampler::AlwaysOn)
         .build();
 
-    init_with_tracer_provider(log_name, tracer_provider);
+    init_with_tracer_provider(log_name, &tracer_provider);
 }

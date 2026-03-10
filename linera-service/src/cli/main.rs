@@ -1673,7 +1673,7 @@ impl Runnable for Job {
 
                 wallet.insert(
                     description.id(),
-                    wallet::Chain {
+                    &wallet::Chain {
                         owner: Some(owner),
                         ..(&description).into()
                     },

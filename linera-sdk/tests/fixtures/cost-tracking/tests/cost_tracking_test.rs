@@ -21,7 +21,7 @@ async fn test_cost_tracking() {
     // Execute the RunAll operation to perform all cost tracking operations
     chain
         .add_block(|block| {
-            block.with_operation(application_id, Operation::RunAll);
+            block.with_operation(application_id, &Operation::RunAll);
         })
         .await;
 

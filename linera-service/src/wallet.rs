@@ -126,7 +126,7 @@ impl linera_core::Wallet for Wallet {
         id: ChainId,
         chain: wallet::Chain,
     ) -> Result<Option<wallet::Chain>, Self::Error> {
-        self.insert(id, chain)
+        self.insert(id, &chain)
     }
 
     async fn try_insert(
@@ -189,7 +189,7 @@ impl Wallet {
     pub fn insert(
         &self,
         id: ChainId,
-        chain: wallet::Chain,
+        chain: &wallet::Chain,
     ) -> Result<Option<wallet::Chain>, persistent::file::Error> {
         let has_owner = chain.owner.is_some();
         let old_chain = self.0.chains.insert(id, chain.clone());

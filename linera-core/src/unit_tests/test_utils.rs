@@ -1074,13 +1074,13 @@ where
             options,
             5_000,
             10_000,
-            crate::client::RequestsSchedulerConfig::default(),
+            &crate::client::RequestsSchedulerConfig::default(),
         ));
         Ok(client.create_chain_client(
             chain_id,
             block_hash,
             block_height,
-            None,
+            &None,
             self.chain_owners.get(&chain_id).copied(),
             None,
             follow_only,

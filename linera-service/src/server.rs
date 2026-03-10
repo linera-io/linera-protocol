@@ -115,7 +115,7 @@ impl ServerContext {
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         protocol: simple::TransportProtocol,
-        shutdown_signal: CancellationToken,
+        shutdown_signal: &CancellationToken,
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -170,7 +170,7 @@ impl ServerContext {
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
-        shutdown_signal: CancellationToken,
+        shutdown_signal: &CancellationToken,
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -193,8 +193,8 @@ impl ServerContext {
                 state,
                 shard_id,
                 self.server_config.internal_network.clone(),
-                self.cross_chain_config.clone(),
-                self.notification_config.clone(),
+                &self.cross_chain_config,
+                &self.notification_config,
                 shutdown_signal.clone(),
                 &mut join_set,
             );
@@ -250,10 +250,12 @@ impl Runnable for ServerContext {
 
         let mut join_set = match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => {
-                self.spawn_simple(&listen_address, states, protocol, shutdown_notifier)
+                self.spawn_simple(&listen_address, states, protocol, &shutdown_notifier)
             }
             NetworkProtocol::Grpc(tls_config) => match tls_config {
-                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states, shutdown_notifier),
+                TlsConfig::ClearText => {
+                    self.spawn_grpc(&listen_address, states, &shutdown_notifier)
+                }
                 TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
             },
         };
@@ -629,7 +631,7 @@ async fn run(options: ServerOptions) {
             let mut server_config =
                 persistent::File::<ValidatorServerConfig>::read(&server_config_path)
                     .expect("Failed to read server config");
-            let shards = generate_shard_configs(num_shards, host, port, metrics_port)
+            let shards = generate_shard_configs(&num_shards, &host, &port, &metrics_port)
                 .expect("Failed to generate shard configs");
             server_config.internal_network.shards = shards;
             Persist::persist(&mut server_config)
@@ -640,10 +642,10 @@ async fn run(options: ServerOptions) {
 }
 
 fn generate_shard_configs(
-    num_shards: String,
-    host: String,
-    port: String,
-    metrics_port: Option<String>,
+    num_shards: &str,
+    host: &str,
+    port: &str,
+    metrics_port: &Option<String>,
 ) -> anyhow::Result<Vec<ShardConfig>> {
     let mut shards = Vec::new();
     let len = num_shards.len();
@@ -750,13 +752,7 @@ mod test {
     #[test]
     fn test_generate_shard_configs() {
         assert_eq!(
-            generate_shard_configs(
-                "02".into(),
-                "host%%".into(),
-                "10%%".into(),
-                Some("11%%".into())
-            )
-            .unwrap(),
+            generate_shard_configs("02", "host%%", "10%%", &Some("11%%".into())).unwrap(),
             vec![
                 ShardConfig {
                     host: "host01".into(),
@@ -771,12 +767,6 @@ mod test {
             ],
         );
 
-        assert!(generate_shard_configs(
-            "2".into(),
-            "host%%".into(),
-            "10%%".into(),
-            Some("11%%".into())
-        )
-        .is_err());
+        assert!(generate_shard_configs("2", "host%%", "10%%", &Some("11%%".into())).is_err());
     }
 }
