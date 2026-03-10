@@ -675,9 +675,19 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), ChainClientError> {
         let validators = self.validator_nodes().await?;
         let info = Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
+        let mut missing_events = HashSet::new();
+        for event_id in event_ids {
+            if !self
+                .storage_client()
+                .contains_event(event_id.clone())
+                .await?
+            {
+                missing_events.insert(event_id.clone());
+            }
+        }
         let mut next_height = info.next_block_height;
         // Download one certificate at a time so we never overshoot the chain length.
-        loop {
+        while !missing_events.is_empty() {
             let result = self
                 .requests_scheduler
                 .download_certificates_from_validators(
@@ -692,6 +702,12 @@ impl<Env: Environment> Client<Env> {
                 Ok(certificates) => certificates,
                 Err(_) => break, // No validator has a certificate at this height.
             };
+            for event_id in certificates
+                .iter()
+                .flat_map(|cert| cert.block().event_ids())
+            {
+                missing_events.remove(&event_id);
+            }
             let Some(batch_info) = self
                 .process_certificates_using_all(&validators, certificates)
                 .await?
@@ -700,25 +716,8 @@ impl<Env: Environment> Client<Env> {
             };
             assert!(batch_info.next_block_height > next_height);
             next_height = batch_info.next_block_height;
-            if self.has_all_events(event_ids).await? {
-                return Ok(());
-            }
         }
         Ok(())
-    }
-
-    /// Returns `true` if all the given events exist in local storage.
-    async fn has_all_events(&self, event_ids: &[EventId]) -> Result<bool, ChainClientError> {
-        for event_id in event_ids {
-            if !self
-                .storage_client()
-                .contains_event(event_id.clone())
-                .await?
-            {
-                return Ok(false);
-            }
-        }
-        Ok(true)
     }
 
     /// Tries to process all the certificates, requesting any missing blobs from the given node.
@@ -1837,7 +1836,7 @@ impl<Env: Environment> Client<Env> {
     /// Returns the modified block (bundles may be rejected/removed based on the policy)
     /// and the execution result.
     #[instrument(level = "trace", skip(self, block))]
-    async fn stage_block_execution_with_policy(
+    async fn stage_block_execution(
         &self,
         block: ProposedBlock,
         round: Option<u32>,
@@ -1848,12 +1847,7 @@ impl<Env: Environment> Client<Env> {
         loop {
             let result = self
                 .local_node
-                .stage_block_execution_with_policy(
-                    block.clone(),
-                    round,
-                    published_blobs.clone(),
-                    policy,
-                )
+                .stage_block_execution(block.clone(), round, published_blobs.clone(), policy)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.validator_nodes().await?;
@@ -1862,11 +1856,11 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events: Vec<_> = event_ids
+                let new_events = event_ids
                     .iter()
                     .filter(|id| !downloaded_events.contains(id))
                     .cloned()
-                    .collect();
+                    .collect::<Vec<_>>();
                 if !new_events.is_empty() {
                     self.download_publisher_chains_for_events(&new_events)
                         .await?;
@@ -1888,57 +1882,6 @@ impl<Env: Environment> Client<Env> {
             }
             let (_modified_block, executed_block, response, _resource_tracker) = result?;
             return Ok((executed_block, response));
-        }
-    }
-
-    /// Attempts to execute the block locally. If any attempt to read a blob or event fails,
-    /// the missing data is downloaded and execution is retried.
-    #[instrument(level = "trace", skip(self, block))]
-    async fn stage_block_execution(
-        &self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
-        let mut downloaded_events = HashSet::<EventId>::new();
-        loop {
-            let result = self
-                .local_node
-                .stage_block_execution(block.clone(), round, published_blobs.clone())
-                .await;
-            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                let validators = self.validator_nodes().await?;
-                self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
-                    .await?;
-                continue; // We found the missing blob: retry.
-            }
-            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events: Vec<_> = event_ids
-                    .iter()
-                    .filter(|id| !downloaded_events.contains(id))
-                    .cloned()
-                    .collect();
-                if !new_events.is_empty() {
-                    self.download_publisher_chains_for_events(&new_events)
-                        .await?;
-                    downloaded_events.extend(new_events);
-                    continue; // We downloaded new publisher chain data: retry.
-                }
-                // All reported events were already downloaded; don't loop forever.
-            }
-            if let Ok((block, _, _)) = &result {
-                let hash = CryptoHash::new(block);
-                let notification = Notification {
-                    chain_id: block.header.chain_id,
-                    reason: Reason::BlockExecuted {
-                        height: block.header.height,
-                        hash,
-                    },
-                };
-                self.notifier.notify(&[notification]);
-            }
-            let (block, response, _resource_tracker) = result?;
-            return Ok((block, response));
         }
     }
 }
@@ -2696,12 +2639,12 @@ impl<Env: Environment> ChainClient<Env> {
             .local_node
             .get_event_subscriptions(self.chain_id)
             .await?;
-        let chain_ids: BTreeSet<_> = subscriptions
+        let chain_ids = subscriptions
             .iter()
             .map(|((chain_id, _), _)| *chain_id)
             .chain(iter::once(self.client.admin_chain_id))
             .filter(|chain_id| *chain_id != self.chain_id)
-            .collect();
+            .collect::<BTreeSet<_>>();
         stream::iter(
             chain_ids
                 .into_iter()
@@ -3269,7 +3212,7 @@ impl<Env: Environment> ChainClient<Env> {
         let round = self.round_for_oracle(&info, &identity).await?;
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let (block, _) = Box::pin(self.client.stage_block_execution_with_policy(
+        let (block, _) = Box::pin(self.client.stage_block_execution(
             proposed_block,
             round,
             blobs.clone(),
@@ -3448,7 +3391,7 @@ impl<Env: Environment> ChainClient<Env> {
             },
             timestamp,
         };
-        match Box::pin(self.client.stage_block_execution_with_policy(
+        match Box::pin(self.client.stage_block_execution(
             block,
             None,
             Vec::new(),
@@ -3636,7 +3579,12 @@ impl<Env: Environment> ChainClient<Env> {
                         })?;
                     let block = self
                         .client
-                        .stage_block_execution(proposed_block, None, blobs.clone())
+                        .stage_block_execution(
+                            proposed_block,
+                            None,
+                            blobs.clone(),
+                            BundleExecutionPolicy::committed(),
+                        )
                         .await?
                         .0;
                     debug!("Retrying locking block from fast round.");
@@ -3649,7 +3597,12 @@ impl<Env: Environment> ChainClient<Env> {
             let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _) = self
                 .client
-                .stage_block_execution(proposed_block, round, pending_proposal.blobs.clone())
+                .stage_block_execution(
+                    proposed_block,
+                    round,
+                    pending_proposal.blobs.clone(),
+                    BundleExecutionPolicy::committed(),
+                )
                 .await?;
             debug!("Proposing the local pending block.");
             (block, pending_proposal.blobs)
@@ -4474,10 +4427,10 @@ impl<Env: Environment> ChainClient<Env> {
         notification: Notification,
     ) -> Result<(), ChainClientError> {
         let mode = self.client.chain_mode(notification.chain_id);
-        let dominated = mode
+        let is_relevant = mode
             .as_ref()
-            .is_none_or(|mode| !mode.is_relevant(&notification.reason));
-        if dominated {
+            .is_some_and(|mode| mode.is_relevant(&notification.reason));
+        if !is_relevant {
             debug!(
                 chain_id = %notification.chain_id,
                 reason = ?notification.reason,

@@ -396,9 +396,14 @@ where
         .with_timestamp(1)
         .with_operation(publish_counter_op)
         .with_operation(publish_meta_op);
-    let (publish_executed, _, _) = env
+    let (_, publish_executed, _, _) = env
         .worker()
-        .stage_block_execution(publish_block, None, all_blobs.to_vec())
+        .stage_block_execution(
+            publish_block,
+            None,
+            all_blobs.to_vec(),
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let publish_cert = env.make_certificate(ConfirmedBlock::new(publish_executed));
     env.worker()
@@ -426,9 +431,14 @@ where
     let create_counter_block = make_child_block(&publish_cert.into_value())
         .with_timestamp(2)
         .with_operation(create_counter_op);
-    let (create_counter_executed, _, _) = env
+    let (_, create_counter_executed, _, _) = env
         .worker()
-        .stage_block_execution(create_counter_block, None, vec![])
+        .stage_block_execution(
+            create_counter_block,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let create_counter_cert = env.make_certificate(ConfirmedBlock::new(create_counter_executed));
     env.worker()
@@ -456,9 +466,14 @@ where
     let create_meta_block = make_child_block(&create_counter_cert.into_value())
         .with_timestamp(3)
         .with_operation(create_meta_op);
-    let (create_meta_executed, _, _) = env
+    let (_, create_meta_executed, _, _) = env
         .worker()
-        .stage_block_execution(create_meta_block, None, vec![])
+        .stage_block_execution(
+            create_meta_block,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let create_meta_cert = env.make_certificate(ConfirmedBlock::new(create_meta_executed));
     env.worker()
@@ -474,9 +489,14 @@ where
             application_id: meta_app_id,
             bytes: fail_op_bytes,
         });
-    let (send_fail_executed, _, _) = env
+    let (_, send_fail_executed, _, _) = env
         .worker()
-        .stage_block_execution(send_fail_block, None, vec![])
+        .stage_block_execution(
+            send_fail_block,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let send_fail_cert = env.make_certificate(ConfirmedBlock::new(send_fail_executed));
     env.worker()
@@ -516,7 +536,7 @@ where
     // This should handle the failing message by rejecting the bundle.
     let (modified_block, auto_retry_executed, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block.clone(),
             None,
             vec![],
@@ -545,7 +565,7 @@ where
     // and produce the same outcome.
     let (_, abort_executed, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             modified_block.clone(),
             None,
             vec![],
