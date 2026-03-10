@@ -359,6 +359,24 @@ where
                 Ok(Some(RpcMessage::VersionInfoResponse(Box::default())))
             }
 
+            RpcMessage::PreviousEventBlocks(request) => {
+                let (chain_id, stream_ids) = *request;
+                match self
+                    .server
+                    .state
+                    .previous_event_blocks(chain_id, stream_ids)
+                    .await
+                {
+                    Ok(result) => Ok(Some(RpcMessage::PreviousEventBlocksResponse(Box::new(
+                        result,
+                    )))),
+                    Err(error) => {
+                        self.log_error(&error, "Failed to get previous event blocks");
+                        Err(error.into())
+                    }
+                }
+            }
+
             RpcMessage::Vote(_)
             | RpcMessage::Error(_)
             | RpcMessage::ChainInfoResponse(_)
@@ -381,9 +399,8 @@ where
             | RpcMessage::UploadBlob(_)
             | RpcMessage::UploadBlobResponse(_)
             | RpcMessage::DownloadCertificatesByHeights(_, _)
-            | RpcMessage::DownloadCertificatesByHeightsResponse(_) => {
-                Err(NodeError::UnexpectedMessage)
-            }
+            | RpcMessage::DownloadCertificatesByHeightsResponse(_)
+            | RpcMessage::PreviousEventBlocksResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;

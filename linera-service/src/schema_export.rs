@@ -157,6 +157,17 @@ impl ValidatorNode for DummyValidatorNode {
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
+
+    async fn previous_event_blocks(
+        &self,
+        _: ChainId,
+        _: Vec<linera_base::identifiers::StreamId>,
+    ) -> Result<
+        std::collections::BTreeMap<linera_base::identifiers::StreamId, (CryptoHash, BlockHeight)>,
+        NodeError,
+    > {
+        Err(NodeError::UnexpectedMessage)
+    }
 }
 
 struct DummyValidatorNodeProvider;

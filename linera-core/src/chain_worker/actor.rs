@@ -292,6 +292,15 @@ where
         #[debug(skip)]
         callback: oneshot::Sender<Result<u64, WorkerError>>,
     },
+
+    /// Get the previous event blocks for specific streams.
+    GetPreviousEventBlocks {
+        stream_ids: Vec<StreamId>,
+        #[debug(skip)]
+        #[allow(clippy::type_complexity)]
+        callback:
+            oneshot::Sender<Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, WorkerError>>,
+    },
 }
 
 /// The actor worker type.

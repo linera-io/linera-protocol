@@ -1,10 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, StreamId},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -303,6 +305,27 @@ impl ValidatorNode for Client {
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => {
                 simple_client.blob_last_used_by_certificate(blob_id).await?
+            }
+        })
+    }
+
+    async fn previous_event_blocks(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => {
+                grpc_client
+                    .previous_event_blocks(chain_id, stream_ids)
+                    .await?
+            }
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => {
+                simple_client
+                    .previous_event_blocks(chain_id, stream_ids)
+                    .await?
             }
         })
     }

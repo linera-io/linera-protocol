@@ -2,13 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::future::Future;
+use std::{collections::BTreeMap, future::Future};
 
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, StreamId},
     time::{timer, Duration},
 };
 use linera_chain::{
@@ -264,6 +264,17 @@ impl ValidatorNode for SimpleClient {
         self.query::<ConfirmedBlockCertificate>(RpcMessage::BlobLastUsedByCertificate(Box::new(
             blob_id,
         )))
+        .await
+    }
+
+    async fn previous_event_blocks(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, NodeError> {
+        self.query(RpcMessage::PreviousEventBlocks(Box::new((
+            chain_id, stream_ids,
+        ))))
         .await
     }
 }

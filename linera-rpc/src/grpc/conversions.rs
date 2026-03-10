@@ -8,7 +8,7 @@ use linera_base::{
     },
     data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
-    identifiers::{AccountOwner, BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
@@ -1031,6 +1031,17 @@ impl TryFrom<api::DownloadCertificatesByHeightsRequest> for CertificatesByHeight
         Ok(Self {
             chain_id: try_proto_convert(request.chain_id)?,
             heights: request.heights.into_iter().map(Into::into).collect(),
+        })
+    }
+}
+
+impl TryFrom<(ChainId, Vec<StreamId>)> for api::PreviousEventBlocksRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from((chain_id, stream_ids): (ChainId, Vec<StreamId>)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(chain_id.into()),
+            stream_ids: bincode::serialize(&stream_ids)?,
         })
     }
 }

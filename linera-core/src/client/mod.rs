@@ -1420,16 +1420,18 @@ impl<Env: Environment> Client<Env> {
     async fn download_event_bearing_blocks(
         &self,
         sender_chain_id: ChainId,
-        height: BlockHeight,
-        hash: CryptoHash,
+        initial_blocks: BTreeSet<(BlockHeight, CryptoHash)>,
         local_next_block_height: BlockHeight,
         subscribed_streams: &BTreeSet<StreamId>,
         remote_node: &RemoteNode<Env::ValidatorNode>,
     ) -> Result<(), ChainClientError> {
+        if initial_blocks.is_empty() {
+            return Ok(());
+        }
         let (max_epoch, committees) = self.admin_committees().await?;
 
         let mut certificates = BTreeMap::new();
-        let mut blocks_to_fetch = BTreeSet::<_>::from([(height, hash)]);
+        let mut blocks_to_fetch = initial_blocks;
         let next_expected_events = subscribed_streams
             .iter()
             .zip(
@@ -4537,8 +4539,7 @@ impl<Env: Environment> ChainClient<Env> {
                         self.client
                             .download_event_bearing_blocks(
                                 chain_id,
-                                height,
-                                hash,
+                                BTreeSet::from([(height, hash)]),
                                 local_height,
                                 &subscribed,
                                 &remote_node,
@@ -4577,8 +4578,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .download_event_bearing_blocks(
                         chain_id,
-                        height,
-                        hash,
+                        BTreeSet::from([(height, hash)]),
                         local_height,
                         &subscribed,
                         &remote_node,
@@ -4757,13 +4757,46 @@ impl<Env: Environment> ChainClient<Env> {
                     let stream = node.subscribe(vec![this.chain_id]).await?;
                     // Only now the notification stream is established. We may have missed
                     // notifications since the last time we synchronized.
-                    // For EventsOnly chains, skip the full sync — new events will be
-                    // downloaded sparsely via NewEvents notifications.
                     if !events_only {
                         let remote_node = RemoteNode { public_key, node };
                         this.client
                             .synchronize_chain_state_from(&remote_node, this.chain_id)
                             .await?;
+                    } else {
+                        // For EventsOnly chains, do a lightweight initial sync:
+                        // query the validator for the latest event-bearing blocks
+                        // for our subscribed streams, then download them sparsely.
+                        let remote_node = RemoteNode { public_key, node };
+                        if let Some(ListeningMode::EventsOnly(subscribed)) = this.listening_mode() {
+                            let stream_ids: Vec<_> = subscribed.iter().cloned().collect();
+                            let previous_blocks = remote_node
+                                .node
+                                .previous_event_blocks(this.chain_id, stream_ids)
+                                .await;
+                            if let Ok(previous_blocks) = previous_blocks {
+                                let initial_blocks: BTreeSet<_> = previous_blocks
+                                    .into_values()
+                                    .map(|(hash, height)| (height, hash))
+                                    .collect();
+                                let local_height = this
+                                    .client
+                                    .local_node
+                                    .chain_state_view(this.chain_id)
+                                    .await
+                                    .map(|view| view.tip_state.get().next_block_height)
+                                    .unwrap_or(BlockHeight::ZERO);
+                                let _ = this
+                                    .client
+                                    .download_event_bearing_blocks(
+                                        this.chain_id,
+                                        initial_blocks,
+                                        local_height,
+                                        &subscribed,
+                                        &remote_node,
+                                    )
+                                    .await;
+                            }
+                        }
                     }
                     Ok::<_, ChainClientError>(stream)
                 }

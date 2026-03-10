@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fmt,
     future::Future,
     iter,
@@ -17,7 +17,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, StreamId},
     time::Duration,
 };
 use linera_chain::{
@@ -575,5 +575,19 @@ impl ValidatorNode for GrpcClient {
         blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
         Ok(client_delegate!(self, blob_last_used_by_certificate, blob_id)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    async fn previous_event_blocks(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, (CryptoHash, BlockHeight)>, NodeError> {
+        let request = (chain_id, stream_ids);
+        let response: api::PreviousEventBlocksResponse =
+            client_delegate!(self, previous_event_blocks, request)?;
+        bincode::deserialize(&response.previous_event_blocks).map_err(|err| NodeError::GrpcError {
+            error: format!("failed to deserialize previous_event_blocks response: {err}"),
+        })
     }
 }

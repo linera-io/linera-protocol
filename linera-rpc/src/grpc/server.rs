@@ -1075,6 +1075,63 @@ where
         err,
         fields(
             nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id
+        )
+    )]
+    async fn previous_event_blocks(
+        &self,
+        request: Request<api::PreviousEventBlocksRequest>,
+    ) -> Result<Response<api::PreviousEventBlocksResponse>, Status> {
+        let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
+        let inner = request.into_inner();
+        let chain_id = inner
+            .chain_id
+            .ok_or_else(|| Status::invalid_argument("missing chain_id"))?
+            .try_into()?;
+        let stream_ids: Vec<linera_base::identifiers::StreamId> =
+            bincode::deserialize(&inner.stream_ids).map_err(|err| {
+                Status::invalid_argument(format!("failed to deserialize stream_ids: {err}"))
+            })?;
+        match self
+            .state
+            .clone()
+            .previous_event_blocks(chain_id, stream_ids)
+            .await
+        {
+            Ok(result) => {
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "previous_event_blocks",
+                    traffic_type,
+                );
+                let bytes = bincode::serialize(&result).map_err(|err| {
+                    Status::internal(format!("failed to serialize previous_event_blocks: {err}"))
+                })?;
+                Ok(Response::new(api::PreviousEventBlocksResponse {
+                    previous_event_blocks: bytes,
+                }))
+            }
+            Err(error) => {
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "previous_event_blocks",
+                    traffic_type,
+                );
+                self.log_error(&error, "Failed to get previous event blocks");
+                Err(Status::internal(NodeError::from(error).to_string()))
+            }
+        }
+    }
+
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
             chain_id = ?request.get_ref().chain_id()
         )
     )]
@@ -1165,6 +1222,12 @@ impl GrpcProxyable for PendingBlobRequest {
 }
 
 impl GrpcProxyable for HandlePendingBlobRequest {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl GrpcProxyable for api::PreviousEventBlocksRequest {
     fn chain_id(&self) -> Option<ChainId> {
         self.chain_id.clone()?.try_into().ok()
     }
