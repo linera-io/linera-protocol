@@ -1511,6 +1511,42 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
+    /// Queries a validator for the latest event-bearing blocks for the given streams,
+    /// then downloads them sparsely.
+    async fn sync_events_from_node(
+        &self,
+        chain_id: ChainId,
+        stream_ids: &BTreeSet<StreamId>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+    ) -> Result<(), ChainClientError> {
+        let stream_ids_vec: Vec<_> = stream_ids.iter().cloned().collect();
+        let previous_blocks = remote_node
+            .node
+            .previous_event_blocks(chain_id, stream_ids_vec)
+            .await?;
+        if previous_blocks.is_empty() {
+            return Ok(());
+        }
+        let initial_blocks: BTreeSet<_> = previous_blocks
+            .into_values()
+            .map(|(hash, height)| (height, hash))
+            .collect();
+        let local_height = self
+            .local_node
+            .chain_state_view(chain_id)
+            .await
+            .map(|view| view.tip_state.get().next_block_height)
+            .unwrap_or(BlockHeight::ZERO);
+        self.download_event_bearing_blocks(
+            chain_id,
+            initial_blocks,
+            local_height,
+            stream_ids,
+            remote_node,
+        )
+        .await
+    }
+
     #[instrument(
         level = "trace", skip_all,
         fields(certificate_hash = ?incoming_certificate.hash()),
@@ -2740,46 +2776,17 @@ impl<Env: Environment> ChainClient<Env> {
         stream_ids: BTreeSet<StreamId>,
         nodes: &[RemoteNode<Env::ValidatorNode>],
     ) -> Result<(), ChainClientError> {
-        let stream_ids_vec: Vec<_> = stream_ids.iter().cloned().collect();
         // Try each validator until one succeeds.
-        let mut previous_blocks = None;
         for remote_node in nodes {
-            if let Ok(result) = remote_node
-                .node
-                .previous_event_blocks(publisher_chain_id, stream_ids_vec.clone())
+            if self
+                .client
+                .sync_events_from_node(publisher_chain_id, &stream_ids, remote_node)
                 .await
+                .is_ok()
             {
-                previous_blocks = Some(result);
-                break;
+                return Ok(());
             }
         }
-        let Some(previous_blocks) = previous_blocks else {
-            return Ok(());
-        };
-        if previous_blocks.is_empty() {
-            return Ok(());
-        }
-        let initial_blocks: BTreeSet<_> = previous_blocks
-            .into_values()
-            .map(|(hash, height)| (height, hash))
-            .collect();
-        let local_height = self
-            .client
-            .local_node
-            .chain_state_view(publisher_chain_id)
-            .await
-            .map(|view| view.tip_state.get().next_block_height)
-            .unwrap_or(BlockHeight::ZERO);
-        let remote_node = &nodes[0];
-        self.client
-            .download_event_bearing_blocks(
-                publisher_chain_id,
-                initial_blocks,
-                local_height,
-                &stream_ids,
-                remote_node,
-            )
-            .await?;
         Ok(())
     }
 
@@ -4834,34 +4841,10 @@ impl<Env: Environment> ChainClient<Env> {
                         // for our subscribed streams, then download them sparsely.
                         let remote_node = RemoteNode { public_key, node };
                         if let Some(ListeningMode::EventsOnly(subscribed)) = this.listening_mode() {
-                            let stream_ids: Vec<_> = subscribed.iter().cloned().collect();
-                            let previous_blocks = remote_node
-                                .node
-                                .previous_event_blocks(this.chain_id, stream_ids)
+                            let _ = this
+                                .client
+                                .sync_events_from_node(this.chain_id, &subscribed, &remote_node)
                                 .await;
-                            if let Ok(previous_blocks) = previous_blocks {
-                                let initial_blocks: BTreeSet<_> = previous_blocks
-                                    .into_values()
-                                    .map(|(hash, height)| (height, hash))
-                                    .collect();
-                                let local_height = this
-                                    .client
-                                    .local_node
-                                    .chain_state_view(this.chain_id)
-                                    .await
-                                    .map(|view| view.tip_state.get().next_block_height)
-                                    .unwrap_or(BlockHeight::ZERO);
-                                let _ = this
-                                    .client
-                                    .download_event_bearing_blocks(
-                                        this.chain_id,
-                                        initial_blocks,
-                                        local_height,
-                                        &subscribed,
-                                        &remote_node,
-                                    )
-                                    .await;
-                            }
                         }
                     }
                     Ok::<_, ChainClientError>(stream)
