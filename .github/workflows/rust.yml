@@ -279,6 +279,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        override: false
+    - name: Install nightly toolchain for wasm builds
+      run: |
+        rustup toolchain install $(sed -n 's/^channel = "\(.*\)"/\1/p' toolchains/nightly/rust-toolchain.toml) --component rust-src
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
@@ -303,6 +308,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        override: false
+    - name: Install nightly toolchain for wasm builds
+      run: |
+        rustup toolchain install $(sed -n 's/^channel = "\(.*\)"/\1/p' toolchains/nightly/rust-toolchain.toml) --component rust-src
     - uses: foundry-rs/foundry-toolchain@v1.4.0
     - name: Ensure Solc Directory Exists
       run: mkdir -p /home/runner/.solc
