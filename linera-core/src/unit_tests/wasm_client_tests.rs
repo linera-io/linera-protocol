@@ -1159,6 +1159,19 @@ where
             .await?
     );
 
+    // Verify that receiver2 can process its inbox and consume the pre-existing events.
+    // This is what the chain listener would do after the sparse sync: process_new_events
+    // triggers maybe_process_inbox, which creates blocks with UpdateStreams operations.
+    let certs = receiver2.process_inbox().await?.0;
+    assert!(!certs.is_empty(), "receiver2 should have events to process");
+    // The inbox processing should produce UpdateStreams operations for the events.
+    let has_update_streams = certs.iter().any(|cert| {
+        cert.block().body.operations().any(|op| {
+            matches!(op, Operation::System(op) if matches!(**op, SystemOperation::UpdateStreams(_)))
+        })
+    });
+    assert!(has_update_streams, "should have UpdateStreams operations");
+
     Ok(())
 }
 
