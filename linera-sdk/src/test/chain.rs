@@ -34,7 +34,7 @@ use serde::Serialize;
 use tokio::{fs, sync::Mutex};
 
 use super::{BlockBuilder, TestValidator};
-use crate::{ContractAbi, ServiceAbi};
+use crate::{abis::fungible::FungibleTokenAbi, ContractAbi, ServiceAbi};
 
 /// A reference to a single microchain inside a [`TestValidator`].
 pub struct ActiveChain {
@@ -764,14 +764,11 @@ impl ActiveChain {
     }
 
     /// Queries the balance of an account owned by `account_owner` on this chain.
-    pub async fn query_account<Abi>(
+    pub async fn query_account(
         &self,
-        application_id: ApplicationId<Abi>,
+        application_id: ApplicationId<FungibleTokenAbi>,
         account_owner: AccountOwner,
-    ) -> Option<Amount>
-    where
-        Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
-    {
+    ) -> Option<Amount> {
         use async_graphql::InputType as _;
 
         let query = format!(
