@@ -1142,6 +1142,23 @@ RpcMessage:
       BlobLastUsedByCertificateResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlockCertificate
+    33:
+      PreviousEventBlocks:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ChainId
+            - SEQ:
+                TYPENAME: StreamId
+    34:
+      PreviousEventBlocksResponse:
+        NEWTYPE:
+          MAP:
+            KEY:
+              TYPENAME: StreamId
+            VALUE:
+              TUPLE:
+                - TYPENAME: BlockHeight
+                - TYPENAME: CryptoHash
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

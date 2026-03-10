@@ -17,7 +17,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey},
     data_types::*,
-    identifiers::{AccountOwner, BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -274,6 +274,17 @@ where
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_blob_last_used_by_certificate(blob_id, sender)
+        })
+        .await
+    }
+
+    async fn previous_event_blocks(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_previous_event_blocks(chain_id, stream_ids, sender)
         })
         .await
     }
@@ -689,6 +700,22 @@ where
             }
             Err(err) => sender.send(Err(err)),
         }
+    }
+
+    #[allow(clippy::type_complexity)]
+    async fn do_previous_event_blocks(
+        self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+        sender: oneshot::Sender<Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError>>,
+    ) -> Result<(), Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError>> {
+        let validator = self.client.lock().await;
+        let result = validator
+            .state
+            .previous_event_blocks(chain_id, stream_ids)
+            .await
+            .map_err(Into::into);
+        sender.send(result)
     }
 }
 

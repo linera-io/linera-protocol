@@ -381,6 +381,13 @@ impl ValidatorNode for DummyValidator {
     ) -> Result<Response<linera_rpc::grpc::api::Certificate>, Status> {
         unimplemented!()
     }
+
+    async fn previous_event_blocks(
+        &self,
+        _request: Request<linera_rpc::grpc::api::PreviousEventBlocksRequest>,
+    ) -> Result<Response<linera_rpc::grpc::api::PreviousEventBlocksResponse>, Status> {
+        unimplemented!()
+    }
 }
 
 #[async_trait]
