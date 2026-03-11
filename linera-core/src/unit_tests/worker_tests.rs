@@ -3292,9 +3292,21 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let bundles1 = certificate1.message_bundles_for(id1).collect::<Vec<_>>();
     let bundles2 = certificate2.message_bundles_for(id1).collect::<Vec<_>>();
     let bundles3 = certificate3.message_bundles_for(id1).collect::<Vec<_>>();
-    let bundles01 = Vec::from_iter(bundles0.iter().cloned().chain(bundles1.iter().cloned()));
-    let bundles012 = Vec::from_iter(bundles01.iter().cloned().chain(bundles2.iter().cloned()));
-    let bundles0123 = Vec::from_iter(bundles012.iter().cloned().chain(bundles3.iter().cloned()));
+    let bundles01 = bundles0
+        .iter()
+        .cloned()
+        .chain(bundles1.iter().cloned())
+        .collect::<Vec<_>>();
+    let bundles012 = bundles01
+        .iter()
+        .cloned()
+        .chain(bundles2.iter().cloned())
+        .collect::<Vec<_>>();
+    let bundles0123 = bundles012
+        .iter()
+        .cloned()
+        .chain(bundles3.iter().cloned())
+        .collect::<Vec<_>>();
 
     fn without_epochs<'a>(
         bundles: impl IntoIterator<Item = &'a (Epoch, MessageBundle)>,
@@ -3331,7 +3343,11 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             id1,
             BlockHeight::ZERO,
             None,
-            Vec::from_iter(bundles1.iter().cloned().chain(bundles0.iter().cloned()))
+            bundles1
+                .iter()
+                .cloned()
+                .chain(bundles0.iter().cloned())
+                .collect::<Vec<_>>()
         ),
         Err(WorkerError::InvalidCrossChainRequest)
     );

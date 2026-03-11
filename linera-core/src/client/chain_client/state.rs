@@ -75,7 +75,7 @@ impl State {
         }
         assert_eq!(
             block.published_blob_ids(),
-            BTreeSet::from_iter(blobs.iter().map(Blob::id))
+            blobs.iter().map(Blob::id).collect::<BTreeSet<_>>()
         );
         self.pending_proposal = Some(PendingProposal { block, blobs });
     }

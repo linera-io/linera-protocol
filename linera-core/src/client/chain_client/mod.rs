@@ -1054,41 +1054,44 @@ impl<Env: Environment> ChainClient<Env> {
         nodes: &[RemoteNode<Env::ValidatorNode>],
         other_sender_chains: Vec<ChainId>,
     ) {
-        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(|chain_id| {
-            let local_node = self.client.local_node.clone();
-            async move {
-                if let Err(error) = match local_node
-                    .retry_pending_cross_chain_requests(chain_id)
-                    .await
-                {
-                    Ok(()) => Ok(()),
-                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        if let Err(error) = self
-                            .client
-                            .update_local_node_with_blobs_from(blob_ids.clone(), nodes)
-                            .await
-                        {
-                            error!(
-                                ?blob_ids,
-                                %error,
-                                "Error while attempting to download blobs during retrying outgoing \
-                                messages"
-                            );
+        let stream = other_sender_chains
+            .into_iter()
+            .map(|chain_id| {
+                let local_node = self.client.local_node.clone();
+                async move {
+                    if let Err(error) = match local_node
+                        .retry_pending_cross_chain_requests(chain_id)
+                        .await
+                    {
+                        Ok(()) => Ok(()),
+                        Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                            if let Err(error) = self
+                                .client
+                                .update_local_node_with_blobs_from(blob_ids.clone(), nodes)
+                                .await
+                            {
+                                error!(
+                                    ?blob_ids,
+                                    %error,
+                                    "Error while attempting to download blobs during retrying outgoing \
+                                    messages"
+                                );
+                            }
+                            local_node
+                                .retry_pending_cross_chain_requests(chain_id)
+                                .await
                         }
-                        local_node
-                            .retry_pending_cross_chain_requests(chain_id)
-                            .await
+                        err => err,
+                    } {
+                        error!(
+                            %chain_id,
+                            %error,
+                            "Failed to retry outgoing messages from chain"
+                        );
                     }
-                    err => err,
-                } {
-                    error!(
-                        %chain_id,
-                        %error,
-                        "Failed to retry outgoing messages from chain"
-                    );
                 }
-            }
-        }));
+            })
+            .collect::<FuturesUnordered<_>>();
         stream.for_each(future::ready).await;
     }
 
