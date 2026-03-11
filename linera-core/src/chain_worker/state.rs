@@ -161,28 +161,11 @@ where
                 block,
                 round,
                 published_blobs,
-                callback,
-            } => callback
-                .send(
-                    self.stage_block_execution_with_policy(
-                        block,
-                        round,
-                        &published_blobs,
-                        BundleExecutionPolicy::committed(),
-                    )
-                    .await
-                    .map(|(_, block, response, tracker)| (block, response, tracker)),
-                )
-                .is_ok(),
-            ChainWorkerRequest::StageBlockExecutionWithPolicy {
-                block,
-                round,
-                published_blobs,
                 policy,
                 callback,
             } => {
                 let result = self
-                    .stage_block_execution_with_policy(block, round, &published_blobs, policy)
+                    .stage_block_execution(block, round, &published_blobs, policy)
                     .await;
                 callback.send(result).is_ok()
             }
@@ -1487,7 +1470,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
-    async fn stage_block_execution_with_policy(
+    async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
         round: Option<u32>,
