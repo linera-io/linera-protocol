@@ -938,7 +938,7 @@ where
                         ApplicationId::from(&description),
                         code,
                         description,
-                    )?;
+                    );
                 }
 
                 runtime.run_action(application_id, chain_id, action)

@@ -413,8 +413,8 @@ fn get_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8>
 fn get_precompile_argument<Ctx: ContextTr>(
     context: &mut Ctx,
     inputs: &InputsImpl,
-) -> Result<Vec<u8>, ExecutionError> {
-    Ok(get_argument(context, &inputs.input))
+) -> Vec<u8> {
+    get_argument(context, &inputs.input)
 }
 
 fn base_runtime_call<Runtime: BaseRuntime>(
@@ -683,7 +683,7 @@ impl<'a> ContractPrecompile {
         inputs: &InputsImpl,
         context: &mut ContractCtx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let input = get_precompile_argument(context, inputs)?;
+        let input = get_precompile_argument(context, inputs);
         match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => {
                 let mut runtime = context.db().0.lock_runtime();
@@ -726,7 +726,7 @@ impl<'a> ServicePrecompile {
         inputs: &InputsImpl,
         context: &mut ServiceCtx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let input = get_precompile_argument(context, inputs)?;
+        let input = get_precompile_argument(context, inputs);
         match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => {
                 let mut runtime = context.db().0.lock_runtime();

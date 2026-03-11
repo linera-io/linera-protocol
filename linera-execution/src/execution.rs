@@ -335,7 +335,7 @@ where
                         ApplicationId::from(&description),
                         code,
                         description,
-                    )?;
+                    );
                 }
 
                 runtime.run_query(application_id, query)

@@ -941,8 +941,8 @@ mod tests {
     }
 
     /// Helper function to create a test result
-    fn test_result_ok() -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        Ok(vec![])
+    fn test_result_ok() -> Vec<ConfirmedBlockCertificate> {
+        vec![]
     }
 
     /// Helper function to create a test request key
@@ -991,7 +991,7 @@ mod tests {
                 let count = execution_count_clone.clone();
                 async move {
                     count.fetch_add(1, Ordering::SeqCst);
-                    test_result_ok()
+                    Ok(test_result_ok())
                 }
             })
             .await;
@@ -1006,7 +1006,7 @@ mod tests {
                 let count = execution_count_clone2.clone();
                 async move {
                     count.fetch_add(1, Ordering::SeqCst);
-                    test_result_ok()
+                    Ok(test_result_ok())
                 }
             })
             .await;
@@ -1046,7 +1046,7 @@ mod tests {
                         if let Some(receiver) = rx.lock().await.take() {
                             receiver.await.unwrap();
                         }
-                        test_result_ok()
+                        Ok(test_result_ok())
                     }
                 })
                 .await
@@ -1060,7 +1060,7 @@ mod tests {
                     let count = execution_count_clone2.clone();
                     async move {
                         count.fetch_add(1, Ordering::SeqCst);
-                        test_result_ok()
+                        Ok(test_result_ok())
                     }
                 })
                 .await
@@ -1111,7 +1111,7 @@ mod tests {
                         if let Some(receiver) = rx.lock().await.take() {
                             receiver.await.unwrap();
                         }
-                        test_result_ok()
+                        Ok(test_result_ok())
                     }
                 })
                 .await
@@ -1130,7 +1130,7 @@ mod tests {
                         let count = execution_count_clone.clone();
                         async move {
                             count.fetch_add(1, Ordering::SeqCst);
-                            test_result_ok()
+                            Ok(test_result_ok())
                         }
                     })
                     .await
@@ -1186,7 +1186,7 @@ mod tests {
                         if let Some(receiver) = rx.lock().await.take() {
                             receiver.await.unwrap();
                         }
-                        test_result_ok()
+                        Ok(test_result_ok())
                     }
                 })
                 .await
@@ -1203,7 +1203,7 @@ mod tests {
                     let count = execution_count_clone2.clone();
                     async move {
                         count.fetch_add(1, Ordering::SeqCst);
-                        test_result_ok()
+                        Ok(test_result_ok())
                     }
                 })
                 .await
