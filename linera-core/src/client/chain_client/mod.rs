@@ -1032,8 +1032,9 @@ impl<Env: Environment> ChainClient<Env> {
         nodes: &[RemoteNode<Env::ValidatorNode>],
         other_sender_chains: Vec<ChainId>,
     ) {
-        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(
-            |chain_id| async move {
+        let stream: FuturesUnordered<_> = other_sender_chains
+            .into_iter()
+            .map(|chain_id| async move {
                 if let Err(error) = match self
                     .client
                     .retry_pending_cross_chain_requests(chain_id)
@@ -1065,8 +1066,8 @@ impl<Env: Environment> ChainClient<Env> {
                         "Failed to retry outgoing messages from chain"
                     );
                 }
-            },
-        ));
+            })
+            .collect();
         stream.for_each(future::ready).await;
     }
 

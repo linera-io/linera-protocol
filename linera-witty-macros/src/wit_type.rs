@@ -122,7 +122,7 @@ pub fn derive_for_enum<'variants>(
         quote! { u8 }
     } else if variant_count <= u16::MAX.into() {
         quote! { u16 }
-    } else if variant_count <= u32::MAX as usize {
+    } else if u32::try_from(variant_count).is_ok() {
         quote! { u32 }
     } else {
         abort!(name, "Too many variants in `enum`");

@@ -1076,7 +1076,7 @@ impl ContractSyncRuntime {
         id: ApplicationId,
         code: UserContractCode,
         description: ApplicationDescription,
-    ) -> Result<(), ExecutionError> {
+    ) {
         let this = self
             .0
             .as_ref()
@@ -1086,8 +1086,6 @@ impl ContractSyncRuntime {
         if let hash_map::Entry::Vacant(entry) = this_guard.preloaded_applications.entry(id) {
             entry.insert((code, description));
         }
-
-        Ok(())
     }
 
     /// Main entry point to start executing a user action.
@@ -1773,7 +1771,7 @@ impl ServiceSyncRuntime {
         id: ApplicationId,
         code: UserServiceCode,
         description: ApplicationDescription,
-    ) -> Result<(), ExecutionError> {
+    ) {
         let this = self
             .runtime
             .0
@@ -1784,8 +1782,6 @@ impl ServiceSyncRuntime {
         if let hash_map::Entry::Vacant(entry) = this_guard.preloaded_applications.entry(id) {
             entry.insert((code, description));
         }
-
-        Ok(())
     }
 
     /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
