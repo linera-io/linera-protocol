@@ -36,7 +36,9 @@ pub fn create_address(deployer: Address, nonce: u64) -> Address {
 /// Returns the LightClient contract address, assuming it is the first contract
 /// deployed by Anvil account 0 (nonce 0).
 pub fn light_client_address() -> Address {
-    let deployer: Address = ANVIL_DEPLOYER.parse().expect("valid anvil deployer address");
+    let deployer: Address = ANVIL_DEPLOYER
+        .parse()
+        .expect("valid anvil deployer address");
     create_address(deployer, 0)
 }
 
@@ -61,10 +63,10 @@ pub fn dump_compose_logs(project_name: &str, compose_file: &std::path::Path) {
         .output();
 
     if let Ok(output) = output {
-        eprintln!(
-            "=== docker compose logs ===\n{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
+        tracing::info!(
+            stdout=%String::from_utf8_lossy(&output.stdout),
+            stderr=%String::from_utf8_lossy(&output.stderr),
+            "Docker compose logs"
         );
     }
 }
@@ -104,7 +106,7 @@ pub async fn exec_output(
             let exit_code: Option<i64> = r.exit_code().await.unwrap_or(Some(-1));
             let stdout_bytes: Vec<u8> = r.stdout_to_vec().await.unwrap_or_default();
             let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
-            eprintln!("exec output (exit {exit_code:?}):\n{stdout}");
+            tracing::info!(?exit_code, %stdout, "Exec output");
             if exit_code != Some(0) {
                 dump_compose_logs(project_name, compose_file);
                 panic!("exec failed (exit {exit_code:?}):\n{stdout}");
@@ -134,7 +136,7 @@ pub async fn create_extra_wallet(
     project_name: &str,
     compose_file: &std::path::Path,
 ) {
-    eprintln!("Creating extra wallet copy...");
+    tracing::info!("Creating extra wallet copy...");
     exec_ok(
         compose,
         "linera-network",
@@ -162,7 +164,7 @@ pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -
         .args(["down", "-v"])
         .status();
 
-    eprintln!("Starting docker compose stack...");
+    tracing::info!("Starting docker compose stack...");
     let mut compose =
         DockerCompose::with_local_client(&[compose_file_str]).with_project_name(project_name);
     compose.with_remove_volumes(true);

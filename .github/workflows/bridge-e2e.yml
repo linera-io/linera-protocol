@@ -3,8 +3,10 @@ name: Bridge E2E
 on:
   merge_group:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - 'testnet_*'
 
-# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
   cancel-in-progress: true
@@ -17,6 +19,7 @@ env:
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: warn
+  GCP_REGISTRY: us-docker.pkg.dev/linera-io-dev/linera-public-registry
 
 permissions:
   contents: read
@@ -31,15 +34,47 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build docker images
-        run: make -C linera-bridge build-all
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Pull pre-built linera images from GCP registry
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+
+      - name: Configure Docker for GCP
+        run: gcloud auth configure-docker us-docker.pkg.dev
+
+      - name: Pull linera & exporter images
+        run: |
+          BRANCH="${{ github.base_ref || github.ref_name }}"
+          docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
+          docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
+          # Re-tag to names your tests/compose expect
+          docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera:latest
+          docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter:latest
+
+      # Build bridge images with cache
+      - name: Build bridge image 1
+        uses: docker/build-push-action@v6
+        with:
+          context: ./linera-bridge
+          file: ./linera-bridge/Dockerfile  # adjust
+          load: true
+          tags: linera-bridge:latest
+          cache-from: type=gha,scope=linera-bridge
+          cache-to: type=gha,scope=linera-bridge,mode=max
+
+      # Repeat for other bridge images...
 
       - name: Run bridge E2E test
-        run: |
-          cargo test -p linera-bridge-e2e -- --ignored --nocapture
+        run: cargo test -p linera-bridge-e2e -- --ignored --nocapture
