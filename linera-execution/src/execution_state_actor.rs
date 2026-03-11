@@ -332,7 +332,7 @@ where
                 callback,
             } => {
                 let mut view = self.state.users.try_load_entry_mut(&id).await?;
-                view.write_batch(batch).await?;
+                view.write_batch(batch)?;
                 callback.respond(());
             }
 

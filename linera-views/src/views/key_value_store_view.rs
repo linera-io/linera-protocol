@@ -362,9 +362,9 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
-    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
-    /// view.insert(vec![0, 3], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).unwrap();
+    /// view.insert(vec![0, 2], vec![0]).unwrap();
+    /// view.insert(vec![0, 3], vec![0]).unwrap();
     /// let mut count = 0;
     /// view.for_each_index_while(|_key| {
     ///     count += 1;
@@ -433,9 +433,9 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
-    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
-    /// view.insert(vec![0, 3], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).unwrap();
+    /// view.insert(vec![0, 2], vec![0]).unwrap();
+    /// view.insert(vec![0, 3], vec![0]).unwrap();
     /// let mut count = 0;
     /// view.for_each_index(|_key| {
     ///     count += 1;
@@ -466,8 +466,8 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
-    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).unwrap();
+    /// view.insert(vec![0, 2], vec![0]).unwrap();
     /// let mut values = Vec::new();
     /// view.for_each_index_value_while(|_key, value| {
     ///     values.push(value.to_vec());
@@ -537,8 +537,8 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
-    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).unwrap();
+    /// view.insert(vec![0, 2], vec![0]).unwrap();
     /// let mut part_keys = Vec::new();
     /// view.for_each_index_while(|key| {
     ///     part_keys.push(key.to_vec());
@@ -568,8 +568,8 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
-    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).unwrap();
+    /// view.insert(vec![0, 2], vec![0]).unwrap();
     /// let indices = view.indices().await.unwrap();
     /// assert_eq!(indices, vec![vec![0, 1], vec![0, 2]]);
     /// # })
@@ -592,8 +592,8 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
-    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).unwrap();
+    /// view.insert(vec![0, 2], vec![0]).unwrap();
     /// let key_values = view.indices().await.unwrap();
     /// assert_eq!(key_values, vec![vec![0, 1], vec![0, 2]]);
     /// # })
@@ -640,7 +640,7 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![42]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![42]).unwrap();
     /// assert_eq!(view.get(&[0, 1]).await.unwrap(), Some(vec![42]));
     /// assert_eq!(view.get(&[0, 2]).await.unwrap(), None);
     /// # })
@@ -674,7 +674,7 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![42]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![42]).unwrap();
     /// assert!(view.contains_key(&[0, 1]).await.unwrap());
     /// assert!(!view.contains_key(&[0, 2]).await.unwrap());
     /// # })
@@ -708,7 +708,7 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![42]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![42]).unwrap();
     /// let keys = vec![vec![0, 1], vec![0, 2]];
     /// let results = view.contains_keys(&keys).await.unwrap();
     /// assert_eq!(results, vec![true, false]);
@@ -755,7 +755,7 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![42]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![42]).unwrap();
     /// assert_eq!(
     ///     view.multi_get(&[vec![0, 1], vec![0, 2]]).await.unwrap(),
     ///     vec![Some(vec![42]), None]
@@ -808,16 +808,16 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
-    /// view.insert(vec![3, 4], vec![42]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).unwrap();
+    /// view.insert(vec![3, 4], vec![42]).unwrap();
     /// let mut batch = Batch::new();
     /// batch.delete_key_prefix(vec![0]);
-    /// view.write_batch(batch).await.unwrap();
+    /// view.write_batch(batch).unwrap();
     /// let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
     /// assert_eq!(key_values, vec![]);
     /// # })
     /// ```
-    pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
+    pub fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY.measure_latency();
         *self.hash.get_mut().unwrap() = None;
@@ -862,14 +862,14 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).unwrap();
     /// assert_eq!(view.get(&[0, 1]).await.unwrap(), Some(vec![34]));
     /// # })
     /// ```
-    pub async fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) -> Result<(), ViewError> {
+    pub fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.put_key_value_bytes(index, value);
-        self.write_batch(batch).await
+        self.write_batch(batch)
     }
 
     /// Removes a value. If absent then the action has no effect.
@@ -880,15 +880,15 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
-    /// view.remove(vec![0, 1]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).unwrap();
+    /// view.remove(vec![0, 1]).unwrap();
     /// assert_eq!(view.get(&[0, 1]).await.unwrap(), None);
     /// # })
     /// ```
-    pub async fn remove(&mut self, index: Vec<u8>) -> Result<(), ViewError> {
+    pub fn remove(&mut self, index: Vec<u8>) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.delete_key(index);
-        self.write_batch(batch).await
+        self.write_batch(batch)
     }
 
     /// Deletes a key prefix.
@@ -899,15 +899,15 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
-    /// view.remove_by_prefix(vec![0]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).unwrap();
+    /// view.remove_by_prefix(vec![0]).unwrap();
     /// assert_eq!(view.get(&[0, 1]).await.unwrap(), None);
     /// # })
     /// ```
-    pub async fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) -> Result<(), ViewError> {
+    pub fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.delete_key_prefix(key_prefix);
-        self.write_batch(batch).await
+        self.write_batch(batch)
     }
 
     /// Iterates over all the keys matching the given prefix. The prefix is not included in the returned keys.
@@ -918,8 +918,8 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
-    /// view.insert(vec![3, 4], vec![42]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).unwrap();
+    /// view.insert(vec![3, 4], vec![42]).unwrap();
     /// let keys = view.find_keys_by_prefix(&[0]).await.unwrap();
     /// assert_eq!(keys, vec![vec![1]]);
     /// # })
@@ -995,8 +995,8 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![34]).await.unwrap();
-    /// view.insert(vec![3, 4], vec![42]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![34]).unwrap();
+    /// view.insert(vec![3, 4], vec![42]).unwrap();
     /// let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
     /// assert_eq!(key_values, vec![(vec![1], vec![34])]);
     /// # })
@@ -1209,7 +1209,7 @@ impl<C: Context> WritableKeyValueStore for ViewContainer<C> {
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewContainerError> {
         let mut view = self.view.write().await;
-        view.write_batch(batch).await?;
+        view.write_batch(batch)?;
         let mut batch = Batch::new();
         view.pre_save(&mut batch)?;
         view.post_save();
