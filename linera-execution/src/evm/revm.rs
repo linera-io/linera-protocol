@@ -410,10 +410,7 @@ fn get_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8>
     }
 }
 
-fn get_precompile_argument<Ctx: ContextTr>(
-    context: &mut Ctx,
-    inputs: &InputsImpl,
-) -> Vec<u8> {
+fn get_precompile_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &InputsImpl) -> Vec<u8> {
     get_argument(context, &inputs.input)
 }
 

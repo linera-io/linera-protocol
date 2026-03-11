@@ -966,8 +966,8 @@ where
                 }
             })
             .collect::<FuturesUnordered<_>>()
-        .try_collect::<Vec<_>>()
-        .await?;
+            .try_collect::<Vec<_>>()
+            .await?;
         Ok(())
     }
 
@@ -987,8 +987,8 @@ where
                 }
             })
             .collect::<FuturesUnordered<_>>()
-        .try_collect::<Vec<_>>()
-        .await?;
+            .try_collect::<Vec<_>>()
+            .await?;
         Ok(())
     }
 
