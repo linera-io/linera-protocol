@@ -616,8 +616,8 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![0]).await.unwrap();
-    /// view.insert(vec![0, 2], vec![0]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0]).unwrap();
+    /// view.insert(vec![0, 2], vec![0]).unwrap();
     /// let count = view.count().await.unwrap();
     /// assert_eq!(count, 2);
     /// # })
