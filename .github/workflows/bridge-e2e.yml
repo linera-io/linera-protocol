@@ -27,7 +27,6 @@ permissions:
 
 jobs:
   bridge-e2e:
-    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 60
 
@@ -63,22 +62,55 @@ jobs:
           BRANCH="${{ github.base_ref || github.ref_name }}"
           docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
           docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
-          # Re-tag to names your tests/compose expect
-          docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera:latest
-          docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter:latest
+          # Re-tag to names the compose file expects
+          docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
+          docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter
 
-      # Build bridge images with cache
-      - name: Build bridge image 1
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            bridge:
+              - 'linera-bridge/**'
+              - '!linera-bridge/tests/e2e/**'
+              - 'docker/Dockerfile.bridge'
+
+      - name: Build foundry-jq image
+        run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
+
+      - name: Pull bridge image (unchanged)
+        id: pull-bridge
+        if: steps.changes.outputs.bridge == 'false'
+        continue-on-error: true
+        run: |
+          BRANCH="${{ github.base_ref || github.ref_name }}"
+          docker pull "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
+          docker tag "${GCP_REGISTRY}/linera-bridge:${BRANCH}" linera-bridge:latest
+
+      - name: Build bridge image
+        id: build-bridge
+        if: steps.changes.outputs.bridge == 'true' || steps.pull-bridge.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
-          context: ./linera-bridge
-          file: ./linera-bridge/Dockerfile  # adjust
+          context: .
+          file: ./docker/Dockerfile.bridge
           load: true
-          tags: linera-bridge:latest
-          cache-from: type=gha,scope=linera-bridge
-          cache-to: type=gha,scope=linera-bridge,mode=max
+          tags: |
+            linera-bridge:latest
+            ${{ env.GCP_REGISTRY }}/linera-bridge:${{ github.base_ref || github.ref_name }}
 
-      # Repeat for other bridge images...
+      - name: Push bridge image to registry
+        if: steps.build-bridge.outcome == 'success'
+        run: |
+          BRANCH="${{ github.base_ref || github.ref_name }}"
+          docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
+
+      - name: Build fungible example Wasm
+        run: cargo build --release --target wasm32-unknown-unknown -p fungible
+        working-directory: examples
 
       - name: Run bridge E2E test
-        run: cargo test -p linera-bridge-e2e -- --ignored --nocapture
+        working-directory: linera-bridge/tests/e2e
+        env:
+          RUSTFLAGS: ""
+        run: cargo test -- --ignored --nocapture
