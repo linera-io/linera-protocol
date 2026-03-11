@@ -19,6 +19,7 @@ members = [
     "rfq",
     "social",
     "task-processor",
+    "wrapped-fungible",
 ]
 
 [workspace.dependencies]
@@ -63,6 +64,7 @@ fungible = { path = "./fungible" }
 matching-engine = { path = "./matching-engine" }
 native-fungible = { path = "./native-fungible" }
 non-fungible = { path = "./non-fungible" }
+wrapped-fungible = { path = "./wrapped-fungible" }
 
 [profile.release]
 debug = true
