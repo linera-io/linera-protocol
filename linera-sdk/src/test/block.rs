@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock, SignatureAggregator,
-        Transaction,
+        BundleExecutionPolicy, IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock,
+        SignatureAggregator, Transaction,
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
@@ -244,10 +244,15 @@ impl BlockBuilder {
                     .clone()
             })
             .collect();
-        let (block, _, resource_tracker) = self
+        let (_, block, _, resource_tracker) = self
             .validator
             .worker()
-            .stage_block_execution(self.block, None, published_blobs)
+            .stage_block_execution(
+                self.block,
+                None,
+                published_blobs,
+                BundleExecutionPolicy::committed(),
+            )
             .await?;
 
         let value = ConfirmedBlock::new(block);

@@ -427,15 +427,25 @@ message BlockHeight {
   uint64 height = 1;
 }
 
+// A stream identifier.
+message StreamId {
+  bytes bytes = 1;
+}
+
 // Request for previous event blocks.
 message PreviousEventBlocksRequest {
   ChainId chain_id = 1;
-  // bincode-encoded `Vec<StreamId>`
-  bytes stream_ids = 2;
+  repeated StreamId stream_ids = 2;
+}
+
+// An entry mapping a stream to its previous event block.
+message PreviousEventBlock {
+  StreamId stream_id = 1;
+  BlockHeight block_height = 2;
+  CryptoHash crypto_hash = 3;
 }
 
 // Response for previous event blocks.
 message PreviousEventBlocksResponse {
-  // bincode-encoded `BTreeMap<StreamId, (BlockHeight, CryptoHash)>`
-  bytes previous_event_blocks = 1;
+  repeated PreviousEventBlock previous_event_blocks = 1;
 }

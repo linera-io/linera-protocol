@@ -1084,15 +1084,7 @@ where
     ) -> Result<Response<api::PreviousEventBlocksResponse>, Status> {
         let start = Instant::now();
         let traffic_type = Self::get_traffic_type(&request);
-        let inner = request.into_inner();
-        let chain_id = inner
-            .chain_id
-            .ok_or_else(|| Status::invalid_argument("missing chain_id"))?
-            .try_into()?;
-        let stream_ids: Vec<linera_base::identifiers::StreamId> =
-            bincode::deserialize(&inner.stream_ids).map_err(|err| {
-                Status::invalid_argument(format!("failed to deserialize stream_ids: {err}"))
-            })?;
+        let (chain_id, stream_ids) = request.into_inner().try_into()?;
         match self
             .state
             .clone()
@@ -1106,12 +1098,7 @@ where
                     "previous_event_blocks",
                     traffic_type,
                 );
-                let bytes = bincode::serialize(&result).map_err(|err| {
-                    Status::internal(format!("failed to serialize previous_event_blocks: {err}"))
-                })?;
-                Ok(Response::new(api::PreviousEventBlocksResponse {
-                    previous_event_blocks: bytes,
-                }))
+                Ok(Response::new(result.try_into()?))
             }
             Err(error) => {
                 Self::log_request_outcome_and_latency(

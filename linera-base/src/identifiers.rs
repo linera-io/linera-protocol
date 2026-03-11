@@ -502,6 +502,7 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
 }
 
 /// The name of an event stream.
+// TODO(#5667): Enforce length limit for stream names.
 #[derive(
     Clone,
     Debug,
