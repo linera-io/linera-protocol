@@ -2,6 +2,7 @@
 members = [
     "linera-base",
     "linera-bridge",
+    "linera-cache",
     "linera-chain",
     "linera-client",
     "linera-core",
@@ -35,6 +36,7 @@ members = [
 default-members = [
     "linera-base",
     # "linera-bridge", # tested separately in CI (requires solc)
+    "linera-cache",
     "linera-chain",
     "linera-client",
     "linera-core",
@@ -184,7 +186,9 @@ prometheus = "0.13.3"
 prometheus-parse = "0.2.5"
 proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
 prost = "^0.14"
-quick_cache = "0.6.13"
+quick_cache = { version = "0.6.20", default-features = false, features = [
+    "parking_lot",
+] }
 quote = "1.0"
 rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 rand_chacha = { version = "0.3.1", default-features = false }
@@ -307,6 +311,7 @@ zstd = "0.13.2"
 
 linera-base = { version = "0.15.15", path = "./linera-base" }
 linera-bridge = { version = "0.15.15", path = "./linera-bridge" }
+linera-cache = { version = "0.15.15", path = "./linera-cache" }
 linera-chain = { version = "0.15.15", path = "./linera-chain" }
 linera-client = { version = "0.15.15", path = "./linera-client", default-features = false }
 linera-core = { version = "0.15.15", path = "./linera-core", default-features = false }

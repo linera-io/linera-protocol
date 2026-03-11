@@ -1,0 +1,31 @@
+[package]
+name = "linera-cache"
+description = "Caching utilities for the Linera protocol."
+readme = "README.md"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+metrics = ["prometheus", "linera-base/metrics"]
+test = ["linera-base/test"]
+
+[dependencies]
+linera-base.workspace = true
+lru.workspace = true
+prometheus = { workspace = true, optional = true }
+quick_cache.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true
+
+[dev-dependencies]
+linera-cache = { path = ".", default-features = false, features = ["test"] }
+serde.workspace = true

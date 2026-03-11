@@ -19,6 +19,7 @@ use linera_base::{
     time::Instant,
     Task,
 };
+use linera_cache::{UniqueValueCache, ValueCache};
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
@@ -38,7 +39,6 @@ use crate::{
     chain_worker::BlockOutcome,
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    value_cache::ValueCache,
     worker::{NetworkActions, WorkerError},
 };
 
@@ -304,7 +304,7 @@ where
     config: ChainWorkerConfig,
     storage: StorageClient,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     is_tracked: bool,
@@ -357,7 +357,9 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+        execution_state_cache: Arc<
+            UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>,
+        >,
         chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
