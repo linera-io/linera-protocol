@@ -1075,6 +1075,50 @@ where
         err,
         fields(
             nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id
+        )
+    )]
+    async fn previous_event_blocks(
+        &self,
+        request: Request<api::PreviousEventBlocksRequest>,
+    ) -> Result<Response<api::PreviousEventBlocksResponse>, Status> {
+        let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
+        let (chain_id, stream_ids) = request.into_inner().try_into()?;
+        match self
+            .state
+            .clone()
+            .previous_event_blocks(chain_id, stream_ids)
+            .await
+        {
+            Ok(result) => {
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "previous_event_blocks",
+                    traffic_type,
+                );
+                Ok(Response::new(result.try_into()?))
+            }
+            Err(error) => {
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "previous_event_blocks",
+                    traffic_type,
+                );
+                self.log_error(&error, "Failed to get previous event blocks");
+                Err(Status::internal(NodeError::from(error).to_string()))
+            }
+        }
+    }
+
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
             chain_id = ?request.get_ref().chain_id()
         )
     )]
@@ -1165,6 +1209,12 @@ impl GrpcProxyable for PendingBlobRequest {
 }
 
 impl GrpcProxyable for HandlePendingBlobRequest {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl GrpcProxyable for api::PreviousEventBlocksRequest {
     fn chain_id(&self) -> Option<ChainId> {
         self.chain_id.clone()?.try_into().ok()
     }

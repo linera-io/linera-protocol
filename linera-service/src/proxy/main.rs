@@ -454,7 +454,9 @@ where
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_)
             | UploadBlobResponse(_)
-            | DownloadCertificatesByHeightsResponse(_) => {
+            | DownloadCertificatesByHeightsResponse(_)
+            | PreviousEventBlocks(_)
+            | PreviousEventBlocksResponse(_) => {
                 Err(anyhow::Error::from(NodeError::UnexpectedMessage))
             }
         }

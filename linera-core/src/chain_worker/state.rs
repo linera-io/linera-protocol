@@ -272,6 +272,12 @@ where
             ChainWorkerRequest::GetManagerSeed { callback } => {
                 callback.send(self.get_manager_seed().await).is_ok()
             }
+            ChainWorkerRequest::GetPreviousEventBlocks {
+                stream_ids,
+                callback,
+            } => callback
+                .send(self.get_previous_event_blocks(stream_ids).await)
+                .is_ok(),
         };
 
         if !responded {
@@ -1223,6 +1229,35 @@ where
             return Err(WorkerError::BlobsNotFound(missing));
         }
         Ok(blobs)
+    }
+
+    /// Gets the previous event blocks for specific streams.
+    async fn get_previous_event_blocks(
+        &self,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError> {
+        let heights = self
+            .chain
+            .previous_event_blocks
+            .multi_get(&stream_ids)
+            .await?;
+        let mut result = BTreeMap::new();
+        let mut indices = Vec::new();
+        let mut streams_with_heights = Vec::new();
+        for (stream_id, height) in stream_ids.into_iter().zip(heights) {
+            if let Some(height) = height {
+                let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
+                indices.push(index);
+                streams_with_heights.push((stream_id, height));
+            }
+        }
+        let hashes = self.chain.confirmed_log.multi_get(indices).await?;
+        for (hash, (stream_id, height)) in hashes.into_iter().zip(streams_with_heights) {
+            if let Some(hash) = hash {
+                result.insert(stream_id, (height, hash));
+            }
+        }
+        Ok(result)
     }
 
     /// Gets event subscriptions.

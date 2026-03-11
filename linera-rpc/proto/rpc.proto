@@ -38,6 +38,9 @@ service ValidatorWorker {
 
   // Handle a (trusted!) cross-chain request.
   rpc HandleCrossChainRequest(CrossChainRequest) returns (google.protobuf.Empty);
+
+  // Returns the previous event blocks for a chain's streams.
+  rpc PreviousEventBlocks(PreviousEventBlocksRequest) returns (PreviousEventBlocksResponse);
 }
 
 // How to communicate with a validator or a local node.
@@ -99,6 +102,9 @@ service ValidatorNode {
 
   // Returns the certificate that last used the blob.
   rpc BlobLastUsedByCertificate(BlobId) returns (Certificate);
+
+  // Returns the previous event blocks for a chain's streams.
+  rpc PreviousEventBlocks(PreviousEventBlocksRequest) returns (PreviousEventBlocksResponse);
 }
 
 // Batch of raw certificates.
@@ -419,4 +425,27 @@ message ChainInfoResponse {
 
 message BlockHeight {
   uint64 height = 1;
+}
+
+// A stream identifier.
+message StreamId {
+  bytes bytes = 1;
+}
+
+// Request for previous event blocks.
+message PreviousEventBlocksRequest {
+  ChainId chain_id = 1;
+  repeated StreamId stream_ids = 2;
+}
+
+// An entry mapping a stream to its previous event block.
+message PreviousEventBlock {
+  StreamId stream_id = 1;
+  BlockHeight block_height = 2;
+  CryptoHash crypto_hash = 3;
+}
+
+// Response for previous event blocks.
+message PreviousEventBlocksResponse {
+  repeated PreviousEventBlock previous_event_blocks = 1;
 }

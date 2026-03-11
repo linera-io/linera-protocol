@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use linera_base::{
     crypto::{
         AccountPublicKey, AccountSignature, CryptoError, CryptoHash, ValidatorPublicKey,
@@ -8,7 +10,7 @@ use linera_base::{
     },
     data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
-    identifiers::{AccountOwner, BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
@@ -1032,6 +1034,98 @@ impl TryFrom<api::DownloadCertificatesByHeightsRequest> for CertificatesByHeight
             chain_id: try_proto_convert(request.chain_id)?,
             heights: request.heights.into_iter().map(Into::into).collect(),
         })
+    }
+}
+
+impl TryFrom<StreamId> for api::StreamId {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(stream_id: StreamId) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bytes: bincode::serialize(&stream_id)?,
+        })
+    }
+}
+
+impl TryFrom<api::StreamId> for StreamId {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(stream_id: api::StreamId) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(&stream_id.bytes)?)
+    }
+}
+
+impl TryFrom<(ChainId, Vec<StreamId>)> for api::PreviousEventBlocksRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from((chain_id, stream_ids): (ChainId, Vec<StreamId>)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(chain_id.into()),
+            stream_ids: stream_ids
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<api::PreviousEventBlocksRequest> for (ChainId, Vec<StreamId>) {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::PreviousEventBlocksRequest) -> Result<Self, Self::Error> {
+        Ok((
+            try_proto_convert(request.chain_id)?,
+            request
+                .stream_ids
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        ))
+    }
+}
+
+impl TryFrom<BTreeMap<StreamId, (BlockHeight, CryptoHash)>> for api::PreviousEventBlocksResponse {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(map: BTreeMap<StreamId, (BlockHeight, CryptoHash)>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            previous_event_blocks: map
+                .into_iter()
+                .map(|(stream_id, (block_height, crypto_hash))| {
+                    Ok(api::PreviousEventBlock {
+                        stream_id: Some(stream_id.try_into()?),
+                        block_height: Some(block_height.into()),
+                        crypto_hash: Some(crypto_hash.into()),
+                    })
+                })
+                .collect::<Result<_, GrpcProtoConversionError>>()?,
+        })
+    }
+}
+
+impl TryFrom<api::PreviousEventBlocksResponse> for BTreeMap<StreamId, (BlockHeight, CryptoHash)> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(response: api::PreviousEventBlocksResponse) -> Result<Self, Self::Error> {
+        response
+            .previous_event_blocks
+            .into_iter()
+            .map(|entry| {
+                let stream_id: StreamId = entry
+                    .stream_id
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .try_into()?;
+                let block_height: BlockHeight = entry
+                    .block_height
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .into();
+                let crypto_hash: CryptoHash = entry
+                    .crypto_hash
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .try_into()?;
+                Ok((stream_id, (block_height, crypto_hash)))
+            })
+            .collect()
     }
 }
 

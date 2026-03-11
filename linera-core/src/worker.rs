@@ -1484,6 +1484,21 @@ where
         })
         .await
     }
+
+    /// Gets the previous event blocks for specific streams.
+    pub async fn previous_event_blocks(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::GetPreviousEventBlocks {
+                stream_ids,
+                callback,
+            }
+        })
+        .await
+    }
 }
 
 #[cfg(with_testing)]

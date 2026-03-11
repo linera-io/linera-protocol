@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 #[cfg(not(web))]
 use futures::stream::BoxStream;
 #[cfg(web)]
@@ -12,7 +14,7 @@ use linera_base::{
     data_types::{
         ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription, Round, Timestamp,
     },
-    identifiers::{BlobId, ChainId, EventId},
+    identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -171,6 +173,13 @@ pub trait ValidatorNode {
         &self,
         blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError>;
+
+    /// Returns the previous event blocks for a chain's streams.
+    async fn previous_event_blocks(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError>;
 }
 
 /// Turn an address into a validator node.

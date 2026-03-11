@@ -41,8 +41,9 @@ use linera_rpc::{
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoResult, CryptoHash, HandlePendingBlobRequest,
             LiteCertificate, NetworkDescription, Notification, NotificationBatch,
-            PendingBlobRequest, PendingBlobResult, RawCertificate, RawCertificatesBatch,
-            SubscriptionRequest, VersionInfo,
+            PendingBlobRequest, PendingBlobResult, PreviousEventBlocksRequest,
+            PreviousEventBlocksResponse, RawCertificate, RawCertificatesBatch, SubscriptionRequest,
+            VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -699,6 +700,17 @@ where
         let (mut client, inner) = self.worker_client(request)?;
         client
             .handle_pending_blob(Self::create_forwarding_request(inner))
+            .await
+    }
+
+    #[instrument(skip_all, err(Display), fields(method = "previous_event_blocks"))]
+    async fn previous_event_blocks(
+        &self,
+        request: Request<PreviousEventBlocksRequest>,
+    ) -> Result<Response<PreviousEventBlocksResponse>, Status> {
+        let (mut client, inner) = self.worker_client(request)?;
+        client
+            .previous_event_blocks(Self::create_forwarding_request(inner))
             .await
     }
 
