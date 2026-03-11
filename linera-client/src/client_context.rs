@@ -415,7 +415,7 @@ impl<Env: Environment> ClientContext<Env> {
             .insert(
                 info.chain_id,
                 wallet::Chain {
-                    pending_proposal: client.pending_proposal().clone(),
+                    pending_proposal: client.pending_proposal().await,
                     owner: existing_owner,
                     ..info.as_ref().into()
                 },
@@ -1006,7 +1006,7 @@ impl<Env: Environment> ClientContext<Env> {
             for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
-                let pending_proposal = chain_client.pending_proposal().clone();
+                let pending_proposal = chain_client.pending_proposal().await;
                 self.wallet()
                     .insert(
                         info.chain_id,
