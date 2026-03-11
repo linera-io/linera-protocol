@@ -5,10 +5,9 @@
 
 use alloy_primitives::Bytes;
 use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
-use fungible::Account;
 use linera_bridge::proof;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ChainId, WithContractAbi},
+    linera_base_types::{Account, AccountOwner, Amount, ChainId, WithContractAbi},
     views::{linera_views, RootView, SetView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };

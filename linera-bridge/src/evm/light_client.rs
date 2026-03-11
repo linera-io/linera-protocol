@@ -590,7 +590,8 @@ mod tests {
         .into_iter()
         .collect();
         let committee =
-            linera_execution::Committee::new(validators, ResourceControlPolicy::default());
+            linera_execution::Committee::new(validators, ResourceControlPolicy::default())
+                .expect("committee creation failed");
         let committee_bytes = bcs::to_bytes(&committee).expect("committee serialization failed");
         let blob_content = BlobContent::new_committee(committee_bytes.clone());
         let blob_hash = CryptoHash::new(&blob_content);
@@ -653,7 +654,8 @@ mod tests {
             })
             .collect();
         let committee =
-            linera_execution::Committee::new(validators, ResourceControlPolicy::default());
+            linera_execution::Committee::new(validators, ResourceControlPolicy::default())
+                .expect("committee creation failed");
         let bytes = bcs::to_bytes(&committee).expect("committee serialization failed");
         let blob_content = BlobContent::new_committee(bytes.clone());
         let blob_hash = CryptoHash::new(&blob_content);

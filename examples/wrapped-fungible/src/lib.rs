@@ -5,12 +5,10 @@
 
 use async_graphql::{Request, Response};
 pub use fungible::Message;
-pub use linera_sdk::abis::fungible::{
-    Account, FungibleResponse, InitialState, InitialStateBuilder,
-};
+pub use linera_sdk::abis::fungible::{FungibleResponse, InitialState, InitialStateBuilder};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, Amount, ChainId, ContractAbi, ServiceAbi},
+    linera_base_types::{Account, AccountOwner, Amount, ChainId, ContractAbi, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 

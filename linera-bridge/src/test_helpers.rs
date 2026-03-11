@@ -55,7 +55,8 @@ pub fn create_committee_blob(public: &ValidatorPublicKey) -> (Vec<u8>, CryptoHas
             },
         )]),
         ResourceControlPolicy::default(),
-    );
+    )
+    .expect("committee creation failed");
     let bytes = bcs::to_bytes(&committee).expect("committee serialization failed");
     let blob_content = BlobContent::new_committee(bytes.clone());
     let blob_hash = CryptoHash::new(&blob_content);
@@ -230,7 +231,7 @@ pub fn fungible_message_transaction(
             certificate_hash: CryptoHash::new(&TestString::new("cert")),
             transaction_index: 0,
             messages: vec![PostedMessage {
-                authenticated_signer: None,
+                authenticated_owner: None,
                 grant: Amount::ZERO,
                 refund_grant_to: None,
                 kind: MessageKind::Simple,
@@ -387,7 +388,7 @@ pub fn create_test_block(
             timestamp: Timestamp::from(0),
             state_hash: CryptoHash::new(&TestString::new("state")),
             previous_block_hash: None,
-            authenticated_signer: None,
+            authenticated_owner: None,
             transactions_hash: CryptoHash::new(&TestString::new("tx")),
             messages_hash: CryptoHash::new(&TestString::new("msg")),
             previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg")),

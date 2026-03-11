@@ -5,13 +5,11 @@
 
 use fungible::{state::FungibleTokenState, FungibleResponse, InitialState, Message};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, WithContractAbi},
+    linera_base_types::{Account, AccountOwner, Amount, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use wrapped_fungible::{
-    Account, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
-};
+use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters};
 
 pub struct WrappedFungibleTokenContract {
     state: FungibleTokenState,
@@ -164,7 +162,7 @@ impl WrappedFungibleTokenContract {
     fn require_minter(&mut self) -> AccountOwner {
         let signer = self
             .runtime
-            .authenticated_signer()
+            .authenticated_owner()
             .expect("Mint/Burn requires an authenticated signer");
         let params: WrappedParameters = self.runtime.application_parameters();
         assert!(
