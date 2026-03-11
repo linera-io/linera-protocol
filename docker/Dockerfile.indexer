@@ -42,6 +42,7 @@ RUN apt-get update && apt-get install -y \
 
 COPY examples examples
 COPY linera-base linera-base
+COPY linera-bridge linera-bridge
 COPY linera-chain linera-chain
 COPY linera-client linera-client
 COPY linera-core linera-core
