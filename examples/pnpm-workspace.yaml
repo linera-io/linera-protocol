@@ -1,6 +1,7 @@
 packages:
 - ../web/@linera/client
 - ../web/@linera/metamask
+- bridge-demo
 - counter
 - counter/metamask
 - native-fungible

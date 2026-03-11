@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linera | EVM Bridge Demo</title>
+    <link href="/style.css" rel="stylesheet">
+    <link href="/icon.png" rel="icon">
+    <link href="https://fonts.googleapis.com/css2?family=Fragment+Mono&display=swap" rel="stylesheet">
+    <style type="text/css">
+      /*
+       * Scoped under .bridge-demo to beat style.css bare-tag selectors.
+       * Inspired by family.co: warm tones, inset borders, generous spacing,
+       * pill buttons, subtle depth, clear hierarchy.
+       */
+
+      /* ── Layout ── */
+      .bridge-demo.container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+        gap: 2rem;
+        height: auto;
+      }
+
+      .bridge-demo h1 {
+        font-size: 1.5rem;
+        text-align: center;
+        margin: 0;
+        letter-spacing: -0.02em;
+        color: #343433;
+      }
+      .bridge-demo h1::before { display: none; }
+
+      .bridge-demo .subtitle {
+        text-align: center;
+        font-size: 0.875rem;
+        color: #848281;
+        max-width: 32rem;
+        margin: -0.5rem 0 0;
+        line-height: 1.6;
+      }
+
+      /* ── Two-column grid ── */
+      .bridge-demo .widgets {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        width: 100%;
+        align-items: start;
+      }
+      @media (max-width: 700px) {
+        .bridge-demo .widgets { grid-template-columns: 1fr; }
+      }
+
+      /* ── Cards — warm white, inset border like family.co ── */
+      .bridge-demo .card {
+        background: #fff;
+        border-radius: 20px;
+        padding: 0;
+        width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+        transition: transform 180ms ease, box-shadow 180ms ease;
+      }
+      .bridge-demo .card:hover {
+        transform: translateY(-2px);
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06),
+                    0 8px 32px rgba(0,0,0,0.08);
+      }
+
+      /* ── Card header — subtle colored top accent + title ── */
+      .bridge-demo .card-accent {
+        height: 4px;
+      }
+      .bridge-demo .card-accent.evm { background: #4a5568; }
+      .bridge-demo .card-accent.linera { background: #de2a02; }
+
+      .bridge-demo .card-body {
+        padding: 1.5rem 1.75rem 1.75rem;
+      }
+
+      .bridge-demo .card-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1.25rem;
+      }
+      .bridge-demo .card-title .icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #fff;
+        flex-shrink: 0;
+      }
+      .bridge-demo .card-title .icon.evm { background: #4a5568; }
+      .bridge-demo .card-title .icon.linera { background: #de2a02; }
+      .bridge-demo .card-title span {
+        font-weight: 600;
+        font-size: 1rem;
+        color: #343433;
+        letter-spacing: -0.01em;
+      }
+
+      /* ── Info rows ── */
+      .bridge-demo .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0.375rem 0;
+        gap: 0.75rem;
+        min-width: 0;
+      }
+      .bridge-demo .info-row .label {
+        font-size: 0.8125rem;
+        color: #848281;
+        font-weight: 400;
+        flex-shrink: 0;
+      }
+      .bridge-demo .info-row .value {
+        font-family: 'Fragment Mono', monospace;
+        font-size: 0.8125rem;
+        color: #343433;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: right;
+        min-width: 0;
+      }
+
+      /* Balance — the hero number */
+      .bridge-demo .balance-row {
+        background: #FBFAF9;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        margin: 0.75rem 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .bridge-demo .balance-row .label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #848281;
+        font-weight: 500;
+      }
+      .bridge-demo .balance-row .value {
+        font-family: 'Fragment Mono', monospace;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #343433;
+        letter-spacing: -0.02em;
+      }
+
+      /* ── Transfer section — subtle tinted zone ── */
+      .bridge-demo .transfer-section {
+        border-radius: 14px;
+        padding: 1.25rem;
+        margin-top: 0.5rem;
+      }
+      .bridge-demo .transfer-section.deposit {
+        background: rgba(46, 139, 87, 0.04);
+        border: 1px solid rgba(46, 139, 87, 0.12);
+      }
+      .bridge-demo .transfer-section.withdraw {
+        background: rgba(222, 42, 2, 0.04);
+        border: 1px solid rgba(222, 42, 2, 0.10);
+      }
+
+      .bridge-demo .transfer-label {
+        font-size: 0.6875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #848281;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+      }
+
+      /* ── Inputs — warm, recessed ── */
+      .bridge-demo input[type="text"] {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1.5px solid #E8E6E3;
+        border-radius: 12px;
+        font-family: 'Fragment Mono', monospace;
+        font-size: 1rem;
+        background: #FBFAF9;
+        color: #343433;
+        margin: 0 0 0.75rem;
+        transition: border-color 150ms ease, background 150ms ease;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.04);
+      }
+      .bridge-demo input[type="text"]::placeholder {
+        color: #b5b3b0;
+        font-family: 'Poppins', sans-serif;
+      }
+      .bridge-demo input[type="text"]:focus {
+        outline: none;
+        border-color: #999;
+        background: #fff;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.04), 0 0 0 3px rgba(0,0,0,0.04);
+      }
+
+      /* ── Buttons — pill-shaped, solid, with character ── */
+      .bridge-demo button,
+      .bridge-demo input[type="submit"] {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        color: #fff;
+        font-family: 'Poppins', sans-serif;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        padding: 0.875rem 1.5rem;
+        border: none;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: transform 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        letter-spacing: -0.01em;
+      }
+      .bridge-demo button:hover,
+      .bridge-demo input[type="submit"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      }
+      .bridge-demo button:active,
+      .bridge-demo input[type="submit"]:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      }
+
+      .bridge-demo .btn-deposit {
+        background: #2e8b57;
+      }
+      .bridge-demo .btn-deposit:hover { background: #26774b; }
+      .bridge-demo .btn-withdraw {
+        background: #de2a02;
+      }
+      .bridge-demo .btn-withdraw:hover { background: #c42400; }
+
+      .bridge-demo #connect-metamask {
+        background: #343433;
+        margin-bottom: 1rem;
+      }
+      .bridge-demo #connect-metamask:hover { background: #1a1a1a; }
+
+      .bridge-demo button[disabled],
+      .bridge-demo input[type="submit"][disabled] {
+        background: #d0d0d0;
+        color: #fff;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+      }
+      .bridge-demo #connect-metamask[disabled] {
+        background: #343433;
+        opacity: 0.5;
+      }
+
+      /* ── Status — clean bar with accent ── */
+      .bridge-demo #status {
+        font-family: 'Fragment Mono', monospace;
+        font-size: 0.8125rem;
+        padding: 0.875rem 1.25rem;
+        border-left: 3px solid #de2a02;
+        background: #fff;
+        border-radius: 0 14px 14px 0;
+        width: 100%;
+        min-height: 2.75rem;
+        color: #494440;
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+        display: flex;
+        align-items: center;
+      }
+
+      /* ── Errors ── */
+      .bridge-demo #errors {
+        list-style: none;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+      }
+      .bridge-demo #errors li {
+        color: #de2a02;
+        font-size: 0.8125rem;
+        padding: 0.75rem 1.25rem;
+        border: 1px solid rgba(222, 42, 2, 0.2);
+        border-radius: 14px;
+        margin: 0.25rem 0;
+        background: rgba(222, 42, 2, 0.03);
+      }
+
+      /* ── Activity panel ── */
+      .bridge-demo .logs {
+        width: 100%;
+        border-radius: 20px;
+        min-height: 10rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bridge-demo container">
+      <h1>EVM Bridge</h1>
+      <p class="subtitle">
+        Bridge ERC-20 tokens between Anvil EVM and Linera
+      </p>
+
+      <div class="widgets">
+        <!-- EVM widget -->
+        <div class="card">
+          <div class="card-accent evm"></div>
+          <div class="card-body">
+            <div class="card-title">
+              <div class="icon evm">E</div>
+              <span>Anvil EVM</span>
+            </div>
+            <button id="connect-metamask">Connect MetaMask</button>
+            <div class="info-row">
+              <span class="label">Address</span>
+              <span class="value" id="evm-address">not connected</span>
+            </div>
+            <div class="balance-row">
+              <span class="label">ERC-20 Balance</span>
+              <span class="value" id="evm-balance">&mdash;</span>
+            </div>
+            <div class="transfer-section deposit">
+              <div class="transfer-label">Deposit &middot; EVM &rarr; Linera</div>
+              <form id="deposit-form">
+                <input type="text" name="amount" inputmode="decimal" pattern="\d+(\.\d*)?" placeholder="0.00">
+                <input type="submit" class="btn-deposit" value="Deposit to Linera" disabled>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linera widget -->
+        <div class="card">
+          <div class="card-accent linera"></div>
+          <div class="card-body">
+            <div class="card-title">
+              <div class="icon linera">L</div>
+              <span>Linera</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Account</span>
+              <span class="value" id="linera-account">initializing...</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Chain</span>
+              <span class="value" id="linera-chain">&mdash;</span>
+            </div>
+            <div class="balance-row">
+              <span class="label">Wrapped Balance</span>
+              <span class="value" id="linera-balance">&mdash;</span>
+            </div>
+            <div class="transfer-section withdraw">
+              <div class="transfer-label">Withdraw &middot; Linera &rarr; EVM</div>
+              <form id="withdraw-form">
+                <input type="text" name="amount" inputmode="decimal" pattern="\d+(\.\d*)?" placeholder="0.00">
+                <input type="submit" class="btn-withdraw" value="Withdraw to EVM" disabled>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div id="status">Ready</div>
+      <ul id="errors">
+        <template><li class="message"></li></template>
+      </ul>
+
+      <!-- Activity panel -->
+      <div class="logs">
+        <h2>Bridge Activity</h2>
+        <h3>Chain <code id="chain-id-display" class="hex">-</code></h3>
+        <ul id="logs">
+          <template>
+            <li>
+              <span class="height"></span>: <span class="code hash"></span>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </div>
+
+    <script type="module">
+      import * as linera from '@linera/client';
+      import { ethers } from 'ethers';
+
+      // ── Config from env ──
+      const FAUCET_URL       = import.meta.env.LINERA_FAUCET_URL;
+      const APP_ID           = import.meta.env.LINERA_APPLICATION_ID;   // wrapped-fungible
+      const BRIDGE_APP_ID    = import.meta.env.LINERA_BRIDGE_APP_ID;    // evm-bridge
+      const RELAY_URL        = import.meta.env.LINERA_RELAY_URL;
+      const BRIDGE_ADDRESS   = import.meta.env.LINERA_BRIDGE_ADDRESS;   // FungibleBridge on EVM
+      const TOKEN_ADDRESS    = import.meta.env.LINERA_TOKEN_ADDRESS;    // ERC-20 on EVM
+      const BRIDGE_CHAIN_ID  = import.meta.env.LINERA_BRIDGE_CHAIN_ID;  // relay's chain
+      const EVM_CHAIN_ID     = import.meta.env.LINERA_EVM_CHAIN_ID || '31337';
+
+      // ── Minimal ABIs ──
+      const ERC20_ABI = [
+        'function balanceOf(address) view returns (uint256)',
+        'function approve(address spender, uint256 amount) returns (bool)',
+        'function decimals() view returns (uint8)',
+      ];
+
+      const BRIDGE_ABI = [
+        'function deposit(bytes32 target_chain_id, bytes32 target_application_id, bytes32 target_account_owner, uint256 amount)',
+      ];
+
+      // ── GraphQL helpers ──
+      const gql = (query, variables = {}) => JSON.stringify({ query, variables });
+
+      // ── DOM helpers ──
+      const $ = sel => document.querySelector(sel);
+      const setStatus = msg => { $('#status').textContent = msg; };
+      const addError = msg => {
+        const tpl = $('#errors template').content.cloneNode(true);
+        tpl.querySelector('.message').textContent = msg;
+        $('#errors').appendChild(tpl);
+      };
+      const clearErrors = () => {
+        for (const el of [...$('#errors').children])
+          if (!(el instanceof HTMLTemplateElement)) el.remove();
+      };
+
+      function prependEntry(parent, variables) {
+        const entry = parent.querySelector('template').content.cloneNode(true);
+        for (const [name, value] of Object.entries(variables)) {
+          const el = entry.querySelector(`.${name}`);
+          if (el) el.textContent = value;
+        }
+        parent.insertBefore(entry, parent.querySelector('template').nextSibling);
+      }
+
+      // ── State ──
+      let evmProvider = null;
+      let evmSigner = null;
+      let evmAddress = null;
+      let lineraChain = null;
+      let lineraOwner = null;
+      let wrappedApp = null;  // wrapped-fungible application
+      let bridgeApp = null;   // evm-bridge application
+
+      // ── EVM balance ──
+      async function updateEvmBalance() {
+        if (!evmProvider || !evmAddress) return;
+        try {
+          const token = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, evmProvider);
+          const balance = await token.balanceOf(evmAddress);
+          // ERC-20 uses 18 decimals
+          $('#evm-balance').textContent = ethers.formatUnits(balance, 18);
+        } catch (e) {
+          console.error('Failed to fetch EVM balance:', e);
+        }
+      }
+
+      // ── Linera balance ──
+      async function updateLineraBalance(blockHash) {
+        if (!wrappedApp || !lineraOwner) return;
+        try {
+          const resp = JSON.parse(await wrappedApp.query(
+            gql(`query { accounts { entry(key: "${lineraOwner}") { value } } }`),
+            blockHash ? { blockHash } : {},
+          ));
+          const val = resp.data?.accounts?.entry?.value || '0';
+          $('#linera-balance').textContent = (+val).toFixed(2);
+        } catch (e) {
+          console.error('Failed to fetch Linera balance:', e);
+        }
+      }
+
+      // ── MetaMask connect ──
+      async function connectMetaMask() {
+        if (!window.ethereum) {
+          addError('MetaMask not detected. Please install MetaMask.');
+          return;
+        }
+        // Ensure MetaMask is on the correct chain.
+        const expectedChainHex = '0x' + Number(EVM_CHAIN_ID).toString(16);
+        const currentChain = await window.ethereum.request({ method: 'eth_chainId' });
+        if (currentChain !== expectedChainHex) {
+          try {
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: expectedChainHex }],
+            });
+          } catch (e) {
+            addError(`Please switch MetaMask to chain ${EVM_CHAIN_ID} (got ${parseInt(currentChain, 16)})`);
+            return;
+          }
+        }
+        evmProvider = new ethers.BrowserProvider(window.ethereum);
+        evmSigner = await evmProvider.getSigner();
+        evmAddress = await evmSigner.getAddress();
+        $('#evm-address').textContent = evmAddress;
+        $('#connect-metamask').textContent = 'Connected';
+        $('#connect-metamask').disabled = true;
+        await updateEvmBalance();
+        // Enable forms
+        $('#deposit-form input[type="submit"]').disabled = false;
+        $('#withdraw-form input[type="submit"]').disabled = false;
+      }
+
+      // ── Wait for tx receipt with polling (handles slow RPCs like Base Sepolia) ──
+      async function waitForTx(hash, timeoutMs = 120_000, intervalMs = 3_000) {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const receipt = await evmProvider.getTransactionReceipt(hash);
+          if (receipt) return receipt;
+          await new Promise(r => setTimeout(r, intervalMs));
+        }
+        throw new Error(`Transaction ${hash} not confirmed within ${timeoutMs / 1000}s`);
+      }
+
+      // ── Deposit flow ──
+      async function deposit(amount) {
+        clearErrors();
+        if (!evmSigner) { addError('Connect MetaMask first'); return; }
+
+        try {
+          const decimals = 18;
+          const amountWei = ethers.parseUnits(amount, decimals);
+          const token = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, evmSigner);
+          const bridge = new ethers.Contract(BRIDGE_ADDRESS, BRIDGE_ABI, evmSigner);
+
+          // Target the user's own chain (wrapped-fungible sends cross-chain Credit)
+          const chainIdBytes = '0x' + lineraChain;
+          // Wrapped-fungible application ID as bytes32
+          const appIdHex = APP_ID.replace(/^0x/, '');
+          const appIdBytes32 = '0x' + appIdHex.slice(0, 64).padStart(64, '0');
+          // Owner as bytes32
+          const ownerHex = lineraOwner.replace(/^0x/, '');
+          const ownerBytes32 = '0x' + ownerHex.slice(0, 64).padStart(64, '0');
+
+          // Step 1: Approve
+          setStatus('Step 1/3: Approving ERC-20 spend...');
+          const approveTx = await token.approve(BRIDGE_ADDRESS, amountWei);
+          setStatus('Step 1/3: Waiting for approval confirmation...');
+          await waitForTx(approveTx.hash);
+
+          // Step 2: Deposit on EVM
+          setStatus('Step 2/3: Depositing to FungibleBridge...');
+          const depositTx = await bridge.deposit(chainIdBytes, appIdBytes32, ownerBytes32, amountWei);
+          setStatus('Step 2/3: Waiting for deposit confirmation...');
+          const receipt = await waitForTx(depositTx.hash);
+          const txHash = receipt.hash;
+
+          // Step 3: Send to relay (generates proof + submits to Linera)
+          setStatus('Step 3/3: Relay processing deposit...');
+          const depositResp = await fetch(`${RELAY_URL}/deposit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tx_hash: txHash }),
+          });
+          if (!depositResp.ok) {
+            const body = await depositResp.json().catch(() => ({}));
+            throw new Error(body.error || `Relay returned ${depositResp.status}`);
+          }
+
+          setStatus('Deposit complete! Waiting for balance update...');
+          await updateEvmBalance();
+          // Poll for balance update (cross-chain Credit may take a few seconds)
+          const depositDeadline = Date.now() + 60_000;
+          while (Date.now() < depositDeadline) {
+            await new Promise(r => setTimeout(r, 3000));
+            await updateLineraBalance();
+            const bal = parseFloat($('#linera-balance').textContent);
+            console.log('[bridge-demo] polling wrapped balance:', bal);
+            if (bal > 0) {
+              setStatus('Deposit complete! Wrapped tokens received.');
+              break;
+            }
+          }
+        } catch (e) {
+          console.error('Deposit failed:', e);
+          addError(`Deposit failed: ${e.message}`);
+          setStatus('Deposit failed');
+        }
+      }
+
+      // ── Withdraw flow ──
+      async function withdraw(amount) {
+        clearErrors();
+        if (!evmSigner) { addError('Connect MetaMask first'); return; }
+
+        try {
+          // Strip 0x and lowercase the EVM address, pad to 40 hex chars
+          const evmAddrHex = evmAddress.replace(/^0x/, '').toLowerCase();
+          // Address20 format: 0x followed by 40 hex chars
+          const targetOwner = `0x${evmAddrHex}`;
+          const targetAccount = { owner: targetOwner, chainId: BRIDGE_CHAIN_ID };
+
+          // Step 1: Transfer wrapped tokens to bridge chain with Address20 owner
+          setStatus('Step 1/3: Burning wrapped tokens (transfer to bridge chain)...');
+          const mutation = gql(`mutation(
+            $donor: AccountOwner!,
+            $amount: Amount!,
+            $recipient: FungibleAccount!
+          ) {
+            transfer(owner: $donor, amount: $amount, targetAccount: $recipient)
+          }`, {
+            donor: lineraOwner,
+            amount: amount,
+            recipient: targetAccount,
+          });
+          const resp = JSON.parse(await wrappedApp.query(mutation));
+          if (resp.errors?.length) throw new Error(resp.errors[0].message);
+
+          // Step 2: Wait for relay to forward block
+          setStatus('Step 2/3: Waiting for relay to forward block to EVM...');
+
+          // Step 3: Poll EVM balance
+          const initialBalance = await new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, evmProvider)
+            .balanceOf(evmAddress);
+
+          setStatus('Step 3/3: Polling EVM balance...');
+          const deadline = Date.now() + 60_000;
+          while (Date.now() < deadline) {
+            await new Promise(r => setTimeout(r, 1000));
+            const current = await new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, evmProvider)
+              .balanceOf(evmAddress);
+            if (current > initialBalance) {
+              setStatus('Withdrawal complete!');
+              await updateEvmBalance();
+              await updateLineraBalance();
+              return;
+            }
+          }
+          setStatus('Withdrawal timed out. The relay may still be processing.');
+          await updateEvmBalance();
+        } catch (e) {
+          console.error('Withdraw failed:', e);
+          addError(`Withdraw failed: ${e.message}`);
+          setStatus('Withdrawal failed');
+        }
+      }
+
+      // ── Main ──
+      async function run() {
+        const depositForm = $('#deposit-form');
+        const withdrawForm = $('#withdraw-form');
+
+        $('#connect-metamask').addEventListener('click', connectMetaMask);
+
+        depositForm.addEventListener('submit', e => {
+          e.preventDefault();
+          deposit(e.target.elements.amount.value);
+        });
+
+        withdrawForm.addEventListener('submit', e => {
+          e.preventDefault();
+          withdraw(e.target.elements.amount.value);
+        });
+
+        // Initialize Linera client
+        setStatus('Initializing Linera client...');
+        await linera.initialize();
+        const faucet = await new linera.Faucet(FAUCET_URL);
+        const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;
+        const signer = linera.signer.PrivateKey.fromMnemonic(mnemonic);
+        const wallet = await faucet.createWallet();
+        lineraOwner = signer.address();
+        lineraChain = await faucet.claimChain(wallet, lineraOwner);
+
+        const client = await new linera.Client(wallet, signer);
+        const chain = await client.chain(lineraChain, { owner: lineraOwner });
+        wrappedApp = await chain.application(APP_ID);
+        console.log('[bridge-demo] Linera initialized', { lineraChain, lineraOwner, APP_ID, BRIDGE_APP_ID });
+
+        $('#linera-account').textContent = lineraOwner;
+        $('#linera-chain').textContent = lineraChain;
+        $('#chain-id-display').textContent = lineraChain;
+
+        await updateLineraBalance();
+
+        // Listen for chain notifications
+        chain.onNotification(notification => {
+          console.log('[bridge-demo] notification:', JSON.stringify(notification));
+          if (notification.reason.NewIncomingBundle) {
+            console.log('[bridge-demo] NewIncomingBundle detected, updating balances...');
+            updateLineraBalance();
+            updateEvmBalance();
+          } else if (notification.reason.BlockExecuted) {
+            updateLineraBalance(notification.reason.BlockExecuted.hash);
+            updateEvmBalance();
+          } else if (notification.reason.NewBlock) {
+            prependEntry($('#logs'), notification.reason.NewBlock);
+            updateLineraBalance();
+            updateEvmBalance();
+          }
+        });
+
+        setStatus('Ready. Connect MetaMask to begin.');
+      }
+
+      if (document.readyState === 'loading')
+        document.addEventListener('DOMContentLoaded', run);
+      else
+        run();
+    </script>
+  </body>
+</html>

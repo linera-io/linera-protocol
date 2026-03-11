@@ -1422,6 +1422,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-lc-rs"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93fcc8f365936c834db5514fc45aee5b1202d677e6b40e48468aaaa8183ca8c7"
+dependencies = [
+ "aws-lc-sys",
+ "zeroize",
+]
+
+[[package]]
+name = "aws-lc-sys"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61b1d86e7705efe1be1b569bab41d4fa1e14e220b60a160f78de2db687add079"
+dependencies = [
+ "bindgen 0.69.5",
+ "cc",
+ "cmake",
+ "dunce",
+ "fs_extra",
+]
+
+[[package]]
 name = "aws-runtime"
 version = "1.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1826,6 +1849,29 @@ dependencies = [
  "rustc-hash 1.1.0",
  "shlex",
  "syn 2.0.105",
+]
+
+[[package]]
+name = "bindgen"
+version = "0.69.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
+dependencies = [
+ "bitflags 2.9.1",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.10.5",
+ "lazy_static",
+ "lazycell",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 1.1.0",
+ "shlex",
+ "syn 2.0.105",
+ "which",
 ]
 
 [[package]]
@@ -2326,6 +2372,15 @@ dependencies = [
  "tempfile",
  "walkdir",
  "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "cmake"
+version = "0.1.54"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7caa3f9de89ddbe2c607f4101924c5abec803763ae9534e4f4d7d8f84aa81f0"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -5407,14 +5462,21 @@ dependencies = [
  "alloy-trie",
  "anyhow",
  "async-trait",
+ "axum",
  "bcs",
  "clap",
  "fs-err",
+ "futures",
  "hex",
  "insta",
  "linera-base",
  "linera-chain",
+ "linera-client",
+ "linera-core",
  "linera-execution",
+ "linera-faucet-client",
+ "linera-storage",
+ "linera-views",
  "op-alloy-network",
  "proptest",
  "rand 0.8.5",
@@ -5422,6 +5484,7 @@ dependencies = [
  "reqwest 0.11.27",
  "revm",
  "revm-context",
+ "rustls 0.23.31",
  "serde",
  "serde-generate",
  "serde-reflection",
@@ -5429,6 +5492,9 @@ dependencies = [
  "serde_yaml 0.8.26",
  "tempfile",
  "tokio",
+ "tower-http 0.6.6",
+ "tracing",
+ "tracing-subscriber 0.3.19",
  "url",
  "wrapped-fungible",
 ]
@@ -8962,6 +9028,7 @@ version = "0.23.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0ebcbd2f03de0fc1122ad9bb24b127a5a6cd51d72604a3f3c50ac459762b6cc"
 dependencies = [
+ "aws-lc-rs",
  "log",
  "once_cell",
  "ring",
@@ -9030,6 +9097,7 @@ version = "0.103.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a17884ae0c1b773f1ccd2bd4a8c72f16da897310a98b0e84bf349ad5ead92fc"
 dependencies = [
+ "aws-lc-rs",
  "ring",
  "rustls-pki-types",
  "untrusted",
@@ -12066,6 +12134,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e8983c3ab33d6fb807cfcdad2491c4ea8cbc8ed839181c7dfd9c67c83e261b2"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "which"
+version = "4.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
+dependencies = [
+ "either",
+ "home",
+ "once_cell",
+ "rustix 0.38.44",
 ]
 
 [[package]]

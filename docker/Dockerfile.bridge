@@ -4,156 +4,85 @@ ARG build_flag=--release
 ARG build_folder=release
 ARG rustflags="-C force-frame-pointers=yes"
 
-FROM rust:1.86-slim-bookworm AS builder
+# ── Stage 0: chef base (rust + cargo-chef + system deps) ──
+
+FROM rust:1.88-slim-bookworm AS chef
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    protobuf-compiler \
+    clang \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install cargo-chef --locked
+WORKDIR /app
+
+# ── Stage 1: planner — generate dependency recipe from full source ──
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# The examples/ workspace is separate from the root workspace, but
+# `fungible` is a dev-dependency of linera-bridge so Cargo must resolve it.
+# Build minimal stubs (Cargo.toml + dummy sources) for every example member.
+RUN set -e && \
+    mkdir /examples-stubs && \
+    cp examples/Cargo.toml /examples-stubs/Cargo.toml && \
+    find examples -mindepth 2 -name Cargo.toml | while read -r toml; do \
+      rel=$(dirname "${toml#examples/}"); \
+      mkdir -p "/examples-stubs/$rel/src"; \
+      cp "$toml" "/examples-stubs/$rel/Cargo.toml"; \
+      touch "/examples-stubs/$rel/src/lib.rs"; \
+      grep -A3 '^\[\[bin\]\]' "$toml" 2>/dev/null | \
+        grep 'path' | sed 's/.*= *"\(.*\)"/\1/' | while read -r bin_path; do \
+          mkdir -p "/examples-stubs/$rel/$(dirname "$bin_path")"; \
+          printf 'fn main() {}\n' > "/examples-stubs/$rel/$bin_path"; \
+        done; \
+    done
+
+# ── Stage 2: builder — cook deps (cached), then build source ──
+
+FROM chef AS builder
 ARG git_commit
 ARG build_flag
 ARG build_folder
 ARG rustflags
 
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    protobuf-compiler \
-    clang
+COPY --from=planner /app/recipe.json recipe.json
 
-# Workspace root
-COPY Cargo.toml Cargo.lock rust-toolchain* ./
-COPY scripts scripts
+# linera-version's build.rs uses include!() for type definitions and hashes
+# files from other crates at build-script runtime.  These must exist before
+# `cargo chef cook` because cook triggers the build script.
+COPY linera-version/src/serde_pretty linera-version/src/serde_pretty
+COPY linera-version/src/version_info linera-version/src/version_info
+COPY linera-version/api-hashes.json linera-version/api-hashes.json
+COPY linera-rpc/tests/snapshots linera-rpc/tests/snapshots
+COPY linera-service-graphql-client/gql linera-service-graphql-client/gql
+COPY linera-sdk/wit linera-sdk/wit
 
-# examples/ is a separate workspace. fungible is a dev-dep of linera-bridge,
-# but Cargo still resolves its manifest. Copy the workspace root + stub all members.
-COPY examples/Cargo.toml examples/Cargo.toml
-COPY examples/fungible examples/fungible
-COPY examples/amm/Cargo.toml examples/amm/Cargo.toml
-COPY examples/call-evm-counter/Cargo.toml examples/call-evm-counter/Cargo.toml
-COPY examples/controller/Cargo.toml examples/controller/Cargo.toml
-COPY examples/counter/Cargo.toml examples/counter/Cargo.toml
-COPY examples/counter-no-graphql/Cargo.toml examples/counter-no-graphql/Cargo.toml
-COPY examples/crowd-funding/Cargo.toml examples/crowd-funding/Cargo.toml
-COPY examples/ethereum-tracker/Cargo.toml examples/ethereum-tracker/Cargo.toml
-COPY examples/game-of-life-challenge/Cargo.toml examples/game-of-life-challenge/Cargo.toml
-COPY examples/gen-nft/Cargo.toml examples/gen-nft/Cargo.toml
-COPY examples/hex-game/Cargo.toml examples/hex-game/Cargo.toml
-COPY examples/how-to/perform-http-requests/Cargo.toml examples/how-to/perform-http-requests/Cargo.toml
-COPY examples/llm/Cargo.toml examples/llm/Cargo.toml
-COPY examples/matching-engine/Cargo.toml examples/matching-engine/Cargo.toml
-COPY examples/native-fungible/Cargo.toml examples/native-fungible/Cargo.toml
-COPY examples/non-fungible/Cargo.toml examples/non-fungible/Cargo.toml
-COPY examples/rfq/Cargo.toml examples/rfq/Cargo.toml
-COPY examples/social/Cargo.toml examples/social/Cargo.toml
-COPY examples/task-processor/Cargo.toml examples/task-processor/Cargo.toml
-COPY examples/time-expiry/Cargo.toml examples/time-expiry/Cargo.toml
-COPY examples/wrapped-fungible/Cargo.toml examples/wrapped-fungible/Cargo.toml
-RUN for dir in \
-    examples/amm \
-    examples/call-evm-counter \
-    examples/controller \
-    examples/counter \
-    examples/counter-no-graphql \
-    examples/crowd-funding \
-    examples/ethereum-tracker \
-    examples/game-of-life-challenge \
-    examples/gen-nft \
-    examples/hex-game \
-    examples/how-to/perform-http-requests \
-    examples/llm \
-    examples/matching-engine \
-    examples/native-fungible \
-    examples/wrapped-fungible \
-    examples/non-fungible \
-    examples/rfq \
-    examples/social \
-    examples/task-processor \
-    examples/time-expiry; \
-  do mkdir -p "$dir/src" && \
-     echo "" > "$dir/src/lib.rs" && \
-     echo "fn main(){}" > "$dir/src/contract.rs" && \
-     echo "fn main(){}" > "$dir/src/service.rs"; done
-# perform-http-requests has a third binary
-RUN echo "fn main(){}" > examples/how-to/perform-http-requests/src/test_http_server.rs
-COPY linera-base linera-base
-COPY linera-bridge linera-bridge
-COPY linera-chain linera-chain
-COPY linera-core linera-core
-COPY linera-execution linera-execution
-COPY linera-sdk linera-sdk
-COPY linera-sdk-derive linera-sdk-derive
-COPY linera-storage linera-storage
-COPY linera-version linera-version
-COPY linera-views linera-views
-COPY linera-views-derive linera-views-derive
-COPY linera-witty linera-witty
-COPY linera-witty-macros linera-witty-macros
-
-# Stub workspace members: Cargo.toml + empty sources.
-# Cargo needs all workspace members to exist, but only linera-bridge deps need real source.
-RUN for dir in \
-    linera-client \
-    linera-ethereum \
-    linera-explorer \
-    linera-faucet/client \
-    linera-faucet/server \
-    linera-indexer/graphql-client \
-    linera-indexer/lib \
-    linera-indexer/plugins \
-    linera-metrics \
-    linera-persistent \
-    linera-rpc \
-    linera-service-graphql-client \
-    "web/@linera/client"; \
-  do mkdir -p "$dir/src" && echo "" > "$dir/src/lib.rs"; done
-
-# Stubs for crates with [[bin]] targets (need main.rs too)
-RUN mkdir -p linera-service/src/cli linera-service/src/proxy linera-service/src/exporter && \
-    echo "" > linera-service/src/lib.rs && \
-    echo "fn main(){}" > linera-service/src/cli/main.rs && \
-    echo "fn main(){}" > linera-service/src/server.rs && \
-    echo "fn main(){}" > linera-service/src/proxy/main.rs && \
-    echo "fn main(){}" > linera-service/src/schema_export.rs && \
-    echo "fn main(){}" > linera-service/src/benchmark.rs && \
-    echo "fn main(){}" > linera-service/src/exporter/main.rs && \
-    mkdir -p linera-service/benches && \
-    echo "fn main(){}" > linera-service/benches/transfers.rs
-
-RUN mkdir -p linera-indexer/example/src && \
-    echo "" > linera-indexer/example/src/lib.rs && \
-    echo "fn main(){}" > linera-indexer/example/src/main.rs && \
-    echo "fn main(){}" > linera-indexer/example/src/grpc_main.rs
-
-RUN mkdir -p linera-storage-service/src linera-storage-service/benches && \
-    echo "" > linera-storage-service/src/lib.rs && \
-    echo "fn main(){}" > linera-storage-service/src/server.rs && \
-    echo "fn main(){}" > linera-storage-service/benches/store.rs
-
-RUN mkdir -p linera-summary/src && \
-    echo "fn main(){}" > linera-summary/src/main.rs
-
-COPY linera-client/Cargo.toml linera-client/Cargo.toml
-COPY linera-ethereum/Cargo.toml linera-ethereum/Cargo.toml
-COPY linera-explorer/Cargo.toml linera-explorer/Cargo.toml
-COPY linera-faucet/client/Cargo.toml linera-faucet/client/Cargo.toml
-COPY linera-faucet/server/Cargo.toml linera-faucet/server/Cargo.toml
-COPY linera-indexer/example/Cargo.toml linera-indexer/example/Cargo.toml
-COPY linera-indexer/graphql-client/Cargo.toml linera-indexer/graphql-client/Cargo.toml
-COPY linera-indexer/lib/Cargo.toml linera-indexer/lib/Cargo.toml
-COPY linera-indexer/plugins/Cargo.toml linera-indexer/plugins/Cargo.toml
-COPY linera-metrics/Cargo.toml linera-metrics/Cargo.toml
-COPY linera-persistent/Cargo.toml linera-persistent/Cargo.toml
-COPY linera-rpc/Cargo.toml linera-rpc/Cargo.toml
-COPY linera-service/Cargo.toml linera-service/Cargo.toml
-COPY linera-service-graphql-client/Cargo.toml linera-service-graphql-client/Cargo.toml
-COPY linera-storage-service/Cargo.toml linera-storage-service/Cargo.toml
-COPY linera-summary/Cargo.toml linera-summary/Cargo.toml
-COPY web/@linera/client/Cargo.toml web/@linera/client/Cargo.toml
+# Examples workspace stubs for dev-dep resolution during cook.
+COPY --from=planner /examples-stubs examples
 
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
+# Cook dependencies — this layer is cached until Cargo.toml / Cargo.lock change.
+RUN cargo chef cook ${build_flag:+"$build_flag"} \
+    --recipe-path recipe.json \
+    --bin linera-bridge \
+    -p linera-bridge \
+    --features relay
+
+# Copy full source and build (only changed crates recompile).
+COPY . .
 RUN cargo build ${build_flag:+"$build_flag"} \
     --bin linera-bridge \
     -p linera-bridge \
-    --features cli
+    --features relay \
+    && cp target/"$build_folder"/linera-bridge /usr/local/bin/linera-bridge
 
-RUN cp target/"$build_folder"/linera-bridge /usr/local/bin/linera-bridge
+# ── Stage 3: runtime ──
 
 FROM debian:bookworm-slim
 
