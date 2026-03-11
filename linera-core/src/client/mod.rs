@@ -3056,6 +3056,7 @@ impl<Env: Environment> ChainClient<Env> {
             lock_wait_ms = lock_start.elapsed().as_millis(),
             "acquired proposal_mutex in execute_block"
         );
+        // TODO(#5092): We shouldn't need to call this explicitly.
         // Process any leftover pending proposal from a previous interrupted call.
         // Even if there is no pending proposal, this still calls
         // `request_leader_timeout_if_needed` which ensures the local chain state
