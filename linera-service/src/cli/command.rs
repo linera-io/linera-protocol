@@ -773,6 +773,22 @@ pub enum ClientCommand {
         allowed_subscriptions: Vec<String>,
     },
 
+    /// Query an application without starting the node service.
+    /// This performs a read-only GraphQL query directly on a smart contract's service,
+    /// without creating a lock or a persistent HTTP server.
+    QueryApplication {
+        /// The chain on which the application is running.
+        #[arg(long)]
+        chain_id: Option<ChainId>,
+
+        /// The application to query.
+        #[arg(long)]
+        application_id: ApplicationId,
+
+        /// The GraphQL query to send (e.g. "value" for a counter application).
+        query: String,
+    },
+
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.
     /// This gives away the chain's tokens, and is mainly intended for testing.
     Faucet {
@@ -1037,7 +1053,8 @@ impl ClientCommand {
             | ClientCommand::Wallet { .. }
             | ClientCommand::Chain { .. }
             | ClientCommand::Validator { .. }
-            | ClientCommand::RetryPendingBlock { .. } => "client".into(),
+            | ClientCommand::RetryPendingBlock { .. }
+            | ClientCommand::QueryApplication { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
             ClientCommand::Net { .. } => "net".into(),

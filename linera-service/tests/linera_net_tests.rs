@@ -1890,6 +1890,12 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
             None,
         )
         .await?;
+    // Query the application directly via `linera query-application`, without a node service.
+    let counter_value: u64 = client
+        .query_application_json(chain, application_id.forget_abi(), "value")
+        .await?;
+    assert_eq!(counter_value, original_counter_value);
+
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
