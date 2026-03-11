@@ -30,6 +30,12 @@
   "panic-strategy": "abort",
   "pre-link-args": {
     "wasm-lld": [
+      "-z",
+      "stack-size=1048576",
+      "--stack-first",
+      "--allow-undefined",
+      "--no-demangle",
+      "--no-entry",
       "--shared-memory",
       "--max-memory=1073741824",
       "--import-memory",
@@ -39,7 +45,13 @@
       "--export=__tls_base"
     ],
     "wasm-lld-cc": [
+      "-Wl,-z",
+      "-Wl,stack-size=1048576",
+      "-Wl,--stack-first",
+      "-Wl,--allow-undefined",
+      "-Wl,--no-demangle",
       "--target=wasm32-unknown-unknown",
+      "-Wl,--no-entry",
       "-Wl,--shared-memory",
       "-Wl,--max-memory=1073741824",
       "-Wl,--import-memory",
