@@ -1,0 +1,72 @@
+{
+  "arch": "wasm32",
+  "binary-format": "wasm",
+  "crt-objects-fallback": "true",
+  "data-layout": "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20",
+  "dll-prefix": "",
+  "dll-suffix": ".wasm",
+  "dynamic-linking": true,
+  "eh-frame-header": false,
+  "emit-debug-gdb-scripts": false,
+  "exe-suffix": ".wasm",
+  "generate-arange-section": false,
+  "has-thread-local": true,
+  "is-like-wasm": true,
+  "linker": "rust-lld",
+  "linker-flavor": "wasm-lld",
+  "linker-is-gnu": false,
+  "lld-flavor": "wasm",
+  "llvm-target": "wasm32-unknown-unknown",
+  "max-atomic-width": 64,
+  "metadata": {
+    "description": "WebAssembly target for Linera web browser clients",
+    "host_tools": false,
+    "std": true,
+    "tier": 2
+  },
+  "only-cdylib": true,
+  "env": "web",
+  "os": "unknown",
+  "panic-strategy": "abort",
+  "pre-link-args": {
+    "wasm-lld": [
+      "-z",
+      "stack-size=1048576",
+      "--stack-first",
+      "--allow-undefined",
+      "--no-demangle",
+      "--no-entry",
+      "--shared-memory",
+      "--max-memory=1073741824",
+      "--import-memory",
+      "--export=__wasm_init_tls",
+      "--export=__tls_size",
+      "--export=__tls_align",
+      "--export=__tls_base"
+    ],
+    "wasm-lld-cc": [
+      "-Wl,-z",
+      "-Wl,stack-size=1048576",
+      "-Wl,--stack-first",
+      "-Wl,--allow-undefined",
+      "-Wl,--no-demangle",
+      "--target=wasm32-unknown-unknown",
+      "-Wl,--no-entry",
+      "-Wl,--shared-memory",
+      "-Wl,--max-memory=1073741824",
+      "-Wl,--import-memory",
+      "-Wl,--export=__wasm_init_tls",
+      "-Wl,--export=__tls_size",
+      "-Wl,--export=__tls_align",
+      "-Wl,--export=__tls_base"
+    ]
+  },
+  "relocation-model": "static",
+  "singlethread": false,
+  "target-family": [
+    "wasm"
+  ],
+  "target-pointer-width": 32,
+  "tls-model": "local-exec",
+  "features": "+atomics,+bulk-memory,+mutable-globals,+reference-types"
+}

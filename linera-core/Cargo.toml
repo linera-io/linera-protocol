@@ -42,15 +42,6 @@ metrics = [
     "linera-storage/metrics",
     "linera-views/metrics",
 ]
-web = [
-    "linera-base/web",
-    "linera-chain/web",
-    "linera-execution/web",
-    "linera-storage/web",
-    "linera-views/web",
-    "wasm-bindgen-futures",
-]
-
 [dependencies]
 anyhow = { workspace = true, optional = true }
 async-graphql.workspace = true
@@ -82,8 +73,10 @@ tracing.workspace = true
 trait-set.workspace = true
 trait-variant.workspace = true
 wasm-bindgen.workspace = true
-wasm-bindgen-futures = { workspace = true, optional = true }
 web-thread-pool.workspace = true
+
+[target.'cfg(target_env = "web")'.dependencies]
+wasm-bindgen-futures.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 linera-storage-service = { workspace = true, optional = true }

@@ -27,13 +27,6 @@ metrics = [
     "linera-execution/metrics",
     "linera-views/metrics",
 ]
-web = [
-    "linera-base/web",
-    "linera-chain/web",
-    "linera-execution/web",
-    "linera-views/web",
-]
-
 [dependencies]
 async-trait.workspace = true
 bcs.workspace = true

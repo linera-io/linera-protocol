@@ -567,7 +567,9 @@ jobs:
         cargo clippy --locked --all-targets --all-features
         cargo clippy --locked --no-default-features --features kubernetes
         cargo clippy --locked --no-default-features
-        cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features web-default \
+        RUSTFLAGS="$RUSTFLAGS -Zunstable-options" cargo clippy --locked \
+          --target wasm32-web-unknown -Zbuild-std=panic_abort,std -Zjson-target-spec \
+          --no-default-features --features web-default \
           -p linera-client \
           -p linera-rpc \
           -p linera-views

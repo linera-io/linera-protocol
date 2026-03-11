@@ -35,8 +35,6 @@ fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
 wasmer = ["dep:wasmer", "wasmer/enable-serde", "linera-witty/wasmer"]
 wasmtime = ["dep:wasmtime", "linera-witty/wasmtime"]
-web = ["linera-base/web", "linera-views/web", "js-sys", "web-thread-select/web"]
-
 [dependencies]
 allocative.workspace = true
 alloy-primitives = { workspace = true, optional = true }
@@ -52,7 +50,6 @@ derive_more = { workspace = true, features = ["display"] }
 dyn-clone.workspace = true
 futures.workspace = true
 hex = { workspace = true, optional = true }
-js-sys = { workspace = true, optional = true }
 linera-base = { workspace = true, features = ["reqwest"] }
 linera-views.workspace = true
 linera-views-derive.workspace = true
@@ -103,6 +100,10 @@ wasm-instrument = { workspace = true, features = ["sign_ext", "bulk"] }
 wasmtime = { workspace = true, optional = true }
 web-thread-pool.workspace = true
 web-thread-select.workspace = true
+
+[target.'cfg(target_env = "web")'.dependencies]
+js-sys.workspace = true
+web-thread-select = { workspace = true, features = ["web"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

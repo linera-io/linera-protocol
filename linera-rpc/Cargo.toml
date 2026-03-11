@@ -38,15 +38,6 @@ server = ["tokio-util", "tonic-health", "tonic-reflection"]
 simple-network = ["tokio-util/net"]
 transport = ["tonic-prost-build/transport"]
 
-web = [
-    "linera-base/web",
-    "linera-chain/web",
-    "linera-core/web",
-    "linera-execution/web",
-]
-
-web-default = ["web"]
-
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true

@@ -2,7 +2,8 @@
 linker = "aarch64-linux-gnu-gcc"
 
 [env]
-# Makes `--target wasm32-linera-chain` resolve to linera-service/wasm32-linera-chain.json
+# Makes `--target wasm32-linera-chain` and `--target wasm32-web-unknown` resolve to
+# linera-service/wasm32-linera-chain.json and linera-service/wasm32-web-unknown.json
 # anywhere in the repo.
 RUST_TARGET_PATH = { value = "linera-service", relative = true }
 
