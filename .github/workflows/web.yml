@@ -103,9 +103,9 @@ jobs:
         bash scripts/wait-for-kubernetes-service.sh "$LINERA_FAUCET_URL" "$FAUCET_PID" "$LOG_FILE"
         # Create two epochs
         # See https://github.com/linera-io/linera-protocol/pull/2835 for details.
-        LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- storage initialize --genesis /tmp/local-linera-net/genesis.json
-        LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 1000
-        LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
+        LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- storage initialize --genesis /tmp/local-linera-net/genesis.json
+        LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 1000
+        LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
 
     # Run tests
     - name: Test the npm packages
