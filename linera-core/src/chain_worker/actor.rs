@@ -122,18 +122,10 @@ where
         callback: oneshot::Sender<Result<ApplicationDescription, WorkerError>>,
     },
 
-    /// Execute a block but discard any changes to the chain state.
+    /// Execute a block with a policy for handling bundle failures, but discard any changes
+    /// to the chain state. The block may be modified (bundles rejected or removed) based
+    /// on the policy.
     StageBlockExecution {
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: Vec<Blob>,
-        #[debug(skip)]
-        callback: oneshot::Sender<Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError>>,
-    },
-
-    /// Execute a block with a policy for handling bundle failures.
-    /// The block may be modified (bundles rejected or removed) based on the policy.
-    StageBlockExecutionWithPolicy {
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
