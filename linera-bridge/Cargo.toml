@@ -50,13 +50,11 @@ serde_yaml = { version = "0.8.26", optional = true }
 
 [dev-dependencies]
 bcs.workspace = true
-fungible.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-execution.workspace = true
-linera-sdk.workspace = true
 proptest.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
@@ -70,3 +68,4 @@ revm-context.workspace = true
 serde-reflection.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
+wrapped-fungible.workspace = true

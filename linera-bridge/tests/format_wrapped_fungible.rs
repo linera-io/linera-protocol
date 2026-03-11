@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible::{FungibleOperation, Message};
 use linera_base::identifiers::AccountOwner;
 use serde_reflection::{Samples, Tracer, TracerConfig};
+use wrapped_fungible::{Message, WrappedFungibleOperation};
 
 #[test]
-fn test_format_fungible() {
+fn test_format_wrapped_fungible() {
     let mut tracer = Tracer::new(
         TracerConfig::default()
             .record_samples_for_newtype_structs(true)
@@ -15,8 +15,10 @@ fn test_format_fungible() {
     let samples = Samples::new();
     // Trace AccountOwner explicitly so all variants get proper indices.
     tracer.trace_type::<AccountOwner>(&samples).unwrap();
-    tracer.trace_type::<FungibleOperation>(&samples).unwrap();
+    tracer
+        .trace_type::<WrappedFungibleOperation>(&samples)
+        .unwrap();
     tracer.trace_type::<Message>(&samples).unwrap();
     let registry = tracer.registry_unchecked();
-    insta::assert_yaml_snapshot!("format_fungible.yaml", registry);
+    insta::assert_yaml_snapshot!("format_wrapped_fungible.yaml", registry);
 }
