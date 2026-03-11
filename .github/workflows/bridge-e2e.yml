@@ -23,6 +23,7 @@ env:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   bridge-e2e:
@@ -47,9 +48,12 @@ jobs:
 
       # Pull pre-built linera images from GCP registry
       - name: Auth to GCP
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+          workload_identity_provider: >-
+            projects/886017272224/locations/global/workloadIdentityPools/github-apps-pool/providers/github-apps-provider
+          service_account: >-
+            actions-runner@linera-io-dev.iam.gserviceaccount.com
 
       - name: Configure Docker for GCP
         run: gcloud auth configure-docker us-docker.pkg.dev
