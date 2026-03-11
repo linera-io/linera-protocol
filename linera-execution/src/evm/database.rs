@@ -108,13 +108,6 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     }
 }
 
-#[repr(u8)]
-pub enum KeyCategory {
-    AccountInfo,
-    AccountState,
-    Storage,
-}
-
 fn application_id_to_address(application_id: ApplicationId) -> Address {
     let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
     let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
@@ -271,7 +264,7 @@ where
             caller: Address::ZERO,
             value: U256::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
-            changes: HashMap::new(),
+            changes: EvmState::default(),
             is_revm_instantiated: false,
             error: Arc::new(Mutex::new(None)),
         }
