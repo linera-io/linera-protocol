@@ -6,8 +6,8 @@ import "Microchain.sol";
 contract MicrochainTest is Microchain {
     uint64 public blockCount;
 
-    constructor(address _lightClient, bytes32 _chainId)
-        Microchain(_lightClient, _chainId)
+    constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight)
+        Microchain(_lightClient, _chainId, _latestHeight)
     {}
 
     function _onBlock(BridgeTypes.Block memory) internal override {

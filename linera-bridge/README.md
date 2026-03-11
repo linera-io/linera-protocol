@@ -63,9 +63,9 @@ Linera validators use secp256k1 keys (the same curve as Ethereum). The contract 
 
 ### LightClient
 
-#### `verifyBlock(bytes calldata data) → BridgeTypes.Block`
+#### `verifyBlock(bytes calldata data) → (BridgeTypes.Block, bytes32)`
 
-Verifies a BCS-encoded `ConfirmedBlockCertificate` against the committee for the block's declared epoch and returns the deserialized `Block`. This is a `view` function — it does not modify state. Other contracts (like `Microchain`) call this to get verified block data.
+Verifies a BCS-encoded `ConfirmedBlockCertificate` against the committee for the block's declared epoch and returns the deserialized `Block` and the `signedHash` (for duplicate detection). This is a `view` function — it does not modify state. Other contracts (like `Microchain`) call this to get verified block data.
 
 #### `addCommittee(bytes calldata data, bytes calldata committeeBlob, bytes[] calldata validators)`
 
@@ -80,13 +80,13 @@ Advances the committee to the next epoch. This is the only state-modifying opera
 
 The `committeeBlob` is the BCS-serialized `Committee` from Linera. The `validators` parameter is an array of 64-byte uncompressed secp256k1 public keys (without the `0x04` prefix). The caller must provide these separately because the blob only contains compressed keys (33 bytes: x-coordinate + y-parity prefix), and Ethereum addresses are derived from the uncompressed form (`keccak256(x || y)[12:]`). Decompressing a key on-chain would require computing a modular square root on the secp256k1 field — expensive in the EVM. Instead, the caller provides the uncompressed keys and the contract verifies them against the blob's compressed keys: it checks that the x-coordinate matches, the y-parity matches, and the point satisfies y² ≡ x³ + 7 (mod p). This curve membership check uses Solidity's `mulmod`/`addmod` builtins and is cheap. Addresses and weights are extracted from the blob rather than caller-provided, preventing substitution attacks. The authenticity chain is: validator signatures → certified block → `CreateCommittee` operation → `blob_hash` → `committeeBlob` → parsed validators/weights.
 
-The constructor takes `(address[], uint64[], bytes32)` — the genesis committee's validator addresses, weights, and the admin chain ID. The deployer is trusted at genesis (no blob exists).
+The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis committee's validator addresses, weights, the admin chain ID, and the initial epoch. The deployer is trusted at genesis (no blob exists).
 
 ### Microchain (abstract)
 
-#### `constructor(address _lightClient, bytes32 _chainId)`
+#### `constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight)`
 
-Binds the contract to a specific `LightClient` instance and a Linera chain ID (a 32-byte `CryptoHash`).
+Binds the contract to a specific `LightClient` instance, a Linera chain ID (a 32-byte `CryptoHash`), and an initial block height.
 
 #### `addBlock(bytes calldata data)`
 
@@ -125,7 +125,7 @@ Committees are stored per-epoch and must advance monotonically (epoch N can only
 
 ### Initialization
 
-The constructor takes `(address[], uint64[], bytes32)` — the genesis committee's validator Ethereum addresses, their voting weights, and the admin chain ID. The committee is stored as epoch 0. Only blocks from the admin chain can drive committee transitions via `addCommittee`.
+The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis committee's validator Ethereum addresses, their voting weights, the admin chain ID, and the initial epoch. The committee is stored at the given epoch. Only blocks from the admin chain can drive committee transitions via `addCommittee`.
 
 ### Quorum threshold
 
@@ -163,6 +163,7 @@ Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the So
 - Epoch-bound committee verification (block verified against its declared epoch)
 - Microchain block tracking with chain ID enforcement
 - Microchain rejection of wrong chain ID and non-sequential heights
+- Microchain rejection of duplicate block submissions
 
 ### Prerequisites
 
