@@ -10,6 +10,7 @@ pub const FUNGIBLE_TYPES_SOURCE: &str = include_str!("solidity/FungibleTypes.sol
 /// Solidity source for the FungibleBridge contract.
 pub const FUNGIBLE_BRIDGE_SOURCE: &str = include_str!("solidity/FungibleBridge.sol");
 
+pub mod evm_client;
 pub mod light_client;
 pub mod microchain;
 

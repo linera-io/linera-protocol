@@ -127,16 +127,10 @@ mod tests {
             let deployer = Address::ZERO;
             let secret = ValidatorSecretKey::generate();
             let public = secret.public();
-            let address = validator_evm_address(&public);
+            let addr = validator_evm_address(&public);
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
-            let light_client = deploy_light_client(
-                &mut db,
-                deployer,
-                &[address],
-                &[1],
-                test_admin_chain_id(),
-                0,
-            );
+            let light_client =
+                deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
             let contract = deploy_microchain(&mut db, deployer, light_client, chain_id, 0);
 
             Self {

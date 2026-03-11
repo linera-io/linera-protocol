@@ -43,6 +43,126 @@ use crate::{
 // We set up the limit similarly to Infura to 20 million.
 pub const EVM_SERVICE_GAS_LIMIT: u64 = 20_000_000;
 
+/// The cost of loading from storage.
+const SLOAD_COST: u64 = 2100;
+
+/// The cost of storing a non-zero value in the storage for the first time.
+const SSTORE_COST_SET: u64 = 20000;
+
+/// The cost of not changing the state of the variable in the storage.
+const SSTORE_COST_NO_OPERATION: u64 = 100;
+
+/// The cost of overwriting the storage to a different value.
+const SSTORE_COST_RESET: u64 = 2900;
+
+/// The refund from releasing data.
+const SSTORE_REFUND_RELEASE: u64 = 4800;
+
+/// The number of key writes, reads, release, and no change in EVM has to be accounted for.
+/// Then we remove those costs from the final bill.
+#[derive(Clone, Default)]
+pub(crate) struct StorageStats {
+    key_no_operation: u64,
+    key_reset: u64,
+    key_set: u64,
+    key_release: u64,
+    key_read: u64,
+}
+
+impl StorageStats {
+    pub fn storage_costs(&self) -> u64 {
+        let mut storage_costs = 0;
+        storage_costs += self.key_no_operation * SSTORE_COST_NO_OPERATION;
+        storage_costs += self.key_reset * SSTORE_COST_RESET;
+        storage_costs += self.key_set * SSTORE_COST_SET;
+        storage_costs += self.key_read * SLOAD_COST;
+        storage_costs
+    }
+
+    pub fn storage_refund(&self) -> u64 {
+        self.key_release * SSTORE_REFUND_RELEASE
+    }
+}
+
+/// This is the encapsulation of the `Runtime` corresponding to the contract.
+pub(crate) struct DatabaseRuntime<Runtime> {
+    /// This is the storage statistics of the read/write in order to adjust gas costs.
+    storage_stats: Arc<Mutex<StorageStats>>,
+    /// This is the EVM address of the contract.
+    /// At the creation, it is set to `Address::ZERO` and then later set to the correct value.
+    pub contract_address: Address,
+    /// The runtime of the contract.
+    pub runtime: Arc<Mutex<Runtime>>,
+    /// The uncommitted changes to the contract.
+    pub changes: EvmState,
+}
+
+impl<Runtime> Clone for DatabaseRuntime<Runtime> {
+    fn clone(&self) -> Self {
+        Self {
+            storage_stats: self.storage_stats.clone(),
+            contract_address: self.contract_address,
+            runtime: self.runtime.clone(),
+            changes: self.changes.clone(),
+        }
+    }
+}
+
+#[repr(u8)]
+pub enum KeyCategory {
+    AccountInfo,
+    AccountState,
+    Storage,
+}
+
+fn application_id_to_address(application_id: ApplicationId) -> Address {
+    let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
+    let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
+    Address::from_slice(&application_id[0..20])
+}
+
+impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
+    /// Encode the `index` of the EVM storage associated to the smart contract
+    /// in a linera key.
+    fn get_linera_key(key_prefix: &[u8], index: U256) -> Result<Vec<u8>, ExecutionError> {
+        let mut key = key_prefix.to_vec();
+        bcs::serialize_into(&mut key, &index)?;
+        Ok(key)
+    }
+
+    /// Returns the tag associated to the contract.
+    fn get_address_key(prefix: u8, address: Address) -> Vec<u8> {
+        let mut key = vec![prefix];
+        key.extend(address);
+        key
+    }
+
+    /// Creates a new `DatabaseRuntime`.
+    pub fn new(runtime: Runtime) -> Self {
+        let storage_stats = StorageStats::default();
+        // We cannot acquire a lock on runtime here.
+        // So, we set the contract_address to a default value
+        // and update it later.
+        Self {
+            storage_stats: Arc::new(Mutex::new(storage_stats)),
+            contract_address: Address::ZERO,
+            runtime: Arc::new(Mutex::new(runtime)),
+            changes: EvmState::default(),
+        }
+    }
+
+    /// Returns the current storage states and clears it to default.
+    pub fn take_storage_stats(&self) -> StorageStats {
+        let mut storage_stats_read = self
+            .storage_stats
+            .lock()
+            .expect("The lock should be possible");
+        let storage_stats = storage_stats_read.clone();
+        *storage_stats_read = StorageStats::default();
+        storage_stats
+    }
+}
+
 impl DBErrorMarker for ExecutionError {}
 
 /// Core database implementation shared by both contract and service execution modes.

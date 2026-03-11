@@ -23,9 +23,9 @@ ARG build_date
 ARG target=x86_64-unknown-linux-gnu
 ARG binaries=
 ARG copy=${binaries:+_copy}
-# ARG build_flag=--release
-ARG build_folder=debug
-ARG build_features=scylladb,metrics
+ARG build_flag=--release
+ARG build_folder=release
+ARG build_features=scylladb,metrics,bridge
 ARG rustflags="-C force-frame-pointers=yes"
 
 FROM rust:1.86-slim-bookworm AS builder
@@ -66,12 +66,12 @@ COPY linera-views-derive linera-views-derive
 COPY web web
 COPY linera-witty linera-witty
 COPY linera-witty-macros linera-witty-macros
+COPY linera-bridge linera-bridge
 COPY scripts scripts
 COPY rust-toolchain* Cargo.* ./
 
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
-
 
 # Build linera CLI, storage server, server, proxy, and block exporter with scylladb and metrics features
 RUN cargo build ${build_flag:+"$build_flag"} \
