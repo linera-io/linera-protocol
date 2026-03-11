@@ -129,6 +129,8 @@ impl AcknowledgementTask {
         }
     }
 
+    // `tonic::Streaming::message` advances the stream state, so this task must keep a mutable
+    // receiver even though no other fields are mutated directly.
     #[allow(clippy::needless_pass_by_ref_mut)]
     async fn run(&mut self) -> anyhow::Result<()> {
         while self.incoming.message().await?.is_some() {

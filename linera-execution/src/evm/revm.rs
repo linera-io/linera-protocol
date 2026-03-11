@@ -859,6 +859,8 @@ impl<Runtime> Clone for CallInterceptorContract<Runtime> {
 impl<'a, Runtime: ContractRuntime> Inspector<ContractCtx<'a, Runtime>>
     for CallInterceptorContract<Runtime>
 {
+    // `Inspector::create` requires `&mut self` and `&mut CreateInputs`, even though this
+    // implementation forwards to a helper and doesn't otherwise mutate them directly.
     #[allow(clippy::needless_pass_by_ref_mut)]
     fn create(
         &mut self,
@@ -869,6 +871,7 @@ impl<'a, Runtime: ContractRuntime> Inspector<ContractCtx<'a, Runtime>>
         map_result_create_outcome(&self.db.inner, result)
     }
 
+    // `Inspector::call` requires `&mut self` and `&mut CallInputs` as part of the trait API.
     #[allow(clippy::needless_pass_by_ref_mut)]
     fn call(
         &mut self,
@@ -1132,6 +1135,7 @@ impl<'a, Runtime: ServiceRuntime> Inspector<ServiceCtx<'a, Runtime>>
     for CallInterceptorService<Runtime>
 {
     /// See below on `fn create_or_fail`.
+    // `Inspector::create` requires `&mut self` and `&mut CreateInputs` as part of the trait API.
     #[allow(clippy::needless_pass_by_ref_mut)]
     fn create(
         &mut self,
