@@ -2289,6 +2289,7 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     let expected_response = json!({
         "receivedPosts": {
             "keys": [
+                { "author": chain1, "index": 3 },
                 { "author": chain1, "index": 2 },
                 { "author": chain1, "index": 1 },
                 { "author": chain1, "index": 0 }
