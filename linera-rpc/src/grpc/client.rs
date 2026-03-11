@@ -586,8 +586,6 @@ impl ValidatorNode for GrpcClient {
         let request = (chain_id, stream_ids);
         let response: api::PreviousEventBlocksResponse =
             client_delegate!(self, previous_event_blocks, request)?;
-        bincode::deserialize(&response.previous_event_blocks).map_err(|err| NodeError::GrpcError {
-            error: format!("failed to deserialize previous_event_blocks response: {err}"),
-        })
+        Ok(response.try_into()?)
     }
 }
