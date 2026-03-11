@@ -83,7 +83,7 @@ jobs:
       run: |
         cargo test --locked -p linera-execution --features wasmtime
 
-  bridge-format-test:
+  bridge-tests:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
