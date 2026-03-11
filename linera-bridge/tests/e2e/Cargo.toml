@@ -1,6 +1,6 @@
 [package]
 name = "linera-bridge-e2e"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2021"
 publish = false
 
@@ -16,5 +16,7 @@ alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-fe
     "contract",
     "reqwest",
 ] }
+linera-base = { path = "../../../linera-base" }
+rand = { version = "0.8", default-features = false, features = ["std_rng"] }
 testcontainers = { version = "0.27", features = ["docker-compose"] }
 tokio = { version = "1", features = ["full"] }

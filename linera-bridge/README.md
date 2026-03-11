@@ -107,7 +107,7 @@ Binds the contract to a specific `LightClient` instance, a Linera chain ID (a 32
 
 Verifies a certificate via `lightClient.verifyBlock(data)`, then enforces:
 - **Chain ID match**: the block's `header.chain_id` must equal this contract's `chainId`.
-- **Sequential heights**: the block's height must be exactly `latestHeight + 1`.
+- **Sequential heights**: the block's height must equal `nextExpectedHeight`.
 
 On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
 
@@ -140,7 +140,7 @@ let calldata: Vec<u8> = call.abi_encode();
 
 // Available call types:
 // light_client: addCommitteeCall, verifyBlockCall, currentEpochCall
-// microchain:   addBlockCall, latestHeightCall, lightClientCall, chainIdCall
+// microchain:   addBlockCall, nextExpectedHeightCall, lightClientCall, chainIdCall
 
 // Solidity sources (for compilation or deployment tooling):
 // BRIDGE_TYPES_SOURCE, FUNGIBLE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE

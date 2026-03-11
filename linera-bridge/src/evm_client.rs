@@ -98,15 +98,16 @@ impl EvmLightClient {
 
 /// Extracts uncompressed validator public keys from a BCS-serialized committee blob.
 ///
-/// Returns 64-byte uncompressed keys (without the 0x04 prefix) for each validator.
+/// Returns 64-byte uncompressed keys (without the 0x04 prefix) for each validator,
+/// sorted by their compressed byte representation to match BCS canonical map ordering.
+///
+/// BCS serializes map entries sorted by serialized key bytes, which may differ from
+/// Rust's `BTreeMap` iteration order (based on `Ord` for `VerifyingKey`).
 pub fn extract_validator_keys(committee_blob: &[u8]) -> anyhow::Result<Vec<Vec<u8>>> {
     let committee: Committee = bcs::from_bytes(committee_blob)?;
-    let keys: Vec<Vec<u8>> = committee
-        .validators()
-        .keys()
-        .map(uncompressed_key)
-        .collect();
-    Ok(keys)
+    let mut keys: Vec<ValidatorPublicKey> = committee.validators().keys().copied().collect();
+    keys.sort_by_key(|a| a.as_bytes());
+    Ok(keys.iter().map(uncompressed_key).collect())
 }
 
 /// Derives the Ethereum address from a secp256k1 validator public key.

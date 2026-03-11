@@ -604,7 +604,8 @@ mod tests {
         );
         let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
 
-        // Extract uncompressed keys in BTreeMap order
+        // Extract uncompressed keys in BTreeMap iteration order (which may differ
+        // from BCS blob order). The contract handles arbitrary key ordering.
         let deserialized: linera_execution::Committee =
             bcs::from_bytes(&committee_bytes).expect("committee deserialization failed");
         let uncompressed_keys: Vec<alloy_primitives::Bytes> = deserialized
@@ -675,7 +676,8 @@ mod tests {
         let block = create_test_block(chain_id, block_epoch, height, transactions);
         let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
 
-        // Extract uncompressed keys in BTreeMap order (must match BCS blob order)
+        // Extract uncompressed keys in BTreeMap iteration order (which may differ
+        // from BCS blob order). The contract handles arbitrary key ordering.
         let committee: linera_execution::Committee =
             bcs::from_bytes(&committee_bytes).expect("committee deserialization failed");
         let uncompressed_keys: Vec<alloy_primitives::Bytes> = committee
@@ -688,6 +690,65 @@ mod tests {
             data: bcs_bytes.into(),
             committeeBlob: committee_bytes.into(),
             validators: uncompressed_keys,
+        }
+    }
+
+    /// Proptest: generates random secp256k1 keys and tests two-validator addCommittee.
+    /// This reproduces non-deterministic "key x-coordinate mismatch" failures.
+    mod proptest_add_committee {
+        use proptest::prelude::*;
+        use rand::SeedableRng;
+
+        use super::*;
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(200))]
+
+            #[test]
+            fn two_validator_add_committee_succeeds(
+                seed1 in any::<u64>(),
+                seed2 in any::<u64>(),
+                seed3 in any::<u64>(),
+            ) {
+                let mut rng1 = rand_chacha::ChaCha20Rng::seed_from_u64(seed1);
+                let mut rng2 = rand_chacha::ChaCha20Rng::seed_from_u64(seed2);
+                let mut rng3 = rand_chacha::ChaCha20Rng::seed_from_u64(seed3);
+
+                let signer_secret = ValidatorSecretKey::generate_from(&mut rng1);
+                let signer_public = signer_secret.public();
+                let secret1 = ValidatorSecretKey::generate_from(&mut rng2);
+                let public1 = secret1.public();
+                let secret2 = ValidatorSecretKey::generate_from(&mut rng3);
+                let public2 = secret2.public();
+
+                // Skip if the two new keys happen to be the same
+                if public1 == public2 {
+                    return Ok(());
+                }
+
+                // Deploy light client with signer as initial validator
+                let mut db = CacheDB::default();
+                let deployer = Address::ZERO;
+                let signer_addr = validator_evm_address(&signer_public);
+                let contract = deploy_light_client(
+                    &mut db, deployer, &[signer_addr], &[1],
+                    test_admin_chain_id(), 0,
+                );
+
+                // Create two-validator committee and call addCommittee
+                let call = create_add_committee_call_multi(
+                    &signer_secret,
+                    &signer_public,
+                    &[public1, public2],
+                    Epoch(1),
+                    Epoch::ZERO,
+                    BlockHeight(1),
+                    test_admin_chain_id(),
+                );
+
+                let result = try_call_contract(&mut db, deployer, contract, call);
+                prop_assert!(result.is_ok(), "addCommittee failed: {:?}", result.err());
+            }
         }
     }
 }

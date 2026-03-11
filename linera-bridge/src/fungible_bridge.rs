@@ -75,7 +75,7 @@ mod tests {
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let app_id = CryptoHash::new(&TestString::new("fungible_app"));
             let bridge =
-                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, 0, app_id, token);
+                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, 1, app_id, token);
             let origin = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
 
             // Fund the bridge with the full token supply
