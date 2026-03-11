@@ -218,14 +218,14 @@ where
         self.admin_keypair.public()
     }
 
-    pub async fn write_blobs(&mut self, blobs: &[Blob]) -> Result<(), linera_views::ViewError> {
+    pub async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), linera_views::ViewError> {
         self.worker.storage.write_blobs(blobs).await?;
         self.executing_worker.storage.write_blobs(blobs).await?;
         Ok(())
     }
 
     pub async fn register_mock_application(
-        &mut self,
+        &self,
         chain_id: ChainId,
         index: u32,
     ) -> Result<(ApplicationId, MockApplication), anyhow::Error> {
@@ -347,7 +347,7 @@ where
     }
 
     async fn make_simple_transfer_certificate(
-        &mut self,
+        &self,
         chain_id: ChainId,
         chain_owner_pubkey: AccountPublicKey,
         target_id: ChainId,
@@ -370,7 +370,7 @@ where
 
     #[expect(clippy::too_many_arguments)]
     async fn make_transfer_certificate(
-        &mut self,
+        &self,
         chain_id: ChainId,
         authenticated_owner: AccountOwner,
         source: AccountOwner,
@@ -395,7 +395,7 @@ where
     /// Creates a certificate with a transfer.
     #[expect(clippy::too_many_arguments)]
     async fn make_transfer_certificate_for_epoch(
-        &mut self,
+        &self,
         chain_id: ChainId,
         authenticated_owner: AccountOwner,
         source: AccountOwner,
@@ -570,7 +570,7 @@ where
     /// A method creating a `ConfirmedBlockCertificate` for a proposal by executing it on the
     /// `executing_worker`.
     async fn execute_proposal(
-        &mut self,
+        &self,
         proposal: ProposedBlock,
         blobs: Vec<Blob>,
     ) -> Result<ConfirmedBlockCertificate, anyhow::Error> {
