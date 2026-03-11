@@ -34,7 +34,7 @@ use serde::Serialize;
 use tokio::{fs, sync::Mutex};
 
 use super::{BlockBuilder, TestValidator};
-use crate::{ContractAbi, ServiceAbi};
+use crate::{abis::fungible::FungibleTokenAbi, ContractAbi, ServiceAbi};
 
 /// A reference to a single microchain inside a [`TestValidator`].
 pub struct ActiveChain {
@@ -112,7 +112,7 @@ impl ActiveChain {
     pub async fn chain_balance(&self) -> Amount {
         let query = Query::System(SystemQuery);
 
-        let QueryOutcome { response, .. } = self
+        let (QueryOutcome { response, .. }, _) = self
             .validator
             .worker()
             .query_application(self.id(), query, None)
@@ -630,10 +630,13 @@ impl ActiveChain {
     {
         let query_bytes = serde_json::to_vec(&query)?;
 
-        let QueryOutcome {
-            response,
-            operations,
-        } = self
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            _,
+        ) = self
             .validator
             .worker()
             .query_application(
@@ -758,6 +761,28 @@ impl ActiveChain {
             .await?;
 
         Ok(certificate)
+    }
+
+    /// Queries the balance of an account owned by `account_owner` on this chain.
+    pub async fn query_account(
+        &self,
+        application_id: ApplicationId<FungibleTokenAbi>,
+        account_owner: AccountOwner,
+    ) -> Option<Amount> {
+        use async_graphql::InputType as _;
+
+        let query = format!(
+            "query {{ accounts {{ entry(key: {}) {{ value }} }} }}",
+            account_owner.to_value()
+        );
+        let QueryOutcome { response, .. } = self.graphql_query(application_id, query).await;
+        let balance = response.pointer("/accounts/entry/value")?.as_str()?;
+
+        Some(
+            balance
+                .parse()
+                .expect("Account balance cannot be parsed as a number"),
+        )
     }
 }
 

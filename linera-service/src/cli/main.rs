@@ -1224,6 +1224,8 @@ impl Runnable for Job {
                 controller_application_id,
                 task_retry_delay_secs,
                 read_only,
+                query_cache_size,
+                allowed_subscriptions,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1286,6 +1288,26 @@ impl Runnable for Job {
                     tokio::spawn(controller.run());
                 }
 
+                assert!(
+                    query_cache_size.is_none() || !options.client_options.long_lived_services,
+                    "--query-cache-size is incompatible with --long-lived-services"
+                );
+
+                let query_subscriptions = if allowed_subscriptions.is_empty() {
+                    None
+                } else {
+                    use linera_service::query_subscription::parse_allowed_subscription;
+                    let registered: Vec<_> = allowed_subscriptions
+                        .iter()
+                        .map(|s| parse_allowed_subscription(s))
+                        .collect::<Result<_, _>>()?;
+                    Some(Arc::new(
+                        linera_service::query_subscription::QuerySubscriptionManager::new(
+                            registered,
+                        ),
+                    ))
+                };
+
                 let service = NodeService::new(
                     config,
                     port,
@@ -1294,6 +1316,9 @@ impl Runnable for Job {
                     Some(chain_id),
                     context,
                     read_only,
+                    query_cache_size,
+                    query_subscriptions,
+                    cancellation_token.clone(),
                 );
                 service.run(cancellation_token, command_receiver).await?;
             }
@@ -1648,7 +1673,7 @@ impl Runnable for Job {
 
                 wallet.insert(
                     description.id(),
-                    wallet::Chain {
+                    &wallet::Chain {
                         owner: Some(owner),
                         ..(&description).into()
                     },
@@ -2242,7 +2267,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 docker_image_name,
                 build_mode,
                 with_faucet,
-                faucet_chain,
                 faucet_port,
                 faucet_amount,
                 with_block_exporter,
@@ -2266,7 +2290,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     build_mode.clone(),
                     *policy_config,
                     *with_faucet,
-                    *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
                     *with_block_exporter,
@@ -2292,7 +2315,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 path,
                 external_protocol,
                 with_faucet,
-                faucet_chain,
                 faucet_port,
                 faucet_amount,
                 with_block_exporter,
@@ -2316,7 +2338,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     &options.storage_config,
                     external_protocol.clone(),
                     *with_faucet,
-                    *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
                 )

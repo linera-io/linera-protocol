@@ -410,7 +410,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     ///
     /// This reverts all state to what it was when the checkpoint was saved,
     /// as if the failed transaction execution never happened.
-    pub fn restore_checkpoint(&mut self, checkpoint: TrackerCheckpoint) {
+    pub fn restore_checkpoint(&mut self, checkpoint: &TrackerCheckpoint) {
         // Destructure to ensure all fields are handled (compiler will warn on new fields).
         let TrackerCheckpoint {
             resource_tracker,
@@ -424,15 +424,15 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results_len,
         } = checkpoint;
 
-        self.resource_controller.tracker = resource_tracker;
-        self.next_application_index = next_application_index;
-        self.next_chain_index = next_chain_index;
-        self.transaction_index = transaction_index;
-        self.oracle_responses.truncate(oracle_responses_len);
-        self.events.truncate(events_len);
-        self.blobs.truncate(blobs_len);
-        self.messages.truncate(messages_len);
-        self.operation_results.truncate(operation_results_len);
+        self.resource_controller.tracker = *resource_tracker;
+        self.next_application_index = *next_application_index;
+        self.next_chain_index = *next_chain_index;
+        self.transaction_index = *transaction_index;
+        self.oracle_responses.truncate(*oracle_responses_len);
+        self.events.truncate(*events_len);
+        self.blobs.truncate(*blobs_len);
+        self.messages.truncate(*messages_len);
+        self.operation_results.truncate(*operation_results_len);
     }
 
     /// Finalizes the execution and returns the collected results.

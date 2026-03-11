@@ -112,7 +112,7 @@ where
         query: Query,
         block_hash: Option<CryptoHash>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<QueryOutcome, WorkerError>>,
+        callback: oneshot::Sender<Result<(QueryOutcome, BlockHeight), WorkerError>>,
     },
 
     /// Describe an application.
@@ -332,7 +332,7 @@ impl ServiceRuntimeActor {
                             local_time: Timestamp::from(0),
                         },
                     )
-                    .run(runtime_request_receiver)
+                    .run(&runtime_request_receiver)
                 })
                 .await,
         }

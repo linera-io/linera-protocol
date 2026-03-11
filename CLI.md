@@ -745,6 +745,8 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
   Default value: `5`
 * `--read-only` — Run in read-only mode: disallow mutations and prevent queries from scheduling operations. Use this when exposing the service to untrusted clients
+* `--query-cache-size <QUERY_CACHE_SIZE>` — Enable the application query response cache with the given per-chain capacity. Each entry stores a serialized GraphQL response keyed by (application_id, request_bytes). Incompatible with `--long-lived-services`
+* `--allow-subscription <ALLOWED_SUBSCRIPTIONS>` — Allow a named GraphQL subscription query. The operation name is extracted from the query string. Repeatable. Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
 
 
 
@@ -1234,10 +1236,9 @@ Start a Local Linera Network
 * `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either `grpc` or `grpcs`
 
   Default value: `grpc`
-* `--with-faucet` — If present, a faucet is started using the chain provided by --faucet-chain, or the first non-admin chain if not provided
+* `--with-faucet` — If present, a faucet is started on a dedicated chain with its own wallet
 
   Default value: `false`
-* `--faucet-chain <FAUCET_CHAIN>` — When using --with-faucet, this specifies the chain on which the faucet will be started. If this is `n`, the `n`-th non-admin chain (lexicographically) in the wallet is selected
 * `--faucet-port <FAUCET_PORT>` — The port on which to run the faucet server
 
   Default value: `8080`

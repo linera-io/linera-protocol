@@ -54,7 +54,7 @@ where
     };
     let handle = std::thread::spawn(move || {
         start_block_processor(
-            storage,
+            &storage,
             shutdown_signal,
             limits,
             options,
@@ -91,7 +91,7 @@ impl NewBlockQueue {
 
 #[tokio::main(flavor = "current_thread")]
 async fn start_block_processor<S, F>(
-    storage: S,
+    storage: &S,
     shutdown_signal: F,
     limits: LimitsConfig,
     options: NodeOptions,
@@ -120,7 +120,7 @@ where
     let startup_committee_destinations = if destination_config.committee_destination {
         // Load persisted committee destinations from storage if available
         let persisted_committee_destinations =
-            load_persisted_committee_destinations(&storage, &block_processor_storage).await;
+            load_persisted_committee_destinations(storage, &block_processor_storage).await;
 
         let latest_committee_destinations = persisted_committee_destinations.unwrap_or_default();
         tracing::info!(
@@ -139,7 +139,7 @@ where
         limits.work_queue_size.into(),
         shutdown_signal.clone(),
         exporter_storage.clone()?,
-        destination_config.destinations.clone(),
+        destination_config.destinations,
         startup_committee_destinations,
     );
 

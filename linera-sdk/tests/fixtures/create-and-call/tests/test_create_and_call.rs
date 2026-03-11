@@ -50,7 +50,7 @@ async fn test_create_and_call() {
 
     chain
         .add_block(|block| {
-            block.with_operation(application_id, create_and_call_operation);
+            block.with_operation(application_id, &create_and_call_operation);
         })
         .await;
 

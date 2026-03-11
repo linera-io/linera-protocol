@@ -22,8 +22,8 @@ fn test_simple_bool_wrapper() {
     test_store_in_memory(SimpleWrapper(true), &[1], &[]);
     test_store_in_memory(SimpleWrapper(false), &[0], &[]);
 
-    test_lower_to_flat_layout(SimpleWrapper(true), hlist![1], &[]);
-    test_lower_to_flat_layout(SimpleWrapper(false), hlist![0], &[]);
+    test_lower_to_flat_layout(SimpleWrapper(true), &hlist![1], &[]);
+    test_lower_to_flat_layout(SimpleWrapper(false), &hlist![0], &[]);
 }
 
 /// Checks that a type with multiple fields ordered in a way that doesn't require any padding is
@@ -42,7 +42,7 @@ fn test_tuple_struct_without_padding() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0x0123_4567_89ab_cdef_i64, 0x0011_2233_i32, 0x0000_4455_i32],
+        &hlist![0x0123_4567_89ab_cdef_i64, 0x0011_2233_i32, 0x0000_4455_i32],
         &[],
     );
 }
@@ -63,7 +63,7 @@ fn test_tuple_struct_with_padding() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0x0000_0123_i32, 0x4567_89ab_i32, 0x0011_2233_4455_6677_i64],
+        &hlist![0x0000_0123_i32, 0x4567_89ab_i32, 0x0011_2233_4455_6677_i64],
         &[],
     );
 }
@@ -89,7 +89,7 @@ fn test_named_struct_with_double_padding() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![
+        &hlist![
             0x0000_0123_i32,
             0x0011_2233_i32,
             0x0000_0045_i32,
@@ -127,7 +127,7 @@ fn test_nested_types() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![
+        &hlist![
             0x0000_0123_i32,
             0x0000_0000_i32,
             0x2233_4455_6677_8899_i64,
@@ -156,7 +156,7 @@ fn test_enum_type() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![
+        &hlist![
             0x0000_0000_i32,
             0x0000_0000_0000_0000_i64,
             0x0000_0000_i32,
@@ -184,7 +184,7 @@ fn test_enum_type() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![
+        &hlist![
             0x0000_0001_i32,
             0x0000_0000_0000_0000_i64,
             0x0000_0001_i32,
@@ -214,7 +214,7 @@ fn test_enum_type() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![
+        &hlist![
             0x0000_0002_i32,
             0x0102_0304_0506_0708_i64,
             0x0000_0000_i32,
@@ -254,7 +254,7 @@ fn test_specialized_generic_struct() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0x0000_00c8_i32, -200_i32, 0x0000_0000_i32, 0x0000_0004_i32],
+        &hlist![0x0000_00c8_i32, -200_i32, 0x0000_0000_i32, 0x0000_0004_i32],
         &expected_heap,
     );
 }
@@ -274,7 +274,7 @@ fn test_specialized_generic_enum_type() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0x0000_0000_i32, 0x0000_0000_i32, 0x0000_0000_i32],
+        &hlist![0x0000_0000_i32, 0x0000_0000_i32, 0x0000_0000_i32],
         &[],
     );
 
@@ -289,7 +289,7 @@ fn test_specialized_generic_enum_type() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0x0000_0001_i32, 0x0000_0000_i32, 0x0000_0000_i32],
+        &hlist![0x0000_0001_i32, 0x0000_0000_i32, 0x0000_0000_i32],
         &[],
     );
 
@@ -304,7 +304,7 @@ fn test_specialized_generic_enum_type() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0x0000_0001_i32, 0x0000_0001_i32, 0x0000_0000_i32],
+        &hlist![0x0000_0001_i32, 0x0000_0001_i32, 0x0000_0000_i32],
         &[],
     );
 
@@ -319,7 +319,7 @@ fn test_specialized_generic_enum_type() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0x0000_0001_i32, 0x0000_0001_i32, 0x0000_0001_i32],
+        &hlist![0x0000_0001_i32, 0x0000_0001_i32, 0x0000_0001_i32],
         &[],
     );
 
@@ -334,7 +334,7 @@ fn test_specialized_generic_enum_type() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0x0000_0002_i32, 0x0000_0000_i32, 0x0000_0000_i32],
+        &hlist![0x0000_0002_i32, 0x0000_0000_i32, 0x0000_0000_i32],
         &[],
     );
 
@@ -349,7 +349,7 @@ fn test_specialized_generic_enum_type() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0x0000_0002_i32, 0x0000_0001_i32, 0x0000_0009_i32],
+        &hlist![0x0000_0002_i32, 0x0000_0001_i32, 0x0000_0009_i32],
         &[],
     );
 }
@@ -380,7 +380,7 @@ fn test_heap_allocated_fields() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![
+        &hlist![
             0_i32,
             1_i32,
             0x7879_7a7b_7c7d_7e7f_i64,
@@ -412,7 +412,7 @@ fn test_slice() {
     ];
 
     test_store_in_memory(data.as_slice(), &[8, 0, 0, 0, 4, 0, 0, 0], &[0, 0, 1, 1]);
-    test_lower_to_flat_layout(data.as_slice(), hlist![0_i32, 4_i32,], &[0, 0, 1, 1]);
+    test_lower_to_flat_layout(data.as_slice(), &hlist![0_i32, 4_i32,], &[0, 0, 1, 1]);
 }
 
 /// Checks that a [`Vec`] type is properly stored in memory and lowered into its flat layout.
@@ -425,7 +425,7 @@ fn test_vec() {
     ];
 
     test_store_in_memory(data.clone(), &[8, 0, 0, 0, 3, 0, 0, 0], &[1, 0, 1]);
-    test_lower_to_flat_layout(data, hlist![0_i32, 3_i32,], &[1, 0, 1]);
+    test_lower_to_flat_layout(data, &hlist![0_i32, 3_i32,], &[1, 0, 1]);
 }
 
 /// Check that a boxed slice type is properly stored in memory and lowered into its flat layout.
@@ -458,7 +458,7 @@ fn test_boxed_slice() {
         .collect::<Vec<u8>>();
 
     test_store_in_memory(data.clone(), &[8, 0, 0, 0, 4, 0, 0, 0], &heap_memory);
-    test_lower_to_flat_layout(data, hlist![0_i32, 4_i32,], &heap_memory);
+    test_lower_to_flat_layout(data, &hlist![0_i32, 4_i32,], &heap_memory);
 }
 
 /// Check that a rc-ed slice type is properly stored in memory and lowered into its flat layout.
@@ -487,7 +487,7 @@ fn test_rced_slice() {
         .collect::<Vec<u8>>();
 
     test_store_in_memory(data.clone(), &[8, 0, 0, 0, 2, 0, 0, 0], &heap_memory);
-    test_lower_to_flat_layout(data, hlist![0_i32, 2_i32,], &heap_memory);
+    test_lower_to_flat_layout(data, &hlist![0_i32, 2_i32,], &heap_memory);
 }
 
 /// Check that a rc-ed slice type is properly stored in memory and lowered into its flat layout.
@@ -530,7 +530,7 @@ fn test_arced_slice() {
         .collect::<Vec<u8>>();
 
     test_store_in_memory(data.clone(), &[8, 0, 0, 0, 2, 0, 0, 0], &heap_memory);
-    test_lower_to_flat_layout(data, hlist![0_i32, 2_i32,], &heap_memory);
+    test_lower_to_flat_layout(data, &hlist![0_i32, 2_i32,], &heap_memory);
 }
 
 /// Check that a type with a slice field is properly stored in memory and lowered into its
@@ -569,7 +569,7 @@ fn test_slice_field() {
         .collect::<Vec<u8>>();
 
     test_store_in_memory(data, &[8, 0, 0, 0, 3, 0, 0, 0], &expected_memory);
-    test_lower_to_flat_layout(data, hlist![0_i32, 3_i32], &expected_memory);
+    test_lower_to_flat_layout(data, &hlist![0_i32, 3_i32], &expected_memory);
 }
 
 /// Checks that a type with list fields is properly stored in memory and lowered into its
@@ -684,7 +684,7 @@ fn test_list_fields() {
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0_i32, 4_i32, 8_i32, 2_i32, 40_i32, 3_i32, 112_i32, 2_i32],
+        &hlist![0_i32, 4_i32, 8_i32, 2_i32, 40_i32, 3_i32, 112_i32, 2_i32],
         &expected_heap,
     );
 }
@@ -754,11 +754,11 @@ fn test_single_store_in_memory<T>(
 /// and that they match the `expected` value.
 fn test_lower_to_flat_layout<T>(
     data: T,
-    expected: <T::Layout as Layout>::Flat,
+    expected: &<T::Layout as Layout>::Flat,
     expected_memory: &[u8],
 ) where
     T: Clone + WitStore,
-    <T::Layout as Layout>::Flat: Copy + Debug + Eq,
+    <T::Layout as Layout>::Flat: Debug + Eq,
 {
     test_single_lower_to_flat_layout(&data, expected, expected_memory);
     test_single_lower_to_flat_layout(&Box::new(data.clone()), expected, expected_memory);
@@ -770,7 +770,7 @@ fn test_lower_to_flat_layout<T>(
 /// `expected` value.
 fn test_single_lower_to_flat_layout<T>(
     data: &T,
-    expected: <T::Layout as Layout>::Flat,
+    expected: &<T::Layout as Layout>::Flat,
     expected_memory: &[u8],
 ) where
     T: WitStore,
@@ -779,6 +779,6 @@ fn test_single_lower_to_flat_layout<T>(
     let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
-    assert_eq!(data.lower(&mut memory).unwrap(), expected);
+    assert_eq!(&data.lower(&mut memory).unwrap(), expected);
     assert_eq!(&instance.memory_contents(), expected_memory);
 }

@@ -362,8 +362,11 @@ where
     /// Schedules an operation to be included in the block being built.
     ///
     /// The operation is specified as an opaque blob of bytes.
-    pub fn schedule_raw_operation(&self, operation: Vec<u8>) {
-        self.scheduled_operations.lock().unwrap().push(operation);
+    pub fn schedule_raw_operation(&self, operation: &[u8]) {
+        self.scheduled_operations
+            .lock()
+            .unwrap()
+            .push(operation.to_vec());
     }
 
     /// Schedules an operation to be included in the block being built.
@@ -373,7 +376,7 @@ where
         let bytes = <Application::Abi as ContractAbi>::serialize_operation(operation)
             .expect("Failed to serialize application operation");
 
-        self.schedule_raw_operation(bytes);
+        self.schedule_raw_operation(&bytes);
     }
 
     /// Returns the list of operations scheduled since the most recent of:
@@ -464,10 +467,11 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn http_request(&self, request: http::Request) -> http::Response {
         let maybe_request = self.expected_http_requests.lock().unwrap().pop_front();
         let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");
-        assert_eq!(request, expected_request);
+        assert_eq!(&request, &expected_request);
         response
     }
 

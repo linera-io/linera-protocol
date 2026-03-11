@@ -77,7 +77,7 @@ impl Contract for MatchingEngineContract {
                     .expect("Failed to read existing order IDs");
                 for order_id in order_ids {
                     match self.state.modify_order(order_id, ModifyQuantity::All).await {
-                        Some(transfer) => self.send_to(transfer),
+                        Some(transfer) => self.send_to(&transfer),
                         // Orders with amount zero may have been cleared in an earlier iteration.
                         None => continue,
                     }
@@ -136,7 +136,7 @@ impl MatchingEngineContract {
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    fn send_to(&mut self, transfer: Transfer) {
+    fn send_to(&mut self, transfer: &Transfer) {
         let destination = transfer.account;
         let owner_app = self.runtime.application_id().into();
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx);
@@ -183,7 +183,7 @@ impl MatchingEngineContract {
                     .insert_and_uncross_market(&account, quantity, nature, &price)
                     .await;
                 for transfer in transfers {
-                    self.send_to(transfer);
+                    self.send_to(&transfer);
                 }
             }
             Order::Cancel { owner, order_id } => {
@@ -193,7 +193,7 @@ impl MatchingEngineContract {
                     .modify_order(order_id, ModifyQuantity::All)
                     .await
                     .expect("Order is not present therefore cannot be cancelled");
-                self.send_to(transfer);
+                self.send_to(&transfer);
             }
             Order::Modify {
                 owner,
@@ -206,7 +206,7 @@ impl MatchingEngineContract {
                     .modify_order(order_id, ModifyQuantity::Partial(reduce_quantity))
                     .await
                     .expect("Order is not present therefore cannot be cancelled");
-                self.send_to(transfer);
+                self.send_to(&transfer);
             }
         }
     }

@@ -1,0 +1,59 @@
+name: Post Benchmark Comment
+
+# Runs after "Instruction Count Benchmarks" completes. Using workflow_run gives
+# this job write permissions even when the triggering workflow was a fork PR
+# (where GITHUB_TOKEN is read-only).
+#
+# The workflow name below must match the `name:` in instruction-count-benchmarks.yml.
+# If that name changes, update it here too or comment posting will silently stop.
+
+on:
+  workflow_run:
+    workflows: ["Instruction Count Benchmarks"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  actions: read
+
+jobs:
+  post-comment:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Download benchmark comment artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: bench-comment
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path: /tmp/bench-artifacts
+
+    - name: Post or update PR comment
+      run: |
+        PR=$(cat /tmp/bench-artifacts/pr-number.txt)
+        COMMENT=$(cat /tmp/bench-artifacts/bench-comment.md)
+
+        if [ -z "$COMMENT" ]; then
+          echo "No benchmark comment to post"
+          exit 0
+        fi
+
+        EXISTING=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+          --jq '[.[] | select(.body | startswith("## Instruction Count Benchmark Results")) | .id] | last // empty')
+
+        if [ -n "$EXISTING" ]; then
+          gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING}" \
+            -X PATCH -f body="${COMMENT}"
+          echo "Updated existing comment $EXISTING on PR #$PR"
+        else
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+            -f body="${COMMENT}"
+          echo "Posted new comment on PR #$PR"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

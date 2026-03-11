@@ -40,6 +40,7 @@ linera-web/**/*-lock.json
 # Claude
 .claude
 CLAUDE.md
+CLAUDE.local.md
 .serena
 docs/
 
@@ -48,3 +49,6 @@ docs/
 
 # Git worktrees
 .worktrees/
+
+# macOS
+.DS_Store

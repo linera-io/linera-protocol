@@ -88,7 +88,7 @@ where
         &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
+        // In local nodes, cross-chain actions will be handled internally, so we discard them.
         let (response, _actions) =
             Box::pin(self.node.state.handle_block_proposal(proposal)).await?;
         Ok(response)
@@ -116,7 +116,7 @@ where
         &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
+        // In local nodes, cross-chain actions will be handled internally, so we discard them.
         let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
@@ -261,13 +261,13 @@ where
         chain_id: ChainId,
         query: Query,
         block_hash: Option<CryptoHash>,
-    ) -> Result<QueryOutcome, LocalNodeError> {
-        let outcome = self
+    ) -> Result<(QueryOutcome, BlockHeight), LocalNodeError> {
+        let result = self
             .node
             .state
             .query_application(chain_id, query, block_hash)
             .await?;
-        Ok(outcome)
+        Ok(result)
     }
 
     /// Handles any pending local cross-chain requests.

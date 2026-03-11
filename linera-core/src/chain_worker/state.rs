@@ -167,8 +167,14 @@ where
                 callback,
             } => callback
                 .send(
-                    self.stage_block_execution(block, round, &published_blobs)
-                        .await,
+                    self.stage_block_execution_with_policy(
+                        block,
+                        round,
+                        &published_blobs,
+                        BundleExecutionPolicy::Abort,
+                    )
+                    .await
+                    .map(|(_, block, response, tracker)| (block, response, tracker)),
                 )
                 .is_ok(),
             ChainWorkerRequest::StageBlockExecutionWithPolicy {
@@ -808,10 +814,9 @@ where
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
-        // Check that the chain is active and ready for this confirmation.
+        // Check if we already processed this block.
         let tip = self.chain.tip_state.get().clone();
         if tip.next_block_height > height {
-            // We already processed this block.
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
@@ -1409,18 +1414,15 @@ where
         &mut self,
         query: Query,
         block_hash: Option<CryptoHash>,
-    ) -> Result<QueryOutcome, WorkerError> {
+    ) -> Result<(QueryOutcome, BlockHeight), WorkerError> {
         self.initialize_and_save_if_needed().await?;
+        let next_block_height = self.chain.tip_state.get().next_block_height;
         let local_time = self.storage.clock().current_time();
         if let Some(requested_block) = block_hash {
             if let Some(mut state) = self.execution_state_cache.remove(&requested_block) {
                 // We try to use a cached execution state for the requested block.
                 // We want to pretend that this block is committed, so we set the next block height.
-                let next_block_height = self
-                    .chain
-                    .tip_state
-                    .get()
-                    .next_block_height
+                let next_block_height = next_block_height
                     .try_add_one()
                     .expect("block height to not overflow");
                 let context = QueryContext {
@@ -1441,21 +1443,21 @@ where
                     .with_execution_context(ChainExecutionContext::Query)?;
                 self.execution_state_cache
                     .insert_owned(&requested_block, state);
-                Ok(outcome)
+                Ok((outcome, next_block_height))
             } else {
                 tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
                 let outcome = self
                     .chain
                     .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
                     .await?;
-                Ok(outcome)
+                Ok((outcome, next_block_height))
             }
         } else {
             let outcome = self
                 .chain
                 .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
                 .await?;
-            Ok(outcome)
+            Ok((outcome, next_block_height))
         }
     }
 
@@ -1471,28 +1473,6 @@ where
         self.initialize_and_save_if_needed().await?;
         let response = self.chain.describe_application(application_id).await?;
         Ok(response)
-    }
-
-    /// Executes a block without persisting any changes to the state.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        block_height = %block.height
-    ))]
-    async fn stage_block_execution(
-        &mut self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
-        let (_, executed_block, response, resource_tracker) = self
-            .stage_block_execution_with_policy(
-                block,
-                round,
-                published_blobs,
-                BundleExecutionPolicy::Abort,
-            )
-            .await?;
-        Ok((executed_block, response, resource_tracker))
     }
 
     /// Executes a block without persisting any changes to the state, with a specified
@@ -1684,7 +1664,7 @@ where
             .await?;
         let key_pair = self.config.key_pair();
         let manager = &mut self.chain.manager;
-        match manager.create_vote(proposal, block, key_pair, local_time, blobs)? {
+        match manager.create_vote(&proposal, block, key_pair, local_time, blobs)? {
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
                 self.block_values.insert(Cow::Borrowed(vote.value.inner()));
@@ -1853,7 +1833,7 @@ fn missing_indices_blob_ids(maybe_blobs: &[(BlobId, Option<Blob>)]) -> (Vec<usiz
     (missing_indices, missing_blob_ids)
 }
 
-/// Returns the keys whose value is `None`.
+/// Returns the blob IDs whose corresponding value is `None`.
 fn missing_blob_ids<'a>(
     maybe_blobs: impl IntoIterator<Item = (&'a BlobId, &'a Option<Blob>)>,
 ) -> Vec<BlobId> {

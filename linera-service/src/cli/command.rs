@@ -758,6 +758,19 @@ pub enum ClientCommand {
         /// operations. Use this when exposing the service to untrusted clients.
         #[arg(long)]
         read_only: bool,
+
+        /// Enable the application query response cache with the given per-chain capacity.
+        /// Each entry stores a serialized GraphQL response keyed by
+        /// (application_id, request_bytes). Incompatible with `--long-lived-services`.
+        #[arg(long, env = "LINERA_QUERY_CACHE_SIZE")]
+        query_cache_size: Option<usize>,
+
+        /// Allow a named GraphQL subscription query.
+        /// The operation name is extracted from the query string.
+        /// Repeatable.
+        /// Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
+        #[arg(long = "allow-subscription")]
+        allowed_subscriptions: Vec<String>,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.
@@ -1149,15 +1162,9 @@ pub enum NetCommand {
         #[arg(long, default_value = "grpc")]
         external_protocol: String,
 
-        /// If present, a faucet is started using the chain provided by --faucet-chain, or
-        /// the first non-admin chain if not provided.
+        /// If present, a faucet is started on a dedicated chain with its own wallet.
         #[arg(long, default_value = "false")]
         with_faucet: bool,
-
-        /// When using --with-faucet, this specifies the chain on which the faucet will be started.
-        /// If this is `n`, the `n`-th non-admin chain (lexicographically) in the wallet is selected.
-        #[arg(long)]
-        faucet_chain: Option<u32>,
 
         /// The port on which to run the faucet server
         #[arg(long, default_value = "8080")]
