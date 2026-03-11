@@ -56,6 +56,10 @@ use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
     transport, GRPC_MAX_MESSAGE_SIZE,
 };
+
+/// Maximum number of stream IDs per `previous_event_blocks` request, to avoid exceeding
+/// the gRPC message size limit in the response. See [`tests::max_stream_ids_fits`].
+pub(crate) const MAX_STREAM_IDS_PER_REQUEST: usize = 10_000;
 #[cfg(feature = "opentelemetry")]
 use crate::propagation::{get_context_with_traffic_type, inject_context};
 use crate::{
@@ -583,9 +587,55 @@ impl ValidatorNode for GrpcClient {
         chain_id: ChainId,
         stream_ids: Vec<StreamId>,
     ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError> {
-        let request = (chain_id, stream_ids);
-        let response: api::PreviousEventBlocksResponse =
-            client_delegate!(self, previous_event_blocks, request)?;
-        Ok(response.try_into()?)
+        let mut result = BTreeMap::new();
+        for chunk in stream_ids.chunks(MAX_STREAM_IDS_PER_REQUEST) {
+            let request = (chain_id, chunk.to_vec());
+            let response: api::PreviousEventBlocksResponse =
+                client_delegate!(self, previous_event_blocks, request)?;
+            let entries: BTreeMap<StreamId, (BlockHeight, CryptoHash)> = response.try_into()?;
+            result.extend(entries);
+        }
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        crypto::CryptoHash,
+        data_types::BlockHeight,
+        identifiers::{ApplicationId, GenericApplicationId, StreamId, StreamName},
+    };
+
+    use super::{api, GRPC_MAX_MESSAGE_SIZE, MAX_STREAM_IDS_PER_REQUEST};
+
+    /// Verifies that a response with `MAX_STREAM_IDS_PER_REQUEST` entries fits within
+    /// the gRPC message size limit, even with large stream IDs.
+    #[test]
+    fn max_stream_ids_fits() {
+        let large_stream_id = api::StreamId {
+            bytes: bincode::serialize(&StreamId {
+                application_id: GenericApplicationId::User(ApplicationId::new(
+                    CryptoHash::test_hash("app"),
+                )),
+                stream_name: StreamName(vec![0xFF; 256]),
+            })
+            .unwrap(),
+        };
+        let response = api::PreviousEventBlocksResponse {
+            previous_event_blocks: (0..MAX_STREAM_IDS_PER_REQUEST)
+                .map(|_| api::PreviousEventBlock {
+                    stream_id: Some(large_stream_id.clone()),
+                    block_height: Some(BlockHeight::MAX.into()),
+                    crypto_hash: Some(CryptoHash::test_hash("hash").into()),
+                })
+                .collect(),
+        };
+        let size = prost::Message::encoded_len(&response);
+        assert!(
+            size < GRPC_MAX_MESSAGE_SIZE,
+            "Response with {MAX_STREAM_IDS_PER_REQUEST} entries is {size} bytes, \
+             exceeding the {GRPC_MAX_MESSAGE_SIZE}-byte gRPC limit"
+        );
     }
 }
