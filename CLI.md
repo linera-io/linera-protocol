@@ -28,6 +28,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera create-genesis-config`↴](#linera-create-genesis-config)
 * [`linera watch`↴](#linera-watch)
 * [`linera service`↴](#linera-service)
+* [`linera query-application`↴](#linera-query-application)
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-module`↴](#linera-publish-module)
 * [`linera list-events-from-index`↴](#linera-list-events-from-index)
@@ -105,6 +106,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `create-genesis-config` — Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 * `watch` — Watch the network for notifications
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
+* `query-application` — Query an application without starting the node service. This performs a read-only GraphQL query directly on a smart contract's service, without creating a lock or a persistent HTTP server
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-module` — Publish module
 * `list-events-from-index` — Print events from a specific chain and stream from a specified index
@@ -747,6 +749,23 @@ Run a GraphQL service to explore and extend the chains of the wallet
 * `--read-only` — Run in read-only mode: disallow mutations and prevent queries from scheduling operations. Use this when exposing the service to untrusted clients
 * `--query-cache-size <QUERY_CACHE_SIZE>` — Enable the application query response cache with the given per-chain capacity. Each entry stores a serialized GraphQL response keyed by (application_id, request_bytes). Incompatible with `--long-lived-services`
 * `--allow-subscription <ALLOWED_SUBSCRIPTIONS>` — Allow a named GraphQL subscription query. The operation name is extracted from the query string. Repeatable. Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
+
+
+
+## `linera query-application`
+
+Query an application without starting the node service. This performs a read-only GraphQL query directly on a smart contract's service, without creating a lock or a persistent HTTP server
+
+**Usage:** `linera query-application [OPTIONS] --application-id <APPLICATION_ID> <QUERY>`
+
+###### **Arguments:**
+
+* `<QUERY>` — The GraphQL query to send (e.g. "value" for a counter application)
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — The chain on which the application is running
+* `--application-id <APPLICATION_ID>` — The application to query
 
 
 
