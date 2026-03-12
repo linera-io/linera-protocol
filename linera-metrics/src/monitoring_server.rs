@@ -15,8 +15,16 @@ pub fn start_metrics(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,
 ) {
+    start_metrics_with_extras(address, shutdown_signal, None);
+}
+
+pub fn start_metrics_with_extras(
+    address: impl ToSocketAddrs + Debug + Send + 'static,
+    shutdown_signal: CancellationToken,
+    extra_routes: Option<Router>,
+) {
     #[cfg(feature = "memory-profiling")]
-    let app = {
+    let mut app = {
         // Try to add memory profiling endpoint
         match MemoryProfiler::check_prof_ctl() {
             Ok(()) => {
@@ -37,7 +45,11 @@ pub fn start_metrics(
     };
 
     #[cfg(not(feature = "memory-profiling"))]
-    let app = Router::new().route("/metrics", get(serve_metrics));
+    let mut app = Router::new().route("/metrics", get(serve_metrics));
+
+    if let Some(extra) = extra_routes {
+        app = app.merge(extra);
+    }
 
     tokio::spawn(async move {
         let listener = tokio::net::TcpListener::bind(address)

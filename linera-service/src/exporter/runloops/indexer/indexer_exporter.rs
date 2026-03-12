@@ -4,7 +4,7 @@
 use std::{
     future::IntoFuture,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     time::Duration,
@@ -38,6 +38,7 @@ pub(crate) struct Exporter {
     options: NodeOptions,
     work_queue_size: usize,
     destination_id: DestinationId,
+    health: Arc<AtomicBool>,
 }
 
 impl Exporter {
@@ -45,11 +46,13 @@ impl Exporter {
         destination_id: DestinationId,
         work_queue_size: usize,
         options: NodeOptions,
+        health: Arc<AtomicBool>,
     ) -> Exporter {
         Self {
             options,
             destination_id,
             work_queue_size,
+            health,
         }
     }
 
@@ -111,6 +114,7 @@ impl Exporter {
 
                 res = &mut streamer_fut => {
                     if let Err(error) = res {
+                        self.health.store(false, Ordering::Release);
                         tracing::error!(?error, "exporter stream error. re-trying to establish a stream");
                         client = IndexerClient::new(address, self.options)?;
                         sleep(Duration::from_millis(500)).await;
@@ -118,6 +122,7 @@ impl Exporter {
                 },
 
                 res = acknowledgement_task.run() => {
+                    self.health.store(false, Ordering::Release);
                     match res {
                         Err(error) => {
                             tracing::error!(?error, "ack stream error. letting export stream drain before reconnecting");

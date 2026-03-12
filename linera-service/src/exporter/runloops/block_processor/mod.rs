@@ -206,7 +206,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
+    use std::{
+        collections::HashSet,
+        sync::{atomic::AtomicBool, Arc},
+    };
 
     use linera_base::{
         crypto::CryptoHash,
@@ -258,6 +261,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -389,6 +393,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -510,6 +515,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -598,6 +604,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -708,6 +715,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -798,6 +806,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
 
         let mut block_processor = BlockProcessor::new(
