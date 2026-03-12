@@ -81,7 +81,20 @@ pub fn start_metrics(
     shutdown_signal: CancellationToken,
     memory_profiling: MemoryProfiling,
 ) {
-    let app = metrics_router(memory_profiling);
+    start_metrics_with_extras(address, shutdown_signal, memory_profiling, None);
+}
+
+pub fn start_metrics_with_extras(
+    address: impl ToSocketAddrs + Debug + Send + 'static,
+    shutdown_signal: CancellationToken,
+    memory_profiling: MemoryProfiling,
+    extra_routes: Option<Router>,
+) {
+    let mut app = metrics_router(memory_profiling);
+
+    if let Some(extra) = extra_routes {
+        app = app.merge(extra);
+    }
 
     tokio::spawn(async move {
         let listener = tokio::net::TcpListener::bind(address)
