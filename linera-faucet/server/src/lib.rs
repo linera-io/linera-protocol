@@ -532,7 +532,7 @@ where
 
     // Collects requests for new accounts from the queue; answers the ones for existing
     // accounts immediately.
-    async fn get_request_batch(&mut self) -> Vec<PendingRequest> {
+    async fn get_request_batch(&self) -> Vec<PendingRequest> {
         let mut batch_requests = Vec::new();
         let mut requests = self.pending_requests.lock().await;
         while batch_requests.len() < self.config.max_batch_size {

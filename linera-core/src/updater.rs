@@ -801,7 +801,7 @@ where
     ///
     /// Returns the [`ChainInfo`] from the validator after initialization.
     async fn initialize_new_chain_on_validator(
-        &mut self,
+        &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         // Send chain description and all dependency chains
@@ -824,7 +824,7 @@ where
     ///
     /// This is a best-effort operation - failures are logged but don't fail the entire sync.
     async fn sync_consensus_round(
-        &mut self,
+        &self,
         remote_round: Round,
         manager: &linera_chain::manager::ChainManagerInfo,
     ) -> Result<(), chain_client::Error> {
@@ -904,7 +904,7 @@ where
     /// and sends chain information for those heights. With sparse chains, this only
     /// sends the specific blocks containing the blobs, not all blocks up to those heights.
     async fn send_chain_info_for_blobs(
-        &mut self,
+        &self,
         blob_ids: &[BlobId],
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
@@ -934,7 +934,7 @@ where
     /// specified heights, not all blocks up to those heights. This is more efficient for
     /// sparse chains where only specific blocks are needed.
     async fn send_chain_info_at_heights(
-        &mut self,
+        &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
@@ -969,7 +969,7 @@ where
     }
 
     async fn send_chain_info_up_to_heights(
-        &mut self,
+        &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {

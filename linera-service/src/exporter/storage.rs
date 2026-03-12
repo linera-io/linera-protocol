@@ -334,7 +334,7 @@ where
         self.shared_storage.push_block(block)
     }
 
-    pub(super) fn new_committee(&mut self, committee_destinations: HashSet<DestinationId>) {
+    pub(super) fn new_committee(&self, committee_destinations: HashSet<DestinationId>) {
         committee_destinations.into_iter().for_each(|id| {
             let state = match self.shared_storage.destination_states.get(&id) {
                 None => {

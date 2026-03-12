@@ -1026,7 +1026,7 @@ where
     /// `height`.
     #[instrument(level = "trace", skip(self, notify_when_messages_are_delivered))]
     async fn register_delivery_notifier(
-        &mut self,
+        &self,
         height: BlockHeight,
         actions: &NetworkActions,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,

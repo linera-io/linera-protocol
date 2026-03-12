@@ -72,7 +72,7 @@ impl<'input> WitExportGenerator<'input> {
     }
 
     /// Consumes the collected pieces to generate the final code.
-    pub fn generate(mut self) -> TokenStream {
+    pub fn generate(self) -> TokenStream {
         let implementation = self.implementation;
         let wasmer = self.generate_for_wasmer();
         let wasmtime = self.generate_for_wasmtime();
@@ -89,7 +89,7 @@ impl<'input> WitExportGenerator<'input> {
     }
 
     /// Generates the code to export functions using the Wasmer runtime.
-    fn generate_for_wasmer(&mut self) -> TokenStream {
+    fn generate_for_wasmer(&self) -> TokenStream {
         #[cfg(with_wasmer)]
         {
             let user_data_type = self.user_data_type();
@@ -113,7 +113,7 @@ impl<'input> WitExportGenerator<'input> {
     }
 
     /// Generates the code to export functions using the Wasmtime runtime.
-    fn generate_for_wasmtime(&mut self) -> TokenStream {
+    fn generate_for_wasmtime(&self) -> TokenStream {
         #[cfg(with_wasmtime)]
         {
             let user_data_type = self.user_data_type();
@@ -133,7 +133,7 @@ impl<'input> WitExportGenerator<'input> {
     }
 
     /// Generates the code to export functions to a mock instance for testing.
-    fn generate_for_mock_instance(&mut self) -> TokenStream {
+    fn generate_for_mock_instance(&self) -> TokenStream {
         #[cfg(with_testing)]
         {
             let user_data_type = self.user_data_type();

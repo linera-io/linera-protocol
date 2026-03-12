@@ -597,11 +597,7 @@ where
     /// Balances of the contracts have to be checked when
     /// writing. There is a balance in Linera and a balance
     /// in EVM and they have to be coherent.
-    fn check_balance(
-        &mut self,
-        address: Address,
-        revm_balance: U256,
-    ) -> Result<(), ExecutionError> {
+    fn check_balance(&self, address: Address, revm_balance: U256) -> Result<(), ExecutionError> {
         let mut runtime = self.inner.runtime.lock().unwrap();
         let owner = address.into();
         let linera_balance: U256 = runtime.read_owner_balance(owner)?.into();
@@ -614,7 +610,7 @@ where
 
     /// Effectively commits changes to storage.
     pub fn commit_contract_changes(
-        &mut self,
+        &self,
         account: &revm_state::Account,
     ) -> Result<(), ExecutionError> {
         let mut runtime = self.inner.runtime.lock().unwrap();
@@ -676,7 +672,7 @@ where
     /// already been concatenated to the bytecode in the
     /// init_code.
     fn create_new_contract(
-        &mut self,
+        &self,
         address: Address,
         account: &revm_state::Account,
         module_id: ModuleId,
@@ -708,7 +704,7 @@ where
     /// Commits the changes to another contract.
     /// This is done by doing a call application.
     fn commit_remote_contract(
-        &mut self,
+        &self,
         address: Address,
         account: &revm_state::Account,
     ) -> Result<(), ExecutionError> {

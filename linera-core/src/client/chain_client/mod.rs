@@ -2501,7 +2501,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn local_chain_info(
         &self,
         chain_id: ChainId,
-        local_node: &mut LocalNodeClient<Env::Storage>,
+        local_node: &LocalNodeClient<Env::Storage>,
     ) -> Result<Option<Box<ChainInfo>>, Error> {
         match local_node.chain_info(chain_id).await {
             Ok(info) => {
@@ -2518,7 +2518,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn local_next_block_height(
         &self,
         chain_id: ChainId,
-        local_node: &mut LocalNodeClient<Env::Storage>,
+        local_node: &LocalNodeClient<Env::Storage>,
     ) -> Result<BlockHeight, Error> {
         Ok(self
             .local_chain_info(chain_id, local_node)
@@ -2541,7 +2541,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn process_notification(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
-        mut local_node: LocalNodeClient<Env::Storage>,
+        local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) -> Result<(), Error> {
         let listening_mode = self.listening_mode();
@@ -2583,9 +2583,7 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewBlock { height, .. } => {
                 let chain_id = notification.chain_id;
-                let local_height = self
-                    .local_next_block_height(chain_id, &mut local_node)
-                    .await?;
+                let local_height = self.local_next_block_height(chain_id, &local_node).await?;
                 if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
@@ -2598,11 +2596,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
                     .await?;
-                if self
-                    .local_next_block_height(chain_id, &mut local_node)
-                    .await?
-                    <= height
-                {
+                if self.local_next_block_height(chain_id, &local_node).await? <= height {
                     error!("NewBlock: Fail to synchronize new block after notification");
                 }
                 trace!(
@@ -2613,9 +2607,7 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewEvents { height, hash, .. } => {
                 let chain_id = notification.chain_id;
-                let local_height = self
-                    .local_next_block_height(chain_id, &mut local_node)
-                    .await?;
+                let local_height = self.local_next_block_height(chain_id, &local_node).await?;
                 if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
@@ -2649,7 +2641,7 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
-                if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? {
+                if let Some(info) = self.local_chain_info(chain_id, &local_node).await? {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!(
                             chain_id = %self.chain_id,
@@ -2661,7 +2653,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
                     .await?;
-                let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? else {
+                let Some(info) = self.local_chain_info(chain_id, &local_node).await? else {
                     error!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to read local chain info for {chain_id}"
