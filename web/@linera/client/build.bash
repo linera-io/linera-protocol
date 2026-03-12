@@ -7,6 +7,7 @@ shopt -s extglob
 cd $(dirname -- "${BASH_SOURCE[0]}")
 
 export RUST_TOOLCHAIN=nightly
+export RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals,+reference-types --cfg=web_sys_unstable_apis -Z wasm_c_abi=spec${RUSTFLAGS:+ $RUSTFLAGS}"
 
 wasm_bindgen_cli_version=$(wasm-bindgen --version)
 wasm_bindgen_cli_version=${wasm_bindgen_cli_version##* }
