@@ -3,9 +3,9 @@
 
 //! Configuration parameters for the chain worker.
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
-use linera_base::{crypto::ValidatorSecretKey, time::Duration};
+use linera_base::{crypto::ValidatorSecretKey, identifiers::ChainId, time::Duration};
 
 use crate::CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES;
 
@@ -31,6 +31,8 @@ pub struct ChainWorkerConfig {
     pub sender_chain_ttl: Duration,
     /// The size to truncate receive log entries in chain info responses.
     pub chain_info_max_received_log_entries: usize,
+    /// Chain IDs whose incoming bundles should be processed first.
+    pub priority_bundle_origins: HashSet<ChainId>,
 }
 
 impl ChainWorkerConfig {
@@ -57,6 +59,7 @@ impl Default for ChainWorkerConfig {
             ttl: Default::default(),
             sender_chain_ttl: Default::default(),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+            priority_bundle_origins: HashSet::new(),
         }
     }
 }

@@ -272,6 +272,12 @@ where
             ChainWorkerRequest::GetManagerSeed { callback } => {
                 callback.send(self.get_manager_seed().await).is_ok()
             }
+            ChainWorkerRequest::GetPreviousEventBlocks {
+                stream_ids,
+                callback,
+            } => callback
+                .send(self.get_previous_event_blocks(stream_ids).await)
+                .is_ok(),
         };
 
         if !responded {
@@ -1225,6 +1231,35 @@ where
         Ok(blobs)
     }
 
+    /// Gets the previous event blocks for specific streams.
+    async fn get_previous_event_blocks(
+        &self,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError> {
+        let heights = self
+            .chain
+            .previous_event_blocks
+            .multi_get(&stream_ids)
+            .await?;
+        let mut result = BTreeMap::new();
+        let mut indices = Vec::new();
+        let mut streams_with_heights = Vec::new();
+        for (stream_id, height) in stream_ids.into_iter().zip(heights) {
+            if let Some(height) = height {
+                let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
+                indices.push(index);
+                streams_with_heights.push((stream_id, height));
+            }
+        }
+        let hashes = self.chain.confirmed_log.multi_get(indices).await?;
+        for (hash, (stream_id, height)) in hashes.into_iter().zip(streams_with_heights) {
+            if let Some(hash) = hash {
+                result.insert(stream_id, (height, hash));
+            }
+        }
+        Ok(result)
+    }
+
     /// Gets event subscriptions.
     async fn get_event_subscriptions(&self) -> Result<EventSubscriptionsResult, WorkerError> {
         Ok(self
@@ -1717,7 +1752,14 @@ where
                     });
                 }
             }
-            bundles.sort_by_key(|b| b.bundle.timestamp);
+            let priority_origins = &self.config.priority_bundle_origins;
+            bundles.sort_by(|a, b| {
+                let a_priority = priority_origins.contains(&a.origin);
+                let b_priority = priority_origins.contains(&b.origin);
+                b_priority
+                    .cmp(&a_priority)
+                    .then(a.bundle.timestamp.cmp(&b.bundle.timestamp))
+            });
             info.requested_pending_message_bundles = bundles;
         }
         let hashes = chain

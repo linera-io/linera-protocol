@@ -381,7 +381,7 @@ where
             ChangeApplicationPermissions(application_permissions) => {
                 self.application_permissions.set(application_permissions);
             }
-            CloseChain => self.close_chain().await?,
+            CloseChain => self.close_chain()?,
             Transfer {
                 owner,
                 amount,
@@ -799,7 +799,7 @@ where
         Ok(false)
     }
 
-    pub async fn handle_query(
+    pub fn handle_query(
         &mut self,
         context: QueryContext,
         _query: SystemQuery,
@@ -853,7 +853,7 @@ where
         Ok(child_id)
     }
 
-    pub async fn close_chain(&mut self) -> Result<(), ExecutionError> {
+    pub fn close_chain(&mut self) -> Result<(), ExecutionError> {
         self.closed.set(true);
         Ok(())
     }

@@ -8,7 +8,7 @@
 mod wasm;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     iter,
     sync::{Arc, Mutex},
     time::Duration,
@@ -171,6 +171,11 @@ where
 
     fn worker(&self) -> &WorkerState<S> {
         &self.worker
+    }
+
+    fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
+        self.worker = self.worker.with_priority_bundle_origins(origins);
+        self
     }
 
     fn admin_public_key(&self) -> AccountPublicKey {
@@ -4354,6 +4359,85 @@ where
         env.worker().handle_block_proposal(bad_proposal).await,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })
+    );
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_bundles_priority_ordering<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_1_key = AccountSecretKey::generate();
+    let sender_2_key = AccountSecretKey::generate();
+    let storage = storage_builder.build().await?;
+
+    // Source chain 1 (non-priority) has index 1, source chain 3 (priority) has index 3.
+    let chain_1_desc = dummy_chain_description(1);
+    let chain_1 = chain_1_desc.id();
+    let chain_3_desc = dummy_chain_description(3);
+    let chain_3 = chain_3_desc.id();
+
+    let mut env = TestEnvironment::new(storage, false, false)
+        .await
+        .with_priority_bundle_origins(HashSet::from([chain_3]));
+
+    // Target chain 2 receives messages from both sources.
+    let chain_2_desc = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await;
+    let chain_2 = chain_2_desc.id();
+
+    // Send from chain 1 (non-priority) first — it would normally appear first by timestamp.
+    let certificate_1 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc,
+            sender_1_key.public(),
+            chain_2,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::ZERO,
+            vec![],
+        )
+        .await;
+    env.worker()
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate_1))
+        .await?;
+
+    // Send from chain 3 (priority) second — later timestamp but should appear first.
+    let certificate_3 = env
+        .make_simple_transfer_certificate(
+            chain_3_desc,
+            sender_2_key.public(),
+            chain_2,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Amount::ZERO,
+            vec![],
+        )
+        .await;
+    env.worker()
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate_3))
+        .await?;
+
+    // Query pending bundles and verify priority chain's bundle comes first.
+    let query = ChainInfoQuery::new(chain_2).with_pending_message_bundles();
+    let (response, _actions) = env.worker().handle_chain_info_query(query).await?;
+    let bundles = &response.info.requested_pending_message_bundles;
+
+    assert_eq!(bundles.len(), 2);
+    assert_eq!(
+        bundles[0].origin, chain_3,
+        "Priority chain bundle should be first"
+    );
+    assert_eq!(
+        bundles[1].origin, chain_1,
+        "Non-priority chain bundle should be second"
     );
 
     Ok(())

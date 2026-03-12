@@ -277,6 +277,7 @@ impl<Env: Environment> Client<Env> {
         name: impl Into<String>,
         chain_worker_ttl: Duration,
         sender_chain_worker_ttl: Duration,
+        priority_bundle_origins: HashSet<ChainId>,
         options: ChainClientOptions,
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
@@ -290,7 +291,8 @@ impl<Env: Environment> Client<Env> {
         .with_allow_inactive_chains(true)
         .with_allow_messages_from_deprecated_epochs(true)
         .with_chain_worker_ttl(chain_worker_ttl)
-        .with_sender_chain_worker_ttl(sender_chain_worker_ttl);
+        .with_sender_chain_worker_ttl(sender_chain_worker_ttl)
+        .with_priority_bundle_origins(priority_bundle_origins);
         let local_node = LocalNodeClient::new(state);
         let requests_scheduler = RequestsScheduler::new(vec![], requests_scheduler_config);
 

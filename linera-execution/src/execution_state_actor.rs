@@ -332,7 +332,7 @@ where
                 callback,
             } => {
                 let mut view = self.state.users.try_load_entry_mut(&id).await?;
-                view.write_batch(batch).await?;
+                view.write_batch(batch)?;
                 callback.respond(());
             }
 
@@ -366,7 +366,7 @@ where
                 if !app_permissions.can_close_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
-                    self.state.system.close_chain().await?;
+                    self.state.system.close_chain()?;
                     callback.respond(Ok(()));
                 }
             }

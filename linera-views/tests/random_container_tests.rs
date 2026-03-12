@@ -171,7 +171,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
                         .collect::<Vec<_>>();
                     all_keys.insert(key.clone());
                     let value = Vec::new();
-                    view.store.insert(key.clone(), value.clone()).await?;
+                    view.store.insert(key.clone(), value.clone())?;
                     new_state_map.insert(key, value);
 
                     new_state_vec = new_state_map.clone().into_iter().collect();
@@ -186,14 +186,14 @@ async fn key_value_store_view_mutability() -> Result<()> {
                     let pos = rng.gen_range(0..entry_count);
                     let (key, _) = new_state_vec[pos].clone();
                     new_state_map.remove(&key);
-                    view.store.remove(key).await?;
+                    view.store.remove(key)?;
                 }
             }
             if choice == 2 && entry_count > 0 {
                 // deleting a prefix
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
-                view.store.remove_by_prefix(key_prefix.clone()).await?;
+                view.store.remove_by_prefix(key_prefix.clone())?;
                 remove_by_prefix(&mut new_state_map, key_prefix);
             }
             if choice == 3 {
