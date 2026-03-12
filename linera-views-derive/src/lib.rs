@@ -297,6 +297,15 @@ fn generate_root_view_code(input: &ItemStruct) -> TokenStream2 {
                 self.post_save();
                 Ok(())
             }
+
+            async fn save_and_drop(self) -> Result<(), linera_views::ViewError> {
+                use linera_views::{context::Context as _, batch::Batch, store::WritableKeyValueStore as _, views::View as _};
+                #metrics_code
+                let mut batch = Batch::new();
+                self.pre_save(&mut batch)?;
+                #write_batch_with_metrics
+                Ok(())
+            }
         }
     }
 }

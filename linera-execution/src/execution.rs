@@ -275,7 +275,7 @@ where
                             context,
                             bytes,
                             &mut endpoint.incoming_execution_requests,
-                            &mut endpoint.runtime_request_sender,
+                            &endpoint.runtime_request_sender,
                         )
                         .await?
                     }
@@ -357,7 +357,7 @@ where
         incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
             ExecutionRequest,
         >,
-        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        runtime_request_sender: &std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (outcome_sender, outcome_receiver) = oneshot::channel();
         let mut outcome_receiver = outcome_receiver.fuse();

@@ -169,7 +169,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns a new TransactionTracker for the current transaction.
-    fn new_transaction_tracker(&mut self) -> Result<TransactionTracker, ChainError> {
+    fn new_transaction_tracker(&self) -> Result<TransactionTracker, ChainError> {
         Ok(TransactionTracker::new(
             self.local_time,
             self.transaction_index,

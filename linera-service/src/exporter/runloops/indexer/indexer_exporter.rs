@@ -69,7 +69,7 @@ impl Exporter {
             let (outgoing_stream, incoming_stream) =
                 client.setup_indexer_client(self.work_queue_size).await?;
 
-            let mut streamer = ExportTaskQueue::new(
+            let streamer = ExportTaskQueue::new(
                 self.work_queue_size,
                 destination_state.load(Ordering::Acquire) as usize,
                 outgoing_stream,
@@ -129,6 +129,9 @@ impl AcknowledgementTask {
         }
     }
 
+    // `tonic::Streaming::message` advances the stream state, so this task must keep a mutable
+    // receiver even though no other fields are mutated directly.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn run(&mut self) -> anyhow::Result<()> {
         while self.incoming.message().await?.is_some() {
             self.increment_destination_state();
@@ -170,7 +173,7 @@ where
         }
     }
 
-    async fn run(&mut self) -> anyhow::Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let mut index = self.start_height;
         let mut futures = FuturesOrdered::new();
         while futures.len() < self.queue_size {

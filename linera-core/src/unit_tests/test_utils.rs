@@ -384,15 +384,15 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let client = self.client.clone();
-        let mut validator = client.lock().await;
+        let validator = client.lock().await;
         let result = async move {
             match validator.state.full_certificate(certificate).await? {
                 Either::Left(confirmed) => {
-                    self.do_handle_certificate_internal(confirmed, &mut validator)
+                    self.do_handle_certificate_internal(confirmed, &validator)
                         .await
                 }
                 Either::Right(validated) => {
-                    self.do_handle_certificate_internal(validated, &mut validator)
+                    self.do_handle_certificate_internal(validated, &validator)
                         .await
                 }
             }
@@ -404,7 +404,7 @@ where
     async fn do_handle_certificate_internal<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
-        validator: &mut MutexGuard<'_, LocalValidator<S>>,
+        validator: &MutexGuard<'_, LocalValidator<S>>,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self.fault_type {
             FaultType::DontProcessValidated if T::KIND == CertificateKind::Validated => {
@@ -443,9 +443,9 @@ where
         certificate: GenericCertificate<T>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.client.lock().await;
+        let validator = self.client.lock().await;
         let result = self
-            .do_handle_certificate_internal(certificate, &mut validator)
+            .do_handle_certificate_internal(certificate, &validator)
             .await;
         sender.send(result)
     }

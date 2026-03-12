@@ -172,7 +172,8 @@ fi
 
 # Check for instruction-count regressions (>1% increase)
 if $HAS_CMP; then
-  declare -a REGRESSED_NAMES REGRESSED_PCTS
+  REGRESSED_NAMES=()
+  REGRESSED_PCTS=()
   for ((j = 0; j < COUNT; j++)); do
     pct="${B_IP[j]}"
     if [[ -n "$pct" ]] && awk "BEGIN { exit !($pct > 1) }"; then
