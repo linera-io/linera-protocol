@@ -259,7 +259,7 @@ services:
       bridge-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/health || exit 1"]
+      test: ["CMD-SHELL", "nc -z localhost ${BLOCK_EXPORTER_PORT:-8882}"]
       interval: 5s
       timeout: 3s
       retries: 10
