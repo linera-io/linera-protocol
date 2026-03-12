@@ -17,11 +17,13 @@ use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{Extension, Router};
 use futures::{lock::Mutex, FutureExt as _};
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     bcs,
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, ChainDescription, Epoch, Timestamp},
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
@@ -201,15 +203,30 @@ pub struct MutationRoot<S> {
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
     storage: S,
+    /// Amount for initial claims (chain creation).
+    amount: Amount,
+    /// Amount for daily claims (token transfer).
+    daily_claim_amount: Amount,
 }
 
-/// The result of a successful `claim` mutation.
-#[derive(SimpleObject)]
+/// The result of a successful `claim` or `dailyClaim` mutation.
+#[derive(Clone, Debug, SimpleObject)]
 pub struct ClaimOutcome {
-    /// The ID of the new chain.
+    /// The ID of the chain.
     pub chain_id: ChainId,
-    /// The hash of the parent chain's certificate containing the `OpenChain` operation.
+    /// The hash of the certificate containing the operation.
     pub certificate_hash: CryptoHash,
+    /// The amount of tokens transferred.
+    pub amount: Amount,
+}
+
+/// Information about a previous claim.
+#[derive(Clone, Debug, SimpleObject)]
+pub struct LastClaim {
+    /// The chain ID that was created.
+    pub chain_id: ChainId,
+    /// The timestamp when the chain was created.
+    pub timestamp: Timestamp,
 }
 
 #[derive(Debug, Deserialize, SimpleObject)]
@@ -218,18 +235,52 @@ pub struct Validator {
     pub network_address: String,
 }
 
-/// A pending chain creation request.
+/// The response from a pending request.
+#[derive(Debug)]
+enum PendingResponse {
+    /// Initial claim: returns the full chain description.
+    Initial(Result<Box<ChainDescription>, Error>),
+    /// Daily claim: returns the claim outcome.
+    Daily(Result<ClaimOutcome, Error>),
+}
+
+/// A pending chain creation or token transfer request.
+///
+/// If `target_chain_id` is `None`, this is an initial claim (creates a new chain).
+/// If `target_chain_id` is `Some`, this is a daily claim (transfers tokens).
 #[derive(Debug)]
 struct PendingRequest {
     owner: AccountOwner,
-    responder: oneshot::Sender<Result<ChainDescription, Error>>,
+    /// For daily claims, the existing chain to transfer tokens to.
+    target_chain_id: Option<ChainId>,
+    /// The amount of tokens to send.
+    amount: Amount,
+    /// For daily claims, the period number to store.
+    daily_period: u64,
+    responder: oneshot::Sender<PendingResponse>,
     #[cfg(with_metrics)]
     queued_at: std::time::Instant,
 }
 
+impl PendingRequest {
+    fn is_daily(&self) -> bool {
+        self.target_chain_id.is_some()
+    }
+
+    fn send_err(self, err: Error) {
+        let response = if self.is_daily() {
+            PendingResponse::Daily(Err(err))
+        } else {
+            PendingResponse::Initial(Err(err))
+        };
+        if self.responder.send(response).is_err() {
+            tracing::warn!("Receiver dropped while sending error to {}.", self.owner);
+        }
+    }
+}
+
 /// Configuration for the batch processor.
 struct BatchProcessorConfig {
-    amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
@@ -285,25 +336,80 @@ where
         Ok(info.epoch)
     }
 
-    /// Find the existing a chain with the given authentication key, if any.
+    /// Find the existing chain with the given authentication key, if any.
     async fn chain_id(&self, owner: AccountOwner) -> Result<ChainId, Error> {
         // Check if this owner already has a chain.
         #[cfg(with_metrics)]
-        let db_start_time = std::time::Instant::now();
-
-        let chain_id = self
-            .faucet_storage
-            .get_chain_id(&owner)
-            .await
-            .map_err(|e| Error::new(e.to_string()))?;
-
+        let histogram = metrics::DATABASE_OPERATION_LATENCY.with_label_values(&["get_chain_id"]);
         #[cfg(with_metrics)]
-        metrics::DATABASE_OPERATION_LATENCY
-            .with_label_values(&["get_chain_id"])
-            .observe(db_start_time.elapsed().as_secs_f64() * 1000.0);
+        let _latency = histogram.measure_latency();
+
+        let chain_id = self.faucet_storage.get_chain_id(&owner).await?;
 
         chain_id.ok_or(Error::new("This user has no chain yet"))
     }
+
+    /// Returns the last claim for the given owner, if any.
+    async fn last_claim(&self, owner: AccountOwner) -> Result<Option<LastClaim>, Error> {
+        let claim_record = self.faucet_storage.last_claim(&owner).await?;
+
+        Ok(claim_record.map(|r| LastClaim {
+            chain_id: r.chain_id,
+            timestamp: r.timestamp,
+        }))
+    }
+
+    /// Returns the earliest time at which the owner can make a daily claim.
+    /// If the returned timestamp is in the past (or now), the user can claim immediately.
+    /// Returns `None` if the user has not yet completed the initial claim.
+    async fn next_daily_claim(&self, owner: AccountOwner) -> Result<Option<Timestamp>, Error> {
+        let initial_claim = match self.faucet_storage.last_claim(&owner).await? {
+            Some(record) => record,
+            None => return Ok(None),
+        };
+
+        let initial_micros = initial_claim.timestamp.micros();
+
+        // The initial claim counts as "a claim in period 0".
+        let last_period = self
+            .faucet_storage
+            .last_daily_claim_period(&owner)
+            .await?
+            .unwrap_or(0);
+
+        // Next available at start of the next period.
+        Ok(Some(Timestamp::from(
+            initial_micros + (last_period + 1) * DAILY_PERIOD_MICROS,
+        )))
+    }
+}
+
+/// Duration of one daily claim period in microseconds (24 hours).
+const DAILY_PERIOD_MICROS: u64 = 24 * 60 * 60 * 1_000_000;
+
+/// Computes the current daily claim period from timestamps.
+fn current_daily_period(initial_claim_micros: u64, now_micros: u64) -> u64 {
+    now_micros.saturating_sub(initial_claim_micros) / DAILY_PERIOD_MICROS
+}
+
+/// Executes a future and records its latency in [`metrics::CLAIM_LATENCY`], labeled by outcome.
+async fn record_claim_latency<T>(
+    future: impl std::future::Future<Output = Result<T, Error>>,
+) -> Result<T, Error> {
+    #[cfg(with_metrics)]
+    let start_time = std::time::Instant::now();
+
+    let result = future.await;
+
+    #[cfg(with_metrics)]
+    {
+        let label = if result.is_ok() { "success" } else { "error" };
+        metrics::CLAIM_LATENCY
+            .with_label_values(&[label])
+            .observe(start_time.elapsed().as_secs_f64() * 1000.0);
+    }
+
+    result
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
@@ -313,20 +419,14 @@ where
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
-        #[cfg(with_metrics)]
-        let start_time = std::time::Instant::now();
+        record_claim_latency(self.do_claim(owner)).await
+    }
 
-        let result = self.do_claim(owner).await;
-
-        #[cfg(with_metrics)]
-        {
-            let label = if result.is_ok() { "success" } else { "error" };
-            metrics::CLAIM_LATENCY
-                .with_label_values(&[label])
-                .observe(start_time.elapsed().as_secs_f64() * 1000.0);
-        }
-
-        result
+    /// Transfers a daily amount of tokens to the user's existing chain.
+    /// The user must have already claimed a chain. Each user can claim once per 24-hour
+    /// period, measured from their initial claim time.
+    async fn daily_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
+        record_claim_latency(self.do_daily_claim(owner)).await
     }
 }
 
@@ -337,20 +437,13 @@ where
     async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
         // Check if this owner already has a chain.
         #[cfg(with_metrics)]
-        let db_start_time = std::time::Instant::now();
+        let histogram = metrics::DATABASE_OPERATION_LATENCY.with_label_values(&["get_chain_id"]);
 
         tracing::debug!(account_owner=?owner, "claim request received");
-
-        let existing_chain_id = self
-            .faucet_storage
-            .get_chain_id(&owner)
-            .await
-            .map_err(|e| Error::new(e.to_string()))?;
-
         #[cfg(with_metrics)]
-        metrics::DATABASE_OPERATION_LATENCY
-            .with_label_values(&["get_chain_id"])
-            .observe(db_start_time.elapsed().as_secs_f64() * 1000.0);
+        let _latency = histogram.measure_latency();
+
+        let existing_chain_id = self.faucet_storage.get_chain_id(&owner).await?;
 
         if let Some(existing_chain_id) = existing_chain_id {
             #[cfg(with_metrics)]
@@ -358,7 +451,6 @@ where
                 .with_label_values(&["duplicate"])
                 .inc();
 
-            // Retrieve the chain description from local storage
             let stored_chain =
                 get_chain_description_from_storage(&self.storage, existing_chain_id).await;
             tracing::debug!(account_owner=?owner, "claim request processed; returning pre-existing chain");
@@ -373,6 +465,9 @@ where
             let mut requests = self.pending_requests.lock().await;
             requests.push_back(PendingRequest {
                 owner,
+                target_chain_id: None,
+                amount: self.amount,
+                daily_period: 0,
                 responder: tx,
                 #[cfg(with_metrics)]
                 queued_at: std::time::Instant::now(),
@@ -388,20 +483,115 @@ where
         self.request_notifier.notify_one();
 
         // Wait for the result
-        let result = rx
+        let response = rx
             .await
             .map_err(|_| Error::new("Request processing was cancelled"))?;
 
         #[cfg(with_metrics)]
         {
-            let label = if result.is_ok() { "success" } else { "error" };
+            let label = match &response {
+                PendingResponse::Initial(Ok(_)) => "success",
+                _ => "error",
+            };
             metrics::CLAIM_REQUESTS_TOTAL
                 .with_label_values(&[label])
                 .inc();
         }
 
         tracing::debug!(account_owner=?owner, "claim request processed; new chain created");
-        result
+        match response {
+            PendingResponse::Initial(result) => result.map(|b| *b),
+            PendingResponse::Daily(_) => Err(Error::new("Unexpected response type")),
+        }
+    }
+
+    async fn do_daily_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
+        if self.daily_claim_amount == Amount::ZERO {
+            return Err(Error::new("Daily claims are not enabled on this faucet"));
+        }
+
+        // The user must have done the initial claim first.
+        let initial_claim = self
+            .faucet_storage
+            .last_claim(&owner)
+            .await?
+            .ok_or_else(|| Error::new("You must claim a chain before making daily claims"))?;
+
+        let now = self.storage.clock().current_time();
+        let period = current_daily_period(initial_claim.timestamp.micros(), now.micros());
+        let last_period = self
+            .faucet_storage
+            .last_daily_claim_period(&owner)
+            .await?
+            .unwrap_or(0);
+
+        if period <= last_period {
+            return Err(Error::new(
+                "You have already claimed tokens for this period",
+            ));
+        }
+
+        self.enqueue_daily_request(
+            owner,
+            initial_claim.chain_id,
+            self.daily_claim_amount,
+            period,
+        )
+        .await
+    }
+
+    async fn enqueue_daily_request(
+        &self,
+        owner: AccountOwner,
+        target_chain_id: ChainId,
+        amount: Amount,
+        daily_period: u64,
+    ) -> Result<ClaimOutcome, Error> {
+        // Create a oneshot channel to receive the result.
+        let (tx, rx) = oneshot::channel();
+
+        // Add request to the queue.
+        {
+            let mut requests = self.pending_requests.lock().await;
+            requests.push_back(PendingRequest {
+                owner,
+                target_chain_id: Some(target_chain_id),
+                amount,
+                daily_period,
+                responder: tx,
+                #[cfg(with_metrics)]
+                queued_at: std::time::Instant::now(),
+            });
+
+            #[cfg(with_metrics)]
+            metrics::QUEUE_SIZE
+                .with_label_values(&[])
+                .observe(requests.len() as f64);
+        }
+
+        // Notify the batch processor that there's a new request.
+        self.request_notifier.notify_one();
+
+        // Wait for the result
+        let response = rx
+            .await
+            .map_err(|_| Error::new("Request processing was cancelled"))?;
+
+        #[cfg(with_metrics)]
+        {
+            let label = match &response {
+                PendingResponse::Daily(Ok(_)) => "success",
+                _ => "error",
+            };
+            metrics::CLAIM_REQUESTS_TOTAL
+                .with_label_values(&[label])
+                .inc();
+        }
+
+        match response {
+            PendingResponse::Daily(result) => result,
+            PendingResponse::Initial(_) => Err(Error::new("Unexpected response type")),
+        }
     }
 }
 /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
@@ -546,47 +736,80 @@ where
         }
     }
 
-    // Collects requests for new accounts from the queue; answers the ones for existing
-    // accounts immediately.
-    async fn get_request_batch(&mut self) -> Vec<PendingRequest> {
+    // Collects requests from the queue; validates and filters them.
+    async fn get_request_batch(&self) -> Vec<PendingRequest> {
         let mut batch_requests = Vec::new();
         let mut requests = self.pending_requests.lock().await;
         while batch_requests.len() < self.config.max_batch_size {
             let Some(request) = requests.pop_front() else {
                 break;
             };
-            // Check if this owner already has a chain. Otherwise send response immediately.
-            let response = match self.faucet_storage.get_chain_id(&request.owner).await {
-                Ok(None) => {
+
+            match self.validate_request(&request).await {
+                Ok(()) => {
                     batch_requests.push(request);
-                    continue;
-                }
-                Ok(Some(existing_chain_id)) => {
-                    // Retrieve the chain description from local storage.
-                    get_chain_description_from_storage(
-                        self.client.storage_client(),
-                        existing_chain_id,
-                    )
-                    .await
                 }
                 Err(err) => {
-                    tracing::error!("Database error: {err}");
-                    Err(Error::new(err.to_string()))
+                    request.send_err(err);
                 }
-            };
-            if let Err(response) = request.responder.send(response) {
-                tracing::error!(
-                    "Receiver dropped while sending response {response:?} for request from {}",
-                    request.owner
-                );
             }
         }
         batch_requests
     }
 
-    /// Checks if the given number of requests can currently be fulfilled, based on the balance
+    /// Validates a pending request based on whether it's an initial or daily claim.
+    async fn validate_request(&self, request: &PendingRequest) -> Result<(), Error> {
+        if request.is_daily() {
+            // Verify the initial claim still exists.
+            let initial_claim = match self.faucet_storage.last_claim(&request.owner).await {
+                Ok(Some(record)) => record,
+                Ok(None) => {
+                    return Err(Error::new(
+                        "You must claim a chain before making daily claims",
+                    ));
+                }
+                Err(err) => {
+                    tracing::error!("Database error: {err}");
+                    return Err(Error::new(err.to_string()));
+                }
+            };
+
+            // Verify the daily claim period.
+            let now = self.client.storage_client().clock().current_time();
+            let period = current_daily_period(initial_claim.timestamp.micros(), now.micros());
+            let last_period = self
+                .faucet_storage
+                .last_daily_claim_period(&request.owner)
+                .await?
+                .unwrap_or(0);
+
+            if period <= last_period {
+                return Err(Error::new(
+                    "You have already claimed tokens for this period",
+                ));
+            }
+        } else {
+            match self.faucet_storage.get_chain_id(&request.owner).await {
+                Ok(None) => {}
+                Ok(Some(_)) => {
+                    #[cfg(with_metrics)]
+                    metrics::CLAIM_REQUESTS_TOTAL
+                        .with_label_values(&["duplicate"])
+                        .inc();
+                    return Err(Error::new("This user already has a chain"));
+                }
+                Err(err) => {
+                    tracing::error!("Database error: {err}");
+                    return Err(Error::new(err.to_string()));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks if the given requests can currently be fulfilled, based on the balance
     /// and rate limiting settings. Returns an error if not.
-    async fn check_rate_limiting(&self, request_count: usize) -> async_graphql::Result<()> {
+    async fn check_rate_limiting(&self, requests: &[PendingRequest]) -> async_graphql::Result<()> {
         let end_timestamp = self.config.end_timestamp;
         let start_timestamp = self.config.start_timestamp;
         let local_time = self.client.storage_client().clock().current_time();
@@ -599,7 +822,9 @@ where
             .with_label_values(&[])
             .set(u128::from(balance) as i64);
 
-        let total_amount = self.config.amount.saturating_mul(request_count as u128);
+        let total_amount = requests
+            .iter()
+            .fold(Amount::ZERO, |acc, r| acc.saturating_add(r.amount));
         let Ok(remaining_balance) = balance.try_sub(total_amount) else {
             // Not enough balance - reject all requests
             #[cfg(with_metrics)]
@@ -625,29 +850,39 @@ where
     fn send_err(requests: Vec<PendingRequest>, err: impl Into<async_graphql::Error>) {
         let err = err.into();
         for request in requests {
-            if request.responder.send(Err(err.clone())).is_err() {
-                tracing::warn!("Receiver dropped while sending error to {}.", request.owner);
-            }
+            request.send_err(err.clone());
         }
     }
 
-    /// Executes a batch of chain creation requests.
+    /// Executes a batch of chain creation and/or token transfer requests.
     async fn execute_batch(&mut self, requests: Vec<PendingRequest>) -> anyhow::Result<()> {
-        if let Err(err) = self.check_rate_limiting(requests.len()).await {
+        if let Err(err) = self.check_rate_limiting(&requests).await {
             tracing::debug!("Rejecting requests due to rate limiting: {err:?}");
             Self::send_err(requests, err);
             return Ok(());
         }
 
-        // Create OpenChain operations for all valid requests
+        // Build operations: OpenChain for initial claims, Transfer for daily claims.
         let mut operations = Vec::new();
         for request in &requests {
-            let config = OpenChainConfig {
-                ownership: ChainOwnership::single(request.owner),
-                balance: self.config.amount,
-                application_permissions: ApplicationPermissions::default(),
+            let operation = if let Some(target_chain_id) = request.target_chain_id {
+                Operation::system(SystemOperation::Transfer {
+                    owner: AccountOwner::CHAIN,
+                    recipient: Account {
+                        chain_id: target_chain_id,
+                        owner: request.owner,
+                    },
+                    amount: request.amount,
+                })
+            } else {
+                let config = OpenChainConfig {
+                    ownership: ChainOwnership::single(request.owner),
+                    balance: request.amount,
+                    application_permissions: ApplicationPermissions::default(),
+                };
+                Operation::system(SystemOperation::OpenChain(config))
             };
-            operations.push(Operation::system(SystemOperation::OpenChain(config)));
+            operations.push(operation);
         }
 
         // Execute all operations in a single block
@@ -745,40 +980,51 @@ where
             }
         };
 
-        // Parse chain descriptions from the block's blobs
+        let certificate_hash = certificate.hash();
+        let block_timestamp = certificate.block().header.timestamp;
+
+        // Parse chain descriptions from the block's blobs (for initial claims only).
         let chain_descriptions = extract_opened_single_owner_chains(&certificate)?;
 
-        if chain_descriptions.len() != requests.len() {
-            let error_msg = format!(
-                "Mismatch between operations ({}) and results ({})",
-                requests.len(),
-                chain_descriptions.len()
-            );
-            Self::send_err(requests, error_msg.clone());
-            anyhow::bail!(error_msg);
-        }
+        // Build a map of owner -> description for initial claims.
+        let initial_desc_map: std::collections::HashMap<_, _> =
+            chain_descriptions.into_iter().collect();
 
-        // Store results.
-        let chains_to_store = chain_descriptions
+        // Split requests by claim type for storage.
+        let initial_chains: Vec<_> = initial_desc_map
             .iter()
             .map(|(owner, description)| (*owner, description.id()))
+            .collect();
+        let daily_claims: Vec<_> = requests
+            .iter()
+            .filter_map(|r| {
+                r.target_chain_id
+                    .map(|chain_id| (r.owner, chain_id, r.daily_period))
+            })
             .collect();
 
         #[cfg(with_metrics)]
         let _store_chains_start = std::time::Instant::now();
-        if let Err(e) = self
-            .faucet_storage
-            .store_chains_batch(chains_to_store)
-            .await
-        {
-            #[cfg(with_metrics)]
-            {
-                let elapsed_ms = _store_chains_start.elapsed().as_secs_f64() * 1000.0;
-                metrics::STORE_CHAIN_LATENCY
-                    .with_label_values(&[])
-                    .observe(elapsed_ms);
+
+        let store_initial = async {
+            if initial_chains.is_empty() {
+                return Ok(());
             }
-            let error_msg = format!("Failed to save chains to database: {}", e);
+            self.faucet_storage
+                .store_chains_batch(initial_chains, block_timestamp)
+                .await
+        };
+        let store_daily = async {
+            if daily_claims.is_empty() {
+                return Ok(());
+            }
+            self.faucet_storage
+                .store_daily_claims_batch(daily_claims)
+                .await
+        };
+
+        if let Err(e) = futures::try_join!(store_initial, store_daily) {
+            let error_msg = format!("Failed to save claims to database: {}", e);
             Self::send_err(requests, error_msg.clone());
             anyhow::bail!(error_msg);
         }
@@ -792,9 +1038,9 @@ where
 
         // Respond to requests.
         #[cfg(with_metrics)]
-        let chains_created = chain_descriptions.len();
+        let chains_created = initial_desc_map.len();
 
-        for (request, (owner, description)) in requests.into_iter().zip(chain_descriptions) {
+        for request in requests {
             #[cfg(with_metrics)]
             {
                 let wait_time = request.queued_at.elapsed().as_secs_f64() * 1000.0;
@@ -803,18 +1049,25 @@ where
                     .observe(wait_time);
             }
 
-            let response = if request.owner == owner {
-                Ok(description)
+            let response = if let Some(target_chain_id) = request.target_chain_id {
+                PendingResponse::Daily(Ok(ClaimOutcome {
+                    chain_id: target_chain_id,
+                    certificate_hash,
+                    amount: request.amount,
+                }))
+            } else if let Some(description) = initial_desc_map.get(&request.owner) {
+                PendingResponse::Initial(Ok(Box::new(description.clone())))
             } else {
-                let error_msg = format!(
-                    "Owner mismatch: description for {owner}, but requested by {}",
+                PendingResponse::Initial(Err(Error::new(format!(
+                    "No chain created for owner {}",
                     request.owner
-                );
-                tracing::error!("{}", error_msg);
-                Err(Error::new(error_msg))
+                ))))
             };
             if request.responder.send(response).is_err() {
-                tracing::warn!("Receiver dropped while sending response to {owner}.");
+                tracing::warn!(
+                    "Receiver dropped while sending response to {}.",
+                    request.owner
+                );
             }
         }
 
@@ -842,6 +1095,7 @@ where
     #[cfg(feature = "metrics")]
     metrics_port: u16,
     amount: Amount,
+    daily_claim_amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
@@ -869,6 +1123,7 @@ where
             #[cfg(feature = "metrics")]
             metrics_port: self.metrics_port,
             amount: self.amount,
+            daily_claim_amount: self.daily_claim_amount,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
@@ -887,6 +1142,7 @@ pub struct FaucetConfig {
     pub metrics_port: u16,
     pub chain_id: ChainId,
     pub amount: Amount,
+    pub daily_claim_amount: Amount,
     pub end_timestamp: Timestamp,
     pub genesis_config: std::sync::Arc<GenesisConfig>,
     pub chain_listener_config: ChainListenerConfig,
@@ -937,6 +1193,7 @@ where
             #[cfg(feature = "metrics")]
             metrics_port: config.metrics_port,
             amount: config.amount,
+            daily_claim_amount: config.daily_claim_amount,
             end_timestamp: config.end_timestamp,
             start_timestamp,
             start_balance,
@@ -960,6 +1217,8 @@ where
             pending_requests: Arc::clone(&self.pending_requests),
             request_notifier: Arc::clone(&self.request_notifier),
             storage: self.storage.clone(),
+            amount: self.amount,
+            daily_claim_amount: self.daily_claim_amount,
         };
         let query_root = QueryRoot {
             genesis_config: Arc::clone(&self.genesis_config),
@@ -994,7 +1253,6 @@ where
 
         // Start the batch processor
         let batch_processor_config = BatchProcessorConfig {
-            amount: self.amount,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
