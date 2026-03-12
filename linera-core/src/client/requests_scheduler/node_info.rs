@@ -66,7 +66,7 @@ impl<Env: Environment> NodeInfo<Env> {
     /// - **Success score**: Directly proportional to EMA success rate
     ///
     /// Returns a score from 0.0 to 1.0, where higher values indicate better performance.
-    pub(super) async fn calculate_score(&self) -> f64 {
+    pub(super) fn calculate_score(&self) -> f64 {
         // 1. Normalize latency (lower is better, so we invert)
         let latency_score = 1.0
             - (self.ema_latency_ms.min(self.max_expected_latency_ms)
