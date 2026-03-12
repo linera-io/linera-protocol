@@ -34,7 +34,7 @@ impl linera_sdk::Contract for Contract {
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::HandleHttpResponse(response_body) => {
-                self.handle_http_response(response_body)
+                self.handle_http_response(&response_body)
             }
             Operation::PerformHttpRequest => self.perform_http_request(),
             Operation::UseServiceAsOracle => self.use_service_as_oracle(),
@@ -59,7 +59,7 @@ impl Contract {
     /// Usually this is done by verifying that the response is signed by the trusted HTTP server.
     /// In this example, the verification is simulated by checking that the `response_body` is
     /// exactly an expected value.
-    fn handle_http_response(&self, response_body: Vec<u8>) {
+    fn handle_http_response(&self, response_body: &[u8]) {
         assert_eq!(response_body, b"Hello, world!");
     }
 
@@ -73,7 +73,7 @@ impl Contract {
         let url = self.runtime.application_parameters();
         let response = self.runtime.http_request(http::Request::get(url));
 
-        self.handle_http_response(response.body);
+        self.handle_http_response(&response.body);
     }
 
     /// Uses the service as an oracle to perform the HTTP request.
@@ -97,7 +97,7 @@ impl Contract {
                 graphql_response_data
             );
         };
-        let http_response = http_response_list
+        let http_response: Vec<u8> = http_response_list
             .iter()
             .map(|value| {
                 let async_graphql::Value::Number(number) = value else {
@@ -113,7 +113,7 @@ impl Contract {
             })
             .collect();
 
-        self.handle_http_response(http_response);
+        self.handle_http_response(&http_response);
     }
 }
 

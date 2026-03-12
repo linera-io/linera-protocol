@@ -456,7 +456,7 @@ where
         fn check_getter<Value, UserData>(
             caller: &MockInstance<UserData>,
             name: &str,
-            expected_value: Value,
+            expected_value: &Value,
         ) where
             Value: Debug + PartialEq + WitLoad + 'static,
         {
@@ -467,25 +467,25 @@ where
                 )
                 .unwrap_or_else(|error| panic!("Failed to call getter function {name:?}: {error}"));
 
-            assert_eq!(value, expected_value);
+            assert_eq!(&value, expected_value);
         }
 
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/entrypoint#entrypoint",
             |caller, _: HList![]| {
-                check_getter(&caller, "get-true", true);
-                check_getter(&caller, "get-false", false);
-                check_getter(&caller, "get-s8", -125_i8);
-                check_getter(&caller, "get-u8", 200_u8);
-                check_getter(&caller, "get-s16", -410_i16);
-                check_getter(&caller, "get-u16", 60_000_u16);
-                check_getter(&caller, "get-s32", -100_000_i32);
-                check_getter(&caller, "get-u32", 3_000_111_u32);
-                check_getter(&caller, "get-s64", -5_000_000_i64);
-                check_getter(&caller, "get-u64", 10_000_000_000_u64);
-                check_getter(&caller, "get-float32", -0.125_f32);
-                check_getter(&caller, "get-float64", 128.25_f64);
+                check_getter(&caller, "get-true", &true);
+                check_getter(&caller, "get-false", &false);
+                check_getter(&caller, "get-s8", &-125_i8);
+                check_getter(&caller, "get-u8", &200_u8);
+                check_getter(&caller, "get-s16", &-410_i16);
+                check_getter(&caller, "get-u16", &60_000_u16);
+                check_getter(&caller, "get-s32", &-100_000_i32);
+                check_getter(&caller, "get-u32", &3_000_111_u32);
+                check_getter(&caller, "get-s64", &-5_000_000_i64);
+                check_getter(&caller, "get-u64", &10_000_000_000_u64);
+                check_getter(&caller, "get-float32", &-0.125_f32);
+                check_getter(&caller, "get-float64", &128.25_f64);
 
                 Ok(hlist![])
             },
@@ -542,7 +542,7 @@ where
             caller: &MockInstance<UserData>,
             name: &str,
             operands: impl WitStore + 'static,
-            expected_result: Value,
+            expected_result: &Value,
         ) where
             Value: Debug + PartialEq + WitLoad + 'static,
         {
@@ -553,39 +553,44 @@ where
                 )
                 .unwrap_or_else(|error| panic!("Failed to call setter function {name:?}: {error}"));
 
-            assert_eq!(result, expected_result);
+            assert_eq!(&result, expected_result);
         }
 
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/entrypoint#entrypoint",
             |caller, _: HList![]| {
-                check_operation(&caller, "and-bool", (true, true), true);
-                check_operation(&caller, "and-bool", (true, false), false);
-                check_operation(&caller, "add-s8", (-100_i8, 40_i8), -60_i8);
-                check_operation(&caller, "add-u8", (201_u8, 32_u8), 233_u8);
-                check_operation(&caller, "add-s16", (-20_000_i16, 30_000_i16), 10_000_i16);
-                check_operation(&caller, "add-u16", (50_000_u16, 256_u16), 50_256_u16);
-                check_operation(&caller, "add-s32", (-2_000_000_i32, -1_i32), -2_000_001_i32);
-                check_operation(&caller, "add-u32", (4_000_000_u32, 1_u32), 4_000_001_u32);
+                check_operation(&caller, "and-bool", (true, true), &true);
+                check_operation(&caller, "and-bool", (true, false), &false);
+                check_operation(&caller, "add-s8", (-100_i8, 40_i8), &-60_i8);
+                check_operation(&caller, "add-u8", (201_u8, 32_u8), &233_u8);
+                check_operation(&caller, "add-s16", (-20_000_i16, 30_000_i16), &10_000_i16);
+                check_operation(&caller, "add-u16", (50_000_u16, 256_u16), &50_256_u16);
+                check_operation(
+                    &caller,
+                    "add-s32",
+                    (-2_000_000_i32, -1_i32),
+                    &-2_000_001_i32,
+                );
+                check_operation(&caller, "add-u32", (4_000_000_u32, 1_u32), &4_000_001_u32);
                 check_operation(
                     &caller,
                     "add-s64",
                     (-16_000_000_i64, 32_000_000_i64),
-                    16_000_000_i64,
+                    &16_000_000_i64,
                 );
                 check_operation(
                     &caller,
                     "add-u64",
                     (3_000_000_000_u64, 9_345_678_999_u64),
-                    12_345_678_999_u64,
+                    &12_345_678_999_u64,
                 );
-                check_operation(&caller, "add-float32", (10.5_f32, 120.25_f32), 130.75_f32);
+                check_operation(&caller, "add-float32", (10.5_f32, 120.25_f32), &130.75_f32);
                 check_operation(
                     &caller,
                     "add-float64",
                     (-0.000_08_f64, 1.0_f64),
-                    0.999_92_f64,
+                    &0.999_92_f64,
                 );
 
                 Ok(hlist![])

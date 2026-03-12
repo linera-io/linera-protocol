@@ -23,11 +23,11 @@ impl WithContractAbi for CallCounterContract {
 }
 
 impl CallCounterContract {
-    fn process_operation(&mut self, operation: Vec<u8>) -> u64 {
+    fn process_operation(&mut self, operation: &Vec<u8>) -> u64 {
         let evm_counter_id = self.runtime.application_parameters();
         let result = self
             .runtime
-            .call_application(true, evm_counter_id, &operation);
+            .call_application(true, evm_counter_id, operation);
         let arr: [u8; 32] = result.try_into().expect("result should have length 32");
         U256::from_be_bytes(arr).to::<u64>()
     }
@@ -58,14 +58,14 @@ impl Contract for CallCounterContract {
                 let operation = incrementCall { input: increment };
                 let operation = EvmOperation::new(Amount::ZERO, operation.abi_encode());
                 let operation = operation.to_bytes().unwrap();
-                self.process_operation(operation)
+                self.process_operation(&operation)
             }
             CallCounterOperation::TestCallAddress => {
                 let remote_address = address!("0000000000000000000000000000000000000000");
                 let operation = call_from_wasmCall { remote_address };
                 let operation = EvmOperation::new(Amount::ZERO, operation.abi_encode());
                 let operation = operation.to_bytes().unwrap();
-                self.process_operation(operation)
+                self.process_operation(&operation)
             }
         }
     }

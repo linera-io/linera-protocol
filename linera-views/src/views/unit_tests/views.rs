@@ -137,7 +137,7 @@ where
     let mut expected_state = VecDeque::new();
     let mut queue = QueueView::load(context.clone()).await?;
 
-    check_queue_state(&mut queue, &expected_state).await?;
+    check_queue_state(&queue, &expected_state).await?;
 
     for operation in operations {
         match operation {
@@ -155,14 +155,14 @@ where
             }
         }
 
-        check_queue_state(&mut queue, &expected_state).await?;
+        check_queue_state(&queue, &expected_state).await?;
     }
 
     Ok(())
 }
 
 async fn check_queue_state<C>(
-    queue: &mut QueueView<C, usize>,
+    queue: &QueueView<C, usize>,
     expected_state: &VecDeque<usize>,
 ) -> Result<(), anyhow::Error>
 where

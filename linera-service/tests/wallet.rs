@@ -70,7 +70,7 @@ pub async fn new_test_client_context(
             },
             block_cache_size,
             execution_state_cache_size,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )
         .into(),
         genesis_config,
@@ -114,7 +114,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     wallet
         .insert(
             admin_description.id(),
-            wallet::Chain {
+            &wallet::Chain {
                 owner: Some(new_pubkey.into()),
                 timestamp: clock.current_time(),
                 pending_proposal: Some(PendingProposal {

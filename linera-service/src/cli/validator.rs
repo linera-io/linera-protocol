@@ -302,7 +302,7 @@ impl Add {
 impl BatchQuery {
     async fn run(
         &self,
-        context: &mut ClientContext<impl linera_core::Environment>,
+        context: &ClientContext<impl linera_core::Environment>,
     ) -> anyhow::Result<()> {
         let batch = parse_query_batch_file(self.file.clone())
             .context("parsing query batch file `{file}`")?;
@@ -586,7 +586,7 @@ impl Update {
 impl List {
     async fn run(
         &self,
-        context: &mut ClientContext<impl linera_core::Environment>,
+        context: &ClientContext<impl linera_core::Environment>,
     ) -> anyhow::Result<()> {
         let chain_id = self.chain_id.unwrap_or_else(|| context.default_chain());
         println!("Querying validators about chain {chain_id}.\n");
@@ -659,7 +659,7 @@ impl List {
 impl Query {
     async fn run(
         &self,
-        context: &mut ClientContext<impl linera_core::Environment>,
+        context: &ClientContext<impl linera_core::Environment>,
     ) -> anyhow::Result<()> {
         let node = context.make_node_provider().make_node(&self.address)?;
         let chain_id = self.chain_id.unwrap_or_else(|| context.default_chain());
@@ -739,9 +739,7 @@ impl Remove {
 impl Sync {
     async fn run(
         &self,
-        context: &mut ClientContext<
-            impl linera_core::Environment<ValidatorNode = linera_rpc::Client>,
-        >,
+        context: &ClientContext<impl linera_core::Environment<ValidatorNode = linera_rpc::Client>>,
     ) -> anyhow::Result<()> {
         tracing::info!("Starting sync operation for validator at {}", self.address);
 

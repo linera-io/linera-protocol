@@ -206,7 +206,7 @@ impl<UserData> Environment<UserData> {
     /// # Panics
     ///
     /// If the slot is empty.
-    fn load_export(&mut self, name: &str) -> Option<Extern> {
+    fn load_export(&self, name: &str) -> Option<Extern> {
         self.exports
             .get()
             .expect("Attempted to get export before instance is loaded")

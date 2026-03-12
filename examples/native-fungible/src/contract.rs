@@ -74,7 +74,6 @@ impl Contract for NativeFungibleTokenContract {
                     .expect("Permission for Transfer operation");
 
                 let fungible_target_account = target_account;
-                let target_account = self.normalize_account(target_account);
 
                 log::info!(
                     "transferring tokens from={} to={} amount={}",
@@ -104,9 +103,6 @@ impl Contract for NativeFungibleTokenContract {
 
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
-
-                let source_account = self.normalize_account(source_account);
-                let target_account = self.normalize_account(target_account);
 
                 self.runtime.claim(source_account, target_account, amount);
                 self.claim(
@@ -149,13 +145,6 @@ impl NativeFungibleTokenContract {
                 .prepare_message(message)
                 .with_authentication()
                 .send_to(source_chain_id);
-        }
-    }
-
-    fn normalize_account(&self, account: Account) -> Account {
-        Account {
-            chain_id: account.chain_id,
-            owner: account.owner,
         }
     }
 }

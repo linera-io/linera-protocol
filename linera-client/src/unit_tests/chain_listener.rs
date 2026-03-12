@@ -121,7 +121,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
     context
@@ -234,7 +234,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
 
@@ -389,7 +389,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
     let context = Arc::new(Mutex::new(context));
@@ -464,7 +464,7 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
 
@@ -581,7 +581,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
 

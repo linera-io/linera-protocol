@@ -99,50 +99,53 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     pub(crate) async fn handle_optimized_validated_certificate(
-        &mut self,
+        &self,
         certificate: &ValidatedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        if certificate.is_signed_by(&self.public_key) {
-            let result = self
-                .handle_lite_certificate(certificate.lite_certificate(), delivery)
-                .await;
-            match result {
-                Err(NodeError::MissingCertificateValue) => {
-                    debug!(
-                        address = self.address(),
-                        certificate_hash = %certificate.hash(),
-                        "validator forgot a validated block value that they signed before",
-                    );
-                }
-                _ => return result,
-            }
+        if let Some(result) = self.try_lite_certificate(certificate, delivery).await {
+            return result;
         }
         self.handle_validated_certificate(certificate.clone()).await
     }
 
     pub(crate) async fn handle_optimized_confirmed_certificate(
-        &mut self,
+        &self,
         certificate: &ConfirmedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        if certificate.is_signed_by(&self.public_key) {
-            let result = self
-                .handle_lite_certificate(certificate.lite_certificate(), delivery)
-                .await;
-            match result {
-                Err(NodeError::MissingCertificateValue) => {
-                    debug!(
-                        address = self.address(),
-                        certificate_hash = %certificate.hash(),
-                        "validator forgot a confirmed block value that they signed before",
-                    );
-                }
-                _ => return result,
-            }
+        if let Some(result) = self.try_lite_certificate(certificate, delivery).await {
+            return result;
         }
         self.handle_confirmed_certificate(certificate.clone(), delivery)
             .await
+    }
+
+    /// Tries to send a lite certificate if this validator signed it. Returns `Some` on
+    /// success or non-recoverable error, `None` if the full certificate should be sent.
+    async fn try_lite_certificate<T: CertificateValue>(
+        &self,
+        certificate: &GenericCertificate<T>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Option<Result<Box<ChainInfo>, NodeError>> {
+        if !certificate.is_signed_by(&self.public_key) {
+            return None;
+        }
+        let result = self
+            .handle_lite_certificate(certificate.lite_certificate(), delivery)
+            .await;
+        match result {
+            Err(NodeError::MissingCertificateValue) => {
+                debug!(
+                    address = self.address(),
+                    certificate_hash = %certificate.hash(),
+                    kind = ?T::KIND,
+                    "validator forgot a certificate value that they signed before",
+                );
+                None
+            }
+            other => Some(other),
+        }
     }
 
     fn check_and_return_info(

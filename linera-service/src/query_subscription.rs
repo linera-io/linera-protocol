@@ -92,7 +92,7 @@ impl QuerySubscriptionManager {
     /// Returns a broadcast receiver for the given key. Lazily spawns a watcher if needed.
     pub fn subscribe<C: ClientContext + 'static>(
         self: &Arc<Self>,
-        key: SubscriptionKey,
+        key: &SubscriptionKey,
         context: Arc<futures::lock::Mutex<C>>,
         token: CancellationToken,
     ) -> anyhow::Result<broadcast::Receiver<Value>> {
@@ -106,7 +106,7 @@ impl QuerySubscriptionManager {
         let mut watchers = self.watchers.lock().unwrap();
 
         // If a watcher already exists, reuse it.
-        if let Some(state) = watchers.get(&key) {
+        if let Some(state) = watchers.get(key) {
             return Ok(state.sender.subscribe());
         }
 

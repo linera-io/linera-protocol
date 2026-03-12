@@ -262,7 +262,7 @@ impl<Env: Environment> Client<Env> {
         options: chain_client::Options,
         block_cache_size: usize,
         execution_state_cache_size: usize,
-        requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
+        requests_scheduler_config: &requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
         let chain_modes = Arc::new(RwLock::new(chain_modes.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -381,7 +381,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
         next_block_height: BlockHeight,
-        pending_proposal: Option<PendingProposal>,
+        pending_proposal: &Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
         timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
         follow_only: bool,
@@ -943,7 +943,6 @@ impl<Env: Environment> Client<Env> {
 
     /// Processes the confirmed block in the local node, possibly without executing it.
     #[instrument(level = "trace", skip_all)]
-    #[allow(dead_code)] // Otherwise CI fails when built for docker.
     async fn receive_sender_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,

@@ -136,8 +136,8 @@ pub struct KeyValueStateView<C> {
     pub store: KeyValueStoreView<C>,
 }
 
-fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
-    map.retain(|key, _| !key.starts_with(&key_prefix));
+fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: &[u8]) {
+    map.retain(|key, _| !key.starts_with(key_prefix));
 }
 
 fn total_size(vec: &Vec<(Vec<u8>, Vec<u8>)>) -> SizeData {
@@ -209,7 +209,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
                 view.store.remove_by_prefix(key_prefix.clone()).await?;
-                remove_by_prefix(&mut new_state_map, key_prefix);
+                remove_by_prefix(&mut new_state_map, &key_prefix);
             }
             if choice == 3 {
                 // Doing the clearing
@@ -303,7 +303,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
                 view.map.remove_by_prefix(key_prefix.clone());
-                remove_by_prefix(&mut new_state_map, key_prefix);
+                remove_by_prefix(&mut new_state_map, &key_prefix);
             }
             if choice == 3 {
                 // Doing the clearing

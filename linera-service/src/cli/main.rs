@@ -1675,7 +1675,7 @@ impl Runnable for Job {
 
                 wallet.insert(
                     description.id(),
-                    wallet::Chain {
+                    &wallet::Chain {
                         owner: Some(owner),
                         ..(&description).into()
                     },
@@ -2269,7 +2269,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 docker_image_name,
                 build_mode,
                 with_faucet,
-                faucet_chain,
                 faucet_port,
                 faucet_amount,
                 with_block_exporter,
@@ -2293,7 +2292,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     build_mode.clone(),
                     *policy_config,
                     *with_faucet,
-                    *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
                     *with_block_exporter,
@@ -2319,7 +2317,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 path,
                 external_protocol,
                 with_faucet,
-                faucet_chain,
                 faucet_port,
                 faucet_amount,
                 with_block_exporter,
@@ -2343,7 +2340,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     &options.storage_config,
                     external_protocol.clone(),
                     *with_faucet,
-                    *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
                 )

@@ -64,22 +64,21 @@ impl<Env: Environment> NodeInfo<Env> {
     /// The score combines three normalized components:
     /// - **Latency score**: Inversely proportional to EMA latency
     /// - **Success score**: Directly proportional to EMA success rate
-    /// - **Load score**: Inversely proportional to current load
     ///
     /// Returns a score from 0.0 to 1.0, where higher values indicate better performance.
     pub(super) async fn calculate_score(&self) -> f64 {
-        // 1. Normalize Latency (lower is better, so we invert)
+        // 1. Normalize latency (lower is better, so we invert)
         let latency_score = 1.0
             - (self.ema_latency_ms.min(self.max_expected_latency_ms)
                 / self.max_expected_latency_ms);
 
-        // 2. Success Rate is already normalized [0, 1]
+        // 2. Success rate is already normalized [0, 1]
         let success_score = self.ema_success_rate;
 
-        // 4. Apply cold-start penalty for nodes with very few requests
+        // 3. Apply cold-start penalty for nodes with very few requests
         let confidence_factor = (self.total_requests as f64 / 10.0).min(1.0);
 
-        // 5. Combine with weights
+        // 4. Combine with weights
         let raw_score =
             (self.weights.latency * latency_score) + (self.weights.success * success_score);
 
