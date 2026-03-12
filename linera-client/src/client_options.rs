@@ -63,6 +63,7 @@ pub struct Options {
     pub max_block_limit_errors: u32,
 
     /// The duration in milliseconds after which an idle chain worker will free its memory.
+    /// Use 0 to disable expiry.
     #[arg(
         long = "chain-worker-ttl-ms",
         default_value = "30000",
@@ -72,7 +73,7 @@ pub struct Options {
     pub chain_worker_ttl: Duration,
 
     /// The duration, in milliseconds, after which an idle sender chain worker will
-    /// free its memory.
+    /// free its memory. Use 0 to disable expiry.
     #[arg(
         long = "sender-chain-worker-ttl-ms",
         default_value = "1000",

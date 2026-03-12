@@ -43,7 +43,7 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, Timeout, TimeoutCertificate,
         ValidatedBlock,
     },
-    ChainError, ChainExecutionContext, ChainStateView,
+    ChainError, ChainExecutionContext,
 };
 use linera_execution::{
     committee::Committee,
@@ -59,7 +59,7 @@ use rand::seq::SliceRandom;
 use serde::Serialize;
 pub use state::State;
 use thiserror::Error;
-use tokio::sync::{mpsc, OwnedRwLockReadGuard};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
@@ -424,7 +424,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn chain_state_view(
         &self,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<Env::StorageContext>>, LocalNodeError> {
+    ) -> Result<crate::worker::ChainStateViewReadGuard<Env::Storage>, LocalNodeError> {
         self.client.local_node.chain_state_view(self.chain_id).await
     }
 

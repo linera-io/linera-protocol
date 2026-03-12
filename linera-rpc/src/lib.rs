@@ -4,6 +4,7 @@
 //! This module provides network abstractions and the data schemas for remote procedure
 //! calls (RPCs) in the Linera protocol.
 
+#![recursion_limit = "256"]
 // `tracing::instrument` is not compatible with this nightly Clippy lint
 #![allow(unknown_lints)]
 
