@@ -223,15 +223,6 @@ pub struct Validator {
     pub network_address: String,
 }
 
-/// Distinguishes between the one-time initial claim and recurring daily claims.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ClaimType {
-    /// First-time claim: creates a new chain.
-    Initial,
-    /// Recurring daily claim: transfers tokens to an existing chain.
-    Daily,
-}
-
 /// The response from a pending request.
 #[derive(Debug)]
 enum PendingResponse {
@@ -242,6 +233,9 @@ enum PendingResponse {
 }
 
 /// A pending chain creation or token transfer request.
+///
+/// If `target_chain_id` is `None`, this is an initial claim (creates a new chain).
+/// If `target_chain_id` is `Some`, this is a daily claim (transfers tokens).
 #[derive(Debug)]
 struct PendingRequest {
     owner: AccountOwner,
@@ -249,13 +243,28 @@ struct PendingRequest {
     target_chain_id: Option<ChainId>,
     /// The amount of tokens to send.
     amount: Amount,
-    /// Whether this is an initial or daily claim.
-    claim_type: ClaimType,
     /// For daily claims, the period number to store.
     daily_period: u64,
     responder: oneshot::Sender<PendingResponse>,
     #[cfg(with_metrics)]
     queued_at: std::time::Instant,
+}
+
+impl PendingRequest {
+    fn is_daily(&self) -> bool {
+        self.target_chain_id.is_some()
+    }
+
+    fn send_err(self, err: Error) {
+        let response = if self.is_daily() {
+            PendingResponse::Daily(Err(err))
+        } else {
+            PendingResponse::Initial(Err(err))
+        };
+        if self.responder.send(response).is_err() {
+            tracing::warn!("Receiver dropped while sending error to {}.", self.owner);
+        }
+    }
 }
 
 /// Configuration for the batch processor.
@@ -441,7 +450,6 @@ where
                 owner,
                 target_chain_id: None,
                 amount: self.amount,
-                claim_type: ClaimType::Initial,
                 daily_period: 0,
                 responder: tx,
                 #[cfg(with_metrics)]
@@ -531,7 +539,6 @@ where
                 owner,
                 target_chain_id: Some(target_chain_id),
                 amount,
-                claim_type: ClaimType::Daily,
                 daily_period,
                 responder: tx,
                 #[cfg(with_metrics)]
@@ -733,68 +740,61 @@ where
                     batch_requests.push(request);
                 }
                 Err(err) => {
-                    let response = match request.claim_type {
-                        ClaimType::Initial => PendingResponse::Initial(Err(err)),
-                        ClaimType::Daily => PendingResponse::Daily(Err(err)),
-                    };
-                    if request.responder.send(response).is_err() {
-                        tracing::warn!("Receiver dropped while sending error to {}", request.owner);
-                    }
+                    request.send_err(err);
                 }
             }
         }
         batch_requests
     }
 
-    /// Validates a pending request based on its claim type.
+    /// Validates a pending request based on whether it's an initial or daily claim.
     async fn validate_request(&self, request: &PendingRequest) -> Result<(), Error> {
-        match request.claim_type {
-            ClaimType::Initial => match self.faucet_storage.get_chain_id(&request.owner).await {
-                Ok(None) => Ok(()),
+        if request.is_daily() {
+            // Verify the initial claim still exists.
+            let initial_claim = match self.faucet_storage.last_claim(&request.owner).await {
+                Ok(Some(record)) => record,
+                Ok(None) => {
+                    return Err(Error::new(
+                        "You must claim a chain before making daily claims",
+                    ));
+                }
+                Err(err) => {
+                    tracing::error!("Database error: {err}");
+                    return Err(Error::new(err.to_string()));
+                }
+            };
+
+            // Verify the daily claim period.
+            let now = self.client.storage_client().clock().current_time();
+            let period = current_daily_period(initial_claim.timestamp.micros(), now.micros());
+            let last_period = self
+                .faucet_storage
+                .last_daily_claim_period(&request.owner)
+                .await?
+                .unwrap_or(0);
+
+            if period <= last_period {
+                return Err(Error::new(
+                    "You have already claimed tokens for this period",
+                ));
+            }
+        } else {
+            match self.faucet_storage.get_chain_id(&request.owner).await {
+                Ok(None) => {}
                 Ok(Some(_)) => {
                     #[cfg(with_metrics)]
                     metrics::CLAIM_REQUESTS_TOTAL
                         .with_label_values(&["duplicate"])
                         .inc();
-                    Err(Error::new("This user already has a chain"))
+                    return Err(Error::new("This user already has a chain"));
                 }
                 Err(err) => {
                     tracing::error!("Database error: {err}");
-                    Err(Error::new(err.to_string()))
+                    return Err(Error::new(err.to_string()));
                 }
-            },
-            ClaimType::Daily => {
-                // Verify the initial claim still exists.
-                let initial_claim = match self.faucet_storage.last_claim(&request.owner).await {
-                    Ok(Some(record)) => record,
-                    Ok(None) => {
-                        return Err(Error::new(
-                            "You must claim a chain before making daily claims",
-                        ));
-                    }
-                    Err(err) => {
-                        tracing::error!("Database error: {err}");
-                        return Err(Error::new(err.to_string()));
-                    }
-                };
-
-                // Verify the daily claim period.
-                let now = self.client.storage_client().clock().current_time();
-                let period = current_daily_period(initial_claim.timestamp.micros(), now.micros());
-                let last_period = self
-                    .faucet_storage
-                    .last_daily_claim_period(&request.owner)
-                    .await?
-                    .unwrap_or(0);
-
-                if period <= last_period {
-                    return Err(Error::new(
-                        "You have already claimed tokens for this period",
-                    ));
-                }
-                Ok(())
             }
         }
+        Ok(())
     }
 
     /// Checks if the given requests can currently be fulfilled, based on the balance
@@ -840,13 +840,7 @@ where
     fn send_err(requests: Vec<PendingRequest>, err: impl Into<async_graphql::Error>) {
         let err = err.into();
         for request in requests {
-            let response = match request.claim_type {
-                ClaimType::Initial => PendingResponse::Initial(Err(err.clone())),
-                ClaimType::Daily => PendingResponse::Daily(Err(err.clone())),
-            };
-            if request.responder.send(response).is_err() {
-                tracing::warn!("Receiver dropped while sending error to {}.", request.owner);
-            }
+            request.send_err(err.clone());
         }
     }
 
@@ -861,29 +855,24 @@ where
         // Build operations: OpenChain for initial claims, Transfer for daily claims.
         let mut operations = Vec::new();
         for request in &requests {
-            match request.claim_type {
-                ClaimType::Initial => {
-                    let config = OpenChainConfig {
-                        ownership: ChainOwnership::single(request.owner),
-                        balance: request.amount,
-                        application_permissions: ApplicationPermissions::default(),
-                    };
-                    operations.push(Operation::system(SystemOperation::OpenChain(config)));
-                }
-                ClaimType::Daily => {
-                    let target_chain_id = request
-                        .target_chain_id
-                        .expect("daily claim must have target");
-                    operations.push(Operation::system(SystemOperation::Transfer {
-                        owner: AccountOwner::CHAIN,
-                        recipient: Account {
-                            chain_id: target_chain_id,
-                            owner: request.owner,
-                        },
-                        amount: request.amount,
-                    }));
-                }
-            }
+            let operation = if let Some(target_chain_id) = request.target_chain_id {
+                Operation::system(SystemOperation::Transfer {
+                    owner: AccountOwner::CHAIN,
+                    recipient: Account {
+                        chain_id: target_chain_id,
+                        owner: request.owner,
+                    },
+                    amount: request.amount,
+                })
+            } else {
+                let config = OpenChainConfig {
+                    ownership: ChainOwnership::single(request.owner),
+                    balance: request.amount,
+                    application_permissions: ApplicationPermissions::default(),
+                };
+                Operation::system(SystemOperation::OpenChain(config))
+            };
+            operations.push(operation);
         }
 
         // Execute all operations in a single block
@@ -987,13 +976,9 @@ where
             .collect();
         let daily_claims: Vec<_> = requests
             .iter()
-            .filter(|r| r.claim_type == ClaimType::Daily)
-            .map(|r| {
-                (
-                    r.owner,
-                    r.target_chain_id.expect("daily claim must have target"),
-                    r.daily_period,
-                )
+            .filter_map(|r| {
+                r.target_chain_id
+                    .map(|chain_id| (r.owner, chain_id, r.daily_period))
             })
             .collect();
 
@@ -1033,27 +1018,19 @@ where
                     .observe(wait_time);
             }
 
-            let response = match request.claim_type {
-                ClaimType::Initial => {
-                    if let Some(description) = initial_desc_map.get(&request.owner) {
-                        PendingResponse::Initial(Ok(Box::new(description.clone())))
-                    } else {
-                        PendingResponse::Initial(Err(Error::new(format!(
-                            "No chain created for owner {}",
-                            request.owner
-                        ))))
-                    }
-                }
-                ClaimType::Daily => {
-                    let target = request
-                        .target_chain_id
-                        .expect("daily claim must have target");
-                    PendingResponse::Daily(Ok(ClaimOutcome {
-                        chain_id: target,
-                        certificate_hash,
-                        amount: request.amount,
-                    }))
-                }
+            let response = if let Some(target_chain_id) = request.target_chain_id {
+                PendingResponse::Daily(Ok(ClaimOutcome {
+                    chain_id: target_chain_id,
+                    certificate_hash,
+                    amount: request.amount,
+                }))
+            } else if let Some(description) = initial_desc_map.get(&request.owner) {
+                PendingResponse::Initial(Ok(Box::new(description.clone())))
+            } else {
+                PendingResponse::Initial(Err(Error::new(format!(
+                    "No chain created for owner {}",
+                    request.owner
+                ))))
             };
             if request.responder.send(response).is_err() {
                 tracing::warn!(

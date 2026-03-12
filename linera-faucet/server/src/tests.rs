@@ -260,7 +260,6 @@ async fn test_batch_size_reduction_on_limit_errors() -> anyhow::Result<()> {
                 owner,
                 target_chain_id: None,
                 amount: Amount::from_tokens(1),
-                claim_type: super::ClaimType::Initial,
                 daily_period: 0,
                 responder: tx,
                 #[cfg(with_metrics)]
