@@ -43,6 +43,7 @@ getrandom = { version = "0.2.12", default-features = false, features = [
 ] }
 hex = "0.4.3"
 insta = { version = "1.36.1", features = ["yaml"] }
+linera-ethereum = { path = "../linera-ethereum" }
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
