@@ -1058,7 +1058,7 @@ impl<Env: Environment> ChainClient<Env> {
             let local_node = self.client.local_node.clone();
             async move {
                 if let Err(error) = match local_node
-                    .retry_pending_cross_chain_requests(chain_id)
+                    .retry_pending_cross_chain_requests(chain_id, &self.client.notifier)
                     .await
                 {
                     Ok(()) => Ok(()),
@@ -1076,7 +1076,7 @@ impl<Env: Environment> ChainClient<Env> {
                             );
                         }
                         local_node
-                            .retry_pending_cross_chain_requests(chain_id)
+                            .retry_pending_cross_chain_requests(chain_id, &self.client.notifier)
                             .await
                     }
                     err => err,
@@ -2123,7 +2123,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .extend_chain_mode(description.id(), ListeningMode::FullChain);
             self.client
                 .local_node
-                .retry_pending_cross_chain_requests(self.chain_id)
+                .retry_pending_cross_chain_requests(self.chain_id, &self.client.notifier)
                 .await?;
         }
         Ok(ClientOutcome::Committed((description, certificate)))
@@ -2492,7 +2492,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn retry_pending_outgoing_messages(&self) -> Result<(), Error> {
         self.client
             .local_node
-            .retry_pending_cross_chain_requests(self.chain_id)
+            .retry_pending_cross_chain_requests(self.chain_id, &self.client.notifier)
             .await?;
         Ok(())
     }

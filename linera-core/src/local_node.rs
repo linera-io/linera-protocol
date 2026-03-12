@@ -269,10 +269,11 @@ where
     }
 
     /// Handles any pending local cross-chain requests.
-    #[instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", skip(self, notifier))]
     pub async fn retry_pending_cross_chain_requests(
         &self,
         sender_chain: ChainId,
+        notifier: &impl Notifier,
     ) -> Result<(), LocalNodeError> {
         let (_response, actions) = self
             .node
@@ -282,6 +283,7 @@ where
         let mut requests = VecDeque::from_iter(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let new_actions = self.node.state.handle_cross_chain_request(request).await?;
+            notifier.notify(&new_actions.notifications);
             requests.extend(new_actions.cross_chain_requests);
         }
         Ok(())

@@ -401,7 +401,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         if !new_ids.is_empty() {
             context_guard
                 .client()
-                .local_node
                 .retry_pending_cross_chain_requests(parent_chain_id)
                 .await?;
         }
