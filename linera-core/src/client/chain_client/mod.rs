@@ -65,7 +65,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use super::{
     received_log::ReceivedLogs, validator_trackers::ValidatorTrackers, AbortOnDrop, Client,
-    ListeningMode, PendingProposal, ReceiveCertificateMode, TimingType,
+    ListeningMode, PendingProposal, TimingType,
 };
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
@@ -2583,18 +2583,21 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewBlock { height, .. } => {
                 let chain_id = notification.chain_id;
-                if self.local_next_block_height(chain_id, &local_node).await? > height {
+                let local_height = self.local_next_block_height(chain_id, &local_node).await?;
+                if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
                         "Accepting redundant notification for new block"
                     );
                     return Ok(());
                 }
+                // The below will only happen in modes other than EventsOnly, as the
+                // NewBlock notification is only relevant to other modes.
                 self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
                     .await?;
                 if self.local_next_block_height(chain_id, &local_node).await? <= height {
-                    info!("NewBlock: Fail to synchronize new block after notification");
+                    error!("NewBlock: Fail to synchronize new block after notification");
                 }
                 trace!(
                     chain_id = %self.chain_id,
@@ -2603,14 +2606,12 @@ impl<Env: Environment> ChainClient<Env> {
                 );
             }
             Reason::NewEvents { height, hash, .. } => {
-                if self
-                    .local_next_block_height(notification.chain_id, &local_node)
-                    .await?
-                    > height
-                {
+                let chain_id = notification.chain_id;
+                let local_height = self.local_next_block_height(chain_id, &local_node).await?;
+                if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
-                        "Accepting redundant notification for new block"
+                        "Accepting redundant notification for new events"
                     );
                     return Ok(());
                 }
@@ -2619,17 +2620,22 @@ impl<Env: Environment> ChainClient<Env> {
                     %height,
                     "NewEvents: processing notification"
                 );
-                let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
-                // download_certificates ensures that we will get exactly one
-                // certificate in the result.
-                let certificate = certificates
-                    .pop()
-                    .expect("download_certificates should have returned one certificate");
+                // Use the subscribed streams from EventsOnly mode to figure out which
+                // streams we are interested in.
+                let relevant_streams = match self.listening_mode() {
+                    Some(ListeningMode::EventsOnly(subscribed)) => subscribed,
+                    // other cases should be unreachable, as the NewEvents notification is
+                    // only relevant in the EventsOnly mode
+                    _ => unreachable!(),
+                };
                 self.client
-                    .receive_sender_certificate(
-                        certificate,
-                        ReceiveCertificateMode::NeedsCheck,
-                        None,
+                    .download_event_bearing_blocks(
+                        self.chain_id,
+                        height,
+                        hash,
+                        local_height,
+                        &relevant_streams,
+                        &remote_node,
                     )
                     .await?;
             }
@@ -2780,16 +2786,21 @@ impl<Env: Environment> ChainClient<Env> {
             };
             let address = node.address();
             let this = self.clone();
+            let listening_mode_for_sync = self.listening_mode();
             let stream = stream::once({
                 let node = node.clone();
                 async move {
                     let stream = node.subscribe(vec![this.chain_id]).await?;
                     // Only now the notification stream is established. We may have missed
                     // notifications since the last time we synchronized.
+                    // For EventsOnly mode, skip full sync - we'll lazily download
+                    // event-relevant blocks when we receive notifications.
                     let remote_node = RemoteNode { public_key, node };
-                    this.client
-                        .synchronize_chain_state_from(&remote_node, this.chain_id)
-                        .await?;
+                    if listening_mode_for_sync.is_some_and(|mode| mode.should_sync_chain_state()) {
+                        this.client
+                            .synchronize_chain_state_from(&remote_node, this.chain_id)
+                            .await?;
+                    }
                     Ok::<_, Error>(stream)
                 }
             })

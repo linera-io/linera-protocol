@@ -178,12 +178,16 @@ impl ListeningMode {
     /// mode.
     pub fn is_relevant(&self, reason: &Reason) -> bool {
         match (reason, self) {
+            // NewEvents is only processed in EventsOnly mode, the other modes depend on
+            // the NewBlock notification.
+            (Reason::NewEvents { .. }, ListeningMode::FollowChain | ListeningMode::FullChain) => {
+                false
+            }
             // FullChain processes everything.
             (_, ListeningMode::FullChain) => true,
             // FollowChain processes new blocks on the chain itself, including blocks that
             // produced events.
             (Reason::NewBlock { .. }, ListeningMode::FollowChain) => true,
-            (Reason::NewEvents { .. }, ListeningMode::FollowChain) => true,
             (_, ListeningMode::FollowChain) => false,
             // EventsOnly only processes events from relevant streams.
             (Reason::NewEvents { event_streams, .. }, ListeningMode::EventsOnly(relevant)) => {
@@ -223,6 +227,13 @@ impl ListeningMode {
     /// inboxes).
     pub fn is_full(&self) -> bool {
         matches!(self, ListeningMode::FullChain)
+    }
+
+    pub fn should_sync_chain_state(&self) -> bool {
+        match self {
+            ListeningMode::FullChain | ListeningMode::FollowChain => true,
+            ListeningMode::EventsOnly(_) => false,
+        }
     }
 }
 
@@ -1225,6 +1236,105 @@ impl<Env: Environment> Client<Env> {
         }
 
         // Process certificates in ascending block height order (BTreeMap keeps them sorted).
+        for certificate in certificates.into_values() {
+            self.receive_sender_certificate(
+                certificate,
+                ReceiveCertificateMode::AlreadyChecked,
+                Some(vec![remote_node.clone()]),
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Downloads blocks that contain events in the subscribed streams, walking backwards
+    /// through `previous_event_blocks` to fetch event-bearing ancestors that we don't
+    /// already have locally.
+    /// Downloads event-bearing blocks for the given streams by walking the
+    /// `previous_event_blocks` linked list backwards from `height`, stopping at
+    /// `local_next_block_height` (blocks below that are already executed locally).
+    async fn download_event_bearing_blocks(
+        &self,
+        sender_chain_id: ChainId,
+        height: BlockHeight,
+        hash: CryptoHash,
+        local_next_block_height: BlockHeight,
+        subscribed_streams: &BTreeSet<StreamId>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+    ) -> Result<(), chain_client::Error> {
+        let (max_epoch, committees) = self.admin_committees().await?;
+
+        let mut certificates = BTreeMap::new();
+        let mut blocks_to_fetch = BTreeSet::<_>::from([(height, hash)]);
+        let next_expected_events = subscribed_streams
+            .iter()
+            .zip(
+                self.local_node
+                    .chain_state_view(sender_chain_id)
+                    .await?
+                    .next_expected_events
+                    .multi_get(subscribed_streams)
+                    .await?
+                    .into_iter()
+                    .map(|maybe_index| maybe_index.unwrap_or_default()),
+            )
+            .collect::<BTreeMap<_, _>>();
+
+        while let Some((current_height, current_hash)) = blocks_to_fetch.pop_last() {
+            if current_height < local_next_block_height {
+                continue; // Already executed locally.
+            }
+            if certificates.contains_key(&current_height) {
+                continue;
+            }
+
+            let certificate = if let Some(certificate) =
+                self.storage_client().read_certificate(current_hash).await?
+            {
+                certificate
+            } else {
+                let downloaded = self
+                    .requests_scheduler
+                    .download_certificates(remote_node, sender_chain_id, current_height, 1)
+                    .await?;
+                let Some(certificate) = downloaded.into_iter().next() else {
+                    continue;
+                };
+
+                Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
+                    .into_result()?;
+
+                certificate
+            };
+
+            let block = certificate.block();
+            // Walk previous_event_blocks for subscribed streams.
+            for stream_id in subscribed_streams {
+                if let Some((prev_hash, prev_height)) =
+                    block.body.previous_event_blocks.get(stream_id)
+                {
+                    if next_expected_events.get(stream_id).is_some_and(|index| {
+                        block
+                            .body
+                            .events
+                            .iter()
+                            .flatten()
+                            .find(|event| event.stream_id == *stream_id)
+                            .is_some_and(|event| event.index == *index)
+                    }) {
+                        continue;
+                    }
+                    if !certificates.contains_key(prev_height) {
+                        blocks_to_fetch.insert((*prev_height, *prev_hash));
+                    }
+                }
+            }
+
+            certificates.insert(current_height, certificate);
+        }
+
+        // Process in ascending height order.
         for certificate in certificates.into_values() {
             self.receive_sender_certificate(
                 certificate,
