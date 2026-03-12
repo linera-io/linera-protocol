@@ -19,4 +19,16 @@ where
         self.post_save();
         Ok(())
     }
+    async fn save_and_drop(self) -> Result<(), linera_views::ViewError> {
+        use linera_views::{
+            context::Context as _, batch::Batch, store::WritableKeyValueStore as _,
+            views::View as _,
+        };
+        let mut batch = Batch::new();
+        self.pre_save(&mut batch)?;
+        if !batch.is_empty() {
+            self.context().store().write_batch(batch).await?;
+        }
+        Ok(())
+    }
 }
