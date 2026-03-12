@@ -458,8 +458,7 @@ library BridgeTypes {
     struct ApplicationPermissions {
         opt_seq_ApplicationId execute_operations;
         ApplicationId[] mandatory_applications;
-        ApplicationId[] close_chain;
-        ApplicationId[] change_application_permissions;
+        ApplicationId[] manage_chain;
         opt_seq_ApplicationId call_service_as_oracle;
         opt_seq_ApplicationId make_http_requests;
     }
@@ -471,8 +470,7 @@ library BridgeTypes {
     {
         bytes memory result = bcs_serialize_opt_seq_ApplicationId(input.execute_operations);
         result = abi.encodePacked(result, bcs_serialize_seq_ApplicationId(input.mandatory_applications));
-        result = abi.encodePacked(result, bcs_serialize_seq_ApplicationId(input.close_chain));
-        result = abi.encodePacked(result, bcs_serialize_seq_ApplicationId(input.change_application_permissions));
+        result = abi.encodePacked(result, bcs_serialize_seq_ApplicationId(input.manage_chain));
         result = abi.encodePacked(result, bcs_serialize_opt_seq_ApplicationId(input.call_service_as_oracle));
         return abi.encodePacked(result, bcs_serialize_opt_seq_ApplicationId(input.make_http_requests));
     }
@@ -487,15 +485,13 @@ library BridgeTypes {
         (new_pos, execute_operations) = bcs_deserialize_offset_opt_seq_ApplicationId(pos, input);
         ApplicationId[] memory mandatory_applications;
         (new_pos, mandatory_applications) = bcs_deserialize_offset_seq_ApplicationId(new_pos, input);
-        ApplicationId[] memory close_chain;
-        (new_pos, close_chain) = bcs_deserialize_offset_seq_ApplicationId(new_pos, input);
-        ApplicationId[] memory change_application_permissions;
-        (new_pos, change_application_permissions) = bcs_deserialize_offset_seq_ApplicationId(new_pos, input);
+        ApplicationId[] memory manage_chain;
+        (new_pos, manage_chain) = bcs_deserialize_offset_seq_ApplicationId(new_pos, input);
         opt_seq_ApplicationId memory call_service_as_oracle;
         (new_pos, call_service_as_oracle) = bcs_deserialize_offset_opt_seq_ApplicationId(new_pos, input);
         opt_seq_ApplicationId memory make_http_requests;
         (new_pos, make_http_requests) = bcs_deserialize_offset_opt_seq_ApplicationId(new_pos, input);
-        return (new_pos, ApplicationPermissions(execute_operations, mandatory_applications, close_chain, change_application_permissions, call_service_as_oracle, make_http_requests));
+        return (new_pos, ApplicationPermissions(execute_operations, mandatory_applications, manage_chain, call_service_as_oracle, make_http_requests));
     }
 
     function bcs_deserialize_ApplicationPermissions(bytes memory input)
@@ -757,7 +753,7 @@ library BridgeTypes {
         Timestamp timestamp;
         CryptoHash state_hash;
         opt_CryptoHash previous_block_hash;
-        opt_AccountOwner authenticated_signer;
+        opt_AccountOwner authenticated_owner;
     }
 
     function bcs_serialize_BlockHeader(BlockHeader memory input)
@@ -771,7 +767,7 @@ library BridgeTypes {
         result = abi.encodePacked(result, bcs_serialize_Timestamp(input.timestamp));
         result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.state_hash));
         result = abi.encodePacked(result, bcs_serialize_opt_CryptoHash(input.previous_block_hash));
-        return abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.authenticated_signer));
+        return abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.authenticated_owner));
     }
 
     function bcs_deserialize_offset_BlockHeader(uint256 pos, bytes memory input)
@@ -792,9 +788,9 @@ library BridgeTypes {
         (new_pos, state_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
         opt_CryptoHash memory previous_block_hash;
         (new_pos, previous_block_hash) = bcs_deserialize_offset_opt_CryptoHash(new_pos, input);
-        opt_AccountOwner memory authenticated_signer;
-        (new_pos, authenticated_signer) = bcs_deserialize_offset_opt_AccountOwner(new_pos, input);
-        return (new_pos, BlockHeader(chain_id, epoch, height, timestamp, state_hash, previous_block_hash, authenticated_signer));
+        opt_AccountOwner memory authenticated_owner;
+        (new_pos, authenticated_owner) = bcs_deserialize_offset_opt_AccountOwner(new_pos, input);
+        return (new_pos, BlockHeader(chain_id, epoch, height, timestamp, state_hash, previous_block_hash, authenticated_owner));
     }
 
     function bcs_deserialize_BlockHeader(bytes memory input)
@@ -926,6 +922,7 @@ library BridgeTypes {
     struct ChainOwnership {
         AccountOwner[] super_owners;
         key_values_AccountOwner_uint64[] owners;
+        opt_AccountOwner first_leader;
         uint32 multi_leader_rounds;
         bool open_multi_leader_rounds;
         TimeoutConfig timeout_config;
@@ -938,6 +935,7 @@ library BridgeTypes {
     {
         bytes memory result = bcs_serialize_seq_AccountOwner(input.super_owners);
         result = abi.encodePacked(result, bcs_serialize_seq_key_values_AccountOwner_uint64(input.owners));
+        result = abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.first_leader));
         result = abi.encodePacked(result, bcs_serialize_uint32(input.multi_leader_rounds));
         result = abi.encodePacked(result, bcs_serialize_bool(input.open_multi_leader_rounds));
         return abi.encodePacked(result, bcs_serialize_TimeoutConfig(input.timeout_config));
@@ -953,13 +951,15 @@ library BridgeTypes {
         (new_pos, super_owners) = bcs_deserialize_offset_seq_AccountOwner(pos, input);
         key_values_AccountOwner_uint64[] memory owners;
         (new_pos, owners) = bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(new_pos, input);
+        opt_AccountOwner memory first_leader;
+        (new_pos, first_leader) = bcs_deserialize_offset_opt_AccountOwner(new_pos, input);
         uint32 multi_leader_rounds;
         (new_pos, multi_leader_rounds) = bcs_deserialize_offset_uint32(new_pos, input);
         bool open_multi_leader_rounds;
         (new_pos, open_multi_leader_rounds) = bcs_deserialize_offset_bool(new_pos, input);
         TimeoutConfig memory timeout_config;
         (new_pos, timeout_config) = bcs_deserialize_offset_TimeoutConfig(new_pos, input);
-        return (new_pos, ChainOwnership(super_owners, owners, multi_leader_rounds, open_multi_leader_rounds, timeout_config));
+        return (new_pos, ChainOwnership(super_owners, owners, first_leader, multi_leader_rounds, open_multi_leader_rounds, timeout_config));
     }
 
     function bcs_deserialize_ChainOwnership(bytes memory input)
@@ -2094,7 +2094,7 @@ library BridgeTypes {
 
     struct OutgoingMessage {
         ChainId destination;
-        opt_AccountOwner authenticated_signer;
+        opt_AccountOwner authenticated_owner;
         Amount grant;
         opt_Account refund_grant_to;
         MessageKind kind;
@@ -2107,7 +2107,7 @@ library BridgeTypes {
         returns (bytes memory)
     {
         bytes memory result = bcs_serialize_ChainId(input.destination);
-        result = abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.authenticated_signer));
+        result = abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.authenticated_owner));
         result = abi.encodePacked(result, bcs_serialize_Amount(input.grant));
         result = abi.encodePacked(result, bcs_serialize_opt_Account(input.refund_grant_to));
         result = abi.encodePacked(result, bcs_serialize_MessageKind(input.kind));
@@ -2122,8 +2122,8 @@ library BridgeTypes {
         uint256 new_pos;
         ChainId memory destination;
         (new_pos, destination) = bcs_deserialize_offset_ChainId(pos, input);
-        opt_AccountOwner memory authenticated_signer;
-        (new_pos, authenticated_signer) = bcs_deserialize_offset_opt_AccountOwner(new_pos, input);
+        opt_AccountOwner memory authenticated_owner;
+        (new_pos, authenticated_owner) = bcs_deserialize_offset_opt_AccountOwner(new_pos, input);
         Amount memory grant;
         (new_pos, grant) = bcs_deserialize_offset_Amount(new_pos, input);
         opt_Account memory refund_grant_to;
@@ -2132,7 +2132,7 @@ library BridgeTypes {
         (new_pos, kind) = bcs_deserialize_offset_MessageKind(new_pos, input);
         Message memory message;
         (new_pos, message) = bcs_deserialize_offset_Message(new_pos, input);
-        return (new_pos, OutgoingMessage(destination, authenticated_signer, grant, refund_grant_to, kind, message));
+        return (new_pos, OutgoingMessage(destination, authenticated_owner, grant, refund_grant_to, kind, message));
     }
 
     function bcs_deserialize_OutgoingMessage(bytes memory input)
@@ -2148,7 +2148,7 @@ library BridgeTypes {
     }
 
     struct PostedMessage {
-        opt_AccountOwner authenticated_signer;
+        opt_AccountOwner authenticated_owner;
         Amount grant;
         opt_Account refund_grant_to;
         MessageKind kind;
@@ -2161,7 +2161,7 @@ library BridgeTypes {
         pure
         returns (bytes memory)
     {
-        bytes memory result = bcs_serialize_opt_AccountOwner(input.authenticated_signer);
+        bytes memory result = bcs_serialize_opt_AccountOwner(input.authenticated_owner);
         result = abi.encodePacked(result, bcs_serialize_Amount(input.grant));
         result = abi.encodePacked(result, bcs_serialize_opt_Account(input.refund_grant_to));
         result = abi.encodePacked(result, bcs_serialize_MessageKind(input.kind));
@@ -2175,8 +2175,8 @@ library BridgeTypes {
         returns (uint256, PostedMessage memory)
     {
         uint256 new_pos;
-        opt_AccountOwner memory authenticated_signer;
-        (new_pos, authenticated_signer) = bcs_deserialize_offset_opt_AccountOwner(pos, input);
+        opt_AccountOwner memory authenticated_owner;
+        (new_pos, authenticated_owner) = bcs_deserialize_offset_opt_AccountOwner(pos, input);
         Amount memory grant;
         (new_pos, grant) = bcs_deserialize_offset_Amount(new_pos, input);
         opt_Account memory refund_grant_to;
@@ -2187,7 +2187,7 @@ library BridgeTypes {
         (new_pos, index) = bcs_deserialize_offset_uint32(new_pos, input);
         Message memory message;
         (new_pos, message) = bcs_deserialize_offset_Message(new_pos, input);
-        return (new_pos, PostedMessage(authenticated_signer, grant, refund_grant_to, kind, index, message));
+        return (new_pos, PostedMessage(authenticated_owner, grant, refund_grant_to, kind, index, message));
     }
 
     function bcs_deserialize_PostedMessage(bytes memory input)
@@ -3090,6 +3090,7 @@ library BridgeTypes {
     struct SystemOperation_ChangeOwnership {
         AccountOwner[] super_owners;
         tuple_AccountOwner_uint64[] owners;
+        opt_AccountOwner first_leader;
         uint32 multi_leader_rounds;
         bool open_multi_leader_rounds;
         TimeoutConfig timeout_config;
@@ -3102,6 +3103,7 @@ library BridgeTypes {
     {
         bytes memory result = bcs_serialize_seq_AccountOwner(input.super_owners);
         result = abi.encodePacked(result, bcs_serialize_seq_tuple_AccountOwner_uint64(input.owners));
+        result = abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.first_leader));
         result = abi.encodePacked(result, bcs_serialize_uint32(input.multi_leader_rounds));
         result = abi.encodePacked(result, bcs_serialize_bool(input.open_multi_leader_rounds));
         return abi.encodePacked(result, bcs_serialize_TimeoutConfig(input.timeout_config));
@@ -3117,13 +3119,15 @@ library BridgeTypes {
         (new_pos, super_owners) = bcs_deserialize_offset_seq_AccountOwner(pos, input);
         tuple_AccountOwner_uint64[] memory owners;
         (new_pos, owners) = bcs_deserialize_offset_seq_tuple_AccountOwner_uint64(new_pos, input);
+        opt_AccountOwner memory first_leader;
+        (new_pos, first_leader) = bcs_deserialize_offset_opt_AccountOwner(new_pos, input);
         uint32 multi_leader_rounds;
         (new_pos, multi_leader_rounds) = bcs_deserialize_offset_uint32(new_pos, input);
         bool open_multi_leader_rounds;
         (new_pos, open_multi_leader_rounds) = bcs_deserialize_offset_bool(new_pos, input);
         TimeoutConfig memory timeout_config;
         (new_pos, timeout_config) = bcs_deserialize_offset_TimeoutConfig(new_pos, input);
-        return (new_pos, SystemOperation_ChangeOwnership(super_owners, owners, multi_leader_rounds, open_multi_leader_rounds, timeout_config));
+        return (new_pos, SystemOperation_ChangeOwnership(super_owners, owners, first_leader, multi_leader_rounds, open_multi_leader_rounds, timeout_config));
     }
 
     function bcs_deserialize_SystemOperation_ChangeOwnership(bytes memory input)

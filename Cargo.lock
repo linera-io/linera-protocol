@@ -5487,7 +5487,7 @@ dependencies = [
  "rustls 0.23.31",
  "serde",
  "serde-generate",
- "serde-reflection 0.3.6",
+ "serde-reflection",
  "serde_json",
  "serde_yaml 0.8.26",
  "tempfile",
@@ -5979,7 +5979,7 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "serde",
- "serde-reflection 0.3.6",
+ "serde-reflection",
  "test-strategy",
  "thiserror 1.0.69",
  "tokio",
@@ -6219,7 +6219,7 @@ dependencies = [
  "proptest",
  "prost 0.14.1",
  "serde",
- "serde-reflection 0.3.6",
+ "serde-reflection",
  "similar-asserts",
  "test-strategy",
  "thiserror 1.0.69",
@@ -9438,7 +9438,7 @@ dependencies = [
  "include_dir",
  "phf 0.10.1",
  "serde",
- "serde-reflection 0.5.2",
+ "serde-reflection",
  "textwrap",
 ]
 
@@ -9448,17 +9448,6 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b5b14ebbcc4e4f2b3642fa99c388649da58d1dc3308c7d109f39f565d1710f0"
 dependencies = [
- "serde",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "serde-reflection"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f05a5f801ac62a51a49d378fdb3884480041b99aced450b28990673e8ff99895"
-dependencies = [
- "once_cell",
  "serde",
  "thiserror 1.0.69",
 ]
