@@ -166,30 +166,50 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
 ) {
     linera_base::Task::spawn(async move {
         loop {
-            linera_base::time::timer::sleep(ttl).await;
             let last = last_access.load(Ordering::Relaxed);
             let now = current_time_micros();
             let idle_micros = now.saturating_sub(last);
             let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
-            if idle_micros >= ttl_micros {
-                break;
+
+            if idle_micros < ttl_micros {
+                // Touched recently — sleep for the remaining time.
+                let remaining = Duration::from_micros(ttl_micros - idle_micros);
+                linera_base::time::timer::sleep(remaining).await;
+                continue;
             }
-            // Touched recently — sleep for the remaining time.
-            let remaining = Duration::from_micros(ttl_micros - idle_micros);
-            linera_base::time::timer::sleep(remaining).await;
-        }
-        // Shut down: acquire write lock to drain outstanding guards, then
-        // clear the endpoint and await the runtime task.
-        let task = {
-            let mut guard = RollbackGuard(state.clone().write_owned().await);
-            guard.clear_service_runtime()
-        };
-        if let Some(task) = task {
-            if let Err(err) = task.await {
-                tracing::warn!(%err, "Failed to shut down service runtime");
+
+            // Let's try to shut down the chain worker.
+            let task = {
+                // Acquire write lock to drain outstanding guards.
+                let mut guard = RollbackGuard(state.clone().write_owned().await);
+
+                // Check the TTL again.
+                let last = last_access.load(Ordering::Relaxed);
+                let now = current_time_micros();
+                let idle_micros = now.saturating_sub(last);
+                let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
+                if idle_micros < ttl_micros {
+                    // The app was accessed while we were acquiring the lock. Let's
+                    // keep the chain alive for now.
+                    drop(guard);
+
+                    // Sleep for the remaining time and try again.
+                    let remaining = Duration::from_micros(ttl_micros - idle_micros);
+                    linera_base::time::timer::sleep(remaining).await;
+                    continue;
+                }
+
+                // Returned the task to clear the service endpoint.
+                guard.clear_service_runtime()
+            };
+            if let Some(task) = task {
+                if let Err(err) = task.await {
+                    tracing::warn!(%err, "Failed to shut down service runtime");
+                }
             }
+            drop(state);
+            return;
         }
-        drop(state);
     })
     .forget();
 }
