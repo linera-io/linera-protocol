@@ -384,10 +384,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
     /// Ensures that a call to `application_id` is not-reentrant.
     ///
     /// Returns an error if there already is an entry for `application_id` in the call stack.
-    fn check_for_reentrancy(
-        &mut self,
-        application_id: ApplicationId,
-    ) -> Result<(), ExecutionError> {
+    fn check_for_reentrancy(&self, application_id: ApplicationId) -> Result<(), ExecutionError> {
         ensure!(
             !self.active_applications.contains(&application_id),
             ExecutionError::ReentrantCall(application_id)
@@ -1086,7 +1083,7 @@ impl ContractSyncRuntime {
 impl ContractSyncRuntimeHandle {
     #[instrument(skip_all, fields(application_id = %application_id))]
     fn run_action(
-        &mut self,
+        &self,
         application_id: ApplicationId,
         chain_id: ChainId,
         action: UserAction,
@@ -1125,7 +1122,7 @@ impl ContractSyncRuntimeHandle {
 
     /// Notifies all loaded applications that execution is finalizing.
     #[instrument(skip_all)]
-    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError> {
+    fn finalize(&self, context: FinalizeContext) -> Result<(), ExecutionError> {
         let applications = mem::take(&mut self.inner().applications_to_finalize)
             .into_iter()
             .rev();
@@ -1145,7 +1142,7 @@ impl ContractSyncRuntimeHandle {
     /// Executes a `closure` with the contract code for the `application_id`.
     #[instrument(skip_all, fields(application_id = %application_id))]
     fn execute(
-        &mut self,
+        &self,
         application_id: ApplicationId,
         signer: Option<AccountOwner>,
         closure: impl FnOnce(&mut UserContractInstance) -> Result<Option<Vec<u8>>, ExecutionError>,

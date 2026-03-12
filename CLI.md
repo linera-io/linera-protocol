@@ -139,10 +139,10 @@ Client implementation and command-line tool for the Linera blockchain
    Discarded bundles can be retried in the next block.
 
   Default value: `3`
-* `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory
+* `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory. Use 0 to disable expiry
 
   Default value: `30000`
-* `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory
+* `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory. Use 0 to disable expiry
 
   Default value: `1000`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
@@ -766,6 +766,9 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 
   Default value: `8080`
 * `--amount <AMOUNT>` — The number of tokens to send to each new chain
+* `--daily-claim-amount <DAILY_CLAIM_AMOUNT>` — The number of tokens to send per daily claim. Set to 0 to disable daily claims
+
+  Default value: `0`
 * `--limit-rate-until <LIMIT_RATE_UNTIL>` — The end timestamp: The faucet will rate-limit the token supply so it runs out of money no earlier than this
 * `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
 * `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)

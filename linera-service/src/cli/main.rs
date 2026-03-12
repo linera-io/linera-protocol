@@ -1329,6 +1329,7 @@ impl Runnable for Job {
                 #[cfg(with_metrics)]
                 metrics_port,
                 amount,
+                daily_claim_amount,
                 limit_rate_until,
                 config,
                 storage_path,
@@ -1357,6 +1358,7 @@ impl Runnable for Job {
                     metrics_port,
                     chain_id,
                     amount,
+                    daily_claim_amount,
                     end_timestamp,
                     genesis_config: Arc::new(genesis_config),
                     chain_listener_config: config,

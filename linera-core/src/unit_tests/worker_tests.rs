@@ -77,7 +77,7 @@ use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
-    chain_worker::CrossChainUpdateHelper,
+    chain_worker::{ChainWorkerConfig, CrossChainUpdateHelper},
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -172,17 +172,16 @@ where
                 .await
                 .expect("writing a network description should not fail");
 
-            WorkerState::new(
-                "Single validator node".to_string(),
-                Some(keypair.secret_key),
-                storage,
-                5_000,
-                10_000,
-            )
-            .with_allow_inactive_chains(is_client)
-            .with_allow_messages_from_deprecated_epochs(is_client)
-            .with_long_lived_services(has_long_lived_services)
-            .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS))
+            let config = ChainWorkerConfig {
+                nickname: "Single validator node".to_string(),
+                allow_inactive_chains: is_client,
+                allow_messages_from_deprecated_epochs: is_client,
+                long_lived_services: has_long_lived_services,
+                block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+                ..ChainWorkerConfig::default()
+            }
+            .with_key_pair(Some(keypair.secret_key));
+            WorkerState::new(storage, config, None)
         };
 
         let worker = make_worker(ValidatorKeypair::generate()).await;
@@ -218,14 +217,14 @@ where
         self.admin_keypair.public()
     }
 
-    pub async fn write_blobs(&mut self, blobs: &[Blob]) -> Result<(), linera_views::ViewError> {
+    pub async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), linera_views::ViewError> {
         self.worker.storage.write_blobs(blobs).await?;
         self.executing_worker.storage.write_blobs(blobs).await?;
         Ok(())
     }
 
     pub async fn register_mock_application(
-        &mut self,
+        &self,
         chain_id: ChainId,
         index: u32,
     ) -> Result<(ApplicationId, MockApplication), anyhow::Error> {
@@ -347,7 +346,7 @@ where
     }
 
     async fn make_simple_transfer_certificate(
-        &mut self,
+        &self,
         chain_id: ChainId,
         chain_owner_pubkey: AccountPublicKey,
         target_id: ChainId,
@@ -370,7 +369,7 @@ where
 
     #[expect(clippy::too_many_arguments)]
     async fn make_transfer_certificate(
-        &mut self,
+        &self,
         chain_id: ChainId,
         authenticated_owner: AccountOwner,
         source: AccountOwner,
@@ -395,7 +394,7 @@ where
     /// Creates a certificate with a transfer.
     #[expect(clippy::too_many_arguments)]
     async fn make_transfer_certificate_for_epoch(
-        &mut self,
+        &self,
         chain_id: ChainId,
         authenticated_owner: AccountOwner,
         source: AccountOwner,
@@ -570,7 +569,7 @@ where
     /// A method creating a `ConfirmedBlockCertificate` for a proposal by executing it on the
     /// `executing_worker`.
     async fn execute_proposal(
-        &mut self,
+        &self,
         proposal: ProposedBlock,
         blobs: Vec<Blob>,
     ) -> Result<ConfirmedBlockCertificate, anyhow::Error> {

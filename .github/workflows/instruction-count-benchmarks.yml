@@ -1,3 +1,5 @@
+# NOTE: post-benchmark-comment.yml references this workflow by name.
+# If you rename it, update the workflow_run trigger there too.
 name: Instruction Count Benchmarks
 
 on:
@@ -24,7 +26,6 @@ env:
 
 permissions:
   contents: read
-  pull-requests: write
   actions: read
 
 jobs:
@@ -133,20 +134,17 @@ jobs:
       env:
         BASELINE_SHA: ${{ steps.download-baseline.outputs.baseline_sha }}
         CACHE_INFO: ${{ steps.cache-info.outputs.cache_info }}
-    - name: Post PR comment
+    - name: Save PR number
       if: github.event_name == 'pull_request' && always()
-      run: |
-        COMMENT=$(cat /tmp/bench-comment.md)
-
-        PR=${{ github.event.pull_request.number }}
-        EXISTING=$(gh api "repos/${{ github.repository }}/issues/${PR}/comments" \
-          --jq '[.[] | select(.body | startswith("## Instruction Count Benchmark Results")) | .id] | last // empty')
-
-        if [ -n "$EXISTING" ]; then
-          gh api "repos/${{ github.repository }}/issues/comments/${EXISTING}" \
-            -X PATCH -f body="${COMMENT}"
-        else
-          gh pr comment "${PR}" --body "${COMMENT}"
-        fi
+      run: echo "$PR_NUMBER" > /tmp/pr-number.txt
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+    - name: Upload benchmark comment
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: bench-comment
+        path: |
+          /tmp/bench-comment.md
+          /tmp/pr-number.txt
+        retention-days: 1

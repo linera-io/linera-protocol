@@ -176,6 +176,9 @@ impl Hasher for sha3::Sha3_256 {
 pub trait RootView: View {
     /// Saves the root view to the database context
     async fn save(&mut self) -> Result<(), ViewError>;
+
+    /// Saves the root view to the database context and then drops it without calling `post_save`.
+    async fn save_and_drop(self) -> Result<(), ViewError>;
 }
 
 /// A [`View`] that also supports crypto hash
