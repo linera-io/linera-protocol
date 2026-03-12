@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Helpers for managing chain worker state behind an `Arc<RwLock<…>>`.
+//!
+//! Tokio's [`RwLock`] is write-preferring: once a writer is waiting, new readers
+//! queue behind it. This prevents read-only queries from starving write operations
+//! (block proposals, certificate handling, etc.).
 
 use std::{
     ops::{Deref, DerefMut},
