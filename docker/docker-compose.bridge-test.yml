@@ -217,6 +217,7 @@ services:
     image: "${LINERA_EXPORTER_IMAGE:-linera-exporter}"
     ports:
       - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
+      - "${EXPORTER_METRICS_PORT:-9091}:9091"
     command:
       - sh
       - -c
@@ -258,7 +259,7 @@ services:
       bridge-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost ${BLOCK_EXPORTER_PORT:-8882}"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10
