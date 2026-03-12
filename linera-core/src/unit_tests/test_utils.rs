@@ -1091,6 +1091,7 @@ where
             format!("Client node for {:.8}", chain_id),
             Duration::from_secs(30),
             Duration::from_secs(1),
+            HashSet::new(),
             options,
             crate::client::RequestsSchedulerConfig::default(),
         ));
