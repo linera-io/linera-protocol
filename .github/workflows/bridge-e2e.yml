@@ -121,8 +121,8 @@ jobs:
           load: true
           tags: linera-bridge:latest
 
-      - name: Build wrapped-fungible example Wasm
-        run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible
+      - name: Build example Wasm for bridge tests
+        run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible -p evm-bridge
         working-directory: examples
 
       - name: Run bridge E2E test
