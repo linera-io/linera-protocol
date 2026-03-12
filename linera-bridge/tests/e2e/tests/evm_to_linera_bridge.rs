@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
+
 //! End-to-end test: deposit ERC-20 tokens on EVM (Anvil), generate an MPT proof,
 //! submit a `ProcessDeposit` operation to the evm-bridge app on Linera, and verify
 //! that the wrapped-fungible tokens are minted.

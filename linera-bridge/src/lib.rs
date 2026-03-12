@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
+
 // -- On-chain (Wasm-compatible, always available) --
 
 /// EVM receipt proof verification and deposit event parsing.

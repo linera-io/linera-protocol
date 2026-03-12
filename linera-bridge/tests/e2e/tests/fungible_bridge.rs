@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
+
 //! End-to-end test: deploy a fungible token on Linera, transfer tokens to an EVM address,
 //! submit the block certificate to FungibleBridge on Anvil, and verify the ERC20 balance.
 
