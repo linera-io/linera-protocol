@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BlockchainAPI, API_BASE_URL } from '../utils/database';
 import { BlockInfo, Block, IncomingBundleWithMessages, ChainInfo, Operation, Message, Event, OracleResponse } from '../types/blockchain';
 
