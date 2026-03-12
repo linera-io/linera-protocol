@@ -183,18 +183,18 @@ spec:
           startupProbe:
             httpGet:
               path: /health
-              port: {{ .Values.blockExporter.port }}
+              port: {{ .Values.blockExporter.metricsPort }}
             failureThreshold: 30
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.blockExporter.port }}
+              port: {{ .Values.blockExporter.metricsPort }}
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.blockExporter.port }}
+              port: {{ .Values.blockExporter.metricsPort }}
             periodSeconds: 5
       volumes:
         - name: configmap
