@@ -181,6 +181,7 @@ releases:
     namespace: tempo
     chart: grafana/tempo
     timeout: 900
+    installed: {{ ne (env "LINERA_HELMFILE_SET_OTLP_EXPORTER_ENDPOINT" | default "") "" }}
     values:
       - {{ env "LINERA_HELMFILE_VALUES_LINERA_CORE" | default "values-local.yaml.gotmpl" }}
   - name: observability-alloy
