@@ -105,7 +105,7 @@ linera-views = { workspace = true, optional = true }
 rustls = { version = "0.23", optional = true, features = ["ring"] }
 tower-http = { workspace = true, optional = true, features = ["cors"] }
 tracing = { workspace = true, optional = true }
-tracing-subscriber = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true, features = ["fmt"] }
 
 [[bin]]
 name = "linera-bridge"

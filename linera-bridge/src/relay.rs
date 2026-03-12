@@ -316,6 +316,8 @@ pub async fn run(
         &Default::default(),
         None,
         genesis_config,
+        10_000,
+        10_000,
     )
     .await?;
     tracing::info!("Client context created");
