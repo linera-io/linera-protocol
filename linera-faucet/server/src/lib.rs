@@ -374,6 +374,26 @@ fn current_daily_period(initial_claim_micros: u64, now_micros: u64) -> u64 {
     now_micros.saturating_sub(initial_claim_micros) / DAILY_PERIOD_MICROS
 }
 
+/// Executes a future and records its latency in [`metrics::CLAIM_LATENCY`], labeled by outcome.
+async fn record_claim_latency<T>(
+    future: impl std::future::Future<Output = Result<T, Error>>,
+) -> Result<T, Error> {
+    #[cfg(with_metrics)]
+    let start_time = std::time::Instant::now();
+
+    let result = future.await;
+
+    #[cfg(with_metrics)]
+    {
+        let label = if result.is_ok() { "success" } else { "error" };
+        metrics::CLAIM_LATENCY
+            .with_label_values(&[label])
+            .observe(start_time.elapsed().as_secs_f64() * 1000.0);
+    }
+
+    result
+}
+
 #[async_graphql::Object(cache_control(no_cache))]
 impl<S> MutationRoot<S>
 where
@@ -381,40 +401,14 @@ where
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
-        #[cfg(with_metrics)]
-        let start_time = std::time::Instant::now();
-
-        let result = self.do_claim(owner).await;
-
-        #[cfg(with_metrics)]
-        {
-            let label = if result.is_ok() { "success" } else { "error" };
-            metrics::CLAIM_LATENCY
-                .with_label_values(&[label])
-                .observe(start_time.elapsed().as_secs_f64() * 1000.0);
-        }
-
-        result
+        record_claim_latency(self.do_claim(owner)).await
     }
 
     /// Transfers a daily amount of tokens to the user's existing chain.
     /// The user must have already claimed a chain. Each user can claim once per 24-hour
     /// period, measured from their initial claim time.
     async fn daily_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
-        #[cfg(with_metrics)]
-        let start_time = std::time::Instant::now();
-
-        let result = self.do_daily_claim(owner).await;
-
-        #[cfg(with_metrics)]
-        {
-            let label = if result.is_ok() { "success" } else { "error" };
-            metrics::CLAIM_LATENCY
-                .with_label_values(&[label])
-                .observe(start_time.elapsed().as_secs_f64() * 1000.0);
-        }
-
-        result
+        record_claim_latency(self.do_daily_claim(owner)).await
     }
 }
 
