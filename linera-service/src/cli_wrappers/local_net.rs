@@ -487,7 +487,7 @@ impl LocalNet {
     }
 
     fn block_exporter_port(&self, validator: usize, exporter_id: usize) -> usize {
-        12000 + validator * self.num_shards + exporter_id + 1
+        14000 + validator * self.num_shards + exporter_id + 1
     }
 
     pub fn proxy_public_port(&self, validator: usize, proxy_id: usize) -> usize {
@@ -498,8 +498,8 @@ impl LocalNet {
         FIRST_PUBLIC_PORT + 1
     }
 
-    fn block_exporter_metrics_port(exporter_id: usize) -> usize {
-        FIRST_PUBLIC_PORT + exporter_id + 1
+    fn block_exporter_metrics_port(&self, validator: usize, exporter_id: usize) -> usize {
+        15000 + validator * self.num_shards + exporter_id + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
@@ -620,7 +620,7 @@ impl LocalNet {
         let n = validator;
         let host = Network::Grpc.localhost();
         let port = self.block_exporter_port(n, exporter_id as usize);
-        let metrics_port = Self::block_exporter_metrics_port(exporter_id as usize);
+        let metrics_port = self.block_exporter_metrics_port(n, exporter_id as usize);
         let mut config = format!(
             r#"
             id = {exporter_id}

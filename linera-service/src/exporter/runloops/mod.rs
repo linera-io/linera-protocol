@@ -4,6 +4,7 @@
 use std::{
     collections::HashSet,
     future::{Future, IntoFuture},
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use block_processor::BlockProcessor;
@@ -39,6 +40,7 @@ pub(crate) fn start_block_processor_task<S, F>(
     options: NodeOptions,
     block_exporter_id: u32,
     destination_config: DestinationConfig,
+    health: Arc<AtomicBool>,
 ) -> (
     UnboundedSender<BlockId>,
     std::thread::JoinHandle<Result<(), ExporterError>>,
@@ -62,6 +64,7 @@ where
             block_exporter_id,
             new_block_queue,
             destination_config,
+            health,
         )
     });
 
@@ -91,6 +94,7 @@ impl NewBlockQueue {
 }
 
 #[tokio::main(flavor = "current_thread")]
+#[expect(clippy::too_many_arguments)]
 async fn start_block_processor<S, F>(
     storage: S,
     shutdown_signal: F,
@@ -99,6 +103,7 @@ async fn start_block_processor<S, F>(
     block_exporter_id: u32,
     new_block_queue: NewBlockQueue,
     destination_config: DestinationConfig,
+    health: Arc<AtomicBool>,
 ) -> Result<(), ExporterError>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -160,6 +165,7 @@ where
         exporter_storage.clone()?,
         destination_config.destinations.clone(),
         startup_committee_destinations,
+        health,
     );
 
     let mut block_processor = BlockProcessor::new(
@@ -317,7 +323,14 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, sync::atomic::Ordering, time::Duration};
+    use std::{
+        collections::BTreeMap,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        time::Duration,
+    };
 
     use linera_base::{
         crypto::{AccountPublicKey, Secp256k1PublicKey},
@@ -407,6 +420,7 @@ mod test {
                 committee_destination: false,
                 destinations: vec![destination_address],
             },
+            Arc::new(AtomicBool::new(true)),
         );
 
         assert!(
@@ -464,6 +478,7 @@ mod test {
                 committee_destination: false,
                 destinations: destinations.clone(),
             },
+            Arc::new(AtomicBool::new(true)),
         );
 
         assert!(
@@ -520,6 +535,7 @@ mod test {
                 destinations: destinations.clone(),
                 committee_destination: false,
             },
+            Arc::new(AtomicBool::new(true)),
         );
 
         sleep(Duration::from_secs(4)).await;
@@ -581,6 +597,7 @@ mod test {
                 committee_destination: true,
                 destinations: vec![],
             },
+            Arc::new(AtomicBool::new(true)),
         );
 
         let mut single_validator = BTreeMap::new();
