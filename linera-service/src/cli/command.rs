@@ -773,9 +773,7 @@ pub enum ClientCommand {
         allowed_subscriptions: Vec<String>,
     },
 
-    /// Query an application without starting the node service.
-    /// This performs a read-only GraphQL query directly on a smart contract's service,
-    /// without creating a lock or a persistent HTTP server.
+    /// Query an application with a read-only GraphQL query.
     QueryApplication {
         /// The chain on which the application is running.
         #[arg(long)]

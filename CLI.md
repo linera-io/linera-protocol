@@ -106,7 +106,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `create-genesis-config` — Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 * `watch` — Watch the network for notifications
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
-* `query-application` — Query an application without starting the node service. This performs a read-only GraphQL query directly on a smart contract's service, without creating a lock or a persistent HTTP server
+* `query-application` — Query an application with a read-only GraphQL query
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-module` — Publish module
 * `list-events-from-index` — Print events from a specific chain and stream from a specified index
@@ -754,7 +754,7 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
 ## `linera query-application`
 
-Query an application without starting the node service. This performs a read-only GraphQL query directly on a smart contract's service, without creating a lock or a persistent HTTP server
+Query an application with a read-only GraphQL query
 
 **Usage:** `linera query-application [OPTIONS] --application-id <APPLICATION_ID> <QUERY>`
 
