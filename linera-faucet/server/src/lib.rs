@@ -14,6 +14,8 @@ use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{Extension, Router};
 use futures::{lock::Mutex, FutureExt as _};
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     bcs,
     crypto::{CryptoHash, ValidatorPublicKey},
@@ -311,29 +313,18 @@ where
     async fn chain_id(&self, owner: AccountOwner) -> Result<ChainId, Error> {
         // Check if this owner already has a chain.
         #[cfg(with_metrics)]
-        let db_start_time = std::time::Instant::now();
-
-        let chain_id = self
-            .faucet_storage
-            .get_chain_id(&owner)
-            .await
-            .map_err(|e| Error::new(e.to_string()))?;
-
+        let histogram = metrics::DATABASE_OPERATION_LATENCY.with_label_values(&["get_chain_id"]);
         #[cfg(with_metrics)]
-        metrics::DATABASE_OPERATION_LATENCY
-            .with_label_values(&["get_chain_id"])
-            .observe(db_start_time.elapsed().as_secs_f64() * 1000.0);
+        let _latency = histogram.measure_latency();
+
+        let chain_id = self.faucet_storage.get_chain_id(&owner).await?;
 
         chain_id.ok_or(Error::new("This user has no chain yet"))
     }
 
     /// Returns the last claim for the given owner, if any.
     async fn last_claim(&self, owner: AccountOwner) -> Result<Option<LastClaim>, Error> {
-        let claim_record = self
-            .faucet_storage
-            .last_claim(&owner)
-            .await
-            .map_err(|e| Error::new(e.to_string()))?;
+        let claim_record = self.faucet_storage.last_claim(&owner).await?;
 
         Ok(claim_record.map(|r| LastClaim {
             chain_id: r.chain_id,
@@ -345,12 +336,7 @@ where
     /// If the returned timestamp is in the past (or now), the user can claim immediately.
     /// Returns `None` if the user has not yet completed the initial claim.
     async fn next_daily_claim(&self, owner: AccountOwner) -> Result<Option<Timestamp>, Error> {
-        let initial_claim = match self
-            .faucet_storage
-            .last_claim(&owner)
-            .await
-            .map_err(|e| Error::new(e.to_string()))?
-        {
+        let initial_claim = match self.faucet_storage.last_claim(&owner).await? {
             Some(record) => record,
             None => return Ok(None),
         };
@@ -361,8 +347,7 @@ where
         let last_period = self
             .faucet_storage
             .last_daily_claim_period(&owner)
-            .await
-            .map_err(|e| Error::new(e.to_string()))?
+            .await?
             .unwrap_or(0);
 
         // Next available at start of the next period.
@@ -431,18 +416,11 @@ where
     async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
         // Check if this owner already has a chain.
         #[cfg(with_metrics)]
-        let db_start_time = std::time::Instant::now();
-
-        let existing_chain_id = self
-            .faucet_storage
-            .get_chain_id(&owner)
-            .await
-            .map_err(|e| Error::new(e.to_string()))?;
-
+        let histogram = metrics::DATABASE_OPERATION_LATENCY.with_label_values(&["get_chain_id"]);
         #[cfg(with_metrics)]
-        metrics::DATABASE_OPERATION_LATENCY
-            .with_label_values(&["get_chain_id"])
-            .observe(db_start_time.elapsed().as_secs_f64() * 1000.0);
+        let _latency = histogram.measure_latency();
+
+        let existing_chain_id = self.faucet_storage.get_chain_id(&owner).await?;
 
         if let Some(existing_chain_id) = existing_chain_id {
             #[cfg(with_metrics)]
@@ -510,8 +488,7 @@ where
         let initial_claim = self
             .faucet_storage
             .last_claim(&owner)
-            .await
-            .map_err(|e| Error::new(e.to_string()))?
+            .await?
             .ok_or_else(|| Error::new("You must claim a chain before making daily claims"))?;
 
         let now = self.storage.clock().current_time();
@@ -519,8 +496,7 @@ where
         let last_period = self
             .faucet_storage
             .last_daily_claim_period(&owner)
-            .await
-            .map_err(|e| Error::new(e.to_string()))?
+            .await?
             .unwrap_or(0);
 
         if period <= last_period {
@@ -744,7 +720,7 @@ where
     }
 
     // Collects requests from the queue; validates and filters them.
-    async fn get_request_batch(&mut self) -> Vec<PendingRequest> {
+    async fn get_request_batch(&self) -> Vec<PendingRequest> {
         let mut batch_requests = Vec::new();
         let mut requests = self.pending_requests.lock().await;
         while batch_requests.len() < self.config.max_batch_size {
@@ -808,8 +784,7 @@ where
                 let last_period = self
                     .faucet_storage
                     .last_daily_claim_period(&request.owner)
-                    .await
-                    .map_err(|e| Error::new(e.to_string()))?
+                    .await?
                     .unwrap_or(0);
 
                 if period <= last_period {

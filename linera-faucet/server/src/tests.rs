@@ -79,26 +79,21 @@ impl chain_listener::ClientContext for ClientContext {
 }
 
 #[tokio::test]
-async fn test_faucet_rate_limiting() {
+async fn test_faucet_rate_limiting() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let keys = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     clock.set(Timestamp::from(0));
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await.unwrap();
-    let client = builder
-        .add_root_chain(1, Amount::from_tokens(6))
-        .await
-        .unwrap();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(6)).await?;
     let context = ClientContext {
         client: client.clone(),
         update_calls: 0,
     };
     let context = Arc::new(Mutex::new(context));
-    let temp_dir = tempdir().unwrap();
+    let temp_dir = tempdir()?;
     let faucet_storage = Arc::new(
-        FaucetDatabase::new(&temp_dir.path().join("test_faucet_rate_limiting.sqlite"))
-            .await
-            .unwrap(),
+        FaucetDatabase::new(&temp_dir.path().join("test_faucet_rate_limiting.sqlite")).await?,
     );
 
     // Set up the batching components
@@ -184,7 +179,8 @@ async fn test_faucet_rate_limiting() {
 
     // Clean up
     cancellation_token.cancel();
-    processor_task.await.unwrap();
+    processor_task.await?;
+    Ok(())
 }
 
 #[test]
@@ -199,11 +195,11 @@ fn test_multiply() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_batch_size_reduction_on_limit_errors() {
+async fn test_batch_size_reduction_on_limit_errors() -> anyhow::Result<()> {
     // Test that the batch processor reduces batch size when hitting BlockTooLarge limit
 
     // Set up test environment
-    let temp_dir = tempdir().unwrap();
+    let temp_dir = tempdir()?;
     let storage_path = temp_dir.path().join("test_batch_reduction.sqlite");
 
     let storage_builder = MemoryStorageBuilder::default();
@@ -216,21 +212,17 @@ async fn test_batch_size_reduction_on_limit_errors() {
     };
 
     let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
-        .await
-        .unwrap()
+        .await?
         .with_policy(restrictive_policy);
 
-    let client = builder
-        .add_root_chain(1, Amount::from_tokens(100))
-        .await
-        .unwrap();
+    let client = builder.add_root_chain(1, Amount::from_tokens(100)).await?;
 
     let context = Arc::new(Mutex::new(ClientContext {
         client: client.clone(),
         update_calls: 0,
     }));
 
-    let faucet_storage = Arc::new(FaucetDatabase::new(&storage_path).await.unwrap());
+    let faucet_storage = Arc::new(FaucetDatabase::new(&storage_path).await?);
     let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
     let request_notifier = Arc::new(Notify::new());
 
@@ -278,35 +270,29 @@ async fn test_batch_size_reduction_on_limit_errors() {
     }
 
     // Execute the batch - this triggers BlockTooLarge error
-    batch_processor
-        .process_batch()
-        .await
-        .expect("Batch processing should succeed");
+    batch_processor.process_batch().await?;
 
     // Now the batch size should be reduced.
     assert!(batch_processor.config.max_batch_size < initial_batch_size);
+    Ok(())
 }
 
 #[test_log::test(tokio::test)]
-async fn test_faucet_persistence() {
+async fn test_faucet_persistence() -> anyhow::Result<()> {
     // Test that the faucet correctly persists chain IDs and retrieves them after restart.
-    // This ensures the database is working correctly across sessions.
 
     let storage_builder = MemoryStorageBuilder::default();
     let keys = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     clock.set(Timestamp::from(0));
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await.unwrap();
-    let client = builder
-        .add_root_chain(1, Amount::from_tokens(6))
-        .await
-        .unwrap();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(6)).await?;
 
-    let temp_dir = tempdir().unwrap();
+    let temp_dir = tempdir()?;
     let storage_path = temp_dir.path().join("test_faucet_persistence.sqlite");
 
     // Create first faucet instance
-    let faucet_storage = Arc::new(FaucetDatabase::new(&storage_path).await.unwrap());
+    let faucet_storage = Arc::new(FaucetDatabase::new(&storage_path).await?);
 
     let context = ClientContext {
         client: client.clone(),
@@ -398,20 +384,19 @@ async fn test_faucet_persistence() {
 
     // Stop the batch processor
     cancellation_token.cancel();
-    processor_task.await.unwrap();
+    processor_task.await?;
 
     // Drop the first faucet instance to simulate shutdown
     drop(root);
     drop(faucet_storage);
 
     // Create a new faucet instance with the same database path (simulating restart)
-    let faucet_storage_2 = Arc::new(FaucetDatabase::new(&storage_path).await.unwrap());
+    let faucet_storage_2 = Arc::new(FaucetDatabase::new(&storage_path).await?);
 
     // Test the chain_id query API through the database for owners that have claimed chains
     let queried_chain_1 = faucet_storage_2
         .get_chain_id(&test_owner_1)
-        .await
-        .expect("Query should succeed for owner 1")
+        .await?
         .expect("Owner 1 should have a chain ID");
     assert_eq!(
         chain_1_id, queried_chain_1,
@@ -420,8 +405,7 @@ async fn test_faucet_persistence() {
 
     let queried_chain_2 = faucet_storage_2
         .get_chain_id(&test_owner_2)
-        .await
-        .expect("Query should succeed for owner 2")
+        .await?
         .expect("Owner 2 should have a chain ID");
     assert_eq!(
         chain_2_id, queried_chain_2,
@@ -430,10 +414,7 @@ async fn test_faucet_persistence() {
 
     // Test the chain_id query for an owner that hasn't claimed a chain yet
     let test_owner_new = AccountPublicKey::test_key(99).into();
-    let result_new = faucet_storage_2
-        .get_chain_id(&test_owner_new)
-        .await
-        .expect("Query should succeed even for non-existent owner");
+    let result_new = faucet_storage_2.get_chain_id(&test_owner_new).await?;
     assert!(
         result_new.is_none(),
         "Query should return None for owner that hasn't claimed a chain"
@@ -519,30 +500,26 @@ async fn test_faucet_persistence() {
 
     // Clean up
     cancellation_token_2.cancel();
-    processor_task_2.await.unwrap();
+    processor_task_2.await?;
+    Ok(())
 }
 
 #[test_log::test(tokio::test)]
-async fn test_blockchain_sync_after_database_deletion() {
+async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
     // Test that the faucet correctly syncs with blockchain after database deletion.
-    // This verifies that the blockchain synchronization can restore chain mappings from
-    // the blockchain history when the database is lost or corrupted.
 
     let storage_builder = MemoryStorageBuilder::default();
     let keys = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     clock.set(Timestamp::from(0));
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await.unwrap();
-    let client = builder
-        .add_root_chain(1, Amount::from_tokens(6))
-        .await
-        .unwrap();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(6)).await?;
 
-    let temp_dir = tempdir().unwrap();
+    let temp_dir = tempdir()?;
     let storage_path = temp_dir.path().join("test_blockchain_sync.sqlite");
 
     // === PHASE 1: Create chains with first faucet instance ===
-    let faucet_storage = Arc::new(FaucetDatabase::new(&storage_path).await.unwrap());
+    let faucet_storage = Arc::new(FaucetDatabase::new(&storage_path).await?);
     let context = ClientContext {
         client: client.clone(),
         update_calls: 0,
@@ -621,21 +598,18 @@ async fn test_blockchain_sync_after_database_deletion() {
 
     // Stop the batch processor and clean up first instance
     cancellation_token.cancel();
-    processor_task.await.unwrap();
+    processor_task.await?;
     drop(root);
     drop(faucet_storage);
 
     // === PHASE 2: Delete the database file (simulate data loss) ===
-    std::fs::remove_file(&storage_path).expect("Should be able to delete database file");
+    std::fs::remove_file(&storage_path)?;
 
     // === PHASE 3: Create new faucet instance (should sync from blockchain) ===
-    let faucet_storage_2 = Arc::new(FaucetDatabase::new(&storage_path).await.unwrap());
+    let faucet_storage_2 = Arc::new(FaucetDatabase::new(&storage_path).await?);
 
     // CRITICAL: Trigger blockchain sync before using the faucet
-    faucet_storage_2
-        .sync_with_blockchain(&client)
-        .await
-        .expect("Blockchain sync should succeed");
+    faucet_storage_2.sync_with_blockchain(&client).await?;
 
     // Set up the new MutationRoot instance
     let pending_requests_2 = Arc::new(Mutex::new(VecDeque::new()));
@@ -732,22 +706,20 @@ async fn test_blockchain_sync_after_database_deletion() {
 
     // Clean up
     cancellation_token_2.cancel();
-    processor_task_2.await.unwrap();
+    processor_task_2.await?;
+    Ok(())
 }
 
 #[test_log::test(tokio::test)]
-async fn test_daily_claim_flow() {
+async fn test_daily_claim_flow() -> anyhow::Result<()> {
     // Test the full daily claim flow: create a chain, then make a daily claim.
 
     let storage_builder = MemoryStorageBuilder::default();
     let keys = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     clock.set(Timestamp::from(0));
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await.unwrap();
-    let client = builder
-        .add_root_chain(1, Amount::from_tokens(100))
-        .await
-        .unwrap();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(100)).await?;
 
     let context = ClientContext {
         client: client.clone(),
@@ -755,12 +727,9 @@ async fn test_daily_claim_flow() {
     };
     let context = Arc::new(Mutex::new(context));
 
-    let temp_dir = tempdir().unwrap();
-    let faucet_storage = Arc::new(
-        FaucetDatabase::new(&temp_dir.path().join("test_daily_claim_flow.sqlite"))
-            .await
-            .unwrap(),
-    );
+    let temp_dir = tempdir()?;
+    let faucet_storage =
+        Arc::new(FaucetDatabase::new(&temp_dir.path().join("test_daily_claim_flow.sqlite")).await?);
 
     let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
     let request_notifier = Arc::new(Notify::new());
@@ -854,5 +823,6 @@ async fn test_daily_claim_flow() {
 
     // Clean up
     cancellation_token.cancel();
-    processor_task.await.unwrap();
+    processor_task.await?;
+    Ok(())
 }
