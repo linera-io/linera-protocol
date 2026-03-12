@@ -30,8 +30,9 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{environment::wallet::Memory, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
+use linera_base::identifiers::Account;
 use wrapped_fungible::{
-    Account, InitialState, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
+    InitialState, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
 };
 use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
@@ -86,6 +87,8 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         &Default::default(),
         None,
         genesis_config,
+        10_000,
+        10_000,
     )
     .await?;
 
@@ -112,9 +115,9 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .to_path_buf();
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
     let contract_bytecode =
-        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm"))?;
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm")).await?;
     let service_bytecode =
-        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm"))?;
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm")).await?;
 
     let (module_id, cert) = cc_a
         .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)

@@ -114,6 +114,8 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         &Default::default(),
         None,
         genesis_config,
+        10_000,
+        10_000,
     )
     .await?;
 
@@ -190,8 +192,8 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
 
     // 4a. Publish and create wrapped-fungible app
     tracing::info!("Publishing wrapped-fungible module...");
-    let wf_contract = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm"))?;
-    let wf_service = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm"))?;
+    let wf_contract = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm")).await?;
+    let wf_service = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm")).await?;
 
     let (wf_module_id, _) = cc
         .publish_module(wf_contract, wf_service, VmRuntime::Wasm)
@@ -225,8 +227,8 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
 
     // 4b. Publish and create evm-bridge app
     tracing::info!("Publishing evm-bridge module...");
-    let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm"))?;
-    let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm"))?;
+    let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm")).await?;
+    let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm")).await?;
 
     let (eb_module_id, _) = cc
         .publish_module(eb_contract, eb_service, VmRuntime::Wasm)

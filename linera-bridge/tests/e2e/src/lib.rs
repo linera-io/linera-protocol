@@ -17,8 +17,9 @@ use testcontainers::{
 pub const WALLET_DIR: &str = "/tmp/wallet";
 
 /// Extra wallet index (created by copying wallet_0).
-/// Uses separate client storage to avoid RocksDB lock conflicts with the faucet.
-pub const EXTRA_WALLET_ID: u32 = 1;
+/// `linera net up` creates wallet_0 (admin) and wallet_1 (faucet), both with
+/// locked RocksDB stores. We use index 2 to avoid lock conflicts.
+pub const EXTRA_WALLET_ID: u32 = 2;
 
 /// Anvil account 0 private key.
 pub const ANVIL_PRIVATE_KEY: &str =
@@ -129,8 +130,10 @@ pub fn extra_wallet_env() -> String {
     )
 }
 
-/// Creates a copy of wallet_0 with separate client storage so we can run
+/// Creates a copy of wallet_0 with fresh client storage so we can run
 /// CLI commands without conflicting with the faucet's RocksDB lock.
+/// Only the wallet and keystore JSON files are copied; the RocksDB
+/// storage is left empty so the CLI creates it fresh on first use.
 pub async fn create_extra_wallet(
     compose: &DockerCompose,
     project_name: &str,
