@@ -158,35 +158,28 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
 
 /// Spawns a background task that keeps the chain state alive for at least `ttl`
 /// after the last access. When the state has been idle for the full TTL, the task
-/// drops its strong reference and tries to upgrade a `Weak`. If the upgrade
-/// succeeds (someone else still holds a strong reference), it re-acquires the
-/// strong reference and continues. It only exits when no strong references remain.
+/// drops the state if it holds the only strong reference.
 fn spawn_keep_alive<S: Storage + Clone + 'static>(
-    state: Arc<RwLock<ChainWorkerState<S>>>,
+    mut state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicU64>,
     ttl: Duration,
 ) {
-    let weak = Arc::downgrade(&state);
     linera_base::Task::spawn(async move {
-        let mut _strong = Some(state);
         let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
+        linera_base::time::timer::sleep(ttl).await;
         loop {
-            linera_base::time::timer::sleep(ttl).await;
             let last = last_access.load(Ordering::Relaxed);
             let now = current_time_micros();
-            let idle_micros = now.saturating_sub(last);
-            if idle_micros < ttl_micros {
+            let remaining = last.saturating_add(ttl_micros).saturating_sub(now);
+            if remaining > 0 {
                 // Touched recently — sleep for the remaining time.
-                let remaining = Duration::from_micros(ttl_micros - idle_micros);
-                linera_base::time::timer::sleep(remaining).await;
-                continue;
-            }
-            // Idle long enough. Drop our strong reference, then check if
-            // anyone else still holds one.
-            _strong = None;
-            match weak.upgrade() {
-                Some(arc) => _strong = Some(arc),
-                None => break,
+                linera_base::time::timer::sleep(Duration::from_micros(remaining)).await;
+            } else {
+                // Idle long enough. Drop our strong reference if it's the only one.
+                match Arc::try_unwrap(state) {
+                    Ok(_owned_state) => break,
+                    Err(arc) => state = arc,
+                }
             }
         }
     })

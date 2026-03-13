@@ -505,24 +505,14 @@ fn start_sweep<S: Storage + Clone + 'static>(
             let Some(map) = weak_map.upgrade() else {
                 break;
             };
-            let guard = map.guard();
-            let dead_keys: Vec<ChainId> = map
-                .pin_owned()
-                .iter()
-                .filter(|(_, rx)| {
-                    let value = rx.borrow();
-                    match &*value {
-                        Some(weak) => weak.strong_count() == 0,
-                        // Sender dropped means loading failed; clean up.
-                        None => rx.has_changed().is_err(),
-                    }
-                })
-                .map(|(chain_id, _)| *chain_id)
-                .collect();
-            for chain_id in dead_keys {
-                map.remove(&chain_id, &guard);
-            }
-            drop(guard);
+            map.pin_owned().retain(|_, rx| {
+                let value = rx.borrow();
+                match &*value {
+                    Some(weak) => weak.strong_count() > 0,
+                    // Sender dropped means loading failed; clean up.
+                    None => rx.has_changed().is_ok(),
+                }
+            });
             drop(map);
         }
     })
