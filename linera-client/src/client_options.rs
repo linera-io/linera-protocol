@@ -68,7 +68,7 @@ pub struct Options {
 
     /// Time budget for staging message bundles in milliseconds. When set, limits bundle
     /// execution by wall-clock time, in addition to the count limit from
-    /// `max_pending_message_bundles`.
+    /// [`max_pending_message_bundles`][Options::max_pending_message_bundles].
     #[arg(long = "staging-bundles-time-budget-ms", value_parser = util::parse_millis)]
     pub staging_bundles_time_budget: Option<Duration>,
 
@@ -288,7 +288,6 @@ impl Options {
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
         ChainClientOptions {
-            max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
             max_new_events_per_block: self.max_new_events_per_block,
             staging_bundles_time_budget: self.staging_bundles_time_budget,

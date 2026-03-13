@@ -33,6 +33,8 @@ pub struct ChainWorkerConfig {
     pub chain_info_max_received_log_entries: usize,
     /// Chain IDs whose incoming bundles should be processed first.
     pub priority_bundle_origins: HashSet<ChainId>,
+    /// Maximum number of pending message bundles processed at a time in a block.
+    pub max_pending_message_bundles: usize,
 }
 
 impl ChainWorkerConfig {
@@ -60,6 +62,7 @@ impl Default for ChainWorkerConfig {
             sender_chain_ttl: Default::default(),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
             priority_bundle_origins: HashSet::new(),
+            max_pending_message_bundles: usize::MAX,
         }
     }
 }

@@ -278,6 +278,7 @@ impl<Env: Environment> Client<Env> {
         chain_worker_ttl: Duration,
         sender_chain_worker_ttl: Duration,
         priority_bundle_origins: HashSet<ChainId>,
+        max_pending_message_bundles: usize,
         options: ChainClientOptions,
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
@@ -292,7 +293,8 @@ impl<Env: Environment> Client<Env> {
         .with_allow_messages_from_deprecated_epochs(true)
         .with_chain_worker_ttl(chain_worker_ttl)
         .with_sender_chain_worker_ttl(sender_chain_worker_ttl)
-        .with_priority_bundle_origins(priority_bundle_origins);
+        .with_priority_bundle_origins(priority_bundle_origins)
+        .with_max_pending_message_bundles(max_pending_message_bundles);
         let local_node = LocalNodeClient::new(state);
         let requests_scheduler = RequestsScheduler::new(vec![], requests_scheduler_config);
 
@@ -1898,8 +1900,6 @@ pub enum TimingType {
 
 #[derive(Debug, Clone)]
 pub struct ChainClientOptions {
-    /// Maximum number of pending message bundles processed at a time in a block.
-    pub max_pending_message_bundles: usize,
     /// Maximum number of message bundles to discard from a block proposal due to block limit
     /// errors before discarding all remaining bundles.
     ///
@@ -1908,7 +1908,8 @@ pub struct ChainClientOptions {
     /// Maximum number of new stream events processed at a time in a block.
     pub max_new_events_per_block: usize,
     /// Time budget for staging message bundles. When set, limits bundle execution by
-    /// wall-clock time, in addition to the count limit from `max_pending_message_bundles`.
+    /// wall-clock time, in addition to the count limit from
+    /// [`ChainWorkerConfig::max_pending_message_bundles`][crate::chain_worker::ChainWorkerConfig::max_pending_message_bundles].
     pub staging_bundles_time_budget: Option<Duration>,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
@@ -1943,7 +1944,6 @@ impl ChainClientOptions {
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
         ChainClientOptions {
-            max_pending_message_bundles: 10,
             max_block_limit_errors: 3,
             max_new_events_per_block: 10,
             staging_bundles_time_budget: None,
@@ -2340,8 +2340,8 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info)
     }
 
-    /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
-    /// local chain.
+    /// Obtains the pending message bundles for the local chain, up to the limit configured in
+    /// [`ChainWorkerConfig`][crate::chain_worker::ChainWorkerConfig].
     #[instrument(level = "trace")]
     async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
         if self.options.message_policy.is_ignore() {
@@ -2372,7 +2372,6 @@ impl<Env: Environment> ChainClient<Env> {
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
-            .take(self.options.max_pending_message_bundles)
             .collect())
     }
 
@@ -3326,8 +3325,8 @@ impl<Env: Environment> ChainClient<Env> {
     /// incoming messages in a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
-    /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
-    /// block.
+    /// `max_pending_message_bundles` incoming message bundles and the execution fees for
+    /// a single block.
     #[instrument(level = "trace")]
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
         let (balance, _) = Box::pin(self.query_balances_with_owner(AccountOwner::CHAIN)).await?;
@@ -3338,8 +3337,8 @@ impl<Env: Environment> ChainClient<Env> {
     /// a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
-    /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
-    /// block.
+    /// `max_pending_message_bundles` incoming message bundles and the execution fees for
+    /// a single block.
     #[instrument(level = "trace", skip(owner))]
     pub async fn query_owner_balance(
         &self,
@@ -3359,8 +3358,8 @@ impl<Env: Environment> ChainClient<Env> {
     /// execution of incoming messages in a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
-    /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
-    /// block.
+    /// `max_pending_message_bundles` incoming message bundles and the execution fees for
+    /// a single block.
     #[instrument(level = "trace", skip(owner))]
     async fn query_balances_with_owner(
         &self,

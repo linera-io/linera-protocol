@@ -1760,6 +1760,7 @@ where
                     .cmp(&a_priority)
                     .then(a.bundle.timestamp.cmp(&b.bundle.timestamp))
             });
+            bundles.truncate(self.config.max_pending_message_bundles);
             info.requested_pending_message_bundles = bundles;
         }
         let hashes = chain

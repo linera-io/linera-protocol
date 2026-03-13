@@ -65,6 +65,7 @@ pub async fn new_test_client_context(
             chain_worker_ttl,
             sender_chain_worker_ttl,
             HashSet::new(),
+            usize::MAX,
             ChainClientOptions {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
                 ..ChainClientOptions::test_default()

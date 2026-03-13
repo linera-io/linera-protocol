@@ -628,6 +628,13 @@ where
         self
     }
 
+    /// Returns an instance with the specified maximum number of pending message bundles.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_max_pending_message_bundles(mut self, max_pending_message_bundles: usize) -> Self {
+        self.chain_worker_config.max_pending_message_bundles = max_pending_message_bundles;
+        self
+    }
+
     /// Returns an instance with the specified maximum size for received_log entries.
     ///
     /// Sizes below `CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES` should be avoided.
