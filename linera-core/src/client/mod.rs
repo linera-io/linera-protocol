@@ -1153,7 +1153,6 @@ impl<Env: Environment> Client<Env> {
         let mut nodes = nodes.to_vec();
         while !remote_heights.is_empty() {
             let remote_heights_ref = &remote_heights;
-            nodes.shuffle(&mut rand::thread_rng());
             let certificates = match communicate_concurrently(
                 &nodes,
                 async move |remote_node| {
@@ -1506,12 +1505,11 @@ impl<Env: Environment> Client<Env> {
             return Ok(());
         }
         let initial_blocks = previous_blocks.into_values().collect();
-        let local_height = self
-            .local_node
-            .chain_info(chain_id)
-            .await
-            .map(|info| info.next_block_height)
-            .unwrap_or(BlockHeight::ZERO);
+        let local_height = match self.local_node.chain_info(chain_id).await {
+            Ok(info) => info.next_block_height,
+            Err(LocalNodeError::InactiveChain(_)) => BlockHeight::ZERO,
+            Err(error) => return Err(error.into()),
+        };
         self.download_event_bearing_blocks(
             chain_id,
             initial_blocks,
@@ -2648,13 +2646,13 @@ impl<Env: Environment> ChainClient<Env> {
         // For event publisher chains, do a partial sync using previous_event_blocks.
         let (_, committee) = self.admin_committee().await?;
         let nodes = self.client.make_nodes(&committee)?;
-        let tasks: Vec<_> = streams_by_chain
+        let tasks = streams_by_chain
             .into_iter()
             .filter(|(chain_id, _)| *chain_id != admin_chain_id)
             .map(|(chain_id, stream_ids)| {
                 self.sync_publisher_chain_events(chain_id, stream_ids, &nodes)
             })
-            .collect();
+            .collect::<Vec<_>>();
         stream::iter(tasks)
             .buffer_unordered(self.options.max_joined_tasks)
             .collect::<Vec<_>>()
@@ -2671,10 +2669,8 @@ impl<Env: Environment> ChainClient<Env> {
         stream_ids: BTreeSet<StreamId>,
         nodes: &[RemoteNode<Env::ValidatorNode>],
     ) -> Result<(), ChainClientError> {
-        let mut nodes = nodes.to_vec();
-        nodes.shuffle(&mut rand::thread_rng());
         let result = communicate_concurrently(
-            &nodes,
+            nodes,
             async move |remote_node| {
                 self.client
                     .sync_events_from_node(publisher_chain_id, &stream_ids, &remote_node)
@@ -2857,8 +2853,7 @@ impl<Env: Environment> ChainClient<Env> {
                 let remote_heights = remote_heights.into_iter().collect::<Vec<_>>();
                 let sender = sender.clone();
                 let client = self.client.clone();
-                let mut nodes = nodes.to_vec();
-                nodes.shuffle(&mut rand::thread_rng());
+                let nodes = nodes.to_vec();
                 Some(async move {
                     client
                         .download_and_process_sender_chain(
@@ -4933,6 +4928,8 @@ where
     G: FnOnce(Vec<(ValidatorPublicKey, E1)>) -> E2,
     R: Future<Output = Result<V, E1>> + 'a,
 {
+    let mut nodes = nodes.to_vec();
+    nodes.shuffle(&mut rand::thread_rng());
     let mut stream = nodes
         .iter()
         .zip(0..)
