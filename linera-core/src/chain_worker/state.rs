@@ -62,14 +62,26 @@ pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscr
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram};
-    use prometheus::Histogram;
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
+        register_histogram_vec,
+    };
+    use prometheus::{Histogram, HistogramVec};
 
     pub static CREATE_NETWORK_ACTIONS_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
         register_histogram(
             "create_network_actions_latency",
             "Time (ms) to create network actions",
             exponential_bucket_latencies(10_000.0),
+        )
+    });
+
+    pub static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_inboxes",
+            "Number of inboxes",
+            &[],
+            exponential_bucket_interval(1.0, 10_000.0),
         )
     });
 }
@@ -920,7 +932,13 @@ where
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
             self.chain
-                .receive_message_bundle(&mut inbox, &origin, bundle, local_time, add_to_received_log)
+                .receive_message_bundle(
+                    &mut inbox,
+                    &origin,
+                    bundle,
+                    local_time,
+                    add_to_received_log,
+                )
                 .await?;
         }
         if !self.config.allow_inactive_chains && !self.chain.is_active() {
@@ -1598,6 +1616,10 @@ where
         if query.request_pending_message_bundles {
             let mut bundles = Vec::new();
             let pairs = chain.inboxes.try_load_all_entries().await?;
+            #[cfg(with_metrics)]
+            metrics::NUM_INBOXES
+                .with_label_values(&[])
+                .observe(pairs.len() as f64);
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {

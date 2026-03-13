@@ -151,15 +151,6 @@ pub(crate) mod metrics {
         )
     });
 
-    pub static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_inboxes",
-            "Number of inboxes",
-            &[],
-            exponential_bucket_interval(1.0, 10_000.0),
-        )
-    });
-
     pub static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "num_outboxes",
@@ -478,10 +469,6 @@ where
         &mut self,
         origin: &ChainId,
     ) -> Result<WriteGuardedView<InboxStateView<C>>, ChainError> {
-        #[cfg(with_metrics)]
-        metrics::NUM_INBOXES
-            .with_label_values(&[])
-            .observe(self.inboxes.count().await? as f64);
         Ok(self.inboxes.try_load_entry_mut(origin).await?)
     }
 
