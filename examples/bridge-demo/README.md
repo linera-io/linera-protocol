@@ -136,12 +136,18 @@ The relay claims a Linera chain and bridges events between EVM and Linera. It
 needs to start first because `setup.sh` reads the bridge chain ID and relay
 owner from files the relay writes.
 
-Pick a shared directory for coordination files:
+Pick a shared directory for coordination files. The setup script generates a
+timestamped directory by default (e.g. `/tmp/bridge-demo-20260313-112421`), so
+you must use the same `SHARED_DIR` in both terminals:
 
 ```bash
-export SHARED_DIR=/tmp/bridge-demo
+export SHARED_DIR="/tmp/bridge-demo-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$SHARED_DIR"
 ```
+
+> **Important:** Export the same `SHARED_DIR` value in both the relay terminal
+> and the setup terminal. The relay polls this directory for app IDs written by
+> `setup.sh`, and `setup.sh` reads the bridge chain ID written by the relay.
 
 Start the relay (it will poll the shared dir for contract/app addresses that
 `setup.sh` writes later):
@@ -149,7 +155,7 @@ Start the relay (it will poll the shared dir for contract/app addresses that
 ```bash
 linera-bridge serve \
   --rpc-url https://base-sepolia-rpc.publicnode.com \
-  --faucet-url https://testnet-faucet.linera.io:8080 \
+  --faucet-url https://faucet.testnet-conway.linera.net \
   --evm-private-key 0x... \
   --bridge-address-file "$SHARED_DIR/bridge-address" \
   --bridge-app-id-file "$SHARED_DIR/bridge-app-id" \
@@ -168,11 +174,11 @@ cd examples/bridge-demo
 
 ./setup.sh \
   --evm-rpc-url https://base-sepolia-rpc.publicnode.com \
-  --evm-private-key 0x... \
+  --evm-private-key 0xfce057d5e1a3f8265745c95b0a3847e03831f861bec0f7b47a8cd4800ac92aa1 \
   --evm-chain-id 84532 \
   --bridge-chain-id <64-hex-chain-id-from-relay> \
   --relay-owner <AccountOwner-from-relay> \
-  --faucet-url https://testnet-faucet.linera.io:8080 \
+  --faucet-url https://faucet.testnet-conway.linera.net \
   --relay-url http://localhost:3001 \
   --shared-dir "$SHARED_DIR"
 ```
