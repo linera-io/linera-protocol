@@ -763,30 +763,32 @@ where
     > {
         Box::pin(wrap_future(async move {
             loop {
-                // Create a fresh oneshot channel. If we win the loading slot,
-                // the shared receiver gets inserted and we keep tx.
-                let (tx, rx) = oneshot::channel();
-                let shared = rx.shared();
-
-                // Single atomic compute handles all cases. The papaya guard
-                // is !Send, so it must be dropped before any .await point.
+                // Single atomic compute handles all cases. The oneshot
+                // channel is only created when we need to insert a loading
+                // sentinel. The papaya guard is !Send, so it must be
+                // dropped before any .await point.
+                let mut tx_slot = None;
                 let wait = {
                     let guard = self.chain_workers.guard();
                     match self.chain_workers.compute(
                         chain_id,
-                        |existing| match existing {
-                            Some((_, entry)) => match entry.peek() {
-                                Some(Ok(weak)) => match weak.upgrade() {
-                                    Some(arc) => papaya::Operation::Abort(Ok(arc)),
-                                    // Dead worker; replace with our loading sentinel.
-                                    None => papaya::Operation::Insert(shared.clone()),
+                        |existing| {
+                            let mut insert = || {
+                                let (tx, rx) = oneshot::channel();
+                                tx_slot = Some(tx);
+                                papaya::Operation::Insert(rx.shared())
+                            };
+                            match existing {
+                                Some((_, entry)) => match entry.peek() {
+                                    Some(Ok(weak)) => match weak.upgrade() {
+                                        Some(arc) => papaya::Operation::Abort(Ok(arc)),
+                                        None => insert(),
+                                    },
+                                    Some(Err(_)) => insert(),
+                                    None => papaya::Operation::Abort(Err(entry.clone())),
                                 },
-                                // Loading failed; replace.
-                                Some(Err(_)) => papaya::Operation::Insert(shared.clone()),
-                                // Loading in progress; wait on it.
-                                None => papaya::Operation::Abort(Err(entry.clone())),
-                            },
-                            None => papaya::Operation::Insert(shared.clone()),
+                                None => insert(),
+                            }
                         },
                         &guard,
                     ) {
@@ -812,6 +814,7 @@ where
                 // We own the loading slot. Load from storage.
                 // On success, send the Weak through the channel.
                 // On error, dropping tx wakes waiters so they can retry.
+                let tx = tx_slot.expect("tx must be set when we claimed the loading slot");
                 match self.load_chain_worker(chain_id).await {
                     Ok(worker) => {
                         let _ = tx.send(Arc::downgrade(&worker));
