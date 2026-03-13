@@ -1039,7 +1039,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Certificates for these chains were omitted from `certificates` because they were
         // already processed locally. If they were processed in a concurrent task, it is not
         // guaranteed that their cross-chain messages were already handled.
-        self.retry_pending_cross_chain_requests(nodes, other_sender_chains)
+        self.retry_pending_cross_chain_requests_from_sender_chains(nodes, other_sender_chains)
             .await;
 
         debug!("receive_sender_certificates: finished processing other_sender_chains");
@@ -1048,17 +1048,18 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Retries cross chain requests on the chains which may have been processed on
-    /// another task without the messages being correctly handled.
-    async fn retry_pending_cross_chain_requests(
+    /// another task without the messages being correctly handled. Fetches missing blobs from
+    /// the given nodes if necessary.
+    async fn retry_pending_cross_chain_requests_from_sender_chains(
         &self,
         nodes: &[RemoteNode<Env::ValidatorNode>],
         other_sender_chains: Vec<ChainId>,
     ) {
-        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(|chain_id| {
-            let local_node = self.client.local_node.clone();
-            async move {
-                if let Err(error) = match local_node
-                    .retry_pending_cross_chain_requests(chain_id, &self.client.notifier)
+        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(
+            |chain_id| async move {
+                if let Err(error) = match self
+                    .client
+                    .retry_pending_cross_chain_requests(chain_id)
                     .await
                 {
                     Ok(()) => Ok(()),
@@ -1075,8 +1076,8 @@ impl<Env: Environment> ChainClient<Env> {
                                 messages"
                             );
                         }
-                        local_node
-                            .retry_pending_cross_chain_requests(chain_id, &self.client.notifier)
+                        self.client
+                            .retry_pending_cross_chain_requests(chain_id)
                             .await
                     }
                     err => err,
@@ -1087,8 +1088,8 @@ impl<Env: Environment> ChainClient<Env> {
                         "Failed to retry outgoing messages from chain"
                     );
                 }
-            }
-        }));
+            },
+        ));
         stream.for_each(future::ready).await;
     }
 
@@ -2122,8 +2123,7 @@ impl<Env: Environment> ChainClient<Env> {
             self.client
                 .extend_chain_mode(description.id(), ListeningMode::FullChain);
             self.client
-                .local_node
-                .retry_pending_cross_chain_requests(self.chain_id, &self.client.notifier)
+                .retry_pending_cross_chain_requests(self.chain_id)
                 .await?;
         }
         Ok(ClientOutcome::Committed((description, certificate)))
@@ -2491,8 +2491,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn retry_pending_outgoing_messages(&self) -> Result<(), Error> {
         self.client
-            .local_node
-            .retry_pending_cross_chain_requests(self.chain_id, &self.client.notifier)
+            .retry_pending_cross_chain_requests(self.chain_id)
             .await?;
         Ok(())
     }

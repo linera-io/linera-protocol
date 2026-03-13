@@ -1244,8 +1244,7 @@ impl<Env: Environment> Client<Env> {
         }
 
         if certificates.is_empty() {
-            self.local_node
-                .retry_pending_cross_chain_requests(sender_chain_id, &self.notifier)
+            self.retry_pending_cross_chain_requests(sender_chain_id)
                 .await?;
         }
 
