@@ -36,7 +36,7 @@ use linera_storage::{Clock as _, Storage};
 use linera_views::{context::InactiveContext, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{oneshot, OwnedRwLockReadGuard};
+use tokio::sync::{oneshot, watch, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
 /// A read guard providing access to a chain's [`ChainStateView`].
@@ -474,8 +474,15 @@ impl WorkerError {
 }
 
 type ChainWorkerArc<S> = Arc<tokio::sync::RwLock<ChainWorkerState<S>>>;
-type ChainWorkerMap<S> =
-    Arc<papaya::HashMap<ChainId, std::sync::Weak<tokio::sync::RwLock<ChainWorkerState<S>>>>>;
+type ChainWorkerWeak<S> = std::sync::Weak<tokio::sync::RwLock<ChainWorkerState<S>>>;
+
+/// Each map entry is a `watch::Receiver<Option<Weak<...>>>`:
+/// - `None` means a task is currently loading the worker from storage.
+///   Other callers wait on the receiver for the loader to finish.
+/// - `Some(weak)` means the worker was loaded. Callers upgrade the `Weak`
+///   to obtain the `Arc`. The loader sends the `Weak` through the watch
+///   channel, so waiters receive it directly without re-accessing the map.
+type ChainWorkerMap<S> = Arc<papaya::HashMap<ChainId, watch::Receiver<Option<ChainWorkerWeak<S>>>>>;
 
 /// Starts a background task that periodically removes dead weak references
 /// from the chain handle map. The actual lifetime management is handled by
@@ -502,7 +509,14 @@ fn start_sweep<S: Storage + Clone + 'static>(
             let dead_keys: Vec<ChainId> = map
                 .pin_owned()
                 .iter()
-                .filter(|(_, weak)| weak.strong_count() == 0)
+                .filter(|(_, rx)| {
+                    let value = rx.borrow();
+                    match &*value {
+                        Some(weak) => weak.strong_count() == 0,
+                        // Sender dropped means loading failed; clean up.
+                        None => rx.has_changed().is_err(),
+                    }
+                })
                 .map(|(chain_id, _)| *chain_id)
                 .collect();
             for chain_id in dead_keys {
@@ -738,6 +752,12 @@ where
 
     /// Gets or creates a chain worker for the given chain.
     ///
+    /// A single `compute` call per iteration handles all cases atomically:
+    /// live worker, loading in progress, or empty/stale slot. The map stores
+    /// `watch::Receiver<Option<Weak<...>>>`; the loader sends the `Weak`
+    /// through the watch channel so waiters receive it directly without
+    /// re-accessing the map.
+    ///
     /// Returns a type-erased future to keep `!Sync` intermediate types (e.g.
     /// `std::sync::mpsc::Receiver` from `ServiceRuntimeActor::spawn`) out of
     /// the caller's future type.
@@ -750,76 +770,121 @@ where
         >,
     > {
         Box::pin(wrap_future(async move {
-            // Fast path: check if a live worker already exists.
-            {
-                let guard = self.chain_workers.pin();
-                if let Some(weak) = guard.get(&chain_id) {
-                    if let Some(strong) = weak.upgrade() {
-                        return Ok(strong);
+            loop {
+                // Create a fresh watch channel. If we win the loading slot,
+                // rx gets inserted and we keep tx. Otherwise both are dropped.
+                let (tx, rx) = watch::channel(None);
+
+                // Single atomic compute handles all cases. The papaya guard
+                // is !Send, so it must be dropped before any .await point.
+                let wait_rx = {
+                    let guard = self.chain_workers.guard();
+                    match self.chain_workers.compute(
+                        chain_id,
+                        |existing| match existing {
+                            Some((_, entry_rx)) => {
+                                let current = entry_rx.borrow().clone();
+                                match current {
+                                    Some(weak) => match weak.upgrade() {
+                                        Some(arc) => papaya::Operation::Abort(Ok(arc)),
+                                        // Dead worker; replace with our loading sentinel.
+                                        None => papaya::Operation::Insert(rx.clone()),
+                                    },
+                                    // Loading failed (sender dropped); replace.
+                                    None if entry_rx.has_changed().is_err() => {
+                                        papaya::Operation::Insert(rx.clone())
+                                    }
+                                    // Loading in progress; wait on it.
+                                    None => papaya::Operation::Abort(Err(entry_rx.clone())),
+                                }
+                            }
+                            None => papaya::Operation::Insert(rx.clone()),
+                        },
+                        &guard,
+                    ) {
+                        papaya::Compute::Aborted(Ok(arc), ..) => return Ok(arc),
+                        papaya::Compute::Aborted(Err(wait_rx), ..) => Some(wait_rx),
+                        papaya::Compute::Inserted { .. }
+                        | papaya::Compute::Updated { .. } => None,
+                        papaya::Compute::Removed { .. } => unreachable!(),
                     }
-                }
-            }
-
-            // Slow path: load the chain state (no lock held).
-            let delivery_notifier = self
-                .delivery_notifiers
-                .lock()
-                .unwrap()
-                .entry(chain_id)
-                .or_default()
-                .clone();
-
-            let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
-                chain_modes
-                    .read()
-                    .unwrap()
-                    .get(&chain_id)
-                    .is_some_and(ListeningMode::is_full)
-            });
-
-            let (service_runtime_task, service_runtime_endpoint) =
-                if self.chain_worker_config.long_lived_services {
-                    let actor =
-                        ServiceRuntimeActor::spawn(chain_id, self.storage.thread_pool()).await;
-                    (Some(actor.task), Some(actor.endpoint))
-                } else {
-                    (None, None)
+                    // Guard dropped here.
                 };
 
-            let state = crate::chain_worker::state::ChainWorkerState::load(
-                self.chain_worker_config.clone(),
-                self.storage.clone(),
-                self.block_cache.clone(),
-                self.execution_state_cache.clone(),
-                self.chain_modes.clone(),
-                delivery_notifier,
-                chain_id,
-                service_runtime_endpoint,
-                service_runtime_task,
-            )
-            .await?;
+                if let Some(mut wait_rx) = wait_rx {
+                    // Another task is loading. Wait for it to send the Weak,
+                    // or for the sender to drop (loading failed).
+                    let weak = match wait_rx.wait_for(|v| v.is_some()).await {
+                        Ok(r) => r.clone(),
+                        Err(_) => None,
+                    };
+                    if let Some(arc) = weak.and_then(|w| w.upgrade()) {
+                        return Ok(arc);
+                    }
+                    continue;
+                }
 
-            let worker = handle::create_chain_worker(state, is_tracked, &self.chain_worker_config);
-
-            // Atomically insert our entry, but only if no live worker exists yet.
-            let weak = Arc::downgrade(&worker);
-            let guard = self.chain_workers.guard();
-            match self.chain_workers.compute(
-                chain_id,
-                |existing| match existing {
-                    Some((_, e)) => match e.upgrade() {
-                        Some(live) => papaya::Operation::Abort(live),
-                        None => papaya::Operation::Insert(weak.clone()),
-                    },
-                    None => papaya::Operation::Insert(weak.clone()),
-                },
-                &guard,
-            ) {
-                papaya::Compute::Aborted(existing, ..) => Ok(existing),
-                papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => Ok(worker),
-                papaya::Compute::Removed { .. } => unreachable!(),
+                // We own the loading slot. Load from storage.
+                // On success, send the Weak through the channel.
+                // On error, dropping tx wakes waiters so they can retry.
+                match self.load_chain_worker(chain_id).await {
+                    Ok(worker) => {
+                        let _ = tx.send(Some(Arc::downgrade(&worker)));
+                        return Ok(worker);
+                    }
+                    Err(error) => return Err(error),
+                }
             }
         }))
+    }
+
+    /// Loads a chain worker state from storage and wraps it in an Arc.
+    async fn load_chain_worker(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainWorkerArc<StorageClient>, WorkerError> {
+        let delivery_notifier = self
+            .delivery_notifiers
+            .lock()
+            .unwrap()
+            .entry(chain_id)
+            .or_default()
+            .clone();
+
+        let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
+            chain_modes
+                .read()
+                .unwrap()
+                .get(&chain_id)
+                .is_some_and(ListeningMode::is_full)
+        });
+
+        let (service_runtime_task, service_runtime_endpoint) =
+            if self.chain_worker_config.long_lived_services {
+                let actor = ServiceRuntimeActor::spawn(chain_id, self.storage.thread_pool()).await;
+                (Some(actor.task), Some(actor.endpoint))
+            } else {
+                (None, None)
+            };
+
+        let state = crate::chain_worker::state::ChainWorkerState::load(
+            self.chain_worker_config.clone(),
+            self.storage.clone(),
+            self.block_cache.clone(),
+            self.execution_state_cache.clone(),
+            self.chain_modes.clone(),
+            delivery_notifier,
+            chain_id,
+            service_runtime_endpoint,
+            service_runtime_task,
+        )
+        .await?;
+
+        Ok(handle::create_chain_worker(
+            state,
+            is_tracked,
+            &self.chain_worker_config,
+        ))
     }
 
     /// Tries to execute a block proposal without any verification other than block execution.
