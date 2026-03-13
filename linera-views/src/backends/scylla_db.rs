@@ -47,8 +47,8 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, LeaseConflict,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -115,6 +115,9 @@ struct ScyllaDbClient {
     find_key_values_by_prefix_bounded: PreparedStatement,
     multi_key_values: papaya::HashMap<usize, PreparedStatement>,
     multi_keys: papaya::HashMap<usize, PreparedStatement>,
+    lease_obtain_lwt: PreparedStatement,
+    lease_delete_lwt: PreparedStatement,
+    lease_read_lease_info: PreparedStatement,
 }
 
 impl ScyllaDbClient {
@@ -190,6 +193,40 @@ impl ScyllaDbClient {
             ))
             .await?;
 
+        // Lightweight transaction for lease obtain/renewal
+        // In CQL, when a row doesn't exist, columns are NULL in the condition
+        // This single statement handles:
+        // - Insert if row doesn't exist (lease_uuid = NULL)
+        // - Update if UUID matches (lease_uuid = ?)
+        // - Update if lease has expired (lease_expiration < ?)
+        let lease_obtain_lwt = session
+            .prepare(format!(
+                "UPDATE {}.\"{}\" SET lease_uuid = ?, lease_expiration = ? \
+                WHERE root_key = ? AND k = ? \
+                IF lease_uuid = NULL OR lease_uuid = ? OR lease_expiration < ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        // Lightweight transaction for lease deletion
+        // Only delete if UUID matches
+        let lease_delete_lwt = session
+            .prepare(format!(
+                "DELETE FROM {}.\"{}\" \
+                WHERE root_key = ? AND k = ? \
+                IF lease_uuid = ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        // Read lease UUID and expiration for error messages
+        let lease_read_lease_info = session
+            .prepare(format!(
+                "SELECT lease_uuid, lease_expiration FROM {}.\"{}\" WHERE root_key = ? AND k = ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
         Ok(Self {
             session,
             namespace,
@@ -205,6 +242,9 @@ impl ScyllaDbClient {
             find_key_values_by_prefix_bounded,
             multi_key_values: papaya::HashMap::new(),
             multi_keys: papaya::HashMap::new(),
+            lease_obtain_lwt,
+            lease_delete_lwt,
+            lease_read_lease_info,
         })
     }
 
@@ -709,6 +749,129 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         store.write_batch_internal(&self.root_key, batch).await
     }
+
+    async fn obtain_lease(
+        &self,
+        key: Vec<u8>,
+        uuid: u64,
+        ttl: std::time::Duration,
+    ) -> Result<Result<(), LeaseConflict>, ScyllaDbStoreInternalError> {
+        ScyllaDbClient::check_key_size(&key)?;
+
+        // Calculate expiration timestamp
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let expiration = now + ttl.as_secs();
+
+        let store = self.store.deref();
+
+        // Convert u64 to i64 for varint compatibility
+        let uuid_i64 = uuid as i64;
+        let expiration_i64 = expiration as i64;
+
+        // Use single atomic LWT that handles insert and update cases
+        // The condition checks:
+        // - lease_uuid = NULL (row doesn't exist)
+        // - lease_uuid = ? (same owner renewing)
+        // - lease_expiration < ? (lease has expired)
+        let values = (
+            uuid_i64,
+            expiration_i64,
+            self.root_key.to_vec(),
+            key.clone(),
+            uuid_i64,
+            now as i64,
+        );
+
+        let (result, _) = store
+            .session
+            .execute_single_page(
+                &store.lease_obtain_lwt,
+                &values,
+                scylla::response::PagingState::start(),
+            )
+            .await?;
+
+        // Check if the LWT was applied
+        let rows = result.into_rows_result()?;
+        let mut rows = rows.rows::<(bool,)>()?;
+
+        if let Some(row) = rows.next() {
+            let (applied,) = row?;
+            if applied {
+                // Successfully obtained/renewed lease
+                return Ok(Ok(()));
+            }
+        }
+
+        // LWT failed - a different non-expired lease exists
+        // Read the UUID and expiration for error reporting
+        let (read_result, _) = store
+            .session
+            .execute_single_page(
+                &store.lease_read_lease_info,
+                &(self.root_key.to_vec(), key),
+                scylla::response::PagingState::start(),
+            )
+            .await?;
+
+        let read_rows = read_result.into_rows_result()?;
+        let mut read_rows = read_rows.rows::<(i64, i64)>()?;
+
+        let (existing_uuid, expiration) = if let Some(row) = read_rows.next() {
+            let (uuid, exp) = row?;
+            (uuid as u64, exp as u64)
+        } else {
+            (0, 0)
+        };
+
+        Ok(Err(LeaseConflict {
+            uuid: existing_uuid,
+            timestamp: expiration,
+        }))
+    }
+
+    async fn discard_lease(
+        &self,
+        key: Vec<u8>,
+        uuid: u64,
+    ) -> Result<(), ScyllaDbStoreInternalError> {
+        ScyllaDbClient::check_key_size(&key)?;
+
+        let store = self.store.deref();
+
+        // Convert u64 to i64 for varint compatibility
+        let uuid_i64 = uuid as i64;
+
+        // Use lightweight transaction: DELETE IF lease_uuid = ?
+        let values = (self.root_key.to_vec(), key.clone(), uuid_i64);
+
+        let (result, _) = store
+            .session
+            .execute_single_page(
+                &store.lease_delete_lwt,
+                &values,
+                scylla::response::PagingState::start(),
+            )
+            .await?;
+
+        // Check if the LWT was applied
+        let rows = result.into_rows_result()?;
+        let mut rows = rows.rows::<(bool,)>()?;
+
+        if let Some(row) = rows.next() {
+            let (applied,) = row?;
+            if !applied {
+                // Delete failed - UUID doesn't match or row doesn't exist
+                tracing::warn!("Failed to discard lease");
+                return Ok(());
+            }
+        }
+
+        Ok(())
+    }
 }
 
 // ScyllaDB requires that the keys are non-empty.
@@ -917,6 +1080,8 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
                     root_key blob, \
                     k blob, \
                     v blob, \
+                    lease_uuid varint, \
+                    lease_expiration bigint, \
                     PRIMARY KEY (root_key, k) \
                 ) \
                 WITH compaction = {{ \
