@@ -180,15 +180,21 @@ spec:
               readOnly: true
             - name: exporter-data
               mountPath: /data
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.blockExporter.metricsPort }}
+            failureThreshold: 30
+            periodSeconds: 10
           livenessProbe:
-            tcpSocket:
-              port: {{ .Values.blockExporter.port }}
-            initialDelaySeconds: 30
+            httpGet:
+              path: /health
+              port: {{ .Values.blockExporter.metricsPort }}
             periodSeconds: 10
           readinessProbe:
-            tcpSocket:
-              port: {{ .Values.blockExporter.port }}
-            initialDelaySeconds: 5
+            httpGet:
+              path: /health
+              port: {{ .Values.blockExporter.metricsPort }}
             periodSeconds: 5
       volumes:
         - name: configmap
