@@ -26,7 +26,7 @@ use linera_views::{
     context::Context,
     log_view::LogView,
     map_view::MapView,
-    reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
+    reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView, WriteGuardedView},
     register_view::RegisterView,
     views::{ClonableView, RootView, View},
 };
@@ -473,24 +473,25 @@ where
         Ok(())
     }
 
-    /// Returns the next block height to receive and the last anticipated block height
-    /// for the given origin, loading the inbox only once.
-    pub async fn inbox_cursors(
-        &self,
+    /// Loads the inbox for the given origin mutably.
+    pub async fn load_inbox_mut(
+        &mut self,
         origin: &ChainId,
+    ) -> Result<WriteGuardedView<InboxStateView<C>>, ChainError> {
+        Ok(self.inboxes.try_load_entry_mut(origin).await?)
+    }
+
+    /// Returns the next block height to receive and the last anticipated block height
+    /// from an already-loaded inbox.
+    pub async fn inbox_cursors(
+        inbox: &InboxStateView<C>,
     ) -> Result<(BlockHeight, Option<BlockHeight>), ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
-        match inbox {
-            Some(inbox) => {
-                let next_height = inbox.next_block_height_to_receive()?;
-                let last_anticipated = match inbox.removed_bundles.back().await? {
-                    Some(bundle) => Some(bundle.height),
-                    None => None,
-                };
-                Ok((next_height, last_anticipated))
-            }
-            None => Ok((BlockHeight::ZERO, None)),
-        }
+        let next_height = inbox.next_block_height_to_receive()?;
+        let last_anticipated = match inbox.removed_bundles.back().await? {
+            Some(bundle) => Some(bundle.height),
+            None => None,
+        };
+        Ok((next_height, last_anticipated))
     }
 
     /// Returns the height of the highest block we have, plus one. Includes preprocessed blocks.
@@ -516,6 +517,7 @@ where
     ))]
     pub async fn receive_message_bundle(
         &mut self,
+        inbox: &mut WriteGuardedView<InboxStateView<C>>,
         origin: &ChainId,
         bundle: MessageBundle,
         local_time: Timestamp,
@@ -547,7 +549,6 @@ where
         }
 
         // Process the inbox bundle and update the inbox state.
-        let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
         #[cfg(with_metrics)]
         metrics::NUM_INBOXES
             .with_label_values(&[])
