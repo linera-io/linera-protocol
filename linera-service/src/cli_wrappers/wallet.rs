@@ -715,6 +715,34 @@ impl ClientWrapper {
         Ok(amount)
     }
 
+    /// Runs `linera query-application` and parses the JSON result.
+    pub async fn query_application_json<T: DeserializeOwned>(
+        &self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        query: impl AsRef<str>,
+    ) -> Result<T> {
+        let query = query.as_ref().trim();
+        let name = query
+            .split_once(|ch: char| !ch.is_alphanumeric())
+            .map_or(query, |(name, _)| name);
+        let stdout = self
+            .command()
+            .await?
+            .arg("query-application")
+            .arg("--chain-id")
+            .arg(chain_id.to_string())
+            .arg("--application-id")
+            .arg(application_id.to_string())
+            .arg(query)
+            .spawn_and_wait_for_stdout()
+            .await?;
+        let data: serde_json::Value =
+            serde_json::from_str(stdout.trim()).context("invalid JSON from query-application")?;
+        serde_json::from_value(data[name].clone())
+            .with_context(|| format!("{name} field missing in query-application response"))
+    }
+
     /// Runs `linera sync`.
     pub async fn sync(&self, chain_id: ChainId) -> Result<()> {
         self.command()
