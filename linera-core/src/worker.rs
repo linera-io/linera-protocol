@@ -8,7 +8,10 @@ use std::{
     time::Duration,
 };
 
-use futures::future::Either;
+use futures::{
+    future::{Either, Shared},
+    FutureExt as _,
+};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
     data_types::{
@@ -36,7 +39,7 @@ use linera_storage::{Clock as _, Storage};
 use linera_views::{context::InactiveContext, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{oneshot, watch, OwnedRwLockReadGuard};
+use tokio::sync::{oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
 /// A read guard providing access to a chain's [`ChainStateView`].
@@ -475,14 +478,16 @@ impl WorkerError {
 
 type ChainWorkerArc<S> = Arc<tokio::sync::RwLock<ChainWorkerState<S>>>;
 type ChainWorkerWeak<S> = std::sync::Weak<tokio::sync::RwLock<ChainWorkerState<S>>>;
+type ChainWorkerFuture<S> = Shared<oneshot::Receiver<ChainWorkerWeak<S>>>;
 
-/// Each map entry is a `watch::Receiver<Option<Weak<...>>>`:
-/// - `None` means a task is currently loading the worker from storage.
-///   Other callers wait on the receiver for the loader to finish.
-/// - `Some(weak)` means the worker was loaded. Callers upgrade the `Weak`
-///   to obtain the `Arc`. The loader sends the `Weak` through the watch
-///   channel, so waiters receive it directly without re-accessing the map.
-type ChainWorkerMap<S> = Arc<papaya::HashMap<ChainId, watch::Receiver<Option<ChainWorkerWeak<S>>>>>;
+/// Each map entry is a `Shared<oneshot::Receiver<Weak<...>>>`:
+///
+/// - `peek()` returns `None` while a task is loading the worker from storage.
+/// - `peek()` returns `Some(Ok(weak))` once the worker is loaded.
+/// - `peek()` returns `Some(Err(_))` if loading failed (sender dropped).
+///
+/// Callers that find a pending entry clone the `Shared` future and await it.
+type ChainWorkerMap<S> = Arc<papaya::HashMap<ChainId, ChainWorkerFuture<S>>>;
 
 /// Starts a background task that periodically removes dead weak references
 /// from the chain handle map. The actual lifetime management is handled by
@@ -505,13 +510,10 @@ fn start_sweep<S: Storage + Clone + 'static>(
             let Some(map) = weak_map.upgrade() else {
                 break;
             };
-            map.pin_owned().retain(|_, rx| {
-                let value = rx.borrow();
-                match &*value {
-                    Some(weak) => weak.strong_count() > 0,
-                    // Sender dropped means loading failed; clean up.
-                    None => rx.has_changed().is_ok(),
-                }
+            map.pin_owned().retain(|_, shared| match shared.peek() {
+                Some(Ok(weak)) => weak.strong_count() > 0,
+                Some(Err(_)) => false, // Loading failed; clean up.
+                None => true,          // Still loading; keep.
             });
             drop(map);
         }
@@ -761,55 +763,49 @@ where
     > {
         Box::pin(wrap_future(async move {
             loop {
-                // Create a fresh watch channel. If we win the loading slot,
-                // rx gets inserted and we keep tx. Otherwise both are dropped.
-                let (tx, rx) = watch::channel(None);
+                // Create a fresh oneshot channel. If we win the loading slot,
+                // the shared receiver gets inserted and we keep tx.
+                let (tx, rx) = oneshot::channel();
+                let shared = rx.shared();
 
                 // Single atomic compute handles all cases. The papaya guard
                 // is !Send, so it must be dropped before any .await point.
-                let wait_rx = {
+                let wait = {
                     let guard = self.chain_workers.guard();
                     match self.chain_workers.compute(
                         chain_id,
                         |existing| match existing {
-                            Some((_, entry_rx)) => {
-                                let current = entry_rx.borrow().clone();
-                                match current {
-                                    Some(weak) => match weak.upgrade() {
-                                        Some(arc) => papaya::Operation::Abort(Ok(arc)),
-                                        // Dead worker; replace with our loading sentinel.
-                                        None => papaya::Operation::Insert(rx.clone()),
-                                    },
-                                    // Loading failed (sender dropped); replace.
-                                    None if entry_rx.has_changed().is_err() => {
-                                        papaya::Operation::Insert(rx.clone())
-                                    }
-                                    // Loading in progress; wait on it.
-                                    None => papaya::Operation::Abort(Err(entry_rx.clone())),
-                                }
-                            }
-                            None => papaya::Operation::Insert(rx.clone()),
+                            Some((_, entry)) => match entry.peek() {
+                                Some(Ok(weak)) => match weak.upgrade() {
+                                    Some(arc) => papaya::Operation::Abort(Ok(arc)),
+                                    // Dead worker; replace with our loading sentinel.
+                                    None => papaya::Operation::Insert(shared.clone()),
+                                },
+                                // Loading failed; replace.
+                                Some(Err(_)) => papaya::Operation::Insert(shared.clone()),
+                                // Loading in progress; wait on it.
+                                None => papaya::Operation::Abort(Err(entry.clone())),
+                            },
+                            None => papaya::Operation::Insert(shared.clone()),
                         },
                         &guard,
                     ) {
                         papaya::Compute::Aborted(Ok(arc), ..) => return Ok(arc),
-                        papaya::Compute::Aborted(Err(wait_rx), ..) => Some(wait_rx),
+                        papaya::Compute::Aborted(Err(wait), ..) => Some(wait),
                         papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => None,
                         papaya::Compute::Removed { .. } => unreachable!(),
                     }
                     // Guard dropped here.
                 };
 
-                if let Some(mut wait_rx) = wait_rx {
-                    // Another task is loading. Wait for it to send the Weak,
-                    // or for the sender to drop (loading failed).
-                    let weak = match wait_rx.wait_for(|v| v.is_some()).await {
-                        Ok(r) => r.clone(),
-                        Err(_) => None,
-                    };
-                    if let Some(arc) = weak.and_then(|w| w.upgrade()) {
-                        return Ok(arc);
+                if let Some(wait) = wait {
+                    // Another task is loading. Await the shared future.
+                    if let Ok(weak) = wait.await {
+                        if let Some(arc) = weak.upgrade() {
+                            return Ok(arc);
+                        }
                     }
+                    // Loading failed or worker already dead; retry.
                     continue;
                 }
 
@@ -818,7 +814,7 @@ where
                 // On error, dropping tx wakes waiters so they can retry.
                 match self.load_chain_worker(chain_id).await {
                     Ok(worker) => {
-                        let _ = tx.send(Some(Arc::downgrade(&worker)));
+                        let _ = tx.send(Arc::downgrade(&worker));
                         return Ok(worker);
                     }
                     Err(error) => return Err(error),
