@@ -153,12 +153,12 @@ impl TestView for TestMapView<MemoryContext<()>> {
 
     async fn stage_initial_changes(&mut self) -> Result<Self::State, ViewError> {
         for (key, value) in INITIAL_MAP_COLLECTION_VIEW_CHANGES {
-            self.map.insert(key, value.to_string())?;
+            self.map.insert(key, (*value).to_string())?;
         }
 
         Ok(INITIAL_MAP_COLLECTION_VIEW_CHANGES
             .iter()
-            .map(|(key, value)| (*key, value.to_string()))
+            .map(|(key, value)| (*key, (*value).to_string()))
             .collect::<HashMap<_, _>>())
     }
 
@@ -180,7 +180,7 @@ impl TestView for TestMapView<MemoryContext<()>> {
         let new_state = INITIAL_MAP_COLLECTION_VIEW_CHANGES
             .iter()
             .filter(|(key, _)| !entries_to_remove.contains(key))
-            .map(|(key, value)| (*key, value.to_string()))
+            .map(|(key, value)| (*key, (*value).to_string()))
             .chain(new_entries)
             .collect();
 
@@ -205,7 +205,7 @@ impl TestView for TestMapView<MemoryContext<()>> {
         let new_state = INITIAL_MAP_COLLECTION_VIEW_CHANGES
             .iter()
             .filter(|(key, _)| !entries_to_remove.contains(key))
-            .map(|(key, value)| (*key, value.to_string()))
+            .map(|(key, value)| (*key, (*value).to_string()))
             .chain(new_entries)
             .collect();
 
@@ -308,12 +308,12 @@ impl TestView for TestCollectionView<MemoryContext<()>> {
             self.collection
                 .load_entry_mut(key)
                 .await?
-                .set(value.to_string());
+                .set((*value).to_string());
         }
 
         Ok(INITIAL_MAP_COLLECTION_VIEW_CHANGES
             .iter()
-            .map(|(key, value)| (*key, value.to_string()))
+            .map(|(key, value)| (*key, (*value).to_string()))
             .collect::<HashMap<_, _>>())
     }
 
@@ -335,7 +335,7 @@ impl TestView for TestCollectionView<MemoryContext<()>> {
         let new_state = INITIAL_MAP_COLLECTION_VIEW_CHANGES
             .iter()
             .filter(|(key, _)| !entries_to_remove.contains(key))
-            .map(|(key, value)| (*key, value.to_string()))
+            .map(|(key, value)| (*key, (*value).to_string()))
             .chain(new_entries)
             .collect();
 
@@ -360,7 +360,7 @@ impl TestView for TestCollectionView<MemoryContext<()>> {
         let new_state = INITIAL_MAP_COLLECTION_VIEW_CHANGES
             .iter()
             .filter(|(key, _)| !entries_to_remove.contains(key))
-            .map(|(key, value)| (*key, value.to_string()))
+            .map(|(key, value)| (*key, (*value).to_string()))
             .chain(new_entries)
             .collect();
 

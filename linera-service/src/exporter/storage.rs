@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     marker::PhantomData,
     sync::{atomic::AtomicU64, Arc},
 };
@@ -480,13 +480,15 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ExporterError> {
-        for (_, value) in self
+        let mut pending_updates = self
             .state_updates_buffer
             .pin()
             .iter()
             .map(|(key, value)| (*key, value.clone()))
-            .collect::<BTreeMap<_, _>>()
-        {
+            .collect::<Vec<_>>();
+        pending_updates.sort_unstable_by_key(|(key, _)| *key);
+
+        for (_, value) in pending_updates {
             self.state_context.push(value);
         }
 

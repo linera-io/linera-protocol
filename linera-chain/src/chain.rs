@@ -1076,9 +1076,11 @@ where
         app_permissions: &ApplicationPermissions,
         block: &ProposedBlock,
     ) -> Result<(), ChainError> {
-        let mut mandatory = HashSet::<ApplicationId>::from_iter(
-            app_permissions.mandatory_applications.iter().copied(),
-        );
+        let mut mandatory = app_permissions
+            .mandatory_applications
+            .iter()
+            .copied()
+            .collect::<HashSet<ApplicationId>>();
         for transaction in &block.transactions {
             match transaction {
                 Transaction::ExecuteOperation(operation)

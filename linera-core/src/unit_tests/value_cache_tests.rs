@@ -56,7 +56,7 @@ fn test_insert_many_certificate_values_individually() {
 
     assert_eq!(
         cache.keys::<BTreeSet<_>>(),
-        BTreeSet::from_iter(values.iter().map(Hashed::hash))
+        values.iter().map(Hashed::hash).collect::<BTreeSet<_>>()
     );
 }
 
@@ -75,7 +75,7 @@ fn test_insert_many_values_together() {
 
     assert_eq!(
         cache.keys::<BTreeSet<_>>(),
-        BTreeSet::from_iter(values.iter().map(|el| el.hash()))
+        values.iter().map(|el| el.hash()).collect::<BTreeSet<_>>()
     );
 }
 
@@ -98,7 +98,7 @@ fn test_reinsertion_of_values() {
 
     assert_eq!(
         cache.keys::<BTreeSet<_>>(),
-        BTreeSet::from_iter(values.iter().map(Hashed::hash))
+        values.iter().map(Hashed::hash).collect::<BTreeSet<_>>()
     );
 }
 
@@ -120,7 +120,11 @@ fn test_one_eviction() {
 
     assert_eq!(
         cache.keys::<BTreeSet<_>>(),
-        BTreeSet::from_iter(values.iter().skip(1).map(Hashed::hash))
+        values
+            .iter()
+            .skip(1)
+            .map(Hashed::hash)
+            .collect::<BTreeSet<_>>()
     );
 }
 
@@ -147,13 +151,12 @@ fn test_eviction_of_second_entry() {
 
     assert_eq!(
         cache.keys::<BTreeSet<_>>(),
-        BTreeSet::from_iter(
-            values
-                .iter()
-                .skip(2)
-                .map(Hashed::hash)
-                .chain(Some(values[0].hash()))
-        )
+        values
+            .iter()
+            .skip(2)
+            .map(Hashed::hash)
+            .chain(Some(values[0].hash()))
+            .collect::<BTreeSet<_>>()
     );
 }
 
@@ -180,13 +183,12 @@ fn test_promotion_of_reinsertion() {
 
     assert_eq!(
         cache.keys::<BTreeSet<_>>(),
-        BTreeSet::from_iter(
-            values
-                .iter()
-                .skip(2)
-                .map(Hashed::hash)
-                .chain(Some(values[0].hash()))
-        )
+        values
+            .iter()
+            .skip(2)
+            .map(Hashed::hash)
+            .chain(Some(values[0].hash()))
+            .collect::<BTreeSet<_>>()
     );
 }
 
