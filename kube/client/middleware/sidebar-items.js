@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AuthLayer","BaseUri","BaseUriLayer","ExtraHeaders","ExtraHeadersLayer"]};

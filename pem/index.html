@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides a parser and encoder for PEM-encoded binary data. PEM-encoded binary data is essentially a beginning and matching end tag that encloses base64-encoded binary data (see: https://en.wikipedia.org/wiki/Privacy-enhanced_Electronic_Mail)."><title>pem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pem" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pem/index.html">pem</a><span class="version">3.0.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#example-parse-a-single-chunk-of-pem-encoded-text" title="Example: parse a single chunk of PEM-encoded text">Example: parse a single chunk of PEM-encoded text</a></li><li><a href="#example-parse-a-set-of-pem-encoded-text" title="Example: parse a set of PEM-encoded text">Example: parse a set of PEM-encoded text</a></li><li><a href="#features" title="Features">Features</a></li></ul><h3><a href="#macros">Crate Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>pem</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/pem/lib.rs.html#7-1061">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides a parser and encoder for PEM-encoded binary data.
+PEM-encoded binary data is essentially a beginning and matching end
+tag that encloses base64-encoded binary data (see:
+https://en.wikipedia.org/wiki/Privacy-enhanced_Electronic_Mail).</p>
+<p>This crate’s documentation provides a few simple examples along with
+documentation on the public methods for the crate.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>This crate is <a href="https://crates.io/crates/pem">on crates.io</a> and can be used
+by adding <code>pem</code> to your dependencies in your project’s <code>Cargo.toml</code>.</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+pem = &quot;3&quot;</code></pre></div>
+<p>Using the <code>serde</code> feature will implement the serde traits for
+the <code>Pem</code> struct.</p>
+<h2 id="example-parse-a-single-chunk-of-pem-encoded-text"><a class="doc-anchor" href="#example-parse-a-single-chunk-of-pem-encoded-text">§</a>Example: parse a single chunk of PEM-encoded text</h2>
+<p>Generally, PEM-encoded files contain a single chunk of PEM-encoded
+text. Commonly, this is in some sort of a key file or an x.509
+certificate.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">use </span>pem::parse;
+
+<span class="kw">const </span>SAMPLE: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str = <span class="string">"-----BEGIN RSA PRIVATE KEY-----
+MIIBPQIBAAJBAOsfi5AGYhdRs/x6q5H7kScxA0Kzzqe6WI6gf6+tc6IvKQJo5rQc
+dWWSQ0nRGt2hOPDO+35NKhQEjBQxPh/v7n0CAwEAAQJBAOGaBAyuw0ICyENy5NsO
+2gkT00AWTSzM9Zns0HedY31yEabkuFvrMCHjscEF7u3Y6PB7An3IzooBHchsFDei
+AAECIQD/JahddzR5K3A6rzTidmAf1PBtqi7296EnWv8WvpfAAQIhAOvowIXZI4Un
+DXjgZ9ekuUjZN+GUQRAVlkEEohGLVy59AiEA90VtqDdQuWWpvJX0cM08V10tLXrT
+TTGsEtITid1ogAECIQDAaFl90ZgS5cMrL3wCeatVKzVUmuJmB/VAmlLFFGzK0QIh
+ANJGc7AFk4fyFD/OezhwGHbWmo/S+bfeAiIh2Ss2FxKJ
+-----END RSA PRIVATE KEY-----
+"</span>;
+
+ <span class="kw">let </span>pem = parse(SAMPLE).unwrap();
+ <span class="macro">assert_eq!</span>(pem.tag(), <span class="string">"RSA PRIVATE KEY"</span>);</code></pre></div>
+<h2 id="example-parse-a-set-of-pem-encoded-text"><a class="doc-anchor" href="#example-parse-a-set-of-pem-encoded-text">§</a>Example: parse a set of PEM-encoded text</h2>
+<p>Sometimes, PEM-encoded files contain multiple chunks of PEM-encoded
+text. You might see this if you have an x.509 certificate file that
+also includes intermediate certificates.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">use </span>pem::parse_many;
+
+<span class="kw">const </span>SAMPLE: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str = <span class="string">"-----BEGIN INTERMEDIATE CERT-----
+MIIBPQIBAAJBAOsfi5AGYhdRs/x6q5H7kScxA0Kzzqe6WI6gf6+tc6IvKQJo5rQc
+dWWSQ0nRGt2hOPDO+35NKhQEjBQxPh/v7n0CAwEAAQJBAOGaBAyuw0ICyENy5NsO
+2gkT00AWTSzM9Zns0HedY31yEabkuFvrMCHjscEF7u3Y6PB7An3IzooBHchsFDei
+AAECIQD/JahddzR5K3A6rzTidmAf1PBtqi7296EnWv8WvpfAAQIhAOvowIXZI4Un
+DXjgZ9ekuUjZN+GUQRAVlkEEohGLVy59AiEA90VtqDdQuWWpvJX0cM08V10tLXrT
+TTGsEtITid1ogAECIQDAaFl90ZgS5cMrL3wCeatVKzVUmuJmB/VAmlLFFGzK0QIh
+ANJGc7AFk4fyFD/OezhwGHbWmo/S+bfeAiIh2Ss2FxKJ
+-----END INTERMEDIATE CERT-----
+
+-----BEGIN CERTIFICATE-----
+MIIBPQIBAAJBAOsfi5AGYhdRs/x6q5H7kScxA0Kzzqe6WI6gf6+tc6IvKQJo5rQc
+dWWSQ0nRGt2hOPDO+35NKhQEjBQxPh/v7n0CAwEAAQJBAOGaBAyuw0ICyENy5NsO
+2gkT00AWTSzM9Zns0HedY31yEabkuFvrMCHjscEF7u3Y6PB7An3IzooBHchsFDei
+AAECIQD/JahddzR5K3A6rzTidmAf1PBtqi7296EnWv8WvpfAAQIhAOvowIXZI4Un
+DXjgZ9ekuUjZN+GUQRAVlkEEohGLVy59AiEA90VtqDdQuWWpvJX0cM08V10tLXrT
+TTGsEtITid1ogAECIQDAaFl90ZgS5cMrL3wCeatVKzVUmuJmB/VAmlLFFGzK0QIh
+ANJGc7AFk4fyFD/OezhwGHbWmo/S+bfeAiIh2Ss2FxKJ
+-----END CERTIFICATE-----
+"</span>;
+
+ <span class="kw">let </span>pems = parse_many(SAMPLE).unwrap();
+ <span class="macro">assert_eq!</span>(pems.len(), <span class="number">2</span>);
+ <span class="macro">assert_eq!</span>(pems[<span class="number">0</span>].tag(), <span class="string">"INTERMEDIATE CERT"</span>);
+ <span class="macro">assert_eq!</span>(pems[<span class="number">1</span>].tag(), <span class="string">"CERTIFICATE"</span>);</code></pre></div>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<p>This crate supports two features: <code>std</code> and <code>serde</code>.</p>
+<p>The <code>std</code> feature is enabled by default. If you specify
+<code>default-features = false</code> to disable <code>std</code>, be aware that
+this crate still needs an allocator.</p>
+<p>The <code>serde</code> feature implements <code>serde::{Deserialize, Serialize}</code>
+for this crate’s <code>Pem</code> struct.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.ensure.html" title="macro pem::ensure">ensure</a></dt></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.EncodeConfig.html" title="struct pem::EncodeConfig">Encode<wbr>Config</a></dt><dd>Configuration for Pem encoding</dd><dt><a class="struct" href="struct.HeaderMap.html" title="struct pem::HeaderMap">Header<wbr>Map</a></dt><dd>Provides access to the headers that might be found in a Pem-encoded file</dd><dt><a class="struct" href="struct.HeadersIter.html" title="struct pem::HeadersIter">Headers<wbr>Iter</a></dt><dd>Iterator across all headers in the Pem-encoded data</dd><dt><a class="struct" href="struct.Pem.html" title="struct pem::Pem">Pem</a></dt><dd>A representation of Pem-encoded data</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.LineEnding.html" title="enum pem::LineEnding">Line<wbr>Ending</a></dt><dd>Enum describing line endings</dd><dt><a class="enum" href="enum.PemError.html" title="enum pem::PemError">PemError</a></dt><dd>The <code>pem</code> error type.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.encode.html" title="fn pem::encode">encode</a></dt><dd>Encode a PEM struct into a PEM-encoded data string</dd><dt><a class="fn" href="fn.encode_config.html" title="fn pem::encode_config">encode_<wbr>config</a></dt><dd>Encode a PEM struct into a PEM-encoded data string with additional
+configuration options</dd><dt><a class="fn" href="fn.encode_many.html" title="fn pem::encode_many">encode_<wbr>many</a></dt><dd>Encode multiple PEM structs into a PEM-encoded data string</dd><dt><a class="fn" href="fn.encode_many_config.html" title="fn pem::encode_many_config">encode_<wbr>many_<wbr>config</a></dt><dd>Encode multiple PEM structs into a PEM-encoded data string with additional
+configuration options</dd><dt><a class="fn" href="fn.parse.html" title="fn pem::parse">parse</a></dt><dd>Parses a single PEM-encoded data from a data-type that can be dereferenced as a <a href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html" title="primitive u8">u8</a>.</dd><dt><a class="fn" href="fn.parse_many.html" title="fn pem::parse_many">parse_<wbr>many</a></dt><dd>Parses a set of PEM-encoded data from a data-type that can be dereferenced as a <a href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html" title="primitive u8">u8</a>.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Result.html" title="type pem::Result">Result</a></dt><dd>The <code>pem</code> result type.</dd></dl></section></div></main></body></html>

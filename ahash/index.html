@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="AHash is a high performance keyed hash function."><title>ahash - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ahash" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ahash/index.html">ahash</a><span class="version">0.8.12</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#how-ahash-works" title="How aHash works">How aHash works</a></li><li><a href="#basic-usage" title="Basic Usage">Basic Usage</a><ul><li><a href="#randomness" title="Randomness">Randomness</a></li><li><a href="#if-randomness-is-not-available" title="If randomness is not available">If randomness is not available</a></li></ul></li><li><a href="#convenience-wrappers" title="Convenience wrappers">Convenience wrappers</a></li><li><a href="#aliases" title="Aliases">Aliases</a></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>ahash</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/ahash/lib.rs.html#1-358">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>AHash is a high performance keyed hash function.</p>
+<p>It quickly provides a high quality hash where the result is not predictable without knowing the Key.
+AHash works with <code>HashMap</code> to hash keys, but without allowing for the possibility that an malicious user can
+induce a collision.</p>
+<h2 id="how-ahash-works"><a class="doc-anchor" href="#how-ahash-works">§</a>How aHash works</h2>
+<p>When it is available aHash uses the hardware AES instructions to provide a keyed hash function.
+When it is not, aHash falls back on a slightly slower alternative algorithm.</p>
+<p>Because aHash does not have a fixed standard for its output, it is able to improve over time.
+But this also means that different computers or computers using different versions of ahash may observe different
+hash values for the same input.</p>
+<h2 id="basic-usage"><a class="doc-anchor" href="#basic-usage">§</a>Basic Usage</h2>
+<p>AHash provides an implementation of the [Hasher] trait.
+To construct a HashMap using aHash as its hasher do the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ahash::{AHasher, RandomState};
+<span class="kw">use </span>std::collections::HashMap;
+
+<span class="kw">let </span><span class="kw-2">mut </span>map: HashMap&lt;i32, i32, RandomState&gt; = HashMap::default();
+map.insert(<span class="number">12</span>, <span class="number">34</span>);</code></pre></div>
+<h4 id="randomness"><a class="doc-anchor" href="#randomness">§</a>Randomness</h4>
+<p>The above requires a source of randomness to generate keys for the hashmap. By default this obtained from the OS.
+It is also possible to have randomness supplied via the <code>compile-time-rng</code> flag, or manually.</p>
+<h4 id="if-randomness-is-not-available"><a class="doc-anchor" href="#if-randomness-is-not-available">§</a>If randomness is not available</h4>
+<p><a href="struct.AHasher.html#method.default" title="associated function ahash::AHasher::default">AHasher::default()</a> can be used to hash using fixed keys. This works with
+<a href="https://doc.rust-lang.org/1.86.0/core/hash/struct.BuildHasherDefault.html" title="struct core::hash::BuildHasherDefault">BuildHasherDefault</a>. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hash::BuildHasherDefault;
+<span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>ahash::AHasher;
+
+<span class="kw">let </span><span class="kw-2">mut </span>m: HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>, BuildHasherDefault&lt;AHasher&gt;&gt; = HashMap::default();</code></pre></div>
+<p>It is also possible to instantiate <a href="random_state/struct.RandomState.html" title="struct ahash::random_state::RandomState">RandomState</a> directly:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ahash::HashMap;
+<span class="kw">use </span>ahash::RandomState;
+
+<span class="kw">let </span><span class="kw-2">mut </span>m = HashMap::with_hasher(RandomState::with_seed(<span class="number">42</span>));</code></pre></div>
+<p>Or for uses besides a hashhmap:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hash::BuildHasher;
+<span class="kw">use </span>ahash::RandomState;
+
+<span class="kw">let </span>hash_builder = RandomState::with_seed(<span class="number">42</span>);
+<span class="kw">let </span>hash = hash_builder.hash_one(<span class="string">"Some Data"</span>);</code></pre></div>
+<p>There are several constructors for <a href="random_state/struct.RandomState.html" title="struct ahash::random_state::RandomState">RandomState</a> with different ways to supply seeds.</p>
+<h2 id="convenience-wrappers"><a class="doc-anchor" href="#convenience-wrappers">§</a>Convenience wrappers</h2>
+<p>For convenience, both new-type wrappers and type aliases are provided.</p>
+<p>The new type wrappers are called called <code>AHashMap</code> and <code>AHashSet</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ahash::AHashMap;
+
+<span class="kw">let </span><span class="kw-2">mut </span>map: AHashMap&lt;i32, i32&gt; = AHashMap::new();
+map.insert(<span class="number">12</span>, <span class="number">34</span>);</code></pre></div>
+<p>This avoids the need to type “RandomState”. (For convenience <code>From</code>, <code>Into</code>, and <code>Deref</code> are provided).</p>
+<h2 id="aliases"><a class="doc-anchor" href="#aliases">§</a>Aliases</h2>
+<p>For even less typing and better interop with existing libraries (such as rayon) which require a <code>std::collection::HashMap</code> ,
+the type aliases <a href="type.HashMap.html" title="type ahash::HashMap">HashMap</a>, <a href="type.HashSet.html" title="type ahash::HashSet">HashSet</a> are provided.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ahash::{HashMap, HashMapExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>map: HashMap&lt;i32, i32&gt; = HashMap::new();
+map.insert(<span class="number">12</span>, <span class="number">34</span>);</code></pre></div>
+<p>Note the import of <a href="trait.HashMapExt.html" title="trait ahash::HashMapExt">HashMapExt</a>. This is needed for the constructor.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.RandomState"><code>pub use crate::random_state::<a class="struct" href="random_state/struct.RandomState.html" title="struct ahash::random_state::RandomState">RandomState</a>;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="random_state/index.html" title="mod ahash::random_state">random_<wbr>state</a></dt></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.AHashMap.html" title="struct ahash::AHashMap">AHash<wbr>Map</a></dt><dd>A <a href="https://doc.rust-lang.org/1.86.0/std/collections/hash/map/struct.HashMap.html" title="struct std::collections::hash::map::HashMap"><code>HashMap</code></a> using <a href="random_state/struct.RandomState.html" title="struct ahash::random_state::RandomState"><code>RandomState</code></a> to hash the items.
+(Requires the <code>std</code> feature to be enabled.)</dd><dt><a class="struct" href="struct.AHashSet.html" title="struct ahash::AHashSet">AHash<wbr>Set</a></dt><dd>A <a href="https://doc.rust-lang.org/1.86.0/std/collections/hash/set/struct.HashSet.html" title="struct std::collections::hash::set::HashSet"><code>HashSet</code></a> using <a href="random_state/struct.RandomState.html" title="struct ahash::random_state::RandomState"><code>RandomState</code></a> to hash the items.
+(Requires the <code>std</code> feature to be enabled.)</dd><dt><a class="struct" href="struct.AHasher.html" title="struct ahash::AHasher">AHasher</a></dt><dd>A <code>Hasher</code> for hashing an arbitrary stream of bytes.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.HashMapExt.html" title="trait ahash::HashMapExt">Hash<wbr>MapExt</a></dt><dd>A convenience trait that can be used together with the type aliases defined to
+get access to the <code>new()</code> and <code>with_capacity()</code> methods for the HashMap type alias.</dd><dt><a class="trait" href="trait.HashSetExt.html" title="trait ahash::HashSetExt">Hash<wbr>SetExt</a></dt><dd>A convenience trait that can be used together with the type aliases defined to
+get access to the <code>new()</code> and <code>with_capacity()</code> methods for the HashSet type aliases.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.HashMap.html" title="type ahash::HashMap">HashMap</a></dt><dd>Type alias for <a href="https://doc.rust-lang.org/1.86.0/std/collections/hash/map/struct.HashMap.html" title="struct std::collections::hash::map::HashMap">HashMap</a>&lt;K, V, ahash::RandomState&gt;</dd><dt><a class="type" href="type.HashSet.html" title="type ahash::HashSet">HashSet</a></dt><dd>Type alias for <a href="type.HashSet.html" title="type ahash::HashSet">HashSet</a>&lt;K, ahash::RandomState&gt;</dd></dl></section></div></main></body></html>

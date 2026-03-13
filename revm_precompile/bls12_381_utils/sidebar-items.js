@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["msm_required_gas"]};

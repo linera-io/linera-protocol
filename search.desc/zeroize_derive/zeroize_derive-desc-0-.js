@@ -1,0 +1,1 @@
+searchState.loadedDescShard("zeroize_derive", 0, "Custom derive support for <code>zeroize</code>\nDerive the <code>Zeroize</code> trait.\nDerive the <code>ZeroizeOnDrop</code> trait.")

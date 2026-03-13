@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Serialize value by using its `Display` implementation with the “alternate” (`#`) format flag"><title>SerializeDisplayAlt in serde_with_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_with_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_with_macros/index.html">serde_<wbr>with_<wbr>macros</a><span class="version">3.14.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Serialize<wbr>Display<wbr>Alt</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#attributes" title="Attributes">Attributes</a></li><li><a href="#example" title="Example">Example</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate serde_<wbr>with_<wbr>macros</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">serde_with_macros</a></div><h1>Derive Macro <span class="derive">SerializeDisplayAlt</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/serde_with_macros/lib.rs.html#1261-1274">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(SerializeDisplayAlt)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[serde_with]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Serialize value by using its <a href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>Display</code></a> implementation with the “alternate” (<code>#</code>) format flag</p>
+<p>This derive implements <code>serde::Serialize</code> for any type that already implements
+<a href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>std::fmt::Display</code></a>, emitting its string form using the alternate formatting specifier
+(<code>{:#}</code>) instead of the normal <code>{}</code>.  In other words, rather than calling
+<code>format!("{}", self)</code>, it calls <code>format!("{:#}", self)</code>.</p>
+<p>Ensure that your type implements <a href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>Display</code></a>, or you will get a compile‐error such as:</p>
+<div class="example-wrap"><pre class="language-text"><code>error[E0277]: `MyType` doesn&#39;t implement `std::fmt::Display`</code></pre></div>
+<p>Deserialization from strings via <a href="https://doc.rust-lang.org/1.86.0/core/str/traits/trait.FromStr.html" title="trait core::str::traits::FromStr"><code>std::str::FromStr</code></a> is handled by the companion
+<a href="derive.DeserializeFromStr.html" title="derive serde_with_macros::DeserializeFromStr"><code>DeserializeFromStr</code></a> derive.</p>
+<h2 id="attributes"><a class="doc-anchor" href="#attributes">§</a>Attributes</h2>
+<p>You may customize which <code>serde_with</code> crate is used (for renamed or re-exported crates)
+via the same attribute namespace:</p>
+<ul>
+<li><code>#[serde_with(crate = "...")]</code>
+When your workspace renames or re-exports <code>serde_with</code>, use this to point at the correct path.
+For example:
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(SerializeDisplayAlt)]
+#[serde_with(<span class="kw">crate </span>= <span class="string">"my_forked_serde_with"</span>)]
+</span><span class="kw">pub struct </span>Foo(<span class="comment">/* … */</span>);</code></pre></div>
+</li>
+</ul>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt;
+<span class="kw">use </span>serde_with::{SerializeDisplayAlt, DeserializeFromStr};
+
+<span class="attr">#[derive(Debug, Clone, SerializeDisplayAlt, DeserializeFromStr)]
+#[serde(transparent)]
+</span><span class="kw">pub struct </span>MyType(u32);
+
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>MyType {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        <span class="kw">if </span>f.alternate() {
+            <span class="comment">// Alternate formatting: hex with 0x prefix
+            </span><span class="macro">write!</span>(f, <span class="string">"0x{:X}"</span>, <span class="self">self</span>.<span class="number">0</span>)
+        } <span class="kw">else </span>{
+            <span class="comment">// Standard formatting: decimal
+            </span><span class="macro">write!</span>(f, <span class="string">"{}"</span>, <span class="self">self</span>.<span class="number">0</span>)
+        }
+    }
+}
+
+<span class="kw">let </span>v = MyType(<span class="number">15</span>);
+<span class="comment">// SerializeDisplayAlt always uses `{:#}`, so this yields `"0xF"`
+</span><span class="macro">assert_eq!</span>(<span class="string">r#""0xF""#</span>, serde_json::to_string(<span class="kw-2">&amp;</span>v).unwrap());</code></pre></div>
+</div></details></section></div></main></body></html>

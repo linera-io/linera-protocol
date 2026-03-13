@@ -1,0 +1,186 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Utility functions to allow tracing `Span`s to accept and return OpenTelemetry `Context`s."><title>OpenTelemetrySpanExt in tracing_opentelemetry - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tracing_opentelemetry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../tracing_opentelemetry/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../tracing_opentelemetry/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../tracing_opentelemetry/index.html">tracing_<wbr>opentelemetry</a><span class="version">0.31.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Open<wbr>Telemetry<wbr>Span<wbr>Ext</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.add_event" title="add_event">add_event</a></li><li><a href="#tymethod.add_event_with_timestamp" title="add_event_with_timestamp">add_event_with_timestamp</a></li><li><a href="#tymethod.add_link" title="add_link">add_link</a></li><li><a href="#tymethod.add_link_with_attributes" title="add_link_with_attributes">add_link_with_attributes</a></li><li><a href="#tymethod.context" title="context">context</a></li><li><a href="#tymethod.set_attribute" title="set_attribute">set_attribute</a></li><li><a href="#tymethod.set_parent" title="set_parent">set_parent</a></li><li><a href="#tymethod.set_status" title="set_status">set_status</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-OpenTelemetrySpanExt-for-Span" title="Span">Span</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate tracing_<wbr>opentelemetry</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">tracing_opentelemetry</a></div><h1>Trait <span class="trait">OpenTelemetrySpanExt</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/tracing_opentelemetry/span_ext.rs.html#15-214">Source</a> </span></div><pre class="rust item-decl"><code>pub trait OpenTelemetrySpanExt {
+    // Required methods
+    fn <a href="#tymethod.set_parent" class="fn">set_parent</a>(&amp;self, cx: <a class="struct" href="../opentelemetry/context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.add_link" class="fn">add_link</a>(&amp;self, cx: <a class="struct" href="../opentelemetry/trace/span_context/struct.SpanContext.html" title="struct opentelemetry::trace::span_context::SpanContext">SpanContext</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.add_link_with_attributes" class="fn">add_link_with_attributes</a>(
+        &amp;self,
+        cx: <a class="struct" href="../opentelemetry/trace/span_context/struct.SpanContext.html" title="struct opentelemetry::trace::span_context::SpanContext">SpanContext</a>,
+        attributes: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../opentelemetry/common/struct.KeyValue.html" title="struct opentelemetry::common::KeyValue">KeyValue</a>&gt;,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.context" class="fn">context</a>(&amp;self) -&gt; <a class="struct" href="../opentelemetry/context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_attribute" class="fn">set_attribute</a>(&amp;self, key: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../opentelemetry/common/struct.Key.html" title="struct opentelemetry::common::Key">Key</a>&gt;, value: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="../opentelemetry/common/enum.Value.html" title="enum opentelemetry::common::Value">Value</a>&gt;);
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_status" class="fn">set_status</a>(&amp;self, status: <a class="enum" href="../opentelemetry/trace/span/enum.Status.html" title="enum opentelemetry::trace::span::Status">Status</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.add_event" class="fn">add_event</a>(
+        &amp;self,
+        name: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,
+        attributes: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../opentelemetry/common/struct.KeyValue.html" title="struct opentelemetry::common::KeyValue">KeyValue</a>&gt;,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.add_event_with_timestamp" class="fn">add_event_with_timestamp</a>(
+        &amp;self,
+        name: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,
+        timestamp: <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/time/struct.SystemTime.html" title="struct std::time::SystemTime">SystemTime</a>,
+        attributes: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../opentelemetry/common/struct.KeyValue.html" title="struct opentelemetry::common::KeyValue">KeyValue</a>&gt;,
+    );
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Utility functions to allow tracing <a href="../tracing/span/struct.Span.html" title="struct tracing::span::Span"><code>Span</code></a>s to accept and return
+<a href="https://opentelemetry.io">OpenTelemetry</a> <a href="../opentelemetry/context/struct.Context.html" title="struct opentelemetry::context::Context"><code>Context</code></a>s.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.set_parent" class="method"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#48">Source</a><h4 class="code-header">fn <a href="#tymethod.set_parent" class="fn">set_parent</a>(&amp;self, cx: <a class="struct" href="../opentelemetry/context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>)</h4></section></summary><div class="docblock"><p>Associates <code>self</code> with a given OpenTelemetry trace, using the provided
+parent <a href="../opentelemetry/context/struct.Context.html" title="struct opentelemetry::context::Context"><code>Context</code></a>.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{propagation::TextMapPropagator, trace::TraceContextExt};
+<span class="kw">use </span>opentelemetry_sdk::propagation::TraceContextPropagator;
+<span class="kw">use </span>tracing_opentelemetry::OpenTelemetrySpanExt;
+<span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>tracing::Span;
+
+<span class="comment">// Example carrier, could be a framework header map that impls otel's `Extractor`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>carrier = HashMap::new();
+
+<span class="comment">// Propagator can be swapped with b3 propagator, jaeger propagator, etc.
+</span><span class="kw">let </span>propagator = TraceContextPropagator::new();
+
+<span class="comment">// Extract otel parent context via the chosen propagator
+</span><span class="kw">let </span>parent_context = propagator.extract(<span class="kw-2">&amp;</span>carrier);
+
+<span class="comment">// Generate a tracing span as usual
+</span><span class="kw">let </span>app_root = <span class="macro">tracing::span!</span>(tracing::Level::INFO, <span class="string">"app_start"</span>);
+
+<span class="comment">// Assign parent trace from external context
+</span>app_root.set_parent(parent_context.clone());
+
+<span class="comment">// Or if the current span has been created elsewhere:
+</span>Span::current().set_parent(parent_context);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.add_link" class="method"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#86">Source</a><h4 class="code-header">fn <a href="#tymethod.add_link" class="fn">add_link</a>(&amp;self, cx: <a class="struct" href="../opentelemetry/trace/span_context/struct.SpanContext.html" title="struct opentelemetry::trace::span_context::SpanContext">SpanContext</a>)</h4></section></summary><div class="docblock"><p>Associates <code>self</code> with a given OpenTelemetry trace, using the provided
+followed span <a href="../opentelemetry/trace/span_context/struct.SpanContext.html" title="struct opentelemetry::trace::span_context::SpanContext"><code>SpanContext</code></a>.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{propagation::TextMapPropagator, trace::TraceContextExt};
+<span class="kw">use </span>opentelemetry_sdk::propagation::TraceContextPropagator;
+<span class="kw">use </span>tracing_opentelemetry::OpenTelemetrySpanExt;
+<span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>tracing::Span;
+
+<span class="comment">// Example carrier, could be a framework header map that impls otel's `Extractor`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>carrier = HashMap::new();
+
+<span class="comment">// Propagator can be swapped with b3 propagator, jaeger propagator, etc.
+</span><span class="kw">let </span>propagator = TraceContextPropagator::new();
+
+<span class="comment">// Extract otel context of linked span via the chosen propagator
+</span><span class="kw">let </span>linked_span_otel_context = propagator.extract(<span class="kw-2">&amp;</span>carrier);
+
+<span class="comment">// Extract the linked span context from the otel context
+</span><span class="kw">let </span>linked_span_context = linked_span_otel_context.span().span_context().clone();
+
+<span class="comment">// Generate a tracing span as usual
+</span><span class="kw">let </span>app_root = <span class="macro">tracing::span!</span>(tracing::Level::INFO, <span class="string">"app_start"</span>);
+
+<span class="comment">// Assign linked trace from external context
+</span>app_root.add_link(linked_span_context);
+
+<span class="comment">// Or if the current span has been created elsewhere:
+</span><span class="kw">let </span>linked_span_context = linked_span_otel_context.span().span_context().clone();
+Span::current().add_link(linked_span_context);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.add_link_with_attributes" class="method"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#92">Source</a><h4 class="code-header">fn <a href="#tymethod.add_link_with_attributes" class="fn">add_link_with_attributes</a>(&amp;self, cx: <a class="struct" href="../opentelemetry/trace/span_context/struct.SpanContext.html" title="struct opentelemetry::trace::span_context::SpanContext">SpanContext</a>, attributes: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../opentelemetry/common/struct.KeyValue.html" title="struct opentelemetry::common::KeyValue">KeyValue</a>&gt;)</h4></section></summary><div class="docblock"><p>Associates <code>self</code> with a given OpenTelemetry trace, using the provided
+followed span <a href="../opentelemetry/trace/span_context/struct.SpanContext.html" title="struct opentelemetry::trace::span_context::SpanContext"><code>SpanContext</code></a> and attributes.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.context" class="method"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#121">Source</a><h4 class="code-header">fn <a href="#tymethod.context" class="fn">context</a>(&amp;self) -&gt; <a class="struct" href="../opentelemetry/context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a></h4></section></summary><div class="docblock"><p>Extracts an OpenTelemetry <a href="../opentelemetry/context/struct.Context.html" title="struct opentelemetry::context::Context"><code>Context</code></a> from <code>self</code>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::Context;
+<span class="kw">use </span>tracing_opentelemetry::OpenTelemetrySpanExt;
+<span class="kw">use </span>tracing::Span;
+
+<span class="kw">fn </span>make_request(cx: Context) {
+    <span class="comment">// perform external request after injecting context
+    // e.g. if the request's headers impl `opentelemetry::propagation::Injector`
+    // then `propagator.inject_context(cx, request.headers_mut())`
+</span>}
+
+<span class="comment">// Generate a tracing span as usual
+</span><span class="kw">let </span>app_root = <span class="macro">tracing::span!</span>(tracing::Level::INFO, <span class="string">"app_start"</span>);
+
+<span class="comment">// To include tracing context in client requests from _this_ app,
+// extract the current OpenTelemetry context.
+</span>make_request(app_root.context());
+
+<span class="comment">// Or if the current span has been created elsewhere:
+</span>make_request(Span::current().context())</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_attribute" class="method"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#140">Source</a><h4 class="code-header">fn <a href="#tymethod.set_attribute" class="fn">set_attribute</a>(&amp;self, key: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../opentelemetry/common/struct.Key.html" title="struct opentelemetry::common::Key">Key</a>&gt;, value: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="../opentelemetry/common/enum.Value.html" title="enum opentelemetry::common::Value">Value</a>&gt;)</h4></section></summary><div class="docblock"><p>Sets an OpenTelemetry attribute directly for this span, bypassing <code>tracing</code>.
+If fields set here conflict with <code>tracing</code> fields, the <code>tracing</code> fields will supersede fields set with <code>set_attribute</code>.
+This allows for more than 32 fields.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::Context;
+<span class="kw">use </span>tracing_opentelemetry::OpenTelemetrySpanExt;
+<span class="kw">use </span>tracing::Span;
+
+<span class="comment">// Generate a tracing span as usual
+</span><span class="kw">let </span>app_root = <span class="macro">tracing::span!</span>(tracing::Level::INFO, <span class="string">"app_start"</span>);
+
+<span class="comment">// Set the `http.request.header.x_forwarded_for` attribute to `example`.
+</span>app_root.set_attribute(<span class="string">"http.request.header.x_forwarded_for"</span>, <span class="string">"example"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_status" class="method"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#159">Source</a><h4 class="code-header">fn <a href="#tymethod.set_status" class="fn">set_status</a>(&amp;self, status: <a class="enum" href="../opentelemetry/trace/span/enum.Status.html" title="enum opentelemetry::trace::span::Status">Status</a>)</h4></section></summary><div class="docblock"><p>Sets an OpenTelemetry status for this span.
+This is useful for setting the status of a span that was created by a library that does not declare
+the otel.status_code field of the span in advance.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::trace::Status;
+<span class="kw">use </span>tracing_opentelemetry::OpenTelemetrySpanExt;
+<span class="kw">use </span>tracing::Span;
+
+<span class="doccomment">/// // Generate a tracing span as usual
+</span><span class="kw">let </span>app_root = <span class="macro">tracing::span!</span>(tracing::Level::INFO, <span class="string">"app_start"</span>);
+
+<span class="comment">// Set the Status of the span to `Status::Ok`.
+</span>app_root.set_status(Status::Ok);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.add_event" class="method"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#186">Source</a><h4 class="code-header">fn <a href="#tymethod.add_event" class="fn">add_event</a>(
+    &amp;self,
+    name: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,
+    attributes: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../opentelemetry/common/struct.KeyValue.html" title="struct opentelemetry::common::KeyValue">KeyValue</a>&gt;,
+)</h4></section></summary><div class="docblock"><p>Adds an OpenTelemetry event directly to this span, bypassing <code>tracing::event!</code>.
+This allows for adding events with dynamic attribute keys, similar to <code>set_attribute</code> for span attributes.
+Events are added with the current timestamp.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{KeyValue};
+<span class="kw">use </span>tracing_opentelemetry::OpenTelemetrySpanExt;
+<span class="kw">use </span>tracing::Span;
+
+<span class="kw">let </span>app_root = <span class="macro">tracing::span!</span>(tracing::Level::INFO, <span class="string">"processing_request"</span>);
+
+<span class="kw">let </span>dynamic_attrs = <span class="macro">vec!</span>[
+    KeyValue::new(<span class="string">"job_id"</span>, <span class="string">"job-123"</span>),
+    KeyValue::new(<span class="string">"user.id"</span>, <span class="string">"user-xyz"</span>),
+];
+
+<span class="comment">// Add event using the extension method
+</span>app_root.add_event(<span class="string">"job_started"</span>.to_string(), dynamic_attrs);
+
+<span class="comment">// ... perform work ...
+
+</span>app_root.add_event(<span class="string">"job_completed"</span>, <span class="macro">vec!</span>[KeyValue::new(<span class="string">"status"</span>, <span class="string">"success"</span>)]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.add_event_with_timestamp" class="method"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#208-213">Source</a><h4 class="code-header">fn <a href="#tymethod.add_event_with_timestamp" class="fn">add_event_with_timestamp</a>(
+    &amp;self,
+    name: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,
+    timestamp: <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/time/struct.SystemTime.html" title="struct std::time::SystemTime">SystemTime</a>,
+    attributes: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../opentelemetry/common/struct.KeyValue.html" title="struct opentelemetry::common::KeyValue">KeyValue</a>&gt;,
+)</h4></section></summary><div class="docblock"><p>Adds an OpenTelemetry event with a specific timestamp directly to this span.
+Similar to <code>add_event</code>, but allows overriding the event timestamp.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{KeyValue};
+<span class="kw">use </span>tracing_opentelemetry::OpenTelemetrySpanExt;
+<span class="kw">use </span>tracing::Span;
+<span class="kw">use </span>std::time::{Duration, SystemTime};
+<span class="kw">use </span>std::borrow::Cow;
+
+<span class="kw">let </span>app_root = <span class="macro">tracing::span!</span>(tracing::Level::INFO, <span class="string">"historical_event_processing"</span>);
+
+<span class="kw">let </span>event_time = SystemTime::now() - Duration::from_secs(<span class="number">60</span>);
+<span class="kw">let </span>event_attrs = <span class="macro">vec!</span>[KeyValue::new(<span class="string">"record_id"</span>, <span class="string">"rec-456"</span>)];
+<span class="kw">let </span>event_name: Cow&lt;<span class="lifetime">'static</span>, str&gt; = <span class="string">"event_from_past"</span>.into();
+
+app_root.add_event_with_timestamp(event_name, event_time, event_attrs);</code></pre></div>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-OpenTelemetrySpanExt-for-Span" class="impl"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#216-332">Source</a><a href="#impl-OpenTelemetrySpanExt-for-Span" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.OpenTelemetrySpanExt.html" title="trait tracing_opentelemetry::OpenTelemetrySpanExt">OpenTelemetrySpanExt</a> for <a class="struct" href="../tracing/span/struct.Span.html" title="struct tracing::span::Span">Span</a></h3></section></summary><div class="impl-items"><section id="method.set_parent" class="method trait-impl"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#217-231">Source</a><a href="#method.set_parent" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.set_parent" class="fn">set_parent</a>(&amp;self, cx: <a class="struct" href="../opentelemetry/context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>)</h4></section><section id="method.add_link" class="method trait-impl"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#233-235">Source</a><a href="#method.add_link" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.add_link" class="fn">add_link</a>(&amp;self, cx: <a class="struct" href="../opentelemetry/trace/span_context/struct.SpanContext.html" title="struct opentelemetry::trace::span_context::SpanContext">SpanContext</a>)</h4></section><section id="method.add_link_with_attributes" class="method trait-impl"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#237-258">Source</a><a href="#method.add_link_with_attributes" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.add_link_with_attributes" class="fn">add_link_with_attributes</a>(&amp;self, cx: <a class="struct" href="../opentelemetry/trace/span_context/struct.SpanContext.html" title="struct opentelemetry::trace::span_context::SpanContext">SpanContext</a>, attributes: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../opentelemetry/common/struct.KeyValue.html" title="struct opentelemetry::common::KeyValue">KeyValue</a>&gt;)</h4></section><section id="method.context" class="method trait-impl"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#260-272">Source</a><a href="#method.context" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.context" class="fn">context</a>(&amp;self) -&gt; <a class="struct" href="../opentelemetry/context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a></h4></section><section id="method.set_attribute" class="method trait-impl"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#274-293">Source</a><a href="#method.set_attribute" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.set_attribute" class="fn">set_attribute</a>(&amp;self, key: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../opentelemetry/common/struct.Key.html" title="struct opentelemetry::common::Key">Key</a>&gt;, value: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="../opentelemetry/common/enum.Value.html" title="enum opentelemetry::common::Value">Value</a>&gt;)</h4></section><section id="method.set_status" class="method trait-impl"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#295-305">Source</a><a href="#method.set_status" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.set_status" class="fn">set_status</a>(&amp;self, status: <a class="enum" href="../opentelemetry/trace/span/enum.Status.html" title="enum opentelemetry::trace::span::Status">Status</a>)</h4></section><section id="method.add_event" class="method trait-impl"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#307-309">Source</a><a href="#method.add_event" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.add_event" class="fn">add_event</a>(
+    &amp;self,
+    name: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,
+    attributes: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../opentelemetry/common/struct.KeyValue.html" title="struct opentelemetry::common::KeyValue">KeyValue</a>&gt;,
+)</h4></section><section id="method.add_event_with_timestamp" class="method trait-impl"><a class="src rightside" href="../src/tracing_opentelemetry/span_ext.rs.html#311-331">Source</a><a href="#method.add_event_with_timestamp" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.add_event_with_timestamp" class="fn">add_event_with_timestamp</a>(
+    &amp;self,
+    name: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,
+    timestamp: <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/time/struct.SystemTime.html" title="struct std::time::SystemTime">SystemTime</a>,
+    attributes: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../opentelemetry/common/struct.KeyValue.html" title="struct opentelemetry::common::KeyValue">KeyValue</a>&gt;,
+)</h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/tracing_opentelemetry/span_ext/trait.OpenTelemetrySpanExt.js" data-ignore-extern-crates="tracing" async></script></section></div></main></body></html>

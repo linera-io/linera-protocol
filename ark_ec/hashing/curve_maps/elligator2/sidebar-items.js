@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Elligator2Map"],"trait":["Elligator2Config"]};

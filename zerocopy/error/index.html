@@ -1,0 +1,84 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Types related to error reporting."><title>zerocopy::error - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="zerocopy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../zerocopy/index.html">zerocopy</a><span class="version">0.8.26</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module error</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#single-failure-mode-errors" title="Single failure mode errors">Single failure mode errors</a></li><li><a href="#compound-errors" title="Compound errors">Compound errors</a></li><li><a href="#unaligned-destination-types" title="`Unaligned` destination types"><code>Unaligned</code> destination types</a></li><li><a href="#accessing-the-conversion-source" title="Accessing the conversion source">Accessing the conversion source</a></li><li><a href="#display-formatting" title="Display formatting">Display formatting</a></li><li><a href="#validation-order" title="Validation order">Validation order</a></li><li><a href="#send-sync-and-static" title="`Send`, `Sync`, and `&#39;static`"><code>Send</code>, <code>Sync</code>, and <code>'static</code></a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate zerocopy</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">zerocopy</a></div><h1>Module <span>error</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/zerocopy/error.rs.html#10-1081">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Types related to error reporting.</p>
+<h3 id="single-failure-mode-errors"><a class="doc-anchor" href="#single-failure-mode-errors">§</a>Single failure mode errors</h3>
+<p>Generally speaking, zerocopy’s conversions may fail for one of up to three
+reasons:</p>
+<ul>
+<li><a href="struct.AlignmentError.html" title="struct zerocopy::error::AlignmentError"><code>AlignmentError</code></a>: the conversion source was improperly aligned</li>
+<li><a href="struct.SizeError.html" title="struct zerocopy::error::SizeError"><code>SizeError</code></a>: the conversion source was of incorrect size</li>
+<li><a href="struct.ValidityError.html" title="struct zerocopy::error::ValidityError"><code>ValidityError</code></a>: the conversion source contained invalid data</li>
+</ul>
+<p>Methods that only have one failure mode, like
+<a href="../trait.FromBytes.html#method.read_from_bytes" title="associated function zerocopy::FromBytes::read_from_bytes"><code>FromBytes::read_from_bytes</code></a>, return that mode’s corresponding error type
+directly.</p>
+<h3 id="compound-errors"><a class="doc-anchor" href="#compound-errors">§</a>Compound errors</h3>
+<p>Conversion methods that have either two or three possible failure modes
+return one of these error types:</p>
+<ul>
+<li><a href="type.CastError.html" title="type zerocopy::error::CastError"><code>CastError</code></a>: the error type of reference conversions</li>
+<li><a href="type.TryCastError.html" title="type zerocopy::error::TryCastError"><code>TryCastError</code></a>: the error type of fallible reference conversions</li>
+<li><a href="type.TryReadError.html" title="type zerocopy::error::TryReadError"><code>TryReadError</code></a>: the error type of fallible read conversions</li>
+</ul>
+<h3 id="unaligned-destination-types"><a class="doc-anchor" href="#unaligned-destination-types">§</a><a href="../trait.Unaligned.html" title="trait zerocopy::Unaligned"><code>Unaligned</code></a> destination types</h3>
+<p>For <a href="../trait.Unaligned.html" title="trait zerocopy::Unaligned"><code>Unaligned</code></a> destination types, alignment errors are impossible. All
+compound error types support infallibly discarding the alignment error via
+<a href="https://doc.rust-lang.org/1.86.0/core/convert/trait.From.html" title="trait core::convert::From"><code>From</code></a> so long as <code>Dst: Unaligned</code>. For example, see <a href="struct.SizeError.html#method.from-1"><code>&lt;SizeError as From&lt;ConvertError&gt;&gt;::from</code></a>.</p>
+<h3 id="accessing-the-conversion-source"><a class="doc-anchor" href="#accessing-the-conversion-source">§</a>Accessing the conversion source</h3>
+<p>All error types provide an <code>into_src</code> method that converts the error into
+the source value underlying the failed conversion.</p>
+<h3 id="display-formatting"><a class="doc-anchor" href="#display-formatting">§</a>Display formatting</h3>
+<p>All error types provide a <code>Display</code> implementation that produces a
+human-readable error message. When <code>debug_assertions</code> are enabled, these
+error messages are verbose and may include potentially sensitive
+information, including:</p>
+<ul>
+<li>the names of the involved types</li>
+<li>the sizes of the involved types</li>
+<li>the addresses of the involved types</li>
+<li>the contents of the involved types</li>
+</ul>
+<p>When <code>debug_assertions</code> are disabled (as is default for <code>release</code> builds),
+such potentially sensitive information is excluded.</p>
+<p>In the future, we may support manually configuring this behavior. If you are
+interested in this feature, <a href="https://github.com/google/zerocopy/issues/1457">let us know on GitHub</a> so we know
+to prioritize it.</p>
+<h3 id="validation-order"><a class="doc-anchor" href="#validation-order">§</a>Validation order</h3>
+<p>Our conversion methods typically check alignment, then size, then bit
+validity. However, we do not guarantee that this is always the case, and
+this behavior may change between releases.</p>
+<h3 id="send-sync-and-static"><a class="doc-anchor" href="#send-sync-and-static">§</a><code>Send</code>, <code>Sync</code>, and <code>'static</code></h3>
+<p>Our error types are <code>Send</code>, <code>Sync</code>, and <code>'static</code> when their <code>Src</code> parameter
+is <code>Send</code>, <code>Sync</code>, or <code>'static</code>, respectively. This can cause issues when an
+error is sent or synchronized across threads; e.g.:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>result: SizeError&lt;<span class="kw-2">&amp;</span>[u8], u32&gt; = std::thread::spawn(|| {
+    <span class="kw">let </span>source = <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>, <span class="number">1</span>, <span class="number">2</span>][..];
+    <span class="comment">// Try (and fail) to read a `u32` from `source`.
+    </span>u32::read_from_bytes(source).unwrap_err()
+}).join().unwrap();</code></pre></div>
+<p>To work around this, use <a href="enum.ConvertError.html#method.map_src" title="method zerocopy::error::ConvertError::map_src"><code>map_src</code></a> to convert the
+source parameter to an unproblematic type; e.g.:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>result: SizeError&lt;(), u32&gt; = std::thread::spawn(|| {
+    <span class="kw">let </span>source = <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>, <span class="number">1</span>, <span class="number">2</span>][..];
+    <span class="comment">// Try (and fail) to read a `u32` from `source`.
+    </span>u32::read_from_bytes(source).unwrap_err()
+        <span class="comment">// Erase the error source.
+        </span>.map_src(drop)
+}).join().unwrap();</code></pre></div>
+<p>Alternatively, use <code>.to_string()</code> to eagerly convert the error into a
+human-readable message; e.g.:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>result: <span class="prelude-ty">Result</span>&lt;u32, String&gt; = std::thread::spawn(|| {
+    <span class="kw">let </span>source = <span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>, <span class="number">1</span>, <span class="number">2</span>][..];
+    <span class="comment">// Try (and fail) to read a `u32` from `source`.
+    </span>u32::read_from_bytes(source)
+        <span class="comment">// Eagerly render the error message.
+        </span>.map_err(|err| err.to_string())
+}).join().unwrap();</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.AlignmentError.html" title="struct zerocopy::error::AlignmentError">Alignment<wbr>Error</a></dt><dd>The error emitted if the conversion source is improperly aligned.</dd><dt><a class="struct" href="struct.AllocError.html" title="struct zerocopy::error::AllocError">Alloc<wbr>Error</a></dt><dd>The error type of a failed allocation.</dd><dt><a class="struct" href="struct.SizeError.html" title="struct zerocopy::error::SizeError">Size<wbr>Error</a></dt><dd>The error emitted if the conversion source is of incorrect size.</dd><dt><a class="struct" href="struct.ValidityError.html" title="struct zerocopy::error::ValidityError">Validity<wbr>Error</a></dt><dd>The error emitted if the conversion source contains invalid data.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.ConvertError.html" title="enum zerocopy::error::ConvertError">Convert<wbr>Error</a></dt><dd>Zerocopy’s generic error type.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.AlignedTryCastError.html" title="type zerocopy::error::AlignedTryCastError">Aligned<wbr>TryCast<wbr>Error</a></dt><dd>The error type of well-aligned, fallible casts.</dd><dt><a class="type" href="type.CastError.html" title="type zerocopy::error::CastError">Cast<wbr>Error</a></dt><dd>The error type of reference conversions.</dd><dt><a class="type" href="type.TryCastError.html" title="type zerocopy::error::TryCastError">TryCast<wbr>Error</a></dt><dd>The error type of fallible reference conversions.</dd><dt><a class="type" href="type.TryReadError.html" title="type zerocopy::error::TryReadError">TryRead<wbr>Error</a></dt><dd>The error type of fallible read-conversions.</dd></dl></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SpooledData"],"fn":["spooled_tempfile","spooled_tempfile_in","tempdir","tempdir_in","tempfile","tempfile_in"],"mod":["env"],"struct":["Builder","NamedTempFile","PathPersistError","PersistError","SpooledTempFile","TempDir","TempPath"]};

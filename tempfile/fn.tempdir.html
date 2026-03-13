@@ -1,0 +1,29 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Create a new temporary directory. Also see `tempdir_in`."><title>tempdir in tempfile - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tempfile" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../tempfile/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../tempfile/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt="logo"></a><h2><a href="../tempfile/index.html">tempfile</a><span class="version">3.20.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">tempdir</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#resource-leaking" title="Resource Leaking">Resource Leaking</a></li><li><a href="#security" title="Security">Security</a></li><li><a href="#errors" title="Errors">Errors</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate tempfile</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">tempfile</a></div><h1>Function <span class="fn">tempdir</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/tempfile/dir/mod.rs.html#66-68">Source</a> </span></div><pre class="rust item-decl"><code>pub fn tempdir() -&gt; <a class="type" href="https://doc.rust-lang.org/1.86.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.TempDir.html" title="struct tempfile::TempDir">TempDir</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Create a new temporary directory. Also see <a href="fn.tempdir_in.html" title="fn tempfile::tempdir_in"><code>tempdir_in</code></a>.</p>
+<p>The <code>tempdir</code> function creates a directory in the file system and returns a
+<a href="struct.TempDir.html"><code>TempDir</code></a>. The directory will be automatically deleted when the <code>TempDir</code>’s
+destructor is run.</p>
+<h2 id="resource-leaking"><a class="doc-anchor" href="#resource-leaking">§</a>Resource Leaking</h2>
+<p>See <a href="struct.TempDir.html#resource-leaking">the resource leaking</a> docs on <code>TempDir</code>.</p>
+<h2 id="security"><a class="doc-anchor" href="#security">§</a>Security</h2>
+<p>Temporary directories are created with the default permissions unless otherwise
+specified via <a href="struct.Builder.html#method.permissions" title="method tempfile::Builder::permissions"><code>Builder::permissions</code></a>. Depending on your platform, this may make
+them world-readable.</p>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<p>If the directory can not be created, <code>Err</code> is returned.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tempfile::tempdir;
+<span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::io::Write;
+
+<span class="comment">// Create a directory inside of `env::temp_dir()`
+</span><span class="kw">let </span>tmp_dir = tempdir()<span class="question-mark">?</span>;
+
+<span class="kw">let </span>file_path = tmp_dir.path().join(<span class="string">"my-temporary-note.txt"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>tmp_file = File::create(file_path)<span class="question-mark">?</span>;
+<span class="macro">writeln!</span>(tmp_file, <span class="string">"Brian was here. Briefly."</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// `tmp_dir` goes out of scope, the directory as well as
+// `tmp_file` will be deleted here.
+</span>drop(tmp_file);
+tmp_dir.close()<span class="question-mark">?</span>;</code></pre></div>
+</div></details></section></div></main></body></html>

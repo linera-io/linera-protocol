@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["set_bool","set_float32","set_float64","set_s16","set_s32","set_s64","set_s8","set_u16","set_u32","set_u64","set_u8"]};

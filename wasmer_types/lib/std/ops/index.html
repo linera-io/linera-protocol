@@ -1,0 +1,137 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Overloadable operators."><title>wasmer_types::lib::std::ops - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_<wbr>types</a><span class="version">4.4.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module ops</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In wasmer_<wbr>types::<wbr>lib::<wbr>std</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a></div><h1>Module <span>ops</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/lib.rs.html#336">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Overloadable operators.</p>
+<p>Implementing these traits allows you to overload certain operators.</p>
+<p>Some of these traits are imported by the prelude, so they are available in
+every Rust program. Only operators backed by traits can be overloaded. For
+example, the addition operator (<code>+</code>) can be overloaded through the <a href="trait.Add.html" title="trait wasmer_types::lib::std::ops::Add"><code>Add</code></a>
+trait, but since the assignment operator (<code>=</code>) has no backing trait, there
+is no way of overloading its semantics. Additionally, this module does not
+provide any mechanism to create new operators. If traitless overloading or
+custom operators are required, you should look toward macros to extend
+Rust’s syntax.</p>
+<p>Implementations of operator traits should be unsurprising in their
+respective contexts, keeping in mind their usual meanings and
+<a href="../../reference/expressions.html#expression-precedence">operator precedence</a>. For example, when implementing <a href="trait.Mul.html" title="trait wasmer_types::lib::std::ops::Mul"><code>Mul</code></a>, the operation
+should have some resemblance to multiplication (and share expected
+properties like associativity).</p>
+<p>Note that the <code>&amp;&amp;</code> and <code>||</code> operators are currently not supported for
+overloading. Due to their short circuiting nature, they require a different
+design from traits for other operators like <a href="trait.BitAnd.html" title="trait wasmer_types::lib::std::ops::BitAnd"><code>BitAnd</code></a>. Designs for them are
+under discussion.</p>
+<p>Many of the operators take their operands by value. In non-generic
+contexts involving built-in types, this is usually not a problem.
+However, using these operators in generic code, requires some
+attention if values have to be reused as opposed to letting the operators
+consume them. One option is to occasionally use <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html#tymethod.clone" title="method core::clone::Clone::clone"><code>clone</code></a>.
+Another option is to rely on the types involved providing additional
+operator implementations for references. For example, for a user-defined
+type <code>T</code> which is supposed to support addition, it is probably a good
+idea to have both <code>T</code> and <code>&amp;T</code> implement the traits <a href="trait.Add.html" title="trait wasmer_types::lib::std::ops::Add"><code>Add&lt;T&gt;</code></a> and
+<a href="trait.Add.html" title="trait wasmer_types::lib::std::ops::Add"><code>Add&lt;&amp;T&gt;</code></a> so that generic code can be written without unnecessary
+cloning.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This example creates a <code>Point</code> struct that implements <a href="trait.Add.html" title="trait wasmer_types::lib::std::ops::Add"><code>Add</code></a> and <a href="trait.Sub.html" title="trait wasmer_types::lib::std::ops::Sub"><code>Sub</code></a>,
+and then demonstrates adding and subtracting two <code>Point</code>s.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ops::{Add, Sub};
+
+<span class="attr">#[derive(Debug, Copy, Clone, PartialEq)]
+</span><span class="kw">struct </span>Point {
+    x: i32,
+    y: i32,
+}
+
+<span class="kw">impl </span>Add <span class="kw">for </span>Point {
+    <span class="kw">type </span>Output = <span class="self">Self</span>;
+
+    <span class="kw">fn </span>add(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{x: <span class="self">self</span>.x + other.x, y: <span class="self">self</span>.y + other.y}
+    }
+}
+
+<span class="kw">impl </span>Sub <span class="kw">for </span>Point {
+    <span class="kw">type </span>Output = <span class="self">Self</span>;
+
+    <span class="kw">fn </span>sub(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{x: <span class="self">self</span>.x - other.x, y: <span class="self">self</span>.y - other.y}
+    }
+}
+
+<span class="macro">assert_eq!</span>(Point {x: <span class="number">3</span>, y: <span class="number">3</span>}, Point {x: <span class="number">1</span>, y: <span class="number">0</span>} + Point {x: <span class="number">2</span>, y: <span class="number">3</span>});
+<span class="macro">assert_eq!</span>(Point {x: -<span class="number">1</span>, y: -<span class="number">3</span>}, Point {x: <span class="number">1</span>, y: <span class="number">0</span>} - Point {x: <span class="number">2</span>, y: <span class="number">3</span>});</code></pre></div>
+<p>See the documentation for each trait for an example implementation.</p>
+<p>The <a href="trait.Fn.html" title="trait wasmer_types::lib::std::ops::Fn"><code>Fn</code></a>, <a href="trait.FnMut.html" title="trait wasmer_types::lib::std::ops::FnMut"><code>FnMut</code></a>, and <a href="trait.FnOnce.html" title="trait wasmer_types::lib::std::ops::FnOnce"><code>FnOnce</code></a> traits are implemented by types that can be
+invoked like functions. Note that <a href="trait.Fn.html" title="trait wasmer_types::lib::std::ops::Fn"><code>Fn</code></a> takes <code>&amp;self</code>, <a href="trait.FnMut.html" title="trait wasmer_types::lib::std::ops::FnMut"><code>FnMut</code></a> takes <code>&amp;mut self</code> and <a href="trait.FnOnce.html" title="trait wasmer_types::lib::std::ops::FnOnce"><code>FnOnce</code></a> takes <code>self</code>. These correspond to the three kinds of
+methods that can be invoked on an instance: call-by-reference,
+call-by-mutable-reference, and call-by-value. The most common use of these
+traits is to act as bounds to higher-level functions that take functions or
+closures as arguments.</p>
+<p>Taking a <a href="trait.Fn.html" title="trait wasmer_types::lib::std::ops::Fn"><code>Fn</code></a> as a parameter:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>call_with_one&lt;F&gt;(func: F) -&gt; usize
+    <span class="kw">where </span>F: Fn(usize) -&gt; usize
+{
+    func(<span class="number">1</span>)
+}
+
+<span class="kw">let </span>double = |x| x * <span class="number">2</span>;
+<span class="macro">assert_eq!</span>(call_with_one(double), <span class="number">2</span>);</code></pre></div>
+<p>Taking a <a href="trait.FnMut.html" title="trait wasmer_types::lib::std::ops::FnMut"><code>FnMut</code></a> as a parameter:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>do_twice&lt;F&gt;(<span class="kw-2">mut </span>func: F)
+    <span class="kw">where </span>F: FnMut()
+{
+    func();
+    func();
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>x: usize = <span class="number">1</span>;
+{
+    <span class="kw">let </span>add_two_to_x = || x += <span class="number">2</span>;
+    do_twice(add_two_to_x);
+}
+
+<span class="macro">assert_eq!</span>(x, <span class="number">5</span>);</code></pre></div>
+<p>Taking a <a href="trait.FnOnce.html" title="trait wasmer_types::lib::std::ops::FnOnce"><code>FnOnce</code></a> as a parameter:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>consume_with_relish&lt;F&gt;(func: F)
+    <span class="kw">where </span>F: FnOnce() -&gt; String
+{
+    <span class="comment">// `func` consumes its captured variables, so it cannot be run more
+    // than once
+    </span><span class="macro">println!</span>(<span class="string">"Consumed: {}"</span>, func());
+
+    <span class="macro">println!</span>(<span class="string">"Delicious!"</span>);
+
+    <span class="comment">// Attempting to invoke `func()` again will throw a `use of moved
+    // value` error for `func`
+</span>}
+
+<span class="kw">let </span>x = String::from(<span class="string">"x"</span>);
+<span class="kw">let </span>consume_and_return_x = <span class="kw">move </span>|| x;
+consume_with_relish(consume_and_return_x);
+
+<span class="comment">// `consume_and_return_x` can no longer be invoked at this point</span></code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Range.html" title="struct wasmer_types::lib::std::ops::Range">Range</a></dt><dd>A (half-open) range bounded inclusively below and exclusively above
+(<code>start..end</code>).</dd><dt><a class="struct" href="struct.RangeFrom.html" title="struct wasmer_types::lib::std::ops::RangeFrom">Range<wbr>From</a></dt><dd>A range only bounded inclusively below (<code>start..</code>).</dd><dt><a class="struct" href="struct.RangeFull.html" title="struct wasmer_types::lib::std::ops::RangeFull">Range<wbr>Full</a></dt><dd>An unbounded range (<code>..</code>).</dd><dt><a class="struct" href="struct.RangeInclusive.html" title="struct wasmer_types::lib::std::ops::RangeInclusive">Range<wbr>Inclusive</a></dt><dd>A range bounded inclusively below and above (<code>start..=end</code>).</dd><dt><a class="struct" href="struct.RangeTo.html" title="struct wasmer_types::lib::std::ops::RangeTo">RangeTo</a></dt><dd>A range only bounded exclusively above (<code>..end</code>).</dd><dt><a class="struct" href="struct.RangeToInclusive.html" title="struct wasmer_types::lib::std::ops::RangeToInclusive">Range<wbr>ToInclusive</a></dt><dd>A range only bounded inclusively above (<code>..=end</code>).</dd><dt><a class="struct" href="struct.Yeet.html" title="struct wasmer_types::lib::std::ops::Yeet">Yeet</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Implement <code>FromResidual&lt;Yeet&lt;T&gt;&gt;</code> on your type to enable
+<code>do yeet expr</code> syntax in functions returning your type.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Bound.html" title="enum wasmer_types::lib::std::ops::Bound">Bound</a></dt><dd>An endpoint of a range of keys.</dd><dt><a class="enum" href="enum.ControlFlow.html" title="enum wasmer_types::lib::std::ops::ControlFlow">Control<wbr>Flow</a></dt><dd>Used to tell an operation whether it should exit early or go on as usual.</dd><dt><a class="enum" href="enum.CoroutineState.html" title="enum wasmer_types::lib::std::ops::CoroutineState">Coroutine<wbr>State</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>The result of a coroutine resumption.</dd><dt><a class="enum" href="enum.OneSidedRangeBound.html" title="enum wasmer_types::lib::std::ops::OneSidedRangeBound">OneSided<wbr>Range<wbr>Bound</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>An internal helper for <code>split_off</code> functions indicating
+which end a <code>OneSidedRange</code> is bounded on.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Add.html" title="trait wasmer_types::lib::std::ops::Add">Add</a></dt><dd>The addition operator <code>+</code>.</dd><dt><a class="trait" href="trait.AddAssign.html" title="trait wasmer_types::lib::std::ops::AddAssign">AddAssign</a></dt><dd>The addition assignment operator <code>+=</code>.</dd><dt><a class="trait" href="trait.AsyncFn.html" title="trait wasmer_types::lib::std::ops::AsyncFn">AsyncFn</a></dt><dd>An async-aware version of the <a href="trait.Fn.html" title="trait wasmer_types::lib::std::ops::Fn"><code>Fn</code></a> trait.</dd><dt><a class="trait" href="trait.AsyncFnMut.html" title="trait wasmer_types::lib::std::ops::AsyncFnMut">Async<wbr>FnMut</a></dt><dd>An async-aware version of the <a href="trait.FnMut.html" title="trait wasmer_types::lib::std::ops::FnMut"><code>FnMut</code></a> trait.</dd><dt><a class="trait" href="trait.AsyncFnOnce.html" title="trait wasmer_types::lib::std::ops::AsyncFnOnce">Async<wbr>FnOnce</a></dt><dd>An async-aware version of the <a href="trait.FnOnce.html" title="trait wasmer_types::lib::std::ops::FnOnce"><code>FnOnce</code></a> trait.</dd><dt><a class="trait" href="trait.BitAnd.html" title="trait wasmer_types::lib::std::ops::BitAnd">BitAnd</a></dt><dd>The bitwise AND operator <code>&amp;</code>.</dd><dt><a class="trait" href="trait.BitAndAssign.html" title="trait wasmer_types::lib::std::ops::BitAndAssign">BitAnd<wbr>Assign</a></dt><dd>The bitwise AND assignment operator <code>&amp;=</code>.</dd><dt><a class="trait" href="trait.BitOr.html" title="trait wasmer_types::lib::std::ops::BitOr">BitOr</a></dt><dd>The bitwise OR operator <code>|</code>.</dd><dt><a class="trait" href="trait.BitOrAssign.html" title="trait wasmer_types::lib::std::ops::BitOrAssign">BitOr<wbr>Assign</a></dt><dd>The bitwise OR assignment operator <code>|=</code>.</dd><dt><a class="trait" href="trait.BitXor.html" title="trait wasmer_types::lib::std::ops::BitXor">BitXor</a></dt><dd>The bitwise XOR operator <code>^</code>.</dd><dt><a class="trait" href="trait.BitXorAssign.html" title="trait wasmer_types::lib::std::ops::BitXorAssign">BitXor<wbr>Assign</a></dt><dd>The bitwise XOR assignment operator <code>^=</code>.</dd><dt><a class="trait" href="trait.Deref.html" title="trait wasmer_types::lib::std::ops::Deref">Deref</a></dt><dd>Used for immutable dereferencing operations, like <code>*v</code>.</dd><dt><a class="trait" href="trait.DerefMut.html" title="trait wasmer_types::lib::std::ops::DerefMut">Deref<wbr>Mut</a></dt><dd>Used for mutable dereferencing operations, like in <code>*v = 1;</code>.</dd><dt><a class="trait" href="trait.Div.html" title="trait wasmer_types::lib::std::ops::Div">Div</a></dt><dd>The division operator <code>/</code>.</dd><dt><a class="trait" href="trait.DivAssign.html" title="trait wasmer_types::lib::std::ops::DivAssign">DivAssign</a></dt><dd>The division assignment operator <code>/=</code>.</dd><dt><a class="trait" href="trait.Drop.html" title="trait wasmer_types::lib::std::ops::Drop">Drop</a></dt><dd>Custom code within the destructor.</dd><dt><a class="trait" href="trait.Fn.html" title="trait wasmer_types::lib::std::ops::Fn">Fn</a></dt><dd>The version of the call operator that takes an immutable receiver.</dd><dt><a class="trait" href="trait.FnMut.html" title="trait wasmer_types::lib::std::ops::FnMut">FnMut</a></dt><dd>The version of the call operator that takes a mutable receiver.</dd><dt><a class="trait" href="trait.FnOnce.html" title="trait wasmer_types::lib::std::ops::FnOnce">FnOnce</a></dt><dd>The version of the call operator that takes a by-value receiver.</dd><dt><a class="trait" href="trait.Index.html" title="trait wasmer_types::lib::std::ops::Index">Index</a></dt><dd>Used for indexing operations (<code>container[index]</code>) in immutable contexts.</dd><dt><a class="trait" href="trait.IndexMut.html" title="trait wasmer_types::lib::std::ops::IndexMut">Index<wbr>Mut</a></dt><dd>Used for indexing operations (<code>container[index]</code>) in mutable contexts.</dd><dt><a class="trait" href="trait.Mul.html" title="trait wasmer_types::lib::std::ops::Mul">Mul</a></dt><dd>The multiplication operator <code>*</code>.</dd><dt><a class="trait" href="trait.MulAssign.html" title="trait wasmer_types::lib::std::ops::MulAssign">MulAssign</a></dt><dd>The multiplication assignment operator <code>*=</code>.</dd><dt><a class="trait" href="trait.Neg.html" title="trait wasmer_types::lib::std::ops::Neg">Neg</a></dt><dd>The unary negation operator <code>-</code>.</dd><dt><a class="trait" href="trait.Not.html" title="trait wasmer_types::lib::std::ops::Not">Not</a></dt><dd>The unary logical negation operator <code>!</code>.</dd><dt><a class="trait" href="trait.RangeBounds.html" title="trait wasmer_types::lib::std::ops::RangeBounds">Range<wbr>Bounds</a></dt><dd><code>RangeBounds</code> is implemented by Rust’s built-in range types, produced
+by range syntax like <code>..</code>, <code>a..</code>, <code>..b</code>, <code>..=c</code>, <code>d..e</code>, or <code>f..=g</code>.</dd><dt><a class="trait" href="trait.Rem.html" title="trait wasmer_types::lib::std::ops::Rem">Rem</a></dt><dd>The remainder operator <code>%</code>.</dd><dt><a class="trait" href="trait.RemAssign.html" title="trait wasmer_types::lib::std::ops::RemAssign">RemAssign</a></dt><dd>The remainder assignment operator <code>%=</code>.</dd><dt><a class="trait" href="trait.Shl.html" title="trait wasmer_types::lib::std::ops::Shl">Shl</a></dt><dd>The left shift operator <code>&lt;&lt;</code>. Note that because this trait is implemented
+for all integer types with multiple right-hand-side types, Rust’s type
+checker has special handling for <code>_ &lt;&lt; _</code>, setting the result type for
+integer operations to the type of the left-hand-side operand. This means
+that though <code>a &lt;&lt; b</code> and <code>a.shl(b)</code> are one and the same from an evaluation
+standpoint, they are different when it comes to type inference.</dd><dt><a class="trait" href="trait.ShlAssign.html" title="trait wasmer_types::lib::std::ops::ShlAssign">ShlAssign</a></dt><dd>The left shift assignment operator <code>&lt;&lt;=</code>.</dd><dt><a class="trait" href="trait.Shr.html" title="trait wasmer_types::lib::std::ops::Shr">Shr</a></dt><dd>The right shift operator <code>&gt;&gt;</code>. Note that because this trait is implemented
+for all integer types with multiple right-hand-side types, Rust’s type
+checker has special handling for <code>_ &gt;&gt; _</code>, setting the result type for
+integer operations to the type of the left-hand-side operand. This means
+that though <code>a &gt;&gt; b</code> and <code>a.shr(b)</code> are one and the same from an evaluation
+standpoint, they are different when it comes to type inference.</dd><dt><a class="trait" href="trait.ShrAssign.html" title="trait wasmer_types::lib::std::ops::ShrAssign">ShrAssign</a></dt><dd>The right shift assignment operator <code>&gt;&gt;=</code>.</dd><dt><a class="trait" href="trait.Sub.html" title="trait wasmer_types::lib::std::ops::Sub">Sub</a></dt><dd>The subtraction operator <code>-</code>.</dd><dt><a class="trait" href="trait.SubAssign.html" title="trait wasmer_types::lib::std::ops::SubAssign">SubAssign</a></dt><dd>The subtraction assignment operator <code>-=</code>.</dd><dt><a class="trait" href="trait.CoerceUnsized.html" title="trait wasmer_types::lib::std::ops::CoerceUnsized">Coerce<wbr>Unsized</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Trait that indicates that this is a pointer or a wrapper for one,
+where unsizing can be performed on the pointee.</dd><dt><a class="trait" href="trait.Coroutine.html" title="trait wasmer_types::lib::std::ops::Coroutine">Coroutine</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>The trait implemented by builtin coroutine types.</dd><dt><a class="trait" href="trait.DerefPure.html" title="trait wasmer_types::lib::std::ops::DerefPure">Deref<wbr>Pure</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Perma-unstable marker trait. Indicates that the type has a well-behaved <a href="trait.Deref.html" title="trait wasmer_types::lib::std::ops::Deref"><code>Deref</code></a>
+(and, if applicable, <a href="trait.DerefMut.html" title="trait wasmer_types::lib::std::ops::DerefMut"><code>DerefMut</code></a>) implementation. This is relied on for soundness
+of deref patterns.</dd><dt><a class="trait" href="trait.DispatchFromDyn.html" title="trait wasmer_types::lib::std::ops::DispatchFromDyn">Dispatch<wbr>From<wbr>Dyn</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd><code>DispatchFromDyn</code> is used in the implementation of dyn-compatibility checks (specifically
+allowing arbitrary self types), to guarantee that a method’s receiver type can be dispatched on.</dd><dt><a class="trait" href="trait.FromResidual.html" title="trait wasmer_types::lib::std::ops::FromResidual">From<wbr>Residual</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Used to specify which residuals can be converted into which <a href="trait.Try.html" title="trait wasmer_types::lib::std::ops::Try"><code>crate::ops::Try</code></a> types.</dd><dt><a class="trait" href="trait.IntoBounds.html" title="trait wasmer_types::lib::std::ops::IntoBounds">Into<wbr>Bounds</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Used to convert a range into start and end bounds, consuming the
+range by value.</dd><dt><a class="trait" href="trait.OneSidedRange.html" title="trait wasmer_types::lib::std::ops::OneSidedRange">OneSided<wbr>Range</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd><code>OneSidedRange</code> is implemented for built-in range types that are unbounded
+on one side. For example, <code>a..</code>, <code>..b</code> and <code>..=c</code> implement <code>OneSidedRange</code>,
+but <code>..</code>, <code>d..e</code>, and <code>f..=g</code> do not.</dd><dt><a class="trait" href="trait.Receiver.html" title="trait wasmer_types::lib::std::ops::Receiver">Receiver</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Indicates that a struct can be used as a method receiver.
+That is, a type can use this type as a type of <code>self</code>, like this:</dd><dt><a class="trait" href="trait.Residual.html" title="trait wasmer_types::lib::std::ops::Residual">Residual</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Allows retrieving the canonical type implementing <a href="trait.Try.html" title="trait wasmer_types::lib::std::ops::Try"><code>Try</code></a> that has this type
+as its residual and allows it to hold an <code>O</code> as its output.</dd><dt><a class="trait" href="trait.Try.html" title="trait wasmer_types::lib::std::ops::Try">Try</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>The <code>?</code> operator and <code>try {}</code> blocks.</dd></dl></section></div></main></body></html>

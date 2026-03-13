@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/alloy-signer-local-1.0.24/src/error.rs`."><title>error.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="alloy_signer_local" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">alloy_signer_local/</div>error.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>alloy_primitives::hex;
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>k256::ecdsa;
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>thiserror::Error;
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a><span class="doccomment">/// Error thrown by [`LocalSigner`](crate::LocalSigner).
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="attr">#[derive(Debug, Error)]
+<a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub enum </span>LocalSignerError {
+<a href=#8 id=8 data-nosnippet>8</a>    <span class="doccomment">/// [`ecdsa`] error.
+<a href=#9 id=9 data-nosnippet>9</a>    </span><span class="attr">#[error(transparent)]
+<a href=#10 id=10 data-nosnippet>10</a>    </span>EcdsaError(<span class="attr">#[from] </span>ecdsa::Error),
+<a href=#11 id=11 data-nosnippet>11</a>    <span class="doccomment">/// [`hex`](mod@hex) error.
+<a href=#12 id=12 data-nosnippet>12</a>    </span><span class="attr">#[error(transparent)]
+<a href=#13 id=13 data-nosnippet>13</a>    </span>HexError(<span class="attr">#[from] </span>hex::FromHexError),
+<a href=#14 id=14 data-nosnippet>14</a>    <span class="doccomment">/// [`std::io`] error.
+<a href=#15 id=15 data-nosnippet>15</a>    </span><span class="attr">#[error(transparent)]
+<a href=#16 id=16 data-nosnippet>16</a>    </span>IoError(<span class="attr">#[from] </span>std::io::Error),
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// [`coins_bip32`] error.
+<a href=#19 id=19 data-nosnippet>19</a>    </span><span class="attr">#[error(transparent)]
+<a href=#20 id=20 data-nosnippet>20</a>    #[cfg(feature = <span class="string">"mnemonic"</span>)]
+<a href=#21 id=21 data-nosnippet>21</a>    </span>Bip32Error(<span class="attr">#[from] </span>coins_bip32::Bip32Error),
+<a href=#22 id=22 data-nosnippet>22</a>    <span class="doccomment">/// [`coins_bip39`] error.
+<a href=#23 id=23 data-nosnippet>23</a>    </span><span class="attr">#[error(transparent)]
+<a href=#24 id=24 data-nosnippet>24</a>    #[cfg(feature = <span class="string">"mnemonic"</span>)]
+<a href=#25 id=25 data-nosnippet>25</a>    </span>Bip39Error(<span class="attr">#[from] </span>coins_bip39::MnemonicError),
+<a href=#26 id=26 data-nosnippet>26</a>    <span class="doccomment">/// [`MnemonicBuilder`](super::mnemonic::MnemonicBuilder) error.
+<a href=#27 id=27 data-nosnippet>27</a>    </span><span class="attr">#[error(transparent)]
+<a href=#28 id=28 data-nosnippet>28</a>    #[cfg(feature = <span class="string">"mnemonic"</span>)]
+<a href=#29 id=29 data-nosnippet>29</a>    </span>MnemonicBuilderError(<span class="attr">#[from] </span><span class="kw">super</span>::mnemonic::MnemonicBuilderError),
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="doccomment">/// [`eth_keystore`] error.
+<a href=#32 id=32 data-nosnippet>32</a>    </span><span class="attr">#[cfg(feature = <span class="string">"keystore"</span>)]
+<a href=#33 id=33 data-nosnippet>33</a>    #[error(transparent)]
+<a href=#34 id=34 data-nosnippet>34</a>    </span>EthKeystoreError(<span class="attr">#[from] </span>eth_keystore::KeystoreError),
+<a href=#35 id=35 data-nosnippet>35</a>}</code></pre></div></section></main></body></html>

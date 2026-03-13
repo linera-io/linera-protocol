@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Cranelift Control"><title>cranelift_control - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="cranelift_control" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../cranelift_control/index.html">cranelift_<wbr>control</a><span class="version">0.112.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#cranelift-control" title="Cranelift Control">Cranelift Control</a><ul><li><a href="#fuel-limit" title="Fuel Limit">Fuel Limit</a></li><li><a href="#no_std-support" title="`no_std` support"><code>no_std</code> support</a></li></ul></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>cranelift_control</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/cranelift_control/lib.rs.html#1-59">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="cranelift-control"><a class="doc-anchor" href="#cranelift-control">§</a>Cranelift Control</h2>
+<p>This is the home of the control plane of chaos mode, a compilation feature
+intended to be turned on for certain fuzz targets. When the feature is
+turned off, as is normally the case, <a href="struct.ControlPlane.html" title="struct cranelift_control::ControlPlane">ControlPlane</a> will be a zero-sized
+type and optimized away.</p>
+<p>While the feature is turned on, the struct <a href="struct.ControlPlane.html" title="struct cranelift_control::ControlPlane">ControlPlane</a>
+provides functionality to tap into pseudo-randomness at specific locations
+in the code. It may be used for targeted fuzzing of compiler internals,
+e.g. manipulate heuristic optimizations, clobber undefined register bits
+etc.</p>
+<p>There are two ways to acquire a <a href="struct.ControlPlane.html" title="struct cranelift_control::ControlPlane">ControlPlane</a>:</p>
+<ul>
+<li><a href="struct.ControlPlane.html#method.arbitrary" title="struct cranelift_control::ControlPlane">arbitrary</a> for the real deal (requires the <code>fuzz</code> feature, enabled by default)</li>
+<li><a href="struct.ControlPlane.html#method.default" title="struct cranelift_control::ControlPlane">default</a> for an “empty” control plane which always returns default
+values</li>
+</ul>
+<h3 id="fuel-limit"><a class="doc-anchor" href="#fuel-limit">§</a>Fuel Limit</h3>
+<p>Controls the number of mutations or optimizations that the compiler will
+perform before stopping.</p>
+<p>When a perturbation introduced by chaos mode triggers a bug, it may not be
+immediately clear which of the introduced perturbations was the trigger. The
+fuel limit can then be used to binary-search for the trigger. It limits the
+number of perturbations introduced by the control plane. The fuel limit will
+typically be set with a command line argument passed to a fuzz target. For
+example:</p>
+<div class="example-wrap"><pre class="language-sh"><code>cargo fuzz run --features chaos $TARGET -- --fuel=16</code></pre></div><h3 id="no_std-support"><a class="doc-anchor" href="#no_std-support">§</a><code>no_std</code> support</h3>
+<p>This crate compiles in <code>no_std</code> environments, although both the <code>fuzz</code>
+or <code>chaos</code> features have a dependency on <code>std</code>. This means that on <code>no_std</code>
+you can’t use <a href="struct.ControlPlane.html#method.arbitrary" title="struct cranelift_control::ControlPlane">arbitrary</a> to initialize <a href="struct.ControlPlane.html" title="struct cranelift_control::ControlPlane">ControlPlane</a> and can’t enable
+chaos mode, although the rest of the usual <a href="struct.ControlPlane.html" title="struct cranelift_control::ControlPlane">ControlPlane</a> API is available.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ControlPlane.html" title="struct cranelift_control::ControlPlane">Control<wbr>Plane</a></dt><dd>A shim for ControlPlane when chaos mode is disabled.
+Please see the <a href="index.html" title="mod cranelift_control">crate-level documentation</a>.</dd></dl></section></div></main></body></html>
