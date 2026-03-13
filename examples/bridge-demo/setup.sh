@@ -35,6 +35,9 @@ FUND_AMOUNT="500000000000000000000"
 SHARED_DIR=""
 WALLET_DIR="/tmp/wallet"
 EXTRA_WALLET_ID=1
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+LINERA_BIN=""
+LINERA_BRIDGE_BIN=""
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -158,13 +161,30 @@ linera_exec() {
         LINERA_WALLET="$LINERA_TMP_DIR/wallet.json" \
         LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json" \
         LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db" \
-        linera "$@"
+        "$LINERA_BIN" "$@"
     fi
 }
 
 # Parse "Deployed to: 0x..." from forge create output.
 parse_address() {
     grep 'Deployed to:' | sed 's/.*Deployed to: //' | tr -d '[:space:]'
+}
+
+# Parse "Transaction hash: 0x..." from forge create output.
+parse_tx_hash() {
+    grep 'Transaction hash:' | sed 's/.*Transaction hash: //' | tr -d '[:space:]'
+}
+
+# Wait for a transaction to be mined. Needed on public testnets where forge
+# create returns before the tx is confirmed, causing nonce races.
+wait_for_tx() {
+    local tx_hash="$1"
+    if [[ -z "$tx_hash" || "$tx_hash" == "0x" ]]; then
+        return 0
+    fi
+    echo "  Waiting for tx $tx_hash..."
+    evm_exec cast receipt --confirmations 1 \
+        --rpc-url "$EVM_RPC_URL" "$tx_hash" >/dev/null 2>&1 || true
 }
 
 # ── Mode detection & defaults ──
@@ -190,6 +210,30 @@ else
     FAUCET_URL="${FAUCET_URL:-http://localhost:8080}"
     RELAY_URL="${RELAY_URL:-http://localhost:3001}"
     FORGE_USE_SOLC=(--use 0.8.33)
+
+    # Resolve binaries: prefer target/debug, then target/release, then PATH.
+    if [[ -z "$LINERA_BIN" ]]; then
+        if [[ -x "$REPO_ROOT/target/debug/linera" ]]; then
+            LINERA_BIN="$REPO_ROOT/target/debug/linera"
+        elif [[ -x "$REPO_ROOT/target/release/linera" ]]; then
+            LINERA_BIN="$REPO_ROOT/target/release/linera"
+        else
+            LINERA_BIN="$(command -v linera 2>/dev/null || true)"
+            [[ -z "$LINERA_BIN" ]] && die "linera binary not found — build with 'cargo build -p linera-service' or add to PATH"
+        fi
+    fi
+    if [[ -z "$LINERA_BRIDGE_BIN" ]]; then
+        if [[ -x "$REPO_ROOT/target/debug/linera-bridge" ]]; then
+            LINERA_BRIDGE_BIN="$REPO_ROOT/target/debug/linera-bridge"
+        elif [[ -x "$REPO_ROOT/target/release/linera-bridge" ]]; then
+            LINERA_BRIDGE_BIN="$REPO_ROOT/target/release/linera-bridge"
+        else
+            LINERA_BRIDGE_BIN="$(command -v linera-bridge 2>/dev/null || true)"
+            [[ -z "$LINERA_BRIDGE_BIN" ]] && die "linera-bridge binary not found — build with 'cargo build -p linera-bridge --features cli' or add to PATH"
+        fi
+    fi
+    echo "  linera:        $LINERA_BIN"
+    echo "  linera-bridge: $LINERA_BRIDGE_BIN"
 fi
 
 # ── Shared dir for relay coordination ──
@@ -221,7 +265,7 @@ if [[ -n "$COMPOSE_FILE" && -z "$LIGHT_CLIENT_ADDR" ]]; then
     LIGHT_CLIENT_ADDR=$(dc_exec foundry-tools cat /shared/light-client-address | tr -d '[:space:]')
 elif [[ -z "$LIGHT_CLIENT_ADDR" ]]; then
     echo "Fetching LightClient constructor args from faucet..."
-    LC_ARGS_JSON=$(linera-bridge init-light-client --faucet-url "$FAUCET_URL" --output /dev/null)
+    LC_ARGS_JSON=$("$LINERA_BRIDGE_BIN" init-light-client --faucet-url "$FAUCET_URL" --output /dev/null)
     LC_VALIDATORS=$(echo "$LC_ARGS_JSON" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
@@ -250,6 +294,7 @@ import sys, json; print(json.load(sys.stdin)['epoch'])
         --constructor-args \
         "$LC_VALIDATORS" "$LC_WEIGHTS" "$LC_ADMIN_CHAIN" "$LC_EPOCH")
     LIGHT_CLIENT_ADDR=$(echo "$LC_OUTPUT" | parse_address)
+    wait_for_tx "$(echo "$LC_OUTPUT" | parse_tx_hash)"
 fi
 validate_eth_address "LightClient address" "$LIGHT_CLIENT_ADDR"
 echo "  LightClient: $LIGHT_CLIENT_ADDR"
@@ -298,6 +343,7 @@ if [[ -z "$TOKEN_ADDRESS" ]]; then
         --broadcast \
         --constructor-args "TestToken" "TT" 1000000000000000000000)
     TOKEN_ADDRESS=$(echo "$ERC20_OUTPUT" | parse_address)
+    wait_for_tx "$(echo "$ERC20_OUTPUT" | parse_tx_hash)"
     echo "  MockERC20: $TOKEN_ADDRESS"
 else
     echo "  Using existing token: $TOKEN_ADDRESS"
@@ -323,6 +369,9 @@ fi
 echo "  Relay owner (minter): $RELAY_OWNER"
 
 # ── 4. Publish and create wrapped-fungible app ──
+echo "Syncing chain state..."
+linera_exec sync 2>&1 || true
+linera_exec process-inbox 2>&1 || true
 echo "Publishing and creating wrapped-fungible app..."
 WRAPPED_PARAMS=$(
     TICKER="$TICKER_SYMBOL" \
@@ -384,6 +433,7 @@ BRIDGE_OUTPUT=$(evm_exec \
     "$APP_ID_BYTES32" \
     "$TOKEN_ADDRESS")
 BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
+wait_for_tx "$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
 validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
 BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
 echo "  FungibleBridge: $BRIDGE_ADDRESS"
@@ -395,6 +445,9 @@ fi
 echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 
 # ── 6. Publish and create evm-bridge app ──
+echo "Syncing chain state before evm-bridge deploy..."
+linera_exec sync 2>&1 || true
+linera_exec process-inbox 2>&1 || true
 echo "Publishing and creating evm-bridge app..."
 BRIDGE_PARAMS=$(
     CHAIN_ID="$EVM_CHAIN_ID" \
@@ -467,12 +520,9 @@ echo ""
 echo "Environment written to: $OUTPUT_FILE"
 echo "Shared state dir:       $SHARED_DIR"
 echo ""
-echo "Start the relay (point --*-file flags at the shared dir):"
-echo "  linera-bridge serve --rpc-url \$EVM_RPC_URL --faucet-url \$FAUCET_URL \\"
-echo "    --evm-private-key \$KEY \\"
-echo "    --bridge-address-file $SHARED_DIR/bridge-address \\"
-echo "    --bridge-app-id-file $SHARED_DIR/bridge-app-id \\"
-echo "    --fungible-app-id-file $SHARED_DIR/wrapped-app-id"
+echo "The relay should already be running (it provides --bridge-chain-id and"
+echo "--relay-owner that this script requires). It will pick up the app IDs"
+echo "from the shared dir automatically."
 echo ""
 echo "Start the frontend:"
 echo "  cd examples/bridge-demo"
