@@ -478,6 +478,10 @@ where
         &mut self,
         origin: &ChainId,
     ) -> Result<WriteGuardedView<InboxStateView<C>>, ChainError> {
+        #[cfg(with_metrics)]
+        metrics::NUM_INBOXES
+            .with_label_values(&[])
+            .observe(self.inboxes.count().await? as f64);
         Ok(self.inboxes.try_load_entry_mut(origin).await?)
     }
 
@@ -549,10 +553,6 @@ where
         }
 
         // Process the inbox bundle and update the inbox state.
-        #[cfg(with_metrics)]
-        metrics::NUM_INBOXES
-            .with_label_values(&[])
-            .observe(self.inboxes.count().await? as f64);
         inbox
             .add_bundle(bundle)
             .await
@@ -658,10 +658,6 @@ where
                 }
             }
         }
-        #[cfg(with_metrics)]
-        metrics::NUM_INBOXES
-            .with_label_values(&[])
-            .observe(self.inboxes.count().await? as f64);
         Ok(())
     }
 
