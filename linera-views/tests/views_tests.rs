@@ -932,7 +932,7 @@ where
         let key_str = format!("{:?}", &key);
         let value_usize = (*value.first().unwrap()) as usize;
         view.map.insert(&key_str, value_usize)?;
-        view.key_value_store.insert(key, value).await?;
+        view.key_value_store.insert(key, value)?;
         {
             let subview = view.collection.load_entry_mut(&key_str).await?;
             subview.push(value_usize as u32);
@@ -967,7 +967,7 @@ where
                 tmp += first_value_u64;
                 view.x1.set(tmp);
                 view.map.insert(&key_str, first_value_usize)?;
-                view.key_value_store.insert(key, value).await?;
+                view.key_value_store.insert(key, value)?;
                 {
                     let subview = view.collection.load_entry_mut(&key_str).await?;
                     subview.push(first_value as u32);
@@ -976,7 +976,7 @@ where
             Delete { key } => {
                 let key_str = format!("{:?}", &key);
                 view.map.remove(&key_str)?;
-                view.key_value_store.remove(key).await?;
+                view.key_value_store.remove(key)?;
             }
             DeletePrefix { key_prefix: _ } => {}
         }
@@ -1095,8 +1095,7 @@ where
                 view.map.insert(&str0, pair1_first_u8 as usize)?;
                 view.map.insert(&str1, pair0_first_u8 as usize)?;
                 view.key_value_store
-                    .insert(pair.0.clone(), pair.1.clone())
-                    .await?;
+                    .insert(pair.0.clone(), pair.1.clone())?;
                 if choice == 0 {
                     view.rollback();
                     let hash_new = view.hash().await?;

@@ -4,7 +4,10 @@
 use std::{
     collections::{HashMap, HashSet},
     future::{Future, IntoFuture},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
@@ -44,12 +47,14 @@ where
         storage: ExporterStorage<S>,
         startup_destinations: Vec<Destination>,
         current_committee_destinations: HashSet<DestinationId>,
+        health: Arc<AtomicBool>,
     ) -> Self {
         let exporters_builder = ExporterBuilder::new(
             node_options,
             work_queue_size,
             shutdown_signal,
             &startup_destinations,
+            health,
         );
         Self {
             exporters_builder,
@@ -146,6 +151,7 @@ pub(super) struct ExporterBuilder<F> {
     /// Full destination configs keyed by ID, needed for destinations that
     /// require more than just the address string (e.g. EvmChain).
     destination_configs: HashMap<DestinationId, Destination>,
+    health: Arc<AtomicBool>,
 }
 
 impl<F> ExporterBuilder<F>
@@ -158,6 +164,7 @@ where
         work_queue_size: usize,
         shutdown_signal: F,
         destinations: &[Destination],
+        health: Arc<AtomicBool>,
     ) -> Self {
         let node_provider = GrpcNodeProvider::new(options);
         let arced_node_provider = Arc::new(node_provider);
@@ -169,6 +176,7 @@ where
             work_queue_size,
             node_provider: arced_node_provider,
             destination_configs,
+            health,
         }
     }
 
@@ -180,14 +188,27 @@ where
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
+        let shutdown_signal = self.shutdown_signal.clone();
+        let health = self.health.clone();
+
         match id.kind() {
             DestinationKind::Indexer => {
-                let exporter_task =
-                    super::IndexerExporter::new(id.clone(), self.work_queue_size, self.options);
+                let exporter_task = super::IndexerExporter::new(
+                    id.clone(),
+                    self.work_queue_size,
+                    self.options,
+                    self.health.clone(),
+                );
 
-                tokio::task::spawn(
-                    exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
-                )
+                tokio::task::spawn(async move {
+                    let result = exporter_task
+                        .run_with_shutdown(shutdown_signal, storage)
+                        .await;
+                    if result.is_err() {
+                        health.store(false, Ordering::Release);
+                    }
+                    result
+                })
             }
 
             DestinationKind::Validator => {
@@ -197,16 +218,28 @@ where
                     self.work_queue_size,
                 );
 
-                tokio::task::spawn(
-                    exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
-                )
+                tokio::task::spawn(async move {
+                    let result = exporter_task
+                        .run_with_shutdown(shutdown_signal, storage)
+                        .await;
+                    if result.is_err() {
+                        health.store(false, Ordering::Release);
+                    }
+                    result
+                })
             }
 
             DestinationKind::Logging => {
                 let exporter_task = LoggingExporter::new(id);
-                tokio::task::spawn(
-                    exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
-                )
+                tokio::task::spawn(async move {
+                    let result = exporter_task
+                        .run_with_shutdown(shutdown_signal, storage)
+                        .await;
+                    if result.is_err() {
+                        health.store(false, Ordering::Release);
+                    }
+                    result
+                })
             }
 
             DestinationKind::EvmChain => {
@@ -215,9 +248,15 @@ where
                     .get(&id)
                     .expect("EvmChain destination config must exist");
                 let exporter_task = EvmChainExporter::new(id, destination.clone());
-                tokio::task::spawn(
-                    exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
-                )
+                tokio::task::spawn(async move {
+                    let result = exporter_task
+                        .run_with_shutdown(shutdown_signal, storage)
+                        .await;
+                    if result.is_err() {
+                        health.store(false, Ordering::Release);
+                    }
+                    result
+                })
             }
         }
     }

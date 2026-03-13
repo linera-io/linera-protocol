@@ -217,6 +217,7 @@ services:
     image: "${LINERA_EXPORTER_IMAGE:-linera-exporter}"
     ports:
       - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
+      - "${EXPORTER_METRICS_PORT:-9091}:9091"
     command:
       - sh
       - -c

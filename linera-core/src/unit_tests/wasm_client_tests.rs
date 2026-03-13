@@ -610,7 +610,7 @@ where
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .is_err());
-    receiver.clear_pending_proposal();
+    receiver.clear_pending_proposal().await;
 
     // Try another transfer with the correct amount.
     let transfer = FungibleOperation::Transfer {
@@ -1718,7 +1718,7 @@ where
     );
 
     // Clear the pending proposal and try again with ExpireAfter(6 seconds).
-    creator.clear_pending_proposal();
+    creator.clear_pending_proposal().await;
     let op2 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(6));
     let result = creator
         .execute_operation(Operation::user(app_id, &op2)?)
@@ -1733,7 +1733,7 @@ where
     );
 
     // Clear the pending proposal and try once more with ExpireAfter(7 seconds).
-    creator.clear_pending_proposal();
+    creator.clear_pending_proposal().await;
     let op3 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(7));
     let result = creator
         .execute_operation(Operation::user(app_id, &op3)?)
@@ -1754,7 +1754,7 @@ where
     clock.add(TimeDelta::from_secs(10));
 
     // Clear pending and try to commit ExpireAfter(10 minutes) - should timeout.
-    creator.clear_pending_proposal();
+    creator.clear_pending_proposal().await;
     let op4 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(600));
     let result = creator
         .execute_operation(Operation::user(app_id, &op4)?)

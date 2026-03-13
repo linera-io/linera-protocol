@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -152,6 +156,46 @@ struct RunOptions {
     pub metrics_port: Option<u16>,
 }
 
+async fn start_health_server(
+    address: std::net::SocketAddr,
+    shutdown_signal: CancellationToken,
+    health: Arc<AtomicBool>,
+) {
+    let health_router = axum::Router::new().route(
+        "/health",
+        axum::routing::get(move || {
+            let is_healthy = health.load(std::sync::atomic::Ordering::Acquire);
+            async move {
+                if is_healthy {
+                    (axum::http::StatusCode::OK, "OK")
+                } else {
+                    (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "unhealthy")
+                }
+            }
+        }),
+    );
+
+    #[cfg(with_metrics)]
+    monitoring_server::start_metrics_with_extras(address, shutdown_signal, Some(health_router));
+
+    #[cfg(not(with_metrics))]
+    {
+        let listener = tokio::net::TcpListener::bind(address)
+            .await
+            .expect("Failed to bind health server");
+        let addr = listener.local_addr().expect("Failed to get local address");
+        tracing::info!("Serving /health on {:?}", addr);
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, health_router)
+                .with_graceful_shutdown(shutdown_signal.cancelled_owned())
+                .await
+            {
+                tracing::error!("Health server error: {}", e);
+            }
+        });
+    }
+}
+
 struct ExporterContext {
     node_options: NodeOptions,
     config: BlockExporterConfig,
@@ -168,8 +212,13 @@ impl Runnable for ExporterContext {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
-        #[cfg(with_metrics)]
-        monitoring_server::start_metrics(self.config.metrics_address(), shutdown_notifier.clone());
+        let health = Arc::new(AtomicBool::new(true));
+        start_health_server(
+            self.config.metrics_address(),
+            shutdown_notifier.clone(),
+            health.clone(),
+        )
+        .await;
 
         let (sender, handle) = start_block_processor_task(
             storage,
@@ -178,6 +227,7 @@ impl Runnable for ExporterContext {
             self.node_options,
             self.config.id,
             self.config.destination_config,
+            health,
         );
 
         let service = ExporterService::new(sender);
@@ -426,6 +476,113 @@ impl Runnable for DestinationsContext {
             }
         }
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod health_tests {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+
+    use linera_base::port::get_free_port;
+    use linera_rpc::{config::TlsConfig, NodeOptions};
+    use linera_service::{
+        cli_wrappers::local_net::LocalNet,
+        config::{Destination, DestinationConfig, LimitsConfig},
+    };
+    use linera_storage::{DbStorage, TestClock};
+    use linera_views::memory::MemoryDatabase;
+    use tokio::time::{sleep, Duration};
+    use tokio_util::sync::CancellationToken;
+
+    use super::start_health_server;
+    use crate::{
+        common::ExporterCancellationSignal,
+        runloops::start_block_processor_task,
+        test_utils::{make_simple_state_with_blobs, DummyIndexer, TestDestination},
+    };
+
+    #[test_log::test(tokio::test)]
+    async fn test_health_endpoint_reflects_exporter_errors() -> anyhow::Result<()> {
+        let cancellation_token = CancellationToken::new();
+        let health = Arc::new(AtomicBool::new(true));
+
+        // Start the production health server on a free port.
+        let health_port = get_free_port().await?;
+        let health_addr = std::net::SocketAddr::from(([127, 0, 0, 1], health_port));
+        start_health_server(health_addr, cancellation_token.clone(), health.clone()).await;
+
+        // Start a faulty indexer destination.
+        let indexer_port = get_free_port().await?;
+        let indexer = DummyIndexer::default();
+        indexer.set_faulty();
+        tokio::spawn(
+            indexer
+                .clone()
+                .start(indexer_port, cancellation_token.clone()),
+        );
+        LocalNet::ensure_grpc_server_has_started("faulty indexer", indexer_port as usize, "http")
+            .await?;
+
+        // Prepare storage with test blocks.
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+        let (notification, _state) = make_simple_state_with_blobs(&storage).await;
+
+        // Start the block processor with the faulty indexer and shared health flag.
+        let signal = ExporterCancellationSignal::new(cancellation_token.clone());
+        let (notifier, _handle) = start_block_processor_task(
+            storage,
+            signal,
+            LimitsConfig::default(),
+            NodeOptions {
+                send_timeout: Duration::from_millis(4000),
+                recv_timeout: Duration::from_millis(4000),
+                retry_delay: Duration::from_millis(1000),
+                max_retries: 10,
+                ..Default::default()
+            },
+            0,
+            DestinationConfig {
+                committee_destination: false,
+                destinations: vec![Destination::Indexer {
+                    port: indexer_port,
+                    tls: TlsConfig::ClearText,
+                    endpoint: "127.0.0.1".to_owned(),
+                }],
+            },
+            health.clone(),
+        );
+
+        let base = format!("http://127.0.0.1:{health_port}");
+        let client = reqwest::Client::new();
+
+        // Before any errors, health should be 200.
+        let resp = client.get(format!("{base}/health")).send().await?;
+        assert_eq!(resp.status(), 200);
+        assert_eq!(resp.text().await?, "OK");
+
+        // Send a block notification — the faulty indexer will cause a stream error.
+        notifier.send(notification)?;
+
+        // Wait for the error to propagate and flip the health flag.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while health.load(Ordering::Acquire) {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "health flag did not flip to unhealthy within timeout"
+            );
+            sleep(Duration::from_millis(100)).await;
+        }
+
+        // After the stream error, health should be 500.
+        let resp = client.get(format!("{base}/health")).send().await?;
+        assert_eq!(resp.status(), 500);
+        assert_eq!(resp.text().await?, "unhealthy");
+
+        cancellation_token.cancel();
         Ok(())
     }
 }

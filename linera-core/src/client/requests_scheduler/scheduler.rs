@@ -485,7 +485,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         let mut result = BTreeMap::new();
 
         for (key, info) in nodes.iter() {
-            let score = info.calculate_score().await;
+            let score = info.calculate_score();
             result.insert(
                 *key,
                 (score, info.ema_success_rate(), info.total_requests()),
@@ -529,7 +529,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
             let mut nodes_guard = nodes.write().await;
             if let Some(info) = nodes_guard.get_mut(&public_key) {
                 info.update_metrics(is_success, response_time_ms);
-                let score = info.calculate_score().await;
+                let score = info.calculate_score();
                 tracing::trace!(
                     node = %public_key,
                     address = %info.node.node.address(),
@@ -877,7 +877,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         // Filter nodes that can accept requests and calculate their scores
         let mut scored_nodes = Vec::new();
         for info in nodes.values() {
-            let score = info.calculate_score().await;
+            let score = info.calculate_score();
             scored_nodes.push((score, info.node.clone()));
         }
 

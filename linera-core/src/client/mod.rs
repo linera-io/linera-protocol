@@ -277,6 +277,7 @@ impl<Env: Environment> Client<Env> {
         name: impl Into<String>,
         chain_worker_ttl: Duration,
         sender_chain_worker_ttl: Duration,
+        priority_bundle_origins: HashSet<ChainId>,
         options: ChainClientOptions,
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
@@ -290,7 +291,8 @@ impl<Env: Environment> Client<Env> {
         .with_allow_inactive_chains(true)
         .with_allow_messages_from_deprecated_epochs(true)
         .with_chain_worker_ttl(chain_worker_ttl)
-        .with_sender_chain_worker_ttl(sender_chain_worker_ttl);
+        .with_sender_chain_worker_ttl(sender_chain_worker_ttl)
+        .with_priority_bundle_origins(priority_bundle_origins);
         let local_node = LocalNodeClient::new(state);
         let requests_scheduler = RequestsScheduler::new(vec![], requests_scheduler_config);
 
@@ -884,27 +886,6 @@ impl<Env: Environment> Client<Env> {
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
-    /// Updates the latest block and next block height and round information from the chain info.
-    #[instrument(level = "trace", skip_all, fields(chain_id = format!("{:.8}", info.chain_id)))]
-    fn update_from_info(&self, info: &ChainInfo) {
-        self.chains.pin().update(info.chain_id, |state| {
-            let mut state = state.clone_for_update_unchecked();
-            state.update_from_info(info);
-            state
-        });
-    }
-
-    /// Handles the certificate in the local node and the resulting notifications.
-    #[instrument(level = "trace", skip_all)]
-    async fn process_certificate<T: ProcessableCertificate>(
-        &self,
-        certificate: Box<GenericCertificate<T>>,
-    ) -> Result<(), LocalNodeError> {
-        let info = self.handle_certificate(*certificate).await?.info;
-        self.update_from_info(&info);
-        Ok(())
-    }
-
     /// Submits a validated block for finalization and returns the confirmed block certificate.
     #[instrument(level = "trace", skip_all)]
     async fn finalize_block(
@@ -992,8 +973,7 @@ impl<Env: Environment> Client<Env> {
 
         clock_skew_check_handle.await;
 
-        self.process_certificate(Box::new(certificate.clone()))
-            .await?;
+        self.handle_certificate(certificate.clone()).await?;
         Ok(certificate)
     }
 
@@ -1091,20 +1071,19 @@ impl<Env: Environment> Client<Env> {
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
-        let certificate = Box::new(certificate);
         let block = certificate.block();
         // Recover history from the network.
         self.download_certificates(block.header.chain_id, block.header.height)
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
-        if let Err(err) = self.process_certificate(certificate.clone()).await {
+        if let Err(err) = self.handle_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
                     self.download_blobs(&self.validator_nodes().await?, blob_ids)
                         .await
                         .map_err(|_| err)?;
-                    self.process_certificate(certificate).await?;
+                    self.handle_certificate(certificate).await?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
@@ -1796,8 +1775,7 @@ impl<Env: Environment> Client<Env> {
         certificate: GenericCertificate<ValidatedBlock>,
     ) -> Result<(), ChainClientError> {
         let chain_id = certificate.inner().chain_id();
-        let certificate = Box::new(certificate);
-        match self.process_certificate(certificate.clone()).await {
+        match self.handle_certificate(certificate.clone()).await {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 let mut blobs = Vec::new();
                 for blob_id in blob_ids {
@@ -1810,11 +1788,11 @@ impl<Env: Environment> Client<Env> {
                 self.local_node
                     .handle_pending_blobs(chain_id, blobs)
                     .await?;
-                self.process_certificate(certificate).await?;
+                self.handle_certificate(certificate).await?;
                 Ok(())
             }
             Err(err) => Err(err.into()),
-            Ok(()) => Ok(()),
+            Ok(_) => Ok(()),
         }
     }
 
@@ -2166,43 +2144,23 @@ impl ChainClientError {
 }
 
 impl<Env: Environment> ChainClient<Env> {
-    /// Gets the client mutex from the chain's state.
+    /// Returns the proposal mutex for this chain.
+    ///
+    /// The mutex serializes block proposals and holds the pending proposal (if any).
     #[instrument(level = "trace", skip(self))]
-    fn client_mutex(&self) -> Arc<tokio::sync::Mutex<()>> {
+    fn proposal_mutex(&self) -> Arc<tokio::sync::Mutex<Option<PendingProposal>>> {
         self.client
             .chains
             .pin()
             .get(&self.chain_id)
             .expect("Chain client constructed for invalid chain")
-            .client_mutex()
+            .proposal_mutex()
     }
 
-    /// Gets the next pending block.
+    /// Returns the pending proposal, if any.
     #[instrument(level = "trace", skip(self))]
-    pub fn pending_proposal(&self) -> Option<PendingProposal> {
-        self.client
-            .chains
-            .pin()
-            .get(&self.chain_id)
-            .expect("Chain client constructed for invalid chain")
-            .pending_proposal()
-            .clone()
-    }
-
-    /// Updates the chain's state using a closure.
-    #[instrument(level = "trace", skip(self, f))]
-    fn update_state<F>(&self, f: F)
-    where
-        F: Fn(&mut ChainClientState),
-    {
-        let chains = self.client.chains.pin();
-        chains
-            .update(self.chain_id, |state| {
-                let mut state = state.clone_for_update_unchecked();
-                f(&mut state);
-                state
-            })
-            .expect("Chain client constructed for invalid chain");
+    pub async fn pending_proposal(&self) -> Option<PendingProposal> {
+        self.proposal_mutex().lock().await.clone()
     }
 
     /// Gets a reference to the client's signer instance.
@@ -2317,7 +2275,6 @@ impl<Env: Environment> ChainClient<Env> {
             .local_node
             .handle_chain_info_query(query)
             .await?;
-        self.client.update_from_info(&response.info);
         Ok(response.info)
     }
 
@@ -2332,7 +2289,6 @@ impl<Env: Environment> ChainClient<Env> {
             .local_node
             .handle_chain_info_query(query)
             .await?;
-        self.client.update_from_info(&response.info);
         Ok(response.info)
     }
 
@@ -2588,7 +2544,6 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?;
         }
 
-        self.client.update_from_info(&info);
         Ok(info)
     }
 
@@ -3060,7 +3015,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .communicate_chain_action(committee, action, value)
                 .await?,
         );
-        self.client.process_certificate(certificate.clone()).await?;
+        self.client.handle_certificate(*certificate.clone()).await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.client
             .communicate_chain_updates(
@@ -3176,15 +3131,22 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
-        let mutex = self.client_mutex();
+        let mutex = self.proposal_mutex();
         let lock_start = linera_base::time::Instant::now();
-        let _guard = mutex.lock_owned().await;
+        let mut proposal_guard = mutex.lock_owned().await;
         tracing::debug!(
             lock_wait_ms = lock_start.elapsed().as_millis(),
-            "acquired client_mutex in execute_block"
+            "acquired proposal_mutex in execute_block"
         );
         // TODO(#5092): We shouldn't need to call this explicitly.
-        match self.process_pending_block_without_prepare().await? {
+        // Process any leftover pending proposal from a previous interrupted call.
+        // Even if there is no pending proposal, this still calls
+        // `request_leader_timeout_if_needed` which ensures the local chain state
+        // is synchronized with the current consensus round.
+        match self
+            .process_pending_block_without_prepare(&mut proposal_guard)
+            .await?
+        {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
@@ -3210,16 +3172,21 @@ impl<Env: Environment> ChainClient<Env> {
             ));
         }
 
-        let block = self.new_pending_block(transactions, blobs).await?;
+        let block = self
+            .new_pending_block(transactions, blobs, &mut proposal_guard)
+            .await?;
 
-        match self.process_pending_block_without_prepare().await? {
+        match self
+            .process_pending_block_without_prepare(&mut proposal_guard)
+            .await?
+        {
             ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
                 Ok(ClientOutcome::Committed(certificate))
             }
             ClientOutcome::Committed(Some(certificate)) => {
                 Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
-            // Should be unreachable: We did set a pending block.
+            // Unreachable: We just set the pending proposal in the guard.
             ClientOutcome::Committed(None) => Err(ChainClientError::BlockProposalError(
                 "Unexpected block proposal error",
             )),
@@ -3259,19 +3226,21 @@ impl<Env: Environment> ChainClient<Env> {
             .collect::<Vec<_>>())
     }
 
-    /// Creates a new pending block and handles the proposal in the local node.
-    /// Next time `process_pending_block_without_prepare` is called, this block will be proposed
-    /// to the validators.
-    #[instrument(level = "trace", skip(transactions, blobs))]
+    /// Creates a new pending block and stores it in `proposal_guard`.
+    ///
+    /// The caller must hold the proposal mutex. The pending proposal is written directly
+    /// into the guard so that it is always synchronized with the mutex.
+    #[instrument(level = "trace", skip(transactions, blobs, proposal_guard))]
     async fn new_pending_block(
         &self,
         transactions: Vec<Transaction>,
         blobs: Vec<Blob>,
+        proposal_guard: &mut Option<PendingProposal>,
     ) -> Result<Block, ChainClientError> {
         let identity = self.identity().await?;
 
         ensure!(
-            self.pending_proposal().is_none(),
+            proposal_guard.is_none(),
             ChainClientError::BlockProposalError(
                 "Client state already has a pending block; \
                 use the `linera retry-pending-block` command to commit that first"
@@ -3300,8 +3269,9 @@ impl<Env: Environment> ChainClient<Env> {
         ))
         .await?;
         let (proposed_block, _) = block.clone().into_proposal();
-        self.update_state(|state| {
-            state.set_pending_proposal(proposed_block.clone(), blobs.clone())
+        *proposal_guard = Some(PendingProposal {
+            block: proposed_block,
+            blobs,
         });
         Ok(block)
     }
@@ -3606,23 +3576,41 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info)
     }
 
-    /// Processes the last pending block
+    /// Processes the last pending block.
     #[instrument(level = "trace")]
     pub async fn process_pending_block(
         &self,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
         self.prepare_chain().await?;
-        self.process_pending_block_without_prepare().await
+        let mutex = self.proposal_mutex();
+        let mut proposal_guard = mutex.lock_owned().await;
+        self.process_pending_block_without_prepare(&mut proposal_guard)
+            .await
     }
 
     /// Processes the last pending block. Assumes that the local chain is up to date.
-    #[instrument(level = "trace")]
+    ///
+    /// The caller must hold the proposal mutex via `proposal_guard`. The pending proposal
+    /// is read from and cleared through the guard, ensuring synchronization.
+    #[instrument(level = "trace", skip(proposal_guard))]
     async fn process_pending_block_without_prepare(
         &self,
+        proposal_guard: &mut Option<PendingProposal>,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
         let process_start = linera_base::time::Instant::now();
         tracing::debug!("process_pending_block_without_prepare started");
         let info = self.request_leader_timeout_if_needed().await?;
+
+        // Clear stale pending proposals whose height has already been committed.
+        if let Some(pending) = &*proposal_guard {
+            if pending.block.height < info.next_block_height {
+                tracing::debug!(
+                    "Clearing pending proposal: a block was committed at height {}",
+                    pending.block.height
+                );
+                *proposal_guard = None;
+            }
+        }
 
         // If there is a validated block in the current round, finalize it.
         if info.manager.has_locking_block_in_current_round()
@@ -3634,7 +3622,6 @@ impl<Env: Environment> ChainClient<Env> {
 
         let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
-        let pending_proposal = self.pending_proposal();
         let (block, blobs) = if let Some(locking) = &info.manager.requested_locking {
             match &**locking {
                 LockingBlock::Regular(certificate) => {
@@ -3671,21 +3658,22 @@ impl<Env: Environment> ChainClient<Env> {
                     (block, blobs)
                 }
             }
-        } else if let Some(pending_proposal) = pending_proposal {
+        } else if let Some(pending) = proposal_guard.as_ref() {
             // Otherwise we are free to propose our own pending block.
-            let proposed_block = pending_proposal.block;
+            let proposed_block = pending.block.clone();
+            let blobs = pending.blobs.clone();
             let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _) = self
                 .client
                 .stage_block_execution(
                     proposed_block,
                     round,
-                    pending_proposal.blobs.clone(),
+                    blobs.clone(),
                     BundleExecutionPolicy::committed(),
                 )
                 .await?;
             debug!("Proposing the local pending block.");
-            (block, pending_proposal.blobs)
+            (block, blobs)
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
@@ -3769,6 +3757,8 @@ impl<Env: Environment> ChainClient<Env> {
             total_process_ms = process_start.elapsed().as_millis(),
             "process_pending_block_without_prepare completing"
         );
+        // Clear the pending proposal now that the block has been committed.
+        *proposal_guard = None;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
@@ -3903,8 +3893,8 @@ impl<Env: Environment> ChainClient<Env> {
     /// Clears the information on any operation that previously failed.
     #[cfg(with_testing)]
     #[instrument(level = "trace")]
-    pub fn clear_pending_proposal(&self) {
-        self.update_state(|state| state.clear_pending_proposal());
+    pub async fn clear_pending_proposal(&self) {
+        *self.proposal_mutex().lock().await = None;
     }
 
     /// Rotates the key of the chain.
@@ -4463,11 +4453,7 @@ impl<Env: Environment> ChainClient<Env> {
         local_node: &mut LocalNodeClient<Env::Storage>,
     ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
         match local_node.chain_info(chain_id).await {
-            Ok(info) => {
-                // Useful in case `chain_id` is the same as a local chain.
-                self.client.update_from_info(&info);
-                Ok(Some(info))
-            }
+            Ok(info) => Ok(Some(info)),
             Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => Ok(None),
             Err(err) => Err(err.into()),
         }
