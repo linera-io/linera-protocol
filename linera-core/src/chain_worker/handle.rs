@@ -102,6 +102,7 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
     config: &ChainWorkerConfig,
 ) -> Arc<RwLock<ChainWorkerState<S>>> {
     let last_access = state.last_access_arc();
+    let chain_id = state.chain().chain_id();
     let arc = Arc::new(RwLock::new(state));
     let ttl = if is_tracked {
         config.sender_chain_ttl
@@ -109,7 +110,7 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
         config.ttl
     };
     if let Some(ttl) = ttl {
-        spawn_keep_alive(Arc::clone(&arc), last_access, ttl);
+        spawn_keep_alive(chain_id, Arc::clone(&arc), last_access, ttl);
     }
     arc
 }
@@ -160,6 +161,7 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
 /// after the last access. When the state has been idle for the full TTL, the task
 /// drops the state if it holds the only strong reference.
 fn spawn_keep_alive<S: Storage + Clone + 'static>(
+    chain_id: ChainId,
     mut state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicU64>,
     ttl: Duration,
@@ -177,8 +179,14 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
             } else {
                 // Idle long enough. Drop our strong reference if it's the only one.
                 match Arc::try_unwrap(state) {
-                    Ok(_owned_state) => break,
-                    Err(arc) => state = arc,
+                    Ok(_owned_state) => {
+                        tracing::debug!(%chain_id, "Dropping chain worker");
+                        break;
+                    }
+                    Err(arc) => {
+                        arc.read().await.touch();
+                        state = arc;
+                    }
                 }
             }
         }
