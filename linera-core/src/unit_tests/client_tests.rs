@@ -115,7 +115,7 @@ where
             sender.chain_info().await?.next_block_height,
             BlockHeight::from(1)
         );
-        assert!(sender.pending_proposal().is_none());
+        assert!(sender.pending_proposal().await.is_none());
         assert_eq!(
             sender.local_balance().await.unwrap(),
             Amount::from_millis(1000)
@@ -295,7 +295,7 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
+    assert!(sender.pending_proposal().await.is_none());
     assert_eq!(sender.identity().await?, new_owner);
     assert_eq!(
         builder
@@ -339,7 +339,7 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
+    assert!(sender.pending_proposal().await.is_none());
     assert_matches!(
         sender.identity().await,
         Err(ChainClientError::NotAnOwner(_))
@@ -388,7 +388,7 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
+    assert!(sender.pending_proposal().await.is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     assert_eq!(
         builder
@@ -456,7 +456,7 @@ where
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
     );
-    client.clear_pending_proposal();
+    client.clear_pending_proposal().await;
     client
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
@@ -468,7 +468,7 @@ where
     sender.process_inbox().await.unwrap();
     assert_eq!(client.chain_info().await?, sender.chain_info().await?);
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
-    sender.clear_pending_proposal();
+    sender.clear_pending_proposal().await;
     sender
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
@@ -512,7 +512,7 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
+    assert!(sender.pending_proposal().await.is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
@@ -629,7 +629,7 @@ where
         parent.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
+    assert!(sender.pending_proposal().await.is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     assert_matches!(
         &certificate.block().body.transactions[0],
@@ -706,7 +706,7 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(2)
     );
-    assert!(sender.pending_proposal().is_none());
+    assert!(sender.pending_proposal().await.is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
@@ -759,7 +759,7 @@ where
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     assert!(client1.identity().await.is_ok());
     assert_eq!(
         builder
@@ -862,7 +862,7 @@ where
         chain_1.chain_info().await?.next_block_height,
         BlockHeight::ZERO
     );
-    assert!(chain_1.pending_proposal().is_some());
+    assert!(chain_1.pending_proposal().await.is_some());
     assert_eq!(
         chain_1.local_balance().await.unwrap(),
         Amount::from_tokens(4)
@@ -911,7 +911,7 @@ where
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
@@ -964,7 +964,7 @@ where
         client2.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client2.pending_proposal().is_none());
+    assert!(client2.pending_proposal().await.is_none());
     assert_eq!(
         client2.local_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -1019,7 +1019,7 @@ where
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     // The receiver doesn't know about the transfer.
     client2.process_inbox().await.unwrap();
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
@@ -1105,13 +1105,13 @@ where
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(2)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client2.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client2.pending_proposal().is_none());
+    assert!(client2.pending_proposal().await.is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
@@ -1168,7 +1168,7 @@ where
         admin.chain_info().await?.next_block_height,
         BlockHeight::from(5)
     );
-    assert!(admin.pending_proposal().is_none());
+    assert!(admin.pending_proposal().await.is_none());
     assert!(admin.identity().await.is_ok());
     assert_eq!(admin.chain_info().await?.epoch, Epoch::from(2));
 
@@ -1473,7 +1473,7 @@ where
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client_2a.pending_proposal().is_some());
+    assert!(client_2a.pending_proposal().await.is_some());
 
     for i in 0..=2 {
         let info = builder
@@ -1611,7 +1611,7 @@ where
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client2_a.pending_proposal().is_some());
+    assert!(client2_a.pending_proposal().await.is_some());
 
     for i in 0..=2 {
         let validator_manager = builder
@@ -1842,7 +1842,7 @@ where
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client3_a.pending_proposal().is_some());
+    assert!(client3_a.pending_proposal().await.is_some());
 
     let manager = client3_a
         .chain_info_with_manager_values()
@@ -2075,7 +2075,7 @@ where
         ClientOutcome::Conflict(_) => panic!("Got conflict where we aren't the leader."),
         ClientOutcome::WaitForTimeout(timeout) => timeout,
     };
-    client.clear_pending_proposal();
+    client.clear_pending_proposal().await;
     assert!(client.request_leader_timeout().await.is_err());
     clock.set(timeout.timestamp);
     client.request_leader_timeout().await.unwrap();
@@ -2286,6 +2286,7 @@ where
     assert!(result.is_err());
     assert!(!client1
         .pending_proposal()
+        .await
         .as_ref()
         .unwrap()
         .blobs
@@ -2303,7 +2304,7 @@ where
         manager.requested_locking.unwrap().round(),
         Round::MultiLeader(1)
     );
-    assert!(client0.pending_proposal().is_some());
+    assert!(client0.pending_proposal().await.is_some());
 
     // Client 0 now only tries to transfer 1 token. But instead, they automatically finalize the
     // pending block, which publishes the blob.
@@ -2317,7 +2318,7 @@ where
         client0.local_balance().await.unwrap(),
         Amount::from_tokens(10)
     );
-    assert!(client0.pending_proposal().is_none());
+    assert!(client0.pending_proposal().await.is_none());
 
     // Transfer a token so Client 1 sees that the blob is already published
     client1.prepare_chain().await.unwrap();
@@ -2328,7 +2329,7 @@ where
         client1.local_balance().await.unwrap(),
         Amount::from_tokens(9)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     Ok(())
 }
 
@@ -2465,7 +2466,7 @@ where
         Round::MultiLeader(0)
     );
     assert_eq!(manager.current_round, Round::MultiLeader(1));
-    assert!(client1.pending_proposal().is_some());
+    assert!(client1.pending_proposal().await.is_some());
     assert_matches!(
         client1
             .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
@@ -2576,7 +2577,7 @@ where
     // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
     builder.set_fault_type([0, 1, 2], FaultType::Honest);
     client1.synchronize_from_validators().await.unwrap();
-    assert!(client1.pending_proposal().is_some());
+    assert!(client1.pending_proposal().await.is_some());
     // This test involves timeouts and potential conflicts. Handle them appropriately.
     loop {
         match client1

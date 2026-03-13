@@ -254,8 +254,10 @@ impl<Env: Environment> chain_listener::ClientContext for ClientContext<Env> {
             .await
     }
 
-    async fn update_wallet(&mut self, client: &ChainClient<Env>) -> Result<(), Error> {
-        self.update_wallet_from_client(client).make_sync().await
+    async fn update_wallet(&mut self, chain_client: &ChainClient<Env>) -> Result<(), Error> {
+        self.update_wallet_from_client(chain_client)
+            .make_sync()
+            .await
     }
 }
 
@@ -402,9 +404,9 @@ impl<Env: Environment> ClientContext<Env> {
 
     pub async fn update_wallet_from_client<Env_: Environment>(
         &self,
-        client: &ChainClient<Env_>,
+        chain_client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
-        let info = client.chain_info().await?;
+        let info = chain_client.chain_info().await?;
         let existing_owner = self
             .wallet()
             .get(info.chain_id)
@@ -416,7 +418,7 @@ impl<Env: Environment> ClientContext<Env> {
             .insert(
                 info.chain_id,
                 wallet::Chain {
-                    pending_proposal: client.pending_proposal().clone(),
+                    pending_proposal: chain_client.pending_proposal().await,
                     owner: existing_owner,
                     ..info.as_ref().into()
                 },
@@ -516,14 +518,14 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<(), Error> {
         self.client
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
-        let client = self.make_chain_client(chain_id).await?;
+        let chain_client = self.make_chain_client(chain_id).await?;
 
         // Ensure we have the chain description blob.
-        client.get_chain_description().await?;
+        chain_client.get_chain_description().await?;
 
         // Synchronize and get chain info.
-        client.synchronize_from_validators().await?;
-        let info = client.chain_info().await?;
+        chain_client.synchronize_from_validators().await?;
+        let info = chain_client.chain_info().await?;
 
         // Validate that the owner can propose on this chain (either as owner or via
         // open_multi_leader_rounds).
@@ -567,7 +569,7 @@ impl<Env: Environment> ClientContext<Env> {
     /// timeout, it will wait and retry.
     pub async fn apply_client_command<E, F, Fut, T>(
         &mut self,
-        client: &ChainClient<Env>,
+        chain_client: &ChainClient<Env>,
         mut f: F,
     ) -> Result<T, Error>
     where
@@ -575,10 +577,10 @@ impl<Env: Environment> ClientContext<Env> {
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         Error: From<E>,
     {
-        client.prepare_chain().await?;
+        chain_client.prepare_chain().await?;
         // Try applying f optimistically without validator notifications. Return if committed.
-        let result = f(client).await;
-        self.update_wallet_from_client(client).await?;
+        let result = f(chain_client).await;
+        self.update_wallet_from_client(chain_client).await?;
         match result? {
             ClientOutcome::Committed(t) => return Ok(t),
             ClientOutcome::Conflict(certificate) => {
@@ -588,13 +590,13 @@ impl<Env: Environment> ClientContext<Env> {
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (listener, _listen_handle, mut notification_stream) = client.listen().await?;
+        let (listener, _listen_handle, mut notification_stream) = chain_client.listen().await?;
         self.chain_listeners.spawn_task(listener);
 
         loop {
             // Try applying f. Return if committed.
-            let result = f(client).await;
-            self.update_wallet_from_client(client).await?;
+            let result = f(chain_client).await;
+            self.update_wallet_from_client(chain_client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::Conflict(certificate) => {
@@ -609,8 +611,8 @@ impl<Env: Environment> ClientContext<Env> {
 
     pub async fn ownership(&mut self, chain_id: Option<ChainId>) -> Result<ChainOwnership, Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let client = self.make_chain_client(chain_id).await?;
-        let info = client.chain_info().await?;
+        let chain_client = self.make_chain_client(chain_id).await?;
+        let info = chain_client.chain_info().await?;
         Ok(info.manager.ownership)
     }
 
@@ -1007,7 +1009,7 @@ impl<Env: Environment> ClientContext<Env> {
             for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
-                let pending_proposal = chain_client.pending_proposal().clone();
+                let pending_proposal = chain_client.pending_proposal().await;
                 self.wallet()
                     .insert(
                         info.chain_id,
