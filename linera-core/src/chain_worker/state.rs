@@ -909,9 +909,8 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
-        let mut inbox = self.chain.load_inbox_mut(&origin).await?;
         let (next_height_to_receive, last_anticipated_block_height) =
-            ChainStateView::inbox_cursors(&inbox).await?;
+            self.chain.inbox_cursors(&origin).await?;
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(
@@ -932,13 +931,7 @@ where
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
             self.chain
-                .receive_message_bundle(
-                    &mut inbox,
-                    &origin,
-                    bundle,
-                    local_time,
-                    add_to_received_log,
-                )
+                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
                 .await?;
         }
         if !self.config.allow_inactive_chains && !self.chain.is_active() {
