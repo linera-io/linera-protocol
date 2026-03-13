@@ -338,6 +338,16 @@ impl<Env: Environment> Client<Env> {
         self.environment.network()
     }
 
+    /// Handles any pending local cross-chain requests, notifying subscribers.
+    pub async fn retry_pending_cross_chain_requests(
+        &self,
+        sender_chain: ChainId,
+    ) -> Result<(), LocalNodeError> {
+        self.local_node
+            .retry_pending_cross_chain_requests(sender_chain, &self.notifier)
+            .await
+    }
+
     /// Returns a reference to the client's [`Signer`][crate::environment::Signer].
     #[instrument(level = "trace", skip(self))]
     pub fn signer(&self) -> &Env::Signer {
@@ -1234,8 +1244,7 @@ impl<Env: Environment> Client<Env> {
         }
 
         if certificates.is_empty() {
-            self.local_node
-                .retry_pending_cross_chain_requests(sender_chain_id)
+            self.retry_pending_cross_chain_requests(sender_chain_id)
                 .await?;
         }
 
