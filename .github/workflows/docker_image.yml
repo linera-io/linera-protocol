@@ -2,7 +2,7 @@ name: Docker Image
 
 on:
   push:
-    branches: [ 'devnet_*', 'testnet_*' ]
+    branches: [ 'devnet_*', 'testnet_*', 'bridge-main' ]
   workflow_dispatch:
 
 permissions:
@@ -71,6 +71,12 @@ jobs:
           echo "EXPORTER_IMAGE_SHORT=${REGISTRY_BASE}/${EXPORTER_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
           echo "EXPORTER_IMAGE_LONG=${REGISTRY_BASE}/${EXPORTER_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
 
+          # Bridge image names
+          BRIDGE_IMAGE_NAME="linera-bridge"
+          echo "BRIDGE_IMAGE_BRANCH=${REGISTRY_BASE}/${BRIDGE_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "BRIDGE_IMAGE_SHORT=${REGISTRY_BASE}/${BRIDGE_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+          echo "BRIDGE_IMAGE_LONG=${REGISTRY_BASE}/${BRIDGE_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
+
       - name: Build and push all images in parallel using GCP Cloud Build
         run: |
           set -e
@@ -136,6 +142,9 @@ jobs:
           BUILD_ID_EXPORTER=$(submit_build "docker/build-exporter-image.yaml" \
             "${{ env.EXPORTER_IMAGE_BRANCH }}" "${{ env.EXPORTER_IMAGE_SHORT }}" "${{ env.EXPORTER_IMAGE_LONG }}" "Exporter")
 
+          BUILD_ID_BRIDGE=$(submit_build "docker/build-bridge-image.yaml" \
+            "${{ env.BRIDGE_IMAGE_BRANCH }}" "${{ env.BRIDGE_IMAGE_SHORT }}" "${{ env.BRIDGE_IMAGE_LONG }}" "Bridge")
+
           echo ""
           echo "All builds submitted. Now streaming logs and waiting for completion..."
           echo ""
@@ -149,6 +158,8 @@ jobs:
           PID_EXPLORER=$!
           stream_build_logs "$BUILD_ID_EXPORTER" "Exporter build" &
           PID_EXPORTER=$!
+          stream_build_logs "$BUILD_ID_BRIDGE" "Bridge build" &
+          PID_BRIDGE=$!
 
           # Wait for all background jobs and check exit codes
           EXIT_CODE=0
@@ -156,6 +167,7 @@ jobs:
           wait $PID_INDEXER || EXIT_CODE=$?
           wait $PID_EXPLORER || EXIT_CODE=$?
           wait $PID_EXPORTER || EXIT_CODE=$?
+          wait $PID_BRIDGE || EXIT_CODE=$?
 
           if [[ $EXIT_CODE -ne 0 ]]; then
             echo ""

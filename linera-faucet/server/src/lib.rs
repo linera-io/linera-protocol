@@ -19,7 +19,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     bcs,
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, ApplicationPermissions, ChainDescription, Timestamp},
+    data_types::{Amount, ApplicationPermissions, ChainDescription, Epoch, Timestamp},
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
 };
@@ -316,6 +316,12 @@ where
     /// Returns the current committee, including weights and resource policy.
     async fn current_committee(&self) -> Result<Committee, Error> {
         Ok(self.client.local_committee().await?)
+    }
+
+    /// Returns the current epoch of the faucet's chain.
+    async fn current_epoch(&self) -> Result<Epoch, Error> {
+        let info = self.client.chain_info().await?;
+        Ok(info.epoch)
     }
 
     /// Find the existing chain with the given authentication key, if any.
