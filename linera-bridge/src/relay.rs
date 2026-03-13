@@ -85,26 +85,54 @@ async fn deposit_handler(
     State(state): State<Arc<AppState>>,
     Json(req): Json<DepositHttpRequest>,
 ) -> impl IntoResponse {
+    tracing::info!(tx_hash = %req.tx_hash, "Received deposit request");
+
     let tx_hash = match req.tx_hash.parse() {
         Ok(h) => h,
         Err(_) => {
+            tracing::error!(tx_hash = %req.tx_hash, "Invalid tx_hash format");
             return (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"error": "invalid tx_hash"})),
-            )
+            );
         }
     };
 
-    let proof = match state.proof_client.generate_deposit_proof(tx_hash).await {
-        Ok(p) => p,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": format!("{e:#}")})),
-            )
+    // Retry proof generation — on public testnets the RPC may not have
+    // indexed the receipt yet when the frontend sends the tx hash.
+    tracing::info!(%tx_hash, "Generating deposit proof...");
+    let mut proof = None;
+    for attempt in 0..5 {
+        match state.proof_client.generate_deposit_proof(tx_hash).await {
+            Ok(p) => {
+                tracing::info!(
+                    %tx_hash,
+                    tx_index = p.tx_index,
+                    log_count = p.log_indices.len(),
+                    "Deposit proof generated"
+                );
+                proof = Some(p);
+                break;
+            }
+            Err(e) => {
+                if attempt < 4 {
+                    tracing::warn!(
+                        %tx_hash, attempt, "Deposit proof generation failed, retrying: {e:#}"
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(2 * (attempt + 1))).await;
+                } else {
+                    tracing::error!(%tx_hash, "Deposit proof generation failed after 5 attempts: {e:#}");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": format!("{e:#}")})),
+                    );
+                }
+            }
         }
-    };
+    }
+    let proof = proof.unwrap();
 
+    tracing::info!(%tx_hash, "Sending deposit to processing channel...");
     let (resp_tx, resp_rx) = oneshot::channel();
     if state
         .deposit_tx
@@ -115,6 +143,7 @@ async fn deposit_handler(
         .await
         .is_err()
     {
+        tracing::error!(%tx_hash, "Relay deposit channel closed");
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": "relay channel closed"})),
@@ -122,15 +151,24 @@ async fn deposit_handler(
     }
 
     match resp_rx.await {
-        Ok(Ok(())) => (StatusCode::OK, Json(serde_json::json!({"status": "ok"}))),
-        Ok(Err(e)) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e})),
-        ),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "channel closed"})),
-        ),
+        Ok(Ok(())) => {
+            tracing::info!(%tx_hash, "Deposit processed successfully");
+            (StatusCode::OK, Json(serde_json::json!({"status": "ok"})))
+        }
+        Ok(Err(e)) => {
+            tracing::error!(%tx_hash, "Deposit processing failed: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e})),
+            )
+        }
+        Err(_) => {
+            tracing::error!(%tx_hash, "Deposit response channel closed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "channel closed"})),
+            )
+        }
     }
 }
 

@@ -3,22 +3,24 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use alloy_primitives::Bytes;
+use alloy_primitives::{Bytes, B256};
 use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
 use fungible::Account;
 use linera_bridge::proof;
 use linera_sdk::{
+    ethereum::{ContractEthereumClient, EthereumQueries},
     linera_base_types::{AccountOwner, Amount, ChainId, WithContractAbi},
     views::{linera_views, RootView, SetView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
 use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi};
 
-/// On-chain state: tracks processed deposits for replay protection.
+/// On-chain state: tracks processed deposits and verified block hashes.
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
     pub processed_deposits: SetView<DepositKey>,
+    pub verified_block_hashes: SetView<[u8; 32]>,
 }
 
 pub struct EvmBridgeContract {
@@ -68,6 +70,9 @@ impl Contract for EvmBridgeContract {
                 )
                 .await;
             }
+            BridgeOperation::VerifyBlockHash { block_hash } => {
+                self.verify_block_hash(block_hash).await;
+            }
         }
     }
 
@@ -82,6 +87,33 @@ impl Contract for EvmBridgeContract {
 }
 
 impl EvmBridgeContract {
+    async fn verify_block_hash(&mut self, block_hash: [u8; 32]) {
+        let params = self.runtime.application_parameters();
+        assert!(
+            !params.ethereum_endpoint.is_empty(),
+            "ethereum_endpoint must be configured to verify block hashes"
+        );
+
+        let client = ContractEthereumClient::new(params.ethereum_endpoint.clone());
+        assert!(
+            client
+                .is_block_hash_finalized(B256::from(block_hash))
+                .await
+                .expect("failed to check block finality — block may not exist"),
+            "block is not finalized"
+        );
+
+        log::info!(
+            "verified block hash {} is finalized",
+            hex::encode(block_hash)
+        );
+
+        self.state
+            .verified_block_hashes
+            .insert(&block_hash)
+            .expect("failed to insert verified block hash");
+    }
+
     async fn process_deposit(
         &mut self,
         block_header_rlp: &[u8],
@@ -95,6 +127,19 @@ impl EvmBridgeContract {
         // 1. Decode block header → (block_hash, receipts_root)
         let (block_hash, receipts_root) =
             proof::decode_block_header(block_header_rlp).expect("invalid block header RLP");
+
+        // 1b. Finality check: when an endpoint is configured, verify the block hash
+        //     is finalized. Uses cached result if VerifyBlockHash was called earlier.
+        if !params.ethereum_endpoint.is_empty()
+            && !self
+                .state
+                .verified_block_hashes
+                .contains(&block_hash.0)
+                .await
+                .expect("failed to check verified block hashes")
+        {
+            self.verify_block_hash(block_hash.0).await;
+        }
 
         // 2. Verify receipt inclusion via MPT proof
         let proof_bytes: Vec<Bytes> = proof_nodes

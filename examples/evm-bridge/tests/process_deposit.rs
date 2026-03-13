@@ -19,6 +19,7 @@ use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ApplicationId},
     test::{ActiveChain, TestValidator},
 };
+use serde::Deserialize;
 use wrapped_fungible::{WrappedFungibleTokenAbi, WrappedParameters};
 
 /// Helper to query an account balance on the wrapped-fungible app.
@@ -93,6 +94,7 @@ impl TestBridge {
             bridge_contract_address: [0xBB; 20],
             fungible_app_id: fungible_app_id.forget_abi(),
             token_address,
+            ethereum_endpoint: String::new(),
         };
         let bridge_app_id = chain
             .create_application(bridge_module_id, bridge_params, (), vec![])
@@ -165,7 +167,7 @@ impl TestBridge {
         let (receipts_root, proof_bytes) =
             build_receipt_trie(&[(tx_index, receipt.clone())], tx_index);
         let proof_nodes: Vec<Vec<u8>> = proof_bytes.into_iter().map(|b| b.to_vec()).collect();
-        let block_header = build_test_header(receipts_root);
+        let block_header = build_test_header(receipts_root, 12345);
         (block_header, receipt, proof_nodes, tx_index, 0)
     }
 }
@@ -219,7 +221,7 @@ async fn test_process_deposit() {
     assert!(result.is_err(), "replay deposit should be rejected");
 
     // Use a different (wrong) receipts root in the block header
-    let wrong_header = build_test_header(B256::from([0xFF; 32]));
+    let wrong_header = build_test_header(B256::from([0xFF; 32]), 12345);
 
     let result = tb
         .chain
@@ -554,5 +556,250 @@ async fn test_replay_different_log_index_succeeds() {
     assert_eq!(
         query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
         Some(Amount::from_attos(2_000_000u128)),
+    );
+}
+
+// -- finality verification tests --
+
+/// When `ethereum_endpoint` is set but the block hash can't be verified
+/// (HTTP not authorized), ProcessDeposit should fail during inline finality check.
+#[tokio::test]
+async fn test_process_deposit_without_verification() {
+    let (validator, bridge_module_id) =
+        TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
+    let mut chain = validator.new_chain().await;
+    let chain_owner = AccountOwner::from(chain.public_key());
+
+    let fungible_module_id = chain
+        .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
+            "../wrapped-fungible",
+        )
+        .await;
+
+    let token_address = [0xA0; 20];
+    let source_chain_id = 8453u64;
+
+    let wrapped_params = WrappedParameters {
+        ticker_symbol: "wUSDC".to_string(),
+        minter: chain_owner,
+        mint_chain_id: chain.id(),
+        evm_token_address: token_address,
+        evm_source_chain_id: source_chain_id,
+    };
+    let fungible_app_id = chain
+        .create_application(
+            fungible_module_id,
+            wrapped_params,
+            InitialStateBuilder::default().build(),
+            vec![],
+        )
+        .await;
+
+    // Non-empty endpoint → finality check is enforced
+    let bridge_params = BridgeParameters {
+        source_chain_id,
+        bridge_contract_address: [0xBB; 20],
+        fungible_app_id: fungible_app_id.forget_abi(),
+        token_address,
+        ethereum_endpoint: "http://localhost:8545".to_string(),
+    };
+    let bridge_app_id = chain
+        .create_application(bridge_module_id, bridge_params, (), vec![])
+        .await;
+
+    // Build a valid deposit proof (same as other tests)
+    let bridge_contract = Address::from([0xBB; 20]);
+    let token = Address::from(token_address);
+    let chain_id_bytes: [u8; 32] = chain.id().0.into();
+    let target_chain_b256 = B256::from(chain_id_bytes);
+    let owner_hash = match chain_owner {
+        AccountOwner::Address32(hash) => <[u8; 32]>::from(hash),
+        _ => panic!("expected Address32"),
+    };
+    let target_owner_b256 = B256::from(owner_hash);
+
+    let event_data = build_deposit_event_data(
+        source_chain_id,
+        target_chain_b256,
+        B256::ZERO,
+        target_owner_b256,
+        token,
+        1_000_000,
+        0,
+    );
+    let depositor = Address::from([0xDD; 20]);
+    let mut depositor_topic = [0u8; 32];
+    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
+
+    let log = ReceiptLog {
+        address: bridge_contract,
+        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
+        data: event_data,
+    };
+    let receipt = build_test_receipt(&[log]);
+    let tx_index = 1u64;
+    let (receipts_root, proof_bytes) = build_receipt_trie(&[(tx_index, receipt.clone())], tx_index);
+    let proof_nodes: Vec<Vec<u8>> = proof_bytes.into_iter().map(|b| b.to_vec()).collect();
+    let block_header = build_test_header(receipts_root, 12345);
+
+    // Submit ProcessDeposit WITHOUT prior VerifyBlockHash — should fail
+    let result = chain
+        .try_add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp: block_header,
+                    receipt_rlp: receipt,
+                    proof_nodes,
+                    tx_index,
+                    log_index: 0,
+                },
+            );
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "ProcessDeposit should fail when finality verification cannot succeed"
+    );
+}
+
+// -- Anvil-based finality verification tests --
+// These require `anvil` (from Foundry) to be installed.
+
+/// Minimal block response for extracting hash from an Anvil RPC call.
+#[derive(Deserialize)]
+struct EthBlock {
+    hash: B256,
+}
+
+/// Queries Anvil for the latest block hash (outside the contract, for test setup).
+async fn get_anvil_block_hash(endpoint: &str) -> B256 {
+    use linera_ethereum::client::JsonRpcClient;
+    let rpc = linera_ethereum::provider::EthereumClientSimplified::new(endpoint.to_string());
+    let block: EthBlock = rpc
+        .request("eth_getBlockByNumber", ("latest", false))
+        .await
+        .expect("failed to query Anvil for latest block");
+    block.hash
+}
+
+/// Sets up a bridge instance with Anvil as the EVM endpoint and the TestValidator
+/// configured to allow HTTP requests to Anvil's host.
+async fn setup_bridge_with_anvil(
+    anvil_endpoint: &str,
+) -> (
+    ActiveChain,
+    AccountOwner,
+    ApplicationId<EvmBridgeAbi>,
+    ApplicationId<WrappedFungibleTokenAbi>,
+) {
+    let (mut validator, bridge_module_id) =
+        TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
+
+    // Allow the contract to make HTTP requests to the Anvil host.
+    validator
+        .change_resource_control_policy(|policy| {
+            policy
+                .http_request_allow_list
+                .insert("localhost".to_owned());
+        })
+        .await;
+
+    let mut chain = validator.new_chain().await;
+    let chain_owner = AccountOwner::from(chain.public_key());
+
+    let fungible_module_id = chain
+        .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
+            "../wrapped-fungible",
+        )
+        .await;
+
+    let token_address = [0xA0; 20];
+    let source_chain_id = 8453u64;
+
+    let wrapped_params = WrappedParameters {
+        ticker_symbol: "wUSDC".to_string(),
+        minter: chain_owner,
+        mint_chain_id: chain.id(),
+        evm_token_address: token_address,
+        evm_source_chain_id: source_chain_id,
+    };
+    let fungible_app_id = chain
+        .create_application(
+            fungible_module_id,
+            wrapped_params,
+            InitialStateBuilder::default().build(),
+            vec![],
+        )
+        .await;
+
+    let bridge_params = BridgeParameters {
+        source_chain_id,
+        bridge_contract_address: [0xBB; 20],
+        fungible_app_id: fungible_app_id.forget_abi(),
+        token_address,
+        ethereum_endpoint: anvil_endpoint.to_string(),
+    };
+    let bridge_app_id = chain
+        .create_application(bridge_module_id, bridge_params, (), vec![])
+        .await;
+
+    (chain, chain_owner, bridge_app_id, fungible_app_id)
+}
+
+/// VerifyBlockHash with a real finalized Anvil block hash should succeed.
+#[tokio::test]
+#[ignore] // requires `anvil` from Foundry
+async fn test_verify_block_hash_anvil() {
+    let anvil = linera_ethereum::test_utils::get_anvil()
+        .await
+        .expect("failed to start anvil");
+
+    let block_hash = get_anvil_block_hash(&anvil.endpoint).await;
+
+    let (chain, _chain_owner, bridge_app_id, _fungible_app_id) =
+        setup_bridge_with_anvil(&anvil.endpoint).await;
+
+    // VerifyBlockHash should succeed — Anvil treats all blocks as finalized.
+    chain
+        .add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::VerifyBlockHash {
+                    block_hash: block_hash.0,
+                },
+            );
+        })
+        .await;
+}
+
+/// VerifyBlockHash with a non-existent block hash should fail.
+#[tokio::test]
+#[ignore] // requires `anvil` from Foundry
+async fn test_verify_block_hash_not_found() {
+    let anvil = linera_ethereum::test_utils::get_anvil()
+        .await
+        .expect("failed to start anvil");
+
+    let (chain, _chain_owner, bridge_app_id, _fungible_app_id) =
+        setup_bridge_with_anvil(&anvil.endpoint).await;
+
+    // VerifyBlockHash with a fake hash — Anvil will return null.
+    let fake_hash = [0xDE; 32];
+    let result = chain
+        .try_add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::VerifyBlockHash {
+                    block_hash: fake_hash,
+                },
+            );
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "VerifyBlockHash with non-existent hash should fail"
     );
 }
