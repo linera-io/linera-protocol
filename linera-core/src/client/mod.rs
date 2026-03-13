@@ -428,11 +428,9 @@ impl<Env: Environment> Client<Env> {
 
     /// Sets whether the given chain is in follow-only mode.
     pub fn set_chain_follow_only(&self, chain_id: ChainId, follow_only: bool) {
-        self.chains.pin().update(chain_id, |state| {
-            let mut state = state.clone_for_update_unchecked();
-            state.set_follow_only(follow_only);
-            state
-        });
+        self.chains
+            .pin()
+            .update(chain_id, |state| state.with_follow_only(follow_only));
     }
 
     /// Fetches the chain description blob if needed, and returns the chain info.
@@ -719,27 +717,6 @@ impl<Env: Environment> Client<Env> {
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
-    /// Updates the latest block and next block height and round information from the chain info.
-    #[instrument(level = "trace", skip_all, fields(chain_id = format!("{:.8}", info.chain_id)))]
-    fn update_from_info(&self, info: &ChainInfo) {
-        self.chains.pin().update(info.chain_id, |state| {
-            let mut state = state.clone_for_update_unchecked();
-            state.update_from_info(info);
-            state
-        });
-    }
-
-    /// Handles the certificate in the local node and the resulting notifications.
-    #[instrument(level = "trace", skip_all)]
-    async fn process_certificate<T: ProcessableCertificate>(
-        &self,
-        certificate: Box<GenericCertificate<T>>,
-    ) -> Result<(), LocalNodeError> {
-        let info = self.handle_certificate(*certificate).await?.info;
-        self.update_from_info(&info);
-        Ok(())
-    }
-
     /// Submits a validated block for finalization and returns the confirmed block certificate.
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn finalize_block(
@@ -829,8 +806,7 @@ impl<Env: Environment> Client<Env> {
 
         clock_skew_check_handle.await;
 
-        self.process_certificate(Box::new(certificate.clone()))
-            .await?;
+        self.handle_certificate(certificate.clone()).await?;
         Ok(certificate)
     }
 
@@ -930,20 +906,19 @@ impl<Env: Environment> Client<Env> {
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), chain_client::Error> {
-        let certificate = Box::new(certificate);
         let block = certificate.block();
         // Recover history from the network.
         self.download_certificates(block.header.chain_id, block.header.height)
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
-        if let Err(err) = self.process_certificate(certificate.clone()).await {
+        if let Err(err) = self.handle_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
                     self.download_blobs(&self.validator_nodes().await?, blob_ids)
                         .await
                         .map_err(|_| err)?;
-                    self.process_certificate(certificate).await?;
+                    self.handle_certificate(certificate).await?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
@@ -1613,8 +1588,7 @@ impl<Env: Environment> Client<Env> {
         certificate: GenericCertificate<ValidatedBlock>,
     ) -> Result<(), chain_client::Error> {
         let chain_id = certificate.inner().chain_id();
-        let certificate = Box::new(certificate);
-        match self.process_certificate(certificate.clone()).await {
+        match self.handle_certificate(certificate.clone()).await {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 let mut blobs = Vec::new();
                 for blob_id in blob_ids {
@@ -1627,11 +1601,11 @@ impl<Env: Environment> Client<Env> {
                 self.local_node
                     .handle_pending_blobs(chain_id, blobs)
                     .await?;
-                self.process_certificate(certificate).await?;
+                self.handle_certificate(certificate).await?;
                 Ok(())
             }
             Err(err) => Err(err.into()),
-            Ok(()) => Ok(()),
+            Ok(_) => Ok(()),
         }
     }
 
