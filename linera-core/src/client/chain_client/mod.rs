@@ -1055,11 +1055,11 @@ impl<Env: Environment> ChainClient<Env> {
         nodes: &[RemoteNode<Env::ValidatorNode>],
         other_sender_chains: Vec<ChainId>,
     ) {
-        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(|chain_id| {
-            let local_node = self.client.local_node.clone();
-            async move {
-                if let Err(error) = match local_node
-                    .retry_pending_cross_chain_requests(chain_id, &self.client.notifier)
+        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(
+            |chain_id| async move {
+                if let Err(error) = match self
+                    .client
+                    .retry_pending_cross_chain_requests(chain_id)
                     .await
                 {
                     Ok(()) => Ok(()),
@@ -1076,8 +1076,8 @@ impl<Env: Environment> ChainClient<Env> {
                                 messages"
                             );
                         }
-                        local_node
-                            .retry_pending_cross_chain_requests(chain_id, &self.client.notifier)
+                        self.client
+                            .retry_pending_cross_chain_requests(chain_id)
                             .await
                     }
                     err => err,
@@ -1088,8 +1088,8 @@ impl<Env: Environment> ChainClient<Env> {
                         "Failed to retry outgoing messages from chain"
                     );
                 }
-            }
-        }));
+            },
+        ));
         stream.for_each(future::ready).await;
     }
 
@@ -2491,8 +2491,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn retry_pending_outgoing_messages(&self) -> Result<(), Error> {
         self.client
-            .local_node
-            .retry_pending_cross_chain_requests(self.chain_id, &self.client.notifier)
+            .retry_pending_cross_chain_requests(self.chain_id)
             .await?;
         Ok(())
     }
