@@ -473,14 +473,23 @@ where
         Ok(())
     }
 
-    pub async fn next_block_height_to_receive(
+    /// Returns the next block height to receive and the last anticipated block height
+    /// for the given origin, loading the inbox only once.
+    pub async fn inbox_cursors(
         &self,
         origin: &ChainId,
-    ) -> Result<BlockHeight, ChainError> {
+    ) -> Result<(BlockHeight, Option<BlockHeight>), ChainError> {
         let inbox = self.inboxes.try_load_entry(origin).await?;
         match inbox {
-            Some(inbox) => inbox.next_block_height_to_receive(),
-            None => Ok(BlockHeight::ZERO),
+            Some(inbox) => {
+                let next_height = inbox.next_block_height_to_receive()?;
+                let last_anticipated = match inbox.removed_bundles.back().await? {
+                    Some(bundle) => Some(bundle.height),
+                    None => None,
+                };
+                Ok((next_height, last_anticipated))
+            }
+            None => Ok((BlockHeight::ZERO, None)),
         }
     }
 
@@ -492,20 +501,6 @@ where
             return Ok(height.saturating_add(BlockHeight(1)));
         }
         Ok(self.tip_state.get().next_block_height)
-    }
-
-    pub async fn last_anticipated_block_height(
-        &self,
-        origin: &ChainId,
-    ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
-        match inbox {
-            Some(inbox) => match inbox.removed_bundles.back().await? {
-                Some(bundle) => Ok(Some(bundle.height)),
-                None => Ok(None),
-            },
-            None => Ok(None),
-        }
     }
 
     /// Attempts to process a new `bundle` of messages from the given `origin`. Returns an

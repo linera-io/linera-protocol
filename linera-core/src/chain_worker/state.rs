@@ -897,9 +897,8 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
-        let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
-        let last_anticipated_block_height =
-            self.chain.last_anticipated_block_height(&origin).await?;
+        let (next_height_to_receive, last_anticipated_block_height) =
+            self.chain.inbox_cursors(&origin).await?;
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(
