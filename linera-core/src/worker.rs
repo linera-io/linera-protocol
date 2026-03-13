@@ -515,7 +515,6 @@ fn start_sweep<S: Storage + Clone + 'static>(
                 Some(Err(_)) => false, // Loading failed; clean up.
                 None => true,          // Still loading; keep.
             });
-            drop(map);
         }
     })
     .forget();
@@ -745,10 +744,9 @@ where
     /// Gets or creates a chain worker for the given chain.
     ///
     /// A single `compute` call per iteration handles all cases atomically:
-    /// live worker, loading in progress, or empty/stale slot. The map stores
-    /// `watch::Receiver<Option<Weak<...>>>`; the loader sends the `Weak`
-    /// through the watch channel so waiters receive it directly without
-    /// re-accessing the map.
+    /// live worker, loading in progress, or empty/stale slot. The loader
+    /// sends the `Weak` through a oneshot channel so waiters receive it
+    /// directly without re-accessing the map.
     ///
     /// Returns a type-erased future to keep `!Sync` intermediate types (e.g.
     /// `std::sync::mpsc::Receiver` from `ServiceRuntimeActor::spawn`) out of
