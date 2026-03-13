@@ -795,40 +795,37 @@ where
                 block.body.incoming_bundles(),
             )
             .await?;
-        let oracle_responses = Some(block.body.oracle_responses.clone());
-        let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome =
-            if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
-                chain.execution_state = execution_state
-                    .with_context(|ctx| {
-                        chain
-                            .execution_state
-                            .context()
-                            .clone_with_base_key(ctx.base_key().bytes.clone())
-                    })
-                    .await;
-                outcome.clone()
-            } else {
-                let (_, verified, _resource_tracker) = chain
-                    .execute_block(
-                        proposed_block,
-                        local_time,
-                        None,
-                        &published_blobs,
-                        oracle_responses,
-                        BundleExecutionPolicy::Abort,
-                    )
-                    .await?;
-                verified
-            };
-        // We should always agree on the messages and state hash.
-        ensure!(
-            outcome == verified_outcome,
-            WorkerError::IncorrectOutcome {
-                submitted: Box::new(outcome),
-                computed: Box::new(verified_outcome),
-            }
-        );
+        if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
+            chain.execution_state = execution_state
+                .with_context(|ctx| {
+                    chain
+                        .execution_state
+                        .context()
+                        .clone_with_base_key(ctx.base_key().bytes.clone())
+                })
+                .await;
+        } else {
+            let (proposed_block, outcome) = block.clone().into_proposal();
+            let oracle_responses = Some(outcome.oracle_responses.clone());
+            let (_, verified, _resource_tracker) = chain
+                .execute_block(
+                    proposed_block,
+                    local_time,
+                    None,
+                    &published_blobs,
+                    oracle_responses,
+                    BundleExecutionPolicy::Abort,
+                )
+                .await?;
+            // We should always agree on the messages and state hash.
+            ensure!(
+                outcome == verified,
+                WorkerError::IncorrectOutcome {
+                    submitted: Box::new(outcome),
+                    computed: Box::new(verified),
+                }
+            );
+        }
 
         // Update the rest of the chain state.
         let updated_streams = chain
