@@ -83,6 +83,8 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
+    /// Held so the task is not dropped prematurely; dropped with the state.
+    #[expect(dead_code)]
     service_runtime_task: Option<web_thread_pool::Task<()>>,
     /// Timestamp of the last access, in microseconds since the Unix epoch.
     /// Used by the keep-alive task to determine when the worker has been idle.
@@ -169,13 +171,6 @@ where
     /// Returns a clone of the last-access `Arc`, for use by the keep-alive task.
     pub(crate) fn last_access_arc(&self) -> Arc<AtomicU64> {
         Arc::clone(&self.last_access)
-    }
-
-    /// Drops the service runtime endpoint, signaling the runtime task to stop.
-    /// Returns the runtime task so the caller can await it outside the lock.
-    pub(crate) fn clear_service_runtime(&mut self) -> Option<web_thread_pool::Task<()>> {
-        self.service_runtime_endpoint.take();
-        self.service_runtime_task.take()
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.

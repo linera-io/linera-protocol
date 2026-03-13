@@ -804,8 +804,7 @@ where
                     ) {
                         papaya::Compute::Aborted(Ok(arc), ..) => return Ok(arc),
                         papaya::Compute::Aborted(Err(wait_rx), ..) => Some(wait_rx),
-                        papaya::Compute::Inserted { .. }
-                        | papaya::Compute::Updated { .. } => None,
+                        papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => None,
                         papaya::Compute::Removed { .. } => unreachable!(),
                     }
                     // Guard dropped here.

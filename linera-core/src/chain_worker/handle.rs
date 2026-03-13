@@ -158,38 +158,37 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
 
 /// Spawns a background task that keeps the chain state alive for at least `ttl`
 /// after the last access. When the state has been idle for the full TTL, the task
-/// shuts down the service runtime, drops its strong reference, and exits.
+/// drops its strong reference and tries to upgrade a `Weak`. If the upgrade
+/// succeeds (someone else still holds a strong reference), it re-acquires the
+/// strong reference and continues. It only exits when no strong references remain.
 fn spawn_keep_alive<S: Storage + Clone + 'static>(
     state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicU64>,
     ttl: Duration,
 ) {
+    let weak = Arc::downgrade(&state);
     linera_base::Task::spawn(async move {
+        let mut _strong = Some(state);
+        let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
         loop {
             linera_base::time::timer::sleep(ttl).await;
             let last = last_access.load(Ordering::Relaxed);
             let now = current_time_micros();
             let idle_micros = now.saturating_sub(last);
-            let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
-            if idle_micros >= ttl_micros {
-                break;
+            if idle_micros < ttl_micros {
+                // Touched recently — sleep for the remaining time.
+                let remaining = Duration::from_micros(ttl_micros - idle_micros);
+                linera_base::time::timer::sleep(remaining).await;
+                continue;
             }
-            // Touched recently — sleep for the remaining time.
-            let remaining = Duration::from_micros(ttl_micros - idle_micros);
-            linera_base::time::timer::sleep(remaining).await;
-        }
-        // Shut down: acquire write lock to drain outstanding guards, then
-        // clear the endpoint and await the runtime task.
-        let task = {
-            let mut guard = RollbackGuard(state.clone().write_owned().await);
-            guard.clear_service_runtime()
-        };
-        if let Some(task) = task {
-            if let Err(err) = task.await {
-                tracing::warn!(%err, "Failed to shut down service runtime");
+            // Idle long enough. Drop our strong reference, then check if
+            // anyone else still holds one.
+            _strong = None;
+            match weak.upgrade() {
+                Some(arc) => _strong = Some(arc),
+                None => break,
             }
         }
-        drop(state);
     })
     .forget();
 }
