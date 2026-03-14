@@ -611,6 +611,23 @@ where
         &self.claim_requests
     }
 
+    /// Approves `spender` to withdraw `amount` of native tokens from `owner`'s account.
+    pub fn approve(&mut self, _owner: AccountOwner, _spender: AccountOwner, _amount: Amount) {
+        // No-op in test runtime
+    }
+
+    /// Transfers `amount` of native tokens from `owner` to `destination` using `spender`'s
+    /// allowance.
+    pub fn transfer_from(
+        &mut self,
+        _owner: AccountOwner,
+        _spender: AccountOwner,
+        _destination: Account,
+        _amount: Amount,
+    ) {
+        // No-op in test runtime
+    }
+
     /// Configures the chain ownership configuration to return during the test.
     pub fn with_chain_ownership(mut self, chain_ownership: ChainOwnership) -> Self {
         self.chain_ownership = Some(chain_ownership);

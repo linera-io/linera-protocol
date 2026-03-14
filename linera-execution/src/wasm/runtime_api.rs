@@ -211,6 +211,30 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Returns the allowance for a given owner-spender pair.
+    fn read_allowance(
+        caller: &mut Caller,
+        owner: AccountOwner,
+        spender: AccountOwner,
+    ) -> Result<Amount, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_allowance(owner, spender)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns all allowances on this chain.
+    fn read_allowances(
+        caller: &mut Caller,
+    ) -> Result<Vec<(AccountOwner, AccountOwner, Amount)>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_allowances()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Makes an HTTP request to the given URL and returns the response body.
     fn perform_http_request(
         caller: &mut Caller,
@@ -515,6 +539,35 @@ where
             .user_data_mut()
             .runtime
             .claim(source, destination, amount)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Approves a `spender` to withdraw an `amount` of native tokens from the `owner`'s account.
+    fn approve(
+        caller: &mut Caller,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .approve(owner, spender, amount)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Transfers an `amount` of native tokens from `owner` to `destination` using `spender`'s allowance.
+    fn transfer_from(
+        caller: &mut Caller,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .transfer_from(owner, spender, destination, amount)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

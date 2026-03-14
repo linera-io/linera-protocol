@@ -4,7 +4,7 @@
 /*! ABI of the Native Fungible Token Example Application */
 
 use async_graphql::SimpleObject;
-use linera_sdk::linera_base_types::{AccountOwner, Amount};
+use linera_sdk::linera_base_types::{AccountOwner, Amount, OwnerSpender};
 use serde::{Deserialize, Serialize};
 
 pub const TICKER_SYMBOL: &str = "NAT";
@@ -12,6 +12,12 @@ pub const TICKER_SYMBOL: &str = "NAT";
 #[derive(Deserialize, SimpleObject)]
 pub struct AccountEntry {
     pub key: AccountOwner,
+    pub value: Amount,
+}
+
+#[derive(Deserialize, SimpleObject)]
+pub struct AllowanceEntry {
+    pub key: OwnerSpender,
     pub value: Amount,
 }
 
