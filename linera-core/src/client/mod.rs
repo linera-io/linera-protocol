@@ -2675,7 +2675,7 @@ impl<Env: Environment> ChainClient<Env> {
         committee: &Committee,
     ) -> Result<(), ChainClientError> {
         let stream_ids_ref = &stream_ids;
-        let result = communicate_with_quorum(
+        communicate_with_quorum(
             nodes,
             committee,
             |_: &()| (),
@@ -2686,14 +2686,7 @@ impl<Env: Environment> ChainClient<Env> {
             },
             self.options.quorum_grace_period,
         )
-        .await;
-        // Quorum failure is non-fatal — there may simply be no events yet.
-        if let Err(error) = &result {
-            debug!(
-                %publisher_chain_id, %error,
-                "Failed to sync events from publisher chain"
-            );
-        }
+        .await?;
         Ok(())
     }
 
@@ -4790,11 +4783,7 @@ impl<Env: Environment> ChainClient<Env> {
                         if let Some(ListeningMode::EventsOnly(subscribed)) = this.listening_mode() {
                             if let Err(error) = this
                                 .client
-                                .sync_events_from_node(
-                                    this.chain_id,
-                                    &subscribed,
-                                    &remote_node,
-                                )
+                                .sync_events_from_node(this.chain_id, &subscribed, &remote_node)
                                 .await
                             {
                                 debug!(
