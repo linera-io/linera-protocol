@@ -1488,8 +1488,8 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Queries a validator for the latest event-bearing blocks for the given streams,
-    /// then downloads them sparsely.
+    /// Queries a validator for event-bearing blocks for the given streams, then downloads
+    /// them.
     async fn sync_events_from_node(
         &self,
         chain_id: ChainId,
@@ -1501,13 +1501,12 @@ impl<Env: Environment> Client<Env> {
             .node
             .previous_event_blocks(chain_id, stream_ids_vec)
             .await?;
-        if previous_blocks.is_empty() {
-            return Ok(());
-        }
-        let initial_blocks = previous_blocks.into_values().collect();
+        let initial_blocks = previous_blocks.values().copied().collect();
         let local_height = match self.local_node.chain_info(chain_id).await {
             Ok(info) => info.next_block_height,
-            Err(LocalNodeError::InactiveChain(_)) => BlockHeight::ZERO,
+            Err(LocalNodeError::InactiveChain(_) | LocalNodeError::BlobsNotFound(_)) => {
+                BlockHeight::ZERO
+            }
             Err(error) => return Err(error.into()),
         };
         self.download_event_bearing_blocks(
@@ -2650,7 +2649,7 @@ impl<Env: Environment> ChainClient<Env> {
             .into_iter()
             .filter(|(chain_id, _)| *chain_id != admin_chain_id)
             .map(|(chain_id, stream_ids)| {
-                self.sync_publisher_chain_events(chain_id, stream_ids, &nodes)
+                self.sync_publisher_chain_events(chain_id, stream_ids, &nodes, &committee)
             })
             .collect::<Vec<_>>();
         stream::iter(tasks)
@@ -2663,30 +2662,39 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Downloads only event-bearing blocks for the given publisher chain and streams.
+    ///
+    /// Uses `communicate_with_quorum` so that each validator is queried for
+    /// `previous_event_blocks` and the claimed blocks are downloaded from that same
+    /// validator. Waiting for a quorum guarantees that any confirmed event is discovered,
+    /// since at least one honest validator in the quorum must have it.
     async fn sync_publisher_chain_events(
         &self,
         publisher_chain_id: ChainId,
         stream_ids: BTreeSet<StreamId>,
         nodes: &[RemoteNode<Env::ValidatorNode>],
+        committee: &Committee,
     ) -> Result<(), ChainClientError> {
-        let result = communicate_concurrently(
+        let stream_ids_ref = &stream_ids;
+        let result = communicate_with_quorum(
             nodes,
-            async move |remote_node| {
+            committee,
+            |_: &()| (),
+            |remote_node| async move {
                 self.client
-                    .sync_events_from_node(publisher_chain_id, &stream_ids, &remote_node)
+                    .sync_events_from_node(publisher_chain_id, stream_ids_ref, &remote_node)
                     .await
             },
-            |errors| {
-                let (_, error) = errors.into_iter().next_back().unwrap();
-                error
-            },
-            self.options.certificate_batch_download_timeout,
+            self.options.quorum_grace_period,
         )
         .await;
+        // Quorum failure is non-fatal — there may simply be no events yet.
         if let Err(error) = &result {
-            debug!(%publisher_chain_id, %error, "Failed to sync events from publisher chain");
+            debug!(
+                %publisher_chain_id, %error,
+                "Failed to sync events from publisher chain"
+            );
         }
-        result
+        Ok(())
     }
 
     /// Attempts to download new received certificates.
@@ -4782,7 +4790,11 @@ impl<Env: Environment> ChainClient<Env> {
                         if let Some(ListeningMode::EventsOnly(subscribed)) = this.listening_mode() {
                             if let Err(error) = this
                                 .client
-                                .sync_events_from_node(this.chain_id, &subscribed, &remote_node)
+                                .sync_events_from_node(
+                                    this.chain_id,
+                                    &subscribed,
+                                    &remote_node,
+                                )
                                 .await
                             {
                                 debug!(
