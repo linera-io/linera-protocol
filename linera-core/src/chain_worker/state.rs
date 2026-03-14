@@ -83,9 +83,6 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
-    /// Held so the task is not dropped prematurely; dropped with the state.
-    #[expect(dead_code)]
-    service_runtime_task: Option<web_thread_pool::Task<()>>,
     /// Timestamp of the last access, in microseconds since the Unix epoch.
     /// Used by the keep-alive task to determine when the worker has been idle.
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
@@ -123,7 +120,6 @@ where
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
-        service_runtime_task: Option<web_thread_pool::Task<()>>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -132,7 +128,6 @@ where
             storage,
             chain,
             service_runtime_endpoint,
-            service_runtime_task,
             last_access: Arc::new(AtomicU64::new(super::handle::current_time_micros())),
             block_values,
             execution_state_cache,

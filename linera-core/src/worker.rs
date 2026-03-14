@@ -64,9 +64,7 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle::{self, ServiceRuntimeActor},
-        state::ChainWorkerState,
-        BlockOutcome, ChainWorkerConfig, DeliveryNotifier,
+        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -749,7 +747,7 @@ where
     /// directly without re-accessing the map.
     ///
     /// Returns a type-erased future to keep `!Sync` intermediate types (e.g.
-    /// `std::sync::mpsc::Receiver` from `ServiceRuntimeActor::spawn`) out of
+    /// `std::sync::mpsc::Receiver` from `handle::spawn_service_runtime_actor`) out of
     /// the caller's future type.
     fn get_or_create_chain_worker(
         &self,
@@ -845,13 +843,11 @@ where
                 .is_some_and(ListeningMode::is_full)
         });
 
-        let (service_runtime_task, service_runtime_endpoint) =
-            if self.chain_worker_config.long_lived_services {
-                let actor = ServiceRuntimeActor::spawn(chain_id, self.storage.thread_pool()).await;
-                (Some(actor.task), Some(actor.endpoint))
-            } else {
-                (None, None)
-            };
+        let service_runtime_endpoint = if self.chain_worker_config.long_lived_services {
+            Some(handle::spawn_service_runtime_actor(chain_id, self.storage.thread_pool()).await)
+        } else {
+            None
+        };
 
         let state = crate::chain_worker::state::ChainWorkerState::load(
             self.chain_worker_config.clone(),
@@ -862,7 +858,6 @@ where
             delivery_notifier,
             chain_id,
             service_runtime_endpoint,
-            service_runtime_task,
         )
         .await?;
 
