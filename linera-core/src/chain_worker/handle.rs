@@ -54,43 +54,31 @@ impl<S: Storage + Clone + 'static> Drop for RollbackGuard<S> {
     }
 }
 
-/// Actor that manages a long-lived service runtime in a background thread.
-pub(crate) struct ServiceRuntimeActor {
-    pub(crate) task: web_thread_pool::Task<()>,
-    pub(crate) endpoint: ServiceRuntimeEndpoint,
-}
-
-impl ServiceRuntimeActor {
-    /// Spawns a blocking task to execute the service runtime actor.
-    pub(crate) async fn spawn(
-        chain_id: ChainId,
-        thread_pool: &linera_execution::ThreadPool,
-    ) -> Self {
-        let (execution_state_sender, incoming_execution_requests) =
-            futures::channel::mpsc::unbounded();
-        let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
-
-        Self {
-            endpoint: ServiceRuntimeEndpoint {
-                incoming_execution_requests,
-                runtime_request_sender,
-            },
-            task: thread_pool
-                .run((), move |()| async move {
-                    // The dummy context is overwritten by `prepare_for_query`
-                    // before the first actual query is executed.
-                    ServiceSyncRuntime::new(
-                        execution_state_sender,
-                        QueryContext {
-                            chain_id,
-                            next_block_height: BlockHeight(0),
-                            local_time: Timestamp::from(0),
-                        },
-                    )
-                    .run(&runtime_request_receiver)
-                })
-                .await,
-        }
+/// Spawns a blocking task to execute the service runtime endpoint.
+pub(crate) async fn spawn_service_runtime_actor(
+    chain_id: ChainId,
+    thread_pool: &linera_execution::ThreadPool,
+) -> ServiceRuntimeEndpoint {
+    let (execution_state_sender, incoming_execution_requests) = futures::channel::mpsc::unbounded();
+    let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
+    thread_pool
+        .run((), move |()| async move {
+            // The dummy context is overwritten by `prepare_for_query`
+            // before the first actual query is executed.
+            ServiceSyncRuntime::new(
+                execution_state_sender,
+                QueryContext {
+                    chain_id,
+                    next_block_height: BlockHeight(0),
+                    local_time: Timestamp::from(0),
+                },
+            )
+            .run(&runtime_request_receiver)
+        })
+        .await;
+    ServiceRuntimeEndpoint {
+        incoming_execution_requests,
+        runtime_request_sender,
     }
 }
 
@@ -102,6 +90,7 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
     config: &ChainWorkerConfig,
 ) -> Arc<RwLock<ChainWorkerState<S>>> {
     let last_access = state.last_access_arc();
+    let chain_id = state.chain().chain_id();
     let arc = Arc::new(RwLock::new(state));
     let ttl = if is_tracked {
         config.sender_chain_ttl
@@ -109,7 +98,7 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
         config.ttl
     };
     if let Some(ttl) = ttl {
-        spawn_keep_alive(Arc::clone(&arc), last_access, ttl);
+        spawn_keep_alive(chain_id, Arc::clone(&arc), last_access, ttl);
     }
     arc
 }
@@ -158,38 +147,37 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
 
 /// Spawns a background task that keeps the chain state alive for at least `ttl`
 /// after the last access. When the state has been idle for the full TTL, the task
-/// shuts down the service runtime, drops its strong reference, and exits.
+/// drops the state if it holds the only strong reference.
 fn spawn_keep_alive<S: Storage + Clone + 'static>(
-    state: Arc<RwLock<ChainWorkerState<S>>>,
+    chain_id: ChainId,
+    mut state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicU64>,
     ttl: Duration,
 ) {
     linera_base::Task::spawn(async move {
+        let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
+        linera_base::time::timer::sleep(ttl).await;
         loop {
-            linera_base::time::timer::sleep(ttl).await;
             let last = last_access.load(Ordering::Relaxed);
             let now = current_time_micros();
-            let idle_micros = now.saturating_sub(last);
-            let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
-            if idle_micros >= ttl_micros {
-                break;
-            }
-            // Touched recently — sleep for the remaining time.
-            let remaining = Duration::from_micros(ttl_micros - idle_micros);
-            linera_base::time::timer::sleep(remaining).await;
-        }
-        // Shut down: acquire write lock to drain outstanding guards, then
-        // clear the endpoint and await the runtime task.
-        let task = {
-            let mut guard = RollbackGuard(state.clone().write_owned().await);
-            guard.clear_service_runtime()
-        };
-        if let Some(task) = task {
-            if let Err(err) = task.await {
-                tracing::warn!(%err, "Failed to shut down service runtime");
+            let remaining = last.saturating_add(ttl_micros).saturating_sub(now);
+            if remaining > 0 {
+                // Touched recently — sleep for the remaining time.
+                linera_base::time::timer::sleep(Duration::from_micros(remaining)).await;
+            } else {
+                // Idle long enough. Drop our strong reference if it's the only one.
+                match Arc::try_unwrap(state) {
+                    Ok(_owned_state) => {
+                        tracing::debug!(%chain_id, "Dropping chain worker");
+                        break;
+                    }
+                    Err(arc) => {
+                        arc.read().await.touch();
+                        state = arc;
+                    }
+                }
             }
         }
-        drop(state);
     })
     .forget();
 }
