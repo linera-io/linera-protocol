@@ -9,11 +9,11 @@ use linera_base::{data_types::Blob, time::Duration};
 use linera_core::{
     data_types::CrossChainRequest,
     node::NodeError,
-    worker::{NetworkActions, WorkerError, WorkerState},
+    worker::{NetworkActions, Notification, WorkerError, WorkerState},
     JoinSetExt as _,
 };
 use linera_storage::Storage;
-use tokio::{sync::oneshot, task::JoinSet};
+use tokio::{sync, sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
 
@@ -136,6 +136,8 @@ where
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
 
+        let (notification_sender, _) = sync::broadcast::channel(1000);
+
         join_set.spawn_task(Self::forward_cross_chain_queries(
             self.state.nickname().to_string(),
             self.network.clone(),
@@ -152,6 +154,7 @@ where
         let state = RunningServerState {
             server: self,
             cross_chain_sender,
+            notification_sender,
         };
         // Launch server for the appropriate protocol.
         protocol.spawn_server(address, state, shutdown_signal, join_set)
@@ -165,6 +168,7 @@ where
 {
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(CrossChainRequest, ShardId)>,
+    notification_sender: sync::broadcast::Sender<Notification>,
 }
 
 #[async_trait]
@@ -435,6 +439,12 @@ where
             if let Err(error) = self.cross_chain_sender.try_send((request, shard_id)) {
                 error!(%error, "dropping cross-chain request");
                 break;
+            }
+        }
+        for notification in actions.notifications {
+            debug!("Scheduling notification query");
+            if let Err(error) = self.notification_sender.send(notification) {
+                debug!(%error, "dropping notification (no receivers)");
             }
         }
     }
