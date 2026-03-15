@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
-use futures::{channel::mpsc, lock::Mutex};
-use linera_base::{data_types::Blob, time::Duration};
+use futures::{channel::mpsc, lock::Mutex, Stream, StreamExt as _};
+use linera_base::{data_types::Blob, identifiers::ChainId, time::Duration};
 use linera_core::{
     data_types::CrossChainRequest,
     node::NodeError,
@@ -14,6 +14,7 @@ use linera_core::{
 };
 use linera_storage::Storage;
 use tokio::{sync, sync::oneshot, task::JoinSet};
+use tokio_stream::wrappers::BroadcastStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
 
@@ -363,6 +364,11 @@ where
                 Ok(Some(RpcMessage::VersionInfoResponse(Box::default())))
             }
 
+            RpcMessage::SubscribeNotifications(_) | RpcMessage::Notification(_) => {
+                // Subscriptions are handled at the transport level, not here.
+                Err(NodeError::UnexpectedMessage)
+            }
+
             RpcMessage::Vote(_)
             | RpcMessage::Error(_)
             | RpcMessage::ChainInfoResponse(_)
@@ -420,6 +426,37 @@ where
                 Some(error.into())
             }
         }
+    }
+
+    async fn handle_subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
+        RunningServerState::subscribe_to_notifications(self, chains).await
+    }
+}
+
+impl<S> RunningServerState<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    async fn subscribe_to_notifications(
+        &self,
+        chains: Vec<ChainId>,
+    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
+        let receiver = self.notification_sender.subscribe();
+        let stream = BroadcastStream::new(receiver).filter_map(move |result| {
+            let chains = chains.clone();
+            async move {
+                match result {
+                    Ok(notification) if chains.contains(&notification.chain_id) => {
+                        Some(RpcMessage::Notification(Box::new(notification)))
+                    }
+                    _ => None,
+                }
+            }
+        });
+        Some(Box::pin(stream))
     }
 }
 
