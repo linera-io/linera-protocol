@@ -1100,8 +1100,9 @@ async fn test_change_ownership_system_api() -> anyhow::Result<()> {
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
+    // Applications can only change regular owners, not super owners.
     let new_ownership = ChainOwnership {
-        super_owners: BTreeSet::from([AccountOwner::from(AccountPublicKey::test_key(1))]),
+        owners: BTreeMap::from([(AccountOwner::from(AccountPublicKey::test_key(1)), 100)]),
         ..ChainOwnership::default()
     };
 
@@ -1135,7 +1136,7 @@ async fn test_change_ownership_system_api() -> anyhow::Result<()> {
         )
         .await?;
 
-    // Verify the ownership was changed.
+    // Verify the ownership was changed (only regular owners, not super owners).
     assert_eq!(*view.system.ownership.get(), new_ownership);
 
     Ok(())
@@ -1150,7 +1151,7 @@ async fn test_unauthorized_change_ownership_system_api() -> anyhow::Result<()> {
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
     let new_ownership = ChainOwnership {
-        super_owners: BTreeSet::from([AccountOwner::from(AccountPublicKey::test_key(1))]),
+        owners: BTreeMap::from([(AccountOwner::from(AccountPublicKey::test_key(1)), 100)]),
         ..ChainOwnership::default()
     };
 

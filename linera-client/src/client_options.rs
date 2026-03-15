@@ -436,6 +436,105 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
     }
 }
 
+/// CLI config for changing regular owners (accessible by any owner).
+#[derive(Debug, Clone, clap::Args)]
+pub struct ChangeOwnershipConfig {
+    /// A JSON map of the new owners to their weights. Absence of the option leaves the current
+    /// set of owners unchanged.
+    #[arg(long, value_parser = util::parse_json::<BTreeMap<AccountOwner, u64>>)]
+    pub owners: Option<BTreeMap<AccountOwner, u64>>,
+
+    /// The leader of the first single-leader round. If set to null, this is random like other
+    /// rounds. Absence of the option leaves the current setting unchanged.
+    #[arg(long, value_parser = util::parse_json::<Option<AccountOwner>>)]
+    pub first_leader: Option<Option<AccountOwner>>,
+
+    /// The number of rounds in which every owner can propose blocks, i.e. the first round
+    /// number in which only a single designated leader is allowed to propose blocks. "null" is
+    /// equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged.
+    #[arg(long, value_parser = util::parse_json::<Option<u32>>)]
+    pub multi_leader_rounds: Option<Option<u32>>,
+
+    /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
+    /// This should only be `true` on chains with restrictive application permissions and an
+    /// application-based mechanism to select block proposers.
+    #[arg(long)]
+    pub open_multi_leader_rounds: bool,
+
+    /// The duration of the first single-leader and all multi-leader rounds. Absence of
+    /// the option leaves the current setting unchanged.
+    #[arg(
+        long = "base-timeout-ms",
+        value_parser = util::parse_millis_delta
+    )]
+    pub base_timeout: Option<TimeDelta>,
+
+    /// The number of milliseconds by which the timeout increases after each
+    /// single-leader round. Absence of the option leaves the current setting unchanged.
+    #[arg(
+        long = "timeout-increment-ms",
+        value_parser = util::parse_millis_delta
+    )]
+    pub timeout_increment: Option<TimeDelta>,
+
+    /// The age of an incoming tracked or protected message after which the validators start
+    /// transitioning the chain to fallback mode, in milliseconds. Absence of the option
+    /// leaves the current setting unchanged.
+    #[arg(
+        long = "fallback-duration-ms",
+        value_parser = util::parse_millis_delta
+    )]
+    pub fallback_duration: Option<TimeDelta>,
+}
+
+impl ChangeOwnershipConfig {
+    pub fn update(self, chain_ownership: &mut ChainOwnership) {
+        if let Some(owners) = self.owners {
+            chain_ownership.owners = owners;
+        }
+        if let Some(first_leader) = self.first_leader {
+            chain_ownership.first_leader = first_leader;
+        }
+        if let Some(multi_leader_rounds) = self.multi_leader_rounds {
+            chain_ownership.multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
+        }
+        chain_ownership.open_multi_leader_rounds = self.open_multi_leader_rounds;
+        if let Some(base_timeout) = self.base_timeout {
+            chain_ownership.timeout_config.base_timeout = base_timeout;
+        }
+        if let Some(timeout_increment) = self.timeout_increment {
+            chain_ownership.timeout_config.timeout_increment = timeout_increment;
+        }
+        if let Some(fallback_duration) = self.fallback_duration {
+            chain_ownership.timeout_config.fallback_duration = fallback_duration;
+        }
+    }
+}
+
+/// CLI config for changing super owners (requires super owner privileges).
+#[derive(Debug, Clone, clap::Args)]
+pub struct ChangeSuperOwnershipConfig {
+    /// A JSON list of the new super owners.
+    #[arg(long, value_parser = util::parse_json::<Vec<AccountOwner>>)]
+    pub super_owners: Option<Vec<AccountOwner>>,
+
+    /// The duration of the fast round, in milliseconds. "null" means the fast round will
+    /// not time out. Absence of the option leaves the current setting unchanged.
+    #[arg(long = "fast-round-ms", value_parser = util::parse_json_optional_millis_delta)]
+    pub fast_round_duration: Option<Option<TimeDelta>>,
+}
+
+impl ChangeSuperOwnershipConfig {
+    pub fn update(self, chain_ownership: &mut ChainOwnership) {
+        if let Some(super_owners) = self.super_owners {
+            chain_ownership.super_owners = super_owners.into_iter().collect();
+        }
+        if let Some(fast_round_duration) = self.fast_round_duration {
+            chain_ownership.timeout_config.fast_round_duration = fast_round_duration;
+        }
+    }
+}
+
 #[derive(Debug, Clone, clap::Args)]
 pub struct ApplicationPermissionsConfig {
     /// A JSON list of applications allowed to execute operations on this chain. If set to null, all

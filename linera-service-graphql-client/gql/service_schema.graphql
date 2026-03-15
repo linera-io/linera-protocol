@@ -428,15 +428,24 @@ type ChangeApplicationPermissionsMetadata {
 }
 
 """
-Change ownership operation metadata.
+Change owners operation metadata.
 """
-type ChangeOwnershipOperationMetadata {
-	superOwners: [AccountOwner!]!
+type ChangeOwnersOperationMetadata {
 	owners: [OwnerWithWeight!]!
 	firstLeader: AccountOwner
 	multiLeaderRounds: Int!
 	openMultiLeaderRounds: Boolean!
-	timeoutConfig: TimeoutConfigMetadata!
+	baseTimeoutMs: String!
+	timeoutIncrementMs: String!
+	fallbackDurationMs: String!
+}
+
+"""
+Change super owners operation metadata.
+"""
+type ChangeSuperOwnersOperationMetadata {
+	superOwners: [AccountOwner!]!
+	fastRoundMs: String
 }
 
 """
@@ -991,7 +1000,7 @@ type MutationRoot {
 		chainId: ChainId!
 	): CryptoHash
 	"""
-	Changes the chain to a single-owner chain
+	Changes the chain to a single regular owner.
 	"""
 	changeOwner(
 		"""
@@ -1004,7 +1013,20 @@ type MutationRoot {
 		newOwner: AccountOwner!
 	): CryptoHash!
 	"""
-	Changes the ownership of the chain
+	Changes the chain to a single super owner. The caller must be a current super owner.
+	"""
+	changeSuperOwner(
+		"""
+		The chain whose super ownership changes
+		"""
+		chainId: ChainId!,
+		"""
+		The new single super owner of the chain
+		"""
+		newSuperOwner: AccountOwner!
+	): CryptoHash!
+	"""
+	Changes the regular owners of the chain
 	"""
 	changeMultipleOwners(
 		"""
@@ -1031,10 +1053,6 @@ type MutationRoot {
 		The leader of the first single-leader round. If not set, this is random like other rounds.
 		"""
 		firstLeader: AccountOwner,
-		"""
-		The duration of the fast round, in milliseconds; default: no timeout
-		"""
-		fastRoundMs: Int,
 		"""
 		The duration of the first single-leader and all multi-leader rounds
 		"""
@@ -1486,9 +1504,13 @@ type SystemOperationMetadata {
 	"""
 	openChain: OpenChainOperationMetadata
 	"""
-	Change ownership operation details
+	Change owners operation details
 	"""
-	changeOwnership: ChangeOwnershipOperationMetadata
+	changeOwners: ChangeOwnersOperationMetadata
+	"""
+	Change super owners operation details
+	"""
+	changeSuperOwners: ChangeSuperOwnersOperationMetadata
 	"""
 	Change application permissions operation details
 	"""
@@ -1521,29 +1543,6 @@ type SystemOperationMetadata {
 	`UpdateStreams` operation details
 	"""
 	updateStreams: [UpdateStreamMetadata!]
-}
-
-"""
-Timeout configuration metadata for GraphQL.
-"""
-type TimeoutConfigMetadata {
-	"""
-	The duration of the fast round in milliseconds.
-	"""
-	fastRoundMs: String
-	"""
-	The duration of the first single-leader and all multi-leader rounds in milliseconds.
-	"""
-	baseTimeoutMs: String!
-	"""
-	The duration by which the timeout increases after each single-leader round in milliseconds.
-	"""
-	timeoutIncrementMs: String!
-	"""
-	The age of an incoming tracked or protected message after which validators start
-	transitioning to fallback mode, in milliseconds.
-	"""
-	fallbackDurationMs: String!
 }
 
 """

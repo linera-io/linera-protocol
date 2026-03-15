@@ -992,6 +992,65 @@ where
         self.make_client(chain_id, None, BlockHeight::ZERO).await
     }
 
+    pub async fn add_root_super_owner_chain(
+        &mut self,
+        index: u32,
+        balance: Amount,
+    ) -> anyhow::Result<ChainClient<B::Storage>> {
+        // Make sure the admin chain is initialized.
+        if self.admin_description.is_none() && index != 0 {
+            Box::pin(self.add_root_chain(0, Amount::ZERO)).await?;
+        }
+        let origin = ChainOrigin::Root(index);
+        let public_key = self.signer.generate_new();
+        let open_chain_config = InitialChainConfig {
+            ownership: ChainOwnership::single_super(public_key.into()),
+            epoch: Epoch(0),
+            min_active_epoch: Epoch(0),
+            max_active_epoch: Epoch(0),
+            balance,
+            application_permissions: ApplicationPermissions::default(),
+        };
+        let description = ChainDescription::new(origin, open_chain_config, Timestamp::from(0));
+        let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee).unwrap());
+        if index == 0 {
+            self.admin_description = Some(description.clone());
+            self.network_description = Some(NetworkDescription {
+                admin_chain_id: description.id(),
+                genesis_config_hash: CryptoHash::test_hash("genesis config"),
+                genesis_timestamp: Timestamp::from(0),
+                genesis_committee_blob_hash: committee_blob.id().hash,
+                name: "test network".to_string(),
+            });
+        }
+        self.genesis_storage_builder
+            .add(description.clone(), public_key);
+
+        let network_description = self.network_description.as_ref().unwrap();
+
+        for validator in self.node_provider.all_nodes() {
+            let storage = self
+                .validator_storages
+                .get_mut(&validator.public_key)
+                .unwrap();
+            storage
+                .write_network_description(network_description)
+                .await
+                .expect("writing the NetworkDescription should succeed");
+            storage
+                .write_blob(&committee_blob)
+                .await
+                .expect("writing a blob should succeed");
+            storage.create_chain(description.clone()).await.unwrap();
+        }
+        for storage in &mut self.chain_client_storages {
+            storage.create_chain(description.clone()).await.unwrap();
+        }
+        let chain_id = description.id();
+        self.chain_owners.insert(chain_id, public_key.into());
+        self.make_client(chain_id, None, BlockHeight::ZERO).await
+    }
+
     pub fn genesis_chains(&self) -> Vec<(AccountPublicKey, Amount)> {
         let mut result = Vec::new();
         for (i, genesis_account) in self.genesis_storage_builder.accounts.iter().enumerate() {

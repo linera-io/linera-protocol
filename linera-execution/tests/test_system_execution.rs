@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::AccountSecretKey,
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner},
     ownership::ChainOwnership,
 };
@@ -14,9 +14,9 @@ use linera_execution::{
         dummy_chain_description, dummy_chain_description_with_ownership_and_balance,
         SystemExecutionState,
     },
-    ExecutionStateActor, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
-    QueryOutcome, QueryResponse, ResourceController, SystemMessage, SystemOperation, SystemQuery,
-    SystemResponse, TransactionTracker,
+    ExecutionError, ExecutionStateActor, Message, MessageContext, Operation, OperationContext,
+    Query, QueryContext, QueryOutcome, QueryResponse, ResourceController, SystemMessage,
+    SystemOperation, SystemQuery, SystemResponse, TransactionTracker,
 };
 
 #[tokio::test]
@@ -123,5 +123,234 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         })
     );
     assert!(operations.is_empty());
+    Ok(())
+}
+
+/// A super owner can change super owners.
+#[tokio::test]
+async fn test_change_super_owners_by_super_owner() -> anyhow::Result<()> {
+    let super_owner_key = AccountSecretKey::generate();
+    let super_owner = AccountOwner::from(super_owner_key.public());
+    let new_super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let operation = SystemOperation::ChangeSuperOwners {
+        super_owners: vec![new_super_owner],
+        fast_round_duration: Some(TimeDelta::from_secs(5)),
+    };
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(super_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(operation))
+        .await?;
+    let new_ownership = view.system.ownership.get();
+    assert!(new_ownership.super_owners.contains(&new_super_owner));
+    assert!(!new_ownership.super_owners.contains(&super_owner));
+    assert_eq!(
+        new_ownership.timeout_config.fast_round_duration,
+        Some(TimeDelta::from_secs(5))
+    );
+    Ok(())
+}
+
+/// A regular owner cannot change super owners.
+#[tokio::test]
+async fn test_change_super_owners_by_regular_owner_fails() -> anyhow::Result<()> {
+    let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let regular_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        owners: [(regular_owner, 100)].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let operation = SystemOperation::ChangeSuperOwners {
+        super_owners: vec![regular_owner],
+        fast_round_duration: None,
+    };
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(regular_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(operation))
+        .await;
+    assert!(matches!(
+        result,
+        Err(ExecutionError::UnauthorizedChangeSuperOwners)
+    ));
+    Ok(())
+}
+
+/// A chain without super owners cannot gain super owners.
+#[tokio::test]
+async fn test_change_super_owners_on_chain_without_super_owners_fails() -> anyhow::Result<()> {
+    let regular_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        owners: [(regular_owner, 100)].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let new_super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let operation = SystemOperation::ChangeSuperOwners {
+        super_owners: vec![new_super_owner],
+        fast_round_duration: None,
+    };
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(regular_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(operation))
+        .await;
+    assert!(matches!(
+        result,
+        Err(ExecutionError::UnauthorizedChangeSuperOwners)
+    ));
+    Ok(())
+}
+
+/// ChangeSuperOwners fails without an authenticated owner.
+#[tokio::test]
+async fn test_change_super_owners_without_authenticated_owner_fails() -> anyhow::Result<()> {
+    let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let operation = SystemOperation::ChangeSuperOwners {
+        super_owners: vec![super_owner],
+        fast_round_duration: None,
+    };
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: None,
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(operation))
+        .await;
+    assert!(matches!(
+        result,
+        Err(ExecutionError::UnauthorizedChangeSuperOwners)
+    ));
+    Ok(())
+}
+
+/// A regular owner can change regular owners via ChangeOwners.
+#[tokio::test]
+async fn test_change_owners_preserves_super_owners() -> anyhow::Result<()> {
+    let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let regular_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let new_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        owners: [(regular_owner, 100)].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let tc = linera_base::ownership::TimeoutConfig::default();
+    let operation = SystemOperation::ChangeOwners {
+        owners: vec![(new_owner, 100)],
+        first_leader: None,
+        multi_leader_rounds: 2,
+        open_multi_leader_rounds: false,
+        base_timeout: tc.base_timeout,
+        timeout_increment: tc.timeout_increment,
+        fallback_duration: tc.fallback_duration,
+    };
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(regular_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(operation))
+        .await?;
+    let new_ownership = view.system.ownership.get();
+    // Super owners are preserved by ChangeOwners.
+    assert!(new_ownership.super_owners.contains(&super_owner));
+    // Regular owners were changed.
+    assert!(new_ownership.owners.contains_key(&new_owner));
+    assert!(!new_ownership.owners.contains_key(&regular_owner));
     Ok(())
 }

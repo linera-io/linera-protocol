@@ -7,7 +7,7 @@
 
 use linera_base::{
     abi::ContractAbi,
-    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Round, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Round, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
@@ -119,20 +119,32 @@ impl BlockBuilder {
     /// Adds an operation to change this chain's ownership.
     pub fn with_owner_change(
         &mut self,
-        super_owners: Vec<AccountOwner>,
         owners: Vec<(AccountOwner, u64)>,
         first_leader: Option<AccountOwner>,
         multi_leader_rounds: u32,
         open_multi_leader_rounds: bool,
         timeout_config: TimeoutConfig,
     ) -> &mut Self {
-        self.with_system_operation(SystemOperation::ChangeOwnership {
-            super_owners,
+        self.with_system_operation(SystemOperation::ChangeOwners {
             owners,
             first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
-            timeout_config,
+            base_timeout: timeout_config.base_timeout,
+            timeout_increment: timeout_config.timeout_increment,
+            fallback_duration: timeout_config.fallback_duration,
+        })
+    }
+
+    /// Adds a super owner change to this block. Only a super owner can execute this.
+    pub fn with_super_owner_change(
+        &mut self,
+        super_owners: Vec<AccountOwner>,
+        fast_round_duration: Option<TimeDelta>,
+    ) -> &mut Self {
+        self.with_system_operation(SystemOperation::ChangeSuperOwners {
+            super_owners,
+            fast_round_duration,
         })
     }
 

@@ -280,7 +280,8 @@ impl PostgresDatabase {
                     SystemOperation::ProcessNewEpoch(_) => "ProcessNewEpoch",
                     SystemOperation::ProcessRemovedEpoch(_) => "ProcessRemovedEpoch",
                     SystemOperation::UpdateStreams(_) => "UpdateStreams",
-                    SystemOperation::ChangeOwnership { .. } => "ChangeOwnership",
+                    SystemOperation::ChangeOwners { .. } => "ChangeOwners",
+                    SystemOperation::ChangeSuperOwners { .. } => "ChangeSuperOwners",
                     SystemOperation::VerifyBlob { .. } => "VerifyBlob",
                 };
                 ("System", None, Some(sys_op_type))
