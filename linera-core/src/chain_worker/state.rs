@@ -55,14 +55,26 @@ use crate::{
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram};
-    use prometheus::Histogram;
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
+        register_histogram_vec,
+    };
+    use prometheus::{Histogram, HistogramVec};
 
     pub static CREATE_NETWORK_ACTIONS_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
         register_histogram(
             "create_network_actions_latency",
             "Time (ms) to create network actions",
             exponential_bucket_latencies(10_000.0),
+        )
+    });
+
+    pub static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_inboxes",
+            "Number of inboxes",
+            &[],
+            exponential_bucket_interval(1.0, 10_000.0),
         )
     });
 }
@@ -1064,9 +1076,8 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
-        let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
-        let last_anticipated_block_height =
-            self.chain.last_anticipated_block_height(&origin).await?;
+        let (next_height_to_receive, last_anticipated_block_height) =
+            self.chain.inbox_cursors(&origin).await?;
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(
@@ -1738,6 +1749,10 @@ where
         if query.request_pending_message_bundles {
             let mut bundles = Vec::new();
             let pairs = chain.inboxes.try_load_all_entries().await?;
+            #[cfg(with_metrics)]
+            metrics::NUM_INBOXES
+                .with_label_values(&[])
+                .observe(pairs.len() as f64);
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
