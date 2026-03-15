@@ -26,12 +26,11 @@ use std::{net::SocketAddr, path::PathBuf, pin::Pin, time::Duration};
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{stream::SelectAll, FutureExt as _, SinkExt, Stream, StreamExt};
-use linera_base::listen_for_shutdown_signals;
+use linera_base::{identifiers::ChainId, listen_for_shutdown_signals};
 use linera_client::config::ValidatorServerConfig;
 use linera_core::{node::NodeError, JoinSetExt as _};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
-use linera_base::identifiers::ChainId;
 use linera_rpc::{
     config::{
         NetworkProtocol, ShardConfig, ValidatorInternalNetworkPreConfig,
@@ -323,8 +322,7 @@ where
             let address = (shard.host.clone(), shard.port);
             match protocol.connect(address).await {
                 Ok(mut connection) => {
-                    let subscribe_msg =
-                        RpcMessage::SubscribeNotifications(chains.clone());
+                    let subscribe_msg = RpcMessage::SubscribeNotifications(chains.clone());
                     if let Err(error) = connection.send(subscribe_msg).await {
                         error!(%error, "Failed to send subscribe to shard");
                         continue;
@@ -519,9 +517,7 @@ where
             | UploadBlobResponse(_)
             | DownloadCertificatesByHeightsResponse(_)
             | SubscribeNotifications(_)
-            | Notification(_) => {
-                Err(anyhow::Error::from(NodeError::UnexpectedMessage))
-            }
+            | Notification(_) => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
         }
     }
 }
