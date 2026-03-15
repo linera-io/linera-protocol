@@ -593,6 +593,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     Ok(())
 }
 
+#[ignore = "We need to upgrade to next compiler versions"]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]

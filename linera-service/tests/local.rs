@@ -9,6 +9,7 @@ use linera_service::cli_wrappers::{local_net::PathProvider, ClientWrapper, Netwo
 
 mod common;
 
+#[ignore = "We need to switch to next compiler"]
 #[test_log::test(tokio::test)]
 async fn test_project_new() -> Result<()> {
     let _rustflags_override = common::override_disable_warnings_as_errors();
