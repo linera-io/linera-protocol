@@ -767,6 +767,15 @@ pub trait BaseRuntime {
     /// Reads the current application permissions for this chain.
     fn application_permissions(&mut self) -> Result<ApplicationPermissions, ExecutionError>;
 
+    /// Returns a deterministic pseudo-random u64 value.
+    ///
+    /// The value is derived from the chain ID, application ID, block height, and an
+    /// internal counter that increments on each call. This ensures that repeated calls
+    /// return different values, while remaining fully deterministic across validators.
+    ///
+    /// Suitable for algorithmic purposes but NOT for cryptographic use.
+    fn random_number(&mut self) -> Result<u64, ExecutionError>;
+
     /// Tests whether a key exists in the key-value store
     #[cfg(feature = "test")]
     fn contains_key(&mut self, key: Vec<u8>) -> Result<bool, ExecutionError> {

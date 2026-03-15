@@ -84,6 +84,7 @@ where
     expected_create_data_blob_calls: VecDeque<ExpectedCreateDataBlobCall>,
     remaining_fuel: Option<u64>,
     key_value_store: KeyValueStore,
+    random_number_counter: u64,
 }
 
 impl<Application> Default for MockContractRuntime<Application>
@@ -136,6 +137,7 @@ where
             expected_create_data_blob_calls: VecDeque::new(),
             remaining_fuel: None,
             key_value_store: KeyValueStore::mock().to_mut(),
+            random_number_counter: 0,
         }
     }
 
@@ -332,6 +334,15 @@ where
             "Block height has not been mocked, \
             please call `MockContractRuntime::set_block_height` first",
         )
+    }
+
+    /// Returns a deterministic pseudo-random u64 value.
+    ///
+    /// In the mock runtime, this returns incrementing counter values.
+    pub fn random_number(&mut self) -> u64 {
+        let value = self.random_number_counter;
+        self.random_number_counter += 1;
+        value
     }
 
     /// Configures the `message_is_bouncing` flag to return during the test.
