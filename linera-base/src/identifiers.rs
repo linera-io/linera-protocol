@@ -457,7 +457,8 @@ impl From<AccountPublicKey> for AccountOwner {
         match public_key {
             AccountPublicKey::Ed25519(public_key) => public_key.into(),
             AccountPublicKey::Secp256k1(public_key) => public_key.into(),
-            AccountPublicKey::EvmSecp256k1(public_key) => public_key.into(),
+            AccountPublicKey::EvmSecp256k1(public_key)
+            | AccountPublicKey::Eip712Secp256k1(public_key) => public_key.into(),
         }
     }
 }
