@@ -4995,7 +4995,9 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
 ///
 /// It will print the average end-to-end transfer latency, including creating the sending block,
 /// the receiving block, and the resulting `NewBlock` notification.
-//#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_grpc"))]
+///
+/// We disabled the repeated transfers for remote-net because it is failing on CI:
+///#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
