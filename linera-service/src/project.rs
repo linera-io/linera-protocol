@@ -49,6 +49,9 @@ impl Project {
         debug!("Writing Cargo.toml");
         Self::create_cargo_toml(&root, name, linera_root)?;
 
+        debug!("Writing .cargo/config.toml");
+        Self::create_cargo_config(&root)?;
+
         debug!("Writing rust-toolchain.toml");
         Self::create_rust_toolchain(&root)?;
 
@@ -163,6 +166,15 @@ impl Project {
             linera_sdk_dev_dep = linera_sdk_dev_dep,
         );
         Self::write_string_to_file(&toml_path, &toml_contents)
+    }
+
+    fn create_cargo_config(project_root: &Path) -> Result<()> {
+        let cargo_dir = project_root.join(".cargo");
+        fs_err::create_dir_all(&cargo_dir)?;
+        Self::write_string_to_file(
+            &cargo_dir.join("config.toml"),
+            "[resolver]\nincompatible-rust-versions = \"fallback\"\n",
+        )
     }
 
     fn create_rust_toolchain(project_root: &Path) -> Result<()> {

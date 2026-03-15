@@ -2,6 +2,7 @@
 name = "{project_name}"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.86.0"
 
 [dependencies]
 async-graphql = {{ version = "=7.0.17", default-features = false }}
