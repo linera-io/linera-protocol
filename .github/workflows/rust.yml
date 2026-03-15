@@ -66,6 +66,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install nightly toolchain for wasm builds
+      run: |
+        rustup toolchain install $(sed -n 's/^channel = "\(.*\)"/\1/p' toolchains/nightly/rust-toolchain.toml) --component rust-src
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
@@ -233,6 +236,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install nightly toolchain for wasm builds
+      run: |
+        rustup toolchain install $(sed -n 's/^channel = "\(.*\)"/\1/p' toolchains/nightly/rust-toolchain.toml) --component rust-src
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
@@ -279,6 +285,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        override: false
+    - name: Install nightly toolchain for wasm builds
+      run: |
+        rustup toolchain install $(sed -n 's/^channel = "\(.*\)"/\1/p' toolchains/nightly/rust-toolchain.toml) --component rust-src
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
@@ -303,6 +314,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        override: false
+    - name: Install nightly toolchain for wasm builds
+      run: |
+        rustup toolchain install $(sed -n 's/^channel = "\(.*\)"/\1/p' toolchains/nightly/rust-toolchain.toml) --component rust-src
     - uses: foundry-rs/foundry-toolchain@v1.4.0
     - name: Ensure Solc Directory Exists
       run: mkdir -p /home/runner/.solc
@@ -365,14 +381,18 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install nightly toolchain for wasm builds
+      run: |
+        rustup toolchain install $(sed -n 's/^channel = "\(.*\)"/\1/p' toolchains/nightly/rust-toolchain.toml) --component rust-src
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build example applications
       run: |
+        unset RUSTUP_TOOLCHAIN RUSTFLAGS
         cd examples
-        cargo build --locked --release --target wasm32-unknown-unknown
+        cargo build --locked --release --target wasm32-linera-chain
     - name: Run the storage-service instance
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
@@ -556,7 +576,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
     - uses: actions/checkout@v4

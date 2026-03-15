@@ -8,6 +8,7 @@ async-graphql.workspace = true
 candle-core.workspace = true
 candle-transformers.workspace = true
 getrandom.workspace = true
+half.workspace = true
 linera-sdk.workspace = true
 log.workspace = true
 rand.workspace = true
@@ -22,6 +23,9 @@ insta.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 serde-reflection.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
+
+[package.metadata.cargo-machete]
+ignored = ["half"]
 
 [[bin]]
 name = "llm_contract"

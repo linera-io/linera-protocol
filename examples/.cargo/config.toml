@@ -1,0 +1,11 @@
+[env]
+# Makes `--target wasm32-linera-chain` resolve to linera-service/wasm32-linera-chain.json
+RUST_TARGET_PATH = { value = "../linera-service", relative = true }
+
+[build]
+# Required for rustc to accept the custom wasm32-linera-chain target spec.
+rustflags = ["-Zunstable-options"]
+
+[unstable]
+build-std = ["std", "panic_abort"]
+json-target-spec = true

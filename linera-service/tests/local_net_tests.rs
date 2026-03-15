@@ -8,7 +8,6 @@
     feature = "storage-service",
 ))]
 
-mod common;
 mod guard;
 
 use std::{env, path::PathBuf, time::Duration};
@@ -658,7 +657,6 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let _rustflags_override = common::override_disable_warnings_as_errors();
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,

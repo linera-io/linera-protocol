@@ -313,7 +313,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     pub async fn try_load_entry(
         &self,
         short_key: &[u8],
-    ) -> Result<Option<ReadGuardedView<W>>, ViewError> {
+    ) -> Result<Option<ReadGuardedView<'_, W>>, ViewError> {
         let updates = self.updates.read().await;
         match updates.get(short_key) {
             Some(update) => match update {
@@ -371,7 +371,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     pub async fn try_load_entries(
         &self,
         short_keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError> {
+    ) -> Result<Vec<Option<ReadGuardedView<'_, W>>>, ViewError> {
         let mut results = Vec::with_capacity(short_keys.len());
         let mut keys_to_check = Vec::new();
         let mut keys_to_check_metadata = Vec::new();
@@ -461,7 +461,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// ```
     pub async fn try_load_all_entries(
         &self,
-    ) -> Result<Vec<(Vec<u8>, ReadGuardedView<W>)>, ViewError> {
+    ) -> Result<Vec<(Vec<u8>, ReadGuardedView<'_, W>)>, ViewError> {
         let updates = self.updates.read().await; // Acquire the read lock to prevent writes.
         let short_keys = self.keys().await?;
         let mut results = Vec::with_capacity(short_keys.len());
@@ -1033,7 +1033,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     pub async fn try_load_entry<Q>(
         &self,
         index: &Q,
-    ) -> Result<Option<ReadGuardedView<W>>, ViewError>
+    ) -> Result<Option<ReadGuardedView<'_, W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -1065,7 +1065,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     pub async fn try_load_entries<'a, Q>(
         &self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
+    ) -> Result<Vec<Option<ReadGuardedView<'_, W>>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -1094,7 +1094,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
+    pub async fn try_load_all_entries(&self) -> Result<Vec<(I, ReadGuardedView<'_, W>)>, ViewError>
     where
         I: DeserializeOwned,
     {
@@ -1451,7 +1451,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     pub async fn try_load_entry<Q>(
         &self,
         index: &Q,
-    ) -> Result<Option<ReadGuardedView<W>>, ViewError>
+    ) -> Result<Option<ReadGuardedView<'_, W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,
@@ -1482,7 +1482,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     pub async fn try_load_entries<'a, Q>(
         &self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
+    ) -> Result<Vec<Option<ReadGuardedView<'_, W>>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + 'a,
@@ -1511,7 +1511,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
+    pub async fn try_load_all_entries(&self) -> Result<Vec<(I, ReadGuardedView<'_, W>)>, ViewError>
     where
         I: CustomSerialize,
     {
@@ -1815,7 +1815,7 @@ mod graphql {
         async fn entry(
             &self,
             key: K,
-        ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
+        ) -> Result<Entry<K, ReadGuardedView<'_, V>>, async_graphql::Error> {
             let value = self
                 .try_load_entry(&key)
                 .await?
@@ -1826,7 +1826,7 @@ mod graphql {
         async fn entries(
             &self,
             input: Option<MapInput<K>>,
-        ) -> Result<Vec<Entry<K, ReadGuardedView<V>>>, async_graphql::Error> {
+        ) -> Result<Vec<Entry<K, ReadGuardedView<'_, V>>>, async_graphql::Error> {
             let keys = if let Some(keys) = input
                 .and_then(|input| input.filters)
                 .and_then(|filters| filters.keys)
@@ -1880,7 +1880,7 @@ mod graphql {
         async fn entry(
             &self,
             key: K,
-        ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
+        ) -> Result<Entry<K, ReadGuardedView<'_, V>>, async_graphql::Error> {
             let value = self
                 .try_load_entry(&key)
                 .await?
@@ -1891,7 +1891,7 @@ mod graphql {
         async fn entries(
             &self,
             input: Option<MapInput<K>>,
-        ) -> Result<Vec<Entry<K, ReadGuardedView<V>>>, async_graphql::Error> {
+        ) -> Result<Vec<Entry<K, ReadGuardedView<'_, V>>>, async_graphql::Error> {
             let keys = if let Some(keys) = input
                 .and_then(|input| input.filters)
                 .and_then(|filters| filters.keys)

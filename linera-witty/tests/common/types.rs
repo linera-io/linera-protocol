@@ -90,4 +90,5 @@ pub struct StructWithLists {
 
 /// A type that wraps a slice.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitStore)]
+#[allow(dead_code)]
 pub struct SliceWrapper<'slice>(pub &'slice [TupleWithoutPadding]);

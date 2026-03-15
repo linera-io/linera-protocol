@@ -44,14 +44,18 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install nightly toolchain for wasm builds
+      run: |
+        rustup toolchain install $(sed -n 's/^channel = "\(.*\)"/\1/p' toolchains/nightly/rust-toolchain.toml) --component rust-src
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build example applications
       run: |
+        unset RUSTUP_TOOLCHAIN RUSTFLAGS
         cd examples
-        cargo build --locked --release --target wasm32-unknown-unknown
+        cargo build --locked --release --target wasm32-linera-chain
     - name: Build
       run: |
         cargo build --locked --features scylladb

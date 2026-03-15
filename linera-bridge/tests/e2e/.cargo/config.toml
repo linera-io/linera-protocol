@@ -1,5 +1,0 @@
-[resolver]
-# Prefer crate versions compatible with our rust-version (1.88).
-# This prevents alloy sub-crates from resolving to 1.7+ (MSRV 1.91),
-# which would pull in Rust 1.91 and break linera-wasmer-vm's probestack.
-incompatible-rust-versions = "fallback"

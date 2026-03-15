@@ -73,6 +73,7 @@ pub struct RequestData {
     state: RequestState,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct TempChainTokenHolder {
     pub account_owner: AccountOwner,
