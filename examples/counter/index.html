@@ -31,7 +31,7 @@
         </div>
         <div class="ui">
           <p class="counter">Clicks: <span id="count">0</span></p>
-          <button id="increment-btn">Click me!</button>
+          <button id="increment-btn" disabled>Click me!</button>
         </div>
       </div>
 
@@ -61,15 +61,11 @@
        ? linera.signer.PrivateKey.fromMnemonic(mnemonic)
        : linera.signer.PrivateKey.createRandom();
      const wallet = await faucet.createWallet();
-     console.log('wallet created');
      const owner = await signer.address();
-     console.log('address got');
      const chainId = await faucet.claimChain(wallet, owner);
-     console.log('chain claimed');
      document.getElementById('owner').innerText = owner;
      document.getElementById('chain-id').innerText = chainId;
      const client = await new linera.Client(wallet, signer);
-     console.log('chain claimed');
      let chain = await client.chain(chainId);
      const counter = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
      const logs = document.getElementById('logs');
@@ -87,6 +83,7 @@
          const response = await counter.query('{ "query": "query { value }" }', { blockHash });
          document.getElementById('count').innerText
              = JSON.parse(response).data.value;
+         incrementButton.disabled = false;
      }
 
      updateCount();
