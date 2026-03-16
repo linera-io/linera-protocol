@@ -187,7 +187,7 @@ pub struct OwnerSpender {
 }
 
 impl OwnerSpender {
-    /// Creates a new OwnerSpender pair.
+    /// Creates a new `OwnerSpender` pair.
     /// Panics if owner and spender are the same.
     pub fn new(owner: AccountOwner, spender: AccountOwner) -> Self {
         if owner == spender {

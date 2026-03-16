@@ -764,13 +764,8 @@ where
         let owner_spender = OwnerSpender::new(owner, spender);
         let allowance = self
             .allowances
-            .get_mut(&owner_spender)
-            .await?
-            .ok_or_else(|| ExecutionError::InsufficientAllowance {
-                allowance: Amount::ZERO,
-                owner,
-                spender,
-            })?;
+            .get_mut_or_default(&owner_spender)
+            .await?;
 
         allowance
             .try_sub_assign(amount)
