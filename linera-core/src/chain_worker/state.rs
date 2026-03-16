@@ -43,8 +43,8 @@ use linera_views::{
 use tokio::sync::oneshot;
 use tracing::{debug, instrument, trace, warn};
 
-use super::{ChainWorkerConfig, DeliveryNotifier};
 use crate::{
+    chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
@@ -95,7 +95,7 @@ where
     /// Used by the keep-alive task to determine when the worker has been idle.
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
-    last_access: Arc<super::handle::AtomicTimestamp>,
+    last_access: Arc<AtomicTimestamp>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -136,7 +136,7 @@ where
             storage,
             chain,
             service_runtime_endpoint,
-            last_access: Arc::new(super::handle::AtomicTimestamp::now()),
+            last_access: Arc::new(AtomicTimestamp::now()),
             block_values,
             execution_state_cache,
             chain_modes,
@@ -171,7 +171,7 @@ where
     }
 
     /// Returns a clone of the last-access `Arc`, for use by the keep-alive task.
-    pub(crate) fn last_access_arc(&self) -> Arc<super::handle::AtomicTimestamp> {
+    pub(crate) fn last_access_arc(&self) -> Arc<AtomicTimestamp> {
         Arc::clone(&self.last_access)
     }
 
