@@ -15,6 +15,38 @@ use std::{
     },
 };
 
+/// An atomically-updatable timestamp backed by microseconds since the Unix epoch.
+///
+/// This wraps the raw `AtomicU64` microsecond encoding so that call sites work
+/// exclusively with [`Duration`] and never see the underlying representation.
+pub(crate) struct AtomicTimestamp(AtomicU64);
+
+impl AtomicTimestamp {
+    /// Creates a new `AtomicTimestamp` set to the current time.
+    pub(crate) fn now() -> Self {
+        Self(AtomicU64::new(Self::current_micros()))
+    }
+
+    /// Updates the stored timestamp to the current time.
+    pub(crate) fn store_now(&self) {
+        self.0.store(Self::current_micros(), Ordering::Relaxed);
+    }
+
+    /// Returns how long has passed since the stored timestamp.
+    pub(crate) fn elapsed(&self) -> Duration {
+        let last = self.0.load(Ordering::Relaxed);
+        let now = Self::current_micros();
+        Duration::from_micros(now.saturating_sub(last))
+    }
+
+    fn current_micros() -> u64 {
+        linera_base::time::SystemTime::now()
+            .duration_since(linera_base::time::UNIX_EPOCH)
+            .map(|d| d.as_micros() as u64)
+            .unwrap_or(0)
+    }
+}
+
 use linera_base::{
     data_types::{BlockHeight, Timestamp},
     identifiers::ChainId,
@@ -151,19 +183,15 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
 fn spawn_keep_alive<S: Storage + Clone + 'static>(
     chain_id: ChainId,
     mut state: Arc<RwLock<ChainWorkerState<S>>>,
-    last_access: Arc<AtomicU64>,
+    last_access: Arc<AtomicTimestamp>,
     ttl: Duration,
 ) {
     linera_base::Task::spawn(async move {
-        let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
         linera_base::time::timer::sleep(ttl).await;
         loop {
-            let last = last_access.load(Ordering::Relaxed);
-            let now = current_time_micros();
-            let remaining = last.saturating_add(ttl_micros).saturating_sub(now);
-            if remaining > 0 {
+            if let Some(remaining) = ttl.checked_sub(last_access.elapsed()) {
                 // Touched recently — sleep for the remaining time.
-                linera_base::time::timer::sleep(Duration::from_micros(remaining)).await;
+                linera_base::time::timer::sleep(remaining).await;
             } else {
                 // Idle long enough. Drop our strong reference if it's the only one.
                 match Arc::try_unwrap(state) {
@@ -180,12 +208,4 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
         }
     })
     .forget();
-}
-
-/// Returns current time in microseconds since the Unix epoch.
-pub(crate) fn current_time_micros() -> u64 {
-    linera_base::time::SystemTime::now()
-        .duration_since(linera_base::time::UNIX_EPOCH)
-        .map(|d| d.as_micros() as u64)
-        .unwrap_or(0)
 }
