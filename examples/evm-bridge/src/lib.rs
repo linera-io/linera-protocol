@@ -50,8 +50,8 @@ pub enum BridgeOperation {
     /// Verify that an EVM block hash is authentic and finalized.
     ///
     /// Queries the EVM node to confirm the block exists and its number is at or below
-    /// the latest finalized block. Stores the hash so that a subsequent `ProcessDeposit`
-    /// can check it.
+    /// the latest finalized block. Caches the hash only when submitted by an
+    /// authenticated signer (chain owner) to prevent state bloat.
     VerifyBlockHash { block_hash: [u8; 32] },
 }
 

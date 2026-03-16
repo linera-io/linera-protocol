@@ -83,6 +83,15 @@ impl Contract for EvmBridgeContract {
             }
             BridgeOperation::VerifyBlockHash { block_hash } => {
                 self.verify_block_hash(block_hash).await;
+
+                // Only cache when called by an authenticated signer (chain owner),
+                // preventing unauthenticated callers from bloating state.
+                if self.runtime.authenticated_signer().is_some() {
+                    self.state
+                        .verified_block_hashes
+                        .insert(&block_hash)
+                        .expect("failed to insert verified block hash");
+                }
             }
         }
     }
@@ -118,11 +127,6 @@ impl EvmBridgeContract {
             "verified block hash {} is finalized",
             hex::encode(block_hash)
         );
-
-        self.state
-            .verified_block_hashes
-            .insert(&block_hash)
-            .expect("failed to insert verified block hash");
     }
 
     async fn process_deposit(
@@ -140,7 +144,8 @@ impl EvmBridgeContract {
             proof::decode_block_header(block_header_rlp).expect("invalid block header RLP");
 
         // 1b. Finality check: when an endpoint is configured, verify the block hash
-        //     is finalized. Uses cached result if VerifyBlockHash was called earlier.
+        //     is finalized. Uses cached result if a previous deposit from this block
+        //     was already processed.
         if !params.ethereum_endpoint.is_empty()
             && !self
                 .state
@@ -204,6 +209,15 @@ impl EvmBridgeContract {
             .processed_deposits
             .insert(&deposit_key)
             .expect("failed to insert deposit key");
+
+        // 5b. Cache the verified block hash so subsequent deposits from the same
+        //     block skip the RPC finality check.
+        if !params.ethereum_endpoint.is_empty() {
+            self.state
+                .verified_block_hashes
+                .insert(&block_hash.0)
+                .expect("failed to cache verified block hash");
+        }
 
         // 6. Convert deposit fields to Linera types and call Mint
         let target_chain_id =
