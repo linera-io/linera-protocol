@@ -1722,14 +1722,15 @@ where
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let mut info = ChainInfo::from(&self.chain);
-        let chain = &mut self.chain;
         if query.request_committees {
-            info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
+            info.requested_committees =
+                Some(self.chain.execution_state.system.committees.get().clone());
         }
         if query.request_owner_balance == AccountOwner::CHAIN {
-            info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
+            info.requested_owner_balance = Some(*self.chain.execution_state.system.balance.get());
         } else {
-            info.requested_owner_balance = chain
+            info.requested_owner_balance = self
+                .chain
                 .execution_state
                 .system
                 .balances
@@ -1739,30 +1740,32 @@ where
         if let Some(next_block_height) = query.test_next_block_height {
             // If not, send the same error as if a block with next_block_height was proposed.
             ensure!(
-                chain.tip_state.get().next_block_height == next_block_height,
+                self.chain.tip_state.get().next_block_height == next_block_height,
                 WorkerError::UnexpectedBlockHeight {
-                    expected_block_height: chain.tip_state.get().next_block_height,
+                    expected_block_height: self.chain.tip_state.get().next_block_height,
                     found_block_height: next_block_height,
                 }
             );
         }
         if query.request_pending_message_bundles {
             // Lazily initialize the nonempty_inboxes set for chains from older DB versions.
-            let origins = if let Some(nonempty_origins) = chain.nonempty_inboxes.get().clone() {
+            let origins = if let Some(nonempty_origins) = self.chain.nonempty_inboxes.get().clone()
+            {
                 nonempty_origins.into_iter().collect::<Vec<_>>()
             } else {
-                let pairs = chain.inboxes.try_load_all_entries().await?;
+                let pairs = self.chain.inboxes.try_load_all_entries().await?;
                 let nonempty_origins = pairs
                     .into_iter()
                     .filter(|(_, inbox)| inbox.added_bundles.count() > 0)
                     .map(|(origin, _)| origin)
                     .collect::<BTreeSet<ChainId>>();
                 let origins = nonempty_origins.iter().copied().collect::<Vec<_>>();
-                *chain.nonempty_inboxes.get_mut() = Some(nonempty_origins);
+                *self.chain.nonempty_inboxes.get_mut() = Some(nonempty_origins);
+                self.save().await?;
                 origins
             };
             let mut bundles = Vec::new();
-            let inboxes = chain.inboxes.try_load_entries(&origins).await?;
+            let inboxes = self.chain.inboxes.try_load_entries(&origins).await?;
             let origins_and_inboxes = origins
                 .into_iter()
                 .zip(inboxes)
@@ -1772,7 +1775,7 @@ where
             metrics::NUM_INBOXES
                 .with_label_values(&[])
                 .observe(origins_and_inboxes.len() as f64);
-            let action = if *chain.execution_state.system.closed.get() {
+            let action = if *self.chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
@@ -1796,7 +1799,8 @@ where
             });
             info.requested_pending_message_bundles = bundles;
         }
-        let hashes = chain
+        let hashes = self
+            .chain
             .block_hashes(query.request_sent_certificate_hashes_by_heights)
             .await?;
         info.requested_sent_certificate_hashes = hashes;
@@ -1805,11 +1809,11 @@ where
             let max_received_log_entries = self.config.chain_info_max_received_log_entries;
             let end = start
                 .saturating_add(max_received_log_entries)
-                .min(chain.received_log.count());
-            info.requested_received_log = chain.received_log.read(start..end).await?;
+                .min(self.chain.received_log.count());
+            info.requested_received_log = self.chain.received_log.read(start..end).await?;
         }
         if query.request_manager_values {
-            info.manager.add_values(&chain.manager);
+            info.manager.add_values(&self.chain.manager);
         }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }
