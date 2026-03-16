@@ -414,7 +414,7 @@ where
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
+            .observe(self.nonempty_outboxes.get().len() as f64);
         Ok(true)
     }
 
@@ -1247,7 +1247,7 @@ where
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
+            .observe(nonempty_outboxes.len() as f64);
         Ok(targets)
     }
 
