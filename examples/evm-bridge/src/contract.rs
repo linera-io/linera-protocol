@@ -49,8 +49,8 @@ impl Contract for EvmBridgeContract {
 
     async fn instantiate(&mut self, _argument: ()) {
         let params = self.runtime.application_parameters();
-        if !params.ethereum_endpoint.is_empty() {
-            let client = ContractEthereumClient::new(params.ethereum_endpoint.clone());
+        if !params.rpc_endpoint.is_empty() {
+            let client = ContractEthereumClient::new(params.rpc_endpoint.clone());
             let chain_id = client
                 .get_chain_id()
                 .await
@@ -110,11 +110,11 @@ impl EvmBridgeContract {
     async fn verify_block_hash(&mut self, block_hash: [u8; 32]) {
         let params = self.runtime.application_parameters();
         assert!(
-            !params.ethereum_endpoint.is_empty(),
-            "ethereum_endpoint must be configured to verify block hashes"
+            !params.rpc_endpoint.is_empty(),
+            "rpc_endpoint must be configured to verify block hashes"
         );
 
-        let client = ContractEthereumClient::new(params.ethereum_endpoint.clone());
+        let client = ContractEthereumClient::new(params.rpc_endpoint.clone());
         assert!(
             client
                 .is_block_hash_finalized(B256::from(block_hash))
@@ -212,7 +212,7 @@ impl EvmBridgeContract {
 
         // 5b. Cache the verified block hash so subsequent deposits from the same
         //     block skip the RPC finality check.
-        if !params.ethereum_endpoint.is_empty() {
+        if !params.rpc_endpoint.is_empty() {
             self.state
                 .verified_block_hashes
                 .insert(&block_hash.0)

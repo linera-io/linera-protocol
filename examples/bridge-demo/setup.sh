@@ -463,7 +463,7 @@ params = {
     'bridge_contract_address': hex_to_array(os.environ['BRIDGE_HEX']),
     'fungible_app_id': os.environ['APP_ID'],
     'token_address': hex_to_array(os.environ['TOKEN_HEX']),
-    'ethereum_endpoint': os.environ.get('EVM_RPC_URL', ''),
+    'rpc_endpoint': os.environ.get('EVM_RPC_URL', ''),
 }
 print(json.dumps(params))
 ")

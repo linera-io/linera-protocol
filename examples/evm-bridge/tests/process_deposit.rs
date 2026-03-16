@@ -94,7 +94,7 @@ impl TestBridge {
             bridge_contract_address: [0xBB; 20],
             fungible_app_id: fungible_app_id.forget_abi(),
             token_address,
-            ethereum_endpoint: String::new(),
+            rpc_endpoint: String::new(),
         };
         let bridge_app_id = chain
             .create_application(bridge_module_id, bridge_params, (), vec![])
@@ -561,7 +561,7 @@ async fn test_replay_different_log_index_succeeds() {
 
 // -- finality verification tests --
 
-/// When `ethereum_endpoint` is set but the RPC endpoint is unreachable,
+/// When `rpc_endpoint` is set but the RPC endpoint is unreachable,
 /// instantiation should fail because the chain ID check cannot succeed.
 #[tokio::test]
 async fn test_instantiation_fails_with_unreachable_endpoint() {
@@ -601,7 +601,7 @@ async fn test_instantiation_fails_with_unreachable_endpoint() {
         bridge_contract_address: [0xBB; 20],
         fungible_app_id: fungible_app_id.forget_abi(),
         token_address,
-        ethereum_endpoint: "http://localhost:8545".to_string(),
+        rpc_endpoint: "http://localhost:8545".to_string(),
     };
     let result = chain
         .try_create_application(bridge_module_id, bridge_params, (), vec![])
@@ -689,7 +689,7 @@ async fn setup_bridge_with_anvil(
         bridge_contract_address: [0xBB; 20],
         fungible_app_id: fungible_app_id.forget_abi(),
         token_address,
-        ethereum_endpoint: anvil_endpoint.to_string(),
+        rpc_endpoint: anvil_endpoint.to_string(),
     };
     let bridge_app_id = chain
         .create_application(bridge_module_id, bridge_params, (), vec![])

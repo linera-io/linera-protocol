@@ -46,7 +46,7 @@ struct BridgeParameters {
     bridge_contract_address: [u8; 20],
     fungible_app_id: ApplicationId,
     token_address: [u8; 20],
-    ethereum_endpoint: String,
+    rpc_endpoint: String,
 }
 
 /// Must match `evm_bridge::BridgeOperation` variant-for-variant for BCS compatibility.
@@ -248,7 +248,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         bridge_contract_address: bridge_addr.0 .0,
         fungible_app_id,
         token_address: erc20_addr.0 .0,
-        ethereum_endpoint: String::new(),
+        rpc_endpoint: String::new(),
     };
     let (bridge_app_id, _) = cc
         .create_application_untyped(

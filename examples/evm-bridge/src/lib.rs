@@ -24,7 +24,7 @@ pub struct BridgeParameters {
     /// JSON-RPC endpoint of the source EVM chain for finality verification.
     /// When non-empty, `ProcessDeposit` requires the block hash to be verified first
     /// via `VerifyBlockHash`.
-    pub ethereum_endpoint: String,
+    pub rpc_endpoint: String,
 }
 
 /// Replay-protection key for processed deposits.
