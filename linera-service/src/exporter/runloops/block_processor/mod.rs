@@ -118,7 +118,7 @@ where
                                     .collect::<HashSet<_>>();
                                 self.storage.set_latest_committee_blob(new_committee_blob);
                                 if self.committee_destination_update {
-                                    self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
+                                    self.exporters_tracker.shutdown_old_committee(&committee_destinations);
                                     self.storage.new_committee(committee_destinations.clone());
                                     self.exporters_tracker.start_committee_exporters(committee_destinations.clone());
                                 }
@@ -751,7 +751,7 @@ mod test {
                 account_public_key: account_key,
             },
         );
-        let committee = Committee::new(validators, ResourceControlPolicy::default());
+        let committee = Committee::new(validators, ResourceControlPolicy::default())?;
         let committee_bytes = bcs::to_bytes(&committee)?;
         let committee_blob = Blob::new(BlobContent::new_committee(committee_bytes));
         let committee_blob_hash = CryptoHash::new(committee_blob.content());
@@ -862,7 +862,7 @@ mod test {
                 account_public_key: account_key,
             },
         );
-        let committee = Committee::new(validators, ResourceControlPolicy::default());
+        let committee = Committee::new(validators, ResourceControlPolicy::default())?;
         let committee_bytes = bcs::to_bytes(&committee)?;
         let committee_blob = Blob::new(BlobContent::new_committee(committee_bytes.clone()));
         let committee_blob_hash = CryptoHash::new(committee_blob.content());

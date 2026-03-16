@@ -28,6 +28,7 @@ use std::{
     borrow::Cow,
     num::NonZeroU16,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
@@ -39,7 +40,9 @@ use linera_base::{
     listen_for_shutdown_signals,
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
-use linera_core::{worker::WorkerState, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES};
+use linera_core::{
+    worker::WorkerState, ChainWorkerConfig, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -91,18 +94,19 @@ impl ServerContext {
             "Public key: {}",
             self.server_config.validator_secret.public()
         );
-        let state = WorkerState::new(
-            format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
-            Some(self.server_config.validator_secret.copy()),
-            storage,
-            self.block_cache_size,
-            self.execution_state_cache_size,
-        )
-        .with_allow_inactive_chains(false)
-        .with_allow_messages_from_deprecated_epochs(false)
-        .with_block_time_grace_period(self.block_time_grace_period)
-        .with_chain_worker_ttl(self.chain_worker_ttl)
-        .with_chain_info_max_received_log_entries(self.chain_info_max_received_log_entries);
+        let config = ChainWorkerConfig {
+            nickname: format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
+            key_pair: Some(Arc::new(self.server_config.validator_secret.copy())),
+            allow_inactive_chains: false,
+            allow_messages_from_deprecated_epochs: false,
+            block_time_grace_period: self.block_time_grace_period,
+            ttl: util::non_zero_duration(self.chain_worker_ttl),
+            chain_info_max_received_log_entries: self.chain_info_max_received_log_entries,
+            block_cache_size: self.block_cache_size,
+            execution_state_cache_size: self.execution_state_cache_size,
+            ..ChainWorkerConfig::default()
+        };
+        let state = WorkerState::new(storage, config, None);
         (state, shard_id, shard.clone())
     }
 
@@ -111,7 +115,7 @@ impl ServerContext {
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         protocol: simple::TransportProtocol,
-        shutdown_signal: CancellationToken,
+        shutdown_signal: &CancellationToken,
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -166,7 +170,7 @@ impl ServerContext {
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
-        shutdown_signal: CancellationToken,
+        shutdown_signal: &CancellationToken,
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -189,8 +193,8 @@ impl ServerContext {
                 state,
                 shard_id,
                 self.server_config.internal_network.clone(),
-                self.cross_chain_config.clone(),
-                self.notification_config.clone(),
+                &self.cross_chain_config,
+                &self.notification_config,
                 shutdown_signal.clone(),
                 &mut join_set,
             );
@@ -246,10 +250,12 @@ impl Runnable for ServerContext {
 
         let mut join_set = match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => {
-                self.spawn_simple(&listen_address, states, protocol, shutdown_notifier)
+                self.spawn_simple(&listen_address, states, protocol, &shutdown_notifier)
             }
             NetworkProtocol::Grpc(tls_config) => match tls_config {
-                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states, shutdown_notifier),
+                TlsConfig::ClearText => {
+                    self.spawn_grpc(&listen_address, states, &shutdown_notifier)
+                }
                 TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
             },
         };
@@ -394,6 +400,7 @@ enum ServerCommand {
         wasm_runtime: Option<WasmRuntime>,
 
         /// The duration in milliseconds after which an idle chain worker will free its memory.
+        /// Use 0 to disable expiry.
         #[arg(
             long = "chain-worker-ttl-ms",
             default_value = "30000",
@@ -624,7 +631,7 @@ async fn run(options: ServerOptions) {
             let mut server_config =
                 persistent::File::<ValidatorServerConfig>::read(&server_config_path)
                     .expect("Failed to read server config");
-            let shards = generate_shard_configs(num_shards, host, port, metrics_port)
+            let shards = generate_shard_configs(&num_shards, &host, &port, &metrics_port)
                 .expect("Failed to generate shard configs");
             server_config.internal_network.shards = shards;
             Persist::persist(&mut server_config)
@@ -635,10 +642,10 @@ async fn run(options: ServerOptions) {
 }
 
 fn generate_shard_configs(
-    num_shards: String,
-    host: String,
-    port: String,
-    metrics_port: Option<String>,
+    num_shards: &str,
+    host: &str,
+    port: &str,
+    metrics_port: &Option<String>,
 ) -> anyhow::Result<Vec<ShardConfig>> {
     let mut shards = Vec::new();
     let len = num_shards.len();
@@ -745,13 +752,7 @@ mod test {
     #[test]
     fn test_generate_shard_configs() {
         assert_eq!(
-            generate_shard_configs(
-                "02".into(),
-                "host%%".into(),
-                "10%%".into(),
-                Some("11%%".into())
-            )
-            .unwrap(),
+            generate_shard_configs("02", "host%%", "10%%", &Some("11%%".into())).unwrap(),
             vec![
                 ShardConfig {
                     host: "host01".into(),
@@ -766,12 +767,6 @@ mod test {
             ],
         );
 
-        assert!(generate_shard_configs(
-            "2".into(),
-            "host%%".into(),
-            "10%%".into(),
-            Some("11%%".into())
-        )
-        .is_err());
+        assert!(generate_shard_configs("2", "host%%", "10%%", &Some("11%%".into())).is_err());
     }
 }

@@ -24,7 +24,7 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
-    data_types::{Amount, BlockHeight, Bytecode, Epoch},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Bytecode, Epoch},
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
     },
@@ -110,6 +110,7 @@ impl ClientWrapper {
             id,
             on_drop,
             vec!["--wait-for-outgoing-messages".to_string()],
+            None,
         )
     }
 
@@ -120,6 +121,7 @@ impl ClientWrapper {
         id: usize,
         on_drop: OnClientDrop,
         extra_args: Vec<String>,
+        binary_dir: Option<PathBuf>,
     ) -> Self {
         let storage = format!(
             "rocksdb:{}/client_{}.db",
@@ -128,8 +130,9 @@ impl ClientWrapper {
         );
         let wallet = format!("wallet_{}.json", id);
         let keystore = format!("keystore_{}.json", id);
+        let binary_path = binary_dir.map(|dir| dir.join("linera"));
         Self {
-            binary_path: sync::Mutex::new(None),
+            binary_path: sync::Mutex::new(binary_path),
             testing_prng_seed,
             storage,
             wallet,
@@ -486,6 +489,27 @@ impl ClientWrapper {
         operators: &[(String, PathBuf)],
         read_only: bool,
     ) -> Result<NodeService> {
+        self.run_node_service_with_all_options(
+            port,
+            process_inbox,
+            operator_application_ids,
+            operators,
+            read_only,
+            &[],
+        )
+        .await
+    }
+
+    /// Runs `linera service` with all available options.
+    pub async fn run_node_service_with_all_options(
+        &self,
+        port: impl Into<Option<u16>>,
+        process_inbox: ProcessInbox,
+        operator_application_ids: &[ApplicationId],
+        operators: &[(String, PathBuf)],
+        read_only: bool,
+        allowed_subscriptions: &[String],
+    ) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
@@ -503,6 +527,9 @@ impl ClientWrapper {
         }
         if read_only {
             command.arg("--read-only");
+        }
+        for query in allowed_subscriptions {
+            command.args(["--allow-subscription", query]);
         }
         let child = command
             .args(["--port".to_string(), port.to_string()])
@@ -688,6 +715,34 @@ impl ClientWrapper {
         Ok(amount)
     }
 
+    /// Runs `linera query-application` and parses the JSON result.
+    pub async fn query_application_json<T: DeserializeOwned>(
+        &self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        query: impl AsRef<str>,
+    ) -> Result<T> {
+        let query = query.as_ref().trim();
+        let name = query
+            .split_once(|ch: char| !ch.is_alphanumeric())
+            .map_or(query, |(name, _)| name);
+        let stdout = self
+            .command()
+            .await?
+            .arg("query-application")
+            .arg("--chain-id")
+            .arg(chain_id.to_string())
+            .arg("--application-id")
+            .arg(application_id.to_string())
+            .arg(query)
+            .spawn_and_wait_for_stdout()
+            .await?;
+        let data: serde_json::Value =
+            serde_json::from_str(stdout.trim()).context("invalid JSON from query-application")?;
+        serde_json::from_value(data[name].clone())
+            .with_context(|| format!("{name} field missing in query-application response"))
+    }
+
     /// Runs `linera sync`.
     pub async fn sync(&self, chain_id: ChainId) -> Result<()> {
         self.command()
@@ -760,7 +815,7 @@ impl ClientWrapper {
         Ok(())
     }
 
-    fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
+    fn benchmark_command_internal(command: &mut Command, args: &BenchmarkCommand) -> Result<()> {
         let mut formatted_args = to_args(&args)?;
         let subcommand = formatted_args.remove(0);
         // The subcommand is followed by the flattened options, which are preceded by "options".
@@ -796,7 +851,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_envs_and_arguments(envs, self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 
@@ -804,7 +859,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_arguments(self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 
@@ -974,6 +1029,23 @@ impl ClientWrapper {
                 .zip(std::iter::repeat(100u64))
                 .collect::<BTreeMap<_, _>>(),
         )?);
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
+    pub async fn change_application_permissions(
+        &self,
+        chain_id: ChainId,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .arg("change-application-permissions")
+            .args(["--chain-id", &chain_id.to_string()]);
+        command.arg("--manage-chain").arg(serde_json::to_string(
+            &application_permissions.manage_chain,
+        )?);
+        // TODO: add other fields
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
@@ -1721,6 +1793,59 @@ impl NodeService {
                 }
                 serde_json::from_value(value["payload"]["data"]["notifications"].clone())
                     .context("Failed to deserialize notification")
+            },
+        )))
+    }
+
+    /// Subscribes to query results via the `queryResult` GraphQL subscription.
+    pub async fn query_result(
+        &self,
+        name: &str,
+        chain_id: ChainId,
+        application_id: &ApplicationId,
+    ) -> Result<Pin<Box<impl Stream<Item = Result<Value>>>>> {
+        let query = format!(
+            r#"subscription {{ queryResult(name: "{name}", chainId: "{chain_id}", applicationId: "{application_id}") }}"#,
+        );
+        let url = format!("ws://localhost:{}/ws", self.port);
+        let mut request = url.into_client_request()?;
+        request.headers_mut().insert(
+            "Sec-WebSocket-Protocol",
+            HeaderValue::from_str("graphql-transport-ws")?,
+        );
+        let (mut websocket, _) = async_tungstenite::tokio::connect_async(request).await?;
+        let init_json = json!({
+          "type": "connection_init",
+          "payload": {}
+        });
+        websocket.send(init_json.to_string().into()).await?;
+        let text = websocket
+            .next()
+            .await
+            .context("Failed to establish connection")??
+            .into_text()?;
+        ensure!(
+            text == "{\"type\":\"connection_ack\"}",
+            "Unexpected response: {text}"
+        );
+        let query_json = json!({
+          "id": "1",
+          "type": "start",
+          "payload": {
+            "query": query,
+            "variables": {},
+            "operationName": null
+          }
+        });
+        websocket.send(query_json.to_string().into()).await?;
+        Ok(Box::pin(websocket.map_err(anyhow::Error::from).and_then(
+            |message| async {
+                let text = message.into_text()?;
+                let value: Value = serde_json::from_str(&text).context("invalid JSON")?;
+                if let Some(errors) = value["payload"].get("errors") {
+                    bail!("Query result subscription failed: {errors:?}");
+                }
+                Ok(value["payload"]["data"]["queryResult"].clone())
             },
         )))
     }

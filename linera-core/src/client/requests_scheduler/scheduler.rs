@@ -119,12 +119,13 @@ pub(super) mod metrics {
 /// };
 /// let manager = RequestsScheduler::with_config(
 ///     validator_nodes,
-///     15,                      // max 15 concurrent requests per node
-///     latency_weights,         // custom scoring weights
-///     0.2,                     // higher alpha for faster adaptation
-///     3000.0,                  // max expected latency (3 seconds)
-///     Duration::from_secs(60), // 60 second cache TTL
-///     200,                     // cache up to 200 entries
+///     latency_weights,               // custom scoring weights
+///     0.2,                           // higher alpha for faster adaptation
+///     3000.0,                        // max expected latency (3 seconds)
+///     Duration::from_secs(60),       // 60 second cache TTL
+///     200,                           // cache up to 200 entries
+///     Duration::from_millis(200),    // max request TTL
+///     Duration::from_millis(150),    // retry delay
 /// );
 /// ```
 #[derive(Debug, Clone)]
@@ -150,7 +151,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
     /// Creates a new `RequestsScheduler` with the provided configuration.
     pub fn new(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
-        config: RequestsSchedulerConfig,
+        config: &RequestsSchedulerConfig,
     ) -> Self {
         Self::with_config(
             nodes,
@@ -852,14 +853,13 @@ impl<Env: Environment> RequestsScheduler<Env> {
     /// Selects the best available peer using weighted random selection from top performers.
     ///
     /// This method:
-    /// 1. Filters nodes that have available request capacity
-    /// 2. Sorts them by performance score
-    /// 3. Performs weighted random selection from the top 3 performers
+    /// 1. Sorts nodes by performance score
+    /// 2. Performs weighted random selection from the top 3 performers
     ///
     /// This approach balances between choosing high-performing nodes and distributing
     /// load across multiple validators to avoid creating hotspots.
     ///
-    /// Returns `None` if no nodes are available or all are at capacity.
+    /// Returns `None` if no nodes are available.
     async fn select_best_peer(&self) -> Option<RemoteNode<Env::ValidatorNode>> {
         let scored_nodes = self.peers_by_score().await;
 
@@ -1363,7 +1363,7 @@ mod tests {
             })
             .collect();
 
-        let staggered_delay = Duration::from_millis(10);
+        let staggered_delay = Duration::from_millis(100);
 
         // Store public keys for comparison
         let node0_key = nodes[0].public_key;
@@ -1451,7 +1451,7 @@ mod tests {
 
         // First call should be at ~0ms
         assert!(
-            times[0].1.as_millis() < 10,
+            times[0].1.as_millis() < 50,
             "First peer should be called immediately, was called at {}ms",
             times[0].1.as_millis()
         );
@@ -1461,20 +1461,20 @@ mod tests {
         if times.len() > 1 {
             let delay = times[1].1.as_millis();
             assert!(
-                delay < 10,
+                delay < 50,
                 "Second peer should be called immediately on first failure, got {}ms",
                 delay
             );
         }
 
-        // Total time should be significantly less than sequential.
-        // With aggressive retry: node0 fails immediately (~0ms), node1 starts immediately,
-        // node1 takes 20ms (and might fail or timeout), node2 starts at ~10ms (scheduled delay)
-        // and succeeds at ~15ms total (10ms + 5ms internal delay)
+        // Total time should be significantly less than sequential (which would be
+        // ~650ms: 200ms + 200ms + 50ms + 200ms). With parallel staggered retry:
+        // node0 fails immediately, node1 starts immediately, the next delay is
+        // 200ms (peer_index=2), node2 starts at ~200ms and succeeds at ~250ms.
         let total_time = Instant::now().duration_since(start_time).as_millis();
         assert!(
-            total_time < 50,
-            "Total time should be less than 50ms, got {}ms",
+            total_time < 500,
+            "Total time should be less than 500ms (sequential would be ~650ms), got {}ms",
             total_time
         );
     }

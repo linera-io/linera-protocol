@@ -9,8 +9,7 @@ use linera_core::wallet;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use super::JsResult;
-use crate::lock::Lock;
+use crate::{lock::Lock, Error, Result};
 
 /// A wallet that stores the user's chains and keys in memory.
 #[wasm_bindgen]
@@ -30,14 +29,12 @@ impl Wallet {
     ///
     /// If the provided `ChainId` or `AccountOwner` are in the wrong format.
     #[wasm_bindgen(js_name = setOwner)]
-    pub async fn set_owner(&self, chain_id: JsValue, owner: JsValue) -> JsResult<()> {
+    pub async fn set_owner(&self, chain_id: JsValue, owner: JsValue) -> Result<()> {
         let chain_id = serde_wasm_bindgen::from_value(chain_id)?;
         let owner = serde_wasm_bindgen::from_value(owner)?;
         self.chains
             .mutate(chain_id, |chain| chain.owner = Some(owner))
-            .ok_or(JsError::new(&format!(
-                "chain {chain_id} doesn't exist in wallet"
-            )))
+            .ok_or(Error::new(&format!("chain {chain_id} doesn't exist in wallet")).into())
     }
 
     #[must_use]
@@ -52,7 +49,7 @@ impl Wallet {
     ///
     /// # Errors
     /// If the wallet is already locked.
-    pub async fn lock(&mut self) -> JsResult<()> {
+    pub async fn lock(&mut self) -> Result<()> {
         self.lock = Some(Rc::new(Lock::try_acquire(&self.name()).await?));
         Ok(())
     }

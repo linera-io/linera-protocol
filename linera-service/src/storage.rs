@@ -285,11 +285,18 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             }
             if parts.len() == 2 || parts.len() == 3 {
                 let path = parts[0].to_string().into();
-                let spawn_mode = match parts[1] {
+                let spawn_mode_name = parts
+                    .get(1)
+                    .copied()
+                    .expect("validated by the parts length check above");
+                let spawn_mode = match spawn_mode_name {
                     "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                     "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                     "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                    _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
+                    _ => Err(anyhow!(
+                        "Failed to parse {} as a spawn_mode",
+                        spawn_mode_name
+                    )),
                 }?;
                 let namespace = if parts.len() == 2 {
                     DEFAULT_NAMESPACE.to_string()
@@ -385,11 +392,18 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             let path = Path::new(parts[0]);
             let path = path.to_path_buf();
             let path_with_guard = PathWithGuard::new(path);
-            let spawn_mode = match parts[1] {
+            let spawn_mode_name = parts
+                .get(1)
+                .copied()
+                .expect("validated by the parts length check above");
+            let spawn_mode = match spawn_mode_name {
                 "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                 "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                 "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
+                _ => Err(anyhow!(
+                    "Failed to parse {} as a spawn_mode",
+                    spawn_mode_name
+                )),
             }?;
             let protocol = parts[2];
             if protocol != "tcp" {

@@ -129,6 +129,7 @@ getrandom = "0.2.12"
 git2 = "0.19.0"
 glob = "0.3.1"
 gloo-utils = "0.2.0"
+gungraun = "0.17.2"
 hdrhistogram = "7.5.4"
 heck = "0.4.1"
 hex = "0.4.3"
@@ -358,12 +359,6 @@ debug = true
 [profile.bench]
 debug = true
 
-# This section is experimental and requires to build `cargo-all-features` from the fork
-# repository: https://github.com/ma2bd/cargo-all-features
-[workspace.metadata.cargo-all-features]
-skip_optional_dependencies = true
-max_combination_size = 1
-
 # Make sure to compile VMs with high optimization level
 [profile.dev.package.linera-wasmer]
 opt-level = 3
@@ -386,10 +381,13 @@ manual_instant_elapsed = "deny"
 manual_is_power_of_two = "deny"
 manual_is_variant_and = "deny"
 map_unwrap_or = "deny"
+match_on_vec_items = "deny"
 mismatching_type_param_order = "deny"
 naive_bytecount = "deny"
+needless_pass_by_value = "deny"
 non_std_lazy_statics = "deny"
 range_minus_one = "deny"
 range_plus_one = "deny"
+needless_pass_by_ref_mut = "deny"
 ref_option_ref = "deny"
 str_split_at_newline = "deny"

@@ -28,6 +28,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera create-genesis-config`↴](#linera-create-genesis-config)
 * [`linera watch`↴](#linera-watch)
 * [`linera service`↴](#linera-service)
+* [`linera query-application`↴](#linera-query-application)
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-module`↴](#linera-publish-module)
 * [`linera list-events-from-index`↴](#linera-list-events-from-index)
@@ -105,6 +106,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `create-genesis-config` — Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 * `watch` — Watch the network for notifications
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
+* `query-application` — Query an application with a read-only GraphQL query
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-module` — Publish module
 * `list-events-from-index` — Print events from a specific chain and stream from a specified index
@@ -139,10 +141,10 @@ Client implementation and command-line tool for the Linera blockchain
    Discarded bundles can be retried in the next block.
 
   Default value: `3`
-* `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory
+* `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory. Use 0 to disable expiry
 
   Default value: `30000`
-* `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory
+* `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory. Use 0 to disable expiry
 
   Default value: `1000`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
@@ -741,7 +743,29 @@ Run a GraphQL service to explore and extend the chains of the wallet
 * `--operator-application-ids <OPERATOR_APPLICATION_IDS>` — Application IDs of operator applications to watch. When specified, a task processor is started alongside the node service
 * `--controller-id <CONTROLLER_APPLICATION_ID>` — A controller to execute a dynamic set of applications running on a dynamic set of chains
 * `--operators <OPERATORS>` — Supported operators and their binary paths. Format: `name=path` or just `name` (uses name as path). Example: `--operators my-operator=/path/to/binary`
+* `--task-retry-delay-secs <TASK_RETRY_DELAY_SECS>` — Delay in seconds before retrying a failed operator task batch. Only relevant when operators are configured via `--operator-application-ids` or `--controller-id`
+
+  Default value: `5`
 * `--read-only` — Run in read-only mode: disallow mutations and prevent queries from scheduling operations. Use this when exposing the service to untrusted clients
+* `--query-cache-size <QUERY_CACHE_SIZE>` — Enable the application query response cache with the given per-chain capacity. Each entry stores a serialized GraphQL response keyed by (application_id, request_bytes). Incompatible with `--long-lived-services`
+* `--allow-subscription <ALLOWED_SUBSCRIPTIONS>` — Allow a named GraphQL subscription query. The operation name is extracted from the query string. Repeatable. Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
+
+
+
+## `linera query-application`
+
+Query an application with a read-only GraphQL query
+
+**Usage:** `linera query-application [OPTIONS] --application-id <APPLICATION_ID> <QUERY>`
+
+###### **Arguments:**
+
+* `<QUERY>` — The GraphQL query to send (e.g. "value" for a counter application)
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — The chain on which the application is running
+* `--application-id <APPLICATION_ID>` — The application to query
 
 
 
@@ -761,6 +785,9 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 
   Default value: `8080`
 * `--amount <AMOUNT>` — The number of tokens to send to each new chain
+* `--daily-claim-amount <DAILY_CLAIM_AMOUNT>` — The number of tokens to send per daily claim. Set to 0 to disable daily claims
+
+  Default value: `0`
 * `--limit-rate-until <LIMIT_RATE_UNTIL>` — The end timestamp: The faucet will rate-limit the token supply so it runs out of money no earlier than this
 * `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
 * `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)
@@ -1231,10 +1258,9 @@ Start a Local Linera Network
 * `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either `grpc` or `grpcs`
 
   Default value: `grpc`
-* `--with-faucet` — If present, a faucet is started using the chain provided by --faucet-chain, or the first non-admin chain if not provided
+* `--with-faucet` — If present, a faucet is started on a dedicated chain with its own wallet
 
   Default value: `false`
-* `--faucet-chain <FAUCET_CHAIN>` — When using --with-faucet, this specifies the chain on which the faucet will be started. If this is `n`, the `n`-th non-admin chain (lexicographically) in the wallet is selected
 * `--faucet-port <FAUCET_PORT>` — The port on which to run the faucet server
 
   Default value: `8080`

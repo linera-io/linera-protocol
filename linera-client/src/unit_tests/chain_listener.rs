@@ -69,7 +69,7 @@ impl chain_listener::ClientContext for ClientContext {
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
         let existing_owner = self.wallet().get(info.chain_id).and_then(|c| c.owner);
-        let pending_proposal = client.pending_proposal().clone();
+        let pending_proposal = client.pending_proposal().await;
         self.wallet().insert(
             info.chain_id,
             wallet::Chain {
@@ -116,12 +116,12 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             false,
             [(chain_id0, ListeningMode::FullChain)],
             format!("Client node for {:.8}", chain_id0),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
     context
@@ -163,7 +163,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
     // Transfer one token to chain 0. The listener should eventually become leader and receive
     // the message.
     let recipient0 = Account::chain(chain_id0);
@@ -229,12 +229,12 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
                 (chain_b_id, ListeningMode::FullChain),
             ],
             "Client node with follow-only and owned chains".to_string(),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
 
@@ -279,7 +279,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
     // Send a message to chain A first (follow-only). This notification should be ignored.
     sender
@@ -384,12 +384,12 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             false,
             std::iter::empty::<(ChainId, ListeningMode)>(),
             "Client node with no chains".to_string(),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
     let context = Arc::new(Mutex::new(context));
@@ -407,7 +407,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
     let committee = builder.initial_committee.clone();
     // Stage a committee (this will emit events that the listener should be listening to).
     let certificate = client0.stage_new_committee(committee).await?.unwrap();
@@ -459,12 +459,12 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
             false,
             std::iter::empty::<(ChainId, ListeningMode)>(),
             "Client node with no chains".to_string(),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
 
@@ -489,7 +489,7 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
     let mut chains_to_listen = BTreeMap::new();
     chains_to_listen.insert(chain_id0, Some(client0.identity().await?));
@@ -576,12 +576,12 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             false,
             [(chain_id0, ListeningMode::FullChain)],
             format!("Client node for {:.8}", chain_id0),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
             chain_client::Options::test_default(),
             5_000,
             10_000,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
 
@@ -631,7 +631,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
     // Send a message from chain 1 to chain 0. The listener should process the inbox.
     let recipient0 = Account::chain(chain_id0);

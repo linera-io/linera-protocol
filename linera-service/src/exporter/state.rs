@@ -70,7 +70,7 @@ where
                 .pin()
                 .contains_key(destination)
             {
-                let mut states = view.destination_states.get().clone();
+                let states = view.destination_states.get().clone();
                 states.insert(destination.clone(), Arc::new(AtomicU64::new(0)));
                 view.destination_states.set(states);
             }
@@ -223,7 +223,7 @@ impl DestinationStates {
         self.states.pin().get(id).cloned()
     }
 
-    pub fn insert(&mut self, id: DestinationId, state: Arc<AtomicU64>) {
+    pub fn insert(&self, id: DestinationId, state: Arc<AtomicU64>) {
         self.states.pin().insert(id, state);
     }
 

@@ -27,7 +27,7 @@ pub struct ProcessorActions {
     pub request_callback: Option<Timestamp>,
     /// An optional cursor for the task processor to store and pass to the application
     /// upon the next query for actions.
-    pub set_cursor: Option<Vec<u8>>,
+    pub set_cursor: Option<String>,
     /// The application is requesting the execution of the given tasks.
     pub execute_tasks: Vec<Task>,
 }

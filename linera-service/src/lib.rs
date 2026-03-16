@@ -4,12 +4,15 @@
 
 //! This module provides the executables needed to operate a Linera service, including a placeholder wallet acting as a GraphQL service for user interfaces.
 
+#![recursion_limit = "256"]
+
 pub mod cli;
 pub mod cli_wrappers;
 pub mod config;
 pub mod controller;
 pub mod node_service;
 pub mod project;
+pub mod query_subscription;
 pub mod storage;
 pub mod task_processor;
 pub mod tracing;

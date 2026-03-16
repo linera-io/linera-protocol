@@ -73,7 +73,7 @@ async fn collect_pledges() {
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
-                    Operation::Pledge {
+                    &Operation::Pledge {
                         owner: *backer_account,
                         amount: pledge_amount,
                     },
@@ -94,28 +94,32 @@ async fn collect_pledges() {
         .await;
 
     assert_eq!(
-        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
+        campaign_chain
+            .query_account(token_id, campaign_account)
+            .await,
         None
     );
 
     campaign_chain
         .add_block(|block| {
-            block.with_operation(campaign_id, Operation::Collect);
+            block.with_operation(campaign_id, &Operation::Collect);
         })
         .await;
 
     assert_eq!(
-        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
+        campaign_chain
+            .query_account(token_id, campaign_account)
+            .await,
         Some(pledge_amount.saturating_mul(backers.len() as u128)),
     );
 
     for (backer_chain, backer_account, initial_amount) in backers {
         assert_eq!(
-            fungible::query_account(token_id, &backer_chain, backer_account).await,
+            backer_chain.query_account(token_id, backer_account).await,
             Some(initial_amount.saturating_sub(pledge_amount)),
         );
         assert_eq!(
-            fungible::query_account(token_id, &campaign_chain, backer_account).await,
+            campaign_chain.query_account(token_id, backer_account).await,
             None,
         );
     }
@@ -175,7 +179,7 @@ async fn cancel_successful_campaign() {
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
-                    Operation::Pledge {
+                    &Operation::Pledge {
                         owner: *backer_account,
                         amount: pledge_amount,
                     },
@@ -196,7 +200,9 @@ async fn cancel_successful_campaign() {
         .await;
 
     assert_eq!(
-        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
+        campaign_chain
+            .query_account(token_id, campaign_account)
+            .await,
         None
     );
 
@@ -204,22 +210,24 @@ async fn cancel_successful_campaign() {
         .add_block(|block| {
             block
                 .with_timestamp(Timestamp::from(20))
-                .with_operation(campaign_id, Operation::Cancel);
+                .with_operation(campaign_id, &Operation::Cancel);
         })
         .await;
 
     assert_eq!(
-        fungible::query_account(token_id, &campaign_chain, campaign_account).await,
+        campaign_chain
+            .query_account(token_id, campaign_account)
+            .await,
         None,
     );
 
     for (backer_chain, backer_account, initial_amount) in backers {
         assert_eq!(
-            fungible::query_account(token_id, &backer_chain, backer_account).await,
+            backer_chain.query_account(token_id, backer_account).await,
             Some(initial_amount.saturating_sub(pledge_amount)),
         );
         assert_eq!(
-            fungible::query_account(token_id, &campaign_chain, backer_account).await,
+            campaign_chain.query_account(token_id, backer_account).await,
             Some(pledge_amount),
         );
     }

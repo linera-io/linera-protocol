@@ -191,7 +191,8 @@ impl<T: CertificateValue> VoteTestExt<T> for Vote<T> {
         let committee = Committee::new(
             vec![(public_key, state)].into_iter().collect(),
             ResourceControlPolicy::only_fuel(),
-        );
+        )
+        .expect("test committee votes should not overflow");
         SignatureAggregator::new(self.value, self.round, &committee)
             .append(public_key, self.signature)
             .unwrap()

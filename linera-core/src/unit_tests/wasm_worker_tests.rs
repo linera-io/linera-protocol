@@ -136,14 +136,15 @@ where
     assert!(publish_certificate
         .value()
         .matches_proposed_block(&publish_block));
-    assert!(publish_certificate.block().outcome_matches(
-        vec![vec![]],
-        BTreeMap::new(),
-        BTreeMap::new(),
-        vec![vec![]],
-        vec![vec![]],
-        vec![vec![]],
-        vec![OperationResult::default()]
+    assert!(outcome_matches!(
+        publish_certificate.block(),
+        &[vec![]],
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &[vec![]],
+        &[vec![]],
+        &[vec![]],
+        &[OperationResult::default()]
     ));
 
     assert_matches!(
@@ -195,17 +196,18 @@ where
     assert!(create_certificate
         .value()
         .matches_proposed_block(&create_block));
-    assert!(create_certificate.block().outcome_matches(
-        vec![vec![]],
-        BTreeMap::new(),
-        BTreeMap::new(),
-        vec![vec![
+    assert!(outcome_matches!(
+        create_certificate.block(),
+        &[vec![]],
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &[vec![
             OracleResponse::Blob(contract_blob_id),
             OracleResponse::Blob(service_blob_id),
         ]],
-        vec![vec![]],
-        vec![vec![application_description_blob.clone()]],
-        vec![OperationResult::default()],
+        &[vec![]],
+        &[vec![application_description_blob.clone()]],
+        &[OperationResult::default()],
     ));
 
     env.write_blobs(std::slice::from_ref(&application_description_blob))
@@ -236,14 +238,15 @@ where
     let run_certificate = env.execute_proposal(run_block.clone(), vec![]).await?;
 
     assert!(run_certificate.value().matches_proposed_block(&run_block));
-    assert!(run_certificate.block().outcome_matches(
-        vec![vec![]],
-        BTreeMap::new(),
-        BTreeMap::new(),
-        vec![vec![]],
-        vec![vec![]],
-        vec![vec![]],
-        vec![OperationResult(bcs::to_bytes(&15u64)?)],
+    assert!(outcome_matches!(
+        run_certificate.block(),
+        &[vec![]],
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &[vec![]],
+        &[vec![]],
+        &[vec![]],
+        &[OperationResult(bcs::to_bytes(&15u64)?)],
     ));
 
     let info = env

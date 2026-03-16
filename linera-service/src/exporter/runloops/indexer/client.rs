@@ -38,7 +38,8 @@ pub(super) struct IndexerClient {
 
 impl IndexerClient {
     pub(super) fn new(address: &str, options: NodeOptions) -> Result<Self, GrpcError> {
-        let channel = create_channel(address, (&options).into())?;
+        let channel_options: Options = (&options).into();
+        let channel = create_channel(address, &channel_options)?;
         let client = IndexerClientInner::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
@@ -61,6 +62,8 @@ impl IndexerClient {
     ) -> Result<(Sender<Element>, Streaming<()>), ExporterError> {
         let mut retry_count = 0;
         loop {
+            #[cfg(with_metrics)]
+            self.sent_latency.lock().unwrap().clear();
             let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
             #[cfg(with_metrics)]
             let request = {
@@ -123,7 +126,7 @@ impl IndexerClient {
     }
 }
 
-fn create_channel(address: &str, options: Options) -> Result<Channel, tonic::transport::Error> {
+fn create_channel(address: &str, options: &Options) -> Result<Channel, tonic::transport::Error> {
     let mut endpoint = Endpoint::from_shared(address.to_string())?
         .tls_config(tonic::transport::channel::ClientTlsConfig::default().with_webpki_roots())?;
 

@@ -40,6 +40,7 @@ linera-web/**/*-lock.json
 # Claude
 .claude
 CLAUDE.md
+CLAUDE.local.md
 .serena
 docs/
 
@@ -53,3 +54,6 @@ docs/
 test-results/
 playwright-report/
 __screenshots__/
+
+# macOS
+.DS_Store

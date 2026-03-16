@@ -37,9 +37,9 @@ pub fn derive_wit_type(input: TokenStream) -> TokenStream {
     let wit_name = wit_type::discover_wit_name(&input.attrs, &input.ident);
 
     let body = match &input.data {
-        Data::Struct(struct_item) => wit_type::derive_for_struct(wit_name, &struct_item.fields),
+        Data::Struct(struct_item) => wit_type::derive_for_struct(&wit_name, &struct_item.fields),
         Data::Enum(enum_item) => {
-            wit_type::derive_for_enum(&input.ident, wit_name, enum_item.variants.iter())
+            wit_type::derive_for_enum(&input.ident, &wit_name, enum_item.variants.iter())
         }
         Data::Union(_union_item) => {
             abort!(input.ident, "Can't derive `WitType` for `union`s")
@@ -47,10 +47,10 @@ pub fn derive_wit_type(input: TokenStream) -> TokenStream {
     };
 
     derive_trait(
-        input,
-        specializations,
+        &input,
+        &specializations,
         body,
-        Ident::new("WitType", Span::call_site()),
+        &Ident::new("WitType", Span::call_site()),
     )
 }
 
@@ -73,10 +73,10 @@ pub fn derive_wit_load(input: TokenStream) -> TokenStream {
     };
 
     derive_trait(
-        input,
-        specializations,
+        &input,
+        &specializations,
         body,
-        Ident::new("WitLoad", Span::call_site()),
+        &Ident::new("WitLoad", Span::call_site()),
     )
 }
 
@@ -101,10 +101,10 @@ pub fn derive_wit_store(input: TokenStream) -> TokenStream {
     };
 
     derive_trait(
-        input,
-        specializations,
+        &input,
+        &specializations,
         body,
-        Ident::new("WitStore", Span::call_site()),
+        &Ident::new("WitStore", Span::call_site()),
     )
 }
 
@@ -112,10 +112,10 @@ pub fn derive_wit_store(input: TokenStream) -> TokenStream {
 ///
 /// Contains the common code to extract and apply the type's generics for the trait implementation.
 fn derive_trait(
-    input: DeriveInput,
-    specializations: Specializations,
+    input: &DeriveInput,
+    specializations: &Specializations,
     body: impl ToTokens,
-    trait_name: Ident,
+    trait_name: &Ident,
 ) -> TokenStream {
     let (generic_parameters, type_generics, where_clause) =
         specializations.split_generics_from(&input.generics);
@@ -139,7 +139,7 @@ pub fn wit_import(attribute: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemTrait);
     let parameters = AttributeParameters::new(attribute);
 
-    wit_import::generate(input, parameters).into()
+    wit_import::generate(&input, parameters).into()
 }
 
 /// Registers an `impl` block's functions as callable host functions exported to guest Wasm

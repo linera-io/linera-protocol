@@ -38,6 +38,9 @@ wasm-bindgen \
     --target web \
     --split-linked-modules
 
+# wasm-bindgen generates a `package.json` with the requisite dependencies, which is missing its `module: true` attribute.  This confuses `tsc`, and isn't necessary since we're embedding the output in a larger package with its own `package.json`.
+rm src/wasm/package.json
+
 mkdir -p dist
 cp -r src/wasm dist/
 

@@ -19,15 +19,23 @@
 //!
 //! [Web Locks API]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
 
+use std::fmt;
+
 use wasm_bindgen::{JsCast as _, JsValue, UnwrapThrowExt as _};
 use wasm_bindgen_futures::JsFuture;
 
 /// Errors that can occur when acquiring a lock.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
     /// The lock could not be acquired because another context already holds it.
-    #[error("wallet {name} already in use")]
     Contended { name: String },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self::Contended { name } = self;
+        write!(f, "wallet {name} already in use")
+    }
 }
 
 /// An exclusive lock on a named resource, backed by the Web Locks API.

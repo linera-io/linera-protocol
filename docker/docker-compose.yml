@@ -226,7 +226,7 @@ services:
       - ./dashboards:/var/lib/grafana/dashboards
 
   watchtower:
-    image: containrrr/watchtower:latest
+    image: nickfedor/watchtower:1.14.2
     container_name: watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

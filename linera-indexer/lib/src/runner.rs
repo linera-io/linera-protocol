@@ -82,7 +82,7 @@ where
             app = plugin.route(app);
         }
         axum::serve(
-            tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?,
+            tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await?,
             app,
         )
         .await?;
@@ -91,8 +91,8 @@ where
 
     /// Runs a server and the chains listener
     pub async fn run(&mut self) -> Result<(), IndexerError> {
-        let config = self.config.clone();
-        match config.clone().command {
+        let command = self.config.command.clone();
+        match command {
             IndexerCommand::Schema { plugin } => {
                 println!("{}", self.indexer.sdl(plugin)?);
                 Ok(())
@@ -104,7 +104,7 @@ where
                 port,
             } => {
                 warn!("Running in legacy GraphQL mode. Consider migrating to RunGrpc.");
-                info!("config: {:?}", config);
+                info!("config: {:?}", self.config);
                 let chains = if chains.is_empty() {
                     listener.service.get_chains().await?
                 } else {
@@ -114,11 +114,9 @@ where
                     .iter()
                     .map(|chain_id| self.indexer.init(&listener, *chain_id));
                 futures::future::try_join_all(initialize_chains).await?;
-                let connections = {
-                    chains
-                        .into_iter()
-                        .map(|chain_id| listener.listen(&self.indexer, chain_id))
-                };
+                let connections = chains
+                    .into_iter()
+                    .map(|chain_id| listener.listen(&self.indexer, chain_id));
                 select! {
                     result = Self::server(port, &self.indexer) => {
                         result.map(|()| warn!("GraphQL server stopped"))

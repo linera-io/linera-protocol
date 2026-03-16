@@ -60,7 +60,7 @@ where
 {
     /// Start the gRPC indexer server
     pub async fn serve(self, port: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let addr = format!("0.0.0.0:{}", port).parse()?;
+        let addr = format!("0.0.0.0:{port}").parse()?;
 
         info!("Starting gRPC indexer server on {}", addr);
 
@@ -167,10 +167,7 @@ where
                     bincode::serialize(&block_cert).map_err(ProcessingError::BlockSerialization)?;
 
                 // Convert pending blobs to the format expected by the high-level API
-                let blobs: Vec<(BlobId, Vec<u8>)> = pending_blobs
-                    .iter()
-                    .map(|(blob_id, blob_data)| (*blob_id, blob_data.clone()))
-                    .collect();
+                let blobs = pending_blobs.drain().collect::<Vec<_>>();
 
                 // Use the high-level atomic API - this manages all locking internally
                 database
@@ -190,7 +187,6 @@ where
                     block_hash,
                     pending_blobs.len()
                 );
-                pending_blobs.clear();
                 Ok(Some(()))
             }
             None => {

@@ -199,6 +199,9 @@ pub struct LocalNetConfig {
     pub storage_config_builder: InnerStorageConfigBuilder,
     pub path_provider: PathProvider,
     pub block_exporters: ExportersSetup,
+    /// Optional directory where the `linera`, `linera-proxy`, and `linera-server` binaries
+    /// are located. If `None`, binaries are resolved from the current binary's directory.
+    pub binary_dir: Option<PathBuf>,
 }
 
 /// The setup for the block exporters.
@@ -242,6 +245,7 @@ pub struct LocalNet {
     cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
     block_exporters: ExportersSetup,
+    binary_dir: Option<PathBuf>,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -349,6 +353,7 @@ impl LocalNetConfig {
             path_provider,
             block_exporters: ExportersSetup::Local(vec![]),
             http_request_allow_list: Some(vec!["localhost".to_string()]),
+            binary_dir: None,
         }
     }
 }
@@ -370,6 +375,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.cross_chain_config,
             self.path_provider,
             self.block_exporters,
+            self.binary_dir,
         );
         let client = net.make_client().await;
         ensure!(
@@ -409,12 +415,14 @@ impl LineraNet for LocalNet {
     }
 
     async fn make_client(&mut self) -> ClientWrapper {
-        let client = ClientWrapper::new(
+        let client = ClientWrapper::new_with_extra_args(
             self.path_provider.clone(),
             self.network.external,
             self.testing_prng_seed,
             self.next_client_id,
             OnClientDrop::LeakChains,
+            vec!["--wait-for-outgoing-messages".to_string()],
+            self.binary_dir.clone(),
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);
@@ -444,6 +452,7 @@ impl LocalNet {
         cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
         block_exporters: ExportersSetup,
+        binary_dir: Option<PathBuf>,
     ) -> Self {
         Self {
             network,
@@ -460,11 +469,16 @@ impl LocalNet {
             cross_chain_config,
             path_provider,
             block_exporters,
+            binary_dir,
         }
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
-        let path = resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
+        let path = if let Some(dir) = &self.binary_dir {
+            dir.join(name)
+        } else {
+            resolve_binary(name, env!("CARGO_PKG_NAME")).await?
+        };
         let mut command = Command::new(path);
         command.current_dir(self.path_provider.path());
         Ok(command)
@@ -732,7 +746,7 @@ impl LocalNet {
         Ok(())
     }
 
-    async fn run_proxy(&mut self, validator: usize, proxy_id: usize) -> Result<Child> {
+    async fn run_proxy(&self, validator: usize, proxy_id: usize) -> Result<Child> {
         let storage = self
             .initialized_validator_storages
             .get(&validator)
@@ -767,7 +781,7 @@ impl LocalNet {
         Ok(child)
     }
 
-    async fn run_exporter(&mut self, validator: usize, exporter_id: u32) -> Result<Child> {
+    async fn run_exporter(&self, validator: usize, exporter_id: u32) -> Result<Child> {
         let config_path = format!("exporter_config_{validator}:{exporter_id}.toml");
         let storage = self
             .initialized_validator_storages
@@ -894,7 +908,7 @@ impl LocalNet {
         Ok(())
     }
 
-    async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
+    async fn run_server(&self, validator: usize, shard: usize) -> Result<Child> {
         let mut storage = self
             .initialized_validator_storages
             .get(&validator)

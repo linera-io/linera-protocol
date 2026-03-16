@@ -34,4 +34,31 @@ where
         self.post_save();
         Ok(())
     }
+    async fn save_and_drop(self) -> Result<(), linera_views::ViewError> {
+        use linera_views::{
+            context::Context as _, batch::Batch, store::WritableKeyValueStore as _,
+            views::View as _,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        linera_views::metrics::increment_counter(
+            &linera_views::metrics::SAVE_VIEW_COUNTER,
+            stringify!(TestView),
+            &self.context().base_key().bytes,
+        );
+        let mut batch = Batch::new();
+        self.pre_save(&mut batch)?;
+        if !batch.is_empty() {
+            #[cfg(not(target_arch = "wasm32"))]
+            let start = std::time::Instant::now();
+            self.context().store().write_batch(batch).await?;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
+                linera_views::metrics::SAVE_VIEW_LATENCY
+                    .with_label_values(&[stringify!(TestView)])
+                    .observe(latency_ms);
+            }
+        }
+        Ok(())
+    }
 }

@@ -72,12 +72,12 @@ proptest = { workspace = true, optional = true }
 rand = { workspace = true, features = ["std_rng"] }
 serde.workspace = true
 serde_json.workspace = true
+sync_wrapper.workspace = true
 test-log = { workspace = true, optional = true }
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
-tokio-util.workspace = true
 tonic.workspace = true
 tracing.workspace = true
 trait-set.workspace = true

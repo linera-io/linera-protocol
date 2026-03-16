@@ -2,15 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 
 use futures::{lock::Mutex, stream::StreamExt, FutureExt};
-use linera_base::identifiers::{ApplicationId, ChainId};
+use linera_base::{
+    data_types::{MessagePolicy, TimeDelta},
+    identifiers::{ApplicationId, ChainId, GenericApplicationId},
+};
 use linera_client::chain_listener::{ClientContext, ListenerCommand};
-use linera_core::{client::ChainClient, node::NotificationStream, worker::Reason};
-use linera_sdk::abis::controller::{LocalWorkerState, Operation, WorkerCommand};
+use linera_core::{
+    client::ChainClient,
+    node::NotificationStream,
+    worker::{Notification, Reason},
+};
+use linera_sdk::abis::controller::{
+    LocalWorkerState, ManagedServiceId, Operation, PendingService, WorkerCommand,
+};
 use serde_json::json;
 use tokio::{
     select,
@@ -39,9 +48,18 @@ pub struct Controller<Ctx: ClientContext> {
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
     operators: OperatorMap,
+    retry_delay: TimeDelta,
     processors: BTreeMap<ChainId, ProcessorHandle>,
     listened_local_chains: BTreeSet<ChainId>,
+    current_message_policies: BTreeMap<ChainId, MessagePolicy>,
     command_sender: UnboundedSender<ListenerCommand>,
+    pending_services_notifications: BTreeMap<
+        ChainId,
+        (
+            HashMap<ManagedServiceId, PendingService>,
+            NotificationStream,
+        ),
+    >,
 }
 
 impl<Ctx> Controller<Ctx>
@@ -50,6 +68,7 @@ where
     Ctx::Environment: 'static,
     <Ctx::Environment as linera_core::Environment>::Storage: Clone,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: ChainId,
         controller_id: ApplicationId,
@@ -57,6 +76,7 @@ where
         chain_client: ChainClient<Ctx::Environment>,
         cancellation_token: CancellationToken,
         operators: OperatorMap,
+        retry_delay: TimeDelta,
         command_sender: UnboundedSender<ListenerCommand>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
@@ -68,9 +88,12 @@ where
             cancellation_token,
             notifications,
             operators,
+            retry_delay,
             processors: BTreeMap::new(),
             listened_local_chains: BTreeSet::new(),
+            current_message_policies: BTreeMap::new(),
             command_sender,
+            pending_services_notifications: BTreeMap::new(),
         }
     }
 
@@ -81,6 +104,22 @@ where
         );
         self.process_controller_state().await;
         loop {
+            let pending_services_notifications: std::pin::Pin<
+                Box<dyn futures::Future<Output = (ChainId, Option<Notification>)> + Send>,
+            > = if !self.pending_services_notifications.is_empty() {
+                Box::pin(
+                    futures::future::select_all(
+                        self.pending_services_notifications.iter_mut().map(
+                            |(chain_id, (_, notifications))| {
+                                notifications.next().map(|result| (*chain_id, result))
+                            },
+                        ),
+                    )
+                    .map(|((chain_id, maybe_notification), _, _)| (chain_id, maybe_notification)),
+                )
+            } else {
+                Box::pin(futures::future::pending())
+            };
             select! {
                 Some(notification) = self.notifications.next() => {
                     if let Reason::NewBlock { .. } = notification.reason {
@@ -88,12 +127,58 @@ where
                         self.process_controller_state().await;
                     }
                 }
+                (chain_id, Some(notification)) = pending_services_notifications => {
+                    self.process_pending_service_notification(chain_id, notification).await;
+                }
                 _ = self.cancellation_token.cancelled().fuse() => {
                     break;
                 }
             }
         }
         debug!("Notification stream ended.");
+    }
+
+    async fn process_pending_service_notification(
+        &mut self,
+        chain_id: ChainId,
+        notification: Notification,
+    ) {
+        debug!(
+            "Processing notification on pending service chain {}",
+            chain_id
+        );
+        if let Reason::NewBlock { height, .. } = notification.reason {
+            let pending_services = &mut self
+                .pending_services_notifications
+                .get_mut(&chain_id)
+                .expect("the entry should exist")
+                .0;
+            for (service_id, pending_service) in &*pending_services {
+                if pending_service.start_block_height <= height {
+                    let bytes = bcs::to_bytes(&Operation::StartLocalService {
+                        service_id: *service_id,
+                    })
+                    .expect("bcs bytes");
+                    let operation = linera_execution::Operation::User {
+                        application_id: self.controller_id,
+                        bytes,
+                    };
+                    if let Err(e) = self
+                        .chain_client
+                        .execute_operations(vec![operation], vec![])
+                        .await
+                    {
+                        // TODO: handle leader timeouts
+                        error!("Failed to execute worker on-chain registration: {e}");
+                    }
+                }
+            }
+            pending_services
+                .retain(|_, pending_service| pending_service.start_block_height > height);
+            if pending_services.is_empty() {
+                let _ = self.pending_services_notifications.remove(&chain_id);
+            }
+        }
     }
 
     async fn process_controller_state(&mut self) {
@@ -117,6 +202,24 @@ where
             "We should be registered with the current account owner."
         );
 
+        // Subscribe to notifications on pending services chains - we need to know when
+        // they sync their blocks.
+        for (managed_service_id, (chain_id, pending_service)) in &state.local_pending_services {
+            // No need to subscribe twice.
+            if self.pending_services_notifications.contains_key(chain_id) {
+                continue;
+            }
+            let service_notifications = self
+                .chain_client
+                .subscribe_to(*chain_id)
+                .expect("client subscription");
+            self.pending_services_notifications
+                .entry(*chain_id)
+                .or_insert_with(|| (HashMap::new(), service_notifications))
+                .0
+                .insert(*managed_service_id, pending_service.clone());
+        }
+
         // Build a map of ChainId -> Vec<ApplicationId> from local_services
         let mut chain_apps: BTreeMap<ChainId, Vec<ApplicationId>> = BTreeMap::new();
         for service in &state.local_services {
@@ -125,6 +228,36 @@ where
                 .or_default()
                 .push(service.application_id);
         }
+
+        // The service chains should reject bundles that contain no messages sent by relevant apps
+        // and no system messages.
+        let mut message_policies: BTreeMap<_, _> = chain_apps
+            .iter()
+            .map(|(chain_id, apps)| {
+                let message_policy = MessagePolicy {
+                    reject_message_bundles_without_application_ids: Some(
+                        apps.iter()
+                            .map(|app_id| GenericApplicationId::User(*app_id))
+                            .chain(std::iter::once(GenericApplicationId::User(
+                                self.controller_id,
+                            )))
+                            .chain(std::iter::once(GenericApplicationId::System))
+                            .collect(),
+                    ),
+                    ..Default::default()
+                };
+                (*chain_id, message_policy)
+            })
+            .collect();
+        message_policies.extend(state.local_message_policy);
+
+        let message_policies_to_update: BTreeMap<_, _> = message_policies
+            .iter()
+            .filter(|(chain_id, message_policy)| {
+                self.current_message_policies.get(chain_id) != Some(*message_policy)
+            })
+            .map(|(chain_id, message_policy)| (*chain_id, message_policy.clone()))
+            .collect();
 
         let old_chains: BTreeSet<_> = self.processors.keys().cloned().collect();
 
@@ -175,10 +308,21 @@ where
 
         // New chains to listen (neither had processor nor were in listened_local_chains)
         let owner = worker.owner;
-        let new_chains: BTreeMap<_, _> = desired_listened
+        let mut new_chains: BTreeMap<_, _> = desired_listened
             .difference(&old_listened)
             .map(|chain_id| (*chain_id, Some(owner)))
             .collect();
+
+        // Follow the chains for pending services, so that they are synced.
+        new_chains.extend(
+            state
+                .local_pending_services
+                .iter()
+                .map(|(_, (chain_id, _))| *chain_id)
+                .collect::<BTreeSet<_>>()
+                .difference(&old_listened)
+                .map(|chain_id| (*chain_id, None)),
+        );
 
         // Chains to stop listening (were listened but no longer needed)
         let chains_to_stop: BTreeSet<_> = old_listened
@@ -190,11 +334,6 @@ where
         // These are local_chains that don't have services (not in active_chains)
         self.listened_local_chains = local_chains.difference(&active_chains).cloned().collect();
 
-        if let Err(error) = self.command_sender.send(ListenerCommand::SetMessagePolicy(
-            state.local_message_policy,
-        )) {
-            error!(%error, "error sending a command to chain listener");
-        }
         if let Err(error) = self
             .command_sender
             .send(ListenerCommand::Listen(new_chains))
@@ -207,8 +346,19 @@ where
         {
             error!(%error, "error sending a command to chain listener");
         }
+        // This may affect chains we are just starting to listen to, so this command has to be sent
+        // last.
+        if let Err(error) = self.command_sender.send(ListenerCommand::SetMessagePolicy(
+            message_policies_to_update,
+        )) {
+            error!(%error, "error sending a command to chain listener");
+        }
+        self.current_message_policies = message_policies;
     }
 
+    // Keeping `&mut self` avoids borrowing `Controller` through `&self` across `.await`,
+    // which would make `controller.run()` fail the `Send` bound required by `tokio::spawn`.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn register_worker(&mut self) {
         let capabilities = self.operators.keys().cloned().collect();
         let command = WorkerCommand::RegisterWorker { capabilities };
@@ -285,6 +435,7 @@ where
             chain_client,
             self.cancellation_token.child_token(),
             self.operators.clone(),
+            self.retry_delay,
             Some(update_receiver),
         );
 
@@ -296,6 +447,9 @@ where
         Ok(())
     }
 
+    // Keeping `&mut self` avoids borrowing `Controller` through `&self` across `.await`,
+    // which would make `controller.run()` fail the `Send` bound required by `tokio::spawn`.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn query_controller_state(&mut self) -> Result<LocalWorkerState, anyhow::Error> {
         let query = "query { localWorkerState }";
         let bytes = serde_json::to_vec(&json!({"query": query}))?;
@@ -303,10 +457,13 @@ where
             application_id: self.controller_id,
             bytes,
         };
-        let linera_execution::QueryOutcome {
-            response,
-            operations: _,
-        } = self.chain_client.query_application(query, None).await?;
+        let (
+            linera_execution::QueryOutcome {
+                response,
+                operations: _,
+            },
+            _,
+        ) = self.chain_client.query_application(query, None).await?;
         let linera_execution::QueryResponse::User(response) = response else {
             anyhow::bail!("cannot get a system response for a user query");
         };
