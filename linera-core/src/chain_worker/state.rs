@@ -1721,8 +1721,8 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.initialize_and_save_if_needed().await?;
-        let chain = &self.chain;
-        let mut info = ChainInfo::from(chain);
+        let mut info = ChainInfo::from(&self.chain);
+        let chain = &mut self.chain;
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
@@ -1747,18 +1747,37 @@ where
             );
         }
         if query.request_pending_message_bundles {
+            // Lazily initialize the nonempty_inboxes set for chains from older DB versions.
+            let origins = if let Some(nonempty_origins) = chain.nonempty_inboxes.get().clone() {
+                nonempty_origins.into_iter().collect::<Vec<_>>()
+            } else {
+                let pairs = chain.inboxes.try_load_all_entries().await?;
+                let nonempty_origins = pairs
+                    .into_iter()
+                    .filter(|(_, inbox)| inbox.added_bundles.count() > 0)
+                    .map(|(origin, _)| origin)
+                    .collect::<BTreeSet<ChainId>>();
+                let origins = nonempty_origins.iter().copied().collect::<Vec<_>>();
+                *chain.nonempty_inboxes.get_mut() = Some(nonempty_origins);
+                origins
+            };
             let mut bundles = Vec::new();
-            let pairs = chain.inboxes.try_load_all_entries().await?;
+            let inboxes = chain.inboxes.try_load_entries(&origins).await?;
+            let origins_and_inboxes = origins
+                .into_iter()
+                .zip(inboxes)
+                .filter_map(|(origin, inbox)| Some((origin, inbox?)))
+                .collect::<Vec<_>>();
             #[cfg(with_metrics)]
             metrics::NUM_INBOXES
                 .with_label_values(&[])
-                .observe(pairs.len() as f64);
+                .observe(origins_and_inboxes.len() as f64);
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
             };
-            for (origin, inbox) in pairs {
+            for (origin, inbox) in origins_and_inboxes {
                 for bundle in inbox.added_bundles.elements().await? {
                     bundles.push(IncomingBundle {
                         origin,
