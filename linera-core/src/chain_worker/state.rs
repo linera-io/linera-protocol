@@ -1721,6 +1721,16 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.initialize_and_save_if_needed().await?;
+        // Lazily initialize the nonempty_inboxes set for chains from older DB versions.
+        if self.chain.nonempty_inboxes.get().is_none() {
+            let pairs = self.chain.inboxes.try_load_all_entries().await?;
+            let nonempty_set: BTreeSet<ChainId> = pairs
+                .into_iter()
+                .filter(|(_, inbox)| inbox.added_bundles.count() > 0)
+                .map(|(origin, _)| origin)
+                .collect();
+            *self.chain.nonempty_inboxes.get_mut() = Some(nonempty_set);
+        }
         let chain = &self.chain;
         let mut info = ChainInfo::from(chain);
         if query.request_committees {
@@ -1748,17 +1758,37 @@ where
         }
         if query.request_pending_message_bundles {
             let mut bundles = Vec::new();
-            let pairs = chain.inboxes.try_load_all_entries().await?;
+            // Use the nonempty_inboxes set if available; otherwise fall back to scanning
+            // all inboxes (for backwards compatibility with pre-existing database entries).
+            let origins_and_inboxes: Vec<(ChainId, _)> =
+                if let Some(nonempty_origins) = chain.nonempty_inboxes.get() {
+                    let origins: Vec<ChainId> = nonempty_origins.iter().copied().collect();
+                    let inboxes = chain.inboxes.try_load_entries(&origins).await?;
+                    origins
+                        .into_iter()
+                        .zip(inboxes)
+                        .filter_map(|(origin, inbox)| Some((origin, inbox?)))
+                        .collect()
+                } else {
+                    // Not yet initialized: fall back to scanning all inboxes.
+                    chain
+                        .inboxes
+                        .try_load_all_entries()
+                        .await?
+                        .into_iter()
+                        .filter(|(_, inbox)| inbox.added_bundles.count() > 0)
+                        .collect()
+                };
             #[cfg(with_metrics)]
             metrics::NUM_INBOXES
                 .with_label_values(&[])
-                .observe(pairs.len() as f64);
+                .observe(origins_and_inboxes.len() as f64);
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
             };
-            for (origin, inbox) in pairs {
+            for (origin, inbox) in origins_and_inboxes {
                 for bundle in inbox.added_bundles.elements().await? {
                     bundles.push(IncomingBundle {
                         origin,

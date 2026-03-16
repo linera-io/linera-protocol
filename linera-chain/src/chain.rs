@@ -272,6 +272,11 @@ where
     /// The indices of next events we expect to see per stream (could be ahead of the last
     /// executed block in sparse chains).
     pub next_expected_events: MapView<C, StreamId, u32>,
+
+    /// Inboxes with at least one pending added bundle. This allows us to avoid loading all
+    /// inboxes. `None` means the set hasn't been computed yet for this chain (backwards
+    /// compatibility with pre-existing database entries).
+    pub nonempty_inboxes: RegisterView<C, Option<BTreeSet<ChainId>>>,
 }
 
 /// Block-chaining state.
@@ -575,7 +580,7 @@ where
 
         // Process the inbox bundle and update the inbox state.
         let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
-        inbox
+        let newly_added = inbox
             .add_bundle(bundle)
             .await
             .map_err(|error| match error {
@@ -584,6 +589,11 @@ where
                     "while processing messages in certified block: {error}"
                 )),
             })?;
+        if newly_added {
+            if let Some(set) = self.nonempty_inboxes.get_mut() {
+                set.insert(*origin);
+            }
+        }
 
         // Remember the certificate for future validator/client synchronizations.
         if add_to_received_log {
@@ -677,6 +687,11 @@ where
                             height: bundle.height,
                         }
                     );
+                }
+            }
+            if inbox.added_bundles.count() == 0 {
+                if let Some(set) = self.nonempty_inboxes.get_mut() {
+                    set.remove(&origin);
                 }
             }
         }
