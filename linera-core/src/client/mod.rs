@@ -612,14 +612,14 @@ impl<Env: Environment> Client<Env> {
                     .event_block_heights(event_ids.to_vec())
                     .await?;
                 // Step 2: Group resolved heights by chain ID.
-                let mut chain_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>> = BTreeMap::new();
+                let mut chain_heights = BTreeMap::<_, BTreeSet<_>>::new();
                 for (event_id, maybe_height) in event_ids.iter().zip(heights) {
-                    if let Some(height) = maybe_height {
-                        chain_heights
-                            .entry(event_id.chain_id)
-                            .or_default()
-                            .insert(height);
-                    }
+                    let height = maybe_height
+                        .ok_or_else(|| NodeError::EventsNotFound(vec![event_id.clone()]))?;
+                    chain_heights
+                        .entry(event_id.chain_id)
+                        .or_default()
+                        .insert(height);
                 }
                 // Step 3: Download and process certificates from the same validator.
                 for (chain_id, heights) in chain_heights {
