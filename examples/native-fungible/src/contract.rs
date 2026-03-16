@@ -106,7 +106,6 @@ impl Contract for NativeFungibleTokenContract {
                     .check_account_permission(spender)
                     .expect("Permission for TransferFrom operation");
 
-                let target_account = self.normalize_account(target_account);
                 self.runtime
                     .transfer_from(owner, spender, target_account, amount);
 

@@ -146,3 +146,66 @@ async fn test_bouncing_tokens() {
         Some(initial_amount),
     );
 }
+
+#[tokio::test]
+async fn test_allowance_overwrite() {
+    let initial_amount = Amount::from_tokens(20);
+
+    let (validator, module_id) =
+        TestValidator::with_current_module::<FungibleTokenAbi, Parameters, InitialState>().await;
+    let mut owner_chain = validator.new_chain().await;
+    let owner = AccountOwner::from(owner_chain.public_key());
+
+    let initial_state = InitialStateBuilder::default().with_account(owner, initial_amount);
+    let params = Parameters::new("FUN");
+    let application_id = owner_chain
+        .create_application(module_id, params, initial_state.build(), vec![])
+        .await;
+
+    let spender_chain = validator.new_chain().await;
+    let spender = AccountOwner::from(spender_chain.public_key());
+
+    owner_chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                &FungibleOperation::Approve {
+                    owner,
+                    spender,
+                    allowance: Amount::from_tokens(9),
+                },
+            );
+            block.with_operation(
+                application_id,
+                &FungibleOperation::Approve {
+                    owner,
+                    spender,
+                    allowance: Amount::from_tokens(4),
+                },
+            );
+        })
+        .await;
+
+    assert_eq!(
+        owner_chain.query_allowance(application_id, owner, spender).await,
+        Some(Amount::from_tokens(4)),
+    );
+
+    owner_chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                &FungibleOperation::Approve {
+                    owner,
+                    spender,
+                    allowance: Amount::ZERO,
+                },
+            );
+        })
+        .await;
+
+    assert_eq!(
+        owner_chain.query_allowance(application_id, owner, spender).await,
+        None,
+    );
+}
