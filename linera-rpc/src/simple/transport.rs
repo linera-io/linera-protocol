@@ -2,9 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io, mem, net::SocketAddr, pin::pin, sync::Arc};
-
-use std::pin::Pin;
+use std::{
+    collections::HashMap,
+    io, mem,
+    net::SocketAddr,
+    pin::{pin, Pin},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use futures::{
@@ -12,6 +16,7 @@ use futures::{
     stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
+use linera_base::identifiers::ChainId;
 use linera_core::{JoinSetExt as _, TaskHandle};
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -22,8 +27,6 @@ use tokio::{
 };
 use tokio_util::{codec::Framed, sync::CancellationToken, udp::UdpFramed};
 use tracing::{error, warn};
-
-use linera_base::identifiers::ChainId;
 
 use crate::{
     simple::{codec, codec::Codec},

@@ -149,10 +149,7 @@ impl ValidatorNode for SimpleClient {
         self.query(request).await
     }
 
-    async fn subscribe(
-        &self,
-        chains: Vec<ChainId>,
-    ) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(&self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         let mut stream = self
             .network
             .protocol
