@@ -1238,6 +1238,10 @@ where
                 *outbox_counters.entry(block_height).or_default() += 1;
                 nonempty_outboxes.insert(*target);
             }
+            #[cfg(with_metrics)]
+            crate::outbox::metrics::OUTBOX_SIZE
+                .with_label_values(&[])
+                .observe(outbox.queue.count() as f64);
         }
 
         #[cfg(with_metrics)]
