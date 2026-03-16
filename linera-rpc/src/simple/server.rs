@@ -378,6 +378,8 @@ where
             | RpcMessage::BlobLastUsedByCertificateResponse(_)
             | RpcMessage::MissingBlobIds(_)
             | RpcMessage::MissingBlobIdsResponse(_)
+            | RpcMessage::EventBlockHeights(_)
+            | RpcMessage::EventBlockHeightsResponse(_)
             | RpcMessage::DownloadCertificates(_)
             | RpcMessage::DownloadCertificatesResponse(_)
             | RpcMessage::UploadBlob(_)

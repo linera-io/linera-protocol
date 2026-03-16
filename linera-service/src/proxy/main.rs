@@ -441,6 +441,9 @@ where
             MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(
                 self.storage.missing_blobs(&blob_ids).await?,
             ))),
+            EventBlockHeights(event_ids) => Ok(Some(RpcMessage::EventBlockHeightsResponse(
+                self.storage.read_event_block_heights(&event_ids).await?,
+            ))),
             BlockProposal(_)
             | LiteCertificate(_)
             | TimeoutCertificate(_)
@@ -461,6 +464,7 @@ where
             | BlobLastUsedByResponse(_)
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIdsResponse(_)
+            | EventBlockHeightsResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_)
             | UploadBlobResponse(_)

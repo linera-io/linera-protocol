@@ -8,7 +8,7 @@ use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, EventId},
     time::{timer, Duration},
 };
 use linera_chain::{
@@ -265,6 +265,13 @@ impl ValidatorNode for SimpleClient {
 
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         self.query(RpcMessage::MissingBlobIds(blob_ids)).await
+    }
+
+    async fn event_block_heights(
+        &self,
+        event_ids: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError> {
+        self.query(RpcMessage::EventBlockHeights(event_ids)).await
     }
 
     async fn get_shard_info(

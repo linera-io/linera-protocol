@@ -169,6 +169,13 @@ pub trait ValidatorNode {
         blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError>;
 
+    /// Looks up the block heights where the given events were published.
+    /// Returns `None` for events not found in the index.
+    async fn event_block_heights(
+        &self,
+        event_ids: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError>;
+
     /// Returns the missing `Blob`s by their IDs.
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError>;
 

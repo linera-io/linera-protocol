@@ -17,7 +17,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, EventId},
     time::Duration,
 };
 use linera_chain::{
@@ -539,6 +539,15 @@ impl ValidatorNode for GrpcClient {
         blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
         Ok(client_delegate!(self, blob_last_used_by_certificate, blob_id)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    async fn event_block_heights(
+        &self,
+        event_ids: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError> {
+        let request: api::EventBlockHeightsRequest = event_ids.into();
+        Ok(client_delegate!(self, event_block_heights, request)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]

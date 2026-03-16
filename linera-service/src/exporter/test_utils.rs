@@ -378,6 +378,13 @@ impl ValidatorNode for DummyValidator {
         unimplemented!()
     }
 
+    async fn event_block_heights(
+        &self,
+        _request: Request<linera_rpc::grpc::api::EventBlockHeightsRequest>,
+    ) -> Result<Response<linera_rpc::grpc::api::EventBlockHeightsResponse>, Status> {
+        unimplemented!()
+    }
+
     async fn get_shard_info(
         &self,
         _request: Request<linera_rpc::grpc::api::ChainId>,

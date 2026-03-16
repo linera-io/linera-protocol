@@ -103,6 +103,9 @@ service ValidatorNode {
 
   // Return the `BlobId`s that are not contained as `Blob`.
   rpc MissingBlobIds(BlobIds) returns (BlobIds);
+
+  // Look up the block heights where the given events were published.
+  rpc EventBlockHeights(EventBlockHeightsRequest) returns (EventBlockHeightsResponse);
 }
 
 // Batch of raw certificates.
@@ -429,4 +432,16 @@ message ChainInfoResponse {
 
 message BlockHeight {
   uint64 height = 1;
+}
+
+// A request for looking up block heights where events were published.
+message EventBlockHeightsRequest {
+  // BCS-serialized Vec<EventId>.
+  bytes event_ids = 1;
+}
+
+// Response with block heights for each requested event.
+message EventBlockHeightsResponse {
+  // BCS-serialized Vec<Option<BlockHeight>>.
+  bytes heights = 1;
 }
