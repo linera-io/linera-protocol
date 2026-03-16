@@ -793,7 +793,6 @@ where
                         papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => None,
                         papaya::Compute::Removed { .. } => unreachable!(),
                     }
-                    // Guard dropped here.
                 };
 
                 if let Some(wait) = wait {
