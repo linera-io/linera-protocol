@@ -62,15 +62,15 @@ pub async fn new_test_client_context(
             false,
             chain_modes,
             name,
-            chain_worker_ttl,
-            sender_chain_worker_ttl,
+            Some(chain_worker_ttl),
+            Some(sender_chain_worker_ttl),
             chain_client::Options {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
                 ..chain_client::Options::test_default()
             },
             block_cache_size,
             execution_state_cache_size,
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
         )
         .into(),
         genesis_config,
@@ -114,7 +114,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     wallet
         .insert(
             admin_description.id(),
-            wallet::Chain {
+            &wallet::Chain {
                 owner: Some(new_pubkey.into()),
                 timestamp: clock.current_time(),
                 pending_proposal: Some(PendingProposal {

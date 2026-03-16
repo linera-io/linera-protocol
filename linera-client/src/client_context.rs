@@ -321,12 +321,12 @@ where
             options.long_lived_services,
             chain_modes,
             name,
-            options.chain_worker_ttl,
-            options.sender_chain_worker_ttl,
+            util::non_zero_duration(options.chain_worker_ttl),
+            util::non_zero_duration(options.sender_chain_worker_ttl),
             options.to_chain_client_options(),
             block_cache_size,
             execution_state_cache_size,
-            options.to_requests_scheduler_config(),
+            &options.to_requests_scheduler_config(),
         );
 
         #[cfg(not(web))]
@@ -423,7 +423,7 @@ impl<Env: Environment> ClientContext<Env> {
             .and_then(|chain| chain.owner);
 
         let new_chain = wallet::Chain {
-            pending_proposal: client.pending_proposal().clone(),
+            pending_proposal: client.pending_proposal().await,
             owner: existing_owner,
             ..info.as_ref().into()
         };
@@ -971,7 +971,7 @@ impl<Env: Environment> ClientContext<Env> {
             for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
-                let pending_proposal = chain_client.pending_proposal().clone();
+                let pending_proposal = chain_client.pending_proposal().await;
                 self.wallet()
                     .insert(
                         info.chain_id,
@@ -1123,7 +1123,7 @@ impl<Env: Environment> ClientContext<Env> {
                         chain_id,
                         None,
                         BlockHeight::ZERO,
-                        None,
+                        &None,
                         Some(owner),
                         self.timing_sender(),
                         false,

@@ -61,24 +61,24 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn with_protocol(&self, protocol: Protocol) -> String {
+    pub fn with_protocol(&self, protocol: &Protocol) -> String {
         let tls = if self.tls { "s" } else { "" };
         let (protocol, suffix) = match protocol {
             Protocol::Http => ("http", ""),
             Protocol::WebSocket => ("ws", "/ws"),
         };
         format!(
-            "{}{}://{}:{}{}",
-            protocol, tls, self.service_address, self.service_port, suffix
+            "{protocol}{tls}://{}:{}{suffix}",
+            self.service_address, self.service_port
         )
     }
 
     pub fn websocket(&self) -> String {
-        self.with_protocol(Protocol::WebSocket)
+        self.with_protocol(&Protocol::WebSocket)
     }
 
     pub fn http(&self) -> String {
-        self.with_protocol(Protocol::Http)
+        self.with_protocol(&Protocol::Http)
     }
 
     /// Gets one hashed value from the node service
@@ -151,8 +151,9 @@ impl Listener {
                 Ok(response) => {
                     if let Some(data) = response.data {
                         if let Reason::NewBlock { hash, .. } = data.notifications.reason {
-                            if let Ok(value) = self.service.get_value(chain_id, Some(hash)).await {
-                                indexer.process(self, &value).await?;
+                            match self.service.get_value(chain_id, Some(hash)).await {
+                                Ok(value) => indexer.process(self, &value).await?,
+                                Err(error) => error!("failed to fetch block {hash}: {error}"),
                             }
                         }
                     } else {

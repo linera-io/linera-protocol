@@ -758,6 +758,33 @@ pub enum ClientCommand {
         /// operations. Use this when exposing the service to untrusted clients.
         #[arg(long)]
         read_only: bool,
+
+        /// Enable the application query response cache with the given per-chain capacity.
+        /// Each entry stores a serialized GraphQL response keyed by
+        /// (application_id, request_bytes). Incompatible with `--long-lived-services`.
+        #[arg(long, env = "LINERA_QUERY_CACHE_SIZE")]
+        query_cache_size: Option<usize>,
+
+        /// Allow a named GraphQL subscription query.
+        /// The operation name is extracted from the query string.
+        /// Repeatable.
+        /// Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
+        #[arg(long = "allow-subscription")]
+        allowed_subscriptions: Vec<String>,
+    },
+
+    /// Query an application with a read-only GraphQL query.
+    QueryApplication {
+        /// The chain on which the application is running.
+        #[arg(long)]
+        chain_id: Option<ChainId>,
+
+        /// The application to query.
+        #[arg(long)]
+        application_id: ApplicationId,
+
+        /// The GraphQL query to send (e.g. "value" for a counter application).
+        query: String,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.
@@ -778,6 +805,10 @@ pub enum ClientCommand {
         /// The number of tokens to send to each new chain.
         #[arg(long)]
         amount: Amount,
+
+        /// The number of tokens to send per daily claim. Set to 0 to disable daily claims.
+        #[arg(long, default_value = "0")]
+        daily_claim_amount: Amount,
 
         /// The end timestamp: The faucet will rate-limit the token supply so it runs out of money
         /// no earlier than this.
@@ -1024,7 +1055,8 @@ impl ClientCommand {
             | ClientCommand::Wallet { .. }
             | ClientCommand::Chain { .. }
             | ClientCommand::Validator { .. }
-            | ClientCommand::RetryPendingBlock { .. } => "client".into(),
+            | ClientCommand::RetryPendingBlock { .. }
+            | ClientCommand::QueryApplication { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
             ClientCommand::Net { .. } => "net".into(),
@@ -1149,15 +1181,9 @@ pub enum NetCommand {
         #[arg(long, default_value = "grpc")]
         external_protocol: String,
 
-        /// If present, a faucet is started using the chain provided by --faucet-chain, or
-        /// the first non-admin chain if not provided.
+        /// If present, a faucet is started on a dedicated chain with its own wallet.
         #[arg(long, default_value = "false")]
         with_faucet: bool,
-
-        /// When using --with-faucet, this specifies the chain on which the faucet will be started.
-        /// If this is `n`, the `n`-th non-admin chain (lexicographically) in the wallet is selected.
-        #[arg(long)]
-        faucet_chain: Option<u32>,
 
         /// The port on which to run the faucet server
         #[arg(long, default_value = "8080")]

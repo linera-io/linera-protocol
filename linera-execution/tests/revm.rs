@@ -23,7 +23,7 @@ use linera_execution::{
 };
 use linera_views::{context::Context as _, views::View};
 
-fn operation_to_bytes(operation: impl alloy_sol_types::SolCall) -> Result<Vec<u8>, bcs::Error> {
+fn operation_to_bytes(operation: &impl alloy_sol_types::SolCall) -> Result<Vec<u8>, bcs::Error> {
     let operation = EvmOperation::new(Amount::ZERO, operation.abi_encode());
     operation.to_bytes()
 }
@@ -119,7 +119,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         ]);
         value += increment;
         let operation = incrementCall { input: *increment };
-        let bytes = operation_to_bytes(operation)?;
+        let bytes = operation_to_bytes(&operation)?;
         let operation = Operation::User {
             application_id: app_id,
             bytes,
@@ -144,7 +144,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
             anyhow::bail!("Wrong QueryResponse result");
         };
         let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
-        let result = read_evm_u64_entry(result);
+        let result = read_evm_u64_entry(&result);
         assert_eq!(result, value);
     }
     Ok(())
@@ -235,7 +235,7 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
     ]);
     let input = 2;
     let operation = incrementCall { input };
-    let bytes = operation_to_bytes(operation)?;
+    let bytes = operation_to_bytes(&operation)?;
     let operation = Operation::User {
         application_id: app_id,
         bytes,
@@ -412,7 +412,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
 
     // Trying a failing function, should be an error
     let operation = failing_functionCall {};
-    let bytes = operation_to_bytes(operation)?;
+    let bytes = operation_to_bytes(&operation)?;
     let operation = Operation::User {
         application_id: app_id,
         bytes,
@@ -439,7 +439,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
         anyhow::bail!("Wrong QueryResponse result");
     };
     let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
-    assert_eq!(read_evm_u64_entry(result), 0);
+    assert_eq!(read_evm_u64_entry(&result), 0);
 
     // Testing that the created contract has the right address
     let evm_address = app_id.evm_address();
@@ -459,7 +459,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
         anyhow::bail!("Wrong QueryResponse result");
     };
     let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
-    assert_eq!(read_evm_u64_entry(result), 49);
+    assert_eq!(read_evm_u64_entry(&result), 49);
 
     Ok(())
 }

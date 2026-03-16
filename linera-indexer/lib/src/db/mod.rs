@@ -49,9 +49,7 @@ pub trait IndexerDatabase: Send + Sync {
             .await?;
 
         // Commit transaction - this is the only point where data becomes visible
-        self.commit_transaction(tx).await?;
-
-        Ok(())
+        self.commit_transaction(tx).await
     }
 
     /// Starts a new transaction.

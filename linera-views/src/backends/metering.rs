@@ -79,7 +79,7 @@ fn get_counter(name: &str) -> Arc<KeyValueStoreMetrics> {
             entry.clone()
         }
         Entry::Vacant(entry) => {
-            let store_metric = Arc::new(KeyValueStoreMetrics::new(name.to_string()));
+            let store_metric = Arc::new(KeyValueStoreMetrics::new(name));
             entry.insert(store_metric.clone());
             store_metric
         }
@@ -88,7 +88,7 @@ fn get_counter(name: &str) -> Arc<KeyValueStoreMetrics> {
 
 impl KeyValueStoreMetrics {
     /// Creation of a named Metered counter.
-    pub fn new(name: String) -> Self {
+    pub fn new(name: &str) -> Self {
         // name can be "rocks db". Then var_name = "rocks_db" and title_name = "RocksDb"
         let var_name = name.replace(' ', "_");
         let title_name = name.to_case(Case::Snake);

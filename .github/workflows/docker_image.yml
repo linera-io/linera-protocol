@@ -103,19 +103,22 @@ jobs:
             echo "Streaming logs for $BUILD_NAME (ID: $BUILD_ID)"
             echo "========================================"
 
-            gcloud builds log "$BUILD_ID" --stream
+            # Stream logs (exit code only reflects log streaming, not build result)
+            gcloud builds log "$BUILD_ID" --stream || true
 
-            local EXIT_CODE=$?
-            if [[ $EXIT_CODE -eq 0 ]]; then
+            # Check the actual Cloud Build status
+            local BUILD_STATUS
+            BUILD_STATUS=$(gcloud builds describe "$BUILD_ID" --format="value(status)")
+
+            if [[ "$BUILD_STATUS" == "SUCCESS" ]]; then
               echo ""
-              echo "$BUILD_NAME completed successfully"
+              echo "$BUILD_NAME completed successfully (status: $BUILD_STATUS)"
             else
               echo ""
-              echo "$BUILD_NAME failed (exit code: $EXIT_CODE)"
+              echo "$BUILD_NAME failed (status: $BUILD_STATUS)"
               echo "Logs: https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=linera-io-dev"
+              return 1
             fi
-
-            return $EXIT_CODE
           }
 
           echo "Submitting builds to GCP Cloud Build..."

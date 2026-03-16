@@ -187,11 +187,6 @@ where
                 };
                 let entry = error_scores.entry(err.clone()).or_insert(0);
                 *entry += committee.weight(&name);
-                if *entry >= committee.validity_threshold() {
-                    // At least one honest node returned this error.
-                    // No quorum can be reached, so return early.
-                    return Err(CommunicationError::Trusted(err));
-                }
             }
         }
         // If it becomes clear that no key can reach a quorum, break early.
@@ -218,18 +213,18 @@ where
         return Ok((key, values));
     }
 
-    if error_scores.is_empty() {
-        return Err(CommunicationError::NoConsensus(
-            committee.quorum_threshold(),
-            scores,
-        ));
-    }
-
-    // No specific error is available to report reliably.
     let mut sample = error_scores.into_iter().collect::<Vec<_>>();
     sample.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
     sample.truncate(4);
-    Err(CommunicationError::Sample(sample))
+    Err(match sample.as_slice() {
+        [] => CommunicationError::NoConsensus(committee.quorum_threshold(), scores),
+        [(_, score), ..] if *score >= committee.validity_threshold() => {
+            // At least one honest validator returned this error.
+            CommunicationError::Trusted(sample.into_iter().next().unwrap().0)
+        }
+        // Otherwise no specific error is available to report reliably.}
+        _ => CommunicationError::Sample(sample),
+    })
 }
 
 impl<Env> ValidatorUpdater<Env>
@@ -806,7 +801,7 @@ where
     ///
     /// Returns the [`ChainInfo`] from the validator after initialization.
     async fn initialize_new_chain_on_validator(
-        &mut self,
+        &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         // Send chain description and all dependency chains
@@ -829,7 +824,7 @@ where
     ///
     /// This is a best-effort operation - failures are logged but don't fail the entire sync.
     async fn sync_consensus_round(
-        &mut self,
+        &self,
         remote_round: Round,
         manager: &linera_chain::manager::ChainManagerInfo,
     ) -> Result<(), chain_client::Error> {
@@ -909,7 +904,7 @@ where
     /// and sends chain information for those heights. With sparse chains, this only
     /// sends the specific blocks containing the blobs, not all blocks up to those heights.
     async fn send_chain_info_for_blobs(
-        &mut self,
+        &self,
         blob_ids: &[BlobId],
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
@@ -939,7 +934,7 @@ where
     /// specified heights, not all blocks up to those heights. This is more efficient for
     /// sparse chains where only specific blocks are needed.
     async fn send_chain_info_at_heights(
-        &mut self,
+        &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
@@ -974,7 +969,7 @@ where
     }
 
     async fn send_chain_info_up_to_heights(
-        &mut self,
+        &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {

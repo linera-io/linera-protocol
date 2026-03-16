@@ -384,10 +384,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
     /// Ensures that a call to `application_id` is not-reentrant.
     ///
     /// Returns an error if there already is an entry for `application_id` in the call stack.
-    fn check_for_reentrancy(
-        &mut self,
-        application_id: ApplicationId,
-    ) -> Result<(), ExecutionError> {
+    fn check_for_reentrancy(&self, application_id: ApplicationId) -> Result<(), ExecutionError> {
         ensure!(
             !self.active_applications.contains(&application_id),
             ExecutionError::ReentrantCall(application_id)
@@ -1086,7 +1083,7 @@ impl ContractSyncRuntime {
 impl ContractSyncRuntimeHandle {
     #[instrument(skip_all, fields(application_id = %application_id))]
     fn run_action(
-        &mut self,
+        &self,
         application_id: ApplicationId,
         chain_id: ChainId,
         action: UserAction,
@@ -1125,7 +1122,7 @@ impl ContractSyncRuntimeHandle {
 
     /// Notifies all loaded applications that execution is finalizing.
     #[instrument(skip_all)]
-    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError> {
+    fn finalize(&self, context: FinalizeContext) -> Result<(), ExecutionError> {
         let applications = mem::take(&mut self.inner().applications_to_finalize)
             .into_iter()
             .rev();
@@ -1145,7 +1142,7 @@ impl ContractSyncRuntimeHandle {
     /// Executes a `closure` with the contract code for the `application_id`.
     #[instrument(skip_all, fields(application_id = %application_id))]
     fn execute(
-        &mut self,
+        &self,
         application_id: ApplicationId,
         signer: Option<AccountOwner>,
         closure: impl FnOnce(&mut UserContractInstance) -> Result<Option<Vec<u8>>, ExecutionError>,
@@ -1609,7 +1606,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, ExecutionError> {
         let (blobs, module_id) =
-            crate::runtime::create_bytecode_blobs_sync(contract, service, vm_runtime);
+            crate::runtime::create_bytecode_blobs_sync(&contract, &service, vm_runtime);
         let this = self.inner();
         for blob in blobs {
             this.execution_state_sender
@@ -1714,7 +1711,7 @@ impl ServiceSyncRuntime {
     }
 
     /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
-    pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
+    pub fn run(&mut self, incoming_requests: &std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
         while let Ok(request) = incoming_requests.recv() {
             let ServiceRuntimeRequest::Query {
                 application_id,
@@ -1862,8 +1859,8 @@ impl From<&MessageContext> for ExecutingMessage {
 
 /// Creates a compressed contract and service bytecode synchronously.
 pub fn create_bytecode_blobs_sync(
-    contract: Bytecode,
-    service: Bytecode,
+    contract: &Bytecode,
+    service: &Bytecode,
     vm_runtime: VmRuntime,
 ) -> (Vec<Blob>, ModuleId) {
     match vm_runtime {

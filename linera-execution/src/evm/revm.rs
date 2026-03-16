@@ -418,7 +418,7 @@ fn get_precompile_argument<Ctx: ContextTr>(
 }
 
 fn base_runtime_call<Runtime: BaseRuntime>(
-    request: BaseRuntimePrecompile,
+    request: &BaseRuntimePrecompile,
     runtime: &mut Runtime,
 ) -> Result<Vec<u8>, ExecutionError> {
     match request {
@@ -444,7 +444,7 @@ fn base_runtime_call<Runtime: BaseRuntime>(
             Ok(bcs::to_bytes(&balance)?)
         }
         BaseRuntimePrecompile::ReadOwnerBalance(account_owner) => {
-            let balance = runtime.read_owner_balance(account_owner)?;
+            let balance = runtime.read_owner_balance(*account_owner)?;
             let balance = Into::<U256>::into(balance);
             Ok(bcs::to_bytes(&balance)?)
         }
@@ -464,9 +464,9 @@ fn base_runtime_call<Runtime: BaseRuntime>(
             let chain_ownership = runtime.chain_ownership()?;
             Ok(bcs::to_bytes(&chain_ownership)?)
         }
-        BaseRuntimePrecompile::ReadDataBlob(hash) => runtime.read_data_blob(hash),
+        BaseRuntimePrecompile::ReadDataBlob(hash) => runtime.read_data_blob(*hash),
         BaseRuntimePrecompile::AssertDataBlobExists(hash) => {
-            runtime.assert_data_blob_exists(hash)?;
+            runtime.assert_data_blob_exists(*hash)?;
             Ok(Vec::new())
         }
     }
@@ -687,7 +687,7 @@ impl<'a> ContractPrecompile {
         match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => {
                 let mut runtime = context.db().0.lock_runtime();
-                base_runtime_call(base_tag, runtime.deref_mut())
+                base_runtime_call(&base_tag, runtime.deref_mut())
             }
             RuntimePrecompile::Contract(contract_tag) => {
                 Self::contract_runtime_call(contract_tag, context)
@@ -730,7 +730,7 @@ impl<'a> ServicePrecompile {
         match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => {
                 let mut runtime = context.db().0.lock_runtime();
-                base_runtime_call(base_tag, runtime.deref_mut())
+                base_runtime_call(&base_tag, runtime.deref_mut())
             }
             RuntimePrecompile::Contract(_) => Err(EvmExecutionError::PrecompileError(
                 "Contract calls are not available in GeneralServiceCall".to_string(),
@@ -792,7 +792,7 @@ fn map_result_create_outcome<Runtime: BaseRuntime>(
 ) -> Option<CreateOutcome> {
     match result {
         Err(error) => {
-            database.insert_error(error);
+            database.insert_error(&error);
             // The use of Revert immediately stops the execution.
             let result = InstructionResult::Revert;
             let output = Bytes::default();
@@ -817,7 +817,7 @@ fn map_result_call_outcome<Runtime: BaseRuntime>(
 ) -> Option<CallOutcome> {
     match result {
         Err(error) => {
-            database.insert_error(error);
+            database.insert_error(&error);
             // The use of Revert immediately stops the execution.
             let result = InstructionResult::Revert;
             let output = Bytes::default();
@@ -919,7 +919,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// There is no need for a separate blob for the service.
     fn publish_create_inputs(
         context: &mut ContractCtx<'_, Runtime>,
-        inputs: &mut CreateInputs,
+        inputs: &CreateInputs,
     ) -> Result<ModuleId, ExecutionError> {
         let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
         let service = linera_base::data_types::Bytecode::new(vec![]);
@@ -1074,9 +1074,9 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// However, the block is accepted completely or not at all.
     /// Therefore, we can ensure the atomicity of the operations.
     fn call_or_fail(
-        &mut self,
+        &self,
         _context: &mut ContractCtx<'_, Runtime>,
-        inputs: &mut CallInputs,
+        inputs: &CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let is_precompile = self.precompile_addresses.contains(&inputs.target_address);
         let is_first_call = inputs.target_address == self.contract_address;
@@ -1163,7 +1163,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     /// apply in services and so lead to an error.
     fn create_or_fail(
         &mut self,
-        _context: &mut ServiceCtx<'_, Runtime>,
+        _context: &ServiceCtx<'_, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Result<Option<CreateOutcome>, ExecutionError> {
         if !self.db.inner.is_revm_instantiated {
@@ -1250,8 +1250,8 @@ where
         self.initialize_contract(instantiation_argument.value, caller)?;
         if has_selector(&self.module, INSTANTIATE_SELECTOR) {
             let argument = get_revm_instantiation_bytes(instantiation_argument.argument);
-            let result = self.transact_commit(EvmTxKind::Call, argument, U256::ZERO, caller)?;
-            self.write_logs(result.logs, "instantiate")?;
+            let result = self.transact_commit(&EvmTxKind::Call, argument, U256::ZERO, caller)?;
+            self.write_logs(&result.logs, "instantiate")?;
         }
         Ok(())
     }
@@ -1297,7 +1297,7 @@ where
         let result = self.init_transact_commit(evm_call.argument, evm_call.value, caller)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
-        self.write_logs(logs, "operation")?;
+        self.write_logs(&logs, "operation")?;
         Ok(output)
     }
 
@@ -1392,7 +1392,7 @@ where
         let result = self.init_transact_commit(operation, value, caller)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
-        self.write_logs(logs, origin)?;
+        self.write_logs(&logs, origin)?;
         assert_eq!(output.len(), 0);
         Ok(())
     }
@@ -1410,7 +1410,7 @@ where
         if !self.db.inner.set_is_initialized()? {
             self.initialize_contract(U256::ZERO, caller)?;
         }
-        self.transact_commit(EvmTxKind::Call, vec, value, caller)
+        self.transact_commit(&EvmTxKind::Call, vec, value, caller)
     }
 
     /// Initializes the contract.
@@ -1418,11 +1418,11 @@ where
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.inner.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
-        let result = self.transact_commit(EvmTxKind::Create, vec_init, value, caller)?;
+        let result = self.transact_commit(&EvmTxKind::Create, vec_init, value, caller)?;
         result
             .check_contract_initialization(self.db.inner.contract_address)
             .map_err(EvmExecutionError::IncorrectContractCreation)?;
-        self.write_logs(result.logs, "deploy")
+        self.write_logs(&result.logs, "deploy")
     }
 
     /// Computes the address used in the `msg.sender` variable.
@@ -1456,7 +1456,7 @@ where
 
     fn transact_commit(
         &mut self,
-        tx_kind: EvmTxKind,
+        tx_kind: &EvmTxKind,
         input: Vec<u8>,
         value: U256,
         caller: Address,
@@ -1527,19 +1527,19 @@ where
         Ok(process_execution_result(result)?)
     }
 
-    fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
+    fn consume_fuel(&self, gas_final: u64) -> Result<(), ExecutionError> {
         let mut runtime = self.db.lock_runtime();
         runtime.consume_fuel(gas_final, VmRuntime::Evm)
     }
 
-    fn write_logs(&mut self, logs: Vec<Log>, origin: &str) -> Result<(), ExecutionError> {
+    fn write_logs(&self, logs: &[Log], origin: &str) -> Result<(), ExecutionError> {
         // TODO(#3758): Extracting Ethereum events from the Linera events.
         if !logs.is_empty() {
             let mut runtime = self.db.lock_runtime();
             let block_height = runtime.block_height()?;
             let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
-            for log in &logs {
+            for log in logs {
                 let value = bcs::to_bytes(&(origin, block_height.0, log))?;
                 runtime.emit(stream_name.clone(), value)?;
             }

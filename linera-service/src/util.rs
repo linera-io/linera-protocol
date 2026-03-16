@@ -162,6 +162,15 @@ pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
 }
 
+/// Converts a `Duration` to `Option<Duration>`, treating zero as `None`.
+pub fn non_zero_duration(d: Duration) -> Option<Duration> {
+    if d.is_zero() {
+        None
+    } else {
+        Some(d)
+    }
+}
+
 pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
 }

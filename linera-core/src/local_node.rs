@@ -16,13 +16,11 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
     types::{Block, GenericCertificate},
-    ChainStateView,
 };
 use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::ViewError;
 use thiserror::Error;
-use tokio::sync::OwnedRwLockReadGuard;
 use tracing::{instrument, warn};
 
 use crate::{
@@ -88,7 +86,7 @@ where
         &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
+        // In local nodes, cross-chain actions will be handled internally, so we discard them.
         let (response, _actions) =
             Box::pin(self.node.state.handle_block_proposal(proposal)).await?;
         Ok(response)
@@ -116,7 +114,7 @@ where
         &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
+        // In local nodes, cross-chain actions will be handled internally, so we discard them.
         let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
@@ -242,7 +240,7 @@ where
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
+    ) -> Result<crate::worker::ChainStateViewReadGuard<S>, LocalNodeError> {
         Ok(self.node.state.chain_state_view(chain_id).await?)
     }
 
@@ -261,20 +259,21 @@ where
         chain_id: ChainId,
         query: Query,
         block_hash: Option<CryptoHash>,
-    ) -> Result<QueryOutcome, LocalNodeError> {
-        let outcome = self
+    ) -> Result<(QueryOutcome, BlockHeight), LocalNodeError> {
+        let result = self
             .node
             .state
             .query_application(chain_id, query, block_hash)
             .await?;
-        Ok(outcome)
+        Ok(result)
     }
 
     /// Handles any pending local cross-chain requests.
-    #[instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", skip(self, notifier))]
     pub async fn retry_pending_cross_chain_requests(
         &self,
         sender_chain: ChainId,
+        notifier: &impl Notifier,
     ) -> Result<(), LocalNodeError> {
         let (_response, actions) = self
             .node
@@ -284,6 +283,7 @@ where
         let mut requests = VecDeque::from_iter(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let new_actions = self.node.state.handle_cross_chain_request(request).await?;
+            notifier.notify(&new_actions.notifications);
             requests.extend(new_actions.cross_chain_requests);
         }
         Ok(())

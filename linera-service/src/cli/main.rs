@@ -677,7 +677,7 @@ impl Runnable for Job {
                                 }
                                 _ => unreachable!(),
                             }
-                            committee = Committee::new(validators, policy);
+                            committee = Committee::new(validators, policy)?;
                             chain_client
                                 .stage_new_committee(committee)
                                 .await
@@ -1214,6 +1214,38 @@ impl Runnable for Job {
                 info!("Notification stream ended.");
             }
 
+            QueryApplication {
+                chain_id,
+                application_id,
+                query,
+            } => {
+                let context = options
+                    .create_client_context(storage, wallet, signer.into_value())
+                    .await?;
+                let chain_id = chain_id
+                    .or_else(|| context.wallet().default_chain())
+                    .expect("No chain ID specified and no default chain in wallet");
+                let chain_client = context.make_chain_client(chain_id).await?;
+                let graphql_query = format!("query {{ {query} }}");
+                let json_query = serde_json::json!({ "query": graphql_query });
+                let query_bytes = serde_json::to_vec(&json_query)?;
+                let query = linera_execution::Query::User {
+                    application_id,
+                    bytes: query_bytes,
+                };
+                let (outcome, _height) = chain_client.query_application(query, None).await?;
+                match outcome.response {
+                    linera_execution::QueryResponse::User(bytes) => {
+                        let response: Value = serde_json::from_slice(&bytes)?;
+                        let data = &response["data"];
+                        println!("{data}");
+                    }
+                    linera_execution::QueryResponse::System(_) => {
+                        unreachable!("cannot get a system response for a user query")
+                    }
+                }
+            }
+
             Service {
                 config,
                 port,
@@ -1224,6 +1256,8 @@ impl Runnable for Job {
                 controller_application_id,
                 task_retry_delay_secs,
                 read_only,
+                query_cache_size,
+                allowed_subscriptions,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1286,6 +1320,26 @@ impl Runnable for Job {
                     tokio::spawn(controller.run());
                 }
 
+                assert!(
+                    query_cache_size.is_none() || !options.client_options.long_lived_services,
+                    "--query-cache-size is incompatible with --long-lived-services"
+                );
+
+                let query_subscriptions = if allowed_subscriptions.is_empty() {
+                    None
+                } else {
+                    use linera_service::query_subscription::parse_allowed_subscription;
+                    let registered: Vec<_> = allowed_subscriptions
+                        .iter()
+                        .map(|s| parse_allowed_subscription(s))
+                        .collect::<Result<_, _>>()?;
+                    Some(Arc::new(
+                        linera_service::query_subscription::QuerySubscriptionManager::new(
+                            registered,
+                        ),
+                    ))
+                };
+
                 let service = NodeService::new(
                     config,
                     port,
@@ -1294,6 +1348,9 @@ impl Runnable for Job {
                     Some(chain_id),
                     context,
                     read_only,
+                    query_cache_size,
+                    query_subscriptions,
+                    cancellation_token.clone(),
                 );
                 service.run(cancellation_token, command_receiver).await?;
             }
@@ -1304,6 +1361,7 @@ impl Runnable for Job {
                 #[cfg(with_metrics)]
                 metrics_port,
                 amount,
+                daily_claim_amount,
                 limit_rate_until,
                 config,
                 storage_path,
@@ -1332,6 +1390,7 @@ impl Runnable for Job {
                     metrics_port,
                     chain_id,
                     amount,
+                    daily_claim_amount,
                     end_timestamp,
                     genesis_config: Arc::new(genesis_config),
                     chain_listener_config: config,
@@ -1648,7 +1707,7 @@ impl Runnable for Job {
 
                 wallet.insert(
                     description.id(),
-                    wallet::Chain {
+                    &wallet::Chain {
                         owner: Some(owner),
                         ..(&description).into()
                     },
@@ -2148,7 +2207,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     network_name,
                     admin_public_key,
                     *initial_funding,
-                ),
+                )?,
             )?;
             let admin_chain_description = genesis_config.admin_chain_description();
             let mut chains = vec![(
@@ -2242,7 +2301,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 docker_image_name,
                 build_mode,
                 with_faucet,
-                faucet_chain,
                 faucet_port,
                 faucet_amount,
                 with_block_exporter,
@@ -2266,7 +2324,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     build_mode.clone(),
                     *policy_config,
                     *with_faucet,
-                    *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
                     *with_block_exporter,
@@ -2292,7 +2349,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 path,
                 external_protocol,
                 with_faucet,
-                faucet_chain,
                 faucet_port,
                 faucet_amount,
                 with_block_exporter,
@@ -2316,7 +2372,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     &options.storage_config,
                     external_protocol.clone(),
                     *with_faucet,
-                    *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
                 )

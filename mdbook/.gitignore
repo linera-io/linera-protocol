@@ -1,0 +1,25 @@
+book
+*.iml
+.idea/
+
+# emacs
+*~
+
+# vim
+*.swp
+
+# idea
+*.iml
+.idea/
+
+# VSCode
+.vscode/
+.direnv/
+
+# Cursor
+.cursor
+
+# Claude
+.claude
+CLAUDE.md
+.serena

@@ -176,7 +176,7 @@ where
     ///
     /// Errors are stored rather than immediately returned to allow Revm to complete
     /// its execution flow. The error can be checked later via `process_any_error()`.
-    pub fn insert_error(&self, exec_error: ExecutionError) {
+    pub fn insert_error(&self, exec_error: &ExecutionError) {
         let mut error = self.error.lock().unwrap();
         *error = Some(format!("Runtime error {:?}", exec_error));
     }
@@ -597,11 +597,7 @@ where
     /// Balances of the contracts have to be checked when
     /// writing. There is a balance in Linera and a balance
     /// in EVM and they have to be coherent.
-    fn check_balance(
-        &mut self,
-        address: Address,
-        revm_balance: U256,
-    ) -> Result<(), ExecutionError> {
+    fn check_balance(&self, address: Address, revm_balance: U256) -> Result<(), ExecutionError> {
         let mut runtime = self.inner.runtime.lock().unwrap();
         let owner = address.into();
         let linera_balance: U256 = runtime.read_owner_balance(owner)?.into();
@@ -614,7 +610,7 @@ where
 
     /// Effectively commits changes to storage.
     pub fn commit_contract_changes(
-        &mut self,
+        &self,
         account: &revm_state::Account,
     ) -> Result<(), ExecutionError> {
         let mut runtime = self.inner.runtime.lock().unwrap();
@@ -676,14 +672,14 @@ where
     /// already been concatenated to the bytecode in the
     /// init_code.
     fn create_new_contract(
-        &mut self,
+        &self,
         address: Address,
-        account: revm_state::Account,
+        account: &revm_state::Account,
         module_id: ModuleId,
     ) -> Result<(), ExecutionError> {
         let application_id = address_to_user_application_id(address);
         let mut argument = ALREADY_CREATED_CONTRACT_SELECTOR.to_vec();
-        argument.extend(bcs::to_bytes(&account)?);
+        argument.extend(bcs::to_bytes(account)?);
         let evm_instantiation = EvmInstantiation {
             value: U256::ZERO,
             argument,
@@ -708,13 +704,13 @@ where
     /// Commits the changes to another contract.
     /// This is done by doing a call application.
     fn commit_remote_contract(
-        &mut self,
+        &self,
         address: Address,
-        account: revm_state::Account,
+        account: &revm_state::Account,
     ) -> Result<(), ExecutionError> {
         let application_id = address_to_user_application_id(address);
         let mut argument = COMMIT_CONTRACT_CHANGES_SELECTOR.to_vec();
-        argument.extend(bcs::to_bytes(&account)?);
+        argument.extend(bcs::to_bytes(account)?);
         let mut runtime = self.inner.runtime.lock().unwrap();
         runtime.try_call_application(false, application_id, argument)?;
         Ok(())
@@ -747,7 +743,7 @@ where
                     if let Some((module_id, index)) = modules.get(&application_id) {
                         contracts_to_create[*index as usize] = Some((address, account, *module_id));
                     } else {
-                        self.commit_remote_contract(address, account)?;
+                        self.commit_remote_contract(address, &account)?;
                     }
                 }
             }
@@ -755,7 +751,7 @@ where
         for entry in contracts_to_create {
             let (address, account, module_id) =
                 entry.expect("An entry since all have been matched above");
-            self.create_new_contract(address, account, module_id)?;
+            self.create_new_contract(address, &account, module_id)?;
         }
         for (address, revm_balance) in balances {
             self.check_balance(address, revm_balance)?;

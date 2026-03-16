@@ -119,14 +119,18 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 }
                 Some(result) = self.batch_receiver.recv() => {
                     self.in_flight_apps.remove(&result.application_id);
-                    if let Some(retry_at) = result.retry_at {
-                        self.deadlines.push(Reverse((
-                            retry_at,
-                            Some(result.application_id),
-                        )));
-                    } else {
-                        // Re-process immediately to pick up new tasks.
-                        self.process_actions(vec![result.application_id]).await;
+                    // The application could have been unassigned from this processor
+                    // in the meantime - do not retry if that is the case.
+                    if self.application_ids.contains(&result.application_id) {
+                        if let Some(retry_at) = result.retry_at {
+                            self.deadlines.push(Reverse((
+                                retry_at,
+                                Some(result.application_id),
+                            )));
+                        } else {
+                            // Re-process immediately to pick up new tasks.
+                            self.process_actions(vec![result.application_id]).await;
+                        }
                     }
                 }
                 Some(update) = self.update_receiver.recv() => {
@@ -196,6 +200,10 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
     async fn process_actions(&mut self, application_ids: Vec<ApplicationId>) {
         for application_id in application_ids {
+            if !self.application_ids.contains(&application_id) {
+                debug!("Skipping {application_id}: it's no longer assigned to this processor");
+                continue;
+            }
             if self.in_flight_apps.contains(&application_id) {
                 debug!("Skipping {application_id}: tasks already in flight");
                 continue;
@@ -325,6 +333,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         Ok(outcome)
     }
 
+    // Keeping `&mut self` avoids borrowing `TaskProcessor` through `&self` across `.await`,
+    // which would make the spawned future require `TaskProcessor: Sync`.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn query_actions(
         &mut self,
         application_id: ApplicationId,
@@ -341,10 +352,13 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             application_id,
             bytes,
         };
-        let linera_execution::QueryOutcome {
-            response,
-            operations: _,
-        } = self.chain_client.query_application(query, None).await?;
+        let (
+            linera_execution::QueryOutcome {
+                response,
+                operations: _,
+            },
+            _,
+        ) = self.chain_client.query_application(query, None).await?;
         let linera_execution::QueryResponse::User(response) = response else {
             anyhow::bail!("cannot get a system response for a user query");
         };
@@ -377,10 +391,13 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             application_id,
             bytes,
         };
-        let linera_execution::QueryOutcome {
-            response: _,
-            operations,
-        } = chain_client
+        let (
+            linera_execution::QueryOutcome {
+                response: _,
+                operations,
+            },
+            _,
+        ) = chain_client
             .query_application(query, None)
             .await
             .map_err(|error| {

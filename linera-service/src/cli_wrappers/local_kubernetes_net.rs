@@ -391,7 +391,7 @@ impl LocalKubernetesNet {
         Ok(())
     }
 
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&self) -> Result<()> {
         let github_root = get_github_root().await?;
         // Build Docker images
         let (docker_image_name, indexer_image_name, explorer_image_name) = if self.no_build {

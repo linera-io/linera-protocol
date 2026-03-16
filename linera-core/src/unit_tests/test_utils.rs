@@ -48,6 +48,7 @@ use {
 };
 
 use crate::{
+    chain_worker::ChainWorkerConfig,
     client::{chain_client, Client},
     data_types::*,
     environment::{TestSigner, TestWallet},
@@ -383,15 +384,15 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let client = self.client.clone();
-        let mut validator = client.lock().await;
+        let validator = client.lock().await;
         let result = async move {
             match validator.state.full_certificate(certificate).await? {
                 Either::Left(confirmed) => {
-                    self.do_handle_certificate_internal(confirmed, &mut validator)
+                    self.do_handle_certificate_internal(confirmed, &validator)
                         .await
                 }
                 Either::Right(validated) => {
-                    self.do_handle_certificate_internal(validated, &mut validator)
+                    self.do_handle_certificate_internal(validated, &validator)
                         .await
                 }
             }
@@ -403,7 +404,7 @@ where
     async fn do_handle_certificate_internal<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
-        validator: &mut MutexGuard<'_, LocalValidator<S>>,
+        validator: &MutexGuard<'_, LocalValidator<S>>,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self.fault_type {
             FaultType::DontProcessValidated if T::KIND == CertificateKind::Validated => {
@@ -442,9 +443,9 @@ where
         certificate: GenericCertificate<T>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.client.lock().await;
+        let validator = self.client.lock().await;
         let result = self
-            .do_handle_certificate_internal(certificate, &mut validator)
+            .do_handle_certificate_internal(certificate, &validator)
             .await;
         sender.send(result)
     }
@@ -872,15 +873,12 @@ where
         for (i, (validator_keypair, _account_public_key)) in validators.into_iter().enumerate() {
             let validator_public_key = validator_keypair.public_key;
             let storage = storage_builder.build().await?;
-            let state = WorkerState::new(
-                format!("Node {}", i),
-                Some(validator_keypair.secret_key),
-                storage.clone(),
-                5_000,
-                10_000,
-            )
-            .with_allow_inactive_chains(false)
-            .with_allow_messages_from_deprecated_epochs(false);
+            let config = ChainWorkerConfig {
+                nickname: format!("Node {}", i),
+                ..ChainWorkerConfig::default()
+            }
+            .with_key_pair(Some(validator_keypair.secret_key));
+            let state = WorkerState::new(storage.clone(), config, None);
             let mut validator = LocalValidatorClient::new(validator_public_key, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(validator_public_key);
@@ -909,7 +907,8 @@ where
 
     pub fn with_policy(mut self, policy: ResourceControlPolicy) -> Self {
         let validators = self.initial_committee.validators().clone();
-        self.initial_committee = Committee::new(validators, policy);
+        self.initial_committee =
+            Committee::new(validators, policy).expect("committee votes should not overflow");
         self
     }
 
@@ -1070,18 +1069,18 @@ where
             false,
             [(chain_id, mode)],
             format!("Client node for {:.8}", chain_id),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
             options,
             5_000,
             10_000,
-            crate::client::RequestsSchedulerConfig::default(),
+            &crate::client::RequestsSchedulerConfig::default(),
         ));
         Ok(client.create_chain_client(
             chain_id,
             block_hash,
             block_height,
-            None,
+            &None,
             self.chain_owners.get(&chain_id).copied(),
             None,
             follow_only,

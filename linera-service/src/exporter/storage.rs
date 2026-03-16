@@ -124,7 +124,11 @@ where
             Err(guard) => {
                 #[cfg(with_metrics)]
                 metrics::GET_BLOB_HISTOGRAM.measure_latency();
-                let blob = self.storage.read_blob(blob_id).await?.unwrap();
+                let blob = self
+                    .storage
+                    .read_blob(blob_id)
+                    .await?
+                    .ok_or(ExporterError::ReadBlobError(blob_id))?;
                 let heaped_blob = Arc::new(blob);
                 guard.insert(heaped_blob.clone()).ok();
                 Ok(heaped_blob)
@@ -330,7 +334,7 @@ where
         self.shared_storage.push_block(block)
     }
 
-    pub(super) fn new_committee(&mut self, committee_destinations: HashSet<DestinationId>) {
+    pub(super) fn new_committee(&self, committee_destinations: HashSet<DestinationId>) {
         committee_destinations.into_iter().for_each(|id| {
             let state = match self.shared_storage.destination_states.get(&id) {
                 None => {

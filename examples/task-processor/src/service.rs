@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use linera_sdk::{
-    linera_base_types::{Timestamp, WithServiceAbi},
+    linera_base_types::{ChainId, Timestamp, WithServiceAbi},
     task_processor::{ProcessorActions, Task, TaskOutcome},
     views::View,
     Service, ServiceRuntime,
@@ -118,6 +118,16 @@ impl MutationRoot {
     /// Requests a task to be processed by an off-chain operator.
     async fn request_task(&self, operator: String, input: String) -> [u8; 0] {
         let operation = TaskProcessorOperation::RequestTask { operator, input };
+        self.runtime.schedule_operation(&operation);
+        []
+    }
+
+    async fn request_task_on(&self, chain_id: ChainId, operator: String, input: String) -> [u8; 0] {
+        let operation = TaskProcessorOperation::RequestTaskOn {
+            chain_id,
+            operator,
+            input,
+        };
         self.runtime.schedule_operation(&operation);
         []
     }
