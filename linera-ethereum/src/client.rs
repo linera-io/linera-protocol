@@ -122,6 +122,9 @@ pub trait EthereumQueries {
         block: u64,
     ) -> Result<Bytes, Self::Error>;
 
+    /// Returns the chain ID reported by the connected EVM node.
+    async fn get_chain_id(&self) -> Result<u64, Self::Error>;
+
     /// Checks whether a block hash is finalized on the EVM chain.
     ///
     /// Queries the node for the block (proving it exists), then compares its number
@@ -153,6 +156,11 @@ where
 
     async fn get_block_number(&self) -> Result<u64, Self::Error> {
         let result = self.request::<_, U64>("eth_blockNumber", ()).await?;
+        Ok(result.to::<u64>())
+    }
+
+    async fn get_chain_id(&self) -> Result<u64, Self::Error> {
+        let result = self.request::<_, U64>("eth_chainId", ()).await?;
         Ok(result.to::<u64>())
     }
 

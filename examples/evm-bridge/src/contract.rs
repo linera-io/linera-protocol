@@ -48,8 +48,19 @@ impl Contract for EvmBridgeContract {
     }
 
     async fn instantiate(&mut self, _argument: ()) {
-        // Validate parameters are present.
-        self.runtime.application_parameters();
+        let params = self.runtime.application_parameters();
+        if !params.ethereum_endpoint.is_empty() {
+            let client = ContractEthereumClient::new(params.ethereum_endpoint.clone());
+            let chain_id = client
+                .get_chain_id()
+                .await
+                .expect("failed to query chain ID from RPC endpoint");
+            assert_eq!(
+                chain_id, params.source_chain_id,
+                "RPC endpoint chain ID {chain_id} does not match configured source_chain_id {}",
+                params.source_chain_id
+            );
+        }
     }
 
     async fn execute_operation(&mut self, operation: BridgeOperation) {

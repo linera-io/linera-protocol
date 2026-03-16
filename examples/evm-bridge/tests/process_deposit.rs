@@ -561,10 +561,10 @@ async fn test_replay_different_log_index_succeeds() {
 
 // -- finality verification tests --
 
-/// When `ethereum_endpoint` is set but the block hash can't be verified
-/// (HTTP not authorized), ProcessDeposit should fail during inline finality check.
+/// When `ethereum_endpoint` is set but the RPC endpoint is unreachable,
+/// instantiation should fail because the chain ID check cannot succeed.
 #[tokio::test]
-async fn test_process_deposit_without_verification() {
+async fn test_instantiation_fails_with_unreachable_endpoint() {
     let (validator, bridge_module_id) =
         TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
     let mut chain = validator.new_chain().await;
@@ -595,7 +595,7 @@ async fn test_process_deposit_without_verification() {
         )
         .await;
 
-    // Non-empty endpoint → finality check is enforced
+    // Non-empty endpoint that is unreachable → instantiation should fail
     let bridge_params = BridgeParameters {
         source_chain_id,
         bridge_contract_address: [0xBB; 20],
@@ -603,64 +603,13 @@ async fn test_process_deposit_without_verification() {
         token_address,
         ethereum_endpoint: "http://localhost:8545".to_string(),
     };
-    let bridge_app_id = chain
-        .create_application(bridge_module_id, bridge_params, (), vec![])
-        .await;
-
-    // Build a valid deposit proof (same as other tests)
-    let bridge_contract = Address::from([0xBB; 20]);
-    let token = Address::from(token_address);
-    let chain_id_bytes: [u8; 32] = chain.id().0.into();
-    let target_chain_b256 = B256::from(chain_id_bytes);
-    let owner_hash = match chain_owner {
-        AccountOwner::Address32(hash) => <[u8; 32]>::from(hash),
-        _ => panic!("expected Address32"),
-    };
-    let target_owner_b256 = B256::from(owner_hash);
-
-    let event_data = build_deposit_event_data(
-        source_chain_id,
-        target_chain_b256,
-        B256::ZERO,
-        target_owner_b256,
-        token,
-        1_000_000,
-        0,
-    );
-    let depositor = Address::from([0xDD; 20]);
-    let mut depositor_topic = [0u8; 32];
-    depositor_topic[12..32].copy_from_slice(depositor.as_slice());
-
-    let log = ReceiptLog {
-        address: bridge_contract,
-        topics: vec![deposit_event_signature(), B256::from(depositor_topic)],
-        data: event_data,
-    };
-    let receipt = build_test_receipt(&[log]);
-    let tx_index = 1u64;
-    let (receipts_root, proof_bytes) = build_receipt_trie(&[(tx_index, receipt.clone())], tx_index);
-    let proof_nodes: Vec<Vec<u8>> = proof_bytes.into_iter().map(|b| b.to_vec()).collect();
-    let block_header = build_test_header(receipts_root, 12345);
-
-    // Submit ProcessDeposit WITHOUT prior VerifyBlockHash — should fail
     let result = chain
-        .try_add_block(|block| {
-            block.with_operation(
-                bridge_app_id,
-                BridgeOperation::ProcessDeposit {
-                    block_header_rlp: block_header,
-                    receipt_rlp: receipt,
-                    proof_nodes,
-                    tx_index,
-                    log_index: 0,
-                },
-            );
-        })
+        .try_create_application(bridge_module_id, bridge_params, (), vec![])
         .await;
 
     assert!(
         result.is_err(),
-        "ProcessDeposit should fail when finality verification cannot succeed"
+        "instantiation should fail with unreachable endpoint"
     );
 }
 
@@ -716,7 +665,8 @@ async fn setup_bridge_with_anvil(
         .await;
 
     let token_address = [0xA0; 20];
-    let source_chain_id = 8453u64;
+    // Anvil's default chain ID is 31337.
+    let source_chain_id = 31337u64;
 
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wUSDC".to_string(),
