@@ -1609,7 +1609,7 @@ where
         if query.request_pending_message_bundles {
             let mut bundles = Vec::new();
             let nonempty_origins: Vec<ChainId> =
-                chain.nonempty_inbox_chain_ids().copied().collect();
+                chain.nonempty_inboxes.get().iter().copied().collect();
             #[cfg(with_metrics)]
             metrics::NUM_INBOXES
                 .with_label_values(&[])
@@ -1621,14 +1621,15 @@ where
             };
             let inboxes = chain.inboxes.try_load_entries(&nonempty_origins).await?;
             for (origin, inbox) in nonempty_origins.into_iter().zip(inboxes) {
-                if let Some(inbox) = inbox {
-                    for bundle in inbox.added_bundles.elements().await? {
-                        bundles.push(IncomingBundle {
-                            origin,
-                            bundle,
-                            action,
-                        });
-                    }
+                let inbox = inbox.ok_or_else(|| {
+                    ChainError::InternalError(format!("Missing inbox for origin {origin}"))
+                })?;
+                for bundle in inbox.added_bundles.elements().await? {
+                    bundles.push(IncomingBundle {
+                        origin,
+                        bundle,
+                        action,
+                    });
                 }
             }
             bundles.sort_by_key(|b| b.bundle.timestamp);

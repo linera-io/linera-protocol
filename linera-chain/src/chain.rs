@@ -655,11 +655,6 @@ where
         Ok(())
     }
 
-    /// Returns the chain IDs of all origins for which a message is waiting in the inbox.
-    pub fn nonempty_inbox_chain_ids(&self) -> impl Iterator<Item = &ChainId> {
-        self.nonempty_inboxes.get().iter()
-    }
-
     /// Returns the chain IDs of all recipients for which a message is waiting in the outbox.
     pub fn nonempty_outbox_chain_ids(&self) -> Vec<ChainId> {
         self.nonempty_outboxes.get().iter().copied().collect()
