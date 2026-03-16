@@ -187,7 +187,9 @@ async fn test_allowance_overwrite() {
         .await;
 
     assert_eq!(
-        owner_chain.query_allowance(application_id, owner, spender).await,
+        owner_chain
+            .query_allowance(application_id, owner, spender)
+            .await,
         Some(Amount::from_tokens(4)),
     );
 
@@ -205,7 +207,9 @@ async fn test_allowance_overwrite() {
         .await;
 
     assert_eq!(
-        owner_chain.query_allowance(application_id, owner, spender).await,
+        owner_chain
+            .query_allowance(application_id, owner, spender)
+            .await,
         None,
     );
 }

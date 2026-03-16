@@ -238,7 +238,7 @@ impl FungibleApp {
         }
     }
 
-    async fn get_allowance(&self, owner: &AccountOwner, spender: &AccountOwner) -> Amount {
+    async fn query_allowance(&self, owner: &AccountOwner, spender: &AccountOwner) -> Amount {
         let owner_spender = OwnerSpender::new(*owner, *spender);
         let query = format!(
             "allowances {{ entry(key: {}) {{ value }} }}",
@@ -259,7 +259,7 @@ impl FungibleApp {
         spender: &AccountOwner,
         allowance: Amount,
     ) {
-        let value = self.get_allowance(owner, spender).await;
+        let value = self.query_allowance(owner, spender).await;
         assert_eq!(value, allowance);
     }
 
@@ -2548,7 +2548,7 @@ async fn test_wasm_end_to_end_allowances_fungible(
     let (_, height) = node_service1.chain_tip(chain2).await?.unwrap();
     notifications2.wait_for_block(height).await?;
     assert_eq!(
-        app2.get_allowance(&owner1, &owner2).await,
+        app2.query_allowance(&owner1, &owner2).await,
         Amount::from_tokens(17)
     );
 
@@ -2577,13 +2577,11 @@ async fn test_wasm_end_to_end_allowances_fungible(
 
     // Clearing the allowance should remove it entirely.
     app1.approve(&owner1, &owner2, Amount::ZERO).await;
-    app1.assert_allowance(&owner1, &owner2, Amount::ZERO)
-        .await;
+    app1.assert_allowance(&owner1, &owner2, Amount::ZERO).await;
 
     let (_, height) = node_service1.chain_tip(chain2).await?.unwrap();
     notifications2.wait_for_block(height).await?;
-    app2.assert_allowance(&owner1, &owner2, Amount::ZERO)
-        .await;
+    app2.assert_allowance(&owner1, &owner2, Amount::ZERO).await;
 
     // Winding down the system
 
