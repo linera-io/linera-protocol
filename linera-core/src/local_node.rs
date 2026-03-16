@@ -135,26 +135,12 @@ where
         self.node.state.storage_client().clone()
     }
 
-    #[instrument(level = "trace", skip_all)]
-    pub async fn stage_block_execution(
-        &self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), LocalNodeError> {
-        Ok(self
-            .node
-            .state
-            .stage_block_execution(block, round, published_blobs)
-            .await?)
-    }
-
     /// Executes a block with a policy for handling bundle failures.
     ///
     /// Returns the modified block (bundles may be rejected/removed based on the policy),
     /// the executed block, chain info response, and resource tracker.
     #[instrument(level = "trace", skip_all)]
-    pub async fn stage_block_execution_with_policy(
+    pub async fn stage_block_execution(
         &self,
         block: ProposedBlock,
         round: Option<u32>,
@@ -164,7 +150,7 @@ where
         Ok(self
             .node
             .state
-            .stage_block_execution_with_policy(block, round, published_blobs, policy)
+            .stage_block_execution(block, round, published_blobs, policy)
             .await?)
     }
 

@@ -1374,7 +1374,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Also, compute the final certified hash while we're at it.
         let (block, _) = self
             .client
-            .stage_block_execution_with_policy(
+            .stage_block_execution(
                 proposed_block,
                 round,
                 blobs.clone(),
@@ -1552,7 +1552,7 @@ impl<Env: Environment> ChainClient<Env> {
         };
         match self
             .client
-            .stage_block_execution_with_policy(
+            .stage_block_execution(
                 block,
                 None,
                 Vec::new(),
@@ -1752,7 +1752,12 @@ impl<Env: Environment> ChainClient<Env> {
                         .ok_or_else(|| Error::InternalError("Missing local locking blobs"))?;
                     let block = self
                         .client
-                        .stage_block_execution(proposed_block, None, blobs.clone())
+                        .stage_block_execution(
+                            proposed_block,
+                            None,
+                            blobs.clone(),
+                            BundleExecutionPolicy::Abort,
+                        )
                         .await?
                         .0;
                     debug!("Retrying locking block from fast round.");
@@ -1766,7 +1771,12 @@ impl<Env: Environment> ChainClient<Env> {
             let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _) = self
                 .client
-                .stage_block_execution(proposed_block, round, blobs.clone())
+                .stage_block_execution(
+                    proposed_block,
+                    round,
+                    blobs.clone(),
+                    BundleExecutionPolicy::Abort,
+                )
                 .await?;
             debug!("Proposing the local pending block.");
             (block, blobs)

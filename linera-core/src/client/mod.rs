@@ -1725,7 +1725,7 @@ impl<Env: Environment> Client<Env> {
     /// Returns the modified block (bundles may be rejected/removed based on the policy)
     /// and the execution result.
     #[instrument(level = "trace", skip(self, block))]
-    async fn stage_block_execution_with_policy(
+    async fn stage_block_execution(
         &self,
         block: ProposedBlock,
         round: Option<u32>,
@@ -1736,12 +1736,7 @@ impl<Env: Environment> Client<Env> {
         loop {
             let result = self
                 .local_node
-                .stage_block_execution_with_policy(
-                    block.clone(),
-                    round,
-                    published_blobs.clone(),
-                    policy,
-                )
+                .stage_block_execution(block.clone(), round, published_blobs.clone(), policy)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.validator_nodes().await?;
@@ -1775,56 +1770,6 @@ impl<Env: Environment> Client<Env> {
             }
             let (_modified_block, executed_block, response, _resource_tracker) = result?;
             return Ok((executed_block, response));
-        }
-    }
-
-    /// Attempts to execute the block locally. If any attempt to read a blob or event fails,
-    /// the missing data is downloaded and execution is retried.
-    #[instrument(level = "trace", skip(self, block))]
-    async fn stage_block_execution(
-        &self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
-        let mut downloaded_events = HashSet::<EventId>::new();
-        loop {
-            let result = self
-                .local_node
-                .stage_block_execution(block.clone(), round, published_blobs.clone())
-                .await;
-            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                let validators = self.validator_nodes().await?;
-                self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
-                    .await?;
-                continue; // We found the missing blob: retry.
-            }
-            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events: Vec<_> = event_ids
-                    .iter()
-                    .filter(|id| !downloaded_events.contains(id))
-                    .cloned()
-                    .collect();
-                if !new_events.is_empty() {
-                    self.download_certificates_for_events(&new_events).await?;
-                    downloaded_events.extend(new_events);
-                    continue; // We downloaded new publisher chain data: retry.
-                }
-                // All reported events were already downloaded; don't loop forever.
-            }
-            if let Ok((block, _, _)) = &result {
-                let hash = CryptoHash::new(block);
-                let notification = Notification {
-                    chain_id: block.header.chain_id,
-                    reason: Reason::BlockExecuted {
-                        height: block.header.height,
-                        hash,
-                    },
-                };
-                self.notifier.notify(&[notification]);
-            }
-            let (block, response, _resource_tracker) = result?;
-            return Ok((block, response));
         }
     }
 }
