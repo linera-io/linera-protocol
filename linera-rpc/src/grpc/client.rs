@@ -546,7 +546,7 @@ impl ValidatorNode for GrpcClient {
         &self,
         event_ids: Vec<EventId>,
     ) -> Result<Vec<Option<BlockHeight>>, NodeError> {
-        let request: api::EventBlockHeightsRequest = event_ids.into();
+        let request = api::EventBlockHeightsRequest::from(event_ids);
         Ok(client_delegate!(self, event_block_heights, request)?.try_into()?)
     }
 

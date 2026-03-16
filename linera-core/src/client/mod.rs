@@ -623,7 +623,7 @@ impl<Env: Environment> Client<Env> {
                 }
                 // Step 3: Download and process certificates from the same validator.
                 for (chain_id, heights) in chain_heights {
-                    let heights_vec: Vec<_> = heights.into_iter().collect();
+                    let heights_vec = heights.into_iter().collect::<Vec<_>>();
                     let certificates = self
                         .requests_scheduler
                         .download_certificates_by_heights(&remote_node, chain_id, heights_vec)
@@ -1745,11 +1745,11 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events: Vec<_> = event_ids
+                let new_events = event_ids
                     .iter()
                     .filter(|id| !downloaded_events.contains(id))
                     .cloned()
-                    .collect();
+                    .collect::<Vec<_>>();
                 if !new_events.is_empty() {
                     self.download_certificates_for_events(&new_events).await?;
                     downloaded_events.extend(new_events);

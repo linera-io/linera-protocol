@@ -988,7 +988,10 @@ where
         for (chain_id, entries) in chain_groups {
             let root_key = RootKey::EventBlockHeight(chain_id).bytes();
             let store = self.database.open_shared(&root_key)?;
-            let keys: Vec<Vec<u8>> = entries.iter().map(|(_, key)| key.clone()).collect();
+            let keys = entries
+                .iter()
+                .map(|(_, key)| key.clone())
+                .collect::<Vec<_>>();
             let values = store.read_multi_values_bytes(&keys).await?;
             for ((original_index, _), value) in entries.into_iter().zip(values) {
                 if let Some(bytes) = value {
