@@ -15,11 +15,7 @@ use std::env;
 
 use anyhow::{Context as _, Result};
 use async_graphql::InputType;
-use futures::{
-    channel::mpsc,
-    future::{self, Either},
-    StreamExt,
-};
+use futures::{channel::mpsc, future, StreamExt};
 use guard::INTEGRATION_TEST_GUARD;
 #[cfg(with_revm)]
 use linera_base::vm::{EvmInstantiation, EvmOperation, EvmQuery};
@@ -27,10 +23,9 @@ use linera_base::{
     crypto::{CryptoHash, Secp256k1SecretKey},
     data_types::{Amount, ApplicationPermissions},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
-    time::{Duration, Instant},
+    time::Duration,
     vm::VmRuntime,
 };
-use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
     abis::{
         controller::{ControllerAbi, LocalWorkerState, ManagedService},
@@ -70,6 +65,16 @@ use {
         read_evm_u256_entry, read_evm_u64_entry, temporary_write_evm_module,
     },
     linera_sdk::abis::evm::EvmAbi,
+};
+#[cfg(any(
+    feature = "storage-service",
+    feature = "scylladb",
+    feature = "dynamodb"
+))]
+use {
+    futures::future::Either,
+    linera_base::time::Instant,
+    linera_core::worker::{Notification, Reason},
 };
 
 #[cfg(with_revm)]
@@ -4998,6 +5003,11 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
 ///
 /// We disabled the repeated transfers for remote-net because it is failing on CI:
 ///#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_grpc"))]
+#[cfg(any(
+    feature = "storage-service",
+    feature = "scylladb",
+    feature = "dynamodb"
+))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
