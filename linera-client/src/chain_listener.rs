@@ -176,13 +176,8 @@ impl<C: ClientContext + 'static> ListeningClient<C> {
     ) -> Self {
         let inbox_notify = Arc::new(Notify::new());
         let inbox_cancellation = parent_cancellation.child_token();
-        let inbox_task = Task::spawn(inbox_processing_loop(
-            client.clone(),
-            Arc::clone(context),
-            Arc::clone(config),
-            Arc::clone(&inbox_notify),
-            inbox_cancellation.clone(),
-        ));
+        let inbox_task =
+            Self::spawn_inbox_task(&client, context, config, &inbox_notify, &inbox_cancellation);
         Self {
             client,
             abort_handle,
@@ -197,7 +192,7 @@ impl<C: ClientContext + 'static> ListeningClient<C> {
     }
 
     /// Respawns the per-chain inbox task with a fresh clone of the client.
-    /// The `inbox_notify` Arc is reused so no pending permits are lost.
+    /// The `inbox_notify` `Arc` is reused so no pending permits are lost.
     fn respawn_inbox_task(
         &mut self,
         parent_cancellation: &CancellationToken,
@@ -206,13 +201,29 @@ impl<C: ClientContext + 'static> ListeningClient<C> {
     ) {
         self.inbox_cancellation.cancel();
         self.inbox_cancellation = parent_cancellation.child_token();
-        self.inbox_task = Task::spawn(inbox_processing_loop(
-            self.client.clone(),
+        self.inbox_task = Self::spawn_inbox_task(
+            &self.client,
+            context,
+            config,
+            &self.inbox_notify,
+            &self.inbox_cancellation,
+        );
+    }
+
+    fn spawn_inbox_task(
+        client: &ContextChainClient<C>,
+        context: &Arc<Mutex<C>>,
+        config: &Arc<ChainListenerConfig>,
+        inbox_notify: &Arc<Notify>,
+        inbox_cancellation: &CancellationToken,
+    ) -> Task<()> {
+        Task::spawn(inbox_processing_loop(
+            client.clone(),
             Arc::clone(context),
             Arc::clone(config),
-            Arc::clone(&self.inbox_notify),
-            self.inbox_cancellation.clone(),
-        ));
+            Arc::clone(inbox_notify),
+            inbox_cancellation.clone(),
+        ))
     }
 
     async fn stop(self) {
