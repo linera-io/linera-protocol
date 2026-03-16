@@ -146,13 +146,14 @@ impl EvmBridgeContract {
         // 1b. Finality check: when an endpoint is configured, verify the block hash
         //     is finalized. Uses cached result if a previous deposit from this block
         //     was already processed.
-        if !params.ethereum_endpoint.is_empty()
-            && !self
-                .state
-                .verified_block_hashes
-                .contains(&block_hash.0)
-                .await
-                .expect("failed to check verified block hashes")
+        if params.rpc_endpoint.is_empty() {
+            log::warn!("rpc_endpoint is empty — skipping block finality verification.");
+        } else if !self
+            .state
+            .verified_block_hashes
+            .contains(&block_hash.0)
+            .await
+            .expect("failed to check verified block hashes")
         {
             self.verify_block_hash(block_hash.0).await;
         }
