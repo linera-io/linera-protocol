@@ -48,3 +48,8 @@ docs/
 
 # Git worktrees
 .worktrees/
+
+# Test results
+test-results/
+playwright-report/
+__screenshots__/
