@@ -414,7 +414,7 @@ where
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
+            .observe(self.nonempty_outboxes.get().len() as f64);
         Ok(true)
     }
 
@@ -1238,12 +1238,16 @@ where
                 *outbox_counters.entry(block_height).or_default() += 1;
                 nonempty_outboxes.insert(*target);
             }
+            #[cfg(with_metrics)]
+            crate::outbox::metrics::OUTBOX_SIZE
+                .with_label_values(&[])
+                .observe(outbox.queue.count() as f64);
         }
 
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
+            .observe(nonempty_outboxes.len() as f64);
         Ok(targets)
     }
 
