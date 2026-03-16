@@ -436,12 +436,12 @@ message BlockHeight {
 
 // A request for looking up block heights where events were published.
 message EventBlockHeightsRequest {
-  // BCS-serialized Vec<EventId>.
+  // BCS-serialized `Vec<EventId>`.
   bytes event_ids = 1;
 }
 
 // Response with block heights for each requested event.
 message EventBlockHeightsResponse {
-  // BCS-serialized Vec<Option<BlockHeight>>.
+  // BCS-serialized `Vec<Option<BlockHeight>>`.
   bytes heights = 1;
 }
