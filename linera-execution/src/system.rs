@@ -762,10 +762,7 @@ where
 
         // Debit from allowance
         let owner_spender = OwnerSpender::new(owner, spender);
-        let allowance = self
-            .allowances
-            .get_mut_or_default(&owner_spender)
-            .await?;
+        let allowance = self.allowances.get_mut_or_default(&owner_spender).await?;
 
         allowance
             .try_sub_assign(amount)

@@ -300,6 +300,18 @@ impl FungibleApp {
         amount_transfer: Amount,
         destination: Account,
     ) -> Value {
+        self.try_transfer_from(owner, spender, amount_transfer, destination)
+            .await
+            .unwrap()
+    }
+
+    async fn try_transfer_from(
+        &self,
+        owner: &AccountOwner,
+        spender: &AccountOwner,
+        amount_transfer: Amount,
+        destination: Account,
+    ) -> Result<Value> {
         let mutation = format!(
             "transferFrom(owner: {}, spender: {}, amount: \"{}\", targetAccount: {})",
             owner.to_value(),
@@ -307,7 +319,7 @@ impl FungibleApp {
             amount_transfer,
             destination.to_value(),
         );
-        self.0.mutate(mutation).await.unwrap()
+        self.0.mutate(mutation).await
     }
 }
 
@@ -2551,6 +2563,24 @@ async fn test_wasm_end_to_end_allowances_fungible(
         app2.query_allowance(&owner1, &owner2).await,
         Amount::from_tokens(17)
     );
+
+    let error = app2
+        .try_transfer_from(
+            &owner1,
+            &owner2,
+            Amount::from_tokens(18),
+            Account {
+                chain_id: chain2,
+                owner: owner3,
+            },
+        )
+        .await
+        .unwrap_err();
+    let error = error.to_string();
+    assert!(!error.is_empty());
+    app2.assert_balances(expected_balances).await;
+    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(17))
+        .await;
 
     // Doing the transfer from owner 1.
     app2.transfer_from(
