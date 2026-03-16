@@ -235,6 +235,8 @@ where
 
     /// Blocks that have been verified but not executed yet, and that may not be contiguous.
     pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
+    /// Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
+    pub nonempty_inboxes: RegisterView<C, BTreeSet<ChainId>>,
 }
 
 /// Block-chaining state.
@@ -539,7 +541,7 @@ where
 
         // Process the inbox bundle and update the inbox state.
         let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
-        inbox
+        let newly_added = inbox
             .add_bundle(bundle)
             .await
             .map_err(|error| match error {
@@ -548,6 +550,9 @@ where
                     "while processing messages in certified block: {error}"
                 )),
             })?;
+        if newly_added {
+            self.nonempty_inboxes.get_mut().insert(*origin);
+        }
 
         // Remember the certificate for future validator/client synchronizations.
         if add_to_received_log {
@@ -643,8 +648,16 @@ where
                     );
                 }
             }
+            if inbox.added_bundles.count() == 0 {
+                self.nonempty_inboxes.get_mut().remove(&origin);
+            }
         }
         Ok(())
+    }
+
+    /// Returns the chain IDs of all origins for which a message is waiting in the inbox.
+    pub fn nonempty_inbox_chain_ids(&self) -> impl Iterator<Item = &ChainId> {
+        self.nonempty_inboxes.get().iter()
     }
 
     /// Returns the chain IDs of all recipients for which a message is waiting in the outbox.

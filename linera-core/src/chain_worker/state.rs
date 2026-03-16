@@ -1608,23 +1608,27 @@ where
         }
         if query.request_pending_message_bundles {
             let mut bundles = Vec::new();
-            let pairs = chain.inboxes.try_load_all_entries().await?;
+            let nonempty_origins: Vec<ChainId> =
+                chain.nonempty_inbox_chain_ids().copied().collect();
             #[cfg(with_metrics)]
             metrics::NUM_INBOXES
                 .with_label_values(&[])
-                .observe(pairs.len() as f64);
+                .observe(nonempty_origins.len() as f64);
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
             };
-            for (origin, inbox) in pairs {
-                for bundle in inbox.added_bundles.elements().await? {
-                    bundles.push(IncomingBundle {
-                        origin,
-                        bundle,
-                        action,
-                    });
+            let inboxes = chain.inboxes.try_load_entries(&nonempty_origins).await?;
+            for (origin, inbox) in nonempty_origins.into_iter().zip(inboxes) {
+                if let Some(inbox) = inbox {
+                    for bundle in inbox.added_bundles.elements().await? {
+                        bundles.push(IncomingBundle {
+                            origin,
+                            bundle,
+                            action,
+                        });
+                    }
                 }
             }
             bundles.sort_by_key(|b| b.bundle.timestamp);

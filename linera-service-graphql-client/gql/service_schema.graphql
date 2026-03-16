@@ -387,6 +387,10 @@ type ChainStateExtendedView {
 	Blocks that have been verified but not executed yet, and that may not be contiguous.
 	"""
 	preprocessedBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!
+	"""
+	Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
+	"""
+	nonemptyInboxes: [ChainId!]!
 }
 
 """
