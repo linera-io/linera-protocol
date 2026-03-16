@@ -4155,6 +4155,7 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-execution",
  "linera-views",

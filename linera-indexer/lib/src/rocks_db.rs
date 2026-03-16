@@ -68,6 +68,10 @@ pub struct RocksDbConfig {
     /// The maximal memory used in the find_key_values_by_prefix cache in bytes.
     #[arg(long, default_value = "10000000")]
     pub max_cache_find_key_values_size: usize,
+
+    /// The maximal number of entries in the blob cache.
+    #[arg(long, default_value = "1000")]
+    pub blob_cache_size: usize,
 }
 
 pub type RocksDbRunner = Runner<RocksDbDatabase, RocksDbConfig>;
@@ -106,7 +110,7 @@ impl RocksDbRunner {
         };
         store_config
             .clone()
-            .run_with_store(StorageMigration)
+            .run_with_store(config.client.blob_cache_size, StorageMigration)
             .await
             .expect("Failure to migrate the database");
         let database =

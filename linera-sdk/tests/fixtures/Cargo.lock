@@ -2423,6 +2423,7 @@ dependencies = [
  "futures",
  "itertools",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-execution",
  "linera-views",

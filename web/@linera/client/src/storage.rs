@@ -17,6 +17,7 @@ pub async fn get_storage(namespace: &str) -> Result<Storage, linera_views::ViewE
         },
         namespace,
         Some(linera_execution::WasmRuntime::Wasmer),
+        1000,
     )
     .await?
     .with_allow_application_logs(true))

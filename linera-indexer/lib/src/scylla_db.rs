@@ -63,6 +63,10 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "10000000")]
     pub max_cache_find_key_values_size: usize,
 
+    /// The maximal number of entries in the blob cache.
+    #[arg(long, default_value = "1000")]
+    pub blob_cache_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1")]
     pub replication_factor: u32,
@@ -100,7 +104,7 @@ impl ScyllaDbRunner {
         };
         store_config
             .clone()
-            .run_with_store(StorageMigration)
+            .run_with_store(config.client.blob_cache_size, StorageMigration)
             .await
             .expect("ScyllaDb migration failed");
         let database = ScyllaDbDatabase::connect(&scylladb_store_config, &namespace).await?;
