@@ -56,7 +56,7 @@ use {
 
 use crate::{
     chain_listener::{self, ClientContext as _},
-    client_options::{ChainOwnershipConfig, Options},
+    client_options::{ChangeOwnershipConfig, ChangeSuperOwnershipConfig, Options},
     config::GenesisConfig,
     error, util, Error,
 };
@@ -581,10 +581,11 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(info.manager.ownership)
     }
 
+    /// Changes the regular owners of a chain. Any owner can call this.
     pub async fn change_ownership(
         &mut self,
         chain_id: Option<ChainId>,
-        ownership_config: ChainOwnershipConfig,
+        ownership_config: ChangeOwnershipConfig,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
         let chain_client = self.make_chain_client(chain_id).await?;
@@ -594,7 +595,7 @@ impl<Env: Environment> ClientContext<Env> {
         );
         let time_start = Instant::now();
         let mut ownership = chain_client.query_chain_ownership().await?;
-        ownership_config.update(&mut ownership)?;
+        ownership_config.update(&mut ownership);
 
         if ownership.super_owners.is_empty() && ownership.owners.is_empty() {
             tracing::error!("At least one owner or super owner of the chain has to be set.");
@@ -606,11 +607,59 @@ impl<Env: Environment> ClientContext<Env> {
                 let ownership = ownership.clone();
                 let chain_client = chain_client.clone();
                 async move {
+                    let tc = &ownership.timeout_config;
                     chain_client
-                        .change_ownership(ownership)
+                        .execute_operation(linera_execution::SystemOperation::ChangeOwners {
+                            owners: ownership.owners.into_iter().collect(),
+                            first_leader: ownership.first_leader,
+                            multi_leader_rounds: ownership.multi_leader_rounds,
+                            open_multi_leader_rounds: ownership.open_multi_leader_rounds,
+                            base_timeout: tc.base_timeout,
+                            timeout_increment: tc.timeout_increment,
+                            fallback_duration: tc.fallback_duration,
+                        })
                         .await
                         .map_err(Error::from)
                         .context("Failed to change ownership")
+                }
+            })
+            .await?;
+        let time_total = time_start.elapsed();
+        info!("Operation confirmed after {} ms", time_total.as_millis());
+        debug!("{:?}", certificate);
+        Ok(())
+    }
+
+    /// Changes the super owners of a chain. Only a super owner can call this.
+    pub async fn change_super_ownership(
+        &mut self,
+        chain_id: Option<ChainId>,
+        ownership_config: ChangeSuperOwnershipConfig,
+    ) -> Result<(), Error> {
+        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
+        let chain_client = self.make_chain_client(chain_id).await?;
+        info!(
+            ?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(),
+            "Changing super ownership of a chain"
+        );
+        let time_start = Instant::now();
+        let mut ownership = chain_client.query_chain_ownership().await?;
+        ownership_config.update(&mut ownership);
+
+        let certificate = self
+            .apply_client_command(&chain_client, |chain_client| {
+                let ownership = ownership.clone();
+                let chain_client = chain_client.clone();
+                async move {
+                    let tc = &ownership.timeout_config;
+                    chain_client
+                        .execute_operation(linera_execution::SystemOperation::ChangeSuperOwners {
+                            super_owners: ownership.super_owners.into_iter().collect(),
+                            fast_round_duration: tc.fast_round_duration,
+                        })
+                        .await
+                        .map_err(Error::from)
+                        .context("Failed to change super ownership")
                 }
             })
             .await?;

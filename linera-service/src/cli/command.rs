@@ -14,7 +14,8 @@ use linera_base::{
 use linera_client::{
     chain_listener::ChainListenerConfig,
     client_options::{
-        ApplicationPermissionsConfig, ChainOwnershipConfig, ResourceControlPolicyConfig,
+        ApplicationPermissionsConfig, ChainOwnershipConfig, ChangeOwnershipConfig,
+        ChangeSuperOwnershipConfig, ResourceControlPolicyConfig,
     },
     util,
 };
@@ -264,17 +265,30 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
-    /// Change who owns the chain, and how the owners work together proposing blocks.
+    /// Change the regular owners of the chain.
     ///
-    /// Specify the complete set of new owners, by public key. Existing owners that are
-    /// not included will be removed.
+    /// Any owner can use this command. Specify the complete set of new regular owners,
+    /// by public key. Existing regular owners that are not included will be removed.
     ChangeOwnership {
         /// The ID of the chain whose owners will be changed.
         #[clap(long)]
         chain_id: Option<ChainId>,
 
         #[clap(flatten)]
-        ownership_config: ChainOwnershipConfig,
+        ownership_config: ChangeOwnershipConfig,
+    },
+
+    /// Change the super owners of the chain.
+    ///
+    /// Only a super owner can use this command. Specify the complete set of new super
+    /// owners, by public key. Existing super owners that are not included will be removed.
+    ChangeSuperOwnership {
+        /// The ID of the chain whose super owners will be changed.
+        #[clap(long)]
+        chain_id: Option<ChainId>,
+
+        #[clap(flatten)]
+        ownership_config: ChangeSuperOwnershipConfig,
     },
 
     /// Change the preferred owner of a chain.
@@ -1031,6 +1045,7 @@ impl ClientCommand {
             | ClientCommand::OpenMultiOwnerChain { .. }
             | ClientCommand::ShowOwnership { .. }
             | ClientCommand::ChangeOwnership { .. }
+            | ClientCommand::ChangeSuperOwnership { .. }
             | ClientCommand::SetPreferredOwner { .. }
             | ClientCommand::ChangeApplicationPermissions { .. }
             | ClientCommand::CloseChain { .. }

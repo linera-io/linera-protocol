@@ -6,8 +6,6 @@ mod test_helpers;
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
-use std::collections::{BTreeMap, BTreeSet};
-
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{
@@ -357,7 +355,7 @@ where
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
 
     let new_owner: AccountOwner = builder.signer.generate_new().into();
-    let certificate = sender.transfer_ownership(new_owner).await.unwrap().unwrap();
+    let certificate = sender.change_owner(new_owner).await.unwrap().unwrap();
     assert_eq!(
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
@@ -517,19 +515,29 @@ where
     let mut signer = InMemorySigner::new(None);
     let regular_owner = signer.generate_new().into();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let mut sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut sender = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
     let super_owner = sender.identity().await?;
 
     // Configure chain with one super owner and one regular owner, no multi-leader rounds.
-    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
-        super_owners: vec![super_owner],
-        owners: vec![(regular_owner, 100)],
-        first_leader: None,
-        multi_leader_rounds: 0,
-        open_multi_leader_rounds: false,
-        timeout_config: TimeoutConfig::default(),
-    });
-    sender.execute_operation(owner_change_op).await.unwrap();
+    let tc = TimeoutConfig::default();
+    let ops = vec![
+        Operation::system(SystemOperation::ChangeSuperOwners {
+            super_owners: vec![super_owner],
+            fast_round_duration: tc.fast_round_duration,
+        }),
+        Operation::system(SystemOperation::ChangeOwners {
+            owners: vec![(regular_owner, 100)],
+            first_leader: None,
+            multi_leader_rounds: 0,
+            open_multi_leader_rounds: false,
+            base_timeout: tc.base_timeout,
+            timeout_increment: tc.timeout_increment,
+            fallback_duration: tc.fallback_duration,
+        }),
+    ];
+    sender.execute_operations(ops, vec![]).await.unwrap();
 
     // Enable fast blocks so the super owner can propose in the Fast round.
     sender.options_mut().allow_fast_blocks = true;
@@ -1659,13 +1667,15 @@ where
     let owner2_a = client2_a.identity().await.unwrap();
     let owner2_b = builder.signer.generate_new().into();
 
-    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
-        super_owners: Vec::new(),
+    let tc = TimeoutConfig::default();
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwners {
         owners: vec![(owner2_a, 50), (owner2_b, 50)],
         first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
-        timeout_config: TimeoutConfig::default(),
+        base_timeout: tc.base_timeout,
+        timeout_increment: tc.timeout_increment,
+        fallback_duration: tc.fallback_duration,
     });
     client2_a
         .execute_operation(owner_change_op.clone())
@@ -1783,13 +1793,15 @@ where
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     let chain_id = client1.chain_id();
     let owner1 = client1.identity().await?;
-    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
-        super_owners: Vec::new(),
+    let tc = TimeoutConfig::default();
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwners {
         owners: vec![(owner1, 50), (owner2, 50)],
         first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
-        timeout_config: TimeoutConfig::default(),
+        base_timeout: tc.base_timeout,
+        timeout_increment: tc.timeout_increment,
+        fallback_duration: tc.fallback_duration,
     });
     client1
         .execute_operation(owner_change_op.clone())
@@ -1874,13 +1886,15 @@ where
     let owner3_b = builder.signer.generate_new().into();
     let owner3_c = builder.signer.generate_new().into();
 
-    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
-        super_owners: Vec::new(),
+    let tc = TimeoutConfig::default();
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwners {
         owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
         first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
-        timeout_config: TimeoutConfig::default(),
+        base_timeout: tc.base_timeout,
+        timeout_increment: tc.timeout_increment,
+        fallback_duration: tc.fallback_duration,
     });
 
     client3_a
@@ -2592,26 +2606,33 @@ where
     let signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let mut client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let mut client0 = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(10))
+        .await?;
     // Enable fast blocks for this test that specifically tests fast block behavior.
     client0.options_mut().allow_fast_blocks = true;
     let chain_id = client0.chain_id();
     let owner0 = client0.identity().await.unwrap();
     let owner1 = builder.signer.generate_new().into();
 
-    let timeout_config = TimeoutConfig {
-        fast_round_duration: Some(TimeDelta::from_secs(5)),
-        ..TimeoutConfig::default()
-    };
-    let ownership = ChainOwnership {
-        super_owners: BTreeSet::from_iter([owner0]),
-        owners: BTreeMap::from_iter([(owner1, 100)]),
-        first_leader: None,
-        multi_leader_rounds: 10,
-        open_multi_leader_rounds: false,
-        timeout_config,
-    };
-    client0.change_ownership(ownership).await.unwrap();
+    let tc = TimeoutConfig::default();
+    // Set fast round duration and add a regular owner in a single block.
+    let ops = vec![
+        Operation::system(SystemOperation::ChangeSuperOwners {
+            super_owners: vec![owner0],
+            fast_round_duration: Some(TimeDelta::from_secs(5)),
+        }),
+        Operation::system(SystemOperation::ChangeOwners {
+            owners: vec![(owner1, 100)],
+            first_leader: None,
+            multi_leader_rounds: 10,
+            open_multi_leader_rounds: false,
+            base_timeout: tc.base_timeout,
+            timeout_increment: tc.timeout_increment,
+            fallback_duration: tc.fallback_duration,
+        }),
+    ];
+    client0.execute_operations(ops, vec![]).await.unwrap();
     let mut client1 = builder
         .make_client(
             chain_id,
@@ -2828,17 +2849,14 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer)
         .await?
         .with_policy(policy.clone());
-    let mut client1 = builder.add_root_chain(1, Amount::ONE).await?;
-    let mut client2 = builder.add_root_chain(2, Amount::ONE).await?;
-    let mut client3 = builder.add_root_chain(3, Amount::ONE).await?;
+    let mut client1 = builder.add_root_super_owner_chain(1, Amount::ONE).await?;
+    let mut client2 = builder.add_root_super_owner_chain(2, Amount::ONE).await?;
+    let mut client3 = builder.add_root_super_owner_chain(3, Amount::ONE).await?;
     let chain_id3 = client3.chain_id();
 
-    // Configure the clients as super owners with fast blocks enabled.
+    // Enable fast blocks for all clients.
     for client in [&mut client1, &mut client2, &mut client3] {
         client.options_mut().allow_fast_blocks = true;
-        let owner = client.identity().await?;
-        let ownership = ChainOwnership::single_super(owner);
-        client.change_ownership(ownership).await.unwrap();
     }
 
     // Take one validator down
@@ -2877,7 +2895,8 @@ where
     assert_eq!(certificate.round, Round::MultiLeader(0));
     let block = certificate.block();
     assert_eq!(block.body.incoming_bundles().count(), 1);
-    assert_eq!(block.required_blob_ids().len(), 1);
+    // The data blob plus the committee blob (this is the first block on chain 3).
+    assert_eq!(block.required_blob_ids().len(), 2);
 
     // This will go way over the limit, because of the different overheads.
     let blob_bytes = (0..100)
@@ -3412,20 +3431,10 @@ where
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
 
-    // Create a chain and get its owner.
-    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let super_owner = client.identity().await?;
-
-    // Change ownership to make the owner a super owner.
-    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
-        super_owners: vec![super_owner],
-        owners: vec![],
-        first_leader: None,
-        multi_leader_rounds: 10,
-        open_multi_leader_rounds: false,
-        timeout_config: TimeoutConfig::default(),
-    });
-    client.execute_operation(owner_change_op).await.unwrap();
+    // Create a chain with a super owner.
+    let mut client = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
 
     // With fast blocks enabled, the super owner creates a block in the Fast round.
     client.options_mut().allow_fast_blocks = true;
@@ -3542,13 +3551,15 @@ where
     let chain_id = client.chain_id();
 
     // Configure open multi-leader rounds.
-    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
-        super_owners: vec![],
+    let tc = TimeoutConfig::default();
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwners {
         owners: vec![(owner, 100)],
         first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: true,
-        timeout_config: TimeoutConfig::default(),
+        base_timeout: tc.base_timeout,
+        timeout_increment: tc.timeout_increment,
+        fallback_duration: tc.fallback_duration,
     });
     client.execute_operation(owner_change_op).await.unwrap();
     let info = client.chain_info().await?;
@@ -3589,6 +3600,97 @@ where
         .await
         .unwrap_ok_committed();
     assert_eq!(certificate.round, Round::MultiLeader(0));
+
+    Ok(())
+}
+
+/// A regular owner cannot change super owners via the client API.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_regular_owner_cannot_change_super_owners<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    // Chain with only a regular owner (no super owners).
+    let client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+
+    // Trying to add super owners should fail because the chain has none.
+    let result = client
+        .change_super_ownership(vec![client.identity().await?], None)
+        .await;
+    assert_matches!(result, Err(_));
+
+    Ok(())
+}
+
+/// A super owner can transfer super ownership.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_super_owner_can_transfer_super_ownership<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let new_super_owner_key = signer.generate_new();
+    let new_super_owner = AccountOwner::from(new_super_owner_key);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
+    let old_super_owner = sender.identity().await?;
+
+    // Transfer super ownership to another key.
+    sender
+        .transfer_super_ownership(new_super_owner)
+        .await
+        .unwrap();
+
+    // Verify the new super owner is set and old one is gone.
+    let ownership = sender.query_chain_ownership().await?;
+    assert!(ownership.super_owners.contains(&new_super_owner));
+    assert!(!ownership.super_owners.contains(&old_super_owner));
+    // transfer_super_ownership also clears regular owners.
+    assert!(ownership.owners.is_empty());
+
+    Ok(())
+}
+
+/// ChangeOwners does not affect super owners.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_change_owners_preserves_super_owners<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let regular_owner = AccountOwner::from(signer.generate_new());
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
+    let super_owner = sender.identity().await?;
+
+    // Add a regular owner.
+    sender.share_ownership(regular_owner, 100).await.unwrap();
+
+    // Query ownership to verify super owner is still there.
+    let ownership = sender.query_chain_ownership().await?;
+    assert!(ownership.super_owners.contains(&super_owner));
+    assert!(ownership.owners.contains_key(&regular_owner));
 
     Ok(())
 }
