@@ -330,6 +330,14 @@ ChainInfo:
     - requested_received_log:
         SEQ:
           TYPENAME: ChainAndHeight
+    - requested_previous_event_blocks:
+        MAP:
+          KEY:
+            TYPENAME: StreamId
+          VALUE:
+            TUPLE:
+              - TYPENAME: BlockHeight
+              - TYPENAME: CryptoHash
 ChainInfoQuery:
   STRUCT:
     - chain_id:
@@ -353,6 +361,9 @@ ChainInfoQuery:
     - request_sent_certificate_hashes_by_heights:
         SEQ:
           TYPENAME: BlockHeight
+    - request_previous_event_blocks:
+        SEQ:
+          TYPENAME: StreamId
     - create_network_actions: BOOL
 ChainInfoResponse:
   STRUCT:
