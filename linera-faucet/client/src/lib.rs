@@ -42,13 +42,13 @@ pub struct ClaimOutcome {
     pub amount: Amount,
 }
 
-/// Information about a previous claim.
+/// Information about the initial chain claim.
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LastClaim {
+pub struct InitialClaim {
     /// The chain ID that was created.
     pub chain_id: ChainId,
-    /// The timestamp when the chain was created.
+    /// The block timestamp when the chain was created.
     pub timestamp: Timestamp,
 }
 
@@ -163,23 +163,23 @@ impl Faucet {
             .daily_claim)
     }
 
-    /// Returns the last claim for the given owner, if any.
-    pub async fn last_claim(
+    /// Returns the initial claim for the given owner, if any.
+    pub async fn initial_claim(
         &self,
         owner: &linera_base::identifiers::AccountOwner,
-    ) -> Result<Option<LastClaim>, Error> {
+    ) -> Result<Option<InitialClaim>, Error> {
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct Response {
-            last_claim: Option<LastClaim>,
+            initial_claim: Option<InitialClaim>,
         }
 
         Ok(self
             .query::<Response>(format!(
-                "query {{ lastClaim(owner: \"{owner}\") {{ chainId timestamp }} }}"
+                "query {{ initialClaim(owner: \"{owner}\") {{ chainId timestamp }} }}"
             ))
             .await?
-            .last_claim)
+            .initial_claim)
     }
 
     /// Returns the earliest time at which the owner can make a daily claim.
