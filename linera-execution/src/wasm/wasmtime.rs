@@ -14,7 +14,7 @@ use wasmtime::{Config, Engine, Linker, Module, Store};
 use super::{
     module_cache::ModuleCache,
     runtime_api::{BaseRuntimeApi, ContractRuntimeApi, RuntimeApiData, ServiceRuntimeApi},
-    ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
+    add_metering, ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
@@ -62,7 +62,8 @@ impl WasmContractModule {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let module = contract_cache
             .get_or_insert_with(contract_bytecode, |bytecode| {
-                Module::new(&CONTRACT_ENGINE, bytecode)
+                let metered_bytecode = add_metering(&bytecode)?;
+                Module::new(&CONTRACT_ENGINE, metered_bytecode)
             })
             .map_err(WasmExecutionError::LoadContractModule)?;
         Ok(WasmContractModule::Wasmtime { module })

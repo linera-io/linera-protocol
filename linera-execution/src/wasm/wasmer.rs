@@ -16,7 +16,7 @@ use tracing::instrument;
 use super::{
     module_cache::ModuleCache,
     runtime_api::{BaseRuntimeApi, ContractRuntimeApi, RuntimeApiData, ServiceRuntimeApi},
-    ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
+    add_metering, ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
@@ -60,7 +60,10 @@ impl WasmContractModule {
     pub async fn from_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let (engine, module) = contract_cache
-            .get_or_insert_with(contract_bytecode, CachedContractModule::new)
+            .get_or_insert_with(contract_bytecode, |bytecode| {
+                let metered_bytecode = add_metering(&bytecode)?;
+                CachedContractModule::new(metered_bytecode)
+            })
             .map_err(WasmExecutionError::LoadContractModule)?
             .create_execution_instance()
             .map_err(WasmExecutionError::LoadContractModule)?;
