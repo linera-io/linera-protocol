@@ -3212,8 +3212,8 @@ where
 
     // Query the admin chain for previous_event_blocks.
     let stream_id = StreamId::system(NEW_EPOCH_STREAM_NAME);
-    let query = ChainInfoQuery::new(admin_chain_id)
-        .with_previous_event_blocks(vec![stream_id.clone()]);
+    let query =
+        ChainInfoQuery::new(admin_chain_id).with_previous_event_blocks(vec![stream_id.clone()]);
     let (response, _) = env
         .executing_worker()
         .handle_chain_info_query(query)
