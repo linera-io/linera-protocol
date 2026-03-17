@@ -12,9 +12,10 @@ use tracing::instrument;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 
 use super::{
+    add_metering,
     module_cache::ModuleCache,
     runtime_api::{BaseRuntimeApi, ContractRuntimeApi, RuntimeApiData, ServiceRuntimeApi},
-    add_metering, ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
+    ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},

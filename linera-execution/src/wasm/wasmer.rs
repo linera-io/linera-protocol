@@ -14,9 +14,10 @@ use tokio::sync::Mutex;
 use tracing::instrument;
 
 use super::{
+    add_metering,
     module_cache::ModuleCache,
     runtime_api::{BaseRuntimeApi, ContractRuntimeApi, RuntimeApiData, ServiceRuntimeApi},
-    add_metering, ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
+    ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
@@ -53,8 +54,7 @@ static CONTRACT_ENGINE: LazyLock<wasmer::Engine> = LazyLock::new(|| {
 });
 
 /// A cache of compiled contract modules.
-static CONTRACT_CACHE: LazyLock<Mutex<ModuleCache<wasmer::Module>>> =
-    LazyLock::new(Mutex::default);
+static CONTRACT_CACHE: LazyLock<Mutex<ModuleCache<wasmer::Module>>> = LazyLock::new(Mutex::default);
 
 /// A cache of compiled service modules.
 static SERVICE_CACHE: LazyLock<Mutex<ModuleCache<wasmer::Module>>> = LazyLock::new(Mutex::default);
@@ -78,7 +78,8 @@ impl WasmContractModule {
         let module = contract_cache
             .get_or_insert_with(contract_bytecode, |bytecode| {
                 let metered_bytecode = add_metering(&bytecode)?;
-                wasmer::Module::new(&*CONTRACT_ENGINE, metered_bytecode).map_err(anyhow::Error::from)
+                wasmer::Module::new(&*CONTRACT_ENGINE, metered_bytecode)
+                    .map_err(anyhow::Error::from)
             })
             .map_err(WasmExecutionError::LoadContractModule)?;
         Ok(WasmContractModule::Wasmer {
