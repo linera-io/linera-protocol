@@ -1083,7 +1083,7 @@
       "type": "table"
     }
   ],
-  "refresh": "5s",
+  "refresh": "10s",
   "schemaVersion": 39,
   "tags": [
     "linera"

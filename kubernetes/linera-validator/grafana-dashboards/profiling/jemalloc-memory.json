@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "grafana-pyroscope-datasource",
-        "uid": "P02E4190217B50628"
+        "uid": "pyroscope"
       },
       "gridPos": {
         "h": 12,
@@ -40,7 +40,7 @@
         {
           "datasource": {
             "type": "grafana-pyroscope-datasource",
-            "uid": "P02E4190217B50628"
+            "uid": "pyroscope"
           },
           "groupBy": [],
           "labelSelector": "{service_name=\"memory/default/shards/\"}",
@@ -98,7 +98,7 @@
         "current": {
           "selected": false,
           "text": "Pyroscope",
-          "value": "P02E4190217B50628"
+          "value": "pyroscope"
         },
         "hide": 0,
         "includeAll": false,
@@ -141,6 +141,5 @@
   "timezone": "",
   "title": "Memory",
   "uid": "linera-memory-profiling",
-  "version": 1,
   "weekStart": ""
 }
