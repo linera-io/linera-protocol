@@ -844,6 +844,60 @@ where
         SystemOperation::UpdateStreams(vec![(sender2.chain_id(), stream_id, 1)])
     );
 
+    // Make one more post.
+    let text = "Have you followed already?".to_string();
+    let post = social::Operation::Post {
+        text: text.clone(),
+        image_url: None,
+    };
+    sender
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+
+    receiver.synchronize_from_validators().await.unwrap();
+
+    // Turn on the events publishing whitelist: with no applications on it, processing the
+    // events will effectively be disabled.
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        None,
+        None,
+        Some(Default::default()),
+    );
+
+    // Receiver should not process the event.
+    let certs = receiver.process_inbox().await.unwrap().0;
+    assert!(certs.is_empty());
+
+    // Let's whitelist the social app now.
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        None,
+        None,
+        Some([application_id.forget_abi().into()].into_iter().collect()),
+    );
+
+    // Receiver should process the new event now.
+    let certs = receiver.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 1);
+
+    // There should be an UpdateStreams operation due to the new post.
+    let operations = certs[0].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(operation)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
+    };
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    assert_eq!(
+        **operation,
+        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 3)])
+    );
+
     // Request to unsubscribe from the sender.
     let request_unsubscribe = social::Operation::Unsubscribe {
         chain_id: sender.chain_id(),
@@ -872,7 +926,7 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert!(certs.is_empty());
 
-    // There is still only one post it can see.
+    // There should be four posts it can see.
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
     let outcome = receiver
         .query_user_application(application_id, &query)
@@ -882,7 +936,8 @@ where
         response: async_graphql::Response::new(
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
-                    "keys": [ { "author": sender.chain_id(), "index": 1 },
+                    "keys": [ { "author": sender.chain_id(), "index": 2 },
+                              { "author": sender.chain_id(), "index": 1 },
                               { "author": sender.chain_id(), "index": 0 },
                               { "author": sender2.chain_id(), "index": 0 } ]
                 }
