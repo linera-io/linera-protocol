@@ -2351,6 +2351,13 @@ impl<Env: Environment> ChainClient<Env> {
                     .as_ref()
                     .is_none_or(|chain_set| chain_set.contains(chain_id))
             })
+            .filter(|((_, stream_id), _)| {
+                self.options
+                    .message_policy
+                    .process_events_from_application_ids
+                    .as_ref()
+                    .is_none_or(|app_set| app_set.contains(&stream_id.application_id))
+            })
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
                 let previous_index = subscriptions.next_index;

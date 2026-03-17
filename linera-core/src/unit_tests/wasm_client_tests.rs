@@ -801,6 +801,7 @@ where
         Some([sender.chain_id()].into_iter().collect()),
         None,
         None,
+        None,
     );
 
     // Receiver should only process the event from sender now.
@@ -823,7 +824,7 @@ where
 
     // Let's receive from everyone again.
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None);
 
     // Receiver should now process the event from sender2 as well.
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -1237,6 +1238,7 @@ where
         None,
         Some([fungible_id.forget_abi().into()].into_iter().collect()),
         None,
+        None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(certs.len(), 1, "Should accept bundle with fungible message");
@@ -1259,6 +1261,7 @@ where
         BlanketMessagePolicy::Accept,
         None,
         Some([crowd_funding_id.forget_abi().into()].into_iter().collect()),
+        None,
         None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
@@ -1289,6 +1292,7 @@ where
         None,
         Some([fake_app_id.into()].into_iter().collect()),
         None,
+        None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
@@ -1304,6 +1308,7 @@ where
         None,
         None,
         Some([fungible_id.forget_abi().into()].into_iter().collect()),
+        None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
@@ -1325,6 +1330,7 @@ where
             .into_iter()
             .collect(),
         ),
+        None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
