@@ -2524,8 +2524,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6652182476826343f0dd1e76a184ad34bcee57650a9c00c77574b993dd30529"
+source = "git+https://github.com/linera-io/wasmer?rev=2d0941872e1bd14f12f75be8c75b7deb03ffbee0#2d0941872e1bd14f12f75be8c75b7deb03ffbee0"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -2554,8 +2553,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4781ce9fc4a892c9a9727f51ec92d19e1c5b54259da21573671aa49211ae80f"
+source = "git+https://github.com/linera-io/wasmer?rev=2d0941872e1bd14f12f75be8c75b7deb03ffbee0#2d0941872e1bd14f12f75be8c75b7deb03ffbee0"
 dependencies = [
  "backtrace",
  "bytes",
@@ -2585,8 +2583,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8056c8bff8e1b5cafd21aac59b9009e93b30f35b7baab5592a6f4c7db120b490"
+source = "git+https://github.com/linera-io/wasmer?rev=2d0941872e1bd14f12f75be8c75b7deb03ffbee0#2d0941872e1bd14f12f75be8c75b7deb03ffbee0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -2604,8 +2601,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3635a86dd98e2c2fd6dd603054f40b8e379f84365a2238cc177d47547a83eebc"
+source = "git+https://github.com/linera-io/wasmer?rev=2d0941872e1bd14f12f75be8c75b7deb03ffbee0#2d0941872e1bd14f12f75be8c75b7deb03ffbee0"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -2623,8 +2619,7 @@ dependencies = [
 [[package]]
 name = "linera-wasmer-vm"
 version = "4.4.0-linera.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f27d020717572fdb6222324ec46b10eeb49f6f4a120ee63cf7145f4392f12fd8"
+source = "git+https://github.com/linera-io/wasmer?rev=2d0941872e1bd14f12f75be8c75b7deb03ffbee0#2d0941872e1bd14f12f75be8c75b7deb03ffbee0"
 dependencies = [
  "backtrace",
  "cc",
