@@ -195,16 +195,21 @@ impl From<wasmer::RuntimeError> for ExecutionError {
     }
 }
 
-/// Serialized bytes of a compiled contract bytecode.
-// Cloning `Module`s is cheap.
+/// A compiled contract module together with the engine that compiled it.
+///
+/// Cloning both the [`wasmer::Engine`] and [`wasmer::Module`] is cheap.
 #[derive(Clone)]
-pub struct CachedContractModule(wasmer::Module);
+pub struct CachedContractModule {
+    engine: wasmer::Engine,
+    module: wasmer::Module,
+}
 
 impl CachedContractModule {
     /// Creates a new [`CachedContractModule`] by compiling a `contract_bytecode`.
     pub fn new(contract_bytecode: Bytecode) -> Result<Self, anyhow::Error> {
-        let module = wasmer::Module::new(&Self::create_compilation_engine(), contract_bytecode)?;
-        Ok(CachedContractModule(module))
+        let engine = Self::create_compilation_engine();
+        let module = wasmer::Module::new(&engine, contract_bytecode)?;
+        Ok(CachedContractModule { engine, module })
     }
 
     /// Creates a new [`Engine`] to compile a contract bytecode.
@@ -221,23 +226,19 @@ impl CachedContractModule {
         wasmer::Engine::default()
     }
 
-    /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
+    /// Creates a [`Module`] and [`Engine`] pair ready for contract execution.
     #[allow(clippy::unnecessary_wraps)]
     pub fn create_execution_instance(
         &self,
     ) -> Result<(wasmer::Engine, wasmer::Module), anyhow::Error> {
         #[cfg(web)]
         {
-            Ok((wasmer::Engine::default(), self.0.clone()))
+            Ok((self.engine.clone(), self.module.clone()))
         }
 
         #[cfg(not(web))]
         {
-            let engine = wasmer::Engine::default();
-            let store = wasmer::Store::new(engine.clone());
-            let bytes = self.0.serialize()?;
-            let module = unsafe { wasmer::Module::deserialize(&store, bytes) }?;
-            Ok((engine, module))
+            Ok((self.engine.clone(), self.module.clone()))
         }
     }
 }
