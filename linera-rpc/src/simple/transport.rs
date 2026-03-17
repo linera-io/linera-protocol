@@ -2,7 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io, mem, net::SocketAddr, pin::pin, sync::Arc};
+use std::{
+    collections::HashMap,
+    io, mem,
+    net::SocketAddr,
+    pin::{pin, Pin},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use futures::{
@@ -10,6 +16,7 @@ use futures::{
     stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
+use linera_base::identifiers::ChainId;
 use linera_core::{JoinSetExt as _, TaskHandle};
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -79,6 +86,15 @@ pub trait ConnectionPool: Send {
 #[async_trait]
 pub trait MessageHandler: Clone {
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
+
+    /// Handle a notification subscription request. Returns a stream of notification
+    /// messages if supported, or `None` if subscriptions are not supported.
+    async fn handle_subscribe(
+        &mut self,
+        _chains: Vec<ChainId>,
+    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
+        None
+    }
 }
 
 /// The result of spawning a server is oneshot channel to track completion, and the set of
@@ -455,6 +471,10 @@ where
                     return;
                 }
                 result = self.connection.next() => match result {
+                    Some(Ok(RpcMessage::SubscribeNotifications(chains))) => {
+                        self.handle_subscription(chains).await;
+                        return;
+                    }
                     Some(Ok(message)) => self.handle_message(message).await,
                     Some(Err(error)) => {
                         Self::handle_error(&error);
@@ -471,6 +491,27 @@ where
         if let Some(reply) = self.handler.handle_message(message).await {
             if let Err(error) = self.connection.send(reply).await {
                 error!("Failed to send query response: {error}");
+            }
+        }
+    }
+
+    /// Handles a notification subscription request by switching to streaming mode.
+    async fn handle_subscription(&mut self, chains: Vec<ChainId>) {
+        let Some(mut stream) = self.handler.handle_subscribe(chains).await else {
+            return;
+        };
+        loop {
+            tokio::select! { biased;
+                _ = self.shutdown_signal.cancelled() => break,
+                msg = stream.next() => match msg {
+                    Some(notification) => {
+                        if let Err(error) = self.connection.send(notification).await {
+                            error!("Failed to send notification: {error}");
+                            break;
+                        }
+                    }
+                    None => break,
+                }
             }
         }
     }
