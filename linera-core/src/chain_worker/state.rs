@@ -1233,7 +1233,7 @@ where
                     .check_blob_size(blob.content())
                     .with_execution_context(ChainExecutionContext::Block)?;
                 ensure!(
-                    u64::try_from(pending_blobs.pending_blobs.count().await?)
+                    u64::try_from(pending_blobs.pending_blobs.iterative_count().await?)
                         .is_ok_and(|count| count < policy.maximum_published_blobs),
                     WorkerError::TooManyPublishedBlobs(policy.maximum_published_blobs)
                 );
