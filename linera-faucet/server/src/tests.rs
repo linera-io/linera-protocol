@@ -106,7 +106,7 @@ async fn test_faucet_rate_limiting() -> anyhow::Result<()> {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
-        amount: Amount::from_tokens(1),
+        initial_claim_amount: Amount::from_tokens(1),
         daily_claim_amount: Amount::ZERO,
     };
 
@@ -308,7 +308,7 @@ async fn test_faucet_persistence() -> anyhow::Result<()> {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
-        amount: Amount::from_tokens(1),
+        initial_claim_amount: Amount::from_tokens(1),
         daily_claim_amount: Amount::ZERO,
     };
 
@@ -428,7 +428,7 @@ async fn test_faucet_persistence() -> anyhow::Result<()> {
         pending_requests: Arc::clone(&pending_requests_2),
         request_notifier: Arc::clone(&request_notifier_2),
         storage: client.storage_client().clone(),
-        amount: Amount::from_tokens(1),
+        initial_claim_amount: Amount::from_tokens(1),
         daily_claim_amount: Amount::ZERO,
     };
 
@@ -533,7 +533,7 @@ async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
-        amount: Amount::from_tokens(1),
+        initial_claim_amount: Amount::from_tokens(1),
         daily_claim_amount: Amount::ZERO,
     };
 
@@ -619,7 +619,7 @@ async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
         pending_requests: Arc::clone(&pending_requests_2),
         request_notifier: Arc::clone(&request_notifier_2),
         storage: client.storage_client().clone(),
-        amount: Amount::from_tokens(1),
+        initial_claim_amount: Amount::from_tokens(1),
         daily_claim_amount: Amount::ZERO,
     };
 
@@ -739,7 +739,7 @@ async fn test_daily_claim_flow() -> anyhow::Result<()> {
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
         storage: client.storage_client().clone(),
-        amount: Amount::from_tokens(1),
+        initial_claim_amount: Amount::from_tokens(1),
         daily_claim_amount: daily_amount,
     };
 
