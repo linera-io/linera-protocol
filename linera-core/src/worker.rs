@@ -842,11 +842,14 @@ where
                 .is_some_and(ListeningMode::is_full)
         });
 
-        let service_runtime_endpoint = if self.chain_worker_config.long_lived_services {
-            Some(handle::spawn_service_runtime_actor(chain_id, self.storage.thread_pool()).await)
-        } else {
-            None
-        };
+        let (service_runtime_endpoint, service_runtime_task) =
+            if self.chain_worker_config.long_lived_services {
+                let actor =
+                    handle::spawn_service_runtime_actor(chain_id, self.storage.thread_pool()).await;
+                (Some(actor.endpoint), Some(actor.task))
+            } else {
+                (None, None)
+            };
 
         let state = crate::chain_worker::state::ChainWorkerState::load(
             self.chain_worker_config.clone(),
@@ -857,6 +860,7 @@ where
             delivery_notifier,
             chain_id,
             service_runtime_endpoint,
+            service_runtime_task,
         )
         .await?;
 

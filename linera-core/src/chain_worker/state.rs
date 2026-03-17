@@ -91,6 +91,11 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
+    /// The background task running the service runtime. Must be kept alive for the
+    /// lifetime of the worker: the pool `Guard` wrapper returns the thread-pool slot
+    /// when dropped, so dropping this early lets the pool schedule unrelated work on a
+    /// thread that is still running the service runtime.
+    service_runtime_task: Option<web_thread_pool::Task<()>>,
     /// Timestamp of the last access.
     /// Used by the keep-alive task to determine when the worker has been idle.
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
@@ -128,6 +133,7 @@ where
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
+        service_runtime_task: Option<web_thread_pool::Task<()>>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -136,6 +142,7 @@ where
             storage,
             chain,
             service_runtime_endpoint,
+            service_runtime_task,
             last_access: Arc::new(AtomicTimestamp::now()),
             block_values,
             execution_state_cache,
@@ -173,6 +180,13 @@ where
     /// Returns a clone of the last-access `Arc`, for use by the keep-alive task.
     pub(crate) fn last_access_arc(&self) -> Arc<AtomicTimestamp> {
         Arc::clone(&self.last_access)
+    }
+
+    /// Drops the service runtime endpoint, signaling the runtime task to stop.
+    /// Returns the runtime task so the caller can await it outside the lock.
+    pub(crate) fn clear_service_runtime(&mut self) -> Option<web_thread_pool::Task<()>> {
+        self.service_runtime_endpoint.take();
+        self.service_runtime_task.take()
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.

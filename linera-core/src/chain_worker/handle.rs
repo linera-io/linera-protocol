@@ -86,14 +86,20 @@ impl<S: Storage + Clone + 'static> Drop for RollbackGuard<S> {
     }
 }
 
-/// Spawns a blocking task to execute the service runtime endpoint.
+/// The endpoint and background task for a long-lived service runtime.
+pub(crate) struct ServiceRuntimeActor {
+    pub(crate) endpoint: ServiceRuntimeEndpoint,
+    pub(crate) task: web_thread_pool::Task<()>,
+}
+
+/// Spawns a blocking task to execute the service runtime actor.
 pub(crate) async fn spawn_service_runtime_actor(
     chain_id: ChainId,
     thread_pool: &linera_execution::ThreadPool,
-) -> ServiceRuntimeEndpoint {
+) -> ServiceRuntimeActor {
     let (execution_state_sender, incoming_execution_requests) = futures::channel::mpsc::unbounded();
     let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
-    thread_pool
+    let task = thread_pool
         .run((), move |()| async move {
             // The dummy context is overwritten by `prepare_for_query`
             // before the first actual query is executed.
@@ -108,9 +114,12 @@ pub(crate) async fn spawn_service_runtime_actor(
             .run(&runtime_request_receiver)
         })
         .await;
-    ServiceRuntimeEndpoint {
-        incoming_execution_requests,
-        runtime_request_sender,
+    ServiceRuntimeActor {
+        endpoint: ServiceRuntimeEndpoint {
+            incoming_execution_requests,
+            runtime_request_sender,
+        },
+        task,
     }
 }
 
@@ -197,8 +206,18 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
             }
             // Idle long enough. Drop our strong reference if it's the only one.
             match Arc::try_unwrap(state) {
-                Ok(_owned_state) => {
+                Ok(rw_lock) => {
                     tracing::debug!(%chain_id, "Dropping chain worker");
+                    // We have sole ownership — extract the state and
+                    // shut down the service runtime gracefully.
+                    let mut worker_state = RwLock::into_inner(rw_lock);
+                    let task = worker_state.clear_service_runtime();
+                    drop(worker_state);
+                    if let Some(task) = task {
+                        if let Err(err) = task.await {
+                            tracing::warn!(%err, "Failed to shut down service runtime");
+                        }
+                    }
                     break;
                 }
                 Err(arc) => {
