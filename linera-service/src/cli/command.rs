@@ -818,6 +818,10 @@ pub enum ClientCommand {
         #[arg(long)]
         amount: Amount,
 
+        /// The number of tokens to send per daily claim. Set to 0 to disable daily claims.
+        #[arg(long, default_value = "0")]
+        daily_claim_amount: Amount,
+
         /// The end timestamp: The faucet will rate-limit the token supply so it runs out of money
         /// no earlier than this.
         #[arg(long)]

@@ -7,7 +7,11 @@
 
 use std::collections::BTreeMap;
 
-use linera_base::{crypto::ValidatorPublicKey, data_types::ChainDescription};
+use linera_base::{
+    crypto::{CryptoHash, ValidatorPublicKey},
+    data_types::{Amount, ChainDescription, Timestamp},
+    identifiers::ChainId,
+};
 use linera_client::config::GenesisConfig;
 use linera_execution::{committee::ValidatorState, Committee, ResourceControlPolicy};
 use linera_version::VersionInfo;
@@ -25,6 +29,28 @@ pub enum ErrorInner {
 }
 
 thiserror_context::impl_context!(Error(ErrorInner));
+
+/// The result of a successful claim mutation.
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaimOutcome {
+    /// The ID of the chain.
+    pub chain_id: ChainId,
+    /// The hash of the certificate containing the operation.
+    pub certificate_hash: CryptoHash,
+    /// The amount of tokens transferred.
+    pub amount: Amount,
+}
+
+/// Information about the initial chain claim.
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitialClaim {
+    /// The chain ID that was created.
+    pub chain_id: ChainId,
+    /// The block timestamp when the chain was created.
+    pub timestamp: Timestamp,
+}
 
 /// A faucet instance that can be queried.
 #[derive(Debug, Clone)]
@@ -116,6 +142,63 @@ impl Faucet {
             .query::<Response>(format!("mutation {{ claim(owner: \"{owner}\") }}"))
             .await?
             .claim)
+    }
+
+    /// Claims daily tokens for the given owner.
+    /// The user must have already claimed a chain. Each user can claim once per
+    /// 24-hour period.
+    pub async fn daily_claim(
+        &self,
+        owner: &linera_base::identifiers::AccountOwner,
+    ) -> Result<ClaimOutcome, Error> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Response {
+            daily_claim: ClaimOutcome,
+        }
+
+        Ok(self
+            .query::<Response>(format!("mutation {{ dailyClaim(owner: \"{owner}\") }}"))
+            .await?
+            .daily_claim)
+    }
+
+    /// Returns the initial claim for the given owner, if any.
+    pub async fn initial_claim(
+        &self,
+        owner: &linera_base::identifiers::AccountOwner,
+    ) -> Result<Option<InitialClaim>, Error> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Response {
+            initial_claim: Option<InitialClaim>,
+        }
+
+        Ok(self
+            .query::<Response>(format!(
+                "query {{ initialClaim(owner: \"{owner}\") {{ chainId timestamp }} }}"
+            ))
+            .await?
+            .initial_claim)
+    }
+
+    /// Returns the earliest time at which the owner can make a daily claim.
+    /// If the returned timestamp is in the past (or now), the user can claim immediately.
+    /// Returns `None` if the user has not yet completed the initial claim.
+    pub async fn next_daily_claim(
+        &self,
+        owner: &linera_base::identifiers::AccountOwner,
+    ) -> Result<Option<Timestamp>, Error> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Response {
+            next_daily_claim: Option<Timestamp>,
+        }
+
+        Ok(self
+            .query::<Response>(format!("query {{ nextDailyClaim(owner: \"{owner}\") }}"))
+            .await?
+            .next_daily_claim)
     }
 
     pub async fn current_validators(&self) -> Result<Vec<(ValidatorPublicKey, String)>, Error> {
