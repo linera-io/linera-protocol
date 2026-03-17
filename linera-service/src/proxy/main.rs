@@ -319,8 +319,7 @@ where
         let protocol = self.internal_config.protocol;
         let mut select_all = SelectAll::new();
         // Group chains by their owning shard.
-        let mut chains_by_shard =
-            std::collections::HashMap::<usize, Vec<ChainId>>::new();
+        let mut chains_by_shard = std::collections::HashMap::<usize, Vec<ChainId>>::new();
         for chain_id in chains {
             let shard_id = self.internal_config.get_shard_id(chain_id);
             chains_by_shard.entry(shard_id).or_default().push(chain_id);
