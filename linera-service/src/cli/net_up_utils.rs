@@ -34,7 +34,8 @@ struct StorageConfigProvider {
     /// The storage config.
     config: StorageConfig,
     #[cfg(feature = "storage-service")]
-    _service_guard: Option<StorageServiceGuard>,
+    #[allow(dead_code)]
+    service_guard: Option<StorageServiceGuard>,
 }
 
 impl StorageConfigProvider {
@@ -45,8 +46,7 @@ impl StorageConfigProvider {
                 let service_endpoint = linera_base::port::get_free_endpoint().await?;
                 let binary = get_service_storage_binary().await?.display().to_string();
                 let service = StorageService::new(&service_endpoint, binary);
-                let _service_guard = service.run().await?;
-                let _service_guard = Some(_service_guard);
+                let service_guard = Some(service.run().await?);
                 let inner_storage_config = InnerStorageConfig::Service {
                     endpoint: service_endpoint,
                 };
@@ -57,7 +57,7 @@ impl StorageConfigProvider {
                 };
                 Ok(StorageConfigProvider {
                     config,
-                    _service_guard,
+                    service_guard,
                 })
             }
             #[cfg(not(feature = "storage-service"))]
@@ -69,7 +69,7 @@ impl StorageConfigProvider {
                 let config = StorageConfig::from_str(storage)?;
                 Ok(StorageConfigProvider {
                     config,
-                    _service_guard: None,
+                    service_guard: None,
                 })
             }
             #[cfg(not(feature = "storage-service"))]

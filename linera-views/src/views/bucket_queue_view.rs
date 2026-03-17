@@ -779,6 +779,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     /// assert_eq!(queue.elements().await.unwrap(), vec![42]);
     /// # })
     /// ```
+    #[allow(clippy::iter_not_returning_iterator)]
     pub async fn iter_mut(&mut self) -> Result<IterMut<'_, T>, ViewError> {
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())

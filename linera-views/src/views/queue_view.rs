@@ -464,6 +464,7 @@ where
     /// assert_eq!(queue.elements().await.unwrap(), vec![42]);
     /// # })
     /// ```
+    #[allow(clippy::iter_not_returning_iterator)]
     pub async fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())
