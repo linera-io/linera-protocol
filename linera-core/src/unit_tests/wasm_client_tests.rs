@@ -24,8 +24,8 @@ use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
     data_types::{
-        Amount, BlanketMessagePolicy, BlobContent, BlockHeight, Bytecode, ChainDescription, Event,
-        MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
+        Amount, BlanketMessagePolicy, BlobContent, BlockHeight, Bytecode, ChainDescription, Epoch,
+        Event, MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
     },
     identifiers::{
         AccountOwner, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
@@ -684,8 +684,10 @@ where
         .with_policy(ResourceControlPolicy::all_categories());
     builder.set_fault_type([3], FaultType::Offline);
 
-    let sender = builder.add_root_chain(0, Amount::ONE).await?;
-    let sender2 = builder.add_root_chain(1, Amount::ONE).await?;
+    let admin_client = builder.add_root_chain(0, Amount::ONE).await?;
+    let sender = builder.add_root_chain(1, Amount::ONE).await?;
+    let sender2 = builder.add_root_chain(2, Amount::ONE).await?;
+
     // Make sure that sender's chain ID is less than sender2's - important for the final
     // query check
     let (sender, sender2) = if sender.chain_id() < sender2.chain_id() {
@@ -897,6 +899,29 @@ where
         **operation,
         SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 3)])
     );
+
+    // Make sure that the receiver is still at epoch 0.
+    let info = receiver
+        .synchronize_chain_state(receiver.chain_id())
+        .await?;
+    assert_eq!(info.epoch, Epoch(0));
+
+    // While only the social app is whitelisted, the admin chain publishes a new
+    // committee.
+    admin_client
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap();
+
+    // The whitelist should not affect migration to a new epoch.
+    receiver.synchronize_from_validators().await.unwrap();
+    receiver.process_inbox().await.unwrap();
+
+    // The receiver should now be at epoch 1.
+    let info = receiver
+        .synchronize_chain_state(receiver.chain_id())
+        .await?;
+    assert_eq!(info.epoch, Epoch(1));
 
     // Request to unsubscribe from the sender.
     let request_unsubscribe = social::Operation::Unsubscribe {
