@@ -177,6 +177,26 @@ impl std::str::FromStr for Account {
     }
 }
 
+/// A pair of owner and spender accounts for managing allowances.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Allocative)]
+pub struct OwnerSpender {
+    /// Account to withdraw from
+    pub owner: AccountOwner,
+    /// Account to do the withdrawing
+    pub spender: AccountOwner,
+}
+
+impl OwnerSpender {
+    /// Creates a new `OwnerSpender` pair.
+    /// Panics if owner and spender are the same.
+    pub fn new(owner: AccountOwner, spender: AccountOwner) -> Self {
+        if owner == spender {
+            panic!("owner should be different from spender");
+        }
+        Self { owner, spender }
+    }
+}
+
 /// The unique identifier (UID) of a chain. This is currently computed as the hash value
 /// of a [`ChainDescription`].
 #[derive(
@@ -1182,6 +1202,10 @@ doc_scalar!(
 doc_scalar!(
     BlobId,
     "A content-addressed blob ID i.e. the hash of the `BlobContent`"
+);
+bcs_scalar!(
+    OwnerSpender,
+    "A pair of owner and spender accounts for managing allowances"
 );
 
 #[cfg(test)]

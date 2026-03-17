@@ -14,7 +14,7 @@ use linera_chain::{
     manager::{ChainManagerInfo, LockingBlock},
     types::{Certificate, CertificateKind, ConfirmedBlock, Timeout, ValidatedBlock},
 };
-use linera_core::{data_types::CrossChainRequest, node::NodeError};
+use linera_core::{data_types::CrossChainRequest, node::NodeError, worker::Reason};
 use linera_execution::{
     system::{AdminOperation, SystemMessage, SystemOperation},
     Message, MessageKind, Operation,
@@ -81,6 +81,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ChainManagerInfo>(&samples)?;
     tracer.trace_type::<CrossChainRequest>(&samples)?;
     tracer.trace_type::<NodeError>(&samples)?;
+    tracer.trace_type::<Reason>(&samples)?;
     tracer.trace_type::<RpcMessage>(&samples)?;
     tracer.trace_type::<BlobType>(&samples)?;
     tracer.trace_type::<BlobContent>(&samples)?;

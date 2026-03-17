@@ -359,6 +359,16 @@ where
             .collect()
     }
 
+    /// Returns the allowance for a given owner-spender pair.
+    pub fn allowance(&self, _owner: AccountOwner, _spender: AccountOwner) -> Amount {
+        Amount::ZERO
+    }
+
+    /// Returns all allowances on this chain.
+    pub fn allowances(&self) -> Vec<(AccountOwner, AccountOwner, Amount)> {
+        Vec::new()
+    }
+
     /// Schedules an operation to be included in the block being built.
     ///
     /// The operation is specified as an opaque blob of bytes.

@@ -10,10 +10,10 @@ use fungible::Parameters;
 use linera_sdk::{
     abis::fungible::{FungibleOperation, FungibleTokenAbi},
     graphql::GraphQLMutationRoot as _,
-    linera_base_types::{AccountOwner, WithServiceAbi},
+    linera_base_types::{AccountOwner, OwnerSpender, WithServiceAbi},
     Service, ServiceRuntime,
 };
-use native_fungible::{AccountEntry, TICKER_SYMBOL};
+use native_fungible::{AccountEntry, AllowanceEntry, TICKER_SYMBOL};
 
 #[derive(Clone)]
 pub struct NativeFungibleTokenService {
@@ -75,6 +75,29 @@ impl Accounts {
     }
 }
 
+struct Allowances {
+    runtime: Arc<ServiceRuntime<NativeFungibleTokenService>>,
+}
+
+#[Object]
+impl Allowances {
+    async fn entry(&self, key: OwnerSpender) -> AllowanceEntry {
+        let value = self.runtime.allowance(key.owner, key.spender);
+        AllowanceEntry { key, value }
+    }
+
+    async fn entries(&self) -> Vec<AllowanceEntry> {
+        self.runtime
+            .allowances()
+            .into_iter()
+            .map(|(owner, spender, amount)| AllowanceEntry {
+                key: OwnerSpender { owner, spender },
+                value: amount,
+            })
+            .collect()
+    }
+}
+
 // Implements additional fields not derived from struct members of FungibleToken.
 #[Object]
 impl NativeFungibleTokenService {
@@ -84,6 +107,12 @@ impl NativeFungibleTokenService {
 
     async fn accounts(&self) -> Result<Accounts, async_graphql::Error> {
         Ok(Accounts {
+            runtime: self.runtime.clone(),
+        })
+    }
+
+    async fn allowances(&self) -> Result<Allowances, async_graphql::Error> {
+        Ok(Allowances {
             runtime: self.runtime.clone(),
         })
     }
