@@ -329,7 +329,7 @@ where
 
         let chain_id = self.faucet_storage.get_chain_id(&owner).await?;
 
-        chain_id.ok_or(Error::new("This user has no chain yet"))
+        chain_id.ok_or_else(|| Error::new("This user has no chain yet"))
     }
 
     /// Returns the initial claim for the given owner, if any.

@@ -372,8 +372,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     }
                 }
             }
-            let uri = uri.unwrap_or("localhost:9042".to_string());
-            let namespace = namespace.unwrap_or(DEFAULT_NAMESPACE.to_string());
+            let uri = uri.unwrap_or_else(|| "localhost:9042".to_string());
+            let namespace = namespace.unwrap_or_else(|| DEFAULT_NAMESPACE.to_string());
             let inner_storage_config = InnerStorageConfig::ScyllaDb { uri };
             debug!("ScyllaDB connection info: {:?}", inner_storage_config);
             return Ok(StorageConfig {
