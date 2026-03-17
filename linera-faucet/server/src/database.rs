@@ -234,9 +234,9 @@ impl FaucetDatabase {
         Ok(Some(chain_id))
     }
 
-    /// Gets the claim record for an owner, if they have claimed a chain.
-    /// Returns the chain ID and timestamp of the claim.
-    pub async fn last_claim(&self, owner: &AccountOwner) -> anyhow::Result<Option<ClaimRecord>> {
+    /// Gets the initial claim record for an owner, if they have claimed a chain.
+    /// Returns the chain ID and the block timestamp of the initial claim.
+    pub async fn initial_claim(&self, owner: &AccountOwner) -> anyhow::Result<Option<ClaimRecord>> {
         let owner_str = owner.to_string();
 
         let Some(row) = sqlx::query("SELECT chain_id, created_at FROM chains WHERE owner = ?")
