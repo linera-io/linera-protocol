@@ -187,22 +187,23 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
     ttl: Duration,
 ) {
     linera_base::Task::spawn(async move {
-        linera_base::time::timer::sleep(ttl).await;
         loop {
-            if let Some(remaining) = ttl.checked_sub(last_access.elapsed()) {
+            while let Some(remaining) = ttl
+                .checked_sub(last_access.elapsed())
+                .filter(|remaining| *remaining > Duration::ZERO)
+            {
                 // Touched recently — sleep for the remaining time.
                 linera_base::time::timer::sleep(remaining).await;
-            } else {
-                // Idle long enough. Drop our strong reference if it's the only one.
-                match Arc::try_unwrap(state) {
-                    Ok(_owned_state) => {
-                        tracing::debug!(%chain_id, "Dropping chain worker");
-                        break;
-                    }
-                    Err(arc) => {
-                        arc.read().await.touch();
-                        state = arc;
-                    }
+            }
+            // Idle long enough. Drop our strong reference if it's the only one.
+            match Arc::try_unwrap(state) {
+                Ok(_owned_state) => {
+                    tracing::debug!(%chain_id, "Dropping chain worker");
+                    break;
+                }
+                Err(arc) => {
+                    arc.read().await.touch();
+                    state = arc;
                 }
             }
         }
