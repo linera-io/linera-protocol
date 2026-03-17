@@ -1,0 +1,11 @@
+[build]
+# Required for rustc to accept the custom wasm32-linera-chain target spec.
+rustflags = ["-Zunstable-options"]
+
+[env]
+# Makes the linera's wasm32-linera-chain target available.
+RUST_TARGET_PATH = { value = "", relative = true }
+
+[unstable]
+build-std = ["std", "panic_abort"]
+json-target-spec = true

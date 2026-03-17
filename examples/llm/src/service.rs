@@ -94,7 +94,7 @@ impl Service for LlmService {
         ));
         let raw_weights = response.body;
         assert_eq!(
-            Sha3_256::digest(&raw_weights).as_slice(),
+            &Sha3_256::digest(&raw_weights)[..],
             WEIGHTS_HASH,
             "Incorrect model was fetched"
         );
@@ -106,7 +106,7 @@ impl Service for LlmService {
         ));
         let tokenizer_bytes = response.body;
         assert_eq!(
-            Sha3_256::digest(&tokenizer_bytes).as_slice(),
+            &Sha3_256::digest(&tokenizer_bytes)[..],
             TOKENIZER_HASH,
             "Incorrect tokenizer was fetched"
         );

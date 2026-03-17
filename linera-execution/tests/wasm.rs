@@ -23,8 +23,8 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[cfg_attr(with_wasmer, test_case(WasmRuntime::Wasmer, 71_229; "wasmer"))]
-#[cfg_attr(with_wasmtime, test_case(WasmRuntime::Wasmtime, 71_229; "wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmRuntime::Wasmer, 32_142; "wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmRuntime::Wasmtime, 32_142; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,

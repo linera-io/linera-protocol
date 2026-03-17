@@ -52,6 +52,12 @@ impl Project {
         debug!("Writing rust-toolchain.toml");
         Self::create_rust_toolchain(&root)?;
 
+        debug!("Writing .cargo/config.toml");
+        Self::create_cargo_config(&root)?;
+
+        debug!("Writing wasm32-linera-chain.json");
+        Self::create_wasm_target(&root)?;
+
         debug!("Writing state.rs");
         Self::create_state_file(&source_directory, name)?;
 
@@ -169,6 +175,22 @@ impl Project {
         Self::write_string_to_file(
             &project_root.join("rust-toolchain.toml"),
             include_str!("../template/rust-toolchain.toml.template"),
+        )
+    }
+
+    fn create_cargo_config(project_root: &Path) -> Result<()> {
+        let cargo_dir = project_root.join(".cargo");
+        fs_err::create_dir_all(&cargo_dir)?;
+        Self::write_string_to_file(
+            &cargo_dir.join("config.toml"),
+            include_str!("../template/.cargo/config.toml.template"),
+        )
+    }
+
+    fn create_wasm_target(project_root: &Path) -> Result<()> {
+        Self::write_string_to_file(
+            &project_root.join("wasm32-linera-chain.json"),
+            include_str!("../template/wasm32-linera-chain.json"),
         )
     }
 

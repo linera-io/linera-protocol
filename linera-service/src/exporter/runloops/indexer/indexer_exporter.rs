@@ -272,7 +272,7 @@ where
                     retries += 1;
                     if retries == 1 {
                         tracing::info!(index, "waiting for block to be processed");
-                    } else if retries % 60 == 0 {
+                    } else if retries.is_multiple_of(60) {
                         tracing::warn!(index, retries, "still waiting for block to be processed");
                     }
                     tokio::time::sleep(Duration::from_secs(1)).await

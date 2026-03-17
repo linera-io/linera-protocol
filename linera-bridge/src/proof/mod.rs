@@ -455,7 +455,7 @@ pub fn build_receipt_proof(
         .iter()
         .map(|(idx, rlp)| (receipt_trie_key(*idx), rlp.as_slice()))
         .collect();
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    entries.sort_by_key(|a| a.0);
 
     let target_key = receipt_trie_key(target_tx_index);
     let retainer = ProofRetainer::new(vec![target_key]);
