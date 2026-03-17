@@ -1671,11 +1671,13 @@ where
                 }
             }
             let hashes = chain.confirmed_log.multi_get(indices).await?;
-            for (hash, (stream_id, height)) in hashes.into_iter().zip(streams_with_heights) {
-                if let Some(hash) = hash {
-                    info.requested_previous_event_blocks
-                        .insert(stream_id, (height, hash));
-                }
+            for (maybe_hash, (stream_id, height)) in hashes.into_iter().zip(streams_with_heights) {
+                let hash = maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
+                    height,
+                    chain_id: info.chain_id,
+                })?;
+                info.requested_previous_event_blocks
+                    .insert(stream_id, (height, hash));
             }
         }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
