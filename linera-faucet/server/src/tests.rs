@@ -23,7 +23,9 @@ use tempfile::TempDir;
 use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
 
-use crate::database::FaucetDatabase;
+use crate::{
+    database::FaucetDatabase, BatchProcessor, BatchProcessorConfig, MutationRoot, PendingRequest,
+};
 
 struct ClientContext {
     client: ChainClient<environment::Test>,
@@ -81,12 +83,12 @@ impl chain_listener::ClientContext for ClientContext {
 
 /// Holds all components needed by faucet tests after common setup.
 struct FaucetTestEnv {
-    root: super::MutationRoot<environment::TestStorage>,
+    root: MutationRoot<environment::TestStorage>,
     context: Arc<Mutex<ClientContext>>,
     client: ChainClient<environment::Test>,
     clock: TestClock,
     faucet_storage: Arc<FaucetDatabase>,
-    pending_requests: Arc<Mutex<VecDeque<super::PendingRequest>>>,
+    pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
     storage_path: PathBuf,
     _temp_dir: TempDir,
@@ -96,36 +98,20 @@ struct FaucetTestConfig {
     initial_tokens: u128,
     initial_claim_amount: Amount,
     daily_claim_amount: Amount,
-    batch_config: super::BatchProcessorConfig,
+    batch_config: BatchProcessorConfig,
 }
 
 impl FaucetTestConfig {
-    /// Standard config with rate limiting enabled.
-    fn rate_limited(initial_tokens: u128, end_micros: u64) -> Self {
+    fn new(initial_tokens: u128) -> Self {
         Self {
             initial_tokens,
             initial_claim_amount: Amount::from_tokens(1),
             daily_claim_amount: Amount::ZERO,
-            batch_config: super::BatchProcessorConfig {
-                end_timestamp: Timestamp::from(end_micros),
-                start_timestamp: Timestamp::from(0),
-                start_balance: Amount::from_tokens(initial_tokens),
-                max_batch_size: 1,
-            },
-        }
-    }
-
-    /// Config with rate limiting disabled (all tokens immediately available).
-    fn no_rate_limit(initial_tokens: u128, max_batch_size: usize) -> Self {
-        Self {
-            initial_tokens,
-            initial_claim_amount: Amount::from_tokens(1),
-            daily_claim_amount: Amount::ZERO,
-            batch_config: super::BatchProcessorConfig {
+            batch_config: BatchProcessorConfig {
                 end_timestamp: Timestamp::from(0),
                 start_timestamp: Timestamp::from(0),
                 start_balance: Amount::from_tokens(initial_tokens),
-                max_batch_size,
+                max_batch_size: 1,
             },
         }
     }
@@ -154,7 +140,7 @@ impl FaucetTestEnv {
         let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
         let request_notifier = Arc::new(Notify::new());
 
-        let root = super::MutationRoot {
+        let root = MutationRoot {
             faucet_storage: Arc::clone(&faucet_storage),
             pending_requests: Arc::clone(&pending_requests),
             request_notifier: Arc::clone(&request_notifier),
@@ -177,8 +163,8 @@ impl FaucetTestEnv {
     }
 
     /// Spawns the batch processor and returns a handle to stop it.
-    fn spawn_processor(&self, batch_config: super::BatchProcessorConfig) -> BatchProcessorHandle {
-        let batch_processor = super::BatchProcessor::new(
+    fn spawn_processor(&self, batch_config: BatchProcessorConfig) -> BatchProcessorHandle {
+        let batch_processor = BatchProcessor::new(
             batch_config,
             Arc::clone(&self.context),
             self.client.clone(),
@@ -205,24 +191,21 @@ impl FaucetTestEnv {
     fn new_faucet_instance(
         &self,
         faucet_storage: Arc<FaucetDatabase>,
-        batch_config: super::BatchProcessorConfig,
-    ) -> (
-        super::MutationRoot<environment::TestStorage>,
-        BatchProcessorHandle,
-    ) {
+        batch_config: BatchProcessorConfig,
+    ) -> (MutationRoot<environment::TestStorage>, BatchProcessorHandle) {
         let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
         let request_notifier = Arc::new(Notify::new());
 
-        let root = super::MutationRoot {
+        let root = MutationRoot {
             faucet_storage: Arc::clone(&faucet_storage),
             pending_requests: Arc::clone(&pending_requests),
             request_notifier: Arc::clone(&request_notifier),
             storage: self.client.storage_client().clone(),
-            initial_claim_amount: Amount::from_tokens(1),
-            daily_claim_amount: Amount::ZERO,
+            initial_claim_amount: self.root.initial_claim_amount,
+            daily_claim_amount: self.root.daily_claim_amount,
         };
 
-        let batch_processor = super::BatchProcessor::new(
+        let batch_processor = BatchProcessor::new(
             batch_config,
             Arc::clone(&self.context),
             self.client.clone(),
@@ -263,7 +246,8 @@ impl BatchProcessorHandle {
 
 #[tokio::test]
 async fn test_faucet_rate_limiting() -> anyhow::Result<()> {
-    let config = FaucetTestConfig::rate_limited(6, 6000);
+    let mut config = FaucetTestConfig::new(6);
+    config.batch_config.end_timestamp = Timestamp::from(6000);
     let batch_config = config.batch_config.clone();
     let env = FaucetTestEnv::new(config).await?;
     let handle = env.spawn_processor(batch_config);
@@ -376,14 +360,14 @@ async fn test_batch_size_reduction_on_limit_errors() -> anyhow::Result<()> {
 
     // Create batch processor with initial batch size of 3 and disabled rate limiting
     let initial_batch_size = 3;
-    let config = super::BatchProcessorConfig {
+    let config = BatchProcessorConfig {
         start_balance: Amount::from_tokens(100),
         start_timestamp: Timestamp::from(0),
         end_timestamp: Timestamp::from(0), // All tokens are unlocked: no rate limiting.
         max_batch_size: initial_batch_size,
     };
 
-    let mut batch_processor = super::BatchProcessor::new(
+    let mut batch_processor = BatchProcessor::new(
         config,
         Arc::clone(&context),
         client,
@@ -404,7 +388,7 @@ async fn test_batch_size_reduction_on_limit_errors() -> anyhow::Result<()> {
         let mut pending_requests_guard = pending_requests.lock().await;
         for owner in owners {
             let (tx, _rx) = oneshot::channel();
-            pending_requests_guard.push_back(super::PendingRequest {
+            pending_requests_guard.push_back(PendingRequest {
                 owner,
                 target_chain_id: None,
                 amount: Amount::from_tokens(1),
@@ -428,7 +412,8 @@ async fn test_batch_size_reduction_on_limit_errors() -> anyhow::Result<()> {
 async fn test_faucet_persistence() -> anyhow::Result<()> {
     // Test that the faucet correctly persists chain IDs and retrieves them after restart.
 
-    let config = FaucetTestConfig::rate_limited(6, 6000);
+    let mut config = FaucetTestConfig::new(6);
+    config.batch_config.end_timestamp = Timestamp::from(6000);
     let batch_config = config.batch_config.clone();
     let env = FaucetTestEnv::new(config).await?;
     let handle = env.spawn_processor(batch_config.clone());
@@ -565,7 +550,8 @@ async fn test_faucet_persistence() -> anyhow::Result<()> {
 async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
     // Test that the faucet correctly syncs with blockchain after database deletion.
 
-    let config = FaucetTestConfig::rate_limited(6, 6000);
+    let mut config = FaucetTestConfig::new(6);
+    config.batch_config.end_timestamp = Timestamp::from(6000);
     let batch_config = config.batch_config.clone();
     let env = FaucetTestEnv::new(config).await?;
     let handle = env.spawn_processor(batch_config.clone());
@@ -686,7 +672,8 @@ async fn test_daily_claim_flow() -> anyhow::Result<()> {
     // Test the full daily claim flow: create a chain, then make a daily claim.
 
     let daily_amount = Amount::from_millis(500);
-    let mut config = FaucetTestConfig::no_rate_limit(100, 10);
+    let mut config = FaucetTestConfig::new(100);
+    config.batch_config.max_batch_size = 10;
     config.daily_claim_amount = daily_amount;
     let batch_config = config.batch_config.clone();
     let env = FaucetTestEnv::new(config).await?;
