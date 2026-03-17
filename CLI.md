@@ -156,6 +156,12 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-backoff-ms <MAX_BACKOFF>` — Maximum backoff delay for retrying to connect to a validator
 
   Default value: `30000`
+* `--notification-circuit-breaker-initial-probe-interval-ms <NOTIFICATION_CIRCUIT_BREAKER_INITIAL_PROBE_INTERVAL>` — Initial probe interval (ms) for the notification circuit breaker. When a validator's notification stream exhausts retries, the circuit breaker waits this long before probing again. Doubles on each failed probe
+
+  Default value: `300000`
+* `--notification-circuit-breaker-max-probe-interval-ms <NOTIFICATION_CIRCUIT_BREAKER_MAX_PROBE_INTERVAL>` — Maximum probe interval (ms) for the notification circuit breaker. The probe interval doubles on each failure but is capped at this value
+
+  Default value: `3600000`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--allow-fast-blocks` — Whether to allow creating blocks in the fast round. Fast blocks have lower latency but must be used carefully so that there are never any conflicting fast block proposals
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries

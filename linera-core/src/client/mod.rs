@@ -1908,6 +1908,18 @@ pub struct ChainClientOptions {
     /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
     /// must be used carefully so that there are never any conflicting fast block proposals.
     pub allow_fast_blocks: bool,
+    /// Initial probe interval for the notification circuit breaker. When a validator's
+    /// notification stream exhausts retries, the circuit breaker waits this long before
+    /// probing again. Doubles on each failed probe.
+    pub notification_circuit_breaker_initial_probe_interval: Duration,
+    /// Maximum probe interval for the notification circuit breaker. The probe interval
+    /// doubles on each failure but is capped at this value.
+    pub notification_circuit_breaker_max_probe_interval: Duration,
+}
+
+struct CircuitBreakerState {
+    next_probe_at: Instant,
+    probe_interval: Duration,
 }
 
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
@@ -1932,6 +1944,8 @@ impl ChainClientOptions {
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
+            notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
+            notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
         }
     }
 }
@@ -4593,7 +4607,8 @@ impl<Env: Environment> ChainClient<Env> {
             }
         }
 
-        let mut senders = HashMap::new(); // Senders to cancel notification streams.
+        let mut senders = HashMap::new();
+        let mut circuit_breakers: HashMap<ValidatorPublicKey, CircuitBreakerState> = HashMap::new();
         let notifications = self.subscribe()?;
         let (abortable_notifications, abort) = stream::abortable(self.subscribe()?);
 
@@ -4605,7 +4620,10 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut process_notifications = FuturesUnordered::new();
 
-        match self.update_notification_streams(&mut senders).await {
+        match self
+            .update_notification_streams(&mut senders, &mut circuit_breakers)
+            .await
+        {
             Ok(handler) => process_notifications.push(handler),
             Err(error) => error!("Failed to update committee: {error}"),
         };
@@ -4627,7 +4645,8 @@ impl<Env: Environment> ChainClient<Env> {
                         .is_some_and(|m| matches!(m, ListeningMode::EventsOnly(_)));
                     if !is_events_only {
                         match Box::pin(await_while_polling(
-                            this.update_notification_streams(&mut senders).fuse(),
+                            this.update_notification_streams(&mut senders, &mut circuit_breakers)
+                                .fuse(),
                             &mut process_notifications,
                         ))
                         .await
@@ -4650,11 +4669,17 @@ impl<Env: Environment> ChainClient<Env> {
         Ok((update_streams, AbortOnDrop(abort), notifications))
     }
 
-    #[instrument(level = "trace", skip(senders))]
+    #[instrument(level = "trace", skip(senders, circuit_breakers))]
     async fn update_notification_streams(
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
+        circuit_breakers: &mut HashMap<ValidatorPublicKey, CircuitBreakerState>,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
+        let initial_probe_interval = self
+            .options
+            .notification_circuit_breaker_initial_probe_interval;
+        let max_probe_interval = self.options.notification_circuit_breaker_max_probe_interval;
+
         let events_only = self
             .listening_mode()
             .is_some_and(|m| matches!(m, ListeningMode::EventsOnly(_)));
@@ -4675,20 +4700,74 @@ impl<Env: Environment> ChainClient<Env> {
                 .collect();
             (nodes, self.client.local_node.clone())
         };
-        // Drop removed validators.
+
+        // Detect circuit breaker state transitions before cleaning up senders.
+        for (validator, abort) in senders.iter() {
+            if abort.is_aborted() && nodes.contains_key(validator) {
+                if let Some(state) = circuit_breakers.get_mut(validator) {
+                    // Was probing → probe failed → escalate interval.
+                    state.probe_interval = (state.probe_interval * 2).min(max_probe_interval);
+                    state.next_probe_at = Instant::now() + state.probe_interval;
+                    warn!(
+                        %validator,
+                        chain_id = %self.chain_id,
+                        next_probe_in = ?state.probe_interval,
+                        "Validator still unhealthy after probe; increasing probe interval"
+                    );
+                } else {
+                    // First failure → enter circuit breaker.
+                    circuit_breakers.insert(
+                        *validator,
+                        CircuitBreakerState {
+                            next_probe_at: Instant::now() + initial_probe_interval,
+                            probe_interval: initial_probe_interval,
+                        },
+                    );
+                    error!(
+                        %validator,
+                        chain_id = %self.chain_id,
+                        next_probe_in = ?initial_probe_interval,
+                        "Validator notification stream ended; entering circuit breaker"
+                    );
+                }
+            } else if !abort.is_aborted() && circuit_breakers.contains_key(validator) {
+                // Stream alive while in circuit breaker → probe succeeded → recovered.
+                info!(
+                    %validator,
+                    chain_id = %self.chain_id,
+                    "Validator recovered from circuit breaker"
+                );
+                circuit_breakers.remove(validator);
+            }
+        }
+
         senders.retain(|validator, abort| {
             if !nodes.contains_key(validator) {
                 abort.abort();
             }
             !abort.is_aborted()
         });
-        // Add tasks for new validators.
+        circuit_breakers.retain(|validator, _| nodes.contains_key(validator));
+
         let validator_tasks = FuturesUnordered::new();
         for (public_key, node) in nodes {
-            let address = node.address();
             let hash_map::Entry::Vacant(entry) = senders.entry(public_key) else {
                 continue;
             };
+
+            // Circuit breaker: skip if not time to probe yet.
+            if let Some(state) = circuit_breakers.get(&public_key) {
+                if Instant::now() < state.next_probe_at {
+                    continue;
+                }
+                debug!(
+                    validator = %public_key,
+                    chain_id = %self.chain_id,
+                    "Probing unhealthy validator"
+                );
+            }
+
+            let address = node.address();
             let this = self.clone();
             let stream = stream::once({
                 let node = node.clone();
@@ -4720,8 +4799,8 @@ impl<Env: Environment> ChainClient<Env> {
             })
             .flatten();
             let (stream, abort) = stream::abortable(stream);
-            let mut stream = Box::pin(stream);
             let abort_on_exit = abort.clone();
+            let mut stream = Box::pin(stream);
             let this = self.clone();
             let local_node = local_node.clone();
             let remote_node = RemoteNode { public_key, node };
@@ -4747,7 +4826,7 @@ impl<Env: Environment> ChainClient<Env> {
                 warn!(
                     chain_id = %this.chain_id,
                     address = remote_node.address(),
-                    "Validator notification stream ended; will reconnect on next update"
+                    "Validator notification stream ended"
                 );
                 abort_on_exit.abort();
             });
