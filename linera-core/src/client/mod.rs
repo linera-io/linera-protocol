@@ -375,9 +375,7 @@ impl<Env: Environment> Client<Env> {
             .chain_modes
             .write()
             .expect("Panics should not happen while holding a lock to `chain_modes`");
-        let entry = chain_modes
-            .entry(chain_id)
-            .or_insert_with(|| mode.clone());
+        let entry = chain_modes.entry(chain_id).or_insert_with(|| mode.clone());
         entry.extend(Some(mode));
         entry.clone()
     }

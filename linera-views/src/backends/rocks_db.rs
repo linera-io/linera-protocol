@@ -734,7 +734,10 @@ impl PathWithGuard {
         let dir = TempDir::new().unwrap();
         let path_buf = dir.path().to_path_buf();
         let dir_guard = Some(Arc::new(dir));
-        PathWithGuard { path_buf, dir_guard }
+        PathWithGuard {
+            path_buf,
+            dir_guard,
+        }
     }
 }
 
