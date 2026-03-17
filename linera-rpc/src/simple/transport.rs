@@ -317,7 +317,7 @@ where
     /// Gracefully shuts down the server, waiting for existing tasks to finish.
     async fn shutdown(&mut self) {
         let handlers = mem::take(&mut self.active_handlers);
-        let mut handler_results = FuturesUnordered::from_iter(handlers.into_values());
+        let mut handler_results = handlers.into_values().collect::<FuturesUnordered<_>>();
 
         while let Some(result) = handler_results.next().await {
             if let Err(error) = result {

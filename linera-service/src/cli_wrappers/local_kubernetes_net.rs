@@ -123,7 +123,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             self.explorer_image_name,
             self.dual_store,
             self.path_provider,
-        )?;
+        );
 
         let client = net.make_client().await;
         net.generate_initial_validator_config().await.unwrap();
@@ -272,8 +272,8 @@ impl LocalKubernetesNet {
         explorer_image_name: String,
         dual_store: bool,
         path_provider: PathProvider,
-    ) -> Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             network,
             testing_prng_seed,
             next_client_id: 0,
@@ -291,7 +291,7 @@ impl LocalKubernetesNet {
             explorer_image_name,
             dual_store,
             path_provider,
-        })
+        }
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {

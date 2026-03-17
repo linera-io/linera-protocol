@@ -2,7 +2,7 @@
 rustflags = [
     # support threading
     "-C", "target-feature=+atomics,+bulk-memory,+mutable-globals,+reference-types",
-    # allow linking C code (for `rust_secp256k1`)
+    # allow unstable Web APIs needed by `web-sys` bindings used in the web client
     "--cfg=web_sys_unstable_apis",
     "-Z", "wasm_c_abi=spec",
 ]
