@@ -309,20 +309,29 @@ where
         SocketAddr::from(([0, 0, 0, 0], self.port()))
     }
 
-    /// Subscribes to notification streams from all shards for the given chains.
+    /// Subscribes to notification streams from shards for the given chains.
+    /// Each chain is routed to its owning shard, so we only subscribe to the
+    /// shards that actually own at least one of the requested chains.
     async fn subscribe_to_shards(
         &self,
         chains: Vec<ChainId>,
     ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
         let protocol = self.internal_config.protocol;
         let mut select_all = SelectAll::new();
-        // Connect to each shard and subscribe. We send all chains to every shard;
-        // each shard filters for the chains it owns.
-        for shard in &self.internal_config.shards {
+        // Group chains by their owning shard.
+        let mut chains_by_shard =
+            std::collections::HashMap::<usize, Vec<ChainId>>::new();
+        for chain_id in chains {
+            let shard_id = self.internal_config.get_shard_id(chain_id);
+            chains_by_shard.entry(shard_id).or_default().push(chain_id);
+        }
+        // Only connect to shards that own at least one requested chain.
+        for (shard_id, shard_chains) in chains_by_shard {
+            let shard = &self.internal_config.shards[shard_id];
             let address = (shard.host.clone(), shard.port);
             match protocol.connect(address).await {
                 Ok(mut connection) => {
-                    let subscribe_msg = RpcMessage::SubscribeNotifications(chains.clone());
+                    let subscribe_msg = RpcMessage::SubscribeNotifications(shard_chains);
                     if let Err(error) = connection.send(subscribe_msg).await {
                         error!(%error, "Failed to send subscribe to shard");
                         continue;
