@@ -59,15 +59,13 @@ impl WasmContractModule {
     /// Creates a new [`WasmContractModule`] using Wasmer with the provided bytecode files.
     pub async fn from_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
-        let (engine, module) = contract_cache
+        let entry = contract_cache
             .get_or_insert_with(contract_bytecode, |bytecode| {
                 let metered_bytecode = add_metering(&bytecode)?;
                 CachedContractModule::new(metered_bytecode)
             })
-            .map_err(WasmExecutionError::LoadContractModule)?
-            .create_execution_instance()
             .map_err(WasmExecutionError::LoadContractModule)?;
-        Ok(WasmContractModule::Wasmer { engine, module })
+        Ok(WasmContractModule::Wasmer { engine: entry.engine.clone(), module: entry.module.clone() })
     }
 }
 
@@ -224,21 +222,5 @@ impl CachedContractModule {
 
         #[cfg(web)]
         wasmer::Engine::default()
-    }
-
-    /// Creates a [`Module`] and [`Engine`] pair ready for contract execution.
-    #[allow(clippy::unnecessary_wraps)]
-    pub fn create_execution_instance(
-        &self,
-    ) -> Result<(wasmer::Engine, wasmer::Module), anyhow::Error> {
-        #[cfg(web)]
-        {
-            Ok((self.engine.clone(), self.module.clone()))
-        }
-
-        #[cfg(not(web))]
-        {
-            Ok((self.engine.clone(), self.module.clone()))
-        }
     }
 }
