@@ -2469,6 +2469,12 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     });
     assert_eq!(app3.query(query).await?, expected_response);
 
+    // Verify that the sparse sync for client3 did not download the non-event transfer block:
+    // the tip of chain1 as seen by client3 should match the tip seen by client2 (which also
+    // only has event-bearing blocks).
+    let tip_client3 = node_service3.chain_tip(chain1).await?;
+    assert_eq!(tip_after_first_post, tip_client3);
+
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
     node_service3.ensure_is_running()?;

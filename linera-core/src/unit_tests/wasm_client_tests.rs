@@ -28,7 +28,8 @@ use linera_base::{
         MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId,
+        StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -798,13 +799,23 @@ where
     };
     assert_eq!(outcome, expected);
 
-    // Make two more posts.
+    // Make a non-event operation on the sender chain (self-transfer), then another post.
+    let non_event_cert = sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_millis(1),
+            Account::chain(sender.chain_id()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
     let text = "Follow sender2!".to_string();
     let post = social::Operation::Post {
         text: text.clone(),
         image_url: None,
     };
-    let cert1 = sender
+    let cert2 = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
         .unwrap_ok_committed();
@@ -898,7 +909,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(2), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(3), 3)
             .await,
         Some(cert)
     );
@@ -961,11 +972,18 @@ where
             .contains_certificate(cert0.hash())
             .await?
     );
+    // Non-event block should NOT be downloaded (partial sync).
+    assert!(
+        !receiver2
+            .storage_client()
+            .contains_certificate(non_event_cert.hash())
+            .await?
+    );
     // Latest event-bearing block should be downloaded.
     assert!(
         receiver2
             .storage_client()
-            .contains_certificate(cert1.hash())
+            .contains_certificate(cert2.hash())
             .await?
     );
 
