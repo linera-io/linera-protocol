@@ -741,10 +741,10 @@ where
 
     /// Gets or creates a chain worker for the given chain.
     ///
-    /// A single `compute` call per iteration handles all cases atomically:
-    /// live worker, loading in progress, or empty/stale slot. The loader
-    /// sends the `Weak` through a oneshot channel so waiters receive it
-    /// directly without re-accessing the map.
+    /// The oneshot channel is created outside the `compute` closure to keep
+    /// the closure pure (papaya may call it more than once on CAS retry and
+    /// may memoize the output). If the fast path hits, the unused channel is
+    /// dropped harmlessly.
     ///
     /// Returns a type-erased future to keep `!Sync` intermediate types (e.g.
     /// `std::sync::mpsc::Receiver` from `handle::spawn_service_runtime_actor`) out of
@@ -759,32 +759,27 @@ where
     > {
         Box::pin(wrap_future(async move {
             loop {
-                // Single atomic compute handles all cases. The oneshot
-                // channel is only created when we need to insert a loading
-                // sentinel. The papaya guard is !Send, so it must be
-                // dropped before any .await point.
-                let mut tx_slot = None;
+                // Create the channel outside the closure so that the tx/rx
+                // always match regardless of CAS retries.
+                let (tx, rx) = oneshot::channel();
+                let shared_rx = rx.shared();
+
+                // The papaya guard is !Send, so it must be dropped before
+                // any .await point.
                 let wait = {
                     let guard = self.chain_workers.guard();
                     match self.chain_workers.compute(
                         chain_id,
-                        |existing| {
-                            let mut insert = || {
-                                let (tx, rx) = oneshot::channel();
-                                tx_slot = Some(tx);
-                                papaya::Operation::Insert(rx.shared())
-                            };
-                            match existing {
-                                Some((_, entry)) => match entry.peek() {
-                                    Some(Ok(weak)) => match weak.upgrade() {
-                                        Some(arc) => papaya::Operation::Abort(Ok(arc)),
-                                        None => insert(),
-                                    },
-                                    Some(Err(_)) => insert(),
-                                    None => papaya::Operation::Abort(Err(entry.clone())),
+                        |existing| match existing {
+                            Some((_, entry)) => match entry.peek() {
+                                Some(Ok(weak)) => match weak.upgrade() {
+                                    Some(arc) => papaya::Operation::Abort(Ok(arc)),
+                                    None => papaya::Operation::Insert(shared_rx.clone()),
                                 },
-                                None => insert(),
-                            }
+                                Some(Err(_)) => papaya::Operation::Insert(shared_rx.clone()),
+                                None => papaya::Operation::Abort(Err(entry.clone())),
+                            },
+                            None => papaya::Operation::Insert(shared_rx.clone()),
                         },
                         &guard,
                     ) {
@@ -806,10 +801,9 @@ where
                     continue;
                 }
 
-                // We own the loading slot. Load from storage.
+                // We claimed the loading slot. Load from storage.
                 // On success, send the Weak through the channel.
                 // On error, dropping tx wakes waiters so they can retry.
-                let tx = tx_slot.expect("tx must be set when we claimed the loading slot");
                 match self.load_chain_worker(chain_id).await {
                     Ok(worker) => {
                         let _ = tx.send(Arc::downgrade(&worker));
