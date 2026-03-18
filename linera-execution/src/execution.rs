@@ -331,11 +331,7 @@ where
                 );
 
                 for (code, description) in codes.0.into_iter().zip(descriptions) {
-                    runtime.preload_service(
-                        ApplicationId::from(&description),
-                        code,
-                        description,
-                    )?;
+                    runtime.preload_service(ApplicationId::from(&description), code, description);
                 }
 
                 runtime.run_query(application_id, query)

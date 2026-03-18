@@ -14,6 +14,8 @@ interface base-runtime-api {
     read-owner-balance: func(owner: account-owner) -> amount;
     read-owner-balances: func() -> list<tuple<account-owner, amount>>;
     read-balance-owners: func() -> list<account-owner>;
+    read-allowance: func(owner: account-owner, spender: account-owner) -> amount;
+    read-allowances: func() -> list<tuple<account-owner, account-owner, amount>>;
     perform-http-request: func(request: http-request) -> http-response;
     assert-before: func(timestamp: timestamp);
     read-data-blob: func(hash: data-blob-hash) -> list<u8>;

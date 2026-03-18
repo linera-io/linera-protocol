@@ -75,6 +75,7 @@ rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
+tokio-stream.workspace = true
 tokio-util = { workspace = true, optional = true, features = ["codec"] }
 tonic-health = { workspace = true, optional = true }
 tonic-reflection = { workspace = true, optional = true }

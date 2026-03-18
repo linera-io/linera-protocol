@@ -60,8 +60,16 @@ impl Contract for NativeFungibleTokenContract {
                 FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL))
             }
 
-            FungibleOperation::Approve { .. } => {
-                panic!("Approve operation is not supported by native fungible token")
+            FungibleOperation::Approve {
+                owner,
+                spender,
+                allowance,
+            } => {
+                self.runtime
+                    .check_account_permission(owner)
+                    .expect("Permission for Approve operation");
+                self.runtime.approve(owner, spender, allowance);
+                FungibleResponse::Ok
             }
 
             FungibleOperation::Transfer {
@@ -88,8 +96,21 @@ impl Contract for NativeFungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            FungibleOperation::TransferFrom { .. } => {
-                panic!("TransferFrom operation is not supported by native fungible token")
+            FungibleOperation::TransferFrom {
+                owner,
+                spender,
+                amount,
+                target_account,
+            } => {
+                self.runtime
+                    .check_account_permission(spender)
+                    .expect("Permission for TransferFrom operation");
+
+                self.runtime
+                    .transfer_from(owner, spender, target_account, amount);
+
+                self.transfer(target_account.chain_id);
+                FungibleResponse::Ok
             }
 
             FungibleOperation::Claim {

@@ -291,8 +291,8 @@ impl Wallet {
 
     pub fn forget_keys(&self, chain_id: ChainId) -> anyhow::Result<AccountOwner> {
         self.mutate(chain_id, |chain| chain.owner.take())
-            .ok_or(anyhow::anyhow!("nonexistent chain `{chain_id}`"))??
-            .ok_or(anyhow::anyhow!("keypair not found for chain `{chain_id}`"))
+            .ok_or_else(|| anyhow::anyhow!("nonexistent chain `{chain_id}`"))??
+            .ok_or_else(|| anyhow::anyhow!("keypair not found for chain `{chain_id}`"))
     }
 
     pub fn forget_chain(&self, chain_id: ChainId) -> anyhow::Result<wallet::Chain> {
@@ -300,7 +300,7 @@ impl Wallet {
             .0
             .chains
             .remove(chain_id)
-            .ok_or(anyhow::anyhow!("nonexistent chain `{chain_id}`"))?;
+            .ok_or_else(|| anyhow::anyhow!("nonexistent chain `{chain_id}`"))?;
         self.0.save()?;
         Ok(chain)
     }

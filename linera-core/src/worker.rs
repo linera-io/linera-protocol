@@ -1089,12 +1089,13 @@ where
         #[cfg(with_metrics)]
         let metrics_data = metrics::MetricsData::new(&certificate);
 
-        let (info, actions, _outcome) =
+        #[allow(unused_variables)]
+        let (info, actions, outcome) =
             Box::pin(self.process_confirmed_block(certificate, notify_when_messages_are_delivered))
                 .await?;
 
         #[cfg(with_metrics)]
-        if matches!(_outcome, BlockOutcome::Processed) {
+        if matches!(outcome, BlockOutcome::Processed) {
             metrics_data.record();
         }
         Ok((info, actions))
@@ -1117,10 +1118,11 @@ where
         #[cfg(with_metrics)]
         let cert_str = certificate.inner().to_log_str();
 
-        let (info, actions, _outcome) = Box::pin(self.process_validated_block(certificate)).await?;
+        #[allow(unused_variables)]
+        let (info, actions, outcome) = Box::pin(self.process_validated_block(certificate)).await?;
         #[cfg(with_metrics)]
         {
-            if matches!(_outcome, BlockOutcome::Processed) {
+            if matches!(outcome, BlockOutcome::Processed) {
                 metrics::NUM_ROUNDS_IN_CERTIFICATE
                     .with_label_values(&[cert_str, round.type_name()])
                     .observe(round.number() as f64);

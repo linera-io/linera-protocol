@@ -187,7 +187,7 @@ where
             .read_network_description()
             .await
             .transpose()
-            .ok_or(NodeError::ViewError {
+            .ok_or_else(|| NodeError::ViewError {
                 error: "missing NetworkDescription".to_owned(),
             })??)
     }
@@ -516,7 +516,7 @@ where
             .await
             .map_err(Into::into);
         let blob = match blob {
-            Ok(blob) => blob.ok_or(NodeError::BlobsNotFound(vec![blob_id])),
+            Ok(blob) => blob.ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error),
         };
         sender.send(blob.map(|blob| blob.into_content()))

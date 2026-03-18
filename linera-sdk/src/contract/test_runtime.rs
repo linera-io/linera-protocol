@@ -16,7 +16,8 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, ChainId, DataBlobHash, ModuleId, StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, ChainId, DataBlobHash, ModuleId,
+        OwnerSpender, StreamName,
     },
     ownership::{AccountPermissionError, ChainOwnership, ManageChainError},
     vm::VmRuntime,
@@ -64,6 +65,7 @@ where
     timestamp: Option<Timestamp>,
     chain_balance: Option<Amount>,
     owner_balances: Option<HashMap<AccountOwner, Amount>>,
+    allowances: HashMap<OwnerSpender, Amount>,
     chain_ownership: Option<ChainOwnership>,
     application_permissions: Option<ApplicationPermissions>,
     can_manage_chain: Option<bool>,
@@ -116,6 +118,7 @@ where
             timestamp: None,
             chain_balance: None,
             owner_balances: None,
+            allowances: HashMap::new(),
             chain_ownership: None,
             application_permissions: None,
             can_manage_chain: None,
@@ -501,6 +504,76 @@ where
         *self.owner_balance_mut(owner)
     }
 
+    /// Configures the allowances on the chain to use during the test.
+    pub fn with_allowances(
+        mut self,
+        allowances: impl IntoIterator<Item = (AccountOwner, AccountOwner, Amount)>,
+    ) -> Self {
+        self.set_allowances(allowances);
+        self
+    }
+
+    /// Configures the allowances on the chain to use during the test.
+    pub fn set_allowances(
+        &mut self,
+        allowances: impl IntoIterator<Item = (AccountOwner, AccountOwner, Amount)>,
+    ) -> &mut Self {
+        self.allowances = allowances
+            .into_iter()
+            .filter_map(|(owner, spender, amount)| {
+                if amount == Amount::ZERO {
+                    None
+                } else {
+                    Some((OwnerSpender::new(owner, spender), amount))
+                }
+            })
+            .collect();
+        self
+    }
+
+    /// Configures the allowance of one owner-spender pair on the chain to use during the test.
+    pub fn with_allowance(
+        mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        allowance: Amount,
+    ) -> Self {
+        self.set_allowance(owner, spender, allowance);
+        self
+    }
+
+    /// Configures the allowance of one owner-spender pair on the chain to use during the test.
+    pub fn set_allowance(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        allowance: Amount,
+    ) -> &mut Self {
+        let owner_spender = OwnerSpender::new(owner, spender);
+        if allowance == Amount::ZERO {
+            self.allowances.remove(&owner_spender);
+        } else {
+            self.allowances.insert(owner_spender, allowance);
+        }
+        self
+    }
+
+    /// Returns the allowance of one owner-spender pair on this chain.
+    pub fn allowance(&self, owner: AccountOwner, spender: AccountOwner) -> Amount {
+        self.allowances
+            .get(&OwnerSpender::new(owner, spender))
+            .copied()
+            .unwrap_or(Amount::ZERO)
+    }
+
+    /// Returns all allowances on this chain.
+    pub fn allowances(&self) -> Vec<(AccountOwner, AccountOwner, Amount)> {
+        self.allowances
+            .iter()
+            .map(|(owner_spender, amount)| (owner_spender.owner, owner_spender.spender, *amount))
+            .collect()
+    }
+
     /// Returns a mutable reference to the balance of one of the accounts on this chain.
     fn owner_balance_mut(&mut self, owner: AccountOwner) -> &mut Amount {
         self.owner_balances
@@ -609,6 +682,47 @@ where
     /// Returns the list of claims made during the test so far.
     pub fn claim_requests(&self) -> &[ClaimRequest] {
         &self.claim_requests
+    }
+
+    /// Approves `spender` to withdraw `amount` of native tokens from `owner`'s account.
+    pub fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, amount: Amount) {
+        self.set_allowance(owner, spender, amount);
+    }
+
+    /// Transfers `amount` of native tokens from `owner` to `destination` using `spender`'s
+    /// allowance.
+    pub fn transfer_from(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        destination: Account,
+        amount: Amount,
+    ) {
+        let owner_spender = OwnerSpender::new(owner, spender);
+        let remaining_allowance = self
+            .allowances
+            .get(&owner_spender)
+            .copied()
+            .unwrap_or(Amount::ZERO)
+            .try_sub(amount)
+            .expect("Insufficient allowance for transfer_from");
+
+        if remaining_allowance == Amount::ZERO {
+            self.allowances.remove(&owner_spender);
+        } else {
+            self.allowances.insert(owner_spender, remaining_allowance);
+        }
+
+        self.debit(owner, amount);
+
+        if Some(destination.chain_id) == self.chain_id {
+            self.credit(destination.owner, amount);
+        } else {
+            let destination_entry = self.outgoing_transfers.entry(destination).or_default();
+            *destination_entry = destination_entry
+                .try_add(amount)
+                .expect("Outgoing transfer value overflow");
+        }
     }
 
     /// Configures the chain ownership configuration to return during the test.

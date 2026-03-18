@@ -367,7 +367,11 @@ where
         heights_by_recipient: BTreeMap<ChainId, Vec<BlockHeight>>,
     ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
-        let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
+        let heights = heights_by_recipient
+            .values()
+            .flatten()
+            .copied()
+            .collect::<BTreeSet<_>>();
         let next_block_height = self.chain.tip_state.get().next_block_height;
         let log_heights = heights
             .range(..next_block_height)
@@ -1233,7 +1237,7 @@ where
                     .check_blob_size(blob.content())
                     .with_execution_context(ChainExecutionContext::Block)?;
                 ensure!(
-                    u64::try_from(pending_blobs.pending_blobs.count().await?)
+                    u64::try_from(pending_blobs.pending_blobs.iterative_count().await?)
                         .is_ok_and(|count| count < policy.maximum_published_blobs),
                     WorkerError::TooManyPublishedBlobs(policy.maximum_published_blobs)
                 );
@@ -1608,17 +1612,22 @@ where
         }
         if query.request_pending_message_bundles {
             let mut bundles = Vec::new();
-            let pairs = chain.inboxes.try_load_all_entries().await?;
+            let nonempty_origins: Vec<ChainId> =
+                chain.nonempty_inboxes.get().iter().copied().collect();
             #[cfg(with_metrics)]
             metrics::NUM_INBOXES
                 .with_label_values(&[])
-                .observe(pairs.len() as f64);
+                .observe(nonempty_origins.len() as f64);
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
             };
-            for (origin, inbox) in pairs {
+            let inboxes = chain.inboxes.try_load_entries(&nonempty_origins).await?;
+            for (origin, inbox) in nonempty_origins.into_iter().zip(inboxes) {
+                let inbox = inbox.ok_or_else(|| {
+                    ChainError::InternalError(format!("Missing inbox for origin {origin}"))
+                })?;
                 for bundle in inbox.added_bundles.elements().await? {
                     bundles.push(IncomingBundle {
                         origin,

@@ -21,12 +21,12 @@ pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0
 #[export_name = "_rjem_malloc_conf"]
 pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, pin::Pin, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
-use futures::{FutureExt as _, SinkExt, StreamExt};
-use linera_base::listen_for_shutdown_signals;
+use futures::{stream::SelectAll, FutureExt as _, SinkExt, Stream, StreamExt};
+use linera_base::{identifiers::ChainId, listen_for_shutdown_signals};
 use linera_client::config::ValidatorServerConfig;
 use linera_core::{node::NodeError, JoinSetExt as _};
 #[cfg(with_metrics)]
@@ -256,6 +256,13 @@ where
             }
         }
     }
+
+    async fn handle_subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
+        self.subscribe_to_shards(chains).await
+    }
 }
 
 impl<S> SimpleProxy<S>
@@ -300,6 +307,58 @@ where
 
     fn get_listen_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.port()))
+    }
+
+    /// Subscribes to notification streams from shards for the given chains.
+    /// Each chain is routed to its owning shard, so we only subscribe to the
+    /// shards that actually own at least one of the requested chains.
+    async fn subscribe_to_shards(
+        &self,
+        chains: Vec<ChainId>,
+    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
+        let protocol = self.internal_config.protocol;
+        let mut select_all = SelectAll::new();
+        // Group chains by their owning shard.
+        let mut chains_by_shard = std::collections::HashMap::<usize, Vec<ChainId>>::new();
+        for chain_id in chains {
+            let shard_id = self.internal_config.get_shard_id(chain_id);
+            chains_by_shard.entry(shard_id).or_default().push(chain_id);
+        }
+        // Only connect to shards that own at least one requested chain.
+        for (shard_id, shard_chains) in chains_by_shard {
+            let shard = &self.internal_config.shards[shard_id];
+            let address = (shard.host.clone(), shard.port);
+            match protocol.connect(address).await {
+                Ok(mut connection) => {
+                    let subscribe_msg = RpcMessage::SubscribeNotifications(shard_chains);
+                    if let Err(error) = connection.send(subscribe_msg).await {
+                        error!(%error, "Failed to send subscribe to shard");
+                        continue;
+                    }
+                    // The shard will now stream notifications over this connection.
+                    let notification_stream = connection.filter_map(|result| async {
+                        match result {
+                            Ok(msg @ RpcMessage::Notification(_)) => Some(msg),
+                            Ok(_) => None,
+                            Err(error) => {
+                                error!(%error, "Error reading notification from shard");
+                                None
+                            }
+                        }
+                    });
+                    select_all.push(Box::pin(notification_stream)
+                        as Pin<Box<dyn Stream<Item = RpcMessage> + Send>>);
+                }
+                Err(error) => {
+                    error!(%error, "Failed to connect to shard for notifications");
+                }
+            }
+        }
+        if select_all.is_empty() {
+            None
+        } else {
+            Some(Box::pin(select_all))
+        }
     }
 
     async fn try_proxy_message(
@@ -464,9 +523,9 @@ where
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_)
             | UploadBlobResponse(_)
-            | DownloadCertificatesByHeightsResponse(_) => {
-                Err(anyhow::Error::from(NodeError::UnexpectedMessage))
-            }
+            | DownloadCertificatesByHeightsResponse(_)
+            | SubscribeNotifications(_)
+            | Notification(_) => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
         }
     }
 }

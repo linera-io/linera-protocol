@@ -645,10 +645,10 @@ where
     /// map.insert(vec![0, 1], String::from("Hello"));
     /// map.insert(vec![1, 2], String::from("Bonjour"));
     /// map.insert(vec![2, 2], String::from("Hallo"));
-    /// assert_eq!(map.count().await.unwrap(), 3);
+    /// assert_eq!(map.iterative_count().await.unwrap(), 3);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
         let mut count = 0;
         let prefix = Vec::new();
         self.for_each_key(
@@ -1523,11 +1523,11 @@ where
     /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
     /// map.insert("Italian", String::from("Ciao"));
     /// map.insert("French", String::from("Bonjour"));
-    /// assert_eq!(map.count().await.unwrap(), 2);
+    /// assert_eq!(map.iterative_count().await.unwrap(), 2);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
-        self.map.count().await
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
+        self.map.iterative_count().await
     }
 }
 
@@ -2076,11 +2076,11 @@ where
     /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
     /// map.insert(&(24 as u128), String::from("Ciao"));
     /// map.insert(&(37 as u128), String::from("Bonjour"));
-    /// assert_eq!(map.count().await.unwrap(), 2);
+    /// assert_eq!(map.iterative_count().await.unwrap(), 2);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
-        self.map.count().await
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
+        self.map.iterative_count().await
     }
 }
 
@@ -2279,7 +2279,7 @@ mod graphql {
 
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.count().await? as u32)
+            Ok(self.iterative_count().await? as u32)
         }
 
         async fn entry(&self, key: I) -> Result<Entry<I, Option<V>>, async_graphql::Error> {
