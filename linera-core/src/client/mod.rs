@@ -998,7 +998,6 @@ impl<Env: Environment> Client<Env> {
         let mut nodes = nodes.to_vec();
         while !remote_heights.is_empty() {
             let remote_heights_ref = &remote_heights;
-            nodes.shuffle(&mut rand::thread_rng());
             let certificates = match communicate_concurrently(
                 &nodes,
                 async move |remote_node| {
@@ -1245,16 +1244,18 @@ impl<Env: Environment> Client<Env> {
     async fn download_event_bearing_blocks(
         &self,
         sender_chain_id: ChainId,
-        height: BlockHeight,
-        hash: CryptoHash,
+        initial_blocks: BTreeSet<(BlockHeight, CryptoHash)>,
         local_next_block_height: BlockHeight,
         subscribed_streams: &BTreeSet<StreamId>,
         remote_node: &RemoteNode<Env::ValidatorNode>,
     ) -> Result<(), chain_client::Error> {
+        if initial_blocks.is_empty() {
+            return Ok(());
+        }
         let (max_epoch, committees) = self.admin_committees().await?;
 
         let mut certificates = BTreeMap::new();
-        let mut blocks_to_fetch = BTreeSet::<_>::from([(height, hash)]);
+        let mut blocks_to_fetch = initial_blocks;
         let next_expected_events = subscribed_streams
             .iter()
             .zip(
@@ -1333,6 +1334,39 @@ impl<Env: Environment> Client<Env> {
         }
 
         Ok(())
+    }
+
+    /// Queries a validator for event-bearing blocks for the given streams, then downloads
+    /// them.
+    async fn sync_events_from_node(
+        &self,
+        chain_id: ChainId,
+        stream_ids: &BTreeSet<StreamId>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+    ) -> Result<(), chain_client::Error> {
+        let stream_ids_vec: Vec<_> = stream_ids.iter().cloned().collect();
+        let query = ChainInfoQuery::new(chain_id).with_previous_event_blocks(stream_ids_vec);
+        let info = remote_node.handle_chain_info_query(query).await?;
+        let initial_blocks = info
+            .requested_previous_event_blocks
+            .values()
+            .copied()
+            .collect();
+        let local_height = match self.local_node.chain_info(chain_id).await {
+            Ok(info) => info.next_block_height,
+            Err(LocalNodeError::InactiveChain(_) | LocalNodeError::BlobsNotFound(_)) => {
+                BlockHeight::ZERO
+            }
+            Err(error) => return Err(error.into()),
+        };
+        self.download_event_bearing_blocks(
+            chain_id,
+            initial_blocks,
+            local_height,
+            stream_ids,
+            remote_node,
+        )
+        .await
     }
 
     #[instrument(
@@ -1761,6 +1795,8 @@ where
     G: FnOnce(Vec<(ValidatorPublicKey, E1)>) -> E2,
     R: Future<Output = Result<V, E1>> + 'a,
 {
+    let mut nodes = nodes.to_vec();
+    nodes.shuffle(&mut rand::thread_rng());
     let mut stream = nodes
         .iter()
         .zip(0..)
