@@ -9,7 +9,9 @@ spec:
     - port: metrics
       path: /metrics
       scheme: http
-  jobLabel: shards
+      relabelings:
+        - targetLabel: job
+          replacement: linera-linera-server
   namespaceSelector:
     matchNames:
       - default
@@ -25,13 +27,15 @@ metadata:
   name: proxy
 spec:
   endpoints:
-  - port: metrics
-    path: /metrics
-    scheme: http
-  jobLabel: proxy
+    - port: metrics
+      path: /metrics
+      scheme: http
+      relabelings:
+        - targetLabel: job
+          replacement: linera-linera-proxy
   namespaceSelector:
     matchNames:
-    - default
+      - default
   selector:
     matchLabels:
       app: proxy
