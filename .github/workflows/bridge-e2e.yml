@@ -3,6 +3,7 @@ name: Bridge E2E
 on:
   merge_group:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [ 'testnet_*', 'main', 'bridge-main']
 

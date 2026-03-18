@@ -35,7 +35,7 @@ use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use tokio::sync::{mpsc, oneshot};
 use tower_http::cors::CorsLayer;
 
-use crate::proof::gen::{DepositProofClient, HttpDepositProofClient};
+use crate::proof::gen::{DepositProofClient, HttpDepositProofClient, ProofError};
 
 // ── Alloy ABI for FungibleBridge.addBlock ──
 
@@ -100,6 +100,7 @@ async fn deposit_handler(
 
     // Retry proof generation — on public testnets the RPC may not have
     // indexed the receipt yet when the frontend sends the tx hash.
+    // Permanent errors (invalid tx, missing deposit event) fail immediately.
     tracing::info!(%tx_hash, "Generating deposit proof...");
     let mut proof = None;
     for attempt in 0..5 {
@@ -114,7 +115,14 @@ async fn deposit_handler(
                 proof = Some(p);
                 break;
             }
-            Err(e) => {
+            Err(ProofError::Permanent(e)) => {
+                tracing::error!(%tx_hash, "Deposit proof generation failed permanently: {e:#}");
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": format!("{e:#}")})),
+                );
+            }
+            Err(ProofError::Transient(e)) => {
                 if attempt < 4 {
                     tracing::warn!(
                         %tx_hash, attempt, "Deposit proof generation failed, retrying: {e:#}"
