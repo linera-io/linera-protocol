@@ -20,7 +20,9 @@ use linera_client::{
 };
 use linera_rpc::config::CrossChainConfig;
 
-use crate::{cli::validator, task_processor::parse_operator};
+use crate::{
+    cli::validator, query_subscription::parse_subscription_ttl, task_processor::parse_operator,
+};
 
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
 const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
@@ -797,6 +799,14 @@ pub enum ClientCommand {
         /// Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
         #[arg(long = "allow-subscription")]
         allowed_subscriptions: Vec<String>,
+
+        /// Set a minimum TTL (in seconds) for a subscription query's cached result.
+        /// When set, invalidations that arrive before the TTL expires are deferred
+        /// until the remaining time elapses. Format: `Name=Secs`.
+        /// Repeatable.
+        /// Example: `--subscription-ttl-secs CounterValue=30`
+        #[arg(long = "subscription-ttl-secs", value_parser = parse_subscription_ttl)]
+        subscription_ttls: Vec<(String, u64)>,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.

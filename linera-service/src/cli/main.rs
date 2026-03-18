@@ -1193,6 +1193,7 @@ impl Runnable for Job {
                 read_only,
                 query_cache_size,
                 allowed_subscriptions,
+                subscription_ttls,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1268,9 +1269,13 @@ impl Runnable for Job {
                         .iter()
                         .map(|s| parse_allowed_subscription(s))
                         .collect::<Result<_, _>>()?;
+                    let ttls = subscription_ttls
+                        .into_iter()
+                        .map(|(name, secs)| (name, std::time::Duration::from_secs(secs)))
+                        .collect();
                     Some(Arc::new(
                         linera_service::query_subscription::QuerySubscriptionManager::new(
-                            registered,
+                            registered, ttls,
                         ),
                     ))
                 };
