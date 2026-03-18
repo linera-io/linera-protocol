@@ -39,7 +39,10 @@ use linera_base::{
     listen_for_shutdown_signals,
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
-use linera_core::{worker::WorkerState, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES};
+use linera_core::{
+    worker::WorkerState, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+    DEFAULT_MAX_LOADED_CHAIN_WORKERS,
+};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -70,6 +73,7 @@ struct ServerContext {
     shard: Option<usize>,
     block_time_grace_period: Duration,
     chain_worker_ttl: Duration,
+    max_loaded_chain_workers: usize,
     chain_info_max_received_log_entries: usize,
 }
 
@@ -98,6 +102,7 @@ impl ServerContext {
         .with_allow_messages_from_deprecated_epochs(false)
         .with_block_time_grace_period(self.block_time_grace_period)
         .with_chain_worker_ttl(self.chain_worker_ttl)
+        .with_max_loaded_chain_workers(self.max_loaded_chain_workers)
         .with_chain_info_max_received_log_entries(self.chain_info_max_received_log_entries);
         (state, shard_id, shard.clone())
     }
@@ -385,6 +390,14 @@ enum ServerCommand {
         )]
         chain_worker_ttl: Duration,
 
+        /// Maximum number of chain worker actors kept loaded in memory.
+        #[arg(
+            long = "max-loaded-chain-workers",
+            default_value_t = DEFAULT_MAX_LOADED_CHAIN_WORKERS,
+            env = "LINERA_MAX_LOADED_CHAIN_WORKERS"
+        )]
+        max_loaded_chain_workers: usize,
+
         /// Maximum size for received_log entries in chain info responses. This should
         /// generally only be increased from the default value.
         #[arg(
@@ -522,6 +535,7 @@ async fn run(options: ServerOptions) {
             block_time_grace_period,
             wasm_runtime,
             chain_worker_ttl,
+            max_loaded_chain_workers,
             chain_info_max_received_log_entries,
             otlp_exporter_endpoint: _,
         } => {
@@ -537,6 +551,7 @@ async fn run(options: ServerOptions) {
                 shard,
                 block_time_grace_period,
                 chain_worker_ttl,
+                max_loaded_chain_workers,
                 chain_info_max_received_log_entries,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();

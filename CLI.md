@@ -147,6 +147,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory
 
   Default value: `1000`
+* `--max-loaded-chain-workers <MAX_LOADED_CHAIN_WORKERS>` — Maximum number of chain worker actors kept loaded in memory
+
+  Default value: `100`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
 
   Default value: `1000`

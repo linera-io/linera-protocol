@@ -18,7 +18,7 @@ use linera_core::{
         DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
-    DEFAULT_QUORUM_GRACE_PERIOD,
+    DEFAULT_MAX_LOADED_CHAIN_WORKERS, DEFAULT_QUORUM_GRACE_PERIOD,
 };
 use linera_execution::ResourceControlPolicy;
 
@@ -94,6 +94,14 @@ pub struct Options {
         value_parser = util::parse_millis
     )]
     pub sender_chain_worker_ttl: Duration,
+
+    /// Maximum number of chain worker actors kept loaded in memory.
+    #[arg(
+        long = "max-loaded-chain-workers",
+        default_value_t = DEFAULT_MAX_LOADED_CHAIN_WORKERS,
+        env = "LINERA_MAX_LOADED_CHAIN_WORKERS"
+    )]
+    pub max_loaded_chain_workers: usize,
 
     /// Delay increment for retrying to connect to a validator.
     #[arg(

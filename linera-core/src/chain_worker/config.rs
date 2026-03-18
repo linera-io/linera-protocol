@@ -7,7 +7,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use linera_base::{crypto::ValidatorSecretKey, identifiers::ChainId, time::Duration};
 
-use crate::CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES;
+use crate::{CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES, DEFAULT_MAX_LOADED_CHAIN_WORKERS};
 
 /// Configuration parameters for the [`ChainWorkerState`][`super::state::ChainWorkerState`].
 #[derive(Clone)]
@@ -33,6 +33,8 @@ pub struct ChainWorkerConfig {
     pub chain_info_max_received_log_entries: usize,
     /// Chain IDs whose incoming bundles should be processed first.
     pub priority_bundle_origins: HashSet<ChainId>,
+    /// Maximum number of chain worker actors kept loaded in memory.
+    pub max_loaded_chain_workers: usize,
 }
 
 impl ChainWorkerConfig {
@@ -60,6 +62,7 @@ impl Default for ChainWorkerConfig {
             sender_chain_ttl: Default::default(),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
             priority_bundle_origins: HashSet::new(),
+            max_loaded_chain_workers: DEFAULT_MAX_LOADED_CHAIN_WORKERS,
         }
     }
 }

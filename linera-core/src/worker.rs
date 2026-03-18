@@ -4,6 +4,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -35,6 +36,7 @@ use linera_chain::{
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::{context::InactiveContext, ViewError};
+use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -53,7 +55,7 @@ use crate::{
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
     value_cache::ValueCache,
-    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES, DEFAULT_MAX_LOADED_CHAIN_WORKERS,
 };
 
 const BLOCK_CACHE_SIZE: usize = 5_000;
@@ -152,6 +154,14 @@ mod metrics {
         register_int_gauge(
             "chain_worker_endpoints_cached",
             "Number of cached chain worker channel endpoints",
+        )
+    });
+
+    /// Number of chain worker LRU evictions.
+    pub static CHAIN_WORKER_EVICTIONS: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "chain_worker_evictions",
+            "Number of chain worker LRU evictions",
         )
     });
 
@@ -499,8 +509,8 @@ where
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     /// The set of spawned [`ChainWorkerActor`] tasks.
     chain_worker_tasks: Arc<Mutex<JoinSet>>,
-    /// The cache of running [`ChainWorkerActor`]s.
-    chain_workers: Arc<Mutex<BTreeMap<ChainId, ChainActorEndpoint<StorageClient>>>>,
+    /// The cache of running [`ChainWorkerActor`]s, with LRU eviction to cap memory.
+    chain_workers: Arc<Mutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -541,16 +551,20 @@ where
         key_pair: Option<ValidatorSecretKey>,
         storage: StorageClient,
     ) -> Self {
+        let config = ChainWorkerConfig::default().with_key_pair(key_pair);
+        let max_loaded = NonZeroUsize::new(config.max_loaded_chain_workers).unwrap_or(
+            NonZeroUsize::new(DEFAULT_MAX_LOADED_CHAIN_WORKERS).expect("default is non-zero"),
+        );
         WorkerState {
             nickname,
             storage,
-            chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
+            chain_worker_config: config,
             block_cache: Arc::new(ValueCache::new(BLOCK_CACHE_SIZE)),
             execution_state_cache: Arc::new(ValueCache::new(EXECUTION_STATE_CACHE_SIZE)),
             chain_modes: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
+            chain_workers: Arc::new(Mutex::new(LruCache::new(max_loaded))),
         }
     }
 
@@ -560,16 +574,20 @@ where
         storage: StorageClient,
         chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
     ) -> Self {
+        let config = ChainWorkerConfig::default();
+        let max_loaded = NonZeroUsize::new(config.max_loaded_chain_workers).unwrap_or(
+            NonZeroUsize::new(DEFAULT_MAX_LOADED_CHAIN_WORKERS).expect("default is non-zero"),
+        );
         WorkerState {
             nickname,
             storage,
-            chain_worker_config: ChainWorkerConfig::default(),
+            chain_worker_config: config,
             block_cache: Arc::new(ValueCache::new(BLOCK_CACHE_SIZE)),
             execution_state_cache: Arc::new(ValueCache::new(EXECUTION_STATE_CACHE_SIZE)),
             chain_modes: Some(chain_modes),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
+            chain_workers: Arc::new(Mutex::new(LruCache::new(max_loaded))),
         }
     }
 
@@ -625,6 +643,17 @@ where
     #[instrument(level = "trace", skip(self, origins))]
     pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
         self.chain_worker_config.priority_bundle_origins = origins;
+        self
+    }
+
+    /// Returns an instance with the specified maximum number of loaded chain workers.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_max_loaded_chain_workers(mut self, max_loaded_chain_workers: usize) -> Self {
+        self.chain_worker_config.max_loaded_chain_workers = max_loaded_chain_workers;
+        let capacity = NonZeroUsize::new(max_loaded_chain_workers).unwrap_or(
+            NonZeroUsize::new(DEFAULT_MAX_LOADED_CHAIN_WORKERS).expect("default is non-zero"),
+        );
+        self.chain_workers = Arc::new(Mutex::new(LruCache::new(capacity)));
         self
     }
 
@@ -1047,7 +1076,7 @@ where
     > {
         let mut chain_workers = self.chain_workers.lock().unwrap();
 
-        let (sender, new_channel) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
+        let (sender, new_channel) = if let Some(endpoint) = chain_workers.pop(&chain_id) {
             (endpoint, None)
         } else {
             let (sender, receiver) = mpsc::unbounded_channel();
@@ -1055,15 +1084,16 @@ where
         };
 
         if let Err(e) = sender.send((request, tracing::Span::current(), Instant::now())) {
-            // The actor was dropped. Give up without (re-)inserting the endpoint in the cache.
             return Err(WorkerError::ChainActorSendError {
                 chain_id,
                 error: Box::new(e),
             });
         }
 
-        // Put back the sender in the cache for next time.
-        chain_workers.insert(chain_id, sender);
+        if let Some((_evicted_chain_id, _evicted_sender)) = chain_workers.push(chain_id, sender) {
+            #[cfg(with_metrics)]
+            metrics::CHAIN_WORKER_EVICTIONS.inc();
+        }
         #[cfg(with_metrics)]
         metrics::CHAIN_WORKER_ENDPOINTS_CACHED.set(chain_workers.len() as i64);
 

@@ -39,3 +39,5 @@ pub use environment::{
 /// The maximum number of entries in a `received_log` included in a `ChainInfo` response.
 // TODO(#4638): Revisit the number.
 pub const CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES: usize = 20_000;
+
+pub const DEFAULT_MAX_LOADED_CHAIN_WORKERS: usize = 100;

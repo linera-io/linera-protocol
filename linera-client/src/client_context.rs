@@ -317,6 +317,7 @@ where
             name,
             options.chain_worker_ttl,
             options.sender_chain_worker_ttl,
+            options.max_loaded_chain_workers,
             options.prioritize_bundles_from.clone().unwrap_or_default(),
             options.to_chain_client_options(),
             options.to_requests_scheduler_config(),
