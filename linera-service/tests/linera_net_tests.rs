@@ -1976,6 +1976,7 @@ async fn test_wasm_end_to_end_counter_subscription(config: impl LineraNetConfig)
             &[],
             false,
             &["query CounterValue { value }".to_string()],
+            &[],
         )
         .await?;
 
@@ -2029,6 +2030,95 @@ async fn test_wasm_end_to_end_counter_subscription(config: impl LineraNetConfig)
         .context("expected immediate value for second subscriber")??;
     let immediate_value: u64 = serde_json::from_value(immediate["data"]["value"].clone())?;
     assert_eq!(immediate_value, original_counter_value + increment);
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_counter_subscription_ttl(config: impl LineraNetConfig) -> Result<()> {
+    use counter::CounterAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    let original_counter_value = 10;
+    let increment = 3;
+
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let (contract, service) = client.build_example("counter").await?;
+
+    let application_id = client
+        .publish_and_create::<CounterAbi, (), u64>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            &(),
+            &original_counter_value,
+            &[],
+            None,
+        )
+        .await?;
+
+    // Start node service with a subscription query and a 4-second TTL.
+    let ttl_secs = 4;
+    let port = get_node_port().await;
+    let mut node_service = client
+        .run_node_service_with_all_options(
+            port,
+            ProcessInbox::Skip,
+            &[],
+            &[],
+            false,
+            &["query CounterValue { value }".to_string()],
+            &[("CounterValue".to_string(), ttl_secs)],
+        )
+        .await?;
+
+    let application = node_service.make_application(&chain, &application_id)?;
+
+    // Subscribe to query results via WebSocket.
+    let mut subscription = node_service
+        .query_result("CounterValue", chain, &application_id.forget_abi())
+        .await?;
+
+    // The watcher fires immediately with the initial value.
+    let initial = subscription
+        .next()
+        .await
+        .context("expected initial query result")??;
+    let initial_value: u64 = serde_json::from_value(initial["data"]["value"].clone())?;
+    assert_eq!(initial_value, original_counter_value);
+
+    // Increment the counter. With a TTL, the notification should be deferred.
+    let mutation = format!("increment(value: {increment})");
+    application.mutate(mutation).await?;
+
+    // The update should NOT arrive within 2 seconds (TTL is 4s).
+    let no_update =
+        tokio::time::timeout(std::time::Duration::from_secs(2), subscription.next()).await;
+    assert!(
+        no_update.is_err(),
+        "expected no notification during TTL window"
+    );
+
+    // But it should arrive after the TTL expires (wait up to 5 more seconds).
+    let updated = tokio::time::timeout(std::time::Duration::from_secs(5), subscription.next())
+        .await
+        .context("expected deferred notification after TTL")?
+        .context("subscription stream ended")??;
+    let updated_value: u64 = serde_json::from_value(updated["data"]["value"].clone())?;
+    assert_eq!(updated_value, original_counter_value + increment);
 
     node_service.ensure_is_running()?;
 
