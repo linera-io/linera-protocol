@@ -3,21 +3,23 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use alloy_primitives::Bytes;
+use alloy_primitives::{Bytes, B256};
 use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
 use linera_bridge::proof;
 use linera_sdk::{
+    ethereum::{ContractEthereumClient, EthereumQueries},
     linera_base_types::{Account, AccountOwner, Amount, ChainId, WithContractAbi},
     views::{linera_views, RootView, SetView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
 use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi};
 
-/// On-chain state: tracks processed deposits for replay protection.
+/// On-chain state: tracks processed deposits and verified block hashes.
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
     pub processed_deposits: SetView<DepositKey>,
+    pub verified_block_hashes: SetView<[u8; 32]>,
 }
 
 pub struct EvmBridgeContract {
@@ -45,8 +47,19 @@ impl Contract for EvmBridgeContract {
     }
 
     async fn instantiate(&mut self, _argument: ()) {
-        // Validate parameters are present.
-        self.runtime.application_parameters();
+        let params = self.runtime.application_parameters();
+        if !params.rpc_endpoint.is_empty() {
+            let client = ContractEthereumClient::new(params.rpc_endpoint.clone());
+            let chain_id = client
+                .get_chain_id()
+                .await
+                .expect("failed to query chain ID from RPC endpoint");
+            assert_eq!(
+                chain_id, params.source_chain_id,
+                "RPC endpoint chain ID {chain_id} does not match configured source_chain_id {}",
+                params.source_chain_id
+            );
+        }
     }
 
     async fn execute_operation(&mut self, operation: BridgeOperation) {
@@ -67,6 +80,18 @@ impl Contract for EvmBridgeContract {
                 )
                 .await;
             }
+            BridgeOperation::VerifyBlockHash { block_hash } => {
+                self.verify_block_hash(block_hash).await;
+
+                // Only cache when called by an authenticated signer (chain owner),
+                // preventing unauthenticated callers from bloating state.
+                if self.runtime.authenticated_signer().is_some() {
+                    self.state
+                        .verified_block_hashes
+                        .insert(&block_hash)
+                        .expect("failed to insert verified block hash");
+                }
+            }
         }
     }
 
@@ -78,6 +103,28 @@ impl Contract for EvmBridgeContract {
 }
 
 impl EvmBridgeContract {
+    async fn verify_block_hash(&mut self, block_hash: [u8; 32]) {
+        let params = self.runtime.application_parameters();
+        assert!(
+            !params.rpc_endpoint.is_empty(),
+            "rpc_endpoint must be configured to verify block hashes"
+        );
+
+        let client = ContractEthereumClient::new(params.rpc_endpoint.clone());
+        assert!(
+            client
+                .is_block_hash_finalized(B256::from(block_hash))
+                .await
+                .expect("failed to check block finality — block may not exist"),
+            "block is not finalized"
+        );
+
+        log::info!(
+            "verified block hash {} is finalized",
+            hex::encode(block_hash)
+        );
+    }
+
     async fn process_deposit(
         &mut self,
         block_header_rlp: &[u8],
@@ -91,6 +138,21 @@ impl EvmBridgeContract {
         // 1. Decode block header → (block_hash, receipts_root)
         let (block_hash, receipts_root) =
             proof::decode_block_header(block_header_rlp).expect("invalid block header RLP");
+
+        // 1b. Finality check: when an endpoint is configured, verify the block hash
+        //     is finalized. Uses cached result if a previous deposit from this block
+        //     was already processed.
+        if params.rpc_endpoint.is_empty() {
+            log::warn!("rpc_endpoint is empty — skipping block finality verification.");
+        } else if !self
+            .state
+            .verified_block_hashes
+            .contains(&block_hash.0)
+            .await
+            .expect("failed to check verified block hashes")
+        {
+            self.verify_block_hash(block_hash.0).await;
+        }
 
         // 2. Verify receipt inclusion via MPT proof
         let proof_bytes: Vec<Bytes> = proof_nodes
@@ -144,6 +206,15 @@ impl EvmBridgeContract {
             .processed_deposits
             .insert(&deposit_key)
             .expect("failed to insert deposit key");
+
+        // 5b. Cache the verified block hash so subsequent deposits from the same
+        //     block skip the RPC finality check.
+        if !params.rpc_endpoint.is_empty() {
+            self.state
+                .verified_block_hashes
+                .insert(&block_hash.0)
+                .expect("failed to cache verified block hash");
+        }
 
         // 6. Convert deposit fields to Linera types and call Mint
         let target_chain_id =

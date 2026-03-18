@@ -40,6 +40,8 @@ getrandom = { version = "0.2.12", default-features = false, features = [
     "custom",
 ] }
 hex = "0.4.3"
+insta = { version = "1.36.1", features = ["yaml"] }
+linera-ethereum = { path = "../linera-ethereum" }
 linera-sdk = { path = "../linera-sdk" }
 log = "0.4.20"
 num-bigint = "0.4.3"
