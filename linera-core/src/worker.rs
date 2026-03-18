@@ -766,50 +766,49 @@ where
 
                 // The papaya guard is !Send, so it must be dropped before
                 // any .await point.
-                let wait = {
-                    let guard = self.chain_workers.guard();
-                    match self.chain_workers.compute(
-                        chain_id,
-                        |existing| match existing {
-                            Some((_, entry)) => match entry.peek() {
-                                Some(Ok(weak)) => match weak.upgrade() {
-                                    Some(arc) => papaya::Operation::Abort(Ok(arc)),
-                                    None => papaya::Operation::Insert(shared_rx.clone()),
-                                },
-                                Some(Err(_)) => papaya::Operation::Insert(shared_rx.clone()),
-                                None => papaya::Operation::Abort(Err(entry.clone())),
+                let wait_or_tx = {
+                    let pin = self.chain_workers.pin();
+                    match pin.compute(chain_id, |existing| match existing {
+                        Some((_, entry)) => match entry.peek() {
+                            Some(Ok(weak)) => match weak.upgrade() {
+                                Some(arc) => papaya::Operation::Abort(Ok(arc)),
+                                None => papaya::Operation::Insert(shared_rx.clone()),
                             },
-                            None => papaya::Operation::Insert(shared_rx.clone()),
+                            Some(Err(_)) => papaya::Operation::Insert(shared_rx.clone()),
+                            None => papaya::Operation::Abort(Err(entry.clone())),
                         },
-                        &guard,
-                    ) {
+                        None => papaya::Operation::Insert(shared_rx.clone()),
+                    }) {
                         papaya::Compute::Aborted(Ok(arc), ..) => return Ok(arc),
-                        papaya::Compute::Aborted(Err(wait), ..) => Some(wait),
-                        papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => None,
+                        papaya::Compute::Aborted(Err(wait), ..) => Either::Left(wait),
+                        papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => {
+                            Either::Right(tx)
+                        }
                         papaya::Compute::Removed { .. } => unreachable!(),
                     }
                 };
 
-                if let Some(wait) = wait {
-                    // Another task is loading. Await the shared future.
-                    if let Ok(weak) = wait.await {
-                        if let Some(arc) = weak.upgrade() {
-                            return Ok(arc);
+                match wait_or_tx {
+                    Either::Left(wait) => {
+                        // Another task is loading. Await the shared future.
+                        if let Ok(weak) = wait.await {
+                            if let Some(arc) = weak.upgrade() {
+                                return Ok(arc);
+                            }
                         }
+                        // Loading failed or worker already dead; retry.
                     }
-                    // Loading failed or worker already dead; retry.
-                    continue;
-                }
-
-                // We claimed the loading slot. Load from storage.
-                // On success, send the Weak through the channel.
-                // On error, dropping tx wakes waiters so they can retry.
-                match self.load_chain_worker(chain_id).await {
-                    Ok(worker) => {
-                        let _ = tx.send(Arc::downgrade(&worker));
+                    Either::Right(tx) => {
+                        // We claimed the loading slot. Load from storage.
+                        // On success, send the Weak through the channel.
+                        // On error, dropping tx wakes waiters so they can retry.
+                        let worker = self.load_chain_worker(chain_id).await?;
+                        if tx.send(Arc::downgrade(&worker)).is_err() {
+                            tracing::error!(%chain_id, "Receiver dropped while loading worker state.");
+                            continue;
+                        }
                         return Ok(worker);
                     }
-                    Err(error) => return Err(error),
                 }
             }
         }))
