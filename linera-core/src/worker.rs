@@ -20,6 +20,7 @@ use linera_base::{
     time::Instant,
     util::traits::DynError,
 };
+use linera_cache::{UniqueValueCache, ValueCache};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
@@ -52,7 +53,6 @@ use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
-    value_cache::ValueCache,
     CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
@@ -491,7 +491,7 @@ where
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
     block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     /// Chains tracked by a worker, along with their listening modes.
     chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -546,7 +546,7 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
             block_cache: Arc::new(ValueCache::new(BLOCK_CACHE_SIZE)),
-            execution_state_cache: Arc::new(ValueCache::new(EXECUTION_STATE_CACHE_SIZE)),
+            execution_state_cache: Arc::new(UniqueValueCache::new(EXECUTION_STATE_CACHE_SIZE)),
             chain_modes: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -565,7 +565,7 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
             block_cache: Arc::new(ValueCache::new(BLOCK_CACHE_SIZE)),
-            execution_state_cache: Arc::new(ValueCache::new(EXECUTION_STATE_CACHE_SIZE)),
+            execution_state_cache: Arc::new(UniqueValueCache::new(EXECUTION_STATE_CACHE_SIZE)),
             chain_modes: Some(chain_modes),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),

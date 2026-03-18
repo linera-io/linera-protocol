@@ -2253,6 +2253,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-cache"
+version = "0.15.15"
+dependencies = [
+ "cfg_aliases",
+ "linera-base",
+ "lru",
+ "prometheus",
+ "quick_cache",
+]
+
+[[package]]
 name = "linera-chain"
 version = "0.15.15"
 dependencies = [
@@ -2291,13 +2302,13 @@ dependencies = [
  "custom_debug_derive",
  "futures",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-execution",
  "linera-storage",
  "linera-storage-service",
  "linera-version",
  "linera-views",
- "lru",
  "papaya",
  "prometheus",
  "proptest",
@@ -3316,6 +3327,17 @@ dependencies = [
  "linera-sdk",
  "serde",
  "tokio",
+]
+
+[[package]]
+name = "quick_cache"
+version = "0.6.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4c901384fb8fb3d4510388129ce6e13ecd686eee610da778b6ea77219decd53"
+dependencies = [
+ "equivalent",
+ "hashbrown 0.16.0",
+ "parking_lot",
 ]
 
 [[package]]
