@@ -366,7 +366,11 @@ where
         heights_by_recipient: BTreeMap<ChainId, Vec<BlockHeight>>,
     ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
-        let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
+        let heights = heights_by_recipient
+            .values()
+            .flatten()
+            .copied()
+            .collect::<BTreeSet<_>>();
         let next_block_height = self.chain.tip_state.get().next_block_height;
         let log_heights = heights
             .range(..next_block_height)

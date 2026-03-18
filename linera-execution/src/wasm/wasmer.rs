@@ -219,6 +219,7 @@ impl CachedContractModule {
     }
 
     /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
+    #[allow(clippy::unnecessary_wraps)]
     pub fn create_execution_instance(
         &self,
     ) -> Result<(wasmer::Engine, wasmer::Module), anyhow::Error> {

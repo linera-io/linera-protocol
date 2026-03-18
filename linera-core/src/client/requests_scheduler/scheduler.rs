@@ -940,11 +940,6 @@ mod tests {
         Arc::new(manager)
     }
 
-    /// Helper function to create a test result
-    fn test_result_ok() -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        Ok(vec![])
-    }
-
     /// Helper function to create a test request key
     fn test_key() -> RequestKey {
         RequestKey::Certificates {
@@ -991,7 +986,7 @@ mod tests {
                 let count = execution_count_clone.clone();
                 async move {
                     count.fetch_add(1, Ordering::SeqCst);
-                    test_result_ok()
+                    Ok(vec![])
                 }
             })
             .await;
@@ -1006,7 +1001,7 @@ mod tests {
                 let count = execution_count_clone2.clone();
                 async move {
                     count.fetch_add(1, Ordering::SeqCst);
-                    test_result_ok()
+                    Ok(vec![])
                 }
             })
             .await;
@@ -1046,7 +1041,7 @@ mod tests {
                         if let Some(receiver) = rx.lock().await.take() {
                             receiver.await.unwrap();
                         }
-                        test_result_ok()
+                        Ok(vec![])
                     }
                 })
                 .await
@@ -1060,7 +1055,7 @@ mod tests {
                     let count = execution_count_clone2.clone();
                     async move {
                         count.fetch_add(1, Ordering::SeqCst);
-                        test_result_ok()
+                        Ok(vec![])
                     }
                 })
                 .await
@@ -1111,7 +1106,7 @@ mod tests {
                         if let Some(receiver) = rx.lock().await.take() {
                             receiver.await.unwrap();
                         }
-                        test_result_ok()
+                        Ok(vec![])
                     }
                 })
                 .await
@@ -1130,7 +1125,7 @@ mod tests {
                         let count = execution_count_clone.clone();
                         async move {
                             count.fetch_add(1, Ordering::SeqCst);
-                            test_result_ok()
+                            Ok(vec![])
                         }
                     })
                     .await
@@ -1186,7 +1181,7 @@ mod tests {
                         if let Some(receiver) = rx.lock().await.take() {
                             receiver.await.unwrap();
                         }
-                        test_result_ok()
+                        Ok(vec![])
                     }
                 })
                 .await
@@ -1203,7 +1198,7 @@ mod tests {
                     let count = execution_count_clone2.clone();
                     async move {
                         count.fetch_add(1, Ordering::SeqCst);
-                        test_result_ok()
+                        Ok(vec![])
                     }
                 })
                 .await
