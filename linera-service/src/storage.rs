@@ -445,7 +445,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
 }
 
 impl StorageConfig {
-    pub fn maybe_append_shard_path(&mut self, shard: usize) -> std::io::Result<()> {
+    #[allow(clippy::used_underscore_binding)]
+    pub fn maybe_append_shard_path(&mut self, _shard: usize) -> std::io::Result<()> {
         match &mut self.inner_storage_config {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             InnerStorageConfig::DualRocksDbScyllaDb {
@@ -453,7 +454,7 @@ impl StorageConfig {
                 spawn_mode: _,
                 uri: _,
             } => {
-                let shard_str = format!("shard_{}", shard);
+                let shard_str = format!("shard_{}", _shard);
                 path_with_guard.path_buf.push(shard_str);
                 std::fs::create_dir_all(&path_with_guard.path_buf)
             }

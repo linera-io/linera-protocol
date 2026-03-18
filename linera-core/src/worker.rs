@@ -1089,6 +1089,7 @@ where
         #[cfg(with_metrics)]
         let metrics_data = metrics::MetricsData::new(&certificate);
 
+        #[allow(unused_variables)]
         let (info, actions, outcome) =
             Box::pin(self.process_confirmed_block(certificate, notify_when_messages_are_delivered))
                 .await?;
@@ -1117,6 +1118,7 @@ where
         #[cfg(with_metrics)]
         let cert_str = certificate.inner().to_log_str();
 
+        #[allow(unused_variables)]
         let (info, actions, outcome) = Box::pin(self.process_validated_block(certificate)).await?;
         #[cfg(with_metrics)]
         {
