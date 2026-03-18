@@ -120,11 +120,12 @@ pub mod testing {
 
     use super::ReceiptLog;
 
-    /// Builds a minimal RLP-encoded Ethereum block header with the given receipts root.
+    /// Builds a minimal RLP-encoded Ethereum block header with the given receipts root
+    /// and block number.
     ///
     /// All other header fields are set to zero/default values. This produces a valid
     /// RLP list that can be decoded by [`super::decode_block_header`].
-    pub fn build_test_header(receipts_root: B256) -> Vec<u8> {
+    pub fn build_test_header(receipts_root: B256, block_number: u64) -> Vec<u8> {
         let mut payload = Vec::new();
         B256::ZERO.encode(&mut payload); // 0: parentHash
         B256::ZERO.encode(&mut payload); // 1: ommersHash
@@ -134,7 +135,7 @@ pub mod testing {
         receipts_root.encode(&mut payload); // 5: receiptsRoot
         Bloom::ZERO.encode(&mut payload); // 6: logsBloom
         0u64.encode(&mut payload); // 7: difficulty
-        12345u64.encode(&mut payload); // 8: number
+        block_number.encode(&mut payload); // 8: number
         30_000_000u64.encode(&mut payload); // 9: gasLimit
         21_000u64.encode(&mut payload); // 10: gasUsed
         1_700_000_000u64.encode(&mut payload); // 11: timestamp
@@ -606,7 +607,7 @@ mod tests {
     #[test]
     fn test_decode_block_header() {
         let receipts_root = B256::from([0xAB; 32]);
-        let header_rlp = build_test_header(receipts_root);
+        let header_rlp = build_test_header(receipts_root, 12345);
 
         let (block_hash, decoded_root) = decode_block_header(&header_rlp).unwrap();
 
