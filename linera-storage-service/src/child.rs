@@ -18,8 +18,7 @@ pub struct StorageService {
 /// The guard preserves the child from destruction and destroys it when
 /// it drops out of scope.
 pub struct StorageServiceGuard {
-    #[allow(dead_code)]
-    child: Child,
+    _child: Child,
 }
 
 impl StorageService {
@@ -54,7 +53,7 @@ impl StorageService {
         self.wait_for_absence().await?;
         let mut command = self.command();
         let child = command.spawn_into()?;
-        let guard = StorageServiceGuard { child };
+        let guard = StorageServiceGuard { _child: child };
         // We iterate until the child is spawned and can be accessed.
         // We add an additional waiting period to avoid problems.
         for i in 1..10 {

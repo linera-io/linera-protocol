@@ -773,14 +773,13 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
-    /// let mut iter = queue.iter_mut().await.unwrap();
+    /// let mut iter = queue.try_iter_mut().await.unwrap();
     /// let value = iter.next().unwrap();
     /// *value = 42;
     /// assert_eq!(queue.elements().await.unwrap(), vec![42]);
     /// # })
     /// ```
-    #[allow(clippy::iter_not_returning_iterator)]
-    pub async fn iter_mut(&mut self) -> Result<IterMut<'_, T>, ViewError> {
+    pub async fn try_iter_mut(&mut self) -> Result<IterMut<'_, T>, ViewError> {
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())
     }
