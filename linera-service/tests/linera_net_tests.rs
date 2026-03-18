@@ -1691,13 +1691,10 @@ async fn test_wasm_end_to_end_counter_subscription_ttl(config: impl LineraNetCon
     );
 
     // But it should arrive after the TTL expires (wait up to 5 more seconds).
-    let updated = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        subscription.next(),
-    )
-    .await
-    .context("expected deferred notification after TTL")?
-    .context("subscription stream ended")??;
+    let updated = tokio::time::timeout(std::time::Duration::from_secs(5), subscription.next())
+        .await
+        .context("expected deferred notification after TTL")?
+        .context("subscription stream ended")??;
     let updated_value: u64 = serde_json::from_value(updated["data"]["value"].clone())?;
     assert_eq!(updated_value, original_counter_value + increment);
 
