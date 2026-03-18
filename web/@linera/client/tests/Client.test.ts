@@ -16,7 +16,7 @@ test("successfully runs the client and connects to the network", async () => {
 test("fails to create a wallet that already exists", async () => {
   const lin = await linera.initialize();
   const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
-  const signer = linera.signer.PrivateKey.fromMnemonic("test test test test test test test test test test test junk");
+  const signer = linera.signer.PrivateKey.createRandom();
   const wallet1 = await faucet.createWallet();
   const _chainId = await faucet.claimChain(wallet1, signer.address());
   const wallet2 = await faucet.createWallet();
@@ -34,7 +34,7 @@ test("fails to create a wallet that already exists", async () => {
 test("releases resources on asyncDispose()", async () => {
   await linera.initialize();
   const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
-  const signer = linera.signer.PrivateKey.fromMnemonic("test test test test test test test test test test test junk");
+  const signer = linera.signer.PrivateKey.createRandom();
 
   const wallet1 = await faucet.createWallet();
   await faucet.claimChain(wallet1, signer.address());
