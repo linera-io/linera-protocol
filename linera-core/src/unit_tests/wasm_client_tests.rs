@@ -710,8 +710,10 @@ where
         .with_policy(ResourceControlPolicy::all_categories());
     builder.set_fault_type([3], FaultType::Offline);
 
-    let sender = builder.add_root_chain(0, Amount::ONE).await?;
-    let sender2 = builder.add_root_chain(1, Amount::ONE).await?;
+    // Root chain 0 is used as the admin chain; use higher indices for test chains so
+    // that the publisher chains are not the admin chain (which is always fully synced).
+    let sender = builder.add_root_chain(1, Amount::ONE).await?;
+    let sender2 = builder.add_root_chain(2, Amount::ONE).await?;
     // Make sure that sender's chain ID is less than sender2's - important for the final
     // query check
     let (sender, sender2) = if sender.chain_id() < sender2.chain_id() {
@@ -719,7 +721,7 @@ where
     } else {
         (sender2, sender)
     };
-    let mut receiver = builder.add_root_chain(2, Amount::ONE).await?;
+    let mut receiver = builder.add_root_chain(3, Amount::ONE).await?;
 
     let module_id = receiver.publish_wasm_example("social").await?;
     let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
@@ -800,6 +802,7 @@ where
     assert_eq!(outcome, expected);
 
     // Make a non-event operation on the sender chain (self-transfer), then another post.
+    // Non-event block between two event blocks, to test sparse sync gaps.
     let non_event_cert = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -942,7 +945,7 @@ where
 
     // Now test synchronize_publisher_chains: a second receiver subscribes after events
     // already exist, and gets them via partial sync (not full chain download).
-    let receiver2 = builder.add_root_chain(3, Amount::ONE).await?;
+    let receiver2 = builder.add_root_chain(4, Amount::ONE).await?;
 
     // Subscribe to the sender's events using the same application as the first receiver.
     let request_subscribe2 = social::Operation::Subscribe {
