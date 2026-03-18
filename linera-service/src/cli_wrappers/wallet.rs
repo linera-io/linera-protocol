@@ -490,6 +490,7 @@ impl ClientWrapper {
             operators,
             read_only,
             &[],
+            &[],
         )
         .await
     }
@@ -503,6 +504,7 @@ impl ClientWrapper {
         operators: &[(String, PathBuf)],
         read_only: bool,
         allowed_subscriptions: &[String],
+        subscription_ttls: &[(String, u64)],
     ) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
@@ -524,6 +526,9 @@ impl ClientWrapper {
         }
         for query in allowed_subscriptions {
             command.args(["--allow-subscription", query]);
+        }
+        for (name, secs) in subscription_ttls {
+            command.args(["--subscription-ttl-secs", &format!("{name}={secs}")]);
         }
         let child = command
             .args(["--port".to_string(), port.to_string()])
