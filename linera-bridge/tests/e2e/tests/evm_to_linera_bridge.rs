@@ -37,7 +37,9 @@ use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use serde::{Deserialize, Serialize};
 use wrapped_fungible::{InitialState, WrappedParameters};
 
-// ── Inline evm-bridge types (avoids depending on evm-bridge crate) ──────────
+// ── Inline evm-bridge types ─────────────────────────────────────────────────
+// Inlined to avoid a dependency on evm-bridge, which pulls in linera-bridge
+// with the `chain` feature — that disables `proof::gen` via feature unification.
 
 /// Must match `evm_bridge::BridgeParameters` field-for-field for BCS compatibility.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -46,6 +48,7 @@ struct BridgeParameters {
     bridge_contract_address: [u8; 20],
     fungible_app_id: ApplicationId,
     token_address: [u8; 20],
+    rpc_endpoint: String,
 }
 
 /// Must match `evm_bridge::BridgeOperation` variant-for-variant for BCS compatibility.
@@ -57,6 +60,9 @@ enum BridgeOperation {
         proof_nodes: Vec<Vec<u8>>,
         tx_index: u64,
         log_index: u64,
+    },
+    VerifyBlockHash {
+        block_hash: [u8; 32],
     },
 }
 
@@ -245,6 +251,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         bridge_contract_address: bridge_addr.0 .0,
         fungible_app_id,
         token_address: erc20_addr.0 .0,
+        rpc_endpoint: String::new(),
     };
     let (bridge_app_id, _) = cc
         .create_application_untyped(
