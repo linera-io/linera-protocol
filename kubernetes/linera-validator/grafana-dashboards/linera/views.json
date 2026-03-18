@@ -171,7 +171,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_view_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:load_view_latency:rate1m{validator=~\"$validator\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -182,7 +182,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_load_view_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:load_view_latency:rate1m{validator=~\"$validator\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -193,7 +193,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_view_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:load_view_latency:rate1m{validator=~\"$validator\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -338,7 +338,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le, type) (rate(linera_save_view_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:save_view_latency:rate1m{validator=~\"$validator\"})",
           "legendFormat": "{{type}} p50",
           "range": true,
           "refId": "A"
@@ -349,7 +349,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le, type) (rate(linera_save_view_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:save_view_latency:rate1m{validator=~\"$validator\"})",
           "legendFormat": "{{type}} p90",
           "range": true,
           "refId": "B"
@@ -360,7 +360,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le, type) (rate(linera_save_view_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:save_view_latency:rate1m{validator=~\"$validator\"})",
           "legendFormat": "{{type}} p99",
           "range": true,
           "refId": "C"
@@ -1244,7 +1244,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
