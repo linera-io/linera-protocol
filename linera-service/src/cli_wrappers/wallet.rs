@@ -1457,17 +1457,67 @@ fn truncate_query_output_serialize<T: Serialize>(query: T) -> String {
 }
 
 /// A running node service.
+/// Logs a warning if a child process has already exited when its wrapper is dropped.
+/// On Unix, includes the signal number if the process was killed (e.g. signal 9 = OOM).
+fn log_unexpected_exit(child: &mut Child, service_kind: &str, port: u16) {
+    match child.try_wait() {
+        Ok(Some(status)) => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::ExitStatusExt as _;
+                if let Some(signal) = status.signal() {
+                    tracing::error!(
+                        port,
+                        signal,
+                        "The {service_kind} service was killed by signal {signal}",
+                    );
+                    return;
+                }
+            }
+            if !status.success() {
+                tracing::error!(
+                    port,
+                    %status,
+                    "The {service_kind} service exited unexpectedly with {status}",
+                );
+            }
+        }
+        Ok(None) => {} // Still running — normal case when terminate() was called.
+        Err(error) => {
+            tracing::warn!(
+                port,
+                %error,
+                "Failed to check {service_kind} service status",
+            );
+        }
+    }
+}
+
 pub struct NodeService {
     port: u16,
     child: Child,
+    terminated: bool,
+}
+
+impl Drop for NodeService {
+    fn drop(&mut self) {
+        if !self.terminated {
+            log_unexpected_exit(&mut self.child, "node", self.port);
+        }
+    }
 }
 
 impl NodeService {
     fn new(port: u16, child: Child) -> Self {
-        Self { port, child }
+        Self {
+            port,
+            child,
+            terminated: false,
+        }
     }
 
     pub async fn terminate(mut self) -> Result<()> {
+        self.terminated = true;
         self.child.kill().await.context("terminating node service")
     }
 
@@ -1856,6 +1906,15 @@ pub struct FaucetService {
     port: u16,
     child: Child,
     _temp_dir: tempfile::TempDir,
+    terminated: bool,
+}
+
+impl Drop for FaucetService {
+    fn drop(&mut self) {
+        if !self.terminated {
+            log_unexpected_exit(&mut self.child, "faucet", self.port);
+        }
+    }
 }
 
 impl FaucetService {
@@ -1864,10 +1923,12 @@ impl FaucetService {
             port,
             child,
             _temp_dir: temp_dir,
+            terminated: false,
         }
     }
 
     pub async fn terminate(mut self) -> Result<()> {
+        self.terminated = true;
         self.child
             .kill()
             .await
