@@ -31,7 +31,10 @@ use linera_chain::{
         OriginalProposal, ProposalContent, ProposedBlock,
     },
     manager,
-    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{
+        Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
+        ValidatedBlockCertificate,
+    },
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
@@ -760,7 +763,7 @@ where
                     chain_id,
                     reason: Reason::NewEvents {
                         height,
-                        hash: certificate.hash(),
+                        hash: block_hash,
                         event_streams: updated_event_streams,
                     },
                 });
@@ -811,7 +814,9 @@ where
                 block.body.incoming_bundles(),
             )
             .await?;
-        if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
+        let confirmed_block = if let Some(mut execution_state) =
+            self.execution_state_cache.remove(&block_hash)
+        {
             chain.execution_state = execution_state
                 .with_context(|ctx| {
                     chain
@@ -820,10 +825,11 @@ where
                         .clone_with_base_key(ctx.base_key().bytes.clone())
                 })
                 .await;
+            certificate.into_value()
         } else {
-            let (proposed_block, outcome) = block.clone().into_proposal();
+            let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
             let oracle_responses = Some(outcome.oracle_responses.clone());
-            let (_, verified, _resource_tracker) = chain
+            let (proposed_block, verified, _resource_tracker) = chain
                 .execute_block(
                     proposed_block,
                     local_time,
@@ -841,15 +847,16 @@ where
                     computed: Box::new(verified),
                 }
             );
-        }
+            ConfirmedBlock::new(Block::new(proposed_block, verified))
+        };
 
         // Update the rest of the chain state.
         let updated_streams = chain
-            .apply_confirmed_block(certificate.value(), local_time)
+            .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
-        let hash = certificate.hash();
+        let hash = block_hash;
         actions.notifications.push(Notification {
             chain_id,
             reason: Reason::NewBlock { height, hash },
@@ -868,7 +875,7 @@ where
         self.save().await?;
 
         self.block_values
-            .insert(Cow::Owned(certificate.into_inner().into_inner()));
+            .insert(Cow::Owned(confirmed_block.into_inner()));
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
