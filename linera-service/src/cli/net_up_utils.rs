@@ -34,8 +34,7 @@ struct StorageConfigProvider {
     /// The storage config.
     config: StorageConfig,
     #[cfg(feature = "storage-service")]
-    #[allow(dead_code)]
-    service_guard: Option<StorageServiceGuard>,
+    _service_guard: Option<StorageServiceGuard>,
 }
 
 impl StorageConfigProvider {
@@ -57,7 +56,7 @@ impl StorageConfigProvider {
                 };
                 Ok(StorageConfigProvider {
                     config,
-                    service_guard,
+                    _service_guard: service_guard,
                 })
             }
             #[cfg(not(feature = "storage-service"))]
@@ -69,7 +68,7 @@ impl StorageConfigProvider {
                 let config = StorageConfig::from_str(storage)?;
                 Ok(StorageConfigProvider {
                     config,
-                    service_guard: None,
+                    _service_guard: None,
                 })
             }
             #[cfg(not(feature = "storage-service"))]
