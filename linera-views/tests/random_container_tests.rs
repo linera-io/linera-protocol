@@ -446,7 +446,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
                 // changing some random entries
                 let pos = rng.gen_range(0..count);
                 let val = rng.gen::<u8>();
-                let mut iter = view.queue.iter_mut().await?;
+                let mut iter = view.queue.try_iter_mut().await?;
                 (for _ in 0..pos {
                     iter.next();
                 });
@@ -682,7 +682,7 @@ async fn queue_view_mutability_check() -> Result<()> {
                 // changing some random entries
                 let pos = rng.gen_range(0..count);
                 let val = rng.gen::<u8>();
-                let mut iter = view.queue.iter_mut().await?;
+                let mut iter = view.queue.try_iter_mut().await?;
                 (for _ in 0..pos {
                     iter.next();
                 });

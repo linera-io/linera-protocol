@@ -625,7 +625,7 @@ async fn page(
             plugin(&name, indexer).await
         }
         "error" => {
-            let msg = find_arg(args, "msg").unwrap_or("unknown error".to_string());
+            let msg = find_arg(args, "msg").unwrap_or_else(|| "unknown error".to_string());
             Err(anyhow::Error::msg(msg))
         }
         _ => Err(anyhow!("unknown page")),
