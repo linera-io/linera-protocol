@@ -143,6 +143,19 @@ where
         Ok((code, description))
     }
 
+    /// Pre-warms the user state view for the given application into the cache,
+    /// so that subsequent storage operations don't need to reload from storage.
+    pub(crate) async fn pre_warm_user_state(
+        &mut self,
+        application_id: &ApplicationId,
+    ) -> Result<(), ExecutionError> {
+        self.state
+            .users
+            .try_load_entry_mut(application_id)
+            .await?;
+        Ok(())
+    }
+
     // TODO(#1416): Support concurrent I/O.
     #[instrument(
         skip_all,
@@ -335,38 +348,26 @@ where
             }
 
             ContainsKey { id, key, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.contains_key(&key).await?,
-                    None => false,
-                };
+                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let result = view.contains_key(&key).await?;
                 callback.respond(result);
             }
 
             ContainsKeys { id, keys, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.contains_keys(&keys).await?,
-                    None => vec![false; keys.len()],
-                };
+                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let result = view.contains_keys(&keys).await?;
                 callback.respond(result);
             }
 
             ReadMultiValuesBytes { id, keys, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let values = match view {
-                    Some(view) => view.multi_get(&keys).await?,
-                    None => vec![None; keys.len()],
-                };
+                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let values = view.multi_get(&keys).await?;
                 callback.respond(values);
             }
 
             ReadValueBytes { id, key, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.get(&key).await?,
-                    None => None,
-                };
+                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let result = view.get(&key).await?;
                 callback.respond(result);
             }
 
@@ -375,11 +376,8 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.find_keys_by_prefix(&key_prefix).await?,
-                    None => Vec::new(),
-                };
+                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let result = view.find_keys_by_prefix(&key_prefix).await?;
                 callback.respond(result);
             }
 
@@ -388,11 +386,8 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.find_key_values_by_prefix(&key_prefix).await?,
-                    None => Vec::new(),
-                };
+                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let result = view.find_key_values_by_prefix(&key_prefix).await?;
                 callback.respond(result);
             }
 
@@ -796,14 +791,9 @@ where
                 application,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry(&application).await?;
-                let result = match view {
-                    Some(view) => {
-                        let total_size = view.total_size();
-                        (total_size.key, total_size.value)
-                    }
-                    None => (0, 0),
-                };
+                let view = self.state.users.try_load_entry_mut(&application).await?;
+                let total_size = view.total_size();
+                let result = (total_size.key, total_size.value);
                 callback.respond(result);
             }
 
@@ -976,6 +966,10 @@ where
             .is_free_app(&application_id);
         controller.is_free = is_free;
         self.resource_controller.is_free = is_free;
+        // Pre-warm the main application's view into the cache so that subsequent
+        // storage operations don't need to reload it from storage each time.
+        self.pre_warm_user_state(&application_id).await?;
+
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
 

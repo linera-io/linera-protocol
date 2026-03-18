@@ -199,9 +199,12 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
                     let view = view
                         .try_read()
                         .ok_or_else(|| ViewError::TryLockError(index.clone()))?;
+                    let batch_len_before = batch.operations.len();
                     view.pre_save(batch)?;
-                    self.add_index(batch, index);
-                    delete_view = false;
+                    if batch.operations.len() > batch_len_before {
+                        self.add_index(batch, index);
+                        delete_view = false;
+                    }
                 }
             }
         } else {
@@ -211,8 +214,11 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
                         let view = view
                             .try_read()
                             .ok_or_else(|| ViewError::TryLockError(index.clone()))?;
+                        let batch_len_before = batch.operations.len();
                         view.pre_save(batch)?;
-                        self.add_index(batch, index);
+                        if batch.operations.len() > batch_len_before {
+                            self.add_index(batch, index);
+                        }
                     }
                     Update::Removed => {
                         let key_subview = self.get_subview_key(index);
@@ -382,6 +388,16 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 .try_write_arc()
                 .ok_or_else(|| ViewError::TryLockError(short_key.to_vec()))?,
         ))
+    }
+
+    /// Loads a subview for the data at the given index in the collection and returns
+    /// the `Arc<RwLock<W>>` directly. If an entry is absent then a default entry is added
+    /// to the collection. This is useful for caching the Arc outside the collection.
+    pub async fn try_load_view_arc(
+        &mut self,
+        short_key: &[u8],
+    ) -> Result<Arc<RwLock<W>>, ViewError> {
+        self.try_load_view_mut(short_key).await
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
@@ -1237,6 +1253,20 @@ where
     {
         let short_key = BaseKey::derive_short_key(index)?;
         self.collection.try_load_entry_mut(&short_key).await
+    }
+
+    /// Loads a subview for the data at the given index and returns the `Arc<RwLock<W>>`
+    /// directly. If an entry is absent then a default entry is added to the collection.
+    pub async fn try_load_view_arc<Q>(
+        &mut self,
+        index: &Q,
+    ) -> Result<Arc<RwLock<W>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.collection.try_load_view_arc(&short_key).await
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
