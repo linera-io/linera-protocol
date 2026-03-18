@@ -14,6 +14,7 @@ use tokio::sync::Mutex;
 use tracing::instrument;
 
 use super::{
+    add_metering,
     module_cache::ModuleCache,
     runtime_api::{BaseRuntimeApi, ContractRuntimeApi, RuntimeApiData, ServiceRuntimeApi},
     ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
@@ -36,9 +37,24 @@ static SERVICE_ENGINE: LazyLock<wasmer::Engine> = LazyLock::new(|| {
     }
 });
 
-/// A cache of compiled contract modules, with their respective [`wasmer::Engine`] instances.
-static CONTRACT_CACHE: LazyLock<Mutex<ModuleCache<CachedContractModule>>> =
-    LazyLock::new(Mutex::default);
+/// An [`Engine`] instance configured to run application contracts.
+static CONTRACT_ENGINE: LazyLock<wasmer::Engine> = LazyLock::new(|| {
+    #[cfg(not(web))]
+    {
+        let mut compiler_config = wasmer_compiler_singlepass::Singlepass::default();
+        compiler_config.canonicalize_nans(true);
+
+        wasmer::sys::EngineBuilder::new(compiler_config).into()
+    }
+
+    #[cfg(web)]
+    {
+        wasmer::Engine::default()
+    }
+});
+
+/// A cache of compiled contract modules.
+static CONTRACT_CACHE: LazyLock<Mutex<ModuleCache<wasmer::Module>>> = LazyLock::new(Mutex::default);
 
 /// A cache of compiled service modules.
 static SERVICE_CACHE: LazyLock<Mutex<ModuleCache<wasmer::Module>>> = LazyLock::new(Mutex::default);
@@ -59,12 +75,17 @@ impl WasmContractModule {
     /// Creates a new [`WasmContractModule`] using Wasmer with the provided bytecode files.
     pub async fn from_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
-        let (engine, module) = contract_cache
-            .get_or_insert_with(contract_bytecode, "contract", CachedContractModule::new)
-            .map_err(WasmExecutionError::LoadContractModule)?
-            .create_execution_instance()
+        let module = contract_cache
+            .get_or_insert_with(contract_bytecode, "contract", |bytecode| {
+                let metered_bytecode = add_metering(bytecode)?;
+                wasmer::Module::new(&*CONTRACT_ENGINE, metered_bytecode)
+                    .map_err(anyhow::Error::from)
+            })
             .map_err(WasmExecutionError::LoadContractModule)?;
-        Ok(WasmContractModule::Wasmer { engine, module })
+        Ok(WasmContractModule::Wasmer {
+            engine: CONTRACT_ENGINE.clone(),
+            module,
+        })
     }
 }
 
@@ -189,51 +210,5 @@ impl From<wasmer::RuntimeError> for ExecutionError {
             .unwrap_or_else(|unknown_error| {
                 ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmer(unknown_error))
             })
-    }
-}
-
-/// Serialized bytes of a compiled contract bytecode.
-// Cloning `Module`s is cheap.
-#[derive(Clone)]
-pub struct CachedContractModule(wasmer::Module);
-
-impl CachedContractModule {
-    /// Creates a new [`CachedContractModule`] by compiling a `contract_bytecode`.
-    pub fn new(contract_bytecode: Bytecode) -> Result<Self, anyhow::Error> {
-        let module = wasmer::Module::new(&Self::create_compilation_engine(), contract_bytecode)?;
-        Ok(CachedContractModule(module))
-    }
-
-    /// Creates a new [`Engine`] to compile a contract bytecode.
-    fn create_compilation_engine() -> wasmer::Engine {
-        #[cfg(not(web))]
-        {
-            let mut compiler_config = wasmer_compiler_singlepass::Singlepass::default();
-            compiler_config.canonicalize_nans(true);
-
-            wasmer::sys::EngineBuilder::new(compiler_config).into()
-        }
-
-        #[cfg(web)]
-        wasmer::Engine::default()
-    }
-
-    /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
-    pub fn create_execution_instance(
-        &self,
-    ) -> Result<(wasmer::Engine, wasmer::Module), anyhow::Error> {
-        #[cfg(web)]
-        {
-            Ok((wasmer::Engine::default(), self.0.clone()))
-        }
-
-        #[cfg(not(web))]
-        {
-            let engine = wasmer::Engine::default();
-            let store = wasmer::Store::new(engine.clone());
-            let bytes = self.0.serialize()?;
-            let module = unsafe { wasmer::Module::deserialize(&store, bytes) }?;
-            Ok((engine, module))
-        }
     }
 }
