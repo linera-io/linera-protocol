@@ -715,8 +715,7 @@ pub struct PathWithGuard {
     pub path_buf: PathBuf,
     /// The guard for the directory if one is needed
     #[serde(skip)]
-    #[allow(dead_code)]
-    dir_guard: Option<Arc<TempDir>>,
+    _dir_guard: Option<Arc<TempDir>>,
 }
 
 impl PathWithGuard {
@@ -724,7 +723,7 @@ impl PathWithGuard {
     pub fn new(path_buf: PathBuf) -> Self {
         Self {
             path_buf,
-            dir_guard: None,
+            _dir_guard: None,
         }
     }
 
@@ -736,7 +735,7 @@ impl PathWithGuard {
         let dir_guard = Some(Arc::new(dir));
         PathWithGuard {
             path_buf,
-            dir_guard,
+            _dir_guard: dir_guard,
         }
     }
 }
