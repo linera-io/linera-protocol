@@ -52,7 +52,7 @@ jobs:
             name_suffix: Linux-x86_64
 
           - target: x86_64-apple-darwin
-            os: macos-14-large    # Intel Mac runner
+            os: macos-14-large    # Apple Silicon runner (cross-compiles to x86_64)
             archive: tar.gz
             name_suffix: Darwin-x86_64
 
