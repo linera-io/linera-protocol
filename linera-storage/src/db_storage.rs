@@ -11,6 +11,7 @@ use linera_base::{
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
 };
+use linera_cache::ValueCache;
 use linera_chain::{
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
     ChainStateView,
@@ -369,6 +370,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    blob_cache: Arc<ValueCache<BlobId, Blob>>,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 
@@ -1251,12 +1253,20 @@ where
 
     #[instrument(skip_all, fields(%blob_id))]
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+        if let Some(blob) = self.blob_cache.get(&blob_id) {
+            return Ok(Some(blob));
+        }
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let maybe_blob_bytes = store.read_value_bytes(BLOB_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
+        let result =
+            maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes));
+        if let Some(ref blob) = result {
+            self.blob_cache.insert(&blob_id, blob.clone());
+        }
+        Ok(result)
     }
 
     #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
@@ -1764,7 +1774,12 @@ where
     Database::Store: KeyValueStore + Clone + 'static,
     C: Clock + Clone + Send + Sync + 'static,
 {
-    pub(crate) fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
+    pub(crate) fn new(
+        database: Database,
+        wasm_runtime: Option<WasmRuntime>,
+        blob_cache_size: usize,
+        clock: C,
+    ) -> Self {
         Self {
             database: Arc::new(database),
             clock,
@@ -1774,6 +1789,7 @@ where
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
+            blob_cache: Arc::new(ValueCache::new(blob_cache_size)),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
@@ -1795,9 +1811,10 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
+        blob_cache_size: usize,
     ) -> Result<Self, ViewError> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, WallClock);
+        let storage = Self::new(database, wasm_runtime, blob_cache_size, WallClock);
         Ok(storage)
     }
 
@@ -1805,9 +1822,10 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
+        blob_cache_size: usize,
     ) -> Result<Self, ViewError> {
         let database = Database::connect(config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, WallClock);
+        let storage = Self::new(database, wasm_runtime, blob_cache_size, WallClock);
         Ok(storage)
     }
 
@@ -1881,7 +1899,7 @@ where
         clock: TestClock,
     ) -> Result<Self, ViewError> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, clock);
+        let storage = Self::new(database, wasm_runtime, 1000, clock);
         storage.assert_is_migrated_storage().await?;
         Ok(storage)
     }

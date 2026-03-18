@@ -82,6 +82,10 @@ struct ServeOptions {
     /// Port to listen on for HTTP requests
     #[arg(long, default_value = "3001")]
     port: u16,
+
+    /// The maximal number of entries in the blob cache.
+    #[arg(long, default_value = "1000")]
+    blob_cache_size: usize,
 }
 
 fn main() -> Result<()> {
@@ -109,6 +113,7 @@ impl ServeOptions {
             &self.fungible_app_id_file,
             &self.evm_private_key,
             self.port,
+            self.blob_cache_size,
         )
         .await
     }

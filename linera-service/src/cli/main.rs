@@ -1806,6 +1806,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
         self,
         config: D::Config,
         namespace: String,
+        blob_cache_size: usize,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -1846,8 +1847,13 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 genesis_config_path,
             } => {
                 let genesis_config: GenesisConfig = util::read_json(genesis_config_path)?;
-                let mut storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let mut storage = DbStorage::<D, _>::maybe_create_and_connect(
+                    &config,
+                    &namespace,
+                    None,
+                    blob_cache_size,
+                )
+                .await?;
                 genesis_config.initialize_storage(&mut storage).await?;
                 info!(
                     "Namespace {namespace} was initialized in {} ms",

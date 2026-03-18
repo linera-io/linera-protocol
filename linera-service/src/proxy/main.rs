@@ -498,13 +498,18 @@ impl ProxyOptions {
         let store_config = self
             .storage_config
             .add_common_storage_options(&self.common_storage_options)?;
-        store_config.clone().run_with_store(AssertStorageV1).await?;
+        let blob_cache_size = self.common_storage_options.blob_cache_size;
+        store_config
+            .clone()
+            .run_with_store(blob_cache_size, AssertStorageV1)
+            .await?;
         // Proxies are part of validator infrastructure and should not output contract logs.
         let allow_application_logs = false;
         store_config
             .run_with_storage(
                 None,
                 allow_application_logs,
+                blob_cache_size,
                 ProxyContext::from_options(self)?,
             )
             .boxed()

@@ -545,13 +545,14 @@ async fn run(options: ServerOptions) {
                 .unwrap();
             // Validators should not output contract logs.
             let allow_application_logs = false;
+            let blob_cache_size = common_storage_options.blob_cache_size;
             store_config
                 .clone()
-                .run_with_store(AssertStorageV1)
+                .run_with_store(blob_cache_size, AssertStorageV1)
                 .await
                 .unwrap();
             store_config
-                .run_with_storage(wasm_runtime, allow_application_logs, job)
+                .run_with_storage(wasm_runtime, allow_application_logs, blob_cache_size, job)
                 .boxed()
                 .await
                 .unwrap()

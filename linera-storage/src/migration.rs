@@ -575,7 +575,7 @@ mod tests {
         let mut storage_state = get_storage_state();
         write_storage_state_old_schema(&database, storage_state.clone()).await?;
         // Creating a storage and migrate to the new database schema.
-        let storage = DbStorage::<D, WallClock>::new(database, None, WallClock);
+        let storage = DbStorage::<D, WallClock>::new(database, None, 1000, WallClock);
         storage.migrate_if_needed().await?;
         // read the storage state and compare it.
         let read_storage_state = read_storage_state_new_schema(storage.database.deref()).await?;
