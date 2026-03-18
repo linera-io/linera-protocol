@@ -67,7 +67,7 @@ const CLIENT_SERVICE_ENV: &str = "LINERA_CLIENT_SERVICE_PARAMS";
 
 fn reqwest_client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(60))
         .build()
         .unwrap()
 }
