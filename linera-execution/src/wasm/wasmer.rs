@@ -212,4 +212,3 @@ impl From<wasmer::RuntimeError> for ExecutionError {
             })
     }
 }
-
