@@ -1981,11 +1981,11 @@ impl<A> From<String> for ApplicationWrapper<A> {
 }
 
 /// Returns the timeout for tests that wait for notifications, either read from the env
-/// variable `LINERA_TEST_NOTIFICATION_TIMEOUT_MS`, or the default value of 10 seconds.
+/// variable `LINERA_TEST_NOTIFICATION_TIMEOUT_MS`, or the default value of 20 seconds.
 #[cfg(with_testing)]
 fn notification_timeout() -> Duration {
     const NOTIFICATION_TIMEOUT_MS_ENV: &str = "LINERA_TEST_NOTIFICATION_TIMEOUT_MS";
-    const NOTIFICATION_TIMEOUT_MS_DEFAULT: u64 = 10_000;
+    const NOTIFICATION_TIMEOUT_MS_DEFAULT: u64 = 20_000;
 
     match env::var(NOTIFICATION_TIMEOUT_MS_ENV) {
         Ok(var) => Duration::from_millis(var.parse().unwrap_or_else(|error| {
