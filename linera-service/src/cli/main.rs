@@ -77,6 +77,7 @@ use linera_service::{
     },
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     controller::Controller,
+    wallet::WalletExt as _,
     node_service::NodeService,
     project::{self, Project},
     storage::{AssertStorageV1, Runnable, RunnableWithStore, StorageMigration},
@@ -2128,8 +2129,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             });
             let mut genesis_config = persistent::File::new(
                 genesis_config_path,
-                GenesisConfig::new(
-                    committee_config,
+                committee_config.into_genesis(
                     timestamp,
                     policy,
                     network_name,
@@ -2370,13 +2370,17 @@ async fn run(options: &Options) -> Result<i32, Error> {
             WalletCommand::ForgetKeys { chain_id } => {
                 let start_time = Instant::now();
                 let owner = options.wallet()?.forget_keys(*chain_id)?;
-                if !options
-                    .signer()?
-                    .contains_key(&owner)
-                    .await
-                    .expect("Signer error")
-                {
-                    warn!("no keypair found in keystore for chain {chain_id}");
+                if let Some(owner) = owner {
+                    if !options
+                        .signer()?
+                        .contains_key(&owner)
+                        .await
+                        .expect("Signer error")
+                    {
+                        warn!("no keypair found in keystore for chain {chain_id}");
+                    }
+                } else {
+                    warn!("no owner key found for chain {chain_id}");
                 }
                 info!(
                     "Chain keys forgotten in {} ms",
