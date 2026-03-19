@@ -69,11 +69,7 @@ impl Memory {
             .collect::<Vec<_>>()
     }
 
-    pub fn mutate<R>(
-        &self,
-        chain_id: ChainId,
-        mutate: impl Fn(&mut Chain) -> R,
-    ) -> Option<R> {
+    pub fn mutate<R>(&self, chain_id: ChainId, mutate: impl Fn(&mut Chain) -> R) -> Option<R> {
         use papaya::Operation::*;
 
         let mut outcome = None;
