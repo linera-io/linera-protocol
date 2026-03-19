@@ -1257,10 +1257,7 @@ where
 
     /// Loads a subview for the data at the given index and returns the `Arc<RwLock<W>>`
     /// directly. If an entry is absent then a default entry is added to the collection.
-    pub async fn try_load_view_arc<Q>(
-        &mut self,
-        index: &Q,
-    ) -> Result<Arc<RwLock<W>>, ViewError>
+    pub async fn try_load_view_arc<Q>(&mut self, index: &Q) -> Result<Arc<RwLock<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,

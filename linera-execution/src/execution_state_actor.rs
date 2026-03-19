@@ -3,8 +3,12 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
+use async_lock::RwLock;
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
 #[cfg(with_metrics)]
@@ -22,13 +26,8 @@ use linera_base::{
     time::Instant,
 };
 use linera_views::{
-    batch::Batch,
-    context::Context,
-    key_value_store_view::KeyValueStoreView,
-    views::View,
+    batch::Batch, context::Context, key_value_store_view::KeyValueStoreView, views::View,
 };
-use std::sync::Arc;
-use async_lock::RwLock;
 use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
 use tracing::{info_span, instrument, Instrument as _};
@@ -162,11 +161,7 @@ where
         if let Some(arc) = self.key_value_stores.get(application_id) {
             return Ok(arc.clone());
         }
-        let arc = self
-            .state
-            .users
-            .try_load_view_arc(application_id)
-            .await?;
+        let arc = self.state.users.try_load_view_arc(application_id).await?;
         self.key_value_stores.insert(*application_id, arc.clone());
         Ok(arc)
     }
