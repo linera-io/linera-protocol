@@ -604,7 +604,7 @@ impl<Env: Environment> Client<Env> {
         let timeout = self.options.certificate_batch_download_timeout;
         let (max_epoch, committees) = self.admin_committees().await?;
         let committees_ref = &committees;
-        let mut remaining_event_ids: Vec<EventId> = event_ids.to_vec();
+        let mut remaining_event_ids = event_ids.to_vec();
 
         while !remaining_event_ids.is_empty() {
             let remaining_ref = &remaining_event_ids;
@@ -643,23 +643,18 @@ impl<Env: Environment> Client<Env> {
                     }
 
                     // Download certificates and verify them.
-                    let mut certificates_with_check_results = Vec::new();
+                    let mut checked_certificates = Vec::<ConfirmedBlockCertificate>::new();
                     for (chain_id, heights) in chain_heights {
                         let heights_vec = heights.into_iter().collect::<Vec<_>>();
                         let certificates = self
                             .requests_scheduler
-                            .download_certificates_by_heights(
-                                &remote_node,
-                                chain_id,
-                                heights_vec,
-                            )
+                            .download_certificates_by_heights(&remote_node, chain_id, heights_vec)
                             .await
                             .map_err(|_| ())?;
                         for cert in &certificates {
                             // Verify the block contains the expected events.
                             let block = cert.block();
-                            let block_event_ids: HashSet<_> =
-                                block.event_ids().collect();
+                            let block_event_ids = block.event_ids().collect::<HashSet<_>>();
                             if let Some(expected) =
                                 expected_events.get(&(chain_id, block.header.height))
                             {
@@ -670,18 +665,24 @@ impl<Env: Environment> Client<Env> {
                             }
                         }
                         for cert in certificates {
-                            if let Ok(check_result) =
-                                Self::check_certificate(max_epoch, committees_ref, &cert)
-                            {
-                                certificates_with_check_results
-                                    .push((cert, check_result.into_result().is_ok()));
-                            } else {
-                                // Invalid signature — faulty validator.
-                                return Err(());
-                            }
+                            Self::check_certificate(max_epoch, committees_ref, &cert)
+                                .map_err(|error| {
+                                    tracing::debug!(
+                                        validator = %remote_node.address(), %error,
+                                        "invalid certificate"
+                                    );
+                                })?
+                                .into_result()
+                                .map_err(|error| {
+                                    tracing::debug!(
+                                        validator = %remote_node.address(), %error,
+                                        "could not check certificate"
+                                    );
+                                })?;
+                            checked_certificates.push(cert);
                         }
                     }
-                    Ok((certificates_with_check_results, unresolved))
+                    Ok((checked_certificates, unresolved))
                 },
                 |errors| {
                     errors
@@ -695,10 +696,7 @@ impl<Env: Environment> Client<Env> {
 
             match result {
                 Ok((certificates, unresolved)) => {
-                    for (certificate, check_result) in certificates {
-                        if !check_result {
-                            continue;
-                        }
+                    for certificate in certificates {
                         let mode = ReceiveCertificateMode::AlreadyChecked;
                         self.receive_sender_certificate(certificate, mode, None)
                             .await?;
@@ -710,8 +708,7 @@ impl<Env: Environment> Client<Env> {
                     remaining_event_ids = unresolved;
                 }
                 Err(faulty_validators) => {
-                    validators
-                        .retain(|node| !faulty_validators.contains(&node.public_key));
+                    validators.retain(|node| !faulty_validators.contains(&node.public_key));
                     if validators.is_empty() {
                         break;
                     }
