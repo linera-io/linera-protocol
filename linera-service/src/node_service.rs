@@ -161,8 +161,14 @@ where
             )
             .map_err(|e| Error::new(e.to_string()))?;
 
-        Ok(tokio_stream::wrappers::WatchStream::new(receiver)
-            .filter_map(|value| async move { value }))
+        // `sender.subscribe()` marks the current value as "already seen", so
+        // `WatchStream` would skip it and wait for the next change.  Grab the
+        // current snapshot first and prepend it to the stream so that every new
+        // subscriber gets the latest cached result immediately.
+        let current = receiver.borrow().clone();
+        let changes = tokio_stream::wrappers::WatchStream::from_changes(receiver)
+            .filter_map(|value| async move { value });
+        Ok(futures::stream::iter(current).chain(changes))
     }
 }
 
