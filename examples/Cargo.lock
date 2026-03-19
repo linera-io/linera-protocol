@@ -3752,6 +3752,7 @@ dependencies = [
  "allocative",
  "anyhow",
  "async-graphql",
+ "async-lock",
  "async-trait",
  "bcs",
  "cfg-if",

@@ -21,7 +21,14 @@ use linera_base::{
     ownership::ChainOwnership,
     time::Instant,
 };
-use linera_views::{batch::Batch, context::Context, views::View};
+use linera_views::{
+    batch::Batch,
+    context::Context,
+    key_value_store_view::KeyValueStoreView,
+    views::View,
+};
+use std::sync::Arc;
+use async_lock::RwLock;
 use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
 use tracing::{info_span, instrument, Instrument as _};
@@ -38,10 +45,12 @@ use crate::{
 };
 
 /// Actor for handling requests to the execution state.
-pub struct ExecutionStateActor<'a, C> {
+pub struct ExecutionStateActor<'a, C: Context> {
     state: &'a mut ExecutionStateView<C>,
     txn_tracker: &'a mut TransactionTracker,
     resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
+    /// Cached key-value store views for fast access during execution.
+    key_value_stores: BTreeMap<ApplicationId, Arc<RwLock<KeyValueStoreView<C>>>>,
 }
 
 #[cfg(with_metrics)]
@@ -89,6 +98,7 @@ where
             state,
             txn_tracker,
             resource_controller,
+            key_value_stores: BTreeMap::new(),
         }
     }
 
@@ -143,17 +153,22 @@ where
         Ok((code, description))
     }
 
-    /// Pre-warms the user state view for the given application into the cache,
-    /// so that subsequent storage operations don't need to reload from storage.
-    pub(crate) async fn pre_warm_user_state(
+    /// Returns the cached key-value store view for the given application,
+    /// loading it from storage if necessary.
+    async fn get_or_load_key_value_store(
         &mut self,
         application_id: &ApplicationId,
-    ) -> Result<(), ExecutionError> {
-        self.state
+    ) -> Result<Arc<RwLock<KeyValueStoreView<C>>>, ExecutionError> {
+        if let Some(arc) = self.key_value_stores.get(application_id) {
+            return Ok(arc.clone());
+        }
+        let arc = self
+            .state
             .users
-            .try_load_entry_mut(application_id)
+            .try_load_view_arc(application_id)
             .await?;
-        Ok(())
+        self.key_value_stores.insert(*application_id, arc.clone());
+        Ok(arc)
     }
 
     // TODO(#1416): Support concurrent I/O.
@@ -348,25 +363,29 @@ where
             }
 
             ContainsKey { id, key, callback } => {
-                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
                 let result = view.contains_key(&key).await?;
                 callback.respond(result);
             }
 
             ContainsKeys { id, keys, callback } => {
-                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
                 let result = view.contains_keys(&keys).await?;
                 callback.respond(result);
             }
 
             ReadMultiValuesBytes { id, keys, callback } => {
-                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
                 let values = view.multi_get(&keys).await?;
                 callback.respond(values);
             }
 
             ReadValueBytes { id, key, callback } => {
-                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
                 let result = view.get(&key).await?;
                 callback.respond(result);
             }
@@ -376,7 +395,8 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
                 let result = view.find_keys_by_prefix(&key_prefix).await?;
                 callback.respond(result);
             }
@@ -386,7 +406,8 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry_mut(&id).await?;
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
                 let result = view.find_key_values_by_prefix(&key_prefix).await?;
                 callback.respond(result);
             }
@@ -396,7 +417,8 @@ where
                 batch,
                 callback,
             } => {
-                let mut view = self.state.users.try_load_entry_mut(&id).await?;
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let mut view = store.write().await;
                 view.write_batch(batch).await?;
                 callback.respond(());
             }
@@ -791,7 +813,8 @@ where
                 application,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry_mut(&application).await?;
+                let store = self.get_or_load_key_value_store(&application).await?;
+                let view = store.read().await;
                 let total_size = view.total_size();
                 let result = (total_size.key, total_size.value);
                 callback.respond(result);
@@ -966,10 +989,6 @@ where
             .is_free_app(&application_id);
         controller.is_free = is_free;
         self.resource_controller.is_free = is_free;
-        // Pre-warm the main application's view into the cache so that subsequent
-        // storage operations don't need to reload it from storage each time.
-        self.pre_warm_user_state(&application_id).await?;
-
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
 

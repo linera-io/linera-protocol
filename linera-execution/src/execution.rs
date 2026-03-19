@@ -320,9 +320,6 @@ where
         let thread_pool = self.context().extra().thread_pool().clone();
         let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
 
-        // Pre-warm the main application's view into the cache.
-        actor.pre_warm_user_state(&application_id).await?;
-
         let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
 
         let service_runtime_task = thread_pool
