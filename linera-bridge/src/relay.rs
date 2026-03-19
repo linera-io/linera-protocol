@@ -292,8 +292,9 @@ async fn create_rocksdb_storage(path: &Path, blob_cache_size: usize) -> Result<R
 pub async fn run(
     rpc_url: &str,
     faucet_url: &str,
-    data_dir: &Path,
-    keystore: &Path,
+    wallet_path: Option<&Path>,
+    keystore_path: Option<&Path>,
+    storage_config: Option<&str>,
     chain_id_arg: Option<ChainId>,
     evm_bridge_address: &str,
     linera_bridge_address: &str,
@@ -311,8 +312,26 @@ pub async fn run(
 
     tracing::info!("Starting bridge relay server...");
 
-    // Ensure data-dir exists.
-    fs_err::create_dir_all(data_dir)?;
+    // ── Resolve paths (same defaults as linera binary: ~/.config/linera/) ──
+    let default_dir = dirs::config_dir()
+        .context("no config directory on this platform")?
+        .join("linera");
+    let wallet_path = wallet_path
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| default_dir.join("wallet.json"));
+    let keystore_path = keystore_path
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| default_dir.join("keystore.json"));
+    let storage_path = storage_config
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("rocksdb:{}", default_dir.join("wallet.db").display()));
+
+    tracing::info!(
+        wallet = %wallet_path.display(),
+        keystore = %keystore_path.display(),
+        storage = %storage_path,
+        "Resolved paths"
+    );
 
     // ── Common init ──
     tracing::info!("Connecting to Linera faucet at {faucet_url}...");
@@ -320,9 +339,10 @@ pub async fn run(
     let genesis_config = faucet.genesis_config().await?;
     tracing::info!("Genesis config received");
 
-    let mut signer: InMemorySigner = linera_persistent::File::<InMemorySigner>::read(keystore)
-        .context("failed to read keystore")?
-        .into_value();
+    let mut signer: InMemorySigner =
+        linera_persistent::File::<InMemorySigner>::read(&keystore_path)
+            .context("failed to read keystore")?
+            .into_value();
 
     // Parse storage path: expect "rocksdb:/path/to/db"
     let db_path = storage_path
@@ -331,15 +351,16 @@ pub async fn run(
     let mut storage = create_rocksdb_storage(Path::new(db_path), blob_cache_size).await?;
 
     // ── Wallet: load existing or create fresh ──
-    let wallet_path = data_dir.join("wallet.json");
     let wallet_exists = wallet_path.exists();
+
+    // Always initialize storage — this is a no-op if already initialized.
+    genesis_config.initialize_storage(&mut storage).await?;
 
     let wallet = if wallet_exists {
         tracing::info!("Loading existing wallet from {}", wallet_path.display());
         PersistentWallet::read(&wallet_path).context("failed to read wallet")?
     } else {
         tracing::info!("Creating new wallet at {}", wallet_path.display());
-        genesis_config.initialize_storage(&mut storage).await?;
         PersistentWallet::create(&wallet_path, genesis_config).context("failed to create wallet")?
     };
 
@@ -405,8 +426,7 @@ pub async fn run(
         ctx.extend_with_chain(chain_desc, Some(owner)).await?;
 
         // Save updated keystore (has new key from generate_new).
-        let mut ks_file =
-            linera_persistent::File::new(&data_dir.join("keystore.json"), signer.clone())?;
+        let mut ks_file = linera_persistent::File::new(&keystore_path, signer.clone())?;
         ks_file.persist().await?;
 
         // Sync bridge chain.
@@ -489,6 +509,13 @@ async fn serve_loop<E: linera_core::environment::Environment>(
             tracing::error!("HTTP server error: {e}");
         }
     });
+
+    tracing::info!(
+        %bridge_addr,
+        %bridge_app_id,
+        %fungible_app_id,
+        "Relay is ready"
+    );
 
     // ── Main loop: process notifications + deposit requests ──
     tracing::info!("Listening for notifications and deposit requests...");

@@ -164,10 +164,12 @@ cd examples/bridge-demo
   --evm-rpc-url https://base-sepolia.g.alchemy.com/v2/YOUR_KEY \
   --evm-private-key 0x... \
   --evm-chain-id 84532 \
-  --bridge-chain-id <CHAIN_ID> \
+  --linera-bridge-chain-id <CHAIN_ID> \
   --relay-owner <OWNER> \
   --faucet-url "$FAUCET_URL" \
-  --relay-url http://localhost:3001 \
+  --linera-wallet ~/.config/linera/wallet.json \
+  --linera-keystore ~/.config/linera/keystore.json \
+  --linera-storage rocksdb:~/.config/linera/client.db \
   --shared-dir "$SHARED_DIR"
 ```
 
@@ -182,25 +184,27 @@ The setup script:
 
 ### 4. Start the relay
 
-The relay uses the same keystore created in step 2, plus a `--data-dir` for
-persistent RocksDB block storage. Pass the contract addresses and app IDs
-from the setup script output.
+The relay uses the same wallet, keystore, and storage as the `linera` CLI.
+By default it reads from `~/.config/linera/` — the same location `linera
+wallet init` writes to. You can override with `--wallet`, `--keystore`,
+`--storage` flags or `LINERA_WALLET`, `LINERA_KEYSTORE`, `LINERA_STORAGE`
+env vars.
+
+Pass the contract addresses and app IDs from the setup script output:
 
 ```bash
 linera-bridge serve \
-  --rpc-url https://base-sepolia.g.alchemy.com/v2/YOUR_KEY \
+  --rpc-url <evm-rpc> \
   --faucet-url "$FAUCET_URL" \
-  --data-dir ~/.config/linera \
-  --keystore ~/.config/linera/keystore.json \
-  --chain-id <CHAIN_ID> \
-  --evm-bridge-address <EVM_BRIDGE_ADDRESS> \
-  --linera-bridge-address <LINERA_BRIDGE_ADDRESS> \
-  --linera-fungible-address <LINERA_FUNGIBLE_ADDRESS> \
-  --evm-private-key 0x...
+  --linera-bridge-chain-id <chain-id> \
+  --linera-bridge-address <bridge-app-id-on-linera> \
+  --linera-fungible-address <fungible-app-id-on-linera> \
+  --evm-bridge-address <bridge-contract-address-on-evm> \
+  --evm-private-key <relayer-private-key>
 ```
 
 On restart, run the same command — the relay loads persistent state from
-`--data-dir` and syncs from validators to catch up on missed blocks.
+the wallet and storage, and syncs from validators to catch up.
 
 ### 5. Start the frontend
 
@@ -220,7 +224,7 @@ the deposit/withdraw forms.
 | `--evm-private-key KEY` | Anvil account 0 | **required** | Private key for EVM txs |
 | `--evm-chain-id ID` | 31337 | 31337 | EVM chain ID |
 | `--light-client-address ADDR` | read from `/shared/` | deployed if omitted | Skip LightClient deploy |
-| `--bridge-chain-id ID` | polled from relay | **required** | Linera bridge chain (64 hex chars) |
+| `--linera-bridge-chain-id ID` | polled from relay | **required** | Linera bridge chain (64 hex chars) |
 | `--token-address ADDR` | deployed | deployed | Skip MockERC20 deploy |
 | `--relay-owner OWNER` | read from `/shared/` | **required** | Relay's AccountOwner (minter) |
 | `--faucet-url URL` | `http://localhost:8080` | `http://localhost:8080` | Linera faucet |
@@ -231,6 +235,9 @@ the deposit/withdraw forms.
 | `--wasm-dir PATH` | `/wasm` | `../../examples/target/wasm32-unknown-unknown/release` | Directory with `.wasm` binaries |
 | `--contracts-dir PATH` | `/contracts` | `../../linera-bridge/src/solidity` | Solidity source root |
 | `--output PATH` | `.env.local` | `.env.local` | Output env file |
+| `--linera-wallet PATH` | -- | auto (temp dir) | Path to existing Linera wallet.json |
+| `--linera-keystore PATH` | -- | auto (temp dir) | Path to existing Linera keystore.json |
+| `--linera-storage CONFIG` | -- | auto (temp dir) | Linera storage config (e.g. `rocksdb:path/to/db`) |
 
 ## How a deposit works
 

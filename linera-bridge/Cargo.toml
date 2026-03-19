@@ -44,6 +44,7 @@ relay = [
     "offchain",
     "cli",
     "dep:axum",
+    "dep:dirs",
     "dep:futures",
     "dep:hex",
     "dep:linera-chain",
@@ -99,6 +100,7 @@ serde_json = { workspace = true, optional = true }
 
 # relay feature deps
 axum = { workspace = true, optional = true }
+dirs = { workspace = true, optional = true }
 linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }

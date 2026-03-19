@@ -341,9 +341,10 @@ services:
         exec linera-bridge serve \
           --rpc-url=http://anvil:8545 \
           --faucet-url=http://localhost:${FAUCET_PORT:-8080} \
-          --data-dir=/shared/relay-data \
+          --wallet=/shared/relay-wallet/wallet.json \
           --keystore=/shared/relay-wallet/keystore.json \
-          --chain-id="$$CHAIN_ID" \
+          --storage=rocksdb:/shared/relay-wallet/client.db \
+          --linera-bridge-chain-id="$$CHAIN_ID" \
           --evm-bridge-address="$$BRIDGE_ADDR" \
           --linera-bridge-address="$$BRIDGE_APP" \
           --linera-fungible-address="$$FUNGIBLE_APP" \

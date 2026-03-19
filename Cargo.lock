@@ -5422,6 +5422,7 @@ dependencies = [
  "axum",
  "bcs",
  "clap",
+ "dirs",
  "fs-err",
  "futures",
  "hex",

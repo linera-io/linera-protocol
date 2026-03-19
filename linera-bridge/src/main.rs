@@ -58,17 +58,21 @@ struct ServeOptions {
     #[arg(long)]
     faucet_url: String,
 
-    /// Directory for persistent relay state (keystore, wallet, block db).
-    #[arg(long)]
-    data_dir: PathBuf,
+    /// Path to the wallet state file.
+    #[arg(long = "wallet", env = "LINERA_WALLET")]
+    wallet: Option<PathBuf>,
 
-    /// Path to keystore file (InMemorySigner JSON).
-    #[arg(long)]
-    keystore: PathBuf,
+    /// Path to the keystore file.
+    #[arg(long = "keystore", env = "LINERA_KEYSTORE")]
+    keystore: Option<PathBuf>,
 
-    /// Pre-existing Linera chain ID. If omitted, claims a new chain from faucet.
+    /// Storage configuration for blockchain history (e.g. rocksdb:/path/to/db).
+    #[arg(long = "storage", env = "LINERA_STORAGE")]
+    storage: Option<String>,
+
+    /// Linera bridge chain ID. If omitted, claims a new chain from faucet.
     #[arg(long)]
-    chain_id: Option<linera_base::identifiers::ChainId>,
+    linera_bridge_chain_id: Option<linera_base::identifiers::ChainId>,
 
     /// Address of the FungibleBridge contract on EVM.
     #[arg(long)]
@@ -114,9 +118,10 @@ impl ServeOptions {
         Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
             &self.faucet_url,
-            &self.data_dir,
-            &self.keystore,
-            self.chain_id,
+            self.wallet.as_deref(),
+            self.keystore.as_deref(),
+            self.storage.as_deref(),
+            self.linera_bridge_chain_id,
             &self.evm_bridge_address,
             &self.linera_bridge_address,
             &self.linera_fungible_address,
