@@ -856,17 +856,19 @@ where
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
-        let hash = block_hash;
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock { height, hash },
+            reason: Reason::NewBlock {
+                height,
+                hash: block_hash,
+            },
         });
         if !updated_streams.is_empty() {
             actions.notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewEvents {
                     height,
-                    hash,
+                    hash: block_hash,
                     event_streams: updated_streams,
                 },
             });
