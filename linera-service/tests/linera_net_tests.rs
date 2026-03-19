@@ -5049,8 +5049,6 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
 ///
 /// It will print the average end-to-end transfer latency, including creating the sending block,
 /// the receiving block, and the resulting `NewBlock` notification.
-///
-/// We disabled the repeated transfers for remote-net because it is failing on CI:
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_tcp"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
@@ -5131,21 +5129,12 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
             };
             match reason {
                 Reason::NewIncomingBundle { height, origin } => {
-                    assert_eq!(origin, chain_id1);
-                    if got_message {
-                        // Duplicate notification: verify it matches the
-                        // height we already processed and skip it.
-                        assert_eq!(
-                            height,
-                            BlockHeight(next_height1.0 - 1),
-                            "Duplicate notification has unexpected height for transfer #{i}"
-                        );
-                        tracing::warn!(
-                            "Duplicate NewIncomingBundle notification for transfer #{i}"
-                        );
-                        continue;
-                    }
                     assert_eq!(height, next_height1);
+                    assert_eq!(origin, chain_id1);
+                    assert!(
+                        !got_message,
+                        "Duplicate message notification about transfer #{i}"
+                    );
                     got_message = true;
                     next_height1.0 += 1;
                     if i >= WARMUP_ITERATIONS {
