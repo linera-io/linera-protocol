@@ -182,21 +182,21 @@ The setup script:
 
 ### 4. Start the relay
 
-The relay uses the same keystore and wallet created in step 2, plus a
-`--data-dir` for persistent RocksDB block storage. It reads contract and app
-addresses from the shared directory written by the setup script.
+The relay uses the same keystore created in step 2, plus a `--data-dir` for
+persistent RocksDB block storage. Pass the contract addresses and app IDs
+from the setup script output.
 
 ```bash
 linera-bridge serve \
   --rpc-url https://base-sepolia.g.alchemy.com/v2/YOUR_KEY \
   --faucet-url "$FAUCET_URL" \
-  --data-dir /tmp/relay-data \
+  --data-dir ~/.config/linera \
   --keystore ~/.config/linera/keystore.json \
   --chain-id <CHAIN_ID> \
-  --evm-private-key 0x... \
-  --bridge-address-file "$SHARED_DIR/bridge-address" \
-  --bridge-app-id-file "$SHARED_DIR/bridge-app-id" \
-  --fungible-app-id-file "$SHARED_DIR/wrapped-app-id"
+  --bridge-address <BRIDGE_ADDRESS> \
+  --bridge-app-id <BRIDGE_APP_ID> \
+  --fungible-app-id <FUNGIBLE_APP_ID> \
+  --evm-private-key 0x...
 ```
 
 On restart, run the same command — the relay loads persistent state from

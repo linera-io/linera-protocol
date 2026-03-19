@@ -252,8 +252,6 @@ if [[ -z "$COMPOSE_FILE" ]]; then
     if [[ ! -f "$LINERA_TMP_DIR/wallet.json" ]]; then
         echo "Initializing Linera wallet from faucet..."
         linera_exec wallet init --faucet "$FAUCET_URL"
-        echo "Requesting a chain from faucet..."
-        linera_exec wallet request-chain --faucet "$FAUCET_URL"
     else
         echo "  Using existing wallet at $LINERA_TMP_DIR"
     fi

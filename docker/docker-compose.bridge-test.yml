@@ -328,15 +328,25 @@ services:
         echo "Waiting for bridge chain ID..."
         while [ ! -f /shared/bridge-chain-id ]; do sleep 1; done
         CHAIN_ID=$$(cat /shared/bridge-chain-id | tr -d '[:space:]')
-        echo "Using bridge chain: $$CHAIN_ID"
 
+        echo "Waiting for bridge address and app IDs..."
+        while [ ! -f /shared/bridge-address ]; do sleep 1; done
+        while [ ! -f /shared/bridge-app-id ]; do sleep 1; done
+        while [ ! -f /shared/wrapped-app-id ]; do sleep 1; done
+        BRIDGE_ADDR=$$(cat /shared/bridge-address | tr -d '[:space:]')
+        BRIDGE_APP=$$(cat /shared/bridge-app-id | tr -d '[:space:]')
+        FUNGIBLE_APP=$$(cat /shared/wrapped-app-id | tr -d '[:space:]')
+
+        echo "Starting relay: chain=$$CHAIN_ID bridge=$$BRIDGE_ADDR"
         exec linera-bridge serve \
           --rpc-url=http://anvil:8545 \
           --faucet-url=http://localhost:${FAUCET_PORT:-8080} \
           --data-dir=/shared/relay-data \
           --keystore=/shared/relay-wallet/keystore.json \
           --chain-id="$$CHAIN_ID" \
-          --bridge-address-file=/shared/bridge-address \
+          --bridge-address="$$BRIDGE_ADDR" \
+          --bridge-app-id="$$BRIDGE_APP" \
+          --fungible-app-id="$$FUNGIBLE_APP" \
           --evm-private-key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
           --port=${RELAY_PORT:-3001}
     environment:

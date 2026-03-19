@@ -71,21 +71,16 @@ struct ServeOptions {
     chain_id: Option<linera_base::identifiers::ChainId>,
 
     /// Address of the FungibleBridge contract on EVM.
-    /// If omitted, reads from --bridge-address-file (polls until available).
     #[arg(long)]
-    bridge_address: Option<String>,
+    bridge_address: String,
 
-    /// File to read bridge address from (used when bridge is deployed after relay starts)
-    #[arg(long, default_value = "/shared/bridge-address")]
-    bridge_address_file: String,
+    /// evm-bridge ApplicationId (hex).
+    #[arg(long)]
+    bridge_app_id: String,
 
-    /// File to read the evm-bridge ApplicationId from (written by setup script)
-    #[arg(long, default_value = "/shared/bridge-app-id")]
-    bridge_app_id_file: String,
-
-    /// File to read the wrapped-fungible ApplicationId from (written by setup script)
-    #[arg(long, default_value = "/shared/wrapped-app-id")]
-    fungible_app_id_file: String,
+    /// wrapped-fungible ApplicationId (hex).
+    #[arg(long)]
+    fungible_app_id: String,
 
     /// EVM private key for signing addBlock transactions
     #[arg(long)]
@@ -122,10 +117,9 @@ impl ServeOptions {
             &self.data_dir,
             &self.keystore,
             self.chain_id,
-            self.bridge_address.as_deref(),
-            &self.bridge_address_file,
-            &self.bridge_app_id_file,
-            &self.fungible_app_id_file,
+            &self.bridge_address,
+            &self.bridge_app_id,
+            &self.fungible_app_id,
             &self.evm_private_key,
             self.port,
             self.blob_cache_size,

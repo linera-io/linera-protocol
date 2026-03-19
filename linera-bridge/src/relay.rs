@@ -11,7 +11,7 @@
 //! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
 //!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
 
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{path::Path, sync::Arc};
 
 use alloy::{
     network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
@@ -189,66 +189,6 @@ async fn deposit_handler(
 
 // ── Helpers ──
 
-/// Resolve bridge address: use CLI arg if provided, otherwise poll a file.
-async fn resolve_bridge_address(
-    bridge_address: Option<&str>,
-    bridge_address_file: &str,
-) -> Result<Address> {
-    if let Some(addr) = bridge_address {
-        return addr.parse().context("invalid bridge address");
-    }
-
-    tracing::info!(
-        file = bridge_address_file,
-        "Bridge address not provided, polling file..."
-    );
-    loop {
-        if let Ok(contents) = tokio::fs::read_to_string(bridge_address_file).await {
-            let addr_str = contents.trim();
-            if !addr_str.is_empty() {
-                let addr: Address = addr_str.parse().context("invalid bridge address in file")?;
-                tracing::info!(%addr, "Read bridge address from file");
-                return Ok(addr);
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(2)).await;
-    }
-}
-
-/// Poll a file for the evm-bridge ApplicationId (hex-encoded BCS).
-async fn resolve_bridge_app_id(file_path: &str) -> Result<ApplicationId> {
-    tracing::info!(file = file_path, "Polling for bridge app ID...");
-    loop {
-        if let Ok(contents) = tokio::fs::read_to_string(file_path).await {
-            let id_str = contents.trim();
-            if !id_str.is_empty() {
-                let app_id: ApplicationId =
-                    id_str.parse().context("invalid ApplicationId in file")?;
-                tracing::info!(%app_id, "Read bridge app ID from file");
-                return Ok(app_id);
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(2)).await;
-    }
-}
-
-/// Poll a file for the wrapped-fungible ApplicationId (hex-encoded BCS).
-async fn resolve_fungible_app_id(file_path: &str) -> Result<ApplicationId> {
-    tracing::info!(file = file_path, "Polling for wrapped-fungible app ID...");
-    loop {
-        if let Ok(contents) = tokio::fs::read_to_string(file_path).await {
-            let id_str = contents.trim();
-            if !id_str.is_empty() {
-                let app_id: ApplicationId =
-                    id_str.parse().context("invalid ApplicationId in file")?;
-                tracing::info!(%app_id, "Read wrapped-fungible app ID from file");
-                return Ok(app_id);
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(2)).await;
-    }
-}
-
 /// Extract (owner, amount) from a fungible Credit message if the target is Address20.
 ///
 /// BCS layout: variant 0 (Credit) + target: AccountOwner + amount: Amount + source: AccountOwner
@@ -355,10 +295,9 @@ pub async fn run(
     data_dir: &Path,
     keystore: &Path,
     chain_id_arg: Option<ChainId>,
-    bridge_address: Option<&str>,
-    bridge_address_file: &str,
-    bridge_app_id_file: &str,
-    fungible_app_id_file: &str,
+    bridge_address: &str,
+    bridge_app_id: &str,
+    fungible_app_id: &str,
     evm_private_key: &str,
     port: u16,
     blob_cache_size: usize,
@@ -430,7 +369,7 @@ pub async fn run(
     tracing::info!("Admin chain synced");
 
     // ── Resolve bridge chain ──
-    let (chain_id, owner) = if let Some(cid) = chain_id_arg {
+    let (chain_id, _owner) = if let Some(cid) = chain_id_arg {
         // Register in wallet if not already there.
         if ctx.wallet().get(cid).is_none() {
             let key_owner = signer.keys().first().context("keystore has no keys")?.0;
@@ -483,9 +422,8 @@ pub async fn run(
         chain_client,
         rpc_url,
         bridge_address,
-        bridge_address_file,
-        bridge_app_id_file,
-        fungible_app_id_file,
+        bridge_app_id,
+        fungible_app_id,
         evm_private_key,
         port,
     ))
@@ -498,15 +436,14 @@ pub async fn run(
 async fn serve_loop<E: linera_core::environment::Environment>(
     chain_client: ChainClient<E>,
     rpc_url: &str,
-    bridge_address: Option<&str>,
-    bridge_address_file: &str,
-    bridge_app_id_file: &str,
-    fungible_app_id_file: &str,
+    bridge_address: &str,
+    bridge_app_id: &str,
+    fungible_app_id: &str,
     evm_private_key: &str,
     port: u16,
 ) -> Result<()> {
     // ── Set up EVM provider ──
-    let bridge_addr = resolve_bridge_address(bridge_address, bridge_address_file).await?;
+    let bridge_addr: Address = bridge_address.parse().context("invalid bridge address")?;
     let evm_signer: PrivateKeySigner =
         evm_private_key.parse().context("invalid EVM private key")?;
     let evm_wallet = EthereumWallet::from(evm_signer);
@@ -515,9 +452,11 @@ async fn serve_loop<E: linera_core::environment::Environment>(
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    // ── Resolve app IDs ──
-    let bridge_app_id = resolve_bridge_app_id(bridge_app_id_file).await?;
-    let fungible_app_id = resolve_fungible_app_id(fungible_app_id_file).await?;
+    // ── Parse app IDs ──
+    let bridge_app_id: ApplicationId = bridge_app_id.parse().context("invalid --bridge-app-id")?;
+    let fungible_app_id: ApplicationId = fungible_app_id
+        .parse()
+        .context("invalid --fungible-app-id")?;
 
     // ── Start notification listener ──
     let mut notifications = chain_client.subscribe()?;
