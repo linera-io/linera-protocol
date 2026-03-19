@@ -58,6 +58,18 @@ struct ServeOptions {
     #[arg(long)]
     faucet_url: String,
 
+    /// Directory for persistent relay state (keystore, wallet, block db).
+    #[arg(long)]
+    data_dir: PathBuf,
+
+    /// Path to keystore file (InMemorySigner JSON).
+    #[arg(long)]
+    keystore: PathBuf,
+
+    /// Pre-existing Linera chain ID. If omitted, claims a new chain from faucet.
+    #[arg(long)]
+    chain_id: Option<linera_base::identifiers::ChainId>,
+
     /// Address of the FungibleBridge contract on EVM.
     /// If omitted, reads from --bridge-address-file (polls until available).
     #[arg(long)]
@@ -104,9 +116,12 @@ fn main() -> Result<()> {
 #[cfg(feature = "relay")]
 impl ServeOptions {
     async fn run(&self) -> Result<()> {
-        linera_bridge::relay::run(
+        Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
             &self.faucet_url,
+            &self.data_dir,
+            &self.keystore,
+            self.chain_id,
             self.bridge_address.as_deref(),
             &self.bridge_address_file,
             &self.bridge_app_id_file,
@@ -114,7 +129,7 @@ impl ServeOptions {
             &self.evm_private_key,
             self.port,
             self.blob_cache_size,
-        )
+        ))
         .await
     }
 }
@@ -138,7 +153,7 @@ impl GenerateDepositProofOptions {
             "block_header_rlp": alloy_primitives::hex::encode_prefixed(&proof.block_header_rlp),
             "receipt_rlp": alloy_primitives::hex::encode_prefixed(&proof.receipt_rlp),
             "proof_nodes": proof.proof_nodes.iter()
-                .map(|n| alloy_primitives::hex::encode_prefixed(n))
+                .map(alloy_primitives::hex::encode_prefixed)
                 .collect::<Vec<_>>(),
             "tx_index": proof.tx_index,
             "log_indices": proof.log_indices,

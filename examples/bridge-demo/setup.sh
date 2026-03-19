@@ -184,7 +184,7 @@ wait_for_tx() {
     fi
     echo "  Waiting for tx $tx_hash..."
     evm_exec cast receipt --confirmations 1 \
-        --rpc-url "$EVM_RPC_URL" "$tx_hash" >/dev/null 2>&1 || true
+        --rpc-url "$EVM_RPC_URL" "$tx_hash" >/dev/null
 }
 
 # ── Mode detection & defaults ──
@@ -301,9 +301,9 @@ echo "  LightClient: $LIGHT_CLIENT_ADDR"
 
 # ── 2. Read bridge chain ID (Docker mode only) ──
 if [[ -n "$COMPOSE_FILE" && -z "$BRIDGE_CHAIN_ID" ]]; then
-    echo "Waiting for relay to claim bridge chain..."
+    echo "Waiting for bridge chain ID..."
     for i in $(seq 1 30); do
-        BRIDGE_CHAIN_ID=$(dc_exec linera-relay cat /shared/bridge-chain-id 2>/dev/null | tr -d '[:space:]' || true)
+        BRIDGE_CHAIN_ID=$(dc_exec foundry-tools cat /shared/bridge-chain-id 2>/dev/null | tr -d '[:space:]')
         BRIDGE_CHAIN_ID=$(normalize_hex "$BRIDGE_CHAIN_ID")
         if echo "$BRIDGE_CHAIN_ID" | grep -qE '^[a-f0-9]{64}$'; then
             break
@@ -313,7 +313,7 @@ if [[ -n "$COMPOSE_FILE" && -z "$BRIDGE_CHAIN_ID" ]]; then
         sleep 2
     done
     if [[ -z "$BRIDGE_CHAIN_ID" ]]; then
-        die "Relay did not write bridge chain ID within timeout"
+        die "Bridge chain ID not found within timeout"
     fi
 else
     BRIDGE_CHAIN_ID=$(normalize_hex "$BRIDGE_CHAIN_ID")
@@ -355,14 +355,14 @@ TOKEN_ADDR_HEX=$(echo "$TOKEN_ADDRESS" | sed 's/^0x//')
 echo "Reading relay owner..."
 if [[ -n "$COMPOSE_FILE" ]]; then
     for i in $(seq 1 30); do
-        RELAY_OWNER=$(dc_exec linera-relay cat /shared/relay-owner 2>/dev/null | tr -d '[:space:]' || true)
+        RELAY_OWNER=$(dc_exec foundry-tools cat /shared/relay-owner 2>/dev/null | tr -d '[:space:]')
         if [[ -n "$RELAY_OWNER" ]]; then
             break
         fi
         echo "  Waiting for relay owner... ($i/30)"
         sleep 2
     done
-    [[ -z "$RELAY_OWNER" ]] && die "Relay did not write owner within timeout"
+    [[ -z "$RELAY_OWNER" ]] && die "Relay owner not found within timeout"
 else
     [[ -z "$RELAY_OWNER" ]] && die "--relay-owner is required in direct mode"
 fi
@@ -370,8 +370,8 @@ echo "  Relay owner (minter): $RELAY_OWNER"
 
 # ── 4. Publish and create wrapped-fungible app ──
 echo "Syncing chain state..."
-linera_exec sync 2>&1 || true
-linera_exec process-inbox 2>&1 || true
+linera_exec sync 2>&1
+linera_exec process-inbox 2>&1
 echo "Publishing and creating wrapped-fungible app..."
 WRAPPED_PARAMS=$(
     TICKER="$TICKER_SYMBOL" \
@@ -446,8 +446,8 @@ echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 
 # ── 6. Publish and create evm-bridge app ──
 echo "Syncing chain state before evm-bridge deploy..."
-linera_exec sync 2>&1 || true
-linera_exec process-inbox 2>&1 || true
+linera_exec sync 2>&1
+linera_exec process-inbox 2>&1
 echo "Publishing and creating evm-bridge app..."
 BRIDGE_PARAMS=$(
     CHAIN_ID="$EVM_CHAIN_ID" \
@@ -521,9 +521,9 @@ echo ""
 echo "Environment written to: $OUTPUT_FILE"
 echo "Shared state dir:       $SHARED_DIR"
 echo ""
-echo "The relay should already be running (it provides --bridge-chain-id and"
-echo "--relay-owner that this script requires). It will pick up the app IDs"
-echo "from the shared dir automatically."
+echo "The bridge chain must be claimed before running this script (it provides"
+echo "--bridge-chain-id and --relay-owner). The relay picks up app IDs from"
+echo "the shared dir automatically."
 echo ""
 echo "Start the frontend:"
 echo "  cd examples/bridge-demo"

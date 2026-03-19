@@ -1263,6 +1263,7 @@ Start a Local Linera Network
 * `--exporter-port <EXPORTER_PORT>` — The port on which to run the block exporter
 
   Default value: `8081`
+* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
 
 
 

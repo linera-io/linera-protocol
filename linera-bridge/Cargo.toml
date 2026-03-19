@@ -50,8 +50,11 @@ relay = [
     "dep:linera-client",
     "dep:linera-core",
     "dep:linera-faucet-client",
+    "dep:linera-persistent",
     "dep:linera-storage",
     "dep:linera-views",
+    "linera-storage/rocksdb",
+    "linera-views/rocksdb",
     "dep:rustls",
     "dep:tower-http",
     "dep:tracing",
@@ -96,11 +99,12 @@ serde_json = { workspace = true, optional = true }
 
 # relay feature deps
 axum = { workspace = true, optional = true }
+linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 linera-chain = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
-linera-core = { workspace = true, optional = true }
+linera-core = { workspace = true, optional = true, features = ["fs"] }
 linera-faucet-client = { workspace = true, optional = true }
 linera-storage = { workspace = true, optional = true }
 linera-views = { workspace = true, optional = true }

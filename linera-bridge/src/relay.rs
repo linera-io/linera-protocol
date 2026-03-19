@@ -6,12 +6,12 @@
 //! Responsibilities:
 //! - **HTTP**: `POST /deposit` — generates MPT deposit proofs and submits `ProcessDeposit`
 //!   operations on the bridge chain.
-//! - **Linera client**: claims a "bridge chain", listens for `NewIncomingBundle` notifications,
+//! - **Linera client**: manages a "bridge chain", listens for `NewIncomingBundle` notifications,
 //!   processes the inbox, and burns any Address20 credits so the EVM contract can release tokens.
 //! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
 //!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
 
-use std::{sync::Arc, time::Duration};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use alloy::{
     network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
@@ -23,15 +23,22 @@ use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
     data_types::Amount,
-    identifiers::{AccountOwner, ApplicationId},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 use linera_chain::data_types::Transaction;
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::{environment::wallet::Memory, worker::Reason};
+use linera_core::{client::ChainClient, wallet::PersistentWallet, worker::Reason};
 use linera_execution::{Message, Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
+use linera_persistent::Persist;
 use linera_storage::DbStorage;
-use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
+use linera_views::{
+    backends::{
+        lru_caching::LruCachingConfig,
+        rocks_db::{PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreInternalConfig},
+    },
+    lru_prefix_cache::StorageCacheConfig,
+};
 use tokio::sync::{mpsc, oneshot};
 use tower_http::cors::CorsLayer;
 
@@ -307,11 +314,47 @@ async fn forward_cert_to_evm(
     }
 }
 
+// ── RocksDB storage helper ──
+
+type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
+
+async fn create_rocksdb_storage(path: &Path, blob_cache_size: usize) -> Result<RocksDbStorage> {
+    let config = LruCachingConfig {
+        inner_config: RocksDbStoreInternalConfig {
+            path_with_guard: PathWithGuard::new(path.to_path_buf()),
+            spawn_mode: RocksDbSpawnMode::get_spawn_mode_from_runtime(),
+            max_stream_queries: 10,
+        },
+        storage_cache_config: StorageCacheConfig {
+            max_cache_size: 10_000_000,
+            max_value_entry_size: 1_000_000,
+            max_find_keys_entry_size: 10_000_000,
+            max_find_key_values_entry_size: 10_000_000,
+            max_cache_entries: 1000,
+            max_cache_value_size: 10_000_000,
+            max_cache_find_keys_size: 10_000_000,
+            max_cache_find_key_values_size: 10_000_000,
+        },
+    };
+    let storage = DbStorage::<RocksDbDatabase, _>::maybe_create_and_connect(
+        &config,
+        "bridge_relay",
+        Some(WasmRuntime::default()),
+        blob_cache_size,
+    )
+    .await?;
+    Ok(storage)
+}
+
 // ── Entry point ──
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
     faucet_url: &str,
+    data_dir: &Path,
+    keystore: &Path,
+    chain_id_arg: Option<ChainId>,
     bridge_address: Option<&str>,
     bridge_address_file: &str,
     bridge_app_id_file: &str,
@@ -329,50 +372,55 @@ pub async fn run(
 
     tracing::info!("Starting bridge relay server...");
 
-    // ── 1. Set up Linera client ──
+    // Ensure data-dir exists.
+    fs_err::create_dir_all(data_dir)?;
+
+    // ── Common init ──
     tracing::info!("Connecting to Linera faucet at {faucet_url}...");
     let faucet = Faucet::new(faucet_url.to_string());
-    tracing::info!("Fetching genesis config...");
     let genesis_config = faucet.genesis_config().await?;
     tracing::info!("Genesis config received");
 
-    let config = MemoryStoreConfig {
-        max_stream_queries: 10,
-        kill_on_drop: true,
+    let mut signer: InMemorySigner = linera_persistent::File::<InMemorySigner>::read(keystore)
+        .context("failed to read keystore")?
+        .into_value();
+
+    // Parse storage path: expect "rocksdb:/path/to/db"
+    let db_path = storage_path
+        .strip_prefix("rocksdb:")
+        .context("storage config must start with 'rocksdb:'")?;
+    let mut storage = create_rocksdb_storage(Path::new(db_path), blob_cache_size).await?;
+
+    // ── Wallet: load existing or create fresh ──
+    let wallet_path = data_dir.join("wallet.json");
+    let wallet_exists = wallet_path.exists();
+
+    let wallet = if wallet_exists {
+        tracing::info!("Loading existing wallet from {}", wallet_path.display());
+        PersistentWallet::read(&wallet_path).context("failed to read wallet")?
+    } else {
+        tracing::info!("Creating new wallet at {}", wallet_path.display());
+        genesis_config.initialize_storage(&mut storage).await?;
+        PersistentWallet::create(&wallet_path, genesis_config).context("failed to create wallet")?
     };
-    tracing::info!("Creating storage...");
-    let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(
-        &config,
-        "bridge-relay",
-        Some(WasmRuntime::default()),
-        blob_cache_size,
-    )
-    .await?;
 
-    tracing::info!("Initializing storage from genesis...");
-    genesis_config.initialize_storage(&mut storage).await?;
-    tracing::info!("Storage initialized");
-
-    let admin_chain_id = genesis_config.admin_chain_id();
-    let mut signer = InMemorySigner::new(None);
-
-    tracing::info!("Creating client context...");
+    let admin_chain_id = wallet.genesis_config().admin_chain_id();
+    let genesis_config = wallet.genesis_config().clone();
     let mut ctx = ClientContext::new(
         storage,
-        Memory::default(),
+        wallet,
         signer.clone(),
         &Default::default(),
         None,
         genesis_config,
     )
     .await?;
-    tracing::info!("Client context created");
 
-    // ── 1b. Sync admin chain from validators ──
+    // ── Sync admin chain (always) ──
     tracing::info!(%admin_chain_id, "Syncing admin chain from validators...");
     let committee = faucet.current_committee().await?;
     tracing::info!(
-        validators = committee.validators().into_iter().count(),
+        validators = committee.validators().iter().count(),
         "Fetched current committee, downloading chain state..."
     );
     let admin_client = ctx.make_chain_client(admin_chain_id).await?;
@@ -381,29 +429,83 @@ pub async fn run(
         .await?;
     tracing::info!("Admin chain synced");
 
-    // ── 2. Claim bridge chain ──
-    tracing::info!("Claiming bridge chain from faucet...");
-    let owner = AccountOwner::from(signer.generate_new());
-    let chain_desc = faucet.claim(&owner).await?;
-    let chain_id = chain_desc.id();
-    tracing::info!(%chain_id, %owner, "Chain claimed, extending wallet...");
-    ctx.extend_with_chain(chain_desc, Some(owner)).await?;
+    // ── Resolve bridge chain ──
+    let (chain_id, owner) = if let Some(cid) = chain_id_arg {
+        // Register in wallet if not already there.
+        if ctx.wallet().get(cid).is_none() {
+            let key_owner = signer.keys().first().context("keystore has no keys")?.0;
+            ctx.update_wallet_for_new_chain(
+                cid,
+                Some(key_owner),
+                linera_base::data_types::Timestamp::default(),
+                linera_base::data_types::Epoch::ZERO,
+            )
+            .await?;
+        }
 
-    tracing::info!("Synchronizing bridge chain from validators...");
+        // Sync from validators.
+        let chain_client = ctx.make_chain_client(cid).await?;
+        chain_client.synchronize_from_validators().await?;
+
+        // Verify our keystore contains an owner key for this chain.
+        let ownership = chain_client.query_chain_ownership().await?;
+        let our_keys: Vec<AccountOwner> = signer.keys().into_iter().map(|(o, _)| o).collect();
+        let owner = our_keys
+            .into_iter()
+            .find(|o| ownership.super_owners.contains(o) || ownership.owners.contains_key(o))
+            .context("keystore has no key that is an owner of the specified --chain-id")?;
+        tracing::info!(%cid, %owner, "Using pre-existing chain");
+        (cid, owner)
+    } else {
+        // Claim from faucet.
+        tracing::info!("Claiming bridge chain from faucet...");
+        let owner = AccountOwner::from(signer.generate_new());
+        let chain_desc = faucet.claim(&owner).await?;
+        let cid = chain_desc.id();
+        tracing::info!(%cid, %owner, "Chain claimed, extending wallet...");
+        ctx.extend_with_chain(chain_desc, Some(owner)).await?;
+
+        // Save updated keystore (has new key from generate_new).
+        let mut ks_file =
+            linera_persistent::File::new(&data_dir.join("keystore.json"), signer.clone())?;
+        ks_file.persist().await?;
+
+        // Sync bridge chain.
+        let chain_client = ctx.make_chain_client(cid).await?;
+        chain_client.synchronize_from_validators().await?;
+        tracing::info!(%cid, "Bridge chain claimed and synced");
+        (cid, owner)
+    };
+
     let chain_client = ctx.make_chain_client(chain_id).await?;
-    chain_client.synchronize_from_validators().await?;
 
-    tracing::info!(%chain_id, "Bridge chain claimed");
+    Box::pin(serve_loop(
+        chain_client,
+        rpc_url,
+        bridge_address,
+        bridge_address_file,
+        bridge_app_id_file,
+        fungible_app_id_file,
+        evm_private_key,
+        port,
+    ))
+    .await
+}
 
-    // Write chain ID and owner to /shared/ if the directory exists (Docker mode).
-    if let Ok(()) = fs_err::write("/shared/bridge-chain-id", chain_id.to_string()) {
-        tracing::info!("Wrote bridge chain ID to /shared/bridge-chain-id");
-    }
-    if let Ok(()) = fs_err::write("/shared/relay-owner", owner.to_string()) {
-        tracing::info!("Wrote relay owner to /shared/relay-owner");
-    }
+// ── Main event loop ──
 
-    // ── 3. Set up EVM provider ──
+#[allow(clippy::too_many_arguments)]
+async fn serve_loop<E: linera_core::environment::Environment>(
+    chain_client: ChainClient<E>,
+    rpc_url: &str,
+    bridge_address: Option<&str>,
+    bridge_address_file: &str,
+    bridge_app_id_file: &str,
+    fungible_app_id_file: &str,
+    evm_private_key: &str,
+    port: u16,
+) -> Result<()> {
+    // ── Set up EVM provider ──
     let bridge_addr = resolve_bridge_address(bridge_address, bridge_address_file).await?;
     let evm_signer: PrivateKeySigner =
         evm_private_key.parse().context("invalid EVM private key")?;
@@ -413,16 +515,16 @@ pub async fn run(
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    // ── 4. Resolve app IDs ──
+    // ── Resolve app IDs ──
     let bridge_app_id = resolve_bridge_app_id(bridge_app_id_file).await?;
     let fungible_app_id = resolve_fungible_app_id(fungible_app_id_file).await?;
 
-    // ── 5. Start notification listener ──
+    // ── Start notification listener ──
     let mut notifications = chain_client.subscribe()?;
     let (listener, _abort_handle, _) = chain_client.listen().await?;
     tokio::spawn(listener);
 
-    // ── 6. Start HTTP server ──
+    // ── Start HTTP server ──
     let proof_client = HttpDepositProofClient::new(rpc_url)?;
     let (deposit_tx, mut deposit_rx) = mpsc::channel::<DepositRequest>(16);
     let app_state = Arc::new(AppState {
@@ -445,7 +547,7 @@ pub async fn run(
         }
     });
 
-    // ── 7. Main loop: process notifications + deposit requests ──
+    // ── Main loop: process notifications + deposit requests ──
     tracing::info!("Listening for notifications and deposit requests...");
     loop {
         tokio::select! {

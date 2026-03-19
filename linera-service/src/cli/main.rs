@@ -77,12 +77,12 @@ use linera_service::{
     },
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     controller::Controller,
-    wallet::WalletExt as _,
     node_service::NodeService,
     project::{self, Project},
     storage::{AssertStorageV1, Runnable, RunnableWithStore, StorageMigration},
     task_processor::TaskProcessor,
     util,
+    wallet::WalletExt as _,
 };
 use linera_storage::{DbStorage, Storage};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
@@ -2281,6 +2281,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 with_block_exporter,
                 exporter_address: block_exporter_address,
                 exporter_port: block_exporter_port,
+                http_request_allow_list,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -2302,6 +2303,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    http_request_allow_list.clone(),
                 )
                 .boxed()
                 .await?;
