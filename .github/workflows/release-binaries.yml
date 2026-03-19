@@ -51,6 +51,11 @@ jobs:
             archive: tar.gz
             name_suffix: Linux-x86_64
 
+          - target: x86_64-unknown-linux-musl
+            os: linera-io-self-hosted-ci
+            archive: tar.gz
+            name_suffix: Linux-x86_64-musl
+
           - target: x86_64-apple-darwin
             os: macos-14-large    # Apple Silicon runner (cross-compiles to x86_64)
             archive: tar.gz
@@ -81,6 +86,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev
+          if [[ "${{ matrix.target }}" == *"musl"* ]]; then
+            sudo apt-get install -y musl-tools
+          fi
 
       - name: Build release binaries
         run: |
@@ -212,10 +220,16 @@ jobs:
             sudo mv linera-${{ steps.version.outputs.semver }}-Darwin-x86_64/linera /usr/local/bin/
             ```
 
-            **Linux (x86_64):**
+            **Linux (x86_64, glibc):**
             ```bash
             curl -fsSL https://github.com/linera-io/linera-protocol/releases/download/${{ steps.version.outputs.version }}/linera-${{ steps.version.outputs.semver }}-Linux-x86_64.tar.gz | tar xz
             sudo mv linera-${{ steps.version.outputs.semver }}-Linux-x86_64/linera /usr/local/bin/
+            ```
+
+            **Linux (x86_64, musl — Alpine, NixOS, etc.):**
+            ```bash
+            curl -fsSL https://github.com/linera-io/linera-protocol/releases/download/${{ steps.version.outputs.version }}/linera-${{ steps.version.outputs.semver }}-Linux-x86_64-musl.tar.gz | tar xz
+            sudo mv linera-${{ steps.version.outputs.semver }}-Linux-x86_64-musl/linera /usr/local/bin/
             ```
 
             **Verify:**
