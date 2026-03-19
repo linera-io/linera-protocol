@@ -375,7 +375,7 @@ impl<Env: Environment> Client<Env> {
             .chain_modes
             .write()
             .expect("Panics should not happen while holding a lock to `chain_modes`");
-        let entry = chain_modes.entry(chain_id).or_insert(mode.clone());
+        let entry = chain_modes.entry(chain_id).or_insert_with(|| mode.clone());
         entry.extend(Some(mode));
         entry.clone()
     }
@@ -1758,12 +1758,12 @@ impl<Env: Environment> Client<Env> {
                 // All reported events were already downloaded; don't loop forever.
             }
             if let Ok((_, executed_block, _, _)) = &result {
-                let hash = CryptoHash::new(executed_block);
+                let block_hash = CryptoHash::new(executed_block);
                 let notification = Notification {
                     chain_id: executed_block.header.chain_id,
                     reason: Reason::BlockExecuted {
                         height: executed_block.header.height,
-                        hash,
+                        block_hash,
                     },
                 };
                 self.notifier.notify(&[notification]);

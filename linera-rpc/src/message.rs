@@ -14,6 +14,7 @@ use linera_chain::{
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
+    worker::Notification,
 };
 use linera_version::VersionInfo;
 use serde::{Deserialize, Serialize};
@@ -79,6 +80,10 @@ pub enum RpcMessage {
     BlobLastUsedByCertificateResponse(Box<ConfirmedBlockCertificate>),
     ShardInfoQuery(ChainId),
     ShardInfoResponse(ShardInfo),
+
+    // Notification subscription
+    SubscribeNotifications(Vec<ChainId>),
+    Notification(Box<Notification>),
 }
 
 impl RpcMessage {
@@ -125,7 +130,9 @@ impl RpcMessage {
             | EventBlockHeights(_)
             | EventBlockHeightsResponse(_)
             | ShardInfoResponse(_)
-            | DownloadCertificatesResponse(_) => {
+            | DownloadCertificatesResponse(_)
+            | SubscribeNotifications(_)
+            | Notification(_) => {
                 return None;
             }
         };
@@ -175,7 +182,9 @@ impl RpcMessage {
             | MissingBlobIdsResponse(_)
             | EventBlockHeightsResponse(_)
             | DownloadCertificatesResponse(_)
-            | DownloadCertificatesByHeightsResponse(_) => false,
+            | DownloadCertificatesByHeightsResponse(_)
+            | SubscribeNotifications(_)
+            | Notification(_) => false,
         }
     }
 }

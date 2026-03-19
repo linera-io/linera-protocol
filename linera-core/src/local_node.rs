@@ -287,8 +287,9 @@ where
         chain_ids: impl IntoIterator<Item = &ChainId>,
         receiver_id: ChainId,
     ) -> Result<BTreeMap<ChainId, BlockHeight>, LocalNodeError> {
-        let futures =
-            FuturesUnordered::from_iter(chain_ids.into_iter().map(|chain_id| async move {
+        let futures = chain_ids
+            .into_iter()
+            .map(|chain_id| async move {
                 let (next_block_height, next_height_to_schedule) = match self
                     .get_tip_state_and_outbox_info(*chain_id, receiver_id)
                     .await
@@ -305,7 +306,8 @@ where
                     next_block_height
                 };
                 Ok::<_, LocalNodeError>((*chain_id, next_height))
-            }));
+            })
+            .collect::<FuturesUnordered<_>>();
         futures.try_collect().await
     }
 

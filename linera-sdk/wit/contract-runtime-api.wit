@@ -8,6 +8,8 @@ interface contract-runtime-api {
     send-message: func(message: send-message-request);
     transfer: func(source: account-owner, destination: account, amount: amount);
     claim: func(source: account, destination: account, amount: amount);
+    approve: func(owner: account-owner, spender: account-owner, amount: amount);
+    transfer-from: func(owner: account-owner, spender: account-owner, destination: account, amount: amount);
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> chain-id;
     close-chain: func() -> result<tuple<>, manage-chain-error>;
     change-ownership: func(ownership: chain-ownership) -> result<tuple<>, manage-chain-error>;

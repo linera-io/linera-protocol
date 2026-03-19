@@ -91,12 +91,12 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .await?;
     let port = get_node_port().await;
     let mut node_service_2 = match network {
-        Network::Grpc | Network::Grpcs => {
+        Network::Grpc | Network::Grpcs | Network::Tcp => {
             let service = client_2.run_node_service(port, ProcessInbox::Skip).await?;
             let notifications = service.notifications(chain_1).await?;
             Some((service, notifications))
         }
-        Network::Tcp | Network::Udp => None,
+        Network::Udp => None,
     };
 
     client.query_validators(None).await?;
@@ -526,8 +526,11 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 }
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;

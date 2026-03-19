@@ -938,33 +938,36 @@ where
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, heights)| {
-            let mut updater = self.clone();
-            async move {
-                // Get all block hashes for this chain at the specified heights in one call
-                let heights_vec: Vec<_> = heights.into_iter().collect();
-                let certificates = updater
-                    .client
-                    .local_node
-                    .storage_client()
-                    .read_certificates_by_heights(chain_id, &heights_vec)
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>();
+        chain_heights
+            .into_iter()
+            .map(|(chain_id, heights)| {
+                let mut updater = self.clone();
+                async move {
+                    // Get all block hashes for this chain at the specified heights in one call
+                    let heights_vec: Vec<_> = heights.into_iter().collect();
+                    let certificates = updater
+                        .client
+                        .local_node
+                        .storage_client()
+                        .read_certificates_by_heights(chain_id, &heights_vec)
+                        .await?
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>();
 
-                // Send each certificate
-                for certificate in certificates {
-                    updater
-                        .send_confirmed_certificate(certificate, delivery)
-                        .await?;
+                    // Send each certificate
+                    for certificate in certificates {
+                        updater
+                            .send_confirmed_certificate(certificate, delivery)
+                            .await?;
+                    }
+
+                    Ok::<_, chain_client::Error>(())
                 }
-
-                Ok::<_, chain_client::Error>(())
-            }
-        }))
-        .try_collect::<Vec<_>>()
-        .await?;
+            })
+            .collect::<FuturesUnordered<_>>()
+            .try_collect::<Vec<_>>()
+            .await?;
         Ok(())
     }
 
@@ -973,16 +976,19 @@ where
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, height)| {
-            let mut updater = self.clone();
-            async move {
-                updater
-                    .send_chain_information(chain_id, height, delivery, None)
-                    .await
-            }
-        }))
-        .try_collect::<Vec<_>>()
-        .await?;
+        chain_heights
+            .into_iter()
+            .map(|(chain_id, height)| {
+                let mut updater = self.clone();
+                async move {
+                    updater
+                        .send_chain_information(chain_id, height, delivery, None)
+                        .await
+                }
+            })
+            .collect::<FuturesUnordered<_>>()
+            .try_collect::<Vec<_>>()
+            .await?;
         Ok(())
     }
 

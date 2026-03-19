@@ -1032,8 +1032,9 @@ impl<Env: Environment> ChainClient<Env> {
         nodes: &[RemoteNode<Env::ValidatorNode>],
         other_sender_chains: Vec<ChainId>,
     ) {
-        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(
-            |chain_id| async move {
+        let stream: FuturesUnordered<_> = other_sender_chains
+            .into_iter()
+            .map(|chain_id| async move {
                 if let Err(error) = match self
                     .client
                     .retry_pending_cross_chain_requests(chain_id)
@@ -1065,8 +1066,8 @@ impl<Env: Environment> ChainClient<Env> {
                         "Failed to retry outgoing messages from chain"
                     );
                 }
-            },
-        ));
+            })
+            .collect();
         stream.for_each(future::ready).await;
     }
 
@@ -2633,7 +2634,9 @@ impl<Env: Environment> ChainClient<Env> {
                     "NewBlock: processed notification",
                 );
             }
-            Reason::NewEvents { height, hash, .. } => {
+            Reason::NewEvents {
+                height, block_hash, ..
+            } => {
                 let chain_id = notification.chain_id;
                 let local_height = self.local_next_block_height(chain_id, &local_node).await?;
                 if local_height > height {
@@ -2660,7 +2663,7 @@ impl<Env: Environment> ChainClient<Env> {
                     .download_event_bearing_blocks(
                         self.chain_id,
                         height,
-                        hash,
+                        block_hash,
                         local_height,
                         &relevant_streams,
                         &remote_node,

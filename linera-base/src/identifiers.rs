@@ -177,6 +177,26 @@ impl std::str::FromStr for Account {
     }
 }
 
+/// A pair of owner and spender accounts for managing allowances.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Allocative)]
+pub struct OwnerSpender {
+    /// Account to withdraw from
+    pub owner: AccountOwner,
+    /// Account to do the withdrawing
+    pub spender: AccountOwner,
+}
+
+impl OwnerSpender {
+    /// Creates a new `OwnerSpender` pair.
+    /// Panics if owner and spender are the same.
+    pub fn new(owner: AccountOwner, spender: AccountOwner) -> Self {
+        if owner == spender {
+            panic!("owner should be different from spender");
+        }
+        Self { owner, spender }
+    }
+}
+
 /// The unique identifier (UID) of a chain. This is currently computed as the hash value
 /// of a [`ChainDescription`].
 #[derive(
@@ -375,7 +395,7 @@ pub struct ApplicationId<A = ()> {
     #[witty(skip)]
     #[debug(skip)]
     #[allocative(skip)]
-    _phantom: PhantomData<A>,
+    phantom: PhantomData<A>,
 }
 
 /// A unique identifier for an application.
@@ -498,7 +518,7 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     pub vm_runtime: VmRuntime,
     #[witty(skip)]
     #[debug(skip)]
-    _phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
+    phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
 }
 
 /// The name of an event stream.
@@ -692,7 +712,7 @@ impl<Abi, Parameters, InstantiationArgument> PartialEq
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
-            _phantom,
+            phantom: _,
         } = other;
         self.contract_blob_hash == *contract_blob_hash
             && self.service_blob_hash == *service_blob_hash
@@ -721,7 +741,7 @@ impl<Abi, Parameters, InstantiationArgument> Ord
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
-            _phantom,
+            phantom: _,
         } = other;
         (
             self.contract_blob_hash,
@@ -740,7 +760,7 @@ impl<Abi, Parameters, InstantiationArgument> Hash
             contract_blob_hash: contract_blob_id,
             service_blob_hash: service_blob_id,
             vm_runtime: vm_runtime_id,
-            _phantom,
+            phantom: _,
         } = self;
         contract_blob_id.hash(state);
         service_blob_id.hash(state);
@@ -794,7 +814,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
                 contract_blob_hash: serializable_module_id.contract_blob_hash,
                 service_blob_hash: serializable_module_id.service_blob_hash,
                 vm_runtime: serializable_module_id.vm_runtime,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         } else {
             let serializable_module_id = SerializableModuleId::deserialize(deserializer)?;
@@ -802,7 +822,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
                 contract_blob_hash: serializable_module_id.contract_blob_hash,
                 service_blob_hash: serializable_module_id.service_blob_hash,
                 vm_runtime: serializable_module_id.vm_runtime,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         }
     }
@@ -819,7 +839,7 @@ impl ModuleId {
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -831,7 +851,7 @@ impl ModuleId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -870,7 +890,7 @@ impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, Instantia
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -952,13 +972,13 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
                 bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
             Ok(ApplicationId {
                 application_description_hash: application_id.application_description_hash,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         } else {
             let value = SerializableApplicationId::deserialize(deserializer)?;
             Ok(ApplicationId {
                 application_description_hash: value.application_description_hash,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         }
     }
@@ -969,7 +989,7 @@ impl ApplicationId {
     pub fn new(application_description_hash: CryptoHash) -> Self {
         ApplicationId {
             application_description_hash,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -986,7 +1006,7 @@ impl ApplicationId {
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -996,7 +1016,7 @@ impl<A> ApplicationId<A> {
     pub fn forget_abi(self) -> ApplicationId {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -1016,7 +1036,7 @@ impl From<Address> for ApplicationId {
         arr[..20].copy_from_slice(address.as_slice());
         ApplicationId {
             application_description_hash: arr.into(),
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -1182,6 +1202,10 @@ doc_scalar!(
 doc_scalar!(
     BlobId,
     "A content-addressed blob ID i.e. the hash of the `BlobContent`"
+);
+bcs_scalar!(
+    OwnerSpender,
+    "A pair of owner and spender accounts for managing allowances"
 );
 
 #[cfg(test)]

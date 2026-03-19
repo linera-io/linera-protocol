@@ -1334,7 +1334,7 @@ pub mod tests {
             chain_id: dummy_chain_id(0),
             reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
-                hash: CryptoHash::new(&Foo("".into())),
+                block_hash: CryptoHash::new(&Foo("".into())),
             },
         };
         let message = api::Notification::try_from(notification.clone()).unwrap();

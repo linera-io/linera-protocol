@@ -67,7 +67,7 @@ const CLIENT_SERVICE_ENV: &str = "LINERA_CLIENT_SERVICE_PARAMS";
 
 fn reqwest_client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(60))
         .build()
         .unwrap()
 }
@@ -228,7 +228,7 @@ impl ClientWrapper {
         self.command_with_envs_and_arguments(
             &[(
                 "RUST_LOG",
-                &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+                &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
             )],
             arguments,
         )
@@ -238,7 +238,7 @@ impl ClientWrapper {
     async fn command(&self) -> Result<Command> {
         self.command_with_envs(&[(
             "RUST_LOG",
-            &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+            &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
         )])
         .await
     }
@@ -2036,9 +2036,12 @@ pub trait NotificationsExt {
     ) -> impl Future<Output = Result<CryptoHash>> {
         let expected_height = expected_height.into();
         self.wait_for(move |notification| {
-            if let Reason::NewBlock { height, hash, .. } = notification.reason {
+            if let Reason::NewBlock {
+                height, block_hash, ..
+            } = notification.reason
+            {
                 if expected_height.is_none_or(|h| h == height) {
-                    return Some(hash);
+                    return Some(block_hash);
                 }
             }
             None

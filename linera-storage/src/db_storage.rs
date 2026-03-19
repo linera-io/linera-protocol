@@ -279,13 +279,12 @@ impl MultiPartitionBatch {
         self.put_key_values(root_key, vec![(key, value)]);
     }
 
-    fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
+    fn add_blob(&mut self, blob: &Blob) {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let root_key = RootKey::BlobId(blob.id()).bytes();
         let key = BLOB_KEY.to_vec();
         self.put_key_value(root_key, key, blob.bytes().to_vec());
-        Ok(())
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
@@ -352,13 +351,12 @@ impl MultiPartitionBatch {
         Ok(())
     }
 
-    fn add_event(&mut self, event_id: &EventId, value: Vec<u8>) -> Result<(), ViewError> {
+    fn add_event(&mut self, event_id: &EventId, value: Vec<u8>) {
         #[cfg(with_metrics)]
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
         let key = to_event_key(event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         self.put_key_value(root_key, key, value);
-        Ok(())
     }
 
     fn add_network_description(
@@ -778,7 +776,7 @@ where
     #[instrument(skip_all, fields(blob_id = %blob.id()))]
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
-        batch.add_blob(blob)?;
+        batch.add_blob(blob);
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -832,7 +830,7 @@ where
             let has_state = store.contains_key(BLOB_STATE_KEY).await?;
             blob_states.push(has_state);
             if has_state {
-                batch.add_blob(blob)?;
+                batch.add_blob(blob);
             }
         }
         self.write_batch(batch).await?;
@@ -846,7 +844,7 @@ where
         }
         let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
-            batch.add_blob(blob)?;
+            batch.add_blob(blob);
         }
         self.write_batch(batch).await
     }
@@ -859,7 +857,7 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
-            batch.add_blob(blob)?;
+            batch.add_blob(blob);
         }
         batch.add_certificate(certificate)?;
         self.write_batch(batch).await
@@ -1126,7 +1124,7 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         for (event_id, value) in events {
-            batch.add_event(&event_id, value)?;
+            batch.add_event(&event_id, value);
         }
         self.write_batch(batch).await
     }

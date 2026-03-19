@@ -704,6 +704,34 @@ where
         Ok(owners)
     }
 
+    fn read_allowance(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+    ) -> Result<Amount, ExecutionError> {
+        let this = self.inner();
+        let allowance = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::Allowance {
+                owner,
+                spender,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(allowance)
+    }
+
+    fn read_allowances(
+        &mut self,
+    ) -> Result<Vec<(AccountOwner, AccountOwner, Amount)>, ExecutionError> {
+        let this = self.inner();
+        let allowances = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::Allowances { callback })?
+            .recv_response()?;
+        Ok(allowances)
+    }
+
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
         let mut this = self.inner();
         let chain_ownership = this
@@ -1048,7 +1076,7 @@ impl ContractSyncRuntime {
         id: ApplicationId,
         code: UserContractCode,
         description: ApplicationDescription,
-    ) -> Result<(), ExecutionError> {
+    ) {
         let this = self
             .0
             .as_ref()
@@ -1058,8 +1086,6 @@ impl ContractSyncRuntime {
         if let hash_map::Entry::Vacant(entry) = this_guard.preloaded_applications.entry(id) {
             entry.insert((code, description));
         }
-
-        Ok(())
     }
 
     /// Main entry point to start executing a user action.
@@ -1316,6 +1342,56 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::Claim {
                 source,
+                destination,
+                amount,
+                signer,
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
+    fn approve(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let current_application = this.current_application();
+        let application_id = current_application.id;
+        let signer = current_application.signer;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::Approve {
+                owner,
+                spender,
+                amount,
+                signer,
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
+    fn transfer_from(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let current_application = this.current_application();
+        let application_id = current_application.id;
+        let signer = current_application.signer;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::TransferFrom {
+                owner,
+                spender,
                 destination,
                 amount,
                 signer,
@@ -1695,7 +1771,7 @@ impl ServiceSyncRuntime {
         id: ApplicationId,
         code: UserServiceCode,
         description: ApplicationDescription,
-    ) -> Result<(), ExecutionError> {
+    ) {
         let this = self
             .runtime
             .0
@@ -1706,8 +1782,6 @@ impl ServiceSyncRuntime {
         if let hash_map::Entry::Vacant(entry) = this_guard.preloaded_applications.entry(id) {
             entry.insert((code, description));
         }
-
-        Ok(())
     }
 
     /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.

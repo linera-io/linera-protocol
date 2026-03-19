@@ -115,10 +115,10 @@ fn prepare_transfers(
         })
         .collect::<Vec<_>>();
 
-    let chain_transfers = chains
+    chains
         .into_iter()
         .enumerate()
-        .map(|(index, chain)| {
+        .map(move |(index, chain)| {
             let chain_id = chain.id();
             let sender = AccountOwner::from(chain.public_key());
 
@@ -134,10 +134,6 @@ fn prepare_transfers(
 
             (chain, transfers)
         })
-        .collect::<Vec<_>>();
-
-    chain_transfers
-        .into_iter()
         .map(move |(chain, transfers)| async move {
             tokio::spawn(async move {
                 for (sender, recipient) in transfers {

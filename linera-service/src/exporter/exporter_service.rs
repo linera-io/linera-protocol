@@ -106,8 +106,8 @@ fn parse_notification(notification: Notification) -> core::result::Result<BlockI
     let reason = bincode::deserialize::<Reason>(&notification.reason)
         .map_err(|err| BadNotificationKind::InvalidReason { inner: Some(err) })?;
 
-    if let Reason::NewBlock { height, hash } = reason {
-        return Ok(BlockId::new(chain_id, hash, height));
+    if let Reason::NewBlock { height, block_hash } = reason {
+        return Ok(BlockId::new(chain_id, block_hash, height));
     }
 
     Err(BadNotificationKind::InvalidReason { inner: None })?
@@ -136,7 +136,7 @@ mod test {
         let mut client = NotifierServiceClient::connect(format!("http://{endpoint}")).await?;
         let reason = Reason::NewBlock {
             height: 4.into(),
-            hash: CryptoHash::test_hash("s"),
+            block_hash: CryptoHash::test_hash("s"),
         };
         let request = Notification {
             chain_id: ChainId::default(),

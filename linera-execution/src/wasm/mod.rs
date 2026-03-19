@@ -85,7 +85,6 @@ impl WasmContractModule {
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
-        let contract_bytecode = add_metering(&contract_bytecode)?;
         match runtime {
             #[cfg(with_wasmer)]
             WasmRuntime::Wasmer => Self::from_wasmer(contract_bytecode).await,

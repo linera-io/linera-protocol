@@ -20,7 +20,7 @@ use linera_base::{
         Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, ChainDescription,
         CompressedBytecode, Epoch,
     },
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, OwnerSpender},
     vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainExecutionContext};
@@ -761,6 +761,30 @@ impl ActiveChain {
             balance
                 .parse()
                 .expect("Account balance cannot be parsed as a number"),
+        )
+    }
+
+    /// Queries the allowance for an owner-spender pair on this chain.
+    pub async fn query_allowance(
+        &self,
+        application_id: ApplicationId<FungibleTokenAbi>,
+        owner: AccountOwner,
+        spender: AccountOwner,
+    ) -> Option<Amount> {
+        use async_graphql::InputType as _;
+
+        let owner_spender = OwnerSpender::new(owner, spender);
+        let query = format!(
+            "query {{ allowances {{ entry(key: {}) {{ value }} }} }}",
+            owner_spender.to_value()
+        );
+        let QueryOutcome { response, .. } = self.graphql_query(application_id, query).await;
+        let allowance = response.pointer("/allowances/entry/value")?.as_str()?;
+
+        Some(
+            allowance
+                .parse()
+                .expect("Allowance cannot be parsed as a number"),
         )
     }
 }

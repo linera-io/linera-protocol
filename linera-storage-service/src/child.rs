@@ -52,8 +52,8 @@ impl StorageService {
     pub async fn run(&self) -> Result<StorageServiceGuard> {
         self.wait_for_absence().await?;
         let mut command = self.command();
-        let _child = command.spawn_into()?;
-        let guard = StorageServiceGuard { _child };
+        let child = command.spawn_into()?;
+        let guard = StorageServiceGuard { _child: child };
         // We iterate until the child is spawned and can be accessed.
         // We add an additional waiting period to avoid problems.
         for i in 1..10 {
