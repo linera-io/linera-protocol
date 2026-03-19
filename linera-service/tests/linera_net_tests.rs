@@ -44,13 +44,12 @@ use linera_sdk::{
     feature = "storage-service",
 ))]
 use linera_service::cli_wrappers::local_net::{Database, LocalNetConfig};
-use linera_service::cli_wrappers::Network;
 #[cfg(feature = "remote-net")]
 use linera_service::cli_wrappers::{remote_net::RemoteNetTestingConfig, OnClientDrop::*};
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, ProcessInbox},
-        ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig, NotificationsExt,
+        ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig, Network, NotificationsExt,
     },
     test_name,
 };
