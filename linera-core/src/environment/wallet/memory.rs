@@ -72,7 +72,7 @@ impl Memory {
     pub fn mutate<R>(
         &self,
         chain_id: ChainId,
-        mut mutate: impl FnMut(&mut Chain) -> R,
+        mutate: impl Fn(&mut Chain) -> R,
     ) -> Option<R> {
         use papaya::Operation::*;
 
@@ -126,7 +126,7 @@ impl Wallet for Memory {
     async fn modify(
         &self,
         id: ChainId,
-        f: impl FnMut(&mut Chain) + Send,
+        f: impl Fn(&mut Chain) + Send,
     ) -> Result<Option<()>, Self::Error> {
         Ok(self.mutate(id, f))
     }
