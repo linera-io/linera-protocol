@@ -276,11 +276,11 @@ doc_scalar!(
 pub enum Reason {
     NewBlock {
         height: BlockHeight,
-        hash: CryptoHash,
+        block_hash: CryptoHash,
     },
     NewEvents {
         height: BlockHeight,
-        hash: CryptoHash,
+        block_hash: CryptoHash,
         event_streams: BTreeSet<StreamId>,
     },
     NewIncomingBundle {
@@ -293,7 +293,7 @@ pub enum Reason {
     },
     BlockExecuted {
         height: BlockHeight,
-        hash: CryptoHash,
+        block_hash: CryptoHash,
     },
 }
 

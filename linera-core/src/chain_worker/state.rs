@@ -763,7 +763,7 @@ where
                     chain_id,
                     reason: Reason::NewEvents {
                         height,
-                        hash: block_hash,
+                        block_hash,
                         event_streams: updated_event_streams,
                     },
                 });
@@ -858,17 +858,14 @@ where
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock {
-                height,
-                hash: block_hash,
-            },
+            reason: Reason::NewBlock { height, block_hash },
         });
         if !updated_streams.is_empty() {
             actions.notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewEvents {
                     height,
-                    hash: block_hash,
+                    block_hash,
                     event_streams: updated_streams,
                 },
             });

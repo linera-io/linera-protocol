@@ -5158,7 +5158,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                         message_duration += start_time.elapsed();
                     }
                 }
-                Reason::NewBlock { height, hash } => {
+                Reason::NewBlock { height, block_hash } => {
                     assert_eq!(height, next_height2);
                     assert!(
                         got_message,
@@ -5168,7 +5168,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                     if i >= WARMUP_ITERATIONS {
                         block_duration += start_time.elapsed();
                     }
-                    break hash;
+                    break block_hash;
                 }
                 reason @ Reason::NewRound { .. } | reason @ Reason::NewEvents { .. } => {
                     panic!("Unexpected notification about transfer #{i} {reason:?}")

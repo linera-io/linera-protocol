@@ -1695,12 +1695,12 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Ok((_, executed_block, _, _)) = &result {
-                let hash = CryptoHash::new(executed_block);
+                let block_hash = CryptoHash::new(executed_block);
                 let notification = Notification {
                     chain_id: executed_block.header.chain_id,
                     reason: Reason::BlockExecuted {
                         height: executed_block.header.height,
-                        hash,
+                        block_hash,
                     },
                 };
                 self.notifier.notify(&[notification]);
@@ -1731,12 +1731,12 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Ok((block, _, _)) = &result {
-                let hash = CryptoHash::new(block);
+                let block_hash = CryptoHash::new(block);
                 let notification = Notification {
                     chain_id: block.header.chain_id,
                     reason: Reason::BlockExecuted {
                         height: block.header.height,
-                        hash,
+                        block_hash,
                     },
                 };
                 self.notifier.notify(&[notification]);

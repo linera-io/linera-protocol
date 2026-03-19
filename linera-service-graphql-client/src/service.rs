@@ -42,7 +42,7 @@ mod types {
     pub enum Reason {
         NewBlock {
             height: BlockHeight,
-            hash: CryptoHash,
+            block_hash: CryptoHash,
         },
         NewIncomingBundle {
             origin: Origin,
