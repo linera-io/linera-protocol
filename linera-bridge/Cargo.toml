@@ -101,13 +101,13 @@ serde_json = { workspace = true, optional = true }
 # relay feature deps
 axum = { workspace = true, optional = true }
 dirs = { workspace = true, optional = true }
-linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 linera-chain = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
 linera-core = { workspace = true, optional = true, features = ["fs"] }
 linera-faucet-client = { workspace = true, optional = true }
+linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 linera-storage = { workspace = true, optional = true }
 linera-views = { workspace = true, optional = true }
 rustls = { version = "0.23", optional = true, features = ["ring"] }
