@@ -27,6 +27,11 @@ permissions:
 
 jobs:
   bridge-e2e:
+    # Skip on fork PRs: GCP Workload Identity Federation requires OIDC tokens
+    # that GitHub does not inject for pull_request events from forks.
+    if: >-
+      github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 60
 
