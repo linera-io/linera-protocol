@@ -601,48 +601,129 @@ impl<Env: Environment> Client<Env> {
         event_ids: &[EventId],
     ) -> Result<(), chain_client::Error> {
         let mut validators = self.validator_nodes().await?;
-        validators.shuffle(&mut rand::thread_rng());
         let timeout = self.options.certificate_batch_download_timeout;
-        communicate_concurrently(
-            &validators,
-            async move |remote_node| {
-                // Step 1: Query this validator for the block heights.
-                let heights = remote_node
-                    .node
-                    .event_block_heights(event_ids.to_vec())
-                    .await?;
-                // Step 2: Group resolved heights by chain ID.
-                let mut chain_heights = BTreeMap::<_, BTreeSet<_>>::new();
-                for (event_id, maybe_height) in event_ids.iter().zip(heights) {
-                    let height = maybe_height
-                        .ok_or_else(|| NodeError::EventsNotFound(vec![event_id.clone()]))?;
-                    chain_heights
-                        .entry(event_id.chain_id)
-                        .or_default()
-                        .insert(height);
-                }
-                // Step 3: Download and process certificates from the same validator.
-                for (chain_id, heights) in chain_heights {
-                    let heights_vec = heights.into_iter().collect::<Vec<_>>();
-                    let certificates = self
-                        .requests_scheduler
-                        .download_certificates_by_heights(&remote_node, chain_id, heights_vec)
-                        .await?;
-                    for certificate in certificates {
-                        self.receive_sender_certificate(
-                            certificate,
-                            ReceiveCertificateMode::NeedsCheck,
-                            Some(vec![remote_node.clone()]),
-                        )
-                        .await?;
+        let (max_epoch, committees) = self.admin_committees().await?;
+        let committees_ref = &committees;
+        let mut remaining_event_ids: Vec<EventId> = event_ids.to_vec();
+
+        while !remaining_event_ids.is_empty() {
+            let remaining_ref = &remaining_event_ids;
+            validators.shuffle(&mut rand::thread_rng());
+            let result = communicate_concurrently(
+                &validators,
+                async move |remote_node| {
+                    // Query this validator for the block heights.
+                    let heights = remote_node
+                        .node
+                        .event_block_heights(remaining_ref.to_vec())
+                        .await
+                        .map_err(|_| ())?;
+
+                    // Separate resolved and unresolved events.
+                    let mut chain_heights = BTreeMap::<_, BTreeSet<_>>::new();
+                    let mut expected_events = BTreeMap::<_, HashSet<EventId>>::new();
+                    let mut unresolved = Vec::new();
+                    for (event_id, maybe_height) in remaining_ref.iter().zip(heights) {
+                        if let Some(height) = maybe_height {
+                            chain_heights
+                                .entry(event_id.chain_id)
+                                .or_default()
+                                .insert(height);
+                            expected_events
+                                .entry((event_id.chain_id, height))
+                                .or_default()
+                                .insert(event_id.clone());
+                        } else {
+                            unresolved.push(event_id.clone());
+                        }
                     }
+                    if chain_heights.is_empty() {
+                        // This validator has no useful information.
+                        return Err(());
+                    }
+
+                    // Download certificates and verify them.
+                    let mut certificates_with_check_results = Vec::new();
+                    for (chain_id, heights) in chain_heights {
+                        let heights_vec = heights.into_iter().collect::<Vec<_>>();
+                        let certificates = self
+                            .requests_scheduler
+                            .download_certificates_by_heights(
+                                &remote_node,
+                                chain_id,
+                                heights_vec,
+                            )
+                            .await
+                            .map_err(|_| ())?;
+                        for cert in &certificates {
+                            // Verify the block contains the expected events.
+                            let block = cert.block();
+                            let block_event_ids: HashSet<_> =
+                                block.event_ids().collect();
+                            if let Some(expected) =
+                                expected_events.get(&(chain_id, block.header.height))
+                            {
+                                if !expected.is_subset(&block_event_ids) {
+                                    // Faulty validator: block doesn't contain expected events.
+                                    return Err(());
+                                }
+                            }
+                        }
+                        for cert in certificates {
+                            if let Ok(check_result) =
+                                Self::check_certificate(max_epoch, committees_ref, &cert)
+                            {
+                                certificates_with_check_results
+                                    .push((cert, check_result.into_result().is_ok()));
+                            } else {
+                                // Invalid signature — faulty validator.
+                                return Err(());
+                            }
+                        }
+                    }
+                    Ok((certificates_with_check_results, unresolved))
+                },
+                |errors| {
+                    errors
+                        .into_iter()
+                        .map(|(validator, _error)| validator)
+                        .collect::<BTreeSet<_>>()
+                },
+                timeout,
+            )
+            .await;
+
+            match result {
+                Ok((certificates, unresolved)) => {
+                    for (certificate, check_result) in certificates {
+                        if !check_result {
+                            continue;
+                        }
+                        let mode = ReceiveCertificateMode::AlreadyChecked;
+                        self.receive_sender_certificate(certificate, mode, None)
+                            .await?;
+                    }
+                    if unresolved.len() == remaining_event_ids.len() {
+                        // No progress — all remaining events are still unresolved.
+                        break;
+                    }
+                    remaining_event_ids = unresolved;
                 }
-                Result::<_, chain_client::Error>::Ok(())
-            },
-            move |_| chain_client::Error::from(NodeError::EventsNotFound(event_ids.to_vec())),
-            timeout,
-        )
-        .await
+                Err(faulty_validators) => {
+                    validators
+                        .retain(|node| !faulty_validators.contains(&node.public_key));
+                    if validators.is_empty() {
+                        break;
+                    }
+                    continue;
+                }
+            }
+        }
+
+        if !remaining_event_ids.is_empty() {
+            return Err(NodeError::EventsNotFound(remaining_event_ids).into());
+        }
+        Ok(())
     }
 
     /// Tries to process all the certificates, requesting any missing blobs from the given node.
