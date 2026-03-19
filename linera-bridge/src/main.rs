@@ -72,15 +72,15 @@ struct ServeOptions {
 
     /// Address of the FungibleBridge contract on EVM.
     #[arg(long)]
-    bridge_address: String,
+    evm_bridge_address: String,
 
-    /// evm-bridge ApplicationId (hex).
+    /// evm-bridge Linera ApplicationId (hex).
     #[arg(long)]
-    bridge_app_id: String,
+    linera_bridge_address: String,
 
-    /// wrapped-fungible ApplicationId (hex).
+    /// wrapped-fungible Linera ApplicationId (hex).
     #[arg(long)]
-    fungible_app_id: String,
+    linera_fungible_address: String,
 
     /// EVM private key for signing addBlock transactions
     #[arg(long)]
@@ -117,9 +117,9 @@ impl ServeOptions {
             &self.data_dir,
             &self.keystore,
             self.chain_id,
-            &self.bridge_address,
-            &self.bridge_app_id,
-            &self.fungible_app_id,
+            &self.evm_bridge_address,
+            &self.linera_bridge_address,
+            &self.linera_fungible_address,
             &self.evm_private_key,
             self.port,
             self.blob_cache_size,

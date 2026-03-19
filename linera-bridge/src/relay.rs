@@ -295,9 +295,9 @@ pub async fn run(
     data_dir: &Path,
     keystore: &Path,
     chain_id_arg: Option<ChainId>,
-    bridge_address: &str,
-    bridge_app_id: &str,
-    fungible_app_id: &str,
+    evm_bridge_address: &str,
+    linera_bridge_address: &str,
+    linera_fungible_address: &str,
     evm_private_key: &str,
     port: u16,
     blob_cache_size: usize,
@@ -421,9 +421,9 @@ pub async fn run(
     Box::pin(serve_loop(
         chain_client,
         rpc_url,
-        bridge_address,
-        bridge_app_id,
-        fungible_app_id,
+        evm_bridge_address,
+        linera_bridge_address,
+        linera_fungible_address,
         evm_private_key,
         port,
     ))
@@ -436,14 +436,16 @@ pub async fn run(
 async fn serve_loop<E: linera_core::environment::Environment>(
     chain_client: ChainClient<E>,
     rpc_url: &str,
-    bridge_address: &str,
-    bridge_app_id: &str,
-    fungible_app_id: &str,
+    evm_bridge_address: &str,
+    linera_bridge_address: &str,
+    linera_fungible_address: &str,
     evm_private_key: &str,
     port: u16,
 ) -> Result<()> {
     // ── Set up EVM provider ──
-    let bridge_addr: Address = bridge_address.parse().context("invalid bridge address")?;
+    let bridge_addr: Address = evm_bridge_address
+        .parse()
+        .context("invalid --evm-bridge-address")?;
     let evm_signer: PrivateKeySigner =
         evm_private_key.parse().context("invalid EVM private key")?;
     let evm_wallet = EthereumWallet::from(evm_signer);
@@ -453,10 +455,12 @@ async fn serve_loop<E: linera_core::environment::Environment>(
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
     // ── Parse app IDs ──
-    let bridge_app_id: ApplicationId = bridge_app_id.parse().context("invalid --bridge-app-id")?;
-    let fungible_app_id: ApplicationId = fungible_app_id
+    let bridge_app_id: ApplicationId = linera_bridge_address
         .parse()
-        .context("invalid --fungible-app-id")?;
+        .context("invalid --linera-bridge-address")?;
+    let fungible_app_id: ApplicationId = linera_fungible_address
+        .parse()
+        .context("invalid --linera-fungible-address")?;
 
     // ── Start notification listener ──
     let mut notifications = chain_client.subscribe()?;

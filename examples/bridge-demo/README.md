@@ -193,9 +193,9 @@ linera-bridge serve \
   --data-dir ~/.config/linera \
   --keystore ~/.config/linera/keystore.json \
   --chain-id <CHAIN_ID> \
-  --bridge-address <BRIDGE_ADDRESS> \
-  --bridge-app-id <BRIDGE_APP_ID> \
-  --fungible-app-id <FUNGIBLE_APP_ID> \
+  --evm-bridge-address <EVM_BRIDGE_ADDRESS> \
+  --linera-bridge-address <LINERA_BRIDGE_ADDRESS> \
+  --linera-fungible-address <LINERA_FUNGIBLE_ADDRESS> \
   --evm-private-key 0x...
 ```
 
