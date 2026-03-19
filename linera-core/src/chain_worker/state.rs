@@ -913,8 +913,12 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
-        let (next_height_to_receive, last_anticipated_block_height) =
-            self.chain.inbox_cursors(&origin).await?;
+        let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+        let next_height_to_receive = inbox.next_block_height_to_receive()?;
+        let last_anticipated_block_height = match inbox.removed_bundles.back().await? {
+            Some(bundle) => Some(bundle.height),
+            None => None,
+        };
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(
@@ -935,9 +939,16 @@ where
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
             self.chain
-                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
+                .receive_message_bundle_with_inbox(
+                    &mut inbox,
+                    &origin,
+                    bundle,
+                    local_time,
+                    add_to_received_log,
+                )
                 .await?;
         }
+        drop(inbox);
         if !self.config.allow_inactive_chains && !self.chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
