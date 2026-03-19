@@ -207,7 +207,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Time to save a view to storage. p50 is median, p90 is most users' experience, p99 captures tail latency. Broken down by view type.",
+      "description": "Time to save a view to storage. p50 is median, p90 is most users' experience, p99 captures tail latency.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -263,8 +263,8 @@
         "overrides": [
           {
             "matcher": {
-              "id": "byRegexp",
-              "options": ".*p50.*"
+              "id": "byName",
+              "options": "p50"
             },
             "properties": [
               {
@@ -278,8 +278,8 @@
           },
           {
             "matcher": {
-              "id": "byRegexp",
-              "options": ".*p90.*"
+              "id": "byName",
+              "options": "p90"
             },
             "properties": [
               {
@@ -293,8 +293,8 @@
           },
           {
             "matcher": {
-              "id": "byRegexp",
-              "options": ".*p99.*"
+              "id": "byName",
+              "options": "p99"
             },
             "properties": [
               {
@@ -338,8 +338,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(linera:save_view_latency:rate1m{validator=~\"$validator\"}) by (le, type))",
-          "legendFormat": "{{type}} p50",
+          "expr": "histogram_quantile(0.50, sum(linera:save_view_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p50",
           "range": true,
           "refId": "A"
         },
@@ -349,8 +349,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(linera:save_view_latency:rate1m{validator=~\"$validator\"}) by (le, type))",
-          "legendFormat": "{{type}} p90",
+          "expr": "histogram_quantile(0.90, sum(linera:save_view_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p90",
           "range": true,
           "refId": "B"
         },
@@ -360,8 +360,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(linera:save_view_latency:rate1m{validator=~\"$validator\"}) by (le, type))",
-          "legendFormat": "{{type}} p99",
+          "expr": "histogram_quantile(0.99, sum(linera:save_view_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p99",
           "range": true,
           "refId": "C"
         }
