@@ -19,6 +19,7 @@ use linera_core::{
 };
 use linera_execution::ResourceControlPolicy;
 use linera_storage::TestClock;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tempfile::TempDir;
 use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
@@ -736,4 +737,107 @@ async fn test_daily_claim_flow() -> anyhow::Result<()> {
     assert_eq!(outcome_2.amount, daily_amount);
 
     handle.stop().await
+}
+
+#[test_log::test(tokio::test)]
+async fn test_migrate_created_at_from_datetime_to_integer() -> anyhow::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let database_path = temp_dir.path().join("migration_test.sqlite");
+
+    let text_owner: AccountOwner = "0x25E3f5Dbe9E5157C952B3CAc750c2Cee2179A4c5".parse()?;
+    let chain_id_for_text = "2b03a1c3e0fdc475812a22659433fe6f0269785f079c346997eea1756ae4ba1f";
+    let text_datetime = "2025-09-24 01:48:57";
+
+    let integer_owner: AccountOwner = "0x2B07BaA35634ce1e6F05E8b97a428B6E767bB47B".parse()?;
+    let chain_id_for_integer = "d0fa16c72e36c6212f0f8829da36bdee27734b7723ca4ec90885f7c2b8cf6515";
+    let integer_micros = 1_773_791_732_915_641i64;
+
+    let options = SqliteConnectOptions::new()
+        .filename(&database_path)
+        .create_if_missing(true);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE chains (
+            owner TEXT PRIMARY KEY NOT NULL,
+            chain_id TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX idx_chains_chain_id ON chains(chain_id);
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query("INSERT INTO chains (owner, chain_id, created_at) VALUES (?, ?, ?)")
+        .bind(text_owner.to_string())
+        .bind(chain_id_for_text)
+        .bind(text_datetime)
+        .execute(&pool)
+        .await?;
+
+    sqlx::query("INSERT INTO chains (owner, chain_id, created_at) VALUES (?, ?, ?)")
+        .bind(integer_owner.to_string())
+        .bind(chain_id_for_integer)
+        .bind(integer_micros)
+        .execute(&pool)
+        .await?;
+
+    let pragma_rows = sqlx::query("PRAGMA table_info(chains)")
+        .fetch_all(&pool)
+        .await?;
+    let column_type_before: String = pragma_rows
+        .iter()
+        .find(|row| {
+            let name: String = sqlx::Row::get(*row, "name");
+            name == "created_at"
+        })
+        .map(|row| sqlx::Row::get(row, "type"))
+        .unwrap();
+    assert!(
+        !column_type_before.eq_ignore_ascii_case("INTEGER"),
+        "Pre-migration column type should be DATETIME, got: {column_type_before}"
+    );
+
+    pool.close().await;
+
+    let faucet_database = FaucetDatabase::new(&database_path).await?;
+
+    let record_text = faucet_database
+        .initial_claim(&text_owner)
+        .await?
+        .expect("TEXT timestamp row should survive migration");
+    let expected_text_micros = 1_758_678_537u64 * 1_000_000;
+    assert_eq!(
+        record_text.timestamp,
+        Timestamp::from(expected_text_micros),
+        "TEXT '{text_datetime}' should convert to {expected_text_micros} micros",
+    );
+
+    let record_integer = faucet_database
+        .initial_claim(&integer_owner)
+        .await?
+        .expect("INTEGER timestamp row should survive migration");
+    assert_eq!(
+        record_integer.timestamp,
+        Timestamp::from(integer_micros as u64),
+        "INTEGER timestamp should be preserved as-is"
+    );
+
+    drop(faucet_database);
+    let faucet_database_reopened = FaucetDatabase::new(&database_path).await?;
+    let record_after_reopen = faucet_database_reopened
+        .initial_claim(&text_owner)
+        .await?
+        .expect("Row should still exist after second initialization");
+    assert_eq!(
+        record_after_reopen.timestamp, record_text.timestamp,
+        "Timestamp should be unchanged after idempotent re-initialization"
+    );
+
+    Ok(())
 }
