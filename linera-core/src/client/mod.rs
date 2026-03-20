@@ -644,8 +644,7 @@ impl<Env: Environment> Client<Env> {
                         }
 
                         // Download certificates and verify them.
-                        let mut checked_certificates =
-                            Vec::<ConfirmedBlockCertificate>::new();
+                        let mut checked_certificates = Vec::<ConfirmedBlockCertificate>::new();
                         for (chain_id, heights) in chain_heights {
                             let heights_vec = heights.into_iter().collect::<Vec<_>>();
                             let certificates = self
@@ -660,8 +659,7 @@ impl<Env: Environment> Client<Env> {
                             for cert in &certificates {
                                 // Verify the block contains the expected events.
                                 let block = cert.block();
-                                let block_event_ids =
-                                    block.event_ids().collect::<HashSet<_>>();
+                                let block_event_ids = block.event_ids().collect::<HashSet<_>>();
                                 if let Some(expected) =
                                     expected_events.get(&(chain_id, block.header.height))
                                 {
