@@ -100,11 +100,9 @@ impl OutputType for RawJson {
         // When the response is serialised to JSON the raw string is emitted
         // verbatim, avoiding any parsing or tree conversion.
         //
-        // See: async-graphql-value/src/value_serde.rs
-        const RAW_VALUE_TOKEN: &str = "$serde_json::private::RawValue";
         Ok(async_graphql::Value::Object(
             std::iter::once((
-                async_graphql::Name::new(RAW_VALUE_TOKEN),
+                async_graphql::Name::new(async_graphql_value::RAW_VALUE_TOKEN),
                 async_graphql::Value::String(self.0.clone()),
             ))
             .collect(),
@@ -217,8 +215,6 @@ where
         // `WatchStream` would skip it and wait for the next change.  Grab the
         // current snapshot first and prepend it to the stream so that every new
         // subscriber gets the latest cached result immediately.
-        // The watch channel stores pre-serialized JSON strings so that cloning
-        // between subscribers is a cheap memcpy rather than a deep Value clone.
         let current = receiver.borrow().clone();
         let changes = tokio_stream::wrappers::WatchStream::from_changes(receiver)
             .filter_map(|value| async move { value });

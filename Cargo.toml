@@ -91,6 +91,7 @@ assert_matches = "1.5.0"
 async-graphql = { version = "=7.0.17", features = ["raw_value"] }
 async-graphql-axum = "=7.0.17"
 async-graphql-derive = "=7.0.17"
+async-graphql-value = { version = "=7.0.17", features = ["raw_value"] }
 async-lock = "3.3.0"
 async-trait = "0.1.77"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
