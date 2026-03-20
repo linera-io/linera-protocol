@@ -18,7 +18,7 @@ use linera_views::{
 mod outbox_tests;
 
 #[cfg(with_metrics)]
-mod metrics {
+pub(crate) mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec};
@@ -76,10 +76,6 @@ where
         }
         self.next_height_to_schedule.set(height.try_add_one()?);
         self.queue.push_back(height);
-        #[cfg(with_metrics)]
-        metrics::OUTBOX_SIZE
-            .with_label_values(&[])
-            .observe(self.queue.count() as f64);
         Ok(true)
     }
 
