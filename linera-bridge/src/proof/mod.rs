@@ -67,7 +67,7 @@
 //! via an HTTP oracle before accepting a deposit.
 
 /// Off-chain deposit proof generation via EVM JSON-RPC.
-#[cfg(not(feature = "chain"))]
+#[cfg(feature = "offchain")]
 pub mod gen;
 
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
