@@ -20,6 +20,8 @@ use alloy::{
 use anyhow::{Context as _, Result};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
 use futures::StreamExt as _;
+#[cfg(with_metrics)]
+use linera_base::time::Instant;
 use linera_base::{
     crypto::InMemorySigner,
     data_types::Amount,
@@ -77,23 +79,45 @@ enum RelayRequest {
         proof: crate::proof::gen::DepositProof,
         response: oneshot::Sender<Result<(), String>>,
         retry_count: u32,
+        #[cfg(with_metrics)]
+        queued_at: Instant,
     },
     /// Linera→EVM: process inbox, submit burns, forward certs to EVM.
-    Notification { retry_count: u32 },
+    Notification {
+        retry_count: u32,
+        #[cfg(with_metrics)]
+        queued_at: Instant,
+    },
 }
 
 impl RelayRequest {
     fn retry_count(&self) -> u32 {
         match self {
-            Self::Deposit { retry_count, .. } | Self::Notification { retry_count } => *retry_count,
+            Self::Deposit { retry_count, .. } | Self::Notification { retry_count, .. } => {
+                *retry_count
+            }
         }
     }
 
     fn increment_retry(&mut self) {
         match self {
-            Self::Deposit { retry_count, .. } | Self::Notification { retry_count } => {
+            Self::Deposit { retry_count, .. } | Self::Notification { retry_count, .. } => {
                 *retry_count += 1
             }
+        }
+    }
+
+    fn request_type(&self) -> &'static str {
+        match self {
+            Self::Deposit { .. } => "deposit",
+            Self::Notification { .. } => "notification",
+        }
+    }
+
+    #[cfg(with_metrics)]
+    fn queued_at(&self) -> Instant {
+        match self {
+            Self::Deposit { queued_at, .. } | Self::Notification { queued_at, .. } => *queued_at,
         }
     }
 }
@@ -112,6 +136,13 @@ impl RelayQueue {
     }
 
     fn push(&self, request: RelayRequest) {
+        #[cfg(with_metrics)]
+        {
+            metrics::RELAY_QUEUE_SIZE.inc();
+            metrics::RELAY_REQUESTS_ENQUEUED
+                .with_label_values(&[request.request_type()])
+                .inc();
+        }
         self.items
             .lock()
             .expect("queue lock poisoned")
@@ -120,7 +151,12 @@ impl RelayQueue {
     }
 
     fn pop(&self) -> Option<RelayRequest> {
-        self.items.lock().expect("queue lock poisoned").pop_front()
+        let item = self.items.lock().expect("queue lock poisoned").pop_front();
+        #[cfg(with_metrics)]
+        if item.is_some() {
+            metrics::RELAY_QUEUE_SIZE.dec();
+        }
+        item
     }
 }
 
@@ -203,6 +239,8 @@ async fn deposit_handler(
         proof,
         response: resp_tx,
         retry_count: 0,
+        #[cfg(with_metrics)]
+        queued_at: Instant::now(),
     });
 
     match resp_rx.await {
@@ -701,7 +739,11 @@ async fn serve_loop<E: linera_core::environment::Environment>(
                 }
 
                 tracing::info!("Received NewIncomingBundle, queueing for processing...");
-                queue.push(RelayRequest::Notification { retry_count: 0 });
+                queue.push(RelayRequest::Notification {
+                    retry_count: 0,
+                    #[cfg(with_metrics)]
+                    queued_at: Instant::now(),
+                });
             }
 
             _ = queue.notify.notified() => {
@@ -722,6 +764,13 @@ async fn serve_loop<E: linera_core::environment::Environment>(
                     match result {
                         Ok(()) => {
                             tracing::info!("Relay request processed successfully");
+                            #[cfg(with_metrics)]
+                            {
+                                metrics::RELAY_REQUESTS_COMPLETED.inc();
+                                metrics::RELAY_QUEUE_WAIT_TIME.observe(
+                                    request.queued_at().elapsed().as_millis() as f64,
+                                );
+                            }
                             if let RelayRequest::Deposit { response, .. } = request {
                                 let _ = response.send(Ok(()));
                             }
@@ -746,6 +795,8 @@ async fn serve_loop<E: linera_core::environment::Environment>(
                                 tracing::error!(
                                     "Relay failed after {MAX_RELAY_RETRIES} retries, dropping: {e:#}"
                                 );
+                                #[cfg(with_metrics)]
+                                metrics::RELAY_REQUESTS_FAILED.inc();
                                 if let RelayRequest::Deposit { response, .. } = request {
                                     let _ = response.send(Err(format!("{e:#}")));
                                 }
@@ -759,4 +810,52 @@ async fn serve_loop<E: linera_core::environment::Environment>(
     }
 
     Ok(())
+}
+
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram, register_int_counter,
+        register_int_counter_vec, register_int_gauge,
+    };
+    use prometheus::{Histogram, IntCounter, IntCounterVec, IntGauge};
+
+    pub static RELAY_QUEUE_SIZE: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "relay_queue_size",
+            "Current number of items in the relay queue",
+        )
+    });
+
+    pub static RELAY_REQUESTS_ENQUEUED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "relay_requests_enqueued",
+            "Total relay requests enqueued",
+            &["type"],
+        )
+    });
+
+    pub static RELAY_REQUESTS_COMPLETED: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "relay_requests_completed",
+            "Total relay requests completed successfully",
+        )
+    });
+
+    pub static RELAY_REQUESTS_FAILED: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "relay_requests_failed",
+            "Total relay requests dropped after max retries",
+        )
+    });
+
+    pub static RELAY_QUEUE_WAIT_TIME: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "relay_queue_wait_time_ms",
+            "Time (ms) a relay request waits in queue before processing",
+            exponential_bucket_latencies(10_000.0),
+        )
+    });
 }

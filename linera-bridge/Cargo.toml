@@ -40,9 +40,14 @@ cli = [
     "dep:serde",
     "dep:fs-err",
 ]
+metrics = [
+    "prometheus",
+    "linera-base/metrics",
+]
 relay = [
     "offchain",
     "cli",
+    "metrics",
     "dep:axum",
     "dep:dirs",
     "dep:futures",
@@ -112,6 +117,7 @@ linera-storage = { workspace = true, optional = true }
 linera-views = { workspace = true, optional = true }
 rustls = { version = "0.23", optional = true, features = ["ring"] }
 tower-http = { workspace = true, optional = true, features = ["cors"] }
+prometheus = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
 
@@ -120,6 +126,7 @@ name = "linera-bridge"
 required-features = ["cli"]
 
 [build-dependencies]
+cfg_aliases.workspace = true
 serde-generate = { version = "0.33", features = ["solidity"], optional = true }
 serde-reflection = { workspace = true, optional = true }
 serde_yaml = { version = "0.8.26", optional = true }
