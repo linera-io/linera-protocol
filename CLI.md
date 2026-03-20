@@ -263,6 +263,12 @@ Client implementation and command-line tool for the Linera blockchain
 * `--blob-cache-size <BLOB_CACHE_SIZE>` — The maximal number of entries in the blob cache
 
   Default value: `1000`
+* `--block-cache-size <BLOCK_CACHE_SIZE>` — The number of entries in the block cache
+
+  Default value: `5000`
+* `--execution-state-cache-size <EXECUTION_STATE_CACHE_SIZE>` — The number of entries in the execution state cache
+
+  Default value: `10000`
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`

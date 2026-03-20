@@ -86,6 +86,14 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub blob_cache_size: usize,
 
+    /// The number of entries in the block cache.
+    #[arg(long, default_value = "5000", global = true)]
+    pub block_cache_size: usize,
+
+    /// The number of entries in the execution state cache.
+    #[arg(long, default_value = "10000", global = true)]
+    pub execution_state_cache_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,

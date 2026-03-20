@@ -14,6 +14,7 @@ use linera_core::{
     join_set_ext::JoinSet,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
     wallet,
+    worker::{DEFAULT_BLOCK_CACHE_SIZE, DEFAULT_EXECUTION_STATE_CACHE_SIZE},
 };
 use linera_rpc::{NodeOptions, NodeProvider};
 use linera_service::Wallet;
@@ -70,6 +71,8 @@ pub async fn new_test_client_context(
                 ..ChainClientOptions::test_default()
             },
             linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )
         .into(),
         genesis_config,

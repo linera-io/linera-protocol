@@ -73,6 +73,8 @@ impl Client {
             &options,
             default,
             genesis_config,
+            linera_core::worker::DEFAULT_BLOCK_CACHE_SIZE,
+            linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )
         .await?;
         // The `Arc` here is useless, but it is required by the `ChainListener` API.

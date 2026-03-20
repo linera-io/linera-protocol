@@ -71,6 +71,8 @@ struct ServerContext {
     block_time_grace_period: Duration,
     chain_worker_ttl: Duration,
     chain_info_max_received_log_entries: usize,
+    block_cache_size: usize,
+    execution_state_cache_size: usize,
 }
 
 impl ServerContext {
@@ -93,6 +95,8 @@ impl ServerContext {
             format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
             Some(self.server_config.validator_secret.copy()),
             storage,
+            self.block_cache_size,
+            self.execution_state_cache_size,
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
@@ -538,6 +542,8 @@ async fn run(options: ServerOptions) {
                 block_time_grace_period,
                 chain_worker_ttl,
                 chain_info_max_received_log_entries,
+                block_cache_size: common_storage_options.block_cache_size,
+                execution_state_cache_size: common_storage_options.execution_state_cache_size,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config
