@@ -1835,8 +1835,7 @@ impl<Env: Environment> Client<Env> {
                     .cloned()
                     .collect::<Vec<_>>();
                 if !new_events.is_empty() {
-                    Box::pin(self.download_certificates_for_events(&new_events))
-                        .await?;
+                    Box::pin(self.download_certificates_for_events(&new_events)).await?;
                     downloaded_events.extend(new_events);
                     continue; // We downloaded new publisher chain data: retry.
                 }
