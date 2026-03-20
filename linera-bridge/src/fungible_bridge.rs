@@ -96,7 +96,7 @@ mod tests {
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let app_id = CryptoHash::new(&TestString::new("fungible_app"));
             let bridge =
-                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, 1, app_id, token);
+                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id, token);
 
             // Fund the bridge with the full token supply
             call_contract(
@@ -132,7 +132,7 @@ mod tests {
             self.submit_block(vec![txn])
         }
 
-        /// Submits a block with the given transactions at the next sequential height.
+        /// Submits a block with the given transactions.
         fn submit_block(
             &mut self,
             transactions: Vec<Transaction>,
@@ -311,7 +311,7 @@ mod tests {
         let chain_id = CryptoHash::new(&TestString::new("test_chain"));
         let app_id = CryptoHash::new(&TestString::new("fungible_app"));
         let bridge =
-            deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, 1, app_id, token);
+            deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id, token);
 
         // Give depositor tokens (instead of funding the bridge)
         call_contract(
