@@ -125,17 +125,12 @@ pub fn deploy_microchain(
     deployer: Address,
     light_client: Address,
     chain_id: CryptoHash,
-    next_expected_height: u64,
 ) -> Address {
     let test_source = std::fs::read_to_string("tests/solidity/MicrochainTest.sol")
         .expect("MicrochainTest.sol not found");
     let bytecode = compile_contract(&test_source, "MicrochainTest.sol", "MicrochainTest");
-    let constructor_args = (
-        light_client,
-        <[u8; 32]>::from(*chain_id.as_bytes()),
-        next_expected_height,
-    )
-        .abi_encode_params();
+    let constructor_args =
+        (light_client, <[u8; 32]>::from(*chain_id.as_bytes())).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
@@ -146,7 +141,6 @@ pub fn deploy_fungible_bridge(
     deployer: Address,
     light_client: Address,
     chain_id: CryptoHash,
-    next_expected_height: u64,
     application_id: CryptoHash,
     token: Address,
 ) -> Address {
@@ -158,7 +152,6 @@ pub fn deploy_fungible_bridge(
     let constructor_args = (
         light_client,
         <[u8; 32]>::from(*chain_id.as_bytes()),
-        next_expected_height,
         <[u8; 32]>::from(*application_id.as_bytes()),
         token,
     )

@@ -189,7 +189,6 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     let bridge_constructor = (
         deployer,                                // light_client (unused by deposit)
         <[u8; 32]>::from(target_chain_id),       // chainId
-        0u64,                                    // nextExpectedHeight
         <[u8; 32]>::from(target_application_id), // applicationId
         token_address,                           // token
     )
