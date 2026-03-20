@@ -36,11 +36,10 @@ contract FungibleBridge is Microchain {
     constructor(
         address _lightClient,
         bytes32 _chainId,
-        uint64 _nextExpectedHeight,
         bytes32 _applicationId,
         address _token
     )
-        Microchain(_lightClient, _chainId, _nextExpectedHeight)
+        Microchain(_lightClient, _chainId)
     {
         applicationId = _applicationId;
         token = IERC20(_token);

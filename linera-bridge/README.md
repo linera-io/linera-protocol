@@ -99,25 +99,25 @@ The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis c
 
 ### Microchain (abstract)
 
-#### `constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight)`
+#### `constructor(address _lightClient, bytes32 _chainId)`
 
-Binds the contract to a specific `LightClient` instance, a Linera chain ID (a 32-byte `CryptoHash`), and an initial block height.
+Binds the contract to a specific `LightClient` instance and a Linera chain ID (a 32-byte `CryptoHash`).
 
 #### `addBlock(bytes calldata data)`
 
 Verifies a certificate via `lightClient.verifyBlock(data)`, then enforces:
+- **No duplicate blocks**: rejects certificates already processed via the `verifiedBlocks` mapping.
 - **Chain ID match**: the block's `header.chain_id` must equal this contract's `chainId`.
-- **Sequential heights**: the block's height must equal `nextExpectedHeight`.
 
-On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
+Blocks can be submitted in any order; sequential height enforcement is not required because BFT-finalized certificates guarantee canonicality. On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
 
 ### FungibleBridge (concrete Microchain)
 
 A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When a fungible `Credit` message targeting an Ethereum address (`Address20`) is received, the contract transfers tokens from its own balance to the recipient.
 
-#### `constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight, bytes32 _applicationId, address _token)`
+#### `constructor(address _lightClient, bytes32 _chainId, bytes32 _applicationId, address _token)`
 
-Binds to a specific `LightClient`, chain, initial block height, Linera application ID, and ERC-20 token contract. Only messages targeting this `applicationId` are processed; all others are silently skipped.
+Binds to a specific `LightClient`, chain, Linera application ID, and ERC-20 token contract. Only messages targeting this `applicationId` are processed; all others are silently skipped.
 
 #### `_onBlock(BridgeTypes.Block)`
 
@@ -140,7 +140,7 @@ let calldata: Vec<u8> = call.abi_encode();
 
 // Available call types:
 // light_client: addCommitteeCall, verifyBlockCall, currentEpochCall
-// microchain:   addBlockCall, nextExpectedHeightCall, lightClientCall, chainIdCall
+// microchain:   addBlockCall, lightClientCall, chainIdCall
 
 // Solidity sources (for compilation or deployment tooling):
 // BRIDGE_TYPES_SOURCE, WRAPPED_FUNGIBLE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE

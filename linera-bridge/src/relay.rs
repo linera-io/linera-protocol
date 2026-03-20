@@ -564,8 +564,6 @@ pub async fn run(
                         }
                     };
 
-                    // Forward the deposit block to EVM so the Microchain
-                    // height stays sequential.
                     forward_cert_to_evm(&cert, bridge_addr, &provider).await;
 
                     Ok::<(), anyhow::Error>(())
