@@ -7,7 +7,7 @@
 //! Prerequisites: `anvil` (foundry) and `solc` must be installed.
 //! Run: `cargo test -p linera-bridge -- --ignored test_deposit_proof`
 
-#![cfg(not(target_arch = "wasm32"))]
+#![cfg(all(not(target_arch = "wasm32"), feature = "offchain"))]
 
 use std::{
     fs::File,
