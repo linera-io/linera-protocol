@@ -258,7 +258,10 @@ async fn forward_cert_to_evm(
 
 type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
 
-async fn create_rocksdb_storage(path: &Path, blob_cache_size: usize) -> Result<RocksDbStorage> {
+async fn create_rocksdb_storage(
+    path: &Path,
+    cache_sizes: linera_storage::StorageCacheSizes,
+) -> Result<RocksDbStorage> {
     let config = LruCachingConfig {
         inner_config: RocksDbStoreInternalConfig {
             path_with_guard: PathWithGuard::new(path.to_path_buf()),
@@ -280,7 +283,7 @@ async fn create_rocksdb_storage(path: &Path, blob_cache_size: usize) -> Result<R
         &config,
         "bridge_relay",
         Some(WasmRuntime::default()),
-        blob_cache_size,
+        cache_sizes,
     )
     .await?;
     Ok(storage)
@@ -301,7 +304,7 @@ pub async fn run(
     linera_fungible_address: &str,
     evm_private_key: &str,
     port: u16,
-    blob_cache_size: usize,
+    cache_sizes: linera_storage::StorageCacheSizes,
 ) -> Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -348,7 +351,7 @@ pub async fn run(
     let db_path = storage_path
         .strip_prefix("rocksdb:")
         .context("storage config must start with 'rocksdb:'")?;
-    let mut storage = create_rocksdb_storage(Path::new(db_path), blob_cache_size).await?;
+    let mut storage = create_rocksdb_storage(Path::new(db_path), cache_sizes).await?;
 
     // ── Wallet: load existing or create fresh ──
     let wallet_exists = wallet_path.exists();

@@ -17,7 +17,13 @@ pub async fn get_storage(namespace: &str) -> Result<Storage, linera_views::ViewE
         },
         namespace,
         Some(linera_execution::WasmRuntime::Wasmer),
-        1000,
+        linera_storage::StorageCacheSizes {
+            blob_cache_size: 1000,
+            confirmed_block_cache_size: 1000,
+            lite_certificate_cache_size: 1000,
+            certificate_raw_cache_size: 1000,
+            event_cache_size: 1000,
+        },
     )
     .await?
     .with_allow_application_logs(true))

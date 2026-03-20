@@ -79,7 +79,7 @@ use linera_service::{
     controller::Controller,
     node_service::NodeService,
     project::{self, Project},
-    storage::{AssertStorageV1, Runnable, RunnableWithStore, StorageMigration},
+    storage::{AssertStorageV1, Runnable, RunnableWithStore, StorageCacheSizes, StorageMigration},
     task_processor::TaskProcessor,
     util,
     wallet::WalletExt as _,
@@ -1807,7 +1807,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
         self,
         config: D::Config,
         namespace: String,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -1852,7 +1852,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     &config,
                     &namespace,
                     None,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?;
                 genesis_config.initialize_storage(&mut storage).await?;

@@ -33,7 +33,7 @@ use linera_faucet_client::Faucet;
 use wrapped_fungible::{
     Account, InitialState, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
 };
-use linera_storage::DbStorage;
+use linera_storage::{DbStorage, StorageCacheSizes};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
 sol! {
@@ -72,7 +72,13 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         &config,
         "bridge-e2e-test",
         Some(WasmRuntime::default()),
-        1000,
+        StorageCacheSizes {
+            blob_cache_size: 1000,
+            confirmed_block_cache_size: 1000,
+            lite_certificate_cache_size: 1000,
+            certificate_raw_cache_size: 1000,
+            event_cache_size: 1000,
+        },
     )
     .await?;
 

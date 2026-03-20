@@ -97,6 +97,22 @@ struct ServeOptions {
     /// The maximal number of entries in the blob cache.
     #[arg(long, default_value = "1000")]
     blob_cache_size: usize,
+
+    /// The maximal number of entries in the confirmed block cache.
+    #[arg(long, default_value = "1000")]
+    confirmed_block_cache_size: usize,
+
+    /// The maximal number of entries in the lite certificate cache.
+    #[arg(long, default_value = "1000")]
+    lite_certificate_cache_size: usize,
+
+    /// The maximal number of entries in the raw certificate cache.
+    #[arg(long, default_value = "1000")]
+    certificate_raw_cache_size: usize,
+
+    /// The maximal number of entries in the event cache.
+    #[arg(long, default_value = "1000")]
+    event_cache_size: usize,
 }
 
 fn main() -> Result<()> {
@@ -127,7 +143,13 @@ impl ServeOptions {
             &self.linera_fungible_address,
             &self.evm_private_key,
             self.port,
-            self.blob_cache_size,
+            linera_storage::StorageCacheSizes {
+                blob_cache_size: self.blob_cache_size,
+                confirmed_block_cache_size: self.confirmed_block_cache_size,
+                lite_certificate_cache_size: self.lite_certificate_cache_size,
+                certificate_raw_cache_size: self.certificate_raw_cache_size,
+                event_cache_size: self.event_cache_size,
+            },
         ))
         .await
     }
