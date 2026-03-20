@@ -1,0 +1,132 @@
+name: Bridge E2E
+
+on:
+  merge_group:
+  workflow_dispatch:
+  push:
+    branches: [ 'testnet_*', 'main', 'bridge-main']
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTFLAGS: -D warnings
+  RUSTUP_MAX_RETRIES: 10
+  RUST_LOG: warn
+  GCP_REGISTRY: us-docker.pkg.dev/linera-io-dev/linera-public-registry
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  bridge-e2e:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Pull pre-built linera images from GCP registry
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: >-
+            projects/886017272224/locations/global/workloadIdentityPools/github-apps-pool/providers/github-apps-provider
+          service_account: >-
+            actions-runner@linera-io-dev.iam.gserviceaccount.com
+
+      - name: Configure Docker for GCP
+        run: gcloud auth configure-docker us-docker.pkg.dev
+
+      - name: Pull linera image
+        id: pull-linera
+        continue-on-error: true
+        run: |
+          BRANCH="${{ github.base_ref || github.ref_name }}"
+          docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
+          docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
+
+      - name: Build linera image
+        if: steps.pull-linera.outcome == 'failure'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          load: true
+          tags: linera-test
+
+      - name: Pull exporter image
+        id: pull-exporter
+        continue-on-error: true
+        run: |
+          BRANCH="${{ github.base_ref || github.ref_name }}"
+          docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
+          docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter
+
+      - name: Build exporter image
+        if: steps.pull-exporter.outcome == 'failure'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile.exporter
+          load: true
+          tags: linera-exporter
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            bridge:
+              - 'linera-bridge/**'
+              - '!linera-bridge/tests/e2e/**'
+              - 'docker/Dockerfile.bridge'
+
+      - name: Build foundry-jq image
+        run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
+
+      - name: Pull bridge image (unchanged)
+        id: pull-bridge
+        if: steps.changes.outputs.bridge == 'false'
+        continue-on-error: true
+        run: |
+          BRANCH="${{ github.base_ref || github.ref_name }}"
+          docker pull "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
+          docker tag "${GCP_REGISTRY}/linera-bridge:${BRANCH}" linera-bridge:latest
+
+      - name: Build bridge image
+        id: build-bridge
+        if: steps.changes.outputs.bridge == 'true' || steps.pull-bridge.outcome == 'failure'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile.bridge
+          load: true
+          tags: linera-bridge:latest
+
+      - name: Build example Wasm for bridge tests
+        run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible -p evm-bridge
+        working-directory: examples
+
+      - name: Run bridge E2E test
+        working-directory: linera-bridge/tests/e2e
+        env:
+          RUSTFLAGS: ""
+        run: cargo test -- --ignored --nocapture
