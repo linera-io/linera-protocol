@@ -936,10 +936,10 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&[0, 1]).await.unwrap();
     /// view.try_load_entry_mut(&[0, 2]).await.unwrap();
-    /// assert_eq!(view.count().await.unwrap(), 2);
+    /// assert_eq!(view.iterative_count().await.unwrap(), 2);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
         let mut count = 0;
         self.for_each_key(|_key| {
             count += 1;
@@ -1604,11 +1604,11 @@ where
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&23).await.unwrap();
     /// view.try_load_entry_mut(&25).await.unwrap();
-    /// assert_eq!(view.count().await.unwrap(), 2);
+    /// assert_eq!(view.iterative_count().await.unwrap(), 2);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
-        self.collection.count().await
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
+        self.collection.iterative_count().await
     }
 
     /// Applies a function f on each index. Indices are visited in an order
@@ -2167,11 +2167,11 @@ where
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&23).await.unwrap();
     /// view.try_load_entry_mut(&25).await.unwrap();
-    /// assert_eq!(view.count().await.unwrap(), 2);
+    /// assert_eq!(view.iterative_count().await.unwrap(), 2);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
-        self.collection.count().await
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
+        self.collection.iterative_count().await
     }
 
     /// Applies a function f on each index. Indices are visited in an order
@@ -2348,7 +2348,7 @@ mod graphql {
 
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.count().await? as u32)
+            Ok(self.iterative_count().await? as u32)
         }
 
         async fn entry(

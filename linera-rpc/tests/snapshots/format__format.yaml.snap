@@ -808,6 +808,12 @@ NodeError:
           - local_time:
               TYPENAME: Timestamp
           - block_time_grace_period_ms: U64
+Notification:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - reason:
+        TYPENAME: Reason
 OpenChainConfig:
   STRUCT:
     - ownership:
@@ -928,6 +934,46 @@ ProposedBlock:
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
+Reason:
+  ENUM:
+    0:
+      NewBlock:
+        STRUCT:
+          - height:
+              TYPENAME: BlockHeight
+          - block_hash:
+              TYPENAME: CryptoHash
+    1:
+      NewEvents:
+        STRUCT:
+          - height:
+              TYPENAME: BlockHeight
+          - block_hash:
+              TYPENAME: CryptoHash
+          - event_streams:
+              SEQ:
+                TYPENAME: StreamId
+    2:
+      NewIncomingBundle:
+        STRUCT:
+          - origin:
+              TYPENAME: ChainId
+          - height:
+              TYPENAME: BlockHeight
+    3:
+      NewRound:
+        STRUCT:
+          - height:
+              TYPENAME: BlockHeight
+          - round:
+              TYPENAME: Round
+    4:
+      BlockExecuted:
+        STRUCT:
+          - height:
+              TYPENAME: BlockHeight
+          - block_hash:
+              TYPENAME: CryptoHash
 ResourceControlPolicy:
   STRUCT:
     - wasm_fuel_unit:
@@ -1153,6 +1199,15 @@ RpcMessage:
       ShardInfoResponse:
         NEWTYPE:
           TYPENAME: ShardInfo
+    35:
+      SubscribeNotifications:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: ChainId
+    36:
+      Notification:
+        NEWTYPE:
+          TYPENAME: Notification
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

@@ -1214,6 +1214,38 @@ impl Runnable for Job {
                 info!("Notification stream ended.");
             }
 
+            QueryApplication {
+                chain_id,
+                application_id,
+                query,
+            } => {
+                let context = options
+                    .create_client_context(storage, wallet, signer.into_value())
+                    .await?;
+                let chain_id = chain_id
+                    .or_else(|| context.wallet().default_chain())
+                    .expect("No chain ID specified and no default chain in wallet");
+                let chain_client = context.make_chain_client(chain_id).await?;
+                let graphql_query = format!("query {{ {query} }}");
+                let json_query = serde_json::json!({ "query": graphql_query });
+                let query_bytes = serde_json::to_vec(&json_query)?;
+                let query = linera_execution::Query::User {
+                    application_id,
+                    bytes: query_bytes,
+                };
+                let (outcome, _height) = chain_client.query_application(query, None).await?;
+                match outcome.response {
+                    linera_execution::QueryResponse::User(bytes) => {
+                        let response: Value = serde_json::from_slice(&bytes)?;
+                        let data = &response["data"];
+                        println!("{data}");
+                    }
+                    linera_execution::QueryResponse::System(_) => {
+                        unreachable!("cannot get a system response for a user query")
+                    }
+                }
+            }
+
             Service {
                 config,
                 port,
@@ -1357,7 +1389,7 @@ impl Runnable for Job {
                     #[cfg(with_metrics)]
                     metrics_port,
                     chain_id,
-                    amount,
+                    initial_claim_amount: amount,
                     daily_claim_amount,
                     end_timestamp,
                     genesis_config: Arc::new(genesis_config),

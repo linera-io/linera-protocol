@@ -641,7 +641,7 @@ where
             .read_certificate(hash)
             .await
             .map_err(Self::view_error_to_status)?
-            .ok_or(Status::not_found(hash.to_string()))?
+            .ok_or_else(|| Status::not_found(hash.to_string()))?
             .into();
         Ok(Response::new(certificate.try_into()?))
     }

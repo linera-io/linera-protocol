@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::{AccountOwner, Amount, OwnerSpender},
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 
-use crate::{InitialState, OwnerSpender};
+use crate::InitialState;
 
 /// The application state.
 #[derive(RootView)]
@@ -44,16 +44,19 @@ impl FungibleTokenState {
 
     /// Credits an `account` with the provided `amount`.
     pub async fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, allowance: Amount) {
+        let owner_spender = OwnerSpender::new(owner, spender);
         if allowance == Amount::ZERO {
+            self.allowances
+                .remove(&owner_spender)
+                .expect("Failed to remove allowance");
             return;
         }
-        let owner_spender = OwnerSpender::new(owner, spender);
         let total_allowance = self
             .allowances
             .get_mut_or_default(&owner_spender)
             .await
             .expect("Failed allowance access");
-        total_allowance.saturating_add_assign(allowance);
+        *total_allowance = allowance;
     }
 
     pub async fn debit_for_transfer_from(

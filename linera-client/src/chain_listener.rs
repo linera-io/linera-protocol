@@ -327,10 +327,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             Reason::NewRound { .. } => {
                 self.update_validators(&notification).await?;
             }
-            Reason::NewBlock { hash, .. } => {
+            Reason::NewBlock { block_hash, .. } => {
                 self.update_wallet(notification.chain_id).await?;
                 if listening_mode.is_full() {
-                    self.add_new_chains(*hash).await?;
+                    self.add_new_chains(*block_hash).await?;
                     let publishers = self
                         .update_event_subscriptions(notification.chain_id)
                         .await?;
@@ -401,7 +401,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         if !new_ids.is_empty() {
             context_guard
                 .client()
-                .local_node
                 .retry_pending_cross_chain_requests(parent_chain_id)
                 .await?;
         }
@@ -648,8 +647,12 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     async fn update_validators(&self, notification: &Notification) -> Result<(), Error> {
         let chain_id = notification.chain_id;
         let listening_client = self.listening.get(&chain_id).expect("missing client");
-        let latest_block = if let Reason::NewBlock { hash, .. } = &notification.reason {
-            listening_client.client.read_certificate(*hash).await.ok()
+        let latest_block = if let Reason::NewBlock { block_hash, .. } = &notification.reason {
+            listening_client
+                .client
+                .read_certificate(*block_hash)
+                .await
+                .ok()
         } else {
             None
         };

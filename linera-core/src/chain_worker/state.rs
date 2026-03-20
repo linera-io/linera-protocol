@@ -31,7 +31,10 @@ use linera_chain::{
         OriginalProposal, ProposalContent, ProposedBlock,
     },
     manager,
-    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{
+        Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
+        ValidatedBlockCertificate,
+    },
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
@@ -62,14 +65,26 @@ pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscr
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram};
-    use prometheus::Histogram;
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
+        register_histogram_vec,
+    };
+    use prometheus::{Histogram, HistogramVec};
 
     pub static CREATE_NETWORK_ACTIONS_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
         register_histogram(
             "create_network_actions_latency",
             "Time (ms) to create network actions",
             exponential_bucket_latencies(10_000.0),
+        )
+    });
+
+    pub static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_inboxes",
+            "Number of inboxes",
+            &[],
+            exponential_bucket_interval(1.0, 10_000.0),
         )
     });
 }
@@ -355,7 +370,11 @@ where
         heights_by_recipient: BTreeMap<ChainId, Vec<BlockHeight>>,
     ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
-        let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
+        let heights = heights_by_recipient
+            .values()
+            .flatten()
+            .copied()
+            .collect::<BTreeSet<_>>();
         let next_block_height = self.chain.tip_state.get().next_block_height;
         let log_heights = heights
             .range(..next_block_height)
@@ -744,7 +763,7 @@ where
                     chain_id,
                     reason: Reason::NewEvents {
                         height,
-                        hash: certificate.hash(),
+                        block_hash,
                         event_streams: updated_event_streams,
                     },
                 });
@@ -795,58 +814,58 @@ where
                 block.body.incoming_bundles(),
             )
             .await?;
-        let oracle_responses = Some(block.body.oracle_responses.clone());
-        let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome =
-            if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
-                chain.execution_state = execution_state
-                    .with_context(|ctx| {
-                        chain
-                            .execution_state
-                            .context()
-                            .clone_with_base_key(ctx.base_key().bytes.clone())
-                    })
-                    .await;
-                outcome.clone()
-            } else {
-                let (_, verified, _resource_tracker) = chain
-                    .execute_block(
-                        proposed_block,
-                        local_time,
-                        None,
-                        &published_blobs,
-                        oracle_responses,
-                        BundleExecutionPolicy::Abort,
-                    )
-                    .await?;
-                verified
-            };
-        // We should always agree on the messages and state hash.
-        ensure!(
-            outcome == verified_outcome,
-            WorkerError::IncorrectOutcome {
-                submitted: Box::new(outcome),
-                computed: Box::new(verified_outcome),
-            }
-        );
+        let confirmed_block = if let Some(mut execution_state) =
+            self.execution_state_cache.remove(&block_hash)
+        {
+            chain.execution_state = execution_state
+                .with_context(|ctx| {
+                    chain
+                        .execution_state
+                        .context()
+                        .clone_with_base_key(ctx.base_key().bytes.clone())
+                })
+                .await;
+            certificate.into_value()
+        } else {
+            let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
+            let oracle_responses = Some(outcome.oracle_responses.clone());
+            let (proposed_block, verified, _resource_tracker) = chain
+                .execute_block(
+                    proposed_block,
+                    local_time,
+                    None,
+                    &published_blobs,
+                    oracle_responses,
+                    BundleExecutionPolicy::Abort,
+                )
+                .await?;
+            // We should always agree on the messages and state hash.
+            ensure!(
+                outcome == verified,
+                WorkerError::IncorrectOutcome {
+                    submitted: Box::new(outcome),
+                    computed: Box::new(verified),
+                }
+            );
+            ConfirmedBlock::new(Block::new(proposed_block, verified))
+        };
 
         // Update the rest of the chain state.
         let updated_streams = chain
-            .apply_confirmed_block(certificate.value(), local_time)
+            .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
-        let hash = certificate.hash();
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock { height, hash },
+            reason: Reason::NewBlock { height, block_hash },
         });
         if !updated_streams.is_empty() {
             actions.notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewEvents {
                     height,
-                    hash,
+                    block_hash,
                     event_streams: updated_streams,
                 },
             });
@@ -855,7 +874,7 @@ where
         self.save().await?;
 
         self.block_values
-            .insert(Cow::Owned(certificate.into_inner().into_inner()));
+            .insert(Cow::Owned(confirmed_block.into_inner()));
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
@@ -897,9 +916,12 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
-        let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
-        let last_anticipated_block_height =
-            self.chain.last_anticipated_block_height(&origin).await?;
+        let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+        let next_height_to_receive = inbox.next_block_height_to_receive()?;
+        let last_anticipated_block_height = match inbox.removed_bundles.back().await? {
+            Some(bundle) => Some(bundle.height),
+            None => None,
+        };
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(
@@ -920,9 +942,16 @@ where
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
             self.chain
-                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
+                .receive_message_bundle_with_inbox(
+                    &mut inbox,
+                    &origin,
+                    bundle,
+                    local_time,
+                    add_to_received_log,
+                )
                 .await?;
         }
+        drop(inbox);
         if !self.config.allow_inactive_chains && !self.chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
@@ -1222,7 +1251,7 @@ where
                     .check_blob_size(blob.content())
                     .with_execution_context(ChainExecutionContext::Block)?;
                 ensure!(
-                    u64::try_from(pending_blobs.pending_blobs.count().await?)
+                    u64::try_from(pending_blobs.pending_blobs.iterative_count().await?)
                         .is_ok_and(|count| count < policy.maximum_published_blobs),
                     WorkerError::TooManyPublishedBlobs(policy.maximum_published_blobs)
                 );
@@ -1597,13 +1626,22 @@ where
         }
         if query.request_pending_message_bundles {
             let mut bundles = Vec::new();
-            let pairs = chain.inboxes.try_load_all_entries().await?;
+            let nonempty_origins: Vec<ChainId> =
+                chain.nonempty_inboxes.get().iter().copied().collect();
+            #[cfg(with_metrics)]
+            metrics::NUM_INBOXES
+                .with_label_values(&[])
+                .observe(nonempty_origins.len() as f64);
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
             };
-            for (origin, inbox) in pairs {
+            let inboxes = chain.inboxes.try_load_entries(&nonempty_origins).await?;
+            for (origin, inbox) in nonempty_origins.into_iter().zip(inboxes) {
+                let inbox = inbox.ok_or_else(|| {
+                    ChainError::InternalError(format!("Missing inbox for origin {origin}"))
+                })?;
                 for bundle in inbox.added_bundles.elements().await? {
                     bundles.push(IncomingBundle {
                         origin,

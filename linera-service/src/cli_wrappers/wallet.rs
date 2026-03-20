@@ -67,7 +67,7 @@ const CLIENT_SERVICE_ENV: &str = "LINERA_CLIENT_SERVICE_PARAMS";
 
 fn reqwest_client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(60))
         .build()
         .unwrap()
 }
@@ -228,7 +228,7 @@ impl ClientWrapper {
         self.command_with_envs_and_arguments(
             &[(
                 "RUST_LOG",
-                &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+                &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
             )],
             arguments,
         )
@@ -238,7 +238,7 @@ impl ClientWrapper {
     async fn command(&self) -> Result<Command> {
         self.command_with_envs(&[(
             "RUST_LOG",
-            &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+            &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
         )])
         .await
     }
@@ -713,6 +713,34 @@ impl ClientWrapper {
             .parse()
             .context("error while parsing the result of `linera query-balance`")?;
         Ok(amount)
+    }
+
+    /// Runs `linera query-application` and parses the JSON result.
+    pub async fn query_application_json<T: DeserializeOwned>(
+        &self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        query: impl AsRef<str>,
+    ) -> Result<T> {
+        let query = query.as_ref().trim();
+        let name = query
+            .split_once(|ch: char| !ch.is_alphanumeric())
+            .map_or(query, |(name, _)| name);
+        let stdout = self
+            .command()
+            .await?
+            .arg("query-application")
+            .arg("--chain-id")
+            .arg(chain_id.to_string())
+            .arg("--application-id")
+            .arg(application_id.to_string())
+            .arg(query)
+            .spawn_and_wait_for_stdout()
+            .await?;
+        let data: serde_json::Value =
+            serde_json::from_str(stdout.trim()).context("invalid JSON from query-application")?;
+        serde_json::from_value(data[name].clone())
+            .with_context(|| format!("{name} field missing in query-application response"))
     }
 
     /// Runs `linera sync`.
@@ -2008,9 +2036,12 @@ pub trait NotificationsExt {
     ) -> impl Future<Output = Result<CryptoHash>> {
         let expected_height = expected_height.into();
         self.wait_for(move |notification| {
-            if let Reason::NewBlock { height, hash, .. } = notification.reason {
+            if let Reason::NewBlock {
+                height, block_hash, ..
+            } = notification.reason
+            {
                 if expected_height.is_none_or(|h| h == height) {
-                    return Some(hash);
+                    return Some(block_hash);
                 }
             }
             None

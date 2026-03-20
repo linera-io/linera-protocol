@@ -124,7 +124,7 @@ pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
     let contract_name: &str = contract_name
         .split_whitespace()
         .next()
-        .ok_or(anyhow::anyhow!("No space found after the contract name"))?;
+        .ok_or_else(|| anyhow::anyhow!("No space found after the contract name"))?;
     tracing::info!("load_solidity_example, contract_name={contract_name}");
     get_bytecode(&source_code, contract_name)
 }

@@ -151,15 +151,6 @@ pub(crate) mod metrics {
         )
     });
 
-    pub static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_inboxes",
-            "Number of inboxes",
-            &[],
-            exponential_bucket_interval(1.0, 10_000.0),
-        )
-    });
-
     pub static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "num_outboxes",
@@ -244,6 +235,8 @@ where
 
     /// Blocks that have been verified but not executed yet, and that may not be contiguous.
     pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
+    /// Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
+    pub nonempty_inboxes: RegisterView<C, BTreeSet<ChainId>>,
 }
 
 /// Block-chaining state.
@@ -421,7 +414,7 @@ where
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
+            .observe(self.nonempty_outboxes.get().len() as f64);
         Ok(true)
     }
 
@@ -473,17 +466,6 @@ where
         Ok(())
     }
 
-    pub async fn next_block_height_to_receive(
-        &self,
-        origin: &ChainId,
-    ) -> Result<BlockHeight, ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
-        match inbox {
-            Some(inbox) => inbox.next_block_height_to_receive(),
-            None => Ok(BlockHeight::ZERO),
-        }
-    }
-
     /// Returns the height of the highest block we have, plus one. Includes preprocessed blocks.
     ///
     /// The "+ 1" is so that it can be used in the same places as `next_block_height`.
@@ -492,20 +474,6 @@ where
             return Ok(height.saturating_add(BlockHeight(1)));
         }
         Ok(self.tip_state.get().next_block_height)
-    }
-
-    pub async fn last_anticipated_block_height(
-        &self,
-        origin: &ChainId,
-    ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
-        match inbox {
-            Some(inbox) => match inbox.removed_bundles.back().await? {
-                Some(bundle) => Ok(Some(bundle.height)),
-                None => Ok(None),
-            },
-            None => Ok(None),
-        }
     }
 
     /// Attempts to process a new `bundle` of messages from the given `origin`. Returns an
@@ -519,8 +487,9 @@ where
         origin = %origin,
         bundle_height = %bundle.height
     ))]
-    pub async fn receive_message_bundle(
+    pub async fn receive_message_bundle_with_inbox(
         &mut self,
+        inbox: &mut InboxStateView<C>,
         origin: &ChainId,
         bundle: MessageBundle,
         local_time: Timestamp,
@@ -552,12 +521,7 @@ where
         }
 
         // Process the inbox bundle and update the inbox state.
-        let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
-        #[cfg(with_metrics)]
-        metrics::NUM_INBOXES
-            .with_label_values(&[])
-            .observe(self.inboxes.count().await? as f64);
-        inbox
+        let newly_added = inbox
             .add_bundle(bundle)
             .await
             .map_err(|error| match error {
@@ -566,6 +530,9 @@ where
                     "while processing messages in certified block: {error}"
                 )),
             })?;
+        if newly_added {
+            self.nonempty_inboxes.get_mut().insert(*origin);
+        }
 
         // Remember the certificate for future validator/client synchronizations.
         if add_to_received_log {
@@ -661,11 +628,10 @@ where
                     );
                 }
             }
+            if inbox.added_bundles.count() == 0 {
+                self.nonempty_inboxes.get_mut().remove(&origin);
+            }
         }
-        #[cfg(with_metrics)]
-        metrics::NUM_INBOXES
-            .with_label_values(&[])
-            .observe(self.inboxes.count().await? as f64);
         Ok(())
     }
 
@@ -1076,9 +1042,11 @@ where
         app_permissions: &ApplicationPermissions,
         block: &ProposedBlock,
     ) -> Result<(), ChainError> {
-        let mut mandatory = HashSet::<ApplicationId>::from_iter(
-            app_permissions.mandatory_applications.iter().copied(),
-        );
+        let mut mandatory = app_permissions
+            .mandatory_applications
+            .iter()
+            .copied()
+            .collect::<HashSet<ApplicationId>>();
         for transaction in &block.transactions {
             match transaction {
                 Transaction::ExecuteOperation(operation)
@@ -1252,12 +1220,16 @@ where
                 *outbox_counters.entry(block_height).or_default() += 1;
                 nonempty_outboxes.insert(*target);
             }
+            #[cfg(with_metrics)]
+            crate::outbox::metrics::OUTBOX_SIZE
+                .with_label_values(&[])
+                .observe(outbox.queue.count() as f64);
         }
 
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
+            .observe(nonempty_outboxes.len() as f64);
         Ok(targets)
     }
 
