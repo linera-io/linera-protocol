@@ -11,7 +11,7 @@
 //! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
 //!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
 
-use std::{path::Path, sync::Arc};
+use std::{collections::VecDeque, path::Path, sync::Arc, time::Duration};
 
 use alloy::{
     network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
@@ -39,7 +39,7 @@ use linera_views::{
     },
     lru_prefix_cache::StorageCacheConfig,
 };
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{oneshot, Notify};
 use tower_http::cors::CorsLayer;
 
 use crate::proof::gen::{DepositProofClient, HttpDepositProofClient, ProofError};
@@ -67,18 +67,47 @@ enum BridgeOperation {
     },
 }
 
-// ── Channel types for deposit requests ──
+// ── Relay request queue ──
 
-struct DepositRequest {
+const MAX_RELAY_RETRIES: u32 = 5;
+
+struct RelayRequest {
     proof: crate::proof::gen::DepositProof,
     response: oneshot::Sender<Result<(), String>>,
+    retry_count: u32,
+}
+
+struct RelayQueue {
+    items: std::sync::Mutex<VecDeque<RelayRequest>>,
+    notify: Notify,
+}
+
+impl RelayQueue {
+    fn new() -> Self {
+        Self {
+            items: std::sync::Mutex::new(VecDeque::new()),
+            notify: Notify::new(),
+        }
+    }
+
+    fn push(&self, request: RelayRequest) {
+        self.items
+            .lock()
+            .expect("queue lock poisoned")
+            .push_back(request);
+        self.notify.notify_one();
+    }
+
+    fn pop(&self) -> Option<RelayRequest> {
+        self.items.lock().expect("queue lock poisoned").pop_front()
+    }
 }
 
 // ── Shared state for the HTTP server ──
 
 struct AppState {
     proof_client: HttpDepositProofClient,
-    deposit_tx: mpsc::Sender<DepositRequest>,
+    queue: Arc<RelayQueue>,
 }
 
 // ── HTTP handlers ──
@@ -147,23 +176,13 @@ async fn deposit_handler(
     }
     let proof = proof.unwrap();
 
-    tracing::info!(%tx_hash, "Sending deposit to processing channel...");
+    tracing::info!(%tx_hash, "Queueing deposit for relay...");
     let (resp_tx, resp_rx) = oneshot::channel();
-    if state
-        .deposit_tx
-        .send(DepositRequest {
-            proof,
-            response: resp_tx,
-        })
-        .await
-        .is_err()
-    {
-        tracing::error!(%tx_hash, "Relay deposit channel closed");
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "relay channel closed"})),
-        );
-    }
+    state.queue.push(RelayRequest {
+        proof,
+        response: resp_tx,
+        retry_count: 0,
+    });
 
     match resp_rx.await {
         Ok(Ok(())) => {
@@ -450,6 +469,63 @@ pub async fn run(
     .await
 }
 
+// ── Deposit relay processing ──
+
+async fn process_deposit<E: linera_core::environment::Environment>(
+    chain_client: &ChainClient<E>,
+    proof: &crate::proof::gen::DepositProof,
+    bridge_app_id: ApplicationId,
+    bridge_addr: Address,
+    provider: &impl alloy::providers::Provider,
+) -> Result<()> {
+    let operations: Vec<_> = proof
+        .log_indices
+        .iter()
+        .map(|&log_index| {
+            let op = BridgeOperation::ProcessDeposit {
+                block_header_rlp: proof.block_header_rlp.clone(),
+                receipt_rlp: proof.receipt_rlp.clone(),
+                proof_nodes: proof.proof_nodes.clone(),
+                tx_index: proof.tx_index,
+                log_index,
+            };
+            let op_bytes = bcs::to_bytes(&op).expect("failed to BCS-serialize BridgeOperation");
+            Operation::User {
+                application_id: bridge_app_id,
+                bytes: op_bytes,
+            }
+        })
+        .collect();
+
+    tracing::info!(
+        count = operations.len(),
+        "Submitting ProcessDeposit operations on bridge chain..."
+    );
+
+    chain_client
+        .synchronize_from_validators()
+        .await
+        .context("failed to synchronize")?;
+
+    let outcome = chain_client.execute_operations(operations, vec![]).await?;
+    let cert = match outcome {
+        linera_core::data_types::ClientOutcome::Committed(cert) => {
+            tracing::info!(
+                height = %cert.block().header.height,
+                "ProcessDeposit committed"
+            );
+            cert
+        }
+        other => {
+            anyhow::bail!("ProcessDeposit not committed: {other:?}");
+        }
+    };
+
+    forward_cert_to_evm(&cert, bridge_addr, provider).await;
+
+    Ok(())
+}
+
 // ── Main event loop ──
 
 #[allow(clippy::too_many_arguments)]
@@ -489,10 +565,10 @@ async fn serve_loop<E: linera_core::environment::Environment>(
 
     // ── Start HTTP server ──
     let proof_client = HttpDepositProofClient::new(rpc_url)?;
-    let (deposit_tx, mut deposit_rx) = mpsc::channel::<DepositRequest>(16);
+    let queue = Arc::new(RelayQueue::new());
     let app_state = Arc::new(AppState {
         proof_client,
-        deposit_tx,
+        queue: Arc::clone(&queue),
     });
 
     let app = Router::new()
@@ -600,58 +676,40 @@ async fn serve_loop<E: linera_core::environment::Environment>(
                 }
             }
 
-            Some(deposit_req) = deposit_rx.recv() => {
-                let result = async {
-                    let proof = &deposit_req.proof;
-
-                    let operations: Vec<_> = proof.log_indices.iter().map(|&log_index| {
-                        let op = BridgeOperation::ProcessDeposit {
-                            block_header_rlp: proof.block_header_rlp.clone(),
-                            receipt_rlp: proof.receipt_rlp.clone(),
-                            proof_nodes: proof.proof_nodes.clone(),
-                            tx_index: proof.tx_index,
-                            log_index,
-                        };
-                        let op_bytes = bcs::to_bytes(&op)
-                            .expect("failed to BCS-serialize BridgeOperation");
-                        Operation::User {
-                            application_id: bridge_app_id,
-                            bytes: op_bytes,
+            _ = queue.notify.notified() => {
+                while let Some(mut request) = queue.pop() {
+                    match process_deposit(
+                        &chain_client, &request.proof, bridge_app_id, bridge_addr, &provider,
+                    ).await {
+                        Ok(()) => {
+                            tracing::info!("Relay request processed successfully");
+                            let _ = request.response.send(Ok(()));
                         }
-                    }).collect();
-
-                    tracing::info!(
-                        count = operations.len(),
-                        "Submitting ProcessDeposit operations on bridge chain..."
-                    );
-
-                    chain_client.synchronize_from_validators().await
-                        .context("failed to synchronize")?;
-
-                    let outcome = chain_client
-                        .execute_operations(operations, vec![])
-                        .await?;
-                    let cert = match outcome {
-                        linera_core::data_types::ClientOutcome::Committed(cert) => {
-                            tracing::info!(
-                                height = %cert.block().header.height,
-                                "ProcessDeposit committed"
-                            );
-                            cert
+                        Err(e) => {
+                            request.retry_count += 1;
+                            if request.retry_count <= MAX_RELAY_RETRIES {
+                                tracing::warn!(
+                                    retry = request.retry_count,
+                                    "Relay failed, re-queueing: {e:#}"
+                                );
+                                let delay = Duration::from_secs(
+                                    2u64.pow(request.retry_count.min(4)),
+                                );
+                                let q = Arc::clone(&queue);
+                                tokio::spawn(async move {
+                                    tokio::time::sleep(delay).await;
+                                    q.push(request);
+                                });
+                            } else {
+                                tracing::error!(
+                                    "Relay failed after {MAX_RELAY_RETRIES} retries, dropping: {e:#}"
+                                );
+                                let _ = request.response.send(Err(format!("{e:#}")));
+                            }
+                            break;
                         }
-                        other => {
-                            anyhow::bail!("ProcessDeposit not committed: {other:?}");
-                        }
-                    };
-
-                    forward_cert_to_evm(&cert, bridge_addr, &provider).await;
-
-                    Ok::<(), anyhow::Error>(())
-                }.await;
-
-                let _ = deposit_req.response.send(
-                    result.map_err(|e| format!("{e:#}"))
-                );
+                    }
+                }
             }
         }
     }
