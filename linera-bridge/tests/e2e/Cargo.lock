@@ -3637,6 +3637,7 @@ dependencies = [
  "linera-base",
  "linera-execution",
  "op-alloy-network",
+ "thiserror 1.0.69",
  "tokio",
  "url",
 ]

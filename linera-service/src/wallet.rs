@@ -46,9 +46,6 @@ impl ChainDetails {
         if self.is_admin {
             tags.push("ADMIN");
         }
-        if self.user_chain.is_follow_only() {
-            tags.push("FOLLOW-ONLY");
-        }
         if !tags.is_empty() {
             println!("{:<20}  {}", "Tags:", tags.join(", "));
         }
@@ -70,12 +67,6 @@ impl ChainDetails {
 
         println!("{:<20}  {}", "Timestamp:", self.user_chain.timestamp);
         println!("{:<20}  {}", "Blocks:", self.user_chain.next_block_height);
-
-        if let Some(epoch) = self.user_chain.epoch {
-            println!("{:<20}  {epoch}", "Epoch:");
-        } else {
-            println!("{:<20}  -", "Epoch:");
-        }
 
         if let Some(hash) = self.user_chain.block_hash {
             println!("{:<20}  {hash}", "Latest block hash:");
