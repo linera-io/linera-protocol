@@ -1971,13 +1971,16 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 
     let client2 = net.make_client().await;
     client2.wallet_init(None).await?;
+    let client3 = net.make_client().await;
+    client3.wallet_init(None).await?;
 
-    // We use a newly opened chain for the publisher, so that client2 will not be listening to that
-    // chain by default.
+    // We use a newly opened chain for the publisher, so that client2 and client3 will not be
+    // listening to that chain by default.
     let chain1 = client1
         .open_and_assign(&client1, Amount::from_tokens(10))
         .await?;
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let chain3 = client1.open_and_assign(&client3, Amount::ONE).await?;
     let (contract, service) = client1.build_example("social").await?;
     let module_id = client1
         .publish_module::<SocialAbi, (), ()>(contract, service, VmRuntime::Wasm, None)
@@ -2050,8 +2053,40 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     // that block, without downloading the transfer block in between.
     assert_eq!(tip_after_first_post, tip_after_second_post);
 
+    // Test that a new subscriber gets pre-existing events: client3 subscribes after the posts
+    // and should eventually receive them via sparse sync + chain listener processing.
+    let port3 = get_node_port().await;
+    let mut node_service3 = client3
+        .run_node_service(port3, ProcessInbox::Automatic)
+        .await?;
+
+    let app3 = node_service3.make_application(&chain3, &application_id)?;
+    app3.mutate(format!("subscribe(chainId: \"{chain1}\")"))
+        .await?;
+
+    let (_, height3) = node_service3.chain_tip(chain3).await?.unwrap();
+    let mut notifications3 = node_service3.notifications(chain3).await?;
+
+    // Wait for the chain listener to process the pre-existing events.
+    notifications3
+        .wait_for_block(height3.try_add_one()?)
+        .await?;
+
+    // Client3 should have received both pre-existing posts.
+    let query = "receivedPosts { keys { author, index } }";
+    let expected_response = json!({
+        "receivedPosts": {
+            "keys": [
+                { "author": chain1, "index": 1 },
+                { "author": chain1, "index": 0 }
+            ]
+        }
+    });
+    assert_eq!(app3.query(query).await?, expected_response);
+
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
+    node_service3.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
