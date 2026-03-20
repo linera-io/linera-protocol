@@ -21,7 +21,9 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
 };
-use linera_core::worker::WorkerState;
+use linera_core::worker::{
+    WorkerState, DEFAULT_BLOCK_CACHE_SIZE, DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+};
 use linera_execution::{
     committee::Committee,
     system::{AdminOperation, OpenChainConfig, SystemOperation},
@@ -92,6 +94,8 @@ impl TestValidator {
             "Single validator node".to_string(),
             Some(validator_keypair.secret_key.copy()),
             storage.clone(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         );
 
         // Create an admin chain.

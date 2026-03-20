@@ -278,6 +278,8 @@ where
         options: &Options,
         default_chain: Option<ChainId>,
         genesis_config: GenesisConfig,
+        block_cache_size: usize,
+        execution_state_cache_size: usize,
     ) -> Result<Self, Error> {
         #[cfg(not(web))]
         let timing_config = options.to_timing_config();
@@ -320,6 +322,8 @@ where
             options.prioritize_bundles_from.clone().unwrap_or_default(),
             options.to_chain_client_options(),
             options.to_requests_scheduler_config(),
+            block_cache_size,
+            execution_state_cache_size,
         );
 
         #[cfg(not(web))]

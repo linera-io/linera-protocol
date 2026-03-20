@@ -74,6 +74,10 @@ impl Options {
             &self.client_options,
             default_chain,
             genesis_config,
+            self.common.common_storage_options.block_cache_size,
+            self.common
+                .common_storage_options
+                .execution_state_cache_size,
         )
         .await?)
     }

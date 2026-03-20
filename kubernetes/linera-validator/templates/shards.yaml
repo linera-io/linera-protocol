@@ -111,6 +111,8 @@ spec:
                 --storage-max-cache-value-size {{ .Values.storageCacheConfig.maxCacheValueSize | int }} \
                 --storage-max-cache-find-keys-size {{ .Values.storageCacheConfig.maxCacheFindKeysSize | int }} \
                 --storage-max-cache-find-key-values-size {{ .Values.storageCacheConfig.maxCacheFindKeyValuesSize | int }} \
+                --block-cache-size {{ .Values.blockCacheSize | int }} \
+                --execution-state-cache-size {{ .Values.executionStateCacheSize | int }} \
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}

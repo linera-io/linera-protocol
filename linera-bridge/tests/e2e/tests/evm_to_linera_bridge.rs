@@ -121,6 +121,8 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         &Default::default(),
         None,
         genesis_config,
+        linera_core::worker::DEFAULT_BLOCK_CACHE_SIZE,
+        linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
     )
     .await?;
 

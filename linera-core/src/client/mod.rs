@@ -280,12 +280,16 @@ impl<Env: Environment> Client<Env> {
         priority_bundle_origins: HashSet<ChainId>,
         options: ChainClientOptions,
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
+        block_cache_size: usize,
+        execution_state_cache_size: usize,
     ) -> Self {
         let chain_modes = Arc::new(RwLock::new(chain_modes.into_iter().collect()));
         let state = WorkerState::new_for_client(
             name.into(),
             environment.storage().clone(),
             chain_modes.clone(),
+            block_cache_size,
+            execution_state_cache_size,
         )
         .with_long_lived_services(long_lived_services)
         .with_allow_inactive_chains(true)

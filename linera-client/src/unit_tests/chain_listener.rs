@@ -18,7 +18,7 @@ use linera_core::{
         ClientOutcomeResultExt as _, MemoryStorageBuilder, StorageBuilder as _, TestBuilder,
     },
     wallet,
-    worker::Reason,
+    worker::{Reason, DEFAULT_BLOCK_CACHE_SIZE, DEFAULT_EXECUTION_STATE_CACHE_SIZE},
     Environment,
 };
 use linera_execution::{wasm_test, Operation, ResourceControlPolicy, WasmRuntime};
@@ -125,6 +125,8 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             HashSet::new(),
             ChainClientOptions::test_default(),
             linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
     context
@@ -237,6 +239,8 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             HashSet::new(),
             ChainClientOptions::test_default(),
             linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
 
@@ -385,6 +389,8 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             HashSet::new(),
             ChainClientOptions::test_default(),
             linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
     let context = Arc::new(Mutex::new(context));
@@ -461,6 +467,8 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
             HashSet::new(),
             ChainClientOptions::test_default(),
             linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
 
@@ -577,6 +585,8 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             HashSet::new(),
             ChainClientOptions::test_default(),
             linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
 
@@ -777,6 +787,8 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
             HashSet::new(),
             ChainClientOptions::test_default(),
             linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
     context.wallet().insert(

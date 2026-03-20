@@ -56,7 +56,10 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{Notification, ProcessableCertificate, WorkerState},
+    worker::{
+        Notification, ProcessableCertificate, WorkerState, DEFAULT_BLOCK_CACHE_SIZE,
+        DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+    },
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -892,6 +895,8 @@ where
                 format!("Node {}", i),
                 Some(validator_keypair.secret_key),
                 storage.clone(),
+                DEFAULT_BLOCK_CACHE_SIZE,
+                DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             )
             .with_allow_inactive_chains(false)
             .with_allow_messages_from_deprecated_epochs(false);
@@ -1094,6 +1099,8 @@ where
             HashSet::new(),
             options,
             crate::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         ));
         Ok(client.create_chain_client(chain_id, block_hash, block_height, None, owner, None))
     }
