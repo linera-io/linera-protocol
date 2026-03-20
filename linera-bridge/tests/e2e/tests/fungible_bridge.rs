@@ -214,7 +214,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
              --constructor-args \
              {light_client} \
              {chain_a_bytes32} \
-             0 \
              {app_id_bytes32} \
              {erc20_addr}"
         ),
