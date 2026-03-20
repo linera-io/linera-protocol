@@ -39,7 +39,7 @@ impl ValidatorNodeProvider for NodeProvider {
         }
 
         if address.starts_with("grpc") {
-            return Ok(Client::Grpc(self.grpc.make_node(&address)?));
+            return Ok(Client::Grpc(Box::new(self.grpc.make_node(&address)?)));
         }
 
         Err(NodeError::CannotResolveValidatorAddress { address })
