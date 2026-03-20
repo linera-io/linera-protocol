@@ -11,8 +11,11 @@ use std::{
 };
 
 use async_graphql::{
-    futures_util::Stream, resolver_utils::ContainerType, EmptyMutation, Error, MergedObject,
-    OutputType, Request, Response, ScalarType, Schema, SimpleObject, Subscription,
+    futures_util::Stream,
+    registry::{MetaType, MetaTypeId, Registry},
+    resolver_utils::ContainerType,
+    EmptyMutation, Error, MergedObject, OutputType, Positioned, Request, Response, ScalarType,
+    Schema, SimpleObject, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
@@ -59,6 +62,55 @@ use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument, trace};
 
 use crate::util;
+
+/// A pre-serialized JSON string that implements [`OutputType`] as the `JSON` scalar.
+///
+/// When the `raw_value` feature of `async-graphql` is enabled, the string is
+/// emitted directly into the GraphQL response without any parsing or
+/// intermediate tree construction.
+#[derive(Clone)]
+struct RawJson(String);
+
+impl OutputType for RawJson {
+    fn type_name() -> Cow<'static, str> {
+        Cow::Borrowed("JSON")
+    }
+
+    fn create_type_info(registry: &mut Registry) -> String {
+        registry.create_output_type::<Self, _>(MetaTypeId::Scalar, |_| MetaType::Scalar {
+            name: "JSON".to_string(),
+            description: Some("A scalar that can represent any JSON value.".to_string()),
+            is_valid: None,
+            visible: None,
+            inaccessible: false,
+            tags: Default::default(),
+            specified_by_url: None,
+            directive_invocations: Default::default(),
+            requires_scopes: Default::default(),
+        })
+    }
+
+    async fn resolve(
+        &self,
+        _ctx: &async_graphql::ContextSelectionSet<'_>,
+        _field: &Positioned<async_graphql::parser::types::Field>,
+    ) -> async_graphql::ServerResult<async_graphql::Value> {
+        // Wrap the raw JSON string with the magic token that async-graphql's
+        // ConstValue serializer recognises (with feature `raw_value`).
+        // When the response is serialised to JSON the raw string is emitted
+        // verbatim, avoiding any parsing or tree conversion.
+        //
+        // See: async-graphql-value/src/value_serde.rs
+        const RAW_VALUE_TOKEN: &str = "$serde_json::private::RawValue";
+        Ok(async_graphql::Value::Object(
+            std::iter::once((
+                async_graphql::Name::new(RAW_VALUE_TOKEN),
+                async_graphql::Value::String(self.0.clone()),
+            ))
+            .collect(),
+        ))
+    }
+}
 
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
 pub struct Chains {
@@ -141,7 +193,7 @@ where
         #[graphql(desc = "Name of the registered subscription query.")] name: String,
         #[graphql(desc = "The chain to watch.")] chain_id: ChainId,
         #[graphql(desc = "The application to query.")] application_id: ApplicationId,
-    ) -> Result<impl Stream<Item = serde_json::Value>, Error> {
+    ) -> Result<impl Stream<Item = RawJson>, Error> {
         let manager = self
             .query_subscriptions
             .as_ref()
@@ -165,10 +217,12 @@ where
         // `WatchStream` would skip it and wait for the next change.  Grab the
         // current snapshot first and prepend it to the stream so that every new
         // subscriber gets the latest cached result immediately.
+        // The watch channel stores pre-serialized JSON strings so that cloning
+        // between subscribers is a cheap memcpy rather than a deep Value clone.
         let current = receiver.borrow().clone();
         let changes = tokio_stream::wrappers::WatchStream::from_changes(receiver)
             .filter_map(|value| async move { value });
-        Ok(futures::stream::iter(current).chain(changes))
+        Ok(futures::stream::iter(current).chain(changes).map(RawJson))
     }
 }
 

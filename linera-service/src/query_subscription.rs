@@ -12,7 +12,6 @@ use linera_base::identifiers::{ApplicationId, ChainId};
 use linera_client::chain_listener::ClientContext;
 use linera_core::worker::Reason;
 use linera_execution::{Query, QueryResponse};
-use serde_json::Value;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
@@ -71,8 +70,10 @@ pub struct SubscriptionKey {
 }
 
 /// State for an active watcher: the watch sender for the latest query result.
+/// The channel carries pre-serialized JSON strings so that cloning between
+/// subscribers is a single `memcpy` instead of a deep `serde_json::Value` clone.
 struct WatcherState {
-    sender: watch::Sender<Option<Value>>,
+    sender: watch::Sender<Option<String>>,
 }
 
 /// Manages registered query names and active per-key watchers.
@@ -112,7 +113,7 @@ impl QuerySubscriptionManager {
         key: SubscriptionKey,
         context: Arc<futures::lock::Mutex<C>>,
         token: CancellationToken,
-    ) -> anyhow::Result<watch::Receiver<Option<Value>>> {
+    ) -> anyhow::Result<watch::Receiver<Option<String>>> {
         let query_string = self
             .get_query(&key.name)
             .ok_or_else(|| {
@@ -159,7 +160,7 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
     manager: Arc<QuerySubscriptionManager>,
     key: SubscriptionKey,
     query_string: String,
-    sender: watch::Sender<Option<Value>>,
+    sender: watch::Sender<Option<String>>,
     token: CancellationToken,
     ttl: Option<Duration>,
 ) {
@@ -287,7 +288,7 @@ async fn execute_and_maybe_send<C: ClientContext + 'static>(
     context: &Arc<futures::lock::Mutex<C>>,
     key: &SubscriptionKey,
     query_string: &str,
-    sender: &watch::Sender<Option<Value>>,
+    sender: &watch::Sender<Option<String>>,
     last_result: &mut Option<Vec<u8>>,
 ) {
     // The application service expects a JSON-encoded GraphQL request.
@@ -324,17 +325,17 @@ async fn execute_and_maybe_send<C: ClientContext + 'static>(
                 return;
             }
 
-            *last_result = Some(response_bytes.clone());
-
-            // Parse the response as JSON and update the watch channel.
-            match serde_json::from_slice::<Value>(&response_bytes) {
-                Ok(value) => {
-                    if let Err(e) = sender.send(Some(value)) {
+            // Store as a JSON string. The bytes are already valid UTF-8 JSON
+            // from the application service.
+            match String::from_utf8(response_bytes.clone()) {
+                Ok(json_string) => {
+                    *last_result = Some(response_bytes);
+                    if let Err(e) = sender.send(Some(json_string)) {
                         debug!(name = %key.name, "Failed to send graphql response: {e}");
                     }
                 }
                 Err(e) => {
-                    warn!(name = %key.name, "failed to parse query response as JSON: {e}");
+                    warn!(name = %key.name, "response bytes are not valid UTF-8: {e}");
                 }
             }
         }
