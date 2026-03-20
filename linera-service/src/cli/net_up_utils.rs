@@ -207,6 +207,7 @@ pub async fn handle_net_up_service(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
+    http_request_allow_list: Option<Vec<String>>,
 ) -> anyhow::Result<()> {
     assert!(
         num_initial_validators >= 1,
@@ -250,7 +251,7 @@ pub async fn handle_net_up_service(
         num_shards,
         num_proxies,
         policy_config,
-        http_request_allow_list: None,
+        http_request_allow_list,
         cross_chain_config,
         storage_config_builder,
         path_provider,

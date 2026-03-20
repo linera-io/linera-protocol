@@ -30,10 +30,12 @@ pub use updater::DEFAULT_QUORUM_GRACE_PERIOD;
 pub use crate::join_set_ext::{JoinSetExt, TaskHandle};
 
 pub mod environment;
+pub mod genesis_config;
 pub use environment::{
     wallet::{self, Wallet},
     Environment,
 };
+pub use genesis_config::GenesisConfig;
 
 /// The maximum number of entries in a `received_log` included in a `ChainInfo` response.
 // TODO(#4638): Revisit the number.

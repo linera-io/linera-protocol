@@ -33,7 +33,7 @@ pub enum Error {
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
     #[error("config error: {0}")]
-    Config(#[from] crate::config::Error),
+    Config(#[from] crate::config::GenesisConfigError),
 }
 
 util::impl_from_infallible!(Error);

@@ -82,6 +82,7 @@ use linera_service::{
     storage::{AssertStorageV1, Runnable, RunnableWithStore, StorageMigration},
     task_processor::TaskProcessor,
     util,
+    wallet::WalletExt as _,
 };
 use linera_storage::{DbStorage, Storage};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
@@ -2128,8 +2129,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             });
             let mut genesis_config = persistent::File::new(
                 genesis_config_path,
-                GenesisConfig::new(
-                    committee_config,
+                committee_config.into_genesis(
                     timestamp,
                     policy,
                     network_name,
@@ -2281,6 +2281,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 with_block_exporter,
                 exporter_address: block_exporter_address,
                 exporter_port: block_exporter_port,
+                http_request_allow_list,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -2302,6 +2303,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    http_request_allow_list.clone(),
                 )
                 .boxed()
                 .await?;
@@ -2370,13 +2372,17 @@ async fn run(options: &Options) -> Result<i32, Error> {
             WalletCommand::ForgetKeys { chain_id } => {
                 let start_time = Instant::now();
                 let owner = options.wallet()?.forget_keys(*chain_id)?;
-                if !options
-                    .signer()?
-                    .contains_key(&owner)
-                    .await
-                    .expect("Signer error")
-                {
-                    warn!("no keypair found in keystore for chain {chain_id}");
+                if let Some(owner) = owner {
+                    if !options
+                        .signer()?
+                        .contains_key(&owner)
+                        .await
+                        .expect("Signer error")
+                    {
+                        warn!("no keypair found in keystore for chain {chain_id}");
+                    }
+                } else {
+                    warn!("no owner key found for chain {chain_id}");
                 }
                 info!(
                     "Chain keys forgotten in {} ms",

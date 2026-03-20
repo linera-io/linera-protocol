@@ -1243,6 +1243,10 @@ pub enum NetCommand {
         #[cfg(feature = "kubernetes")]
         #[arg(long, default_value = "false")]
         dual_store: bool,
+
+        /// Set the list of hosts that contracts and services can send HTTP requests to.
+        #[arg(long, value_delimiter = ',')]
+        http_request_allow_list: Option<Vec<String>>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

@@ -15,6 +15,11 @@ use crate::{client::PendingProposal, data_types::ChainInfo};
 mod memory;
 pub use memory::Memory;
 
+#[cfg(feature = "fs")]
+mod persistent;
+#[cfg(feature = "fs")]
+pub use self::persistent::PersistentWallet;
+
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Chain {
     pub owner: Option<AccountOwner>,
