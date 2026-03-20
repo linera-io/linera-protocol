@@ -71,10 +71,31 @@ enum BridgeOperation {
 
 const MAX_RELAY_RETRIES: u32 = 5;
 
-struct RelayRequest {
-    proof: crate::proof::gen::DepositProof,
-    response: oneshot::Sender<Result<(), String>>,
-    retry_count: u32,
+enum RelayRequest {
+    /// EVM→Linera: submit ProcessDeposit operations on the bridge chain.
+    Deposit {
+        proof: crate::proof::gen::DepositProof,
+        response: oneshot::Sender<Result<(), String>>,
+        retry_count: u32,
+    },
+    /// Linera→EVM: process inbox, submit burns, forward certs to EVM.
+    Notification { retry_count: u32 },
+}
+
+impl RelayRequest {
+    fn retry_count(&self) -> u32 {
+        match self {
+            Self::Deposit { retry_count, .. } | Self::Notification { retry_count } => *retry_count,
+        }
+    }
+
+    fn increment_retry(&mut self) {
+        match self {
+            Self::Deposit { retry_count, .. } | Self::Notification { retry_count } => {
+                *retry_count += 1
+            }
+        }
+    }
 }
 
 struct RelayQueue {
@@ -178,7 +199,7 @@ async fn deposit_handler(
 
     tracing::info!(%tx_hash, "Queueing deposit for relay...");
     let (resp_tx, resp_rx) = oneshot::channel();
-    state.queue.push(RelayRequest {
+    state.queue.push(RelayRequest::Deposit {
         proof,
         response: resp_tx,
         retry_count: 0,
@@ -475,8 +496,6 @@ async fn process_deposit<E: linera_core::environment::Environment>(
     chain_client: &ChainClient<E>,
     proof: &crate::proof::gen::DepositProof,
     bridge_app_id: ApplicationId,
-    bridge_addr: Address,
-    provider: &impl alloy::providers::Provider,
 ) -> Result<()> {
     let operations: Vec<_> = proof
         .log_indices
@@ -508,20 +527,91 @@ async fn process_deposit<E: linera_core::environment::Environment>(
         .context("failed to synchronize")?;
 
     let outcome = chain_client.execute_operations(operations, vec![]).await?;
-    let cert = match outcome {
+    match outcome {
         linera_core::data_types::ClientOutcome::Committed(cert) => {
             tracing::info!(
                 height = %cert.block().header.height,
                 "ProcessDeposit committed"
             );
-            cert
         }
         other => {
             anyhow::bail!("ProcessDeposit not committed: {other:?}");
         }
-    };
+    }
 
-    forward_cert_to_evm(&cert, bridge_addr, provider).await;
+    Ok(())
+}
+
+// ── Notification relay processing ──
+
+async fn process_notification<E: linera_core::environment::Environment>(
+    chain_client: &ChainClient<E>,
+    fungible_app_id: ApplicationId,
+    bridge_addr: Address,
+    provider: &impl alloy::providers::Provider,
+) -> Result<()> {
+    chain_client
+        .synchronize_from_validators()
+        .await
+        .context("failed to synchronize")?;
+
+    let (certs, _) = chain_client
+        .process_inbox()
+        .await
+        .context("failed to process inbox")?;
+
+    if certs.is_empty() {
+        tracing::info!("No certificates from inbox processing");
+        return Ok(());
+    }
+
+    tracing::info!(count = certs.len(), "Processed inbox certificates");
+
+    // Scan inbox certs for Credit messages to Address20 and submit Burns.
+    let mut burn_ops = vec![];
+    for cert in &certs {
+        for txn in &cert.block().body.transactions {
+            if let Transaction::ReceiveMessages(bundle) = txn {
+                for posted in &bundle.bundle.messages {
+                    if let Message::User {
+                        application_id,
+                        bytes,
+                    } = &posted.message
+                    {
+                        if application_id == &fungible_app_id {
+                            if let Some((owner, amount)) =
+                                try_parse_credit_to_address20(bytes.as_slice())
+                            {
+                                burn_ops.push(Operation::User {
+                                    application_id: fungible_app_id,
+                                    bytes: serialize_burn_operation(&owner, &amount),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !burn_ops.is_empty() {
+        tracing::info!(count = burn_ops.len(), "Submitting burn operations...");
+        chain_client
+            .synchronize_from_validators()
+            .await
+            .context("failed to synchronize before burn")?;
+        match chain_client.execute_operations(burn_ops, vec![]).await {
+            Ok(linera_core::data_types::ClientOutcome::Committed(cert)) => {
+                tracing::info!(
+                    height = %cert.block().header.height,
+                    "Burn operations committed"
+                );
+                forward_cert_to_evm(&cert, bridge_addr, provider).await;
+            }
+            Ok(other) => anyhow::bail!("Burn not committed: {other:?}"),
+            Err(e) => return Err(e.into()),
+        }
+    }
 
     Ok(())
 }
@@ -593,7 +683,7 @@ async fn serve_loop<E: linera_core::environment::Environment>(
         "Relay is ready"
     );
 
-    // ── Main loop: process notifications + deposit requests ──
+    // ── Main loop: receive notifications and process relay queue ──
     tracing::info!("Listening for notifications and deposit requests...");
     loop {
         tokio::select! {
@@ -610,90 +700,42 @@ async fn serve_loop<E: linera_core::environment::Environment>(
                     continue;
                 }
 
-                tracing::info!("Received NewIncomingBundle, processing inbox...");
-
-                if let Err(e) = chain_client.synchronize_from_validators().await {
-                    tracing::error!("Failed to synchronize: {e}");
-                    continue;
-                }
-
-                let certs = match chain_client.process_inbox().await {
-                    Ok((certs, _)) => certs,
-                    Err(e) => {
-                        tracing::error!("Failed to process inbox: {e}");
-                        continue;
-                    }
-                };
-
-                if certs.is_empty() {
-                    tracing::info!("No certificates from inbox processing");
-                    continue;
-                }
-
-                tracing::info!(count = certs.len(), "Processed inbox certificates");
-                for cert in &certs {
-                    forward_cert_to_evm(cert, bridge_addr, &provider).await;
-                }
-
-                // Scan inbox certs for Credit messages to Address20 and submit Burns.
-                let mut burn_ops = vec![];
-                for cert in &certs {
-                    for txn in &cert.block().body.transactions {
-                        if let Transaction::ReceiveMessages(bundle) = txn {
-                            for posted in &bundle.bundle.messages {
-                                if let Message::User { application_id, bytes } = &posted.message {
-                                    if application_id == &fungible_app_id {
-                                        if let Some((owner, amount)) = try_parse_credit_to_address20(bytes.as_slice()) {
-                                            burn_ops.push(Operation::User {
-                                                application_id: fungible_app_id,
-                                                bytes: serialize_burn_operation(&owner, &amount),
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if !burn_ops.is_empty() {
-                    tracing::info!(count = burn_ops.len(), "Submitting burn operations...");
-                    if let Err(e) = chain_client.synchronize_from_validators().await {
-                        tracing::error!("Failed to synchronize before burn: {e}");
-                        continue;
-                    }
-                    match chain_client.execute_operations(burn_ops, vec![]).await {
-                        Ok(linera_core::data_types::ClientOutcome::Committed(cert)) => {
-                            tracing::info!(
-                                height = %cert.block().header.height,
-                                "Burn operations committed"
-                            );
-                            forward_cert_to_evm(&cert, bridge_addr, &provider).await;
-                        }
-                        Ok(other) => tracing::error!("Burn not committed: {other:?}"),
-                        Err(e) => tracing::error!("Burn submission failed: {e}"),
-                    }
-                }
+                tracing::info!("Received NewIncomingBundle, queueing for processing...");
+                queue.push(RelayRequest::Notification { retry_count: 0 });
             }
 
             _ = queue.notify.notified() => {
                 while let Some(mut request) = queue.pop() {
-                    match process_deposit(
-                        &chain_client, &request.proof, bridge_app_id, bridge_addr, &provider,
-                    ).await {
+                    let result = match &request {
+                        RelayRequest::Deposit { proof, .. } => {
+                            process_deposit(
+                                &chain_client, proof, bridge_app_id,
+                            ).await
+                        }
+                        RelayRequest::Notification { .. } => {
+                            process_notification(
+                                &chain_client, fungible_app_id, bridge_addr, &provider,
+                            ).await
+                        }
+                    };
+
+                    match result {
                         Ok(()) => {
                             tracing::info!("Relay request processed successfully");
-                            let _ = request.response.send(Ok(()));
+                            if let RelayRequest::Deposit { response, .. } = request {
+                                let _ = response.send(Ok(()));
+                            }
                         }
                         Err(e) => {
-                            request.retry_count += 1;
-                            if request.retry_count <= MAX_RELAY_RETRIES {
+                            request.increment_retry();
+                            let retry = request.retry_count();
+                            if retry <= MAX_RELAY_RETRIES {
                                 tracing::warn!(
-                                    retry = request.retry_count,
+                                    retry,
                                     "Relay failed, re-queueing: {e:#}"
                                 );
                                 let delay = Duration::from_secs(
-                                    2u64.pow(request.retry_count.min(4)),
+                                    2u64.pow(retry.min(4)),
                                 );
                                 let q = Arc::clone(&queue);
                                 tokio::spawn(async move {
@@ -704,7 +746,9 @@ async fn serve_loop<E: linera_core::environment::Environment>(
                                 tracing::error!(
                                     "Relay failed after {MAX_RELAY_RETRIES} retries, dropping: {e:#}"
                                 );
-                                let _ = request.response.send(Err(format!("{e:#}")));
+                                if let RelayRequest::Deposit { response, .. } = request {
+                                    let _ = response.send(Err(format!("{e:#}")));
+                                }
                             }
                             break;
                         }
