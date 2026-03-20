@@ -67,7 +67,7 @@ importers:
     devDependencies:
       vite:
         specifier: 7.1.7
-        version: 7.1.7(@types/node@25.0.10)(yaml@2.8.1)
+        version: 7.1.7(@types/node@24.9.1)(yaml@2.8.1)
 
   counter:
     dependencies:
