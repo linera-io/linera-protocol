@@ -187,7 +187,6 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
              --constructor-args \
              {light_client} \
              {chain_id_bytes32} \
-             0 \
              {zero_bytes32} \
              {erc20_addr}"
         ),
