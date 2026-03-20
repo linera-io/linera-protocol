@@ -30,6 +30,7 @@ test = [
     "test-strategy",
     "tokio/parking_lot",
 ]
+fs = ["dep:linera-persistent"]
 rocksdb = ["linera-views/rocksdb"]
 dynamodb = ["linera-views/dynamodb"]
 scylladb = ["linera-views/scylladb"]
@@ -62,6 +63,7 @@ futures.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-execution.workspace = true
+linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 linera-storage.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true

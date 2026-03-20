@@ -850,10 +850,12 @@ impl<Env: Environment> ClientContext<Env> {
         blob_path: PathBuf,
     ) -> Result<CryptoHash, Error> {
         info!("Loading data blob file");
-        let blob_bytes = fs::read(&blob_path).context(format!(
-            "failed to load data blob bytes from {:?}",
-            &blob_path
-        ))?;
+        let blob_bytes = fs::read(&blob_path).map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!("failed to load data blob bytes from {blob_path:?}: {e}"),
+            )
+        })?;
 
         info!("Publishing data blob");
         self.apply_client_command(chain_client, |chain_client| {
