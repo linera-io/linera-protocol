@@ -11,7 +11,7 @@ Three components cooperate:
 | Component | EVM side | Linera side |
 |-----------|----------|-------------|
 | **Contracts / Apps** | `LightClient` (verifies Linera blocks), `FungibleBridge` (holds ERC-20s, emits deposit events) | `wrapped-fungible` (mints/burns wrapped tokens), `evm-bridge` (coordinates messaging) |
-| **Relay** | Watches for `DepositInitiated` events, submits receipt proofs | Claims a Linera chain, forwards blocks to EVM for withdrawals |
+| **Relay** | Watches for `DepositInitiated` events, submits receipt proofs | Manages a Linera chain (persistent state), forwards blocks to EVM for withdrawals |
 | **Frontend** | MetaMask for EVM transactions | `@linera/client` for Linera queries and signing |
 
 ## Quick start (Docker)
@@ -130,70 +130,83 @@ make build-wasm
 This compiles `fungible`, `wrapped-fungible`, and `evm-bridge` to
 `examples/target/wasm32-unknown-unknown/release/`.
 
-### 2. Start the relay
+### 2. Initialize wallet and claim a bridge chain
 
-The relay claims a Linera chain and bridges events between EVM and Linera. It
-needs to start first because `setup.sh` reads the bridge chain ID and relay
-owner from files the relay writes.
+```bash
+export FAUCET_URL=https://faucet.testnet-conway.linera.net
 
-Pick a shared directory for coordination files. The setup script generates a
-timestamped directory by default (e.g. `/tmp/bridge-demo-20260313-112421`), so
-you must use the same `SHARED_DIR` in both terminals:
+# Initialize a Linera wallet from the faucet
+linera wallet init --faucet "$FAUCET_URL"
+
+# Claim a chain that the relay will use as the "bridge chain"
+linera wallet request-chain --faucet "$FAUCET_URL"
+```
+
+Note the **chain ID** and **owner** printed by `request-chain` — you'll need
+them for both the setup script and the relay.
+
+### 3. Deploy contracts
+
+Pick a shared directory for coordination files between the setup script and
+the relay:
 
 ```bash
 export SHARED_DIR="/tmp/bridge-demo-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$SHARED_DIR"
 ```
 
-> **Important:** Export the same `SHARED_DIR` value in both the relay terminal
-> and the setup terminal. The relay polls this directory for app IDs written by
-> `setup.sh`, and `setup.sh` reads the bridge chain ID written by the relay.
-
-Start the relay (it will poll the shared dir for contract/app addresses that
-`setup.sh` writes later):
-
-```bash
-linera-bridge serve \
-  --rpc-url https://base-sepolia-rpc.publicnode.com \
-  --faucet-url https://faucet.testnet-conway.linera.net \
-  --evm-private-key 0x... \
-  --bridge-address-file "$SHARED_DIR/bridge-address" \
-  --bridge-app-id-file "$SHARED_DIR/bridge-app-id" \
-  --fungible-app-id-file "$SHARED_DIR/wrapped-app-id"
-```
-
-When the relay starts it prints its **bridge chain ID** and **AccountOwner**.
-Copy both for the next step.
-
-### 3. Run the setup script
-
-In a second terminal:
+Run the setup script to deploy EVM contracts and Linera apps:
 
 ```bash
 cd examples/bridge-demo
 
 ./setup.sh \
-  --evm-rpc-url https://base-sepolia-rpc.publicnode.com \
-  --evm-private-key 0xfce057d5e1a3f8265745c95b0a3847e03831f861bec0f7b47a8cd4800ac92aa1 \
+  --evm-rpc-url https://base-sepolia.g.alchemy.com/v2/YOUR_KEY \
+  --evm-private-key 0x... \
   --evm-chain-id 84532 \
-  --bridge-chain-id <64-hex-chain-id-from-relay> \
-  --relay-owner <AccountOwner-from-relay> \
-  --faucet-url https://faucet.testnet-conway.linera.net \
-  --relay-url http://localhost:3001 \
+  --linera-bridge-chain-id <CHAIN_ID> \
+  --relay-owner <OWNER> \
+  --faucet-url "$FAUCET_URL" \
+  --linera-wallet ~/.config/linera/wallet.json \
+  --linera-keystore ~/.config/linera/keystore.json \
+  --linera-storage rocksdb:~/.config/linera/client.db \
   --shared-dir "$SHARED_DIR"
 ```
 
 The setup script:
-1. Initializes a Linera wallet from the faucet
-2. Fetches validator info and deploys the **LightClient** contract
-3. Deploys a **MockERC20** token (or pass `--token-address` to use an existing one)
-4. Publishes **wrapped-fungible** and **evm-bridge** apps on the bridge chain
-5. Deploys the **FungibleBridge** contract (referencing LightClient + apps)
-6. Funds the bridge with ERC-20 tokens
-7. Writes contract/app addresses to `$SHARED_DIR` (relay picks them up) and
+1. Fetches validator info and deploys the **LightClient** contract
+2. Deploys a **MockERC20** token (or pass `--token-address` to use an existing one)
+3. Publishes **wrapped-fungible** and **evm-bridge** apps on the bridge chain
+4. Deploys the **FungibleBridge** contract (referencing LightClient + apps)
+5. Funds the bridge with ERC-20 tokens
+6. Writes contract/app addresses to `$SHARED_DIR` (relay picks them up) and
    `.env.local` (frontend reads them)
 
-### 4. Start the frontend
+### 4. Start the relay
+
+The relay uses the same wallet, keystore, and storage as the `linera` CLI.
+By default it reads from `~/.config/linera/` — the same location `linera
+wallet init` writes to. You can override with `--wallet`, `--keystore`,
+`--storage` flags or `LINERA_WALLET`, `LINERA_KEYSTORE`, `LINERA_STORAGE`
+env vars.
+
+Pass the contract addresses and app IDs from the setup script output:
+
+```bash
+linera-bridge serve \
+  --rpc-url <evm-rpc> \
+  --faucet-url "$FAUCET_URL" \
+  --linera-bridge-chain-id <chain-id> \
+  --linera-bridge-address <bridge-app-id-on-linera> \
+  --linera-fungible-address <fungible-app-id-on-linera> \
+  --evm-bridge-address <bridge-contract-address-on-evm> \
+  --evm-private-key <relayer-private-key>
+```
+
+On restart, run the same command — the relay loads persistent state from
+the wallet and storage, and syncs from validators to catch up.
+
+### 5. Start the frontend
 
 ```bash
 pnpm install && pnpm dev
@@ -211,7 +224,7 @@ the deposit/withdraw forms.
 | `--evm-private-key KEY` | Anvil account 0 | **required** | Private key for EVM txs |
 | `--evm-chain-id ID` | 31337 | 31337 | EVM chain ID |
 | `--light-client-address ADDR` | read from `/shared/` | deployed if omitted | Skip LightClient deploy |
-| `--bridge-chain-id ID` | polled from relay | **required** | Linera bridge chain (64 hex chars) |
+| `--linera-bridge-chain-id ID` | polled from relay | **required** | Linera bridge chain (64 hex chars) |
 | `--token-address ADDR` | deployed | deployed | Skip MockERC20 deploy |
 | `--relay-owner OWNER` | read from `/shared/` | **required** | Relay's AccountOwner (minter) |
 | `--faucet-url URL` | `http://localhost:8080` | `http://localhost:8080` | Linera faucet |
@@ -222,6 +235,9 @@ the deposit/withdraw forms.
 | `--wasm-dir PATH` | `/wasm` | `../../examples/target/wasm32-unknown-unknown/release` | Directory with `.wasm` binaries |
 | `--contracts-dir PATH` | `/contracts` | `../../linera-bridge/src/solidity` | Solidity source root |
 | `--output PATH` | `.env.local` | `.env.local` | Output env file |
+| `--linera-wallet PATH` | -- | auto (temp dir) | Path to existing Linera wallet.json |
+| `--linera-keystore PATH` | -- | auto (temp dir) | Path to existing Linera keystore.json |
+| `--linera-storage CONFIG` | -- | auto (temp dir) | Linera storage config (e.g. `rocksdb:path/to/db`) |
 
 ## How a deposit works
 
@@ -259,6 +275,25 @@ LINERA_EVM_CHAIN_ID
 ```
 
 All are required -- the Vite dev server will refuse to start if any are missing.
+
+## EVM finality verification
+
+The `evm-bridge` Linera app verifies that deposit blocks are finalized by
+querying an EVM JSON-RPC endpoint (the `rpc_endpoint` parameter). This endpoint
+hostname must be in the Linera network's HTTP request allow list.
+
+- **Docker mode**: The compose file passes `--http-request-allow-list` to
+  `linera net up`, defaulting to `anvil`. Override with the
+  `HTTP_REQUEST_ALLOW_LIST` env var (e.g.
+  `HTTP_REQUEST_ALLOW_LIST=base-sepolia.g.alchemy.com`).
+- **Testnet mode**: The Linera testnet validators must whitelist the RPC
+  hostname (e.g. `base-sepolia.g.alchemy.com`). Contact the testnet operators
+  to add your RPC provider's hostname to the allow list.
+
+If the RPC hostname is not whitelisted, deposits will fail with
+`UnauthorizedHttpRequest`. As a workaround, set `rpc_endpoint` to empty in the
+evm-bridge parameters to skip finality verification (not recommended for
+production).
 
 ## Troubleshooting
 

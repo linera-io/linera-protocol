@@ -5,6 +5,7 @@
 use std::iter::IntoIterator;
 
 use linera_base::{
+<<<<<<< HEAD
     crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
         Amount, ArithmeticError, Blob, ChainDescription, ChainOrigin, Epoch, InitialChainConfig,
@@ -12,26 +13,18 @@ use linera_base::{
     },
     identifiers::ChainId,
     ownership::ChainOwnership,
+=======
+    crypto::{AccountPublicKey, ValidatorPublicKey, ValidatorSecretKey},
+    data_types::Timestamp,
+>>>>>>> 857be0b3aa (Improve linera bridge relayer API (#5754))
 };
+pub use linera_core::genesis_config::{Error as GenesisConfigError, GenesisConfig};
 use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
-use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("I/O error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("chain error: {0}")]
-    Chain(#[from] linera_chain::ChainError),
-    #[error("storage is already initialized: {0:?}")]
-    StorageIsAlreadyInitialized(Box<NetworkDescription>),
-    #[error("no admin chain configured")]
-    NoAdminChain,
-}
 
 /// The public configuration of a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -81,51 +74,30 @@ impl CommitteeConfig {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GenesisConfig {
-    pub committee: Committee,
-    pub timestamp: Timestamp,
-    pub chains: Vec<ChainDescription>,
-    pub network_name: String,
-}
-
-impl BcsSignable<'_> for GenesisConfig {}
-
-fn make_chain(
-    index: u32,
-    public_key: AccountPublicKey,
-    balance: Amount,
-    timestamp: Timestamp,
-) -> ChainDescription {
-    let origin = ChainOrigin::Root(index);
-    let config = InitialChainConfig {
-        application_permissions: Default::default(),
-        balance,
-        min_active_epoch: Epoch::ZERO,
-        max_active_epoch: Epoch::ZERO,
-        epoch: Epoch::ZERO,
-        ownership: ChainOwnership::single(public_key.into()),
-    };
-    ChainDescription::new(origin, config, timestamp)
-}
-
-impl GenesisConfig {
-    /// Creates a `GenesisConfig` with the first chain being the admin chain.
-    pub fn new(
-        committee: CommitteeConfig,
+impl CommitteeConfig {
+    /// Creates a `GenesisConfig` from this committee config with the first chain being the admin chain.
+    pub fn into_genesis(
+        self,
         timestamp: Timestamp,
         policy: ResourceControlPolicy,
         network_name: String,
         admin_public_key: AccountPublicKey,
+<<<<<<< HEAD
         admin_balance: Amount,
     ) -> Result<Self, ArithmeticError> {
         let committee = committee.into_committee(policy)?;
         let admin_chain = make_chain(0, admin_public_key, admin_balance, timestamp);
         Ok(Self {
+=======
+        admin_balance: linera_base::data_types::Amount,
+    ) -> GenesisConfig {
+        let committee = self.into_committee(policy);
+        GenesisConfig::new(
+>>>>>>> 857be0b3aa (Improve linera bridge relayer API (#5754))
             committee,
             timestamp,
-            chains: vec![admin_chain],
             network_name,
+<<<<<<< HEAD
         })
     }
 
@@ -258,4 +230,10 @@ mod test {
             genesis_config
         }
     }
+=======
+            admin_public_key,
+            admin_balance,
+        )
+    }
+>>>>>>> 857be0b3aa (Improve linera bridge relayer API (#5754))
 }

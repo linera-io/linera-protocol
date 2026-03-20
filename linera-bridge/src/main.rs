@@ -58,22 +58,33 @@ struct ServeOptions {
     #[arg(long)]
     faucet_url: String,
 
-    /// Address of the FungibleBridge contract on EVM.
-    /// If omitted, reads from --bridge-address-file (polls until available).
+    /// Path to the wallet state file.
+    #[arg(long = "wallet", env = "LINERA_WALLET")]
+    wallet: Option<PathBuf>,
+
+    /// Path to the keystore file.
+    #[arg(long = "keystore", env = "LINERA_KEYSTORE")]
+    keystore: Option<PathBuf>,
+
+    /// Storage configuration for blockchain history (e.g. rocksdb:/path/to/db).
+    #[arg(long = "storage", env = "LINERA_STORAGE")]
+    storage: Option<String>,
+
+    /// Linera bridge chain ID. If omitted, claims a new chain from faucet.
     #[arg(long)]
-    bridge_address: Option<String>,
+    linera_bridge_chain_id: Option<linera_base::identifiers::ChainId>,
 
-    /// File to read bridge address from (used when bridge is deployed after relay starts)
-    #[arg(long, default_value = "/shared/bridge-address")]
-    bridge_address_file: String,
+    /// Address of the FungibleBridge contract on EVM.
+    #[arg(long)]
+    evm_bridge_address: String,
 
-    /// File to read the evm-bridge ApplicationId from (written by setup script)
-    #[arg(long, default_value = "/shared/bridge-app-id")]
-    bridge_app_id_file: String,
+    /// evm-bridge Linera ApplicationId (hex).
+    #[arg(long)]
+    linera_bridge_address: String,
 
-    /// File to read the wrapped-fungible ApplicationId from (written by setup script)
-    #[arg(long, default_value = "/shared/wrapped-app-id")]
-    fungible_app_id_file: String,
+    /// wrapped-fungible Linera ApplicationId (hex).
+    #[arg(long)]
+    linera_fungible_address: String,
 
     /// EVM private key for signing addBlock transactions
     #[arg(long)]
@@ -123,12 +134,16 @@ impl ServeOptions {
         Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
             &self.faucet_url,
-            self.bridge_address.as_deref(),
-            &self.bridge_address_file,
-            &self.bridge_app_id_file,
-            &self.fungible_app_id_file,
+            self.wallet.as_deref(),
+            self.keystore.as_deref(),
+            self.storage.as_deref(),
+            self.linera_bridge_chain_id,
+            &self.evm_bridge_address,
+            &self.linera_bridge_address,
+            &self.linera_fungible_address,
             &self.evm_private_key,
             self.port,
+<<<<<<< HEAD
             linera_storage::StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
                 confirmed_block_cache_size: self.confirmed_block_cache_size,
@@ -137,6 +152,9 @@ impl ServeOptions {
                 event_cache_size: self.event_cache_size,
                 cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
+=======
+            self.blob_cache_size,
+>>>>>>> 857be0b3aa (Improve linera bridge relayer API (#5754))
         ))
         .await
     }
