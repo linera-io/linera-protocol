@@ -193,8 +193,8 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
 
     let mut notification_stream = Box::pin(notification_stream);
 
-    // Cache the last raw result to deduplicate (compared before JSON parsing).
-    let mut last_result: Option<Vec<u8>> = None;
+    // Cache the last result as a string to deduplicate.
+    let mut last_result: Option<String> = None;
 
     // Execute the query once immediately so the first subscriber gets a value.
     execute_and_maybe_send(&context, &key, &query_string, &sender, &mut last_result).await;
@@ -289,7 +289,7 @@ async fn execute_and_maybe_send<C: ClientContext + 'static>(
     key: &SubscriptionKey,
     query_string: &str,
     sender: &watch::Sender<Option<String>>,
-    last_result: &mut Option<Vec<u8>>,
+    last_result: &mut Option<String>,
 ) {
     // The application service expects a JSON-encoded GraphQL request.
     let json_request = serde_json::json!({ "query": query_string });
@@ -320,24 +320,25 @@ async fn execute_and_maybe_send<C: ClientContext + 'static>(
                 }
             };
 
+            // Convert to string. The bytes are already valid UTF-8 JSON
+            // from the application service.
+            let json_string = match String::from_utf8(response_bytes) {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!(name = %key.name, "response bytes are not valid UTF-8: {e}");
+                    return;
+                }
+            };
+
             // Deduplicate: only send if the result changed.
-            if last_result.as_ref() == Some(&response_bytes) {
+            if last_result.as_ref() == Some(&json_string) {
                 return;
             }
 
-            // Store as a JSON string. The bytes are already valid UTF-8 JSON
-            // from the application service.
-            match String::from_utf8(response_bytes.clone()) {
-                Ok(json_string) => {
-                    *last_result = Some(response_bytes);
-                    if let Err(e) = sender.send(Some(json_string)) {
-                        debug!(name = %key.name, "Failed to send graphql response: {e}");
-                    }
-                }
-                Err(e) => {
-                    warn!(name = %key.name, "response bytes are not valid UTF-8: {e}");
-                }
+            if let Err(e) = sender.send(Some(json_string.clone())) {
+                debug!(name = %key.name, "Failed to send graphql response: {e}");
             }
+            *last_result = Some(json_string);
         }
         Err(e) => {
             warn!(name = %key.name, "query execution failed: {e}");
