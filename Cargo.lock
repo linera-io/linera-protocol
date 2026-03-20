@@ -6024,6 +6024,7 @@ dependencies = [
  "assert_matches",
  "async-graphql",
  "async-graphql-axum",
+ "async-graphql-value",
  "async-lock",
  "async-trait",
  "async-tungstenite",
