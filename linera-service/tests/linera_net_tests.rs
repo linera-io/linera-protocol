@@ -2067,9 +2067,10 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     let (_, height3) = node_service3.chain_tip(chain3).await?.unwrap();
     let mut notifications3 = node_service3.notifications(chain3).await?;
 
-    // Wait for the chain listener to process the pre-existing events.
+    // Wait for the chain listener to process both pre-existing events.
+    // Processing two incoming messages may produce two blocks.
     notifications3
-        .wait_for_block(height3.try_add_one()?)
+        .wait_for_block(height3.try_add_one()?.try_add_one()?)
         .await?;
 
     // Client3 should have received both pre-existing posts.
