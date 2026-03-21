@@ -2414,14 +2414,16 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         }
     });
 
-    loop {
-        let (_, height4) = node_service2.chain_tip(chain2).await?.unwrap();
-        if height4 > latest_height {
-            break;
-        }
-        linera_base::time::timer::sleep(Duration::from_millis(500)).await;
+    // The two posts may arrive in one or two blocks, so wait for the first and check,
+    // then wait for a second block if needed.
+    let mut notifications2 = node_service2.notifications(chain2).await?;
+    let next_height = latest_height.try_add_one()?;
+    notifications2.wait_for_block(next_height).await?;
+    if app2.query(query).await? != expected_response {
+        notifications2
+            .wait_for_block(next_height.try_add_one()?)
+            .await?;
     }
-
     assert_eq!(app2.query(query).await?, expected_response);
 
     let tip_after_fourth_post = node_service2.chain_tip(chain1).await?;
@@ -2443,13 +2445,9 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     let (_, height3) = node_service3.chain_tip(chain3).await?.unwrap();
     let mut notifications3 = node_service3.notifications(chain3).await?;
 
-    // Wait for the chain listener to process the pre-existing events.
-    notifications3
-        .wait_for_block(height3.try_add_one()?)
-        .await?;
-
-    // Client3 should have received the pre-existing posts.
-    let query = "receivedPosts { keys { author, index } }";
+    // Wait for the chain listener to process both pre-existing events.
+    // They may arrive in one or two blocks, so wait for the first and check,
+    // then wait for a second block if needed.
     let expected_response = json!({
         "receivedPosts": {
             "keys": [
@@ -2460,6 +2458,14 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
+    let query = "receivedPosts { keys { author, index } }";
+    let next_height = height3.try_add_one()?;
+    notifications3.wait_for_block(next_height).await?;
+    if app3.query(query).await? != expected_response {
+        notifications3
+            .wait_for_block(next_height.try_add_one()?)
+            .await?;
+    }
     assert_eq!(app3.query(query).await?, expected_response);
 
     // Verify that the sparse sync for client3 did not download the non-event transfer block:
