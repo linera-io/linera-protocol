@@ -87,87 +87,11 @@ impl FaucetDatabase {
             .execute(&self.pool)
             .await
             .context("Failed to create chains table")?;
-        self.migrate_created_at_column().await?;
         sqlx::query(CREATE_DAILY_CLAIMS_TABLE)
             .execute(&self.pool)
             .await
             .context("Failed to create daily_claims table")?;
         info!("Database schema initialized");
-        Ok(())
-    }
-
-    /// Migrates the `created_at` column from DATETIME (TEXT) to INTEGER if needed.
-    ///
-    /// PR #5611 changed the schema but didn't add a migration. Existing databases
-    /// still have `created_at DATETIME` (TEXT), causing sqlx to panic when decoding
-    /// as i64. This recreates the table with the correct INTEGER type, converting
-    /// TEXT timestamps to microseconds since epoch.
-    async fn migrate_created_at_column(&self) -> anyhow::Result<()> {
-        let rows = sqlx::query("PRAGMA table_info(chains)")
-            .fetch_all(&self.pool)
-            .await
-            .context("Failed to read chains table schema")?;
-
-        let needs_migration = rows.iter().any(|row| {
-            let name: &str = row.get("name");
-            let column_type: &str = row.get("type");
-            name == "created_at" && !column_type.eq_ignore_ascii_case("INTEGER")
-        });
-
-        if !needs_migration {
-            return Ok(());
-        }
-
-        info!("Migrating chains table: created_at DATETIME → INTEGER");
-
-        let mut transaction = self.pool.begin().await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE chains_migrated (
-                owner TEXT PRIMARY KEY NOT NULL,
-                chain_id TEXT NOT NULL,
-                created_at INTEGER NOT NULL
-            )
-            "#,
-        )
-        .execute(&mut *transaction)
-        .await
-        .context("Failed to create chains_migrated table")?;
-
-        sqlx::query(
-            r#"
-            INSERT INTO chains_migrated (owner, chain_id, created_at)
-            SELECT owner, chain_id,
-                CASE typeof(created_at)
-                    WHEN 'text' THEN CAST(strftime('%s', created_at) AS INTEGER) * 1000000
-                    WHEN 'integer' THEN created_at
-                END
-            FROM chains
-            "#,
-        )
-        .execute(&mut *transaction)
-        .await
-        .context("Failed to migrate chains data")?;
-
-        sqlx::query("DROP TABLE chains")
-            .execute(&mut *transaction)
-            .await
-            .context("Failed to drop old chains table")?;
-
-        sqlx::query("ALTER TABLE chains_migrated RENAME TO chains")
-            .execute(&mut *transaction)
-            .await
-            .context("Failed to rename chains_migrated to chains")?;
-
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_chains_chain_id ON chains(chain_id)")
-            .execute(&mut *transaction)
-            .await
-            .context("Failed to recreate chain_id index")?;
-
-        transaction.commit().await?;
-
-        info!("Migration complete");
         Ok(())
     }
 
