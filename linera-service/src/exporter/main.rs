@@ -302,15 +302,15 @@ impl RunOptions {
                 .storage_config
                 .add_common_storage_options(&self.common_storage_options)
                 .unwrap();
-            let blob_cache_size = self.common_storage_options.blob_cache_size;
+            let cache_sizes = self.common_storage_options.storage_cache_sizes();
             store_config
                 .clone()
-                .run_with_store(blob_cache_size, StorageMigration)
+                .run_with_store(cache_sizes, StorageMigration)
                 .await?;
             // Exporters are part of validator infrastructure and should not output contract logs.
             let allow_application_logs = false;
             store_config
-                .run_with_storage(None, allow_application_logs, blob_cache_size, context)
+                .run_with_storage(None, allow_application_logs, cache_sizes, context)
                 .boxed()
                 .await
         };
@@ -350,9 +350,9 @@ impl DestinationsCommand {
             action,
         };
 
-        let blob_cache_size = options.common_storage_options.blob_cache_size;
+        let cache_sizes = options.common_storage_options.storage_cache_sizes();
         store_config
-            .run_with_storage(None, false, blob_cache_size, context)
+            .run_with_storage(None, false, cache_sizes, context)
             .await?
             .map_err(Into::into)
     }

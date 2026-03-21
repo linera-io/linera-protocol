@@ -361,6 +361,16 @@ impl MultiPartitionBatch {
     }
 }
 
+/// Individual cache sizes for each `ValueCache` in `DbStorage`.
+#[derive(Clone, Copy, Debug)]
+pub struct StorageCacheSizes {
+    pub blob_cache_size: usize,
+    pub confirmed_block_cache_size: usize,
+    pub lite_certificate_cache_size: usize,
+    pub certificate_raw_cache_size: usize,
+    pub event_cache_size: usize,
+}
+
 /// Raw certificate bytes: (lite_certificate_bytes, confirmed_block_bytes).
 type RawCertificate = (Vec<u8>, Vec<u8>);
 
@@ -1845,7 +1855,7 @@ where
     pub(crate) fn new(
         database: Database,
         wasm_runtime: Option<WasmRuntime>,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
         clock: C,
     ) -> Self {
         Self {
@@ -1857,11 +1867,17 @@ where
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
-            blob_cache: Arc::new(ValueCache::new(blob_cache_size)),
-            confirmed_block_cache: Arc::new(ValueCache::new(blob_cache_size)),
-            lite_certificate_cache: Arc::new(ValueCache::new(blob_cache_size)),
-            certificate_raw_cache: Arc::new(ValueCache::new(blob_cache_size)),
-            event_cache: Arc::new(ValueCache::new(blob_cache_size)),
+            blob_cache: Arc::new(ValueCache::new(cache_sizes.blob_cache_size)),
+            confirmed_block_cache: Arc::new(ValueCache::new(
+                cache_sizes.confirmed_block_cache_size,
+            )),
+            lite_certificate_cache: Arc::new(ValueCache::new(
+                cache_sizes.lite_certificate_cache_size,
+            )),
+            certificate_raw_cache: Arc::new(ValueCache::new(
+                cache_sizes.certificate_raw_cache_size,
+            )),
+            event_cache: Arc::new(ValueCache::new(cache_sizes.event_cache_size)),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
@@ -1883,10 +1899,10 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
     ) -> Result<Self, ViewError> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, blob_cache_size, WallClock);
+        let storage = Self::new(database, wasm_runtime, cache_sizes, WallClock);
         Ok(storage)
     }
 
@@ -1894,10 +1910,10 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
     ) -> Result<Self, ViewError> {
         let database = Database::connect(config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, blob_cache_size, WallClock);
+        let storage = Self::new(database, wasm_runtime, cache_sizes, WallClock);
         Ok(storage)
     }
 
@@ -1971,7 +1987,14 @@ where
         clock: TestClock,
     ) -> Result<Self, ViewError> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, 1000, clock);
+        let default_cache_sizes = StorageCacheSizes {
+            blob_cache_size: 1000,
+            confirmed_block_cache_size: 1000,
+            lite_certificate_cache_size: 1000,
+            certificate_raw_cache_size: 1000,
+            event_cache_size: 1000,
+        };
+        let storage = Self::new(database, wasm_runtime, default_cache_sizes, clock);
         storage.assert_is_migrated_storage().await?;
         Ok(storage)
     }

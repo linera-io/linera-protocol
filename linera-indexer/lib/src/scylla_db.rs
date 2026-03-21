@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_service::storage::{StorageMigration, StoreConfig};
+use linera_service::storage::{StorageCacheSizes, StorageMigration, StoreConfig};
 use linera_views::{
     lru_prefix_cache::StorageCacheConfig,
     scylla_db::{ScyllaDbDatabase, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
@@ -67,6 +67,22 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "1000")]
     pub blob_cache_size: usize,
 
+    /// The maximal number of entries in the confirmed block cache.
+    #[arg(long, default_value = "1000")]
+    pub confirmed_block_cache_size: usize,
+
+    /// The maximal number of entries in the lite certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub lite_certificate_cache_size: usize,
+
+    /// The maximal number of entries in the raw certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub certificate_raw_cache_size: usize,
+
+    /// The maximal number of entries in the event cache.
+    #[arg(long, default_value = "1000")]
+    pub event_cache_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1")]
     pub replication_factor: u32,
@@ -104,7 +120,16 @@ impl ScyllaDbRunner {
         };
         store_config
             .clone()
-            .run_with_store(config.client.blob_cache_size, StorageMigration)
+            .run_with_store(
+                StorageCacheSizes {
+                    blob_cache_size: config.client.blob_cache_size,
+                    confirmed_block_cache_size: config.client.confirmed_block_cache_size,
+                    lite_certificate_cache_size: config.client.lite_certificate_cache_size,
+                    certificate_raw_cache_size: config.client.certificate_raw_cache_size,
+                    event_cache_size: config.client.event_cache_size,
+                },
+                StorageMigration,
+            )
             .await
             .expect("ScyllaDb migration failed");
         let database = ScyllaDbDatabase::connect(&scylladb_store_config, &namespace).await?;

@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use clap::Parser as _;
-use linera_service::storage::{StorageMigration, StoreConfig};
+use linera_service::storage::{StorageCacheSizes, StorageMigration, StoreConfig};
 use linera_views::{
     lru_prefix_cache::StorageCacheConfig,
     rocks_db::{
@@ -72,6 +72,22 @@ pub struct RocksDbConfig {
     /// The maximal number of entries in the blob cache.
     #[arg(long, default_value = "1000")]
     pub blob_cache_size: usize,
+
+    /// The maximal number of entries in the confirmed block cache.
+    #[arg(long, default_value = "1000")]
+    pub confirmed_block_cache_size: usize,
+
+    /// The maximal number of entries in the lite certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub lite_certificate_cache_size: usize,
+
+    /// The maximal number of entries in the raw certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub certificate_raw_cache_size: usize,
+
+    /// The maximal number of entries in the event cache.
+    #[arg(long, default_value = "1000")]
+    pub event_cache_size: usize,
 }
 
 pub type RocksDbRunner = Runner<RocksDbDatabase, RocksDbConfig>;
@@ -110,7 +126,16 @@ impl RocksDbRunner {
         };
         store_config
             .clone()
-            .run_with_store(config.client.blob_cache_size, StorageMigration)
+            .run_with_store(
+                StorageCacheSizes {
+                    blob_cache_size: config.client.blob_cache_size,
+                    confirmed_block_cache_size: config.client.confirmed_block_cache_size,
+                    lite_certificate_cache_size: config.client.lite_certificate_cache_size,
+                    certificate_raw_cache_size: config.client.certificate_raw_cache_size,
+                    event_cache_size: config.client.event_cache_size,
+                },
+                StorageMigration,
+            )
             .await
             .expect("Failure to migrate the database");
         let database =

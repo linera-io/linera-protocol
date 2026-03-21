@@ -243,7 +243,7 @@ mod tests {
             BaseKey, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY, LITE_CERTIFICATE_KEY,
             NETWORK_DESCRIPTION_KEY,
         },
-        DbStorage, WallClock,
+        DbStorage, StorageCacheSizes, WallClock,
     };
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -575,7 +575,14 @@ mod tests {
         let mut storage_state = get_storage_state();
         write_storage_state_old_schema(&database, storage_state.clone()).await?;
         // Creating a storage and migrate to the new database schema.
-        let storage = DbStorage::<D, WallClock>::new(database, None, 1000, WallClock);
+        let cache_sizes = StorageCacheSizes {
+            blob_cache_size: 1000,
+            confirmed_block_cache_size: 1000,
+            lite_certificate_cache_size: 1000,
+            certificate_raw_cache_size: 1000,
+            event_cache_size: 1000,
+        };
+        let storage = DbStorage::<D, WallClock>::new(database, None, cache_sizes, WallClock);
         storage.migrate_if_needed().await?;
         // read the storage state and compare it.
         let read_storage_state = read_storage_state_new_schema(storage.database.deref()).await?;
