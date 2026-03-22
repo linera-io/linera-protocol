@@ -1375,7 +1375,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Ratio of cache hits to total cache accesses for value cache",
+      "description": "Ratio of cache hits to total cache accesses for value cache, broken down by value type",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1461,14 +1461,115 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum (rate(linera_value_cache_hit{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))\n/\n(\n  sum (rate(linera_value_cache_hit{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))\n+ (\n    sum (rate(linera_value_cache_miss{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))\n    or on (validator) vector(0)\n  )\n)",
+          "expr": "sum by (value_type) (rate(linera_value_cache_hit{validator=~\"$validator\", job=\"linera-linera-server\"}[5m]))\n/\n(\n  sum by (value_type) (rate(linera_value_cache_hit{validator=~\"$validator\", job=\"linera-linera-server\"}[5m]))\n  + sum by (value_type) (rate(linera_value_cache_miss{validator=~\"$validator\", job=\"linera-linera-server\"}[5m]))\n)",
           "instant": false,
-          "legendFormat": "Cache Hit Ratio",
+          "legendFormat": "{{value_type}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Value Cache Hit Ratio",
+      "title": "Value Cache Hit Ratio by Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Rate of value cache operations (hits + misses) per second, broken down by value type. Helps distinguish 0% hit ratio due to zero traffic vs actual misses.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "id": 69,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (value_type) (\n  rate(linera_value_cache_hit{validator=~\"$validator\", job=\"linera-linera-server\"}[5m])\n  + rate(linera_value_cache_miss{validator=~\"$validator\", job=\"linera-linera-server\"}[5m])\n)",
+          "instant": false,
+          "legendFormat": "{{value_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Value Cache Operations Rate by Type",
       "type": "timeseries"
     },
     {
