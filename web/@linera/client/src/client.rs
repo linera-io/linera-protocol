@@ -56,16 +56,25 @@ impl Client {
     ) -> Result<Client> {
         let options = options.unwrap_or_default();
 
+        tracing::info!("Client::new: acquiring wallet lock...");
         wallet.lock().await?;
+        tracing::info!("Client::new: wallet lock acquired");
+
+        tracing::info!("Client::new: opening storage...");
         let mut storage = storage::get_storage(&wallet.name()).await?;
+        tracing::info!("Client::new: storage opened");
+
+        tracing::info!("Client::new: initializing storage...");
         wallet
             .genesis_config
             .initialize_storage(&mut storage)
             .await?;
+        tracing::info!("Client::new: storage initialized");
 
         let default = wallet.default;
         let genesis_config = wallet.genesis_config.clone();
 
+        tracing::info!("Client::new: creating ClientContext...");
         let client = linera_client::ClientContext::new(
             storage.clone(),
             wallet,
@@ -75,11 +84,15 @@ impl Client {
             genesis_config,
         )
         .await?;
+        tracing::info!("Client::new: ClientContext created");
+
         // The `Arc` here is useless, but it is required by the `ChainListener` API.
         #[expect(clippy::arc_with_non_send_sync)]
         let client = Arc::new(AsyncMutex::new(client));
         let client_clone = client.clone();
         let cancellation_token = tokio_util::sync::CancellationToken::new();
+
+        tracing::info!("Client::new: starting chain listener...");
         let chain_listener = ChainListener::new(
             options.chain_listener_config,
             client_clone,
@@ -90,6 +103,7 @@ impl Client {
         )
         .run()
         .await?;
+        tracing::info!("Client::new: chain listener started");
 
         let (run_chain_listener, chain_listener_result) = async move {
             let result = chain_listener.await.map_err(|error| {
