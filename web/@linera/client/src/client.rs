@@ -56,26 +56,26 @@ impl Client {
     ) -> Result<Client> {
         let options = options.unwrap_or_default();
 
-        tracing::info!("Client::new: acquiring wallet lock...");
+        tracing::debug!("Client::new: acquiring wallet lock...");
         wallet.lock().await?;
-        tracing::info!("Client::new: wallet lock acquired");
+        tracing::debug!("Client::new: wallet lock acquired");
 
-        tracing::info!("Client::new: opening storage...");
+        tracing::debug!("Client::new: opening storage...");
         let mut storage =
             storage::get_storage(&wallet.name(), std::time::Duration::from_secs(10)).await?;
-        tracing::info!("Client::new: storage opened");
+        tracing::debug!("Client::new: storage opened");
 
-        tracing::info!("Client::new: initializing storage...");
+        tracing::debug!("Client::new: initializing storage...");
         wallet
             .genesis_config
             .initialize_storage(&mut storage)
             .await?;
-        tracing::info!("Client::new: storage initialized");
+        tracing::debug!("Client::new: storage initialized");
 
         let default = wallet.default;
         let genesis_config = wallet.genesis_config.clone();
 
-        tracing::info!("Client::new: creating ClientContext...");
+        tracing::debug!("Client::new: creating ClientContext...");
         let client = linera_client::ClientContext::new(
             storage.clone(),
             wallet,
@@ -85,7 +85,7 @@ impl Client {
             genesis_config,
         )
         .await?;
-        tracing::info!("Client::new: ClientContext created");
+        tracing::debug!("Client::new: ClientContext created");
 
         // The `Arc` here is useless, but it is required by the `ChainListener` API.
         #[expect(clippy::arc_with_non_send_sync)]
@@ -93,7 +93,7 @@ impl Client {
         let client_clone = client.clone();
         let cancellation_token = tokio_util::sync::CancellationToken::new();
 
-        tracing::info!("Client::new: starting chain listener...");
+        tracing::debug!("Client::new: starting chain listener...");
         let chain_listener = ChainListener::new(
             options.chain_listener_config,
             client_clone,
@@ -104,7 +104,7 @@ impl Client {
         )
         .run()
         .await?;
-        tracing::info!("Client::new: chain listener started");
+        tracing::debug!("Client::new: chain listener started");
 
         let (run_chain_listener, chain_listener_result) = async move {
             let result = chain_listener.await.map_err(|error| {
