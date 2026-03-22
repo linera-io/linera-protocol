@@ -45,9 +45,9 @@ storageReplicationFactor: 1
 # These settings control memory usage for caching storage queries
 storageCacheConfig:
   # Maximum total cache size in bytes
-  maxCacheSize: 200000000
+  maxCacheSize: 1000000000
   # Maximum number of entries in the cache
-  maxCacheEntries: 200000
+  maxCacheEntries: 500000
   # Maximum size of a single value entry in bytes
   maxValueEntrySize: 1000000
   # Maximum size of a single find-keys entry in bytes
@@ -55,9 +55,9 @@ storageCacheConfig:
   # Maximum size of a single find-key-values entry in bytes
   maxFindKeyValuesEntrySize: 1000000
   # Maximum total size of value entries in bytes
-  maxCacheValueSize: 200000000
+  maxCacheValueSize: 500000000
   # Maximum total size of find-keys entries in bytes
-  maxCacheFindKeysSize: 40000000
+  maxCacheFindKeysSize: 200000000
   # Maximum total size of find-key-values entries in bytes
   maxCacheFindKeyValuesSize: 10000000
 
@@ -68,7 +68,7 @@ storageCacheSizes:
   confirmedBlockCacheSize: 10000
   liteCertificateCacheSize: 5000
   certificateRawCacheSize: 50000
-  eventCacheSize: 5000
+  eventCacheSize: 20000
 
 # Block cache size (number of entries)
 blockCacheSize: 20000

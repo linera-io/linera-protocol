@@ -685,8 +685,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(\n    sum(rate(linera_num_cache_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    /\n    (\n        sum(rate(linera_num_cache_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n        + sum(rate(linera_num_cache_fault{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    )\n) * 100",
-          "legendFormat": "{{instance}}",
+          "expr": "(\n    sum(rate(linera_num_cache_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    /\n    (\n        sum(rate(linera_num_cache_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n        + sum(rate(linera_num_cache_fault{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    )\n) * 100",
+          "legendFormat": "Hit %",
           "range": true,
           "refId": "A"
         }
@@ -799,8 +799,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(\n    sum(rate(linera_num_read_value_cache_hits{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    /\n    (\n        sum(rate(linera_num_read_value_cache_hits{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n        + sum(rate(linera_num_read_value_cache_miss{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    )\n) * 100",
-          "legendFormat": "{{instance}}",
+          "expr": "(\n    sum(rate(linera_num_read_value_cache_hits{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    /\n    (\n        sum(rate(linera_num_read_value_cache_hits{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n        + sum(rate(linera_num_read_value_cache_miss{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    )\n) * 100",
+          "legendFormat": "Hit %",
           "range": true,
           "refId": "A"
         }
@@ -900,8 +900,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(\n    sum(rate(linera_num_contains_key_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    /\n    (\n        sum(rate(linera_num_contains_key_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n        + sum(rate(linera_num_contains_key_cache_miss{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    )\n) * 100",
-          "legendFormat": "{{instance}}",
+          "expr": "(\n    sum(rate(linera_num_contains_key_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    /\n    (\n        sum(rate(linera_num_contains_key_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n        + sum(rate(linera_num_contains_key_cache_miss{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    )\n) * 100",
+          "legendFormat": "Hit %",
           "range": true,
           "refId": "A"
         }
@@ -1001,8 +1001,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(\n    sum(rate(linera_num_find_keys_by_prefix_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    /\n    (\n        sum(rate(linera_num_find_keys_by_prefix_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n        + sum(rate(linera_num_find_keys_by_prefix_cache_miss{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    )\n) * 100",
-          "legendFormat": "{{instance}}",
+          "expr": "(\n    sum(rate(linera_num_find_keys_by_prefix_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    /\n    (\n        sum(rate(linera_num_find_keys_by_prefix_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n        + sum(rate(linera_num_find_keys_by_prefix_cache_miss{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    )\n) * 100",
+          "legendFormat": "Hit %",
           "range": true,
           "refId": "A"
         }
@@ -1102,8 +1102,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(\n    sum(rate(linera_num_find_key_values_by_prefix_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    /\n    (\n        sum(rate(linera_num_find_key_values_by_prefix_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n        + sum(rate(linera_num_find_key_values_by_prefix_cache_miss{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)\n    )\n) * 100",
-          "legendFormat": "{{instance}}",
+          "expr": "(\n    sum(rate(linera_num_find_key_values_by_prefix_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    /\n    (\n        sum(rate(linera_num_find_key_values_by_prefix_cache_hit{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n        + sum(rate(linera_num_find_key_values_by_prefix_cache_miss{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))\n    )\n) * 100",
+          "legendFormat": "Hit %",
           "range": true,
           "refId": "A"
         }
