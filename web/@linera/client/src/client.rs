@@ -49,6 +49,7 @@ impl Client {
     /// On transport or protocol error, if persistent storage is
     /// unavailable, or if `options` is incorrectly structured.
     #[wasm_bindgen(constructor)]
+    #[tracing::instrument(skip_all)]
     pub async fn new(
         mut wallet: Wallet,
         signer: Signer,
@@ -56,8 +57,23 @@ impl Client {
     ) -> Result<Client> {
         let options = options.unwrap_or_default();
 
+        tracing::debug!("acquiring wallet lock...");
         wallet.lock().await?;
-        let mut storage = storage::get_storage(&wallet.name()).await?;
+
+        tracing::debug!("opening storage...");
+        let mut storage = linera_base::time::timer::timeout(
+            std::time::Duration::from_secs(10),
+            storage::get_storage(&wallet.name()),
+        )
+        .await
+        .map_err(|_| {
+            Error::new(
+                "Timed out opening IndexedDB storage. \
+                 Try clearing site data and reloading.",
+            )
+        })??;
+
+        tracing::debug!("initializing storage...");
         wallet
             .genesis_config
             .initialize_storage(&mut storage)
@@ -66,6 +82,7 @@ impl Client {
         let default = wallet.default;
         let genesis_config = wallet.genesis_config.clone();
 
+        tracing::debug!("creating ClientContext...");
         let client = linera_client::ClientContext::new(
             storage.clone(),
             wallet,
@@ -77,11 +94,14 @@ impl Client {
             linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )
         .await?;
+
         // The `Arc` here is useless, but it is required by the `ChainListener` API.
         #[expect(clippy::arc_with_non_send_sync)]
         let client = Arc::new(AsyncMutex::new(client));
         let client_clone = client.clone();
         let cancellation_token = tokio_util::sync::CancellationToken::new();
+
+        tracing::debug!("starting chain listener...");
         let chain_listener = ChainListener::new(
             options.chain_listener_config,
             client_clone,
