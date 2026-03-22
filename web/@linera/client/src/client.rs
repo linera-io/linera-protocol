@@ -61,8 +61,17 @@ impl Client {
         tracing::debug!("Client::new: wallet lock acquired");
 
         tracing::debug!("Client::new: opening storage...");
-        let mut storage =
-            storage::get_storage(&wallet.name(), std::time::Duration::from_secs(10)).await?;
+        let mut storage = linera_base::time::timer::timeout(
+            std::time::Duration::from_secs(10),
+            storage::get_storage(&wallet.name()),
+        )
+        .await
+        .map_err(|_| {
+            Error::new(
+                "Timed out opening IndexedDB storage. \
+                 Try clearing site data and reloading.",
+            )
+        })??;
         tracing::debug!("Client::new: storage opened");
 
         tracing::debug!("Client::new: initializing storage...");
