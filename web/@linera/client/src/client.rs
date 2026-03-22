@@ -61,7 +61,8 @@ impl Client {
         tracing::info!("Client::new: wallet lock acquired");
 
         tracing::info!("Client::new: opening storage...");
-        let mut storage = storage::get_storage(&wallet.name()).await?;
+        let mut storage =
+            storage::get_storage(&wallet.name(), std::time::Duration::from_secs(10)).await?;
         tracing::info!("Client::new: storage opened");
 
         tracing::info!("Client::new: initializing storage...");

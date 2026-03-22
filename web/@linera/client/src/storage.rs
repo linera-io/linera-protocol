@@ -8,19 +8,16 @@ pub type Storage = linera_storage::DbStorage<
     linera_storage::WallClock,
 >;
 
-/// Timeout for opening IndexedDB storage. If a previous connection was not
-/// properly closed (e.g. page reload during a write), IndexedDB's `open()` can
-/// block indefinitely waiting for the old connection to release. This timeout
-/// ensures we fail fast instead of hanging forever.
-const STORAGE_OPEN_TIMEOUT: Duration = Duration::from_secs(10);
-
 /// Create and return the storage implementation.
 ///
 /// # Errors
 /// If the storage can't be initialized or if the operation times out.
-pub async fn get_storage(namespace: &str) -> Result<Storage, linera_views::ViewError> {
+pub async fn get_storage(
+    namespace: &str,
+    timeout: Duration,
+) -> Result<Storage, linera_views::ViewError> {
     let storage = linera_base::time::timer::timeout(
-        STORAGE_OPEN_TIMEOUT,
+        timeout,
         linera_storage::DbStorage::maybe_create_and_connect(
             &linera_views::indexed_db::IndexedDbStoreConfig {
                 max_stream_queries: 1,
