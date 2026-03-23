@@ -84,11 +84,23 @@ jobs:
     - name: Show memory monitor log
       if: always()
       run: cat /tmp/memory-monitor.log || true
-    - name: Check for OOM kills
+    - name: Check for OOM kills and crashes
       if: always()
       run: |
         echo "=== dmesg OOM entries ==="
         dmesg -T 2>/dev/null | grep -i -E 'oom|killed process|out of memory' || echo "No OOM entries found"
         echo ""
-        echo "=== linera-net-up log (last 50 lines) ==="
-        tail -50 /tmp/linera-net-up.log 2>/dev/null || true
+        echo "=== dmesg segfault/trap entries ==="
+        dmesg -T 2>/dev/null | grep -i -E 'segfault|trap|general protection' || echo "No segfault entries found"
+        echo ""
+        echo "=== zombie linera processes ==="
+        ps -eo pid,stat,comm | grep -E 'Z.*linera' || echo "No zombie linera processes"
+        echo ""
+        echo "=== full linera-net-up log (errors/warnings/panics) ==="
+        grep -i -E 'error|panic|abort|signal|segfault|fatal|thread.*crash' /tmp/linera-net-up.log 2>/dev/null | tail -100 || echo "No matches"
+        echo ""
+        echo "=== linera-net-up log (last 200 lines) ==="
+        tail -200 /tmp/linera-net-up.log 2>/dev/null || true
+        echo ""
+        echo "=== core dumps ==="
+        coredumpctl list 2>/dev/null | tail -10 || echo "coredumpctl not available"
