@@ -11,14 +11,20 @@
 //! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
 //!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
 
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use alloy::{
     network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
     signers::local::PrivateKeySigner, sol,
 };
 use anyhow::{Context as _, Result};
-use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, post},
+    Json, Router,
+};
 use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
@@ -39,10 +45,13 @@ use linera_views::{
     },
     lru_prefix_cache::StorageCacheConfig,
 };
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tower_http::cors::CorsLayer;
 
-use crate::proof::gen::{DepositProofClient, HttpDepositProofClient, ProofError};
+use crate::{
+    monitor::{self, MonitorState},
+    proof::gen::{DepositProofClient, HttpDepositProofClient, ProofError},
+};
 
 // ── Alloy ABI for FungibleBridge.addBlock ──
 
@@ -79,6 +88,7 @@ struct DepositRequest {
 struct AppState {
     proof_client: HttpDepositProofClient,
     deposit_tx: mpsc::Sender<DepositRequest>,
+    monitor: Arc<RwLock<MonitorState>>,
 }
 
 // ── HTTP handlers ──
@@ -185,6 +195,44 @@ async fn deposit_handler(
             )
         }
     }
+}
+
+// ── Monitor HTTP handlers ──
+
+async fn monitor_status_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let summary = state.monitor.read().await.status_summary();
+    Json(summary)
+}
+
+#[derive(serde::Deserialize)]
+struct MonitorFilterParams {
+    status: Option<String>,
+}
+
+async fn monitor_deposits_handler(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<MonitorFilterParams>,
+) -> impl IntoResponse {
+    let monitor = state.monitor.read().await;
+    let deposits: Vec<_> = match params.status.as_deref() {
+        Some("pending") => monitor.pending_deposits().into_iter().cloned().collect(),
+        Some("completed") => monitor.completed_deposits().into_iter().cloned().collect(),
+        _ => monitor.all_deposits().into_iter().cloned().collect(),
+    };
+    Json(deposits)
+}
+
+async fn monitor_burns_handler(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<MonitorFilterParams>,
+) -> impl IntoResponse {
+    let monitor = state.monitor.read().await;
+    let burns: Vec<_> = match params.status.as_deref() {
+        Some("pending") => monitor.pending_burns().into_iter().cloned().collect(),
+        Some("completed") => monitor.completed_burns().into_iter().cloned().collect(),
+        _ => monitor.all_burns().into_iter().cloned().collect(),
+    };
+    Json(burns)
 }
 
 // ── Helpers ──
@@ -333,6 +381,8 @@ pub async fn run(
     evm_private_key: &str,
     port: u16,
     cache_sizes: linera_storage::StorageCacheSizes,
+    monitor_scan_interval: u64,
+    monitor_start_block: u64,
 ) -> Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -479,6 +529,8 @@ pub async fn run(
         linera_fungible_address,
         evm_private_key,
         port,
+        monitor_scan_interval,
+        monitor_start_block,
     ))
     .await
 }
@@ -486,7 +538,7 @@ pub async fn run(
 // ── Main event loop ──
 
 #[allow(clippy::too_many_arguments)]
-async fn serve_loop<E: linera_core::environment::Environment>(
+async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     chain_client: ChainClient<E>,
     rpc_url: &str,
     evm_bridge_address: &str,
@@ -494,6 +546,8 @@ async fn serve_loop<E: linera_core::environment::Environment>(
     linera_fungible_address: &str,
     evm_private_key: &str,
     port: u16,
+    monitor_scan_interval: u64,
+    monitor_start_block: u64,
 ) -> Result<()> {
     // ── Set up EVM provider ──
     let bridge_addr: Address = evm_bridge_address
@@ -520,16 +574,45 @@ async fn serve_loop<E: linera_core::environment::Environment>(
     let (listener, _abort_handle, _) = chain_client.listen().await?;
     tokio::spawn(listener);
 
+    // ── Monitor state + scan loops ──
+    let monitor = Arc::new(RwLock::new(MonitorState::new(monitor_start_block)));
+    let scan_interval = Duration::from_secs(monitor_scan_interval);
+
+    {
+        let monitor = Arc::clone(&monitor);
+        let provider = provider.clone();
+        tokio::spawn(monitor::evm_scan_loop(
+            monitor,
+            provider,
+            bridge_addr,
+            scan_interval,
+        ));
+    }
+    {
+        let monitor = Arc::clone(&monitor);
+        let chain_client = chain_client.clone();
+        tokio::spawn(monitor::linera_scan_loop(
+            monitor,
+            chain_client,
+            fungible_app_id,
+            scan_interval,
+        ));
+    }
+
     // ── Start HTTP server ──
     let proof_client = HttpDepositProofClient::new(rpc_url)?;
     let (deposit_tx, mut deposit_rx) = mpsc::channel::<DepositRequest>(16);
     let app_state = Arc::new(AppState {
         proof_client,
         deposit_tx,
+        monitor: Arc::clone(&monitor),
     });
 
     let app = Router::new()
         .route("/deposit", post(deposit_handler))
+        .route("/monitor/status", get(monitor_status_handler))
+        .route("/monitor/deposits", get(monitor_deposits_handler))
+        .route("/monitor/burns", get(monitor_burns_handler))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 

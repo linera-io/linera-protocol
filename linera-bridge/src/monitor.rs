@@ -17,9 +17,10 @@ use alloy::{
 };
 use tokio::sync::RwLock;
 
-use crate::proof::{deposit_event_signature, parse_deposit_event, DepositKey, ReceiptLog};
-use crate::relay::find_address20_credits;
-
+use crate::{
+    proof::{deposit_event_signature, parse_deposit_event, DepositKey, ReceiptLog},
+    relay::find_address20_credits,
+};
 
 /// A tracked EVM→Linera deposit.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -115,6 +116,10 @@ impl MonitorState {
         }
     }
 
+    pub fn all_deposits(&self) -> Vec<&TrackedDeposit> {
+        self.deposits.values().collect()
+    }
+
     pub fn pending_deposits(&self) -> Vec<&TrackedDeposit> {
         self.deposits
             .values()
@@ -129,6 +134,10 @@ impl MonitorState {
             .collect()
     }
 
+    pub fn all_burns(&self) -> Vec<&TrackedBurn> {
+        self.burns.values().collect()
+    }
+
     pub fn pending_burns(&self) -> Vec<&TrackedBurn> {
         self.burns
             .values()
@@ -136,7 +145,7 @@ impl MonitorState {
             .collect()
     }
 
-    pub fn forwarded_burns(&self) -> Vec<&TrackedBurn> {
+    pub fn completed_burns(&self) -> Vec<&TrackedBurn> {
         self.burns.values().filter(|b| b.forwarded_to_evm).collect()
     }
 
@@ -464,12 +473,12 @@ mod tests {
         state.track_linera_to_evm(10, 0, "0xabcd".to_string(), "500".to_string());
 
         assert_eq!(state.pending_burns().len(), 1);
-        assert_eq!(state.forwarded_burns().len(), 0);
+        assert_eq!(state.completed_burns().len(), 0);
 
         state.complete_linera_to_evm(10, 0);
 
         assert_eq!(state.pending_burns().len(), 0);
-        assert_eq!(state.forwarded_burns().len(), 1);
+        assert_eq!(state.completed_burns().len(), 1);
     }
 
     #[test]
