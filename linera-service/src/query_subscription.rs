@@ -4,6 +4,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use futures::StreamExt as _;
@@ -11,8 +12,7 @@ use linera_base::identifiers::{ApplicationId, ChainId};
 use linera_client::chain_listener::ClientContext;
 use linera_core::worker::Reason;
 use linera_execution::{Query, QueryResponse};
-use serde_json::Value;
-use tokio::sync::broadcast;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
@@ -50,6 +50,17 @@ pub fn parse_allowed_subscription(s: &str) -> anyhow::Result<RegisteredQuery> {
     })
 }
 
+/// Parses a `Name=Secs` string into a query name and TTL in seconds.
+pub fn parse_subscription_ttl(s: &str) -> Result<(String, u64), String> {
+    let (name, secs) = s
+        .split_once('=')
+        .ok_or_else(|| format!("expected format Name=Secs, got: {s}"))?;
+    let secs: u64 = secs
+        .parse()
+        .map_err(|e| format!("invalid seconds value '{secs}': {e}"))?;
+    Ok((name.to_string(), secs))
+}
+
 /// Identifies a unique subscription target: a named query for a specific chain and application.
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct SubscriptionKey {
@@ -58,28 +69,33 @@ pub struct SubscriptionKey {
     pub application_id: ApplicationId,
 }
 
-/// State for an active watcher: the broadcast sender and a handle for cleanup detection.
+/// State for an active watcher: the watch sender for the latest query result.
+/// The channel carries pre-serialized JSON strings so that cloning between
+/// subscribers is a single `memcpy` instead of a deep `serde_json::Value` clone.
 struct WatcherState {
-    sender: broadcast::Sender<Value>,
+    sender: watch::Sender<Option<String>>,
 }
 
 /// Manages registered query names and active per-key watchers.
 pub struct QuerySubscriptionManager {
     /// Registered queries by name.
     queries: HashMap<String, String>,
+    /// Per-query minimum TTL for cached results.
+    ttls: HashMap<String, Duration>,
     /// Active watchers keyed by subscription target.
     watchers: Mutex<HashMap<SubscriptionKey, WatcherState>>,
 }
 
 impl QuerySubscriptionManager {
-    /// Creates a new manager from the registered queries.
-    pub fn new(registered: Vec<RegisteredQuery>) -> Self {
+    /// Creates a new manager from the registered queries and optional per-query TTLs.
+    pub fn new(registered: Vec<RegisteredQuery>, ttls: HashMap<String, Duration>) -> Self {
         let queries = registered
             .into_iter()
             .map(|rq| (rq.name, rq.query))
             .collect();
         Self {
             queries,
+            ttls,
             watchers: Mutex::new(HashMap::new()),
         }
     }
@@ -89,13 +105,15 @@ impl QuerySubscriptionManager {
         self.queries.get(name).map(|s| s.as_str())
     }
 
-    /// Returns a broadcast receiver for the given key. Lazily spawns a watcher if needed.
+    /// Returns a watch receiver for the given key. Lazily spawns a watcher if needed.
+    /// The receiver initially holds `None`; the watcher populates it with `Some(value)`
+    /// after the first query. Callers should filter out `None` values from the stream.
     pub fn subscribe<C: ClientContext + 'static>(
         self: &Arc<Self>,
         key: &SubscriptionKey,
         context: Arc<futures::lock::Mutex<C>>,
         token: CancellationToken,
-    ) -> anyhow::Result<broadcast::Receiver<Value>> {
+    ) -> anyhow::Result<watch::Receiver<Option<String>>> {
         let query_string = self
             .get_query(&key.name)
             .ok_or_else(|| {
@@ -110,8 +128,8 @@ impl QuerySubscriptionManager {
             return Ok(state.sender.subscribe());
         }
 
-        // Create a new broadcast channel and spawn a watcher.
-        let (sender, receiver) = broadcast::channel(64);
+        // Create a new watch channel (initial value is None until the first query completes).
+        let (sender, receiver) = watch::channel(None);
         watchers.insert(
             key.clone(),
             WatcherState {
@@ -119,6 +137,7 @@ impl QuerySubscriptionManager {
             },
         );
 
+        let ttl = self.ttls.get(&key.name).copied();
         let manager = Arc::clone(self);
         let key_clone = key.clone();
         tokio::spawn(run_query_subscription_watcher(
@@ -128,6 +147,7 @@ impl QuerySubscriptionManager {
             query_string,
             sender,
             token,
+            ttl,
         ));
 
         Ok(receiver)
@@ -140,13 +160,15 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
     manager: Arc<QuerySubscriptionManager>,
     key: SubscriptionKey,
     query_string: String,
-    sender: broadcast::Sender<Value>,
+    sender: watch::Sender<Option<String>>,
     token: CancellationToken,
+    ttl: Option<Duration>,
 ) {
     debug!(
         name = %key.name,
         chain_id = %key.chain_id,
         application_id = %key.application_id,
+        ?ttl,
         "starting query subscription watcher"
     );
 
@@ -171,30 +193,76 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
 
     let mut notification_stream = Box::pin(notification_stream);
 
-    // Cache the last result to deduplicate.
-    let mut last_result: Option<Vec<u8>> = None;
+    // Cache the last result as a string to deduplicate.
+    let mut last_result: Option<String> = None;
 
     // Execute the query once immediately so the first subscriber gets a value.
-    execute_and_maybe_broadcast(&context, &key, &query_string, &sender, &mut last_result).await;
+    execute_and_maybe_send(&context, &key, &query_string, &sender, &mut last_result).await;
+
+    // Track when the last execution happened, for TTL-based deferral.
+    let mut last_execution = tokio::time::Instant::now();
+    // Whether a deferred re-execution is pending (a NewBlock arrived during the TTL window).
+    let mut pending_invalidation = false;
 
     loop {
+        // If there's a pending invalidation, compute the remaining TTL sleep.
+        let ttl_sleep = if pending_invalidation {
+            if let Some(ttl) = ttl {
+                let elapsed = last_execution.elapsed();
+                if elapsed < ttl {
+                    tokio::time::sleep(ttl - elapsed)
+                } else {
+                    tokio::time::sleep(Duration::ZERO)
+                }
+            } else {
+                // No TTL configured; should not happen since pending_invalidation
+                // is only set when ttl is Some, but handle gracefully.
+                tokio::time::sleep(Duration::ZERO)
+            }
+        } else {
+            // No pending invalidation: sleep forever (effectively disabled).
+            tokio::time::sleep(Duration::MAX)
+        };
+        tokio::pin!(ttl_sleep);
+
         tokio::select! {
             _ = token.cancelled() => {
                 debug!(name = %key.name, "watcher cancelled");
                 break;
             }
+            () = &mut ttl_sleep, if pending_invalidation => {
+                pending_invalidation = false;
+                execute_and_maybe_send(
+                    &context,
+                    &key,
+                    &query_string,
+                    &sender,
+                    &mut last_result,
+                )
+                .await;
+                last_execution = tokio::time::Instant::now();
+            }
             notification = notification_stream.next() => {
                 match notification {
                     Some(n) => {
                         if matches!(n.reason, Reason::NewBlock { .. }) {
-                            execute_and_maybe_broadcast(
-                                &context,
-                                &key,
-                                &query_string,
-                                &sender,
-                                &mut last_result,
-                            )
-                            .await;
+                            if ttl.is_some() {
+                                // Defer re-execution until the TTL expires.
+                                if !pending_invalidation {
+                                    debug!(name = %key.name, "deferring invalidation until TTL expires");
+                                }
+                                pending_invalidation = true;
+                            } else {
+                                execute_and_maybe_send(
+                                    &context,
+                                    &key,
+                                    &query_string,
+                                    &sender,
+                                    &mut last_result,
+                                )
+                                .await;
+                                last_execution = tokio::time::Instant::now();
+                            }
                         }
                     }
                     None => {
@@ -204,7 +272,7 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
                 }
 
                 // If no receivers remain, stop the watcher.
-                if sender.receiver_count() == 0 {
+                if sender.is_closed() {
                     debug!(name = %key.name, "no more subscribers, stopping watcher");
                     break;
                 }
@@ -215,13 +283,13 @@ async fn run_query_subscription_watcher<C: ClientContext + 'static>(
     cleanup_watcher(&manager, &key);
 }
 
-/// Executes the query against the application and broadcasts if the result changed.
-async fn execute_and_maybe_broadcast<C: ClientContext + 'static>(
+/// Executes the query against the application and updates the watch channel if the result changed.
+async fn execute_and_maybe_send<C: ClientContext + 'static>(
     context: &Arc<futures::lock::Mutex<C>>,
     key: &SubscriptionKey,
     query_string: &str,
-    sender: &broadcast::Sender<Value>,
-    last_result: &mut Option<Vec<u8>>,
+    sender: &watch::Sender<Option<String>>,
+    last_result: &mut Option<String>,
 ) {
     // The application service expects a JSON-encoded GraphQL request.
     let json_request = serde_json::json!({ "query": query_string });
@@ -252,25 +320,25 @@ async fn execute_and_maybe_broadcast<C: ClientContext + 'static>(
                 }
             };
 
-            // Deduplicate: only broadcast if the result changed.
-            if last_result.as_ref() == Some(&response_bytes) {
+            // Convert to string. The bytes are already valid UTF-8 JSON
+            // from the application service.
+            let json_string = match String::from_utf8(response_bytes) {
+                Ok(s) => s,
+                Err(error) => {
+                    warn!(%error, name = %key.name, "response bytes are not valid UTF-8");
+                    return;
+                }
+            };
+
+            // Deduplicate: only send if the result changed.
+            if last_result.as_ref() == Some(&json_string) {
                 return;
             }
 
-            *last_result = Some(response_bytes.clone());
-
-            // Parse the response as JSON and broadcast.
-            match serde_json::from_slice::<Value>(&response_bytes) {
-                Ok(value) => {
-                    // Ignore send errors (no receivers).
-                    if let Err(e) = sender.send(value) {
-                        debug!(name = %key.name, "Failed to send graphql response: {e}");
-                    }
-                }
-                Err(e) => {
-                    warn!(name = %key.name, "failed to parse query response as JSON: {e}");
-                }
+            if let Err(e) = sender.send(Some(json_string.clone())) {
+                debug!(name = %key.name, "Failed to send graphql response: {e}");
             }
+            *last_result = Some(json_string);
         }
         Err(e) => {
             warn!(name = %key.name, "query execution failed: {e}");
