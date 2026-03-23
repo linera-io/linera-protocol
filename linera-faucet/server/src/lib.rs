@@ -19,7 +19,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     bcs,
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, ApplicationPermissions, ChainDescription, TimeDelta, Timestamp},
+    data_types::{Amount, ApplicationPermissions, ChainDescription, Epoch, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
 };
@@ -319,6 +319,12 @@ where
         Ok(self.client.local_committee().await?)
     }
 
+    /// Returns the current epoch of the faucet's chain.
+    async fn current_epoch(&self) -> Result<Epoch, Error> {
+        let info = self.client.chain_info().await?;
+        Ok(info.epoch)
+    }
+
     /// Find the existing chain with the given authentication key, if any.
     async fn chain_id(&self, owner: AccountOwner) -> Result<ChainId, Error> {
         // Check if this owner already has a chain.
@@ -329,7 +335,7 @@ where
 
         let chain_id = self.faucet_storage.get_chain_id(&owner).await?;
 
-        chain_id.ok_or(Error::new("This user has no chain yet"))
+        chain_id.ok_or_else(|| Error::new("This user has no chain yet"))
     }
 
     /// Returns the initial claim for the given owner, if any.

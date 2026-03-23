@@ -1,0 +1,43 @@
+[package]
+name = "linera-bridge-e2e"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+
+# Separate workspace — avoids bollard version conflicts between
+# testcontainers (>=0.19) and dockertest (0.17) in the main workspace.
+
+[workspace]
+
+[dependencies]
+alloy = { version = "=1.0.42", default-features = false, features = [
+    "rpc-types-eth",
+    "json-rpc",
+    "contract",
+    "reqwest",
+    "signer-local",
+] }
+anyhow = "1"
+bcs = "0.1.6"
+futures = "0.3"
+linera-base = { path = "../../../linera-base" }
+linera-bridge = { path = "../../../linera-bridge" }
+linera-client = { path = "../../../linera-client", default-features = false, features = [
+    "wasmer",
+] }
+linera-core = { path = "../../../linera-core", default-features = false, features = [
+    "wasmer",
+] }
+linera-execution = { path = "../../../linera-execution" }
+linera-faucet-client = { path = "../../../linera-faucet/client" }
+linera-storage = { path = "../../../linera-storage", features = ["wasmer"] }
+linera-views = { path = "../../../linera-views" }
+rand = { version = "0.8", default-features = false, features = ["std_rng"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+testcontainers = { version = "0.27", features = ["docker-compose"] }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+wrapped-fungible = { path = "../../../examples/wrapped-fungible" }

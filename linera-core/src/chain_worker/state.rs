@@ -27,7 +27,10 @@ use linera_chain::{
         OriginalProposal, ProposalContent, ProposedBlock,
     },
     manager,
-    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{
+        Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
+        ValidatedBlockCertificate,
+    },
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
@@ -759,7 +762,7 @@ where
                     chain_id,
                     reason: Reason::NewEvents {
                         height,
-                        hash: certificate.hash(),
+                        block_hash,
                         event_streams: updated_event_streams,
                     },
                 });
@@ -810,58 +813,58 @@ where
                 block.body.incoming_bundles(),
             )
             .await?;
-        let oracle_responses = Some(block.body.oracle_responses.clone());
-        let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome =
-            if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
-                chain.execution_state = execution_state
-                    .with_context(|ctx| {
-                        chain
-                            .execution_state
-                            .context()
-                            .clone_with_base_key(ctx.base_key().bytes.clone())
-                    })
-                    .await;
-                outcome.clone()
-            } else {
-                let (_, verified, _resource_tracker) = chain
-                    .execute_block(
-                        proposed_block,
-                        local_time,
-                        None,
-                        &published_blobs,
-                        oracle_responses,
-                        BundleExecutionPolicy::Abort,
-                    )
-                    .await?;
-                verified
-            };
-        // We should always agree on the messages and state hash.
-        ensure!(
-            outcome == verified_outcome,
-            WorkerError::IncorrectOutcome {
-                submitted: Box::new(outcome),
-                computed: Box::new(verified_outcome),
-            }
-        );
+        let confirmed_block = if let Some(mut execution_state) =
+            self.execution_state_cache.remove(&block_hash)
+        {
+            chain.execution_state = execution_state
+                .with_context(|ctx| {
+                    chain
+                        .execution_state
+                        .context()
+                        .clone_with_base_key(ctx.base_key().bytes.clone())
+                })
+                .await;
+            certificate.into_value()
+        } else {
+            let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
+            let oracle_responses = Some(outcome.oracle_responses.clone());
+            let (proposed_block, verified, _resource_tracker) = chain
+                .execute_block(
+                    proposed_block,
+                    local_time,
+                    None,
+                    &published_blobs,
+                    oracle_responses,
+                    BundleExecutionPolicy::Abort,
+                )
+                .await?;
+            // We should always agree on the messages and state hash.
+            ensure!(
+                outcome == verified,
+                WorkerError::IncorrectOutcome {
+                    submitted: Box::new(outcome),
+                    computed: Box::new(verified),
+                }
+            );
+            ConfirmedBlock::new(Block::new(proposed_block, verified))
+        };
 
         // Update the rest of the chain state.
         let updated_streams = chain
-            .apply_confirmed_block(certificate.value(), local_time)
+            .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
-        let hash = certificate.hash();
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock { height, hash },
+            reason: Reason::NewBlock { height, block_hash },
         });
         if !updated_streams.is_empty() {
             actions.notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewEvents {
                     height,
-                    hash,
+                    block_hash,
                     event_streams: updated_streams,
                 },
             });
@@ -870,7 +873,7 @@ where
         self.save().await?;
 
         self.block_values
-            .insert(Cow::Owned(certificate.into_inner().into_inner()));
+            .insert(Cow::Owned(confirmed_block.into_inner()));
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
@@ -912,8 +915,12 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
-        let (next_height_to_receive, last_anticipated_block_height) =
-            self.chain.inbox_cursors(&origin).await?;
+        let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+        let next_height_to_receive = inbox.next_block_height_to_receive()?;
+        let last_anticipated_block_height = match inbox.removed_bundles.back().await? {
+            Some(bundle) => Some(bundle.height),
+            None => None,
+        };
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(
@@ -934,9 +941,16 @@ where
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
             self.chain
-                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
+                .receive_message_bundle_with_inbox(
+                    &mut inbox,
+                    &origin,
+                    bundle,
+                    local_time,
+                    add_to_received_log,
+                )
                 .await?;
         }
+        drop(inbox);
         if !self.config.allow_inactive_chains && !self.chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
