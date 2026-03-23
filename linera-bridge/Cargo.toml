@@ -37,7 +37,6 @@ cli = [
     "dep:clap",
     "dep:reqwest",
     "dep:serde_json",
-    "dep:serde",
     "dep:fs-err",
 ]
 relay = [
@@ -71,6 +70,7 @@ alloy-primitives.workspace = true
 alloy-rlp.workspace = true
 alloy-trie.workspace = true
 anyhow.workspace = true
+serde.workspace = true
 thiserror = { workspace = true, optional = true }
 
 async-trait = { workspace = true, optional = true }
@@ -95,7 +95,6 @@ url = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 fs-err = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
-serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
 # relay feature deps
