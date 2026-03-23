@@ -96,11 +96,11 @@ jobs:
         echo "=== zombie linera processes ==="
         ps -eo pid,stat,comm | grep -E 'Z.*linera' || echo "No zombie linera processes"
         echo ""
-        echo "=== full linera-net-up log (errors/warnings/panics) ==="
-        grep -i -E 'error|panic|abort|signal|segfault|fatal|thread.*crash' /tmp/linera-net-up.log 2>/dev/null | tail -100 || echo "No matches"
+        echo "=== full linera-net-up log (errors/warnings/panics, excluding 'tcp connect error') ==="
+        grep -i -E 'error|panic|abort|signal|segfault|fatal|thread.*crash' /tmp/linera-net-up.log 2>/dev/null | grep -v 'tcp connect error' | tail -100 || echo "No matches"
         echo ""
-        echo "=== linera-net-up log (last 200 lines) ==="
-        tail -200 /tmp/linera-net-up.log 2>/dev/null || true
+        echo "=== linera-net-up log (last 500 lines, excluding tcp connect noise) ==="
+        grep -v 'tcp connect error' /tmp/linera-net-up.log 2>/dev/null | tail -500 || true
         echo ""
         echo "=== core dumps ==="
         coredumpctl list 2>/dev/null | tail -10 || echo "coredumpctl not available"

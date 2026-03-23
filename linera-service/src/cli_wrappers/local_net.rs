@@ -291,11 +291,44 @@ impl Validator {
     }
 
     fn add_proxy(&mut self, proxy: Child) {
+        Self::monitor_child(&proxy, "linera-proxy");
         self.proxies.push(proxy)
     }
 
     fn add_server(&mut self, server: Child) {
+        Self::monitor_child(&server, "linera-server");
         self.servers.push(server)
+    }
+
+    /// Spawns a background task that monitors a child process via `/proc/<pid>/status`
+    /// and logs an error if the process exits unexpectedly.
+    fn monitor_child(child: &Child, name: &str) {
+        let Some(pid) = child.id() else { return };
+        let name = name.to_owned();
+        tokio::spawn(async move {
+            let proc_path = format!("/proc/{pid}/status");
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                match tokio::fs::read_to_string(&proc_path).await {
+                    Ok(status) => {
+                        // Check if the process became a zombie
+                        if status.contains("State:\tZ") {
+                            tracing::error!(
+                                pid,
+                                name,
+                                "Child process became a zombie!\n{status}"
+                            );
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        // /proc/<pid>/status gone — process fully exited
+                        tracing::error!(pid, name, "Child process disappeared from /proc");
+                        break;
+                    }
+                }
+            }
+        });
     }
 
     #[cfg(with_testing)]
