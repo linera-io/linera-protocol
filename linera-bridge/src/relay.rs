@@ -569,13 +569,13 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     // ── Start notification listener ──
     let mut notifications = chain_client.subscribe()?;
     let (listener, _abort_handle, _) = chain_client.listen().await?;
-    tokio::spawn(listener);
+    let chain_listener_handle = tokio::spawn(listener);
 
     // ── Monitor state + scan loops ──
     let monitor = Arc::new(RwLock::new(MonitorState::new(monitor_start_block)));
     let scan_interval = Duration::from_secs(monitor_scan_interval);
 
-    {
+    let evm_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let provider = provider.clone();
         tokio::spawn(monitor::evm_scan_loop(
@@ -583,9 +583,9 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             provider,
             bridge_addr,
             scan_interval,
-        ));
-    }
-    {
+        ))
+    };
+    let linera_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let chain_client = chain_client.clone();
         tokio::spawn(monitor::linera_scan_loop(
@@ -593,8 +593,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             chain_client,
             fungible_app_id,
             scan_interval,
-        ));
-    }
+        ))
+    };
 
     // ── Start HTTP server ──
     let proof_client = HttpDepositProofClient::new(rpc_url)?;
@@ -616,11 +616,11 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let bind_addr = format!("0.0.0.0:{port}");
     tracing::info!("HTTP server listening on {bind_addr}");
 
-    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    tokio::spawn(async move {
-        if let Err(e) = axum::serve(listener, app).await {
-            tracing::error!("HTTP server error: {e}");
-        }
+    let tcp_listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+    let http_server_handle = tokio::spawn(async move {
+        axum::serve(tcp_listener, app)
+            .await
+            .context("HTTP server error")
     });
 
     tracing::info!(
@@ -632,8 +632,24 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
 
     // ── Main loop: process notifications + deposit requests ──
     tracing::info!("Listening for notifications and deposit requests...");
+    let mut chain_listener_handle = chain_listener_handle;
+    let mut evm_scan_handle = evm_scan_handle;
+    let mut linera_scan_handle = linera_scan_handle;
+    let mut http_server_handle = http_server_handle;
     loop {
         tokio::select! {
+            result = &mut chain_listener_handle => {
+                anyhow::bail!("Chain listener exited unexpectedly: {result:?}");
+            }
+            result = &mut evm_scan_handle => {
+                anyhow::bail!("EVM scan loop exited unexpectedly: {result:?}");
+            }
+            result = &mut linera_scan_handle => {
+                anyhow::bail!("Linera scan loop exited unexpectedly: {result:?}");
+            }
+            result = &mut http_server_handle => {
+                anyhow::bail!("HTTP server exited unexpectedly: {result:?}");
+            }
             notification = notifications.next() => {
                 let notification = match notification {
                     Some(n) => n,
