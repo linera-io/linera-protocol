@@ -2430,22 +2430,24 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         .await?;
     let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
 
-    let mut notifications = node_service2.notifications(chain2).await?;
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     let app1 = node_service1.make_application(&chain1, &application_id)?;
     app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
         .await?;
 
     let query = "receivedPosts { keys { author, index } }";
-    let expected_response = json!({
+    let expected_response1 = json!({
         "receivedPosts": {
             "keys": [
                 { "author": chain1, "index": 0 }
             ]
         }
     });
-    notifications.wait_for_block(height2.try_add_one()?).await?;
-    assert_eq!(app2.query(query).await?, expected_response);
+    notifications2
+        .wait_for_block(height2.try_add_one()?)
+        .await?;
+    assert_eq!(app2.query(query).await?, expected_response1);
 
     let tip_after_first_post = node_service2.chain_tip(chain1).await?;
 
@@ -2464,7 +2466,7 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     app1.mutate("post(text: \"Second post!\")").await?;
 
     let query = "receivedPosts { keys { author, index } }";
-    let expected_response = json!({
+    let expected_response2 = json!({
         "receivedPosts": {
             "keys": [
                 { "author": chain1, "index": 1 },
@@ -2472,9 +2474,22 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
-    let latest_height = height2.try_add_one()?;
-    notifications.wait_for_block(latest_height).await?;
-    assert_eq!(app2.query(query).await?, expected_response);
+    // The transfer on chain1 may cause an intermediate block on chain2 via
+    // automatic inbox processing of the event stream subscription, so the
+    // next block may not yet contain the second post.
+    let mut latest_height = height2;
+    loop {
+        latest_height = latest_height.try_add_one()?;
+        notifications2.wait_for_block(latest_height).await?;
+        let response = app2.query(query).await?;
+        if response == expected_response2 {
+            break;
+        }
+        assert_eq!(
+            response, expected_response1,
+            "unexpected intermediate state: expected either both posts or only the first post"
+        );
+    }
 
     let tip_after_second_post = node_service2.chain_tip(chain1).await?;
     // The second post should not have moved the tip hash - client 2 should have only preprocessed
