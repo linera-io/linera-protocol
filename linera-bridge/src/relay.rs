@@ -684,9 +684,6 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                 }
 
                 tracing::info!(count = certs.len(), "Processed inbox certificates");
-                for cert in &certs {
-                    forward_cert_to_evm(cert, bridge_addr, &provider).await;
-                }
 
                 // Scan inbox certs for Credit messages to Address20 and submit Burns.
                 let mut burn_ops = vec![];
@@ -711,7 +708,9 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                                 height = %cert.block().header.height,
                                 "Burn operations committed"
                             );
-                            forward_cert_to_evm(&cert, bridge_addr, &provider).await;
+                            if let Err(e) = forward_cert_to_evm(&cert, bridge_addr, &provider).await {
+                                tracing::error!("Failed to forward burn cert to EVM: {e:#}");
+                            }
                         }
                         Ok(other) => tracing::error!("Burn not committed: {other:?}"),
                         Err(e) => tracing::error!("Burn submission failed: {e}"),
@@ -750,20 +749,17 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                     let outcome = chain_client
                         .execute_operations(operations, vec![])
                         .await?;
-                    let cert = match outcome {
+                    match outcome {
                         linera_core::data_types::ClientOutcome::Committed(cert) => {
                             tracing::info!(
                                 height = %cert.block().header.height,
                                 "ProcessDeposit committed"
                             );
-                            cert
                         }
                         other => {
                             anyhow::bail!("ProcessDeposit not committed: {other:?}");
                         }
                     };
-
-                    forward_cert_to_evm(&cert, bridge_addr, &provider).await;
 
                     Ok::<(), anyhow::Error>(())
                 }.await;
