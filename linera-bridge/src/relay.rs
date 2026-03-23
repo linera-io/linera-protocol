@@ -301,14 +301,8 @@ async fn forward_cert_to_evm(
     cert: &impl serde::Serialize,
     bridge_addr: Address,
     provider: &impl alloy::providers::Provider,
-) {
-    let cert_bytes = match bcs::to_bytes(cert) {
-        Ok(b) => b,
-        Err(e) => {
-            tracing::error!("Failed to BCS-serialize certificate: {e}");
-            return;
-        }
-    };
+) -> Result<()> {
+    let cert_bytes = bcs::to_bytes(cert).context("failed to BCS-serialize certificate")?;
 
     tracing::info!(
         size = cert_bytes.len(),
@@ -316,18 +310,21 @@ async fn forward_cert_to_evm(
     );
 
     let bridge_contract = IFungibleBridge::new(bridge_addr, provider);
-    match bridge_contract.addBlock(cert_bytes.into()).send().await {
-        Ok(pending_tx) => match pending_tx.get_receipt().await {
-            Ok(receipt) => {
-                tracing::info!(
-                    tx = ?receipt.transaction_hash,
-                    "addBlock transaction confirmed"
-                );
-            }
-            Err(e) => tracing::error!("addBlock receipt failed: {e}"),
-        },
-        Err(e) => tracing::error!("addBlock send failed: {e}"),
-    }
+    let pending_tx = bridge_contract
+        .addBlock(cert_bytes.into())
+        .send()
+        .await
+        .context("addBlock send failed")?;
+    let receipt = pending_tx
+        .get_receipt()
+        .await
+        .context("addBlock receipt failed")?;
+
+    tracing::info!(
+        tx = ?receipt.transaction_hash,
+        "addBlock transaction confirmed"
+    );
+    Ok(())
 }
 
 // ── RocksDB storage helper ──
