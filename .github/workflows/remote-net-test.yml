@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   remote-net-test:
-    if: ${{ github.event_name == 'merge_group' }}
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'pull_request' }}
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
@@ -66,6 +66,29 @@ jobs:
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- storage initialize --genesis /tmp/local-linera-net/genesis.json
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 1000
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
+    - name: Start memory and process monitor
+      run: |
+        (while true; do
+          echo "=== $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
+          free -m
+          echo "--- linera processes ---"
+          ps -eo pid,rss,vsz,stat,comm | grep -E 'linera|PID' || true
+          echo "--- dmesg OOM ---"
+          dmesg -T 2>/dev/null | grep -i -E 'oom|killed process|out of memory' | tail -5 || true
+          sleep 10
+        done) > /tmp/memory-monitor.log 2>&1 &
+        echo $! > /tmp/memory-monitor.pid
     - name: Run the remote-net tests
       run: |
         cargo test -p linera-service remote_net_grpc --features remote-net
+    - name: Show memory monitor log
+      if: always()
+      run: cat /tmp/memory-monitor.log || true
+    - name: Check for OOM kills
+      if: always()
+      run: |
+        echo "=== dmesg OOM entries ==="
+        dmesg -T 2>/dev/null | grep -i -E 'oom|killed process|out of memory' || echo "No OOM entries found"
+        echo ""
+        echo "=== linera-net-up log (last 50 lines) ==="
+        tail -50 /tmp/linera-net-up.log 2>/dev/null || true
