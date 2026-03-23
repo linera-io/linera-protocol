@@ -208,16 +208,40 @@ where
     ) -> Result<(Vec<Vec<u8>>, bool), Self::Error> {
         let big_interval = Self::get_big_key_interval(&key_interval);
         let mut keys = Vec::new();
-        let (big_keys, is_big_finished) = self.store.find_keys_in_interval(big_interval).await?;
-        for big_key in big_keys {
-            let len = big_key.len();
-            if Self::read_index_from_key(&big_key)? == 0 {
-                let key = big_key[0..len - 4].to_vec();
-                keys.push(key);
+        let mut next_start = big_interval.start;
+        loop {
+            let remaining_limit = key_interval.limit.map(|limit| limit - keys.len());
+            if remaining_limit == Some(0) {
+                return Ok((keys, false));
             }
+            let (big_keys, is_big_finished) = self
+                .store
+                .find_keys_in_interval(KeyInterval {
+                    start: next_start.clone(),
+                    end: big_interval.end.clone(),
+                    limit: remaining_limit,
+                })
+                .await?;
+            let mut last_big_key = None;
+            for big_key in big_keys {
+                let len = big_key.len();
+                last_big_key = Some(big_key.clone());
+                if Self::read_index_from_key(&big_key)? == 0 {
+                    let key = big_key[0..len - 4].to_vec();
+                    keys.push(key);
+                    if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
+                        return Ok((keys, false));
+                    }
+                }
+            }
+            if is_big_finished {
+                return Ok((keys, true));
+            }
+            let Some(last_big_key) = last_big_key else {
+                return Ok((keys, false));
+            };
+            next_start = KeyIntervalStart::Excluded(last_big_key);
         }
-        let is_finished = is_big_finished;
-        Ok((keys, is_finished))
     }
 
     async fn find_key_values_in_interval(
@@ -260,7 +284,10 @@ where
                 break;
             }
         }
-        let is_finished = is_big_finished;
+        let is_finished = match key_interval.limit {
+            Some(limit) => key_values.len() < limit,
+            None => is_big_finished,
+        };
         Ok((key_values, is_finished))
     }
 }

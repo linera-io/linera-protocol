@@ -227,25 +227,77 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
             .unwrap();
         assert_eq!(exclusive, (middle.to_vec(), true));
 
-        let limited = store
-            .find_keys_in_interval(
+        let unbounded_inclusive = store
+            .find_keys_in_interval(KeyInterval::new(
+                KeyIntervalStart::Included(start.clone()),
+                std::ops::Bound::Unbounded,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(
+            unbounded_inclusive,
+            (
+                sorted_key_values
+                    .iter()
+                    .map(|(key, _)| key.clone())
+                    .collect::<Vec<_>>(),
+                true,
+            )
+        );
+
+        let unbounded_exclusive = store
+            .find_key_values_in_interval(KeyInterval::new(
+                KeyIntervalStart::Excluded(start.clone()),
+                std::ops::Bound::Unbounded,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(
+            unbounded_exclusive,
+            (middle.iter().chain([last]).cloned().collect(), true)
+        );
+
+        let expected_keys = sorted_key_values
+            .iter()
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        let mut paged_keys = Vec::new();
+        let mut next_start = KeyIntervalStart::Included(start.clone());
+        loop {
+            let (page, is_finished) = store
+                .find_keys_in_interval(
+                    KeyInterval::new(next_start, std::ops::Bound::Included(end.clone()))
+                        .with_limit(2),
+                )
+                .await
+                .unwrap();
+            if page.is_empty() {
+                assert!(is_finished);
+                break;
+            }
+            assert!(page.len() <= 2);
+            paged_keys.extend(page.clone());
+            if is_finished {
+                break;
+            }
+            next_start = KeyIntervalStart::Excluded(page.last().unwrap().clone());
+        }
+        assert_eq!(paged_keys, expected_keys);
+
+        let (limited_key_values, _) = store
+            .find_key_values_in_interval(
                 KeyInterval::new(
                     KeyIntervalStart::Included(start),
-                    std::ops::Bound::Included(end),
+                    std::ops::Bound::Included(end.clone()),
                 )
                 .with_limit(2),
             )
             .await
             .unwrap();
+        assert!(limited_key_values.len() <= 2);
         assert_eq!(
-            limited,
-            (
-                sorted_key_values[0..2]
-                    .iter()
-                    .map(|(key, _)| key.clone())
-                    .collect::<Vec<_>>(),
-                false,
-            )
+            limited_key_values,
+            sorted_key_values[0..limited_key_values.len()].to_vec()
         );
     }
 
