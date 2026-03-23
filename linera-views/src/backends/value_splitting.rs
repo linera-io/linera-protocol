@@ -9,8 +9,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        KeyInterval, KeyIntervalStart, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
 };
 #[cfg(with_testing)]
@@ -202,23 +202,31 @@ where
         Ok(big_values)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+    async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), Self::Error> {
+        let big_interval = Self::get_big_key_interval(&key_interval);
         let mut keys = Vec::new();
-        for big_key in self.store.find_keys_by_prefix(key_prefix).await? {
+        let (big_keys, is_big_finished) = self.store.find_keys_in_interval(big_interval).await?;
+        for big_key in big_keys {
             let len = big_key.len();
             if Self::read_index_from_key(&big_key)? == 0 {
                 let key = big_key[0..len - 4].to_vec();
                 keys.push(key);
             }
         }
-        Ok(keys)
+        let is_finished = is_big_finished;
+        Ok((keys, is_finished))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-        let small_key_values = self.store.find_key_values_by_prefix(key_prefix).await?;
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Self::Error> {
+        let big_interval = Self::get_big_key_interval(&key_interval);
+        let (small_key_values, is_big_finished) =
+            self.store.find_key_values_in_interval(big_interval).await?;
         let mut small_kv_iterator = small_key_values.into_iter();
         let mut key_values = Vec::new();
         while let Some((mut big_key, value)) = small_kv_iterator.next() {
@@ -230,9 +238,12 @@ where
             let count = Self::read_count_from_value(&value)?;
             let mut big_value = value[4..].to_vec();
             for idx in 1..count {
-                let (big_key, value) = small_kv_iterator
-                    .next()
-                    .ok_or(ValueSplittingError::MissingSegment)?;
+                let Some((big_key, value)) = small_kv_iterator.next() else {
+                    if is_big_finished {
+                        return Err(ValueSplittingError::MissingSegment);
+                    }
+                    return Ok((key_values, false));
+                };
                 ensure!(
                     Self::read_index_from_key(&big_key)? == idx
                         && big_key.starts_with(&key)
@@ -242,8 +253,15 @@ where
                 big_value.extend(value);
             }
             key_values.push((key, big_value));
+            if key_interval
+                .limit
+                .is_some_and(|limit| key_values.len() >= limit)
+            {
+                break;
+            }
         }
-        Ok(key_values)
+        let is_finished = is_big_finished;
+        Ok((key_values, is_finished))
     }
 }
 
@@ -289,6 +307,36 @@ where
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
         Ok(self.store.clear_journal().await?)
+    }
+}
+
+impl<S> ValueSplittingStore<S>
+where
+    S: ReadableKeyValueStore,
+{
+    fn get_big_key_interval(key_interval: &KeyInterval) -> KeyInterval {
+        let start = match &key_interval.start {
+            KeyIntervalStart::Included(key) => {
+                KeyIntervalStart::Included([key.as_slice(), &[0, 0, 0, 0]].concat())
+            }
+            KeyIntervalStart::Excluded(key) => {
+                KeyIntervalStart::Excluded([key.as_slice(), &[0, 0, 0, 0]].concat())
+            }
+        };
+        let end = match &key_interval.end {
+            std::ops::Bound::Included(key) => {
+                std::ops::Bound::Included([key.as_slice(), &[u8::MAX; 4]].concat())
+            }
+            std::ops::Bound::Excluded(key) => {
+                std::ops::Bound::Excluded([key.as_slice(), &[0, 0, 0, 0]].concat())
+            }
+            std::ops::Bound::Unbounded => std::ops::Bound::Unbounded,
+        };
+        KeyInterval {
+            start,
+            end,
+            limit: key_interval.limit,
+        }
     }
 }
 
@@ -455,18 +503,18 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         self.inner.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
-        self.inner.find_keys_by_prefix(key_prefix).await
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), MemoryStoreError> {
+        self.inner.find_keys_in_interval(key_interval).await
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
-        self.inner.find_key_values_by_prefix(key_prefix).await
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), MemoryStoreError> {
+        self.inner.find_key_values_in_interval(key_interval).await
     }
 }
 

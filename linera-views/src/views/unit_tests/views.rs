@@ -50,7 +50,7 @@ async fn test_queue_operations_with_dynamo_db_context() -> Result<(), anyhow::Er
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_queue_operations_with_scylla_db_context() -> Result<(), anyhow::Error> {
-    run_test_queue_operations_test_cases(ScyllaDbContextFactory).await
+    Box::pin(run_test_queue_operations_test_cases(ScyllaDbContextFactory)).await
 }
 
 #[derive(Clone, Copy, Debug)]

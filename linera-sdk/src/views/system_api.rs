@@ -9,7 +9,9 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    store::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyInterval, KeyIntervalStart, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 use thiserror::Error;
 
@@ -22,6 +24,9 @@ use crate::{
     },
     service::wit::base_runtime_api as service_wit,
 };
+
+type IntervalKeys = (Vec<Vec<u8>>, bool);
+type IntervalKeyValues = (Vec<(Vec<u8>, Vec<u8>)>, bool);
 
 /// We need to have a maximum key size that handles all possible underlying
 /// sizes. The constraint so far is DynamoDB which has a key length of 1024.
@@ -157,28 +162,38 @@ impl ReadableKeyValueStore for KeyValueStore {
         Ok(self.wit_api.read_value_bytes_wait(promise))
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, KeyValueStoreError> {
-        ensure!(
-            key_prefix.len() <= Self::MAX_KEY_SIZE,
-            KeyValueStoreError::KeyTooLong
-        );
-        let promise = self.wit_api.find_keys_new(key_prefix);
-        Ok(self.wit_api.find_keys_wait(promise))
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), KeyValueStoreError> {
+        for key in [key_interval.start_bound(), key_interval.end_bound()] {
+            match key {
+                std::ops::Bound::Included(key) | std::ops::Bound::Excluded(key) => ensure!(
+                    key.len() <= Self::MAX_KEY_SIZE,
+                    KeyValueStoreError::KeyTooLong
+                ),
+                std::ops::Bound::Unbounded => {}
+            }
+        }
+        let promise = self.wit_api.find_keys_in_interval_new(&key_interval);
+        Ok(self.wit_api.find_keys_in_interval_wait(promise))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, KeyValueStoreError> {
-        ensure!(
-            key_prefix.len() <= Self::MAX_KEY_SIZE,
-            KeyValueStoreError::KeyTooLong
-        );
-        let promise = self.wit_api.find_key_values_new(key_prefix);
-        Ok(self.wit_api.find_key_values_wait(promise))
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), KeyValueStoreError> {
+        for key in [key_interval.start_bound(), key_interval.end_bound()] {
+            match key {
+                std::ops::Bound::Included(key) | std::ops::Bound::Excluded(key) => ensure!(
+                    key.len() <= Self::MAX_KEY_SIZE,
+                    KeyValueStoreError::KeyTooLong
+                ),
+                std::ops::Bound::Unbounded => {}
+            }
+        }
+        let promise = self.wit_api.find_key_values_in_interval_new(&key_interval);
+        Ok(self.wit_api.find_key_values_in_interval_wait(promise))
     }
 }
 
@@ -212,6 +227,44 @@ enum WitInterface {
 }
 
 impl WitInterface {
+    fn contract_key_interval_query(key_interval: &KeyInterval) -> contract_wit::KeyIntervalQuery {
+        contract_wit::KeyIntervalQuery {
+            start: match &key_interval.start {
+                KeyIntervalStart::Included(key) | KeyIntervalStart::Excluded(key) => key.clone(),
+            },
+            start_inclusive: matches!(&key_interval.start, KeyIntervalStart::Included(_)),
+            end: match &key_interval.end {
+                std::ops::Bound::Included(key) | std::ops::Bound::Excluded(key) => {
+                    Some(key.clone())
+                }
+                std::ops::Bound::Unbounded => None,
+            },
+            end_inclusive: matches!(&key_interval.end, std::ops::Bound::Included(_)),
+            limit: key_interval
+                .limit
+                .and_then(|limit| u32::try_from(limit).ok()),
+        }
+    }
+
+    fn service_key_interval_query(key_interval: &KeyInterval) -> service_wit::KeyIntervalQuery {
+        service_wit::KeyIntervalQuery {
+            start: match &key_interval.start {
+                KeyIntervalStart::Included(key) | KeyIntervalStart::Excluded(key) => key.clone(),
+            },
+            start_inclusive: matches!(&key_interval.start, KeyIntervalStart::Included(_)),
+            end: match &key_interval.end {
+                std::ops::Bound::Included(key) | std::ops::Bound::Excluded(key) => {
+                    Some(key.clone())
+                }
+                std::ops::Bound::Unbounded => None,
+            },
+            end_inclusive: matches!(&key_interval.end, std::ops::Bound::Included(_)),
+            limit: key_interval
+                .limit
+                .and_then(|limit| u32::try_from(limit).ok()),
+        }
+    }
+
     /// Creates a promise for testing if a key exist in the key-value store
     fn contains_key_new(&self, key: &[u8]) -> u32 {
         match self {
@@ -292,43 +345,67 @@ impl WitInterface {
         }
     }
 
-    /// Creates a promise for finding keys having a specified prefix in the key-value store
-    fn find_keys_new(&self, key_prefix: &[u8]) -> u32 {
+    /// Creates a promise for finding keys in an interval in the key-value store.
+    fn find_keys_in_interval_new(&self, key_interval: &KeyInterval) -> u32 {
         match self {
-            WitInterface::Contract => contract_wit::find_keys_new(key_prefix),
-            WitInterface::Service => service_wit::find_keys_new(key_prefix),
+            WitInterface::Contract => contract_wit::find_keys_in_interval_new(
+                &Self::contract_key_interval_query(key_interval),
+            ),
+            WitInterface::Service => service_wit::find_keys_in_interval_new(
+                &Self::service_key_interval_query(key_interval),
+            ),
             #[cfg(with_testing)]
-            WitInterface::Mock { store, .. } => store.find_keys_new(key_prefix),
+            WitInterface::Mock { store, .. } => {
+                store.find_keys_in_interval_new(key_interval.clone())
+            }
         }
     }
 
-    /// Resolves a promise for finding keys having a specified prefix in the key-value store
-    fn find_keys_wait(&self, promise: u32) -> Vec<Vec<u8>> {
+    /// Resolves a promise for finding keys in an interval in the key-value store.
+    fn find_keys_in_interval_wait(&self, promise: u32) -> IntervalKeys {
         match self {
-            WitInterface::Contract => contract_wit::find_keys_wait(promise),
-            WitInterface::Service => service_wit::find_keys_wait(promise),
+            WitInterface::Contract => {
+                let result = contract_wit::find_keys_in_interval_wait(promise);
+                (result.keys, result.is_finished)
+            }
+            WitInterface::Service => {
+                let result = service_wit::find_keys_in_interval_wait(promise);
+                (result.keys, result.is_finished)
+            }
             #[cfg(with_testing)]
-            WitInterface::Mock { store, .. } => store.find_keys_wait(promise),
+            WitInterface::Mock { store, .. } => store.find_keys_in_interval_wait(promise),
         }
     }
 
-    /// Creates a promise for finding the key/values having a specified prefix in the key-value store
-    fn find_key_values_new(&self, key_prefix: &[u8]) -> u32 {
+    /// Creates a promise for finding key-values in an interval in the key-value store.
+    fn find_key_values_in_interval_new(&self, key_interval: &KeyInterval) -> u32 {
         match self {
-            WitInterface::Contract => contract_wit::find_key_values_new(key_prefix),
-            WitInterface::Service => service_wit::find_key_values_new(key_prefix),
+            WitInterface::Contract => contract_wit::find_key_values_in_interval_new(
+                &Self::contract_key_interval_query(key_interval),
+            ),
+            WitInterface::Service => service_wit::find_key_values_in_interval_new(
+                &Self::service_key_interval_query(key_interval),
+            ),
             #[cfg(with_testing)]
-            WitInterface::Mock { store, .. } => store.find_key_values_new(key_prefix),
+            WitInterface::Mock { store, .. } => {
+                store.find_key_values_in_interval_new(key_interval.clone())
+            }
         }
     }
 
-    /// Resolves a promise for finding the key/values having a specified prefix in the key-value store
-    fn find_key_values_wait(&self, promise: u32) -> Vec<(Vec<u8>, Vec<u8>)> {
+    /// Resolves a promise for finding key-values in an interval in the key-value store.
+    fn find_key_values_in_interval_wait(&self, promise: u32) -> IntervalKeyValues {
         match self {
-            WitInterface::Contract => contract_wit::find_key_values_wait(promise),
-            WitInterface::Service => service_wit::find_key_values_wait(promise),
+            WitInterface::Contract => {
+                let result = contract_wit::find_key_values_in_interval_wait(promise);
+                (result.key_values, result.is_finished)
+            }
+            WitInterface::Service => {
+                let result = service_wit::find_key_values_in_interval_wait(promise);
+                (result.key_values, result.is_finished)
+            }
             #[cfg(with_testing)]
-            WitInterface::Mock { store, .. } => store.find_key_values_wait(promise),
+            WitInterface::Mock { store, .. } => store.find_key_values_in_interval_wait(promise),
         }
     }
 
