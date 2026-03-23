@@ -713,13 +713,9 @@ impl<Env: Environment> Client<Env> {
                 }
                 Err(_) => {
                     // All validators failed; no point retrying.
-                    break;
+                    return Err(NodeError::EventsNotFound(remaining_event_ids).into());
                 }
             }
-        }
-
-        if !remaining_event_ids.is_empty() {
-            return Err(NodeError::EventsNotFound(remaining_event_ids).into());
         }
         Ok(())
     }
