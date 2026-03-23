@@ -13,8 +13,11 @@ use linera_base::{
     ownership::{ChainOwnership, ManageChainError},
     vm::VmRuntime,
 };
-use linera_views::batch::{Batch, WriteOperation};
-use linera_witty::{wit_export, Instance, RuntimeError};
+use linera_views::{
+    batch::{Batch, WriteOperation},
+    store::{KeyInterval, KeyIntervalStart},
+};
+use linera_witty::{wit_export, Instance, RuntimeError, WitLoad, WitStore, WitType};
 use tracing::log;
 
 use super::WasmExecutionError;
@@ -25,6 +28,27 @@ pub struct RuntimeApiData<Runtime> {
     runtime: Runtime,
     active_promises: HashMap<u32, Box<dyn Any + Send + Sync>>,
     promise_counter: u32,
+}
+
+#[derive(Clone, Debug, WitLoad, WitStore, WitType)]
+pub struct KeyIntervalQuery {
+    start: Vec<u8>,
+    start_inclusive: bool,
+    end: Option<Vec<u8>>,
+    end_inclusive: bool,
+    limit: Option<u32>,
+}
+
+#[derive(Clone, Debug, WitLoad, WitStore, WitType)]
+pub struct KeyListQueryResult {
+    keys: Vec<Vec<u8>>,
+    is_finished: bool,
+}
+
+#[derive(Clone, Debug, WitLoad, WitStore, WitType)]
+pub struct KeyValueListQueryResult {
+    key_values: Vec<(Vec<u8>, Vec<u8>)>,
+    is_finished: bool,
 }
 
 impl<Runtime> RuntimeApiData<Runtime> {
@@ -426,6 +450,46 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Creates a new promise to search for keys in the `key_interval`.
+    fn find_keys_in_interval_new(
+        caller: &mut Caller,
+        query: KeyIntervalQuery,
+    ) -> Result<u32, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data
+            .runtime
+            .find_keys_in_interval_new(KeyInterval {
+                start: if query.start_inclusive {
+                    KeyIntervalStart::Included(query.start)
+                } else {
+                    KeyIntervalStart::Excluded(query.start)
+                },
+                end: match query.end {
+                    Some(end) if query.end_inclusive => std::ops::Bound::Included(end),
+                    Some(end) => std::ops::Bound::Excluded(end),
+                    None => std::ops::Bound::Unbounded,
+                },
+                limit: query.limit.map(|limit| limit as usize),
+            })
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+
+        Ok(data.register_promise(promise))
+    }
+
+    /// Waits for the promise to search for keys in the `key_interval`.
+    fn find_keys_in_interval_wait(
+        caller: &mut Caller,
+        promise_id: u32,
+    ) -> Result<KeyListQueryResult, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data.take_promise(promise_id)?;
+        let (keys, is_finished) = data
+            .runtime
+            .find_keys_in_interval_wait(&promise)
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+        Ok(KeyListQueryResult { keys, is_finished })
+    }
+
     /// Creates a new promise to search for entries whose keys that start with the `key_prefix`.
     fn find_key_values_new(caller: &mut Caller, key_prefix: Vec<u8>) -> Result<u32, RuntimeError> {
         let mut data = caller.user_data_mut();
@@ -449,6 +513,49 @@ where
         data.runtime
             .find_key_values_by_prefix_wait(&promise)
             .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Creates a new promise to search for entries in the `key_interval`.
+    fn find_key_values_in_interval_new(
+        caller: &mut Caller,
+        query: KeyIntervalQuery,
+    ) -> Result<u32, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data
+            .runtime
+            .find_key_values_in_interval_new(KeyInterval {
+                start: if query.start_inclusive {
+                    KeyIntervalStart::Included(query.start)
+                } else {
+                    KeyIntervalStart::Excluded(query.start)
+                },
+                end: match query.end {
+                    Some(end) if query.end_inclusive => std::ops::Bound::Included(end),
+                    Some(end) => std::ops::Bound::Excluded(end),
+                    None => std::ops::Bound::Unbounded,
+                },
+                limit: query.limit.map(|limit| limit as usize),
+            })
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+
+        Ok(data.register_promise(promise))
+    }
+
+    /// Waits for the promise to search for entries in the `key_interval`.
+    fn find_key_values_in_interval_wait(
+        caller: &mut Caller,
+        promise_id: u32,
+    ) -> Result<KeyValueListQueryResult, RuntimeError> {
+        let mut data = caller.user_data_mut();
+        let promise = data.take_promise(promise_id)?;
+        let (key_values, is_finished) = data
+            .runtime
+            .find_key_values_in_interval_wait(&promise)
+            .map_err(|error| RuntimeError::Custom(error.into()))?;
+        Ok(KeyValueListQueryResult {
+            key_values,
+            is_finished,
+        })
     }
 }
 

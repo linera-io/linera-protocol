@@ -9,7 +9,10 @@
 
 use std::{
     collections::{BTreeSet, HashMap},
-    ops::Deref,
+    ops::{
+        Bound::{Excluded, Included, Unbounded},
+        Deref,
+    },
     sync::Arc,
 };
 
@@ -47,8 +50,8 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyInterval, KeyIntervalStart, KeyValueDatabase,
+        KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -109,10 +112,30 @@ struct ScyllaDbClient {
     write_batch_delete_prefix_bounded: PreparedStatement,
     write_batch_deletion: PreparedStatement,
     write_batch_insertion: PreparedStatement,
-    find_keys_by_prefix_unbounded: PreparedStatement,
-    find_keys_by_prefix_bounded: PreparedStatement,
-    find_key_values_by_prefix_unbounded: PreparedStatement,
-    find_key_values_by_prefix_bounded: PreparedStatement,
+    find_keys_interval_inclusive_inclusive: PreparedStatement,
+    find_keys_interval_inclusive_inclusive_limited: PreparedStatement,
+    find_keys_interval_inclusive_exclusive: PreparedStatement,
+    find_keys_interval_inclusive_exclusive_limited: PreparedStatement,
+    find_keys_interval_inclusive_unbounded: PreparedStatement,
+    find_keys_interval_inclusive_unbounded_limited: PreparedStatement,
+    find_keys_interval_exclusive_inclusive: PreparedStatement,
+    find_keys_interval_exclusive_inclusive_limited: PreparedStatement,
+    find_keys_interval_exclusive_exclusive: PreparedStatement,
+    find_keys_interval_exclusive_exclusive_limited: PreparedStatement,
+    find_keys_interval_exclusive_unbounded: PreparedStatement,
+    find_keys_interval_exclusive_unbounded_limited: PreparedStatement,
+    find_key_values_interval_inclusive_inclusive: PreparedStatement,
+    find_key_values_interval_inclusive_inclusive_limited: PreparedStatement,
+    find_key_values_interval_inclusive_exclusive: PreparedStatement,
+    find_key_values_interval_inclusive_exclusive_limited: PreparedStatement,
+    find_key_values_interval_inclusive_unbounded: PreparedStatement,
+    find_key_values_interval_inclusive_unbounded_limited: PreparedStatement,
+    find_key_values_interval_exclusive_inclusive: PreparedStatement,
+    find_key_values_interval_exclusive_inclusive_limited: PreparedStatement,
+    find_key_values_interval_exclusive_exclusive: PreparedStatement,
+    find_key_values_interval_exclusive_exclusive_limited: PreparedStatement,
+    find_key_values_interval_exclusive_unbounded: PreparedStatement,
+    find_key_values_interval_exclusive_unbounded_limited: PreparedStatement,
     multi_key_values: papaya::HashMap<usize, PreparedStatement>,
     multi_keys: papaya::HashMap<usize, PreparedStatement>,
 }
@@ -162,30 +185,158 @@ impl ScyllaDbClient {
             ))
             .await?;
 
-        let find_keys_by_prefix_unbounded = session
+        let find_keys_interval_inclusive_inclusive = session
             .prepare(format!(
-                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ?",
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k <= ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_keys_interval_inclusive_inclusive_limited = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k <= ? LIMIT ?",
                 KEYSPACE, namespace
             ))
             .await?;
 
-        let find_keys_by_prefix_bounded = session
+        let find_keys_interval_inclusive_exclusive = session
             .prepare(format!(
                 "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ?",
                 KEYSPACE, namespace
             ))
             .await?;
+        let find_keys_interval_inclusive_exclusive_limited = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
 
-        let find_key_values_by_prefix_unbounded = session
+        let find_keys_interval_inclusive_unbounded = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_keys_interval_inclusive_unbounded_limited = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        let find_keys_interval_exclusive_inclusive = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k > ? AND k <= ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_keys_interval_exclusive_inclusive_limited = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k > ? AND k <= ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        let find_keys_interval_exclusive_exclusive = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k > ? AND k < ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_keys_interval_exclusive_exclusive_limited = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k > ? AND k < ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        let find_keys_interval_exclusive_unbounded = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k > ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_keys_interval_exclusive_unbounded_limited = session
+            .prepare(format!(
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k > ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        let find_key_values_interval_inclusive_inclusive = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k <= ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_key_values_interval_inclusive_inclusive_limited = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k <= ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        let find_key_values_interval_inclusive_exclusive = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_key_values_interval_inclusive_exclusive_limited = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        let find_key_values_interval_inclusive_unbounded = session
             .prepare(format!(
                 "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ?",
                 KEYSPACE, namespace
             ))
             .await?;
-
-        let find_key_values_by_prefix_bounded = session
+        let find_key_values_interval_inclusive_unbounded_limited = session
             .prepare(format!(
-                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ?",
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        let find_key_values_interval_exclusive_inclusive = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k > ? AND k <= ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_key_values_interval_exclusive_inclusive_limited = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k > ? AND k <= ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        let find_key_values_interval_exclusive_exclusive = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k > ? AND k < ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_key_values_interval_exclusive_exclusive_limited = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k > ? AND k < ? LIMIT ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+
+        let find_key_values_interval_exclusive_unbounded = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k > ?",
+                KEYSPACE, namespace
+            ))
+            .await?;
+        let find_key_values_interval_exclusive_unbounded_limited = session
+            .prepare(format!(
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k > ? LIMIT ?",
                 KEYSPACE, namespace
             ))
             .await?;
@@ -199,10 +350,30 @@ impl ScyllaDbClient {
             write_batch_delete_prefix_bounded,
             write_batch_deletion,
             write_batch_insertion,
-            find_keys_by_prefix_unbounded,
-            find_keys_by_prefix_bounded,
-            find_key_values_by_prefix_unbounded,
-            find_key_values_by_prefix_bounded,
+            find_keys_interval_inclusive_inclusive,
+            find_keys_interval_inclusive_inclusive_limited,
+            find_keys_interval_inclusive_exclusive,
+            find_keys_interval_inclusive_exclusive_limited,
+            find_keys_interval_inclusive_unbounded,
+            find_keys_interval_inclusive_unbounded_limited,
+            find_keys_interval_exclusive_inclusive,
+            find_keys_interval_exclusive_inclusive_limited,
+            find_keys_interval_exclusive_exclusive,
+            find_keys_interval_exclusive_exclusive_limited,
+            find_keys_interval_exclusive_unbounded,
+            find_keys_interval_exclusive_unbounded_limited,
+            find_key_values_interval_inclusive_inclusive,
+            find_key_values_interval_inclusive_inclusive_limited,
+            find_key_values_interval_inclusive_exclusive,
+            find_key_values_interval_inclusive_exclusive_limited,
+            find_key_values_interval_inclusive_unbounded,
+            find_key_values_interval_inclusive_unbounded_limited,
+            find_key_values_interval_exclusive_inclusive,
+            find_key_values_interval_exclusive_inclusive_limited,
+            find_key_values_interval_exclusive_exclusive,
+            find_key_values_interval_exclusive_exclusive_limited,
+            find_key_values_interval_exclusive_unbounded,
+            find_key_values_interval_exclusive_unbounded_limited,
             multi_key_values: papaya::HashMap::new(),
             multi_keys: papaya::HashMap::new(),
         })
@@ -452,66 +623,326 @@ impl ScyllaDbClient {
         Ok(())
     }
 
-    async fn find_keys_by_prefix_internal(
+    async fn find_keys_in_interval_internal(
         &self,
         root_key: &[u8],
-        key_prefix: Vec<u8>,
-    ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
-        Self::check_key_size(&key_prefix)?;
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), ScyllaDbStoreInternalError> {
         let session = &self.session;
-        // Read the value of a key
-        let len = key_prefix.len();
-        let query_unbounded = &self.find_keys_by_prefix_unbounded;
-        let query_bounded = &self.find_keys_by_prefix_bounded;
-        let rows = match get_upper_bound_option(&key_prefix) {
-            None => {
-                let values = (root_key.to_vec(), key_prefix.clone());
-                Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
+        let limit = key_interval
+            .limit
+            .map(|limit| limit.min(i32::MAX as usize) as i32);
+        let rows = match (key_interval.start, key_interval.end) {
+            (KeyIntervalStart::Included(start), Included(end)) => {
+                Self::check_key_size(&start)?;
+                Self::check_key_size(&end)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, end, limit);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_inclusive_inclusive_limited.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start, end);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_inclusive_inclusive.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
             }
-            Some(upper_bound) => {
-                let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
-                Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
+            (KeyIntervalStart::Included(start), Excluded(end)) => {
+                Self::check_key_size(&start)?;
+                Self::check_key_size(&end)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, end, limit);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_inclusive_exclusive_limited.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start, end);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_inclusive_exclusive.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
+            }
+            (KeyIntervalStart::Included(start), Unbounded) => {
+                Self::check_key_size(&start)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, limit);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_inclusive_unbounded_limited.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_inclusive_unbounded.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
+            }
+            (KeyIntervalStart::Excluded(start), Included(end)) => {
+                Self::check_key_size(&start)?;
+                Self::check_key_size(&end)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, end, limit);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_exclusive_inclusive_limited.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start, end);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_exclusive_inclusive.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
+            }
+            (KeyIntervalStart::Excluded(start), Excluded(end)) => {
+                Self::check_key_size(&start)?;
+                Self::check_key_size(&end)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, end, limit);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_exclusive_exclusive_limited.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start, end);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_exclusive_exclusive.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
+            }
+            (KeyIntervalStart::Excluded(start), Unbounded) => {
+                Self::check_key_size(&start)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, limit);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_exclusive_unbounded_limited.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start);
+                        Box::pin(session.execute_iter(
+                            self.find_keys_interval_exclusive_unbounded.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
             }
         };
         let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
         let mut keys = Vec::new();
         while let Some(row) = rows.next().await {
             let (key,) = row?;
-            let short_key = key[len..].to_vec();
-            keys.push(short_key);
+            keys.push(key);
         }
-        Ok(keys)
+        let is_finished = key_interval.limit.is_none_or(|limit| keys.len() < limit);
+        Ok((keys, is_finished))
     }
 
-    async fn find_key_values_by_prefix_internal(
+    async fn find_key_values_in_interval_internal(
         &self,
         root_key: &[u8],
-        key_prefix: Vec<u8>,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreInternalError> {
-        Self::check_key_size(&key_prefix)?;
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), ScyllaDbStoreInternalError> {
         let session = &self.session;
-        // Read the value of a key
-        let len = key_prefix.len();
-        let query_unbounded = &self.find_key_values_by_prefix_unbounded;
-        let query_bounded = &self.find_key_values_by_prefix_bounded;
-        let rows = match get_upper_bound_option(&key_prefix) {
-            None => {
-                let values = (root_key.to_vec(), key_prefix.clone());
-                Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
+        let limit = key_interval
+            .limit
+            .map(|limit| limit.min(i32::MAX as usize) as i32);
+        let rows = match (key_interval.start, key_interval.end) {
+            (KeyIntervalStart::Included(start), Included(end)) => {
+                Self::check_key_size(&start)?;
+                Self::check_key_size(&end)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, end, limit);
+                        Box::pin(
+                            session.execute_iter(
+                                self.find_key_values_interval_inclusive_inclusive_limited
+                                    .clone(),
+                                values,
+                            ),
+                        )
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start, end);
+                        Box::pin(session.execute_iter(
+                            self.find_key_values_interval_inclusive_inclusive.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
             }
-            Some(upper_bound) => {
-                let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
-                Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
+            (KeyIntervalStart::Included(start), Excluded(end)) => {
+                Self::check_key_size(&start)?;
+                Self::check_key_size(&end)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, end, limit);
+                        Box::pin(
+                            session.execute_iter(
+                                self.find_key_values_interval_inclusive_exclusive_limited
+                                    .clone(),
+                                values,
+                            ),
+                        )
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start, end);
+                        Box::pin(session.execute_iter(
+                            self.find_key_values_interval_inclusive_exclusive.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
+            }
+            (KeyIntervalStart::Included(start), Unbounded) => {
+                Self::check_key_size(&start)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, limit);
+                        Box::pin(
+                            session.execute_iter(
+                                self.find_key_values_interval_inclusive_unbounded_limited
+                                    .clone(),
+                                values,
+                            ),
+                        )
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start);
+                        Box::pin(session.execute_iter(
+                            self.find_key_values_interval_inclusive_unbounded.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
+            }
+            (KeyIntervalStart::Excluded(start), Included(end)) => {
+                Self::check_key_size(&start)?;
+                Self::check_key_size(&end)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, end, limit);
+                        Box::pin(
+                            session.execute_iter(
+                                self.find_key_values_interval_exclusive_inclusive_limited
+                                    .clone(),
+                                values,
+                            ),
+                        )
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start, end);
+                        Box::pin(session.execute_iter(
+                            self.find_key_values_interval_exclusive_inclusive.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
+            }
+            (KeyIntervalStart::Excluded(start), Excluded(end)) => {
+                Self::check_key_size(&start)?;
+                Self::check_key_size(&end)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, end, limit);
+                        Box::pin(
+                            session.execute_iter(
+                                self.find_key_values_interval_exclusive_exclusive_limited
+                                    .clone(),
+                                values,
+                            ),
+                        )
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start, end);
+                        Box::pin(session.execute_iter(
+                            self.find_key_values_interval_exclusive_exclusive.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
+            }
+            (KeyIntervalStart::Excluded(start), Unbounded) => {
+                Self::check_key_size(&start)?;
+                match limit {
+                    Some(limit) => {
+                        let values = (root_key.to_vec(), start, limit);
+                        Box::pin(
+                            session.execute_iter(
+                                self.find_key_values_interval_exclusive_unbounded_limited
+                                    .clone(),
+                                values,
+                            ),
+                        )
+                        .await?
+                    }
+                    None => {
+                        let values = (root_key.to_vec(), start);
+                        Box::pin(session.execute_iter(
+                            self.find_key_values_interval_exclusive_unbounded.clone(),
+                            values,
+                        ))
+                        .await?
+                    }
+                }
             }
         };
         let mut rows = rows.rows_stream::<(Vec<u8>, Vec<u8>)>()?;
         let mut key_values = Vec::new();
         while let Some(row) = rows.next().await {
             let (key, value) = row?;
-            let short_key = key[len..].to_vec();
-            key_values.push((short_key, value));
+            key_values.push((key, value));
         }
-        Ok(key_values)
+        let is_finished = key_interval
+            .limit
+            .is_none_or(|limit| key_values.len() < limit);
+        Ok((key_values, is_finished))
     }
 }
 
@@ -672,23 +1103,22 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         Ok(results.into_iter().flatten().collect())
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Box::pin(store.find_keys_by_prefix_internal(&self.root_key, key_prefix.to_vec())).await
+        Box::pin(store.find_keys_in_interval_internal(&self.root_key, key_interval)).await
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreInternalError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Box::pin(store.find_key_values_by_prefix_internal(&self.root_key, key_prefix.to_vec()))
-            .await
+        Box::pin(store.find_key_values_in_interval_internal(&self.root_key, key_interval)).await
     }
 }
 

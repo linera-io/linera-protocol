@@ -11,7 +11,7 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyInterval, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -161,31 +161,34 @@ where
         Ok(result)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+    async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), Self::Error> {
         let result = match self {
             Self::First(store) => store
-                .find_keys_by_prefix(key_prefix)
+                .find_keys_in_interval(key_interval.clone())
                 .await
                 .map_err(DualStoreError::First)?,
             Self::Second(store) => store
-                .find_keys_by_prefix(key_prefix)
+                .find_keys_in_interval(key_interval)
                 .await
                 .map_err(DualStoreError::Second)?,
         };
         Ok(result)
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Self::Error> {
         let result = match self {
             Self::First(store) => store
-                .find_key_values_by_prefix(key_prefix)
+                .find_key_values_in_interval(key_interval.clone())
                 .await
                 .map_err(DualStoreError::First)?,
             Self::Second(store) => store
-                .find_key_values_by_prefix(key_prefix)
+                .find_key_values_in_interval(key_interval)
                 .await
                 .map_err(DualStoreError::Second)?,
         };

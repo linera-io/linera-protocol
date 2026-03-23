@@ -18,8 +18,8 @@ use crate::{
     },
     random::{generate_test_namespace, make_deterministic_rng, make_nondeterministic_rng},
     store::{
-        KeyValueDatabase, KeyValueStore, ReadableKeyValueStore, TestKeyValueDatabase,
-        WritableKeyValueStore,
+        KeyInterval, KeyIntervalStart, KeyValueDatabase, KeyValueStore, ReadableKeyValueStore,
+        TestKeyValueDatabase, WritableKeyValueStore,
     },
 };
 
@@ -203,6 +203,52 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         }
         assert_eq!(set_key_value1, set_key_value2);
     }
+
+    let mut sorted_key_values = key_values.clone();
+    sorted_key_values.sort();
+    if let [first, middle @ .., last] = sorted_key_values.as_slice() {
+        let start = first.0.clone();
+        let end = last.0.clone();
+        let inclusive = store
+            .find_key_values_in_interval(KeyInterval::new(
+                KeyIntervalStart::Included(start.clone()),
+                std::ops::Bound::Included(end.clone()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(inclusive, (sorted_key_values.clone(), true));
+
+        let exclusive = store
+            .find_key_values_in_interval(KeyInterval::new(
+                KeyIntervalStart::Excluded(start.clone()),
+                std::ops::Bound::Excluded(end.clone()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(exclusive, (middle.to_vec(), true));
+
+        let limited = store
+            .find_keys_in_interval(
+                KeyInterval::new(
+                    KeyIntervalStart::Included(start),
+                    std::ops::Bound::Included(end),
+                )
+                .with_limit(2),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            limited,
+            (
+                sorted_key_values[0..2]
+                    .iter()
+                    .map(|(key, _)| key.clone())
+                    .collect::<Vec<_>>(),
+                false,
+            )
+        );
+    }
+
     // Now checking the read_multi_values_bytes
     let mut rng = make_deterministic_rng();
     for _ in 0..3 {

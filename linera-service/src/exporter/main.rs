@@ -302,8 +302,7 @@ impl DestinationsCommand {
             action,
         };
 
-        store_config
-            .run_with_storage(None, false, context)
+        Box::pin(store_config.run_with_storage(None, false, context))
             .await?
             .map_err(Into::into)
     }
