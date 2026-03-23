@@ -19,7 +19,9 @@ use prometheus::{exponential_buckets, HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyInterval, KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 
 #[derive(Clone)]
@@ -416,14 +418,21 @@ where
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+    async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), Self::Error> {
         let _latency = self.counter.find_keys_by_prefix_latency.measure_latency();
+        let prefix_size = match key_interval.start_bound() {
+            std::ops::Bound::Included(key) | std::ops::Bound::Excluded(key) => key.len(),
+            std::ops::Bound::Unbounded => unreachable!("KeyInterval start is always bounded"),
+        };
         self.counter
             .find_keys_by_prefix_prefix_size
             .with_label_values(&[])
-            .observe(key_prefix.len() as f64);
-        let result = self.store.find_keys_by_prefix(key_prefix).await?;
-        let (num_keys, keys_size) = result
+            .observe(prefix_size as f64);
+        let (keys, is_finished) = self.store.find_keys_in_interval(key_interval).await?;
+        let (num_keys, keys_size) = keys
             .iter()
             .map(|key| key.len())
             .fold((0, 0), |(count, size), len| (count + 1, size + len));
@@ -435,23 +444,28 @@ where
             .find_keys_by_prefix_keys_size
             .with_label_values(&[])
             .observe(keys_size as f64);
-        Ok(result)
+        Ok((keys, is_finished))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Self::Error> {
         let _latency = self
             .counter
             .find_key_values_by_prefix_latency
             .measure_latency();
+        let prefix_size = match key_interval.start_bound() {
+            std::ops::Bound::Included(key) | std::ops::Bound::Excluded(key) => key.len(),
+            std::ops::Bound::Unbounded => unreachable!("KeyInterval start is always bounded"),
+        };
         self.counter
             .find_key_values_by_prefix_prefix_size
             .with_label_values(&[])
-            .observe(key_prefix.len() as f64);
-        let result = self.store.find_key_values_by_prefix(key_prefix).await?;
-        let (num_keys, key_values_size) = result
+            .observe(prefix_size as f64);
+        let (key_values, is_finished) =
+            self.store.find_key_values_in_interval(key_interval).await?;
+        let (num_keys, key_values_size) = key_values
             .iter()
             .map(|(key, value)| key.len() + value.len())
             .fold((0, 0), |(count, size), len| (count + 1, size + len));
@@ -463,7 +477,7 @@ where
             .find_key_values_by_prefix_key_values_size
             .with_label_values(&[])
             .observe(key_values_size as f64);
-        Ok(result)
+        Ok((key_values, is_finished))
     }
 }
 

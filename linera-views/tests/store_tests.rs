@@ -45,7 +45,10 @@ async fn test_read_multi_values_dynamo_db() {
 async fn test_read_multi_values_scylla_db() {
     use linera_views::scylla_db::ScyllaDbDatabase;
     let config = ScyllaDbDatabase::new_test_config().await.unwrap();
-    big_read_multi_values::<ScyllaDbDatabase>(config, 22200000, 200).await;
+    Box::pin(big_read_multi_values::<ScyllaDbDatabase>(
+        config, 22200000, 200,
+    ))
+    .await;
 }
 
 #[tokio::test]
@@ -342,7 +345,7 @@ async fn test_scylla_db_writes_from_state() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylladb_access() {
-    access_admin_test::<linera_views::scylla_db::ScyllaDbDatabase>().await
+    Box::pin(access_admin_test::<linera_views::scylla_db::ScyllaDbDatabase>()).await
 }
 
 #[cfg(with_dynamodb)]

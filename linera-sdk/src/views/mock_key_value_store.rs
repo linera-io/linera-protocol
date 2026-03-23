@@ -15,8 +15,11 @@ use futures::FutureExt as _;
 use linera_views::{
     batch::Batch,
     memory::MemoryStore,
-    store::{ReadableKeyValueStore, WritableKeyValueStore},
+    store::{KeyInterval, ReadableKeyValueStore, WritableKeyValueStore},
 };
+
+type IntervalKeys = (Vec<Vec<u8>>, bool);
+type IntervalKeyValues = (Vec<(Vec<u8>, Vec<u8>)>, bool);
 
 /// A mock [`KeyValueStore`] implementation using a [`MemoryStore`].
 pub(super) struct MockKeyValueStore {
@@ -25,8 +28,8 @@ pub(super) struct MockKeyValueStore {
     contains_keys_promises: PromiseRegistry<Vec<bool>>,
     read_multi_promises: PromiseRegistry<Vec<Option<Vec<u8>>>>,
     read_single_promises: PromiseRegistry<Option<Vec<u8>>>,
-    find_keys_promises: PromiseRegistry<Vec<Vec<u8>>>,
-    find_key_values_promises: PromiseRegistry<Vec<(Vec<u8>, Vec<u8>)>>,
+    find_keys_in_interval_promises: PromiseRegistry<IntervalKeys>,
+    find_key_values_in_interval_promises: PromiseRegistry<IntervalKeyValues>,
 }
 
 impl Default for MockKeyValueStore {
@@ -37,8 +40,8 @@ impl Default for MockKeyValueStore {
             contains_keys_promises: PromiseRegistry::default(),
             read_multi_promises: PromiseRegistry::default(),
             read_single_promises: PromiseRegistry::default(),
-            find_keys_promises: PromiseRegistry::default(),
-            find_key_values_promises: PromiseRegistry::default(),
+            find_keys_in_interval_promises: PromiseRegistry::default(),
+            find_key_values_in_interval_promises: PromiseRegistry::default(),
         }
     }
 }
@@ -141,39 +144,39 @@ impl MockKeyValueStore {
         self.read_single_promises.take(promise)
     }
 
-    /// Finds keys in the storage that start with `key_prefix`, returning a promise to
-    /// retrieve the final value.
-    pub(crate) fn find_keys_new(&self, key_prefix: &[u8]) -> u32 {
-        self.find_keys_promises.register(
+    /// Finds keys in the storage matching `key_interval`, returning a promise to retrieve the
+    /// final value.
+    pub(crate) fn find_keys_in_interval_new(&self, key_interval: KeyInterval) -> u32 {
+        self.find_keys_in_interval_promises.register(
             self.store
-                .find_keys_by_prefix(key_prefix)
+                .find_keys_in_interval(key_interval)
                 .now_or_never()
                 .expect("Memory store should never wait for anything")
                 .expect("Memory store should never fail"),
         )
     }
 
-    /// Returns the keys found in storage by the respective [`find_keys_new`] call.
-    pub(crate) fn find_keys_wait(&self, promise: u32) -> Vec<Vec<u8>> {
-        self.find_keys_promises.take(promise)
+    /// Returns the keys found in storage by the respective [`find_keys_in_interval_new`] call.
+    pub(crate) fn find_keys_in_interval_wait(&self, promise: u32) -> IntervalKeys {
+        self.find_keys_in_interval_promises.take(promise)
     }
 
-    /// Finds key-value pairs in the storage in which the key starts with `key_prefix`,
-    /// returning a promise to retrieve the final value.
-    pub(crate) fn find_key_values_new(&self, key_prefix: &[u8]) -> u32 {
-        self.find_key_values_promises.register(
+    /// Finds key-value pairs matching `key_interval`, returning a promise to retrieve the final
+    /// value.
+    pub(crate) fn find_key_values_in_interval_new(&self, key_interval: KeyInterval) -> u32 {
+        self.find_key_values_in_interval_promises.register(
             self.store
-                .find_key_values_by_prefix(key_prefix)
+                .find_key_values_in_interval(key_interval)
                 .now_or_never()
                 .expect("Memory store should never wait for anything")
                 .expect("Memory store should never fail"),
         )
     }
 
-    /// Returns the key-value pairs found in storage by the respective [`find_key_values_new`]
-    /// call.
-    pub(crate) fn find_key_values_wait(&self, promise: u32) -> Vec<(Vec<u8>, Vec<u8>)> {
-        self.find_key_values_promises.take(promise)
+    /// Returns the key-value pairs found in storage by the respective
+    /// [`find_key_values_in_interval_new`] call.
+    pub(crate) fn find_key_values_in_interval_wait(&self, promise: u32) -> IntervalKeyValues {
+        self.find_key_values_in_interval_promises.take(promise)
     }
 
     /// Writes a `batch` of operations to storage.

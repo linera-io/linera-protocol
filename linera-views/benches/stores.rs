@@ -43,7 +43,10 @@ fn bench_contains_key(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::contains_key::<ScyllaDbDatabase, _>(iterations, black_box).await
+                Box::pin(performance::contains_key::<ScyllaDbDatabase, _>(
+                    iterations, black_box,
+                ))
+                .await
             })
     });
 }
@@ -80,7 +83,10 @@ fn bench_contains_keys(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::contains_keys::<ScyllaDbDatabase, _>(iterations, black_box).await
+                Box::pin(performance::contains_keys::<ScyllaDbDatabase, _>(
+                    iterations, black_box,
+                ))
+                .await
             })
     });
 }
@@ -117,7 +123,10 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::find_keys_by_prefix::<ScyllaDbDatabase, _>(iterations, black_box).await
+                Box::pin(performance::find_keys_by_prefix::<ScyllaDbDatabase, _>(
+                    iterations, black_box,
+                ))
+                .await
             })
     });
 }
@@ -157,8 +166,12 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::find_key_values_by_prefix::<ScyllaDbDatabase, _>(iterations, black_box)
-                    .await
+                Box::pin(
+                    performance::find_key_values_by_prefix::<ScyllaDbDatabase, _>(
+                        iterations, black_box,
+                    ),
+                )
+                .await
             })
     });
 }
@@ -195,7 +208,10 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::read_value_bytes::<ScyllaDbDatabase, _>(iterations, black_box).await
+                Box::pin(performance::read_value_bytes::<ScyllaDbDatabase, _>(
+                    iterations, black_box,
+                ))
+                .await
             })
     });
 }
@@ -235,8 +251,10 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::read_multi_values_bytes::<ScyllaDbDatabase, _>(iterations, black_box)
-                    .await
+                Box::pin(performance::read_multi_values_bytes::<ScyllaDbDatabase, _>(
+                    iterations, black_box,
+                ))
+                .await
             })
     });
 }
@@ -273,7 +291,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::write_batch::<ScyllaDbDatabase>(iterations).await
+                Box::pin(performance::write_batch::<ScyllaDbDatabase>(iterations)).await
             })
     });
 }

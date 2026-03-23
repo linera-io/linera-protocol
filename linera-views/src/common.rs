@@ -16,7 +16,7 @@ use allocative::Allocative;
 use itertools::Either;
 use serde::de::DeserializeOwned;
 
-use crate::ViewError;
+use crate::{store::KeyIntervalStart, ViewError};
 
 type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::OutputSize;
 #[doc(hidden)]
@@ -104,6 +104,32 @@ pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
 pub(crate) fn get_key_range_for_prefix(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let upper_bound = get_upper_bound(&key_prefix);
     (Included(key_prefix), upper_bound)
+}
+
+#[allow(dead_code)]
+pub(crate) fn key_matches_interval(key: &[u8], start: Bound<&[u8]>, end: Bound<&[u8]>) -> bool {
+    let start_matches = match start {
+        Included(bound) => key >= bound,
+        Excluded(bound) => key > bound,
+        Unbounded => true,
+    };
+    let end_matches = match end {
+        Included(bound) => key <= bound,
+        Excluded(bound) => key < bound,
+        Unbounded => true,
+    };
+    start_matches && end_matches
+}
+
+pub(crate) fn get_interval_range(
+    start: KeyIntervalStart<Vec<u8>>,
+    end: Bound<Vec<u8>>,
+) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
+    let start = match start {
+        KeyIntervalStart::Included(key) => Included(key),
+        KeyIntervalStart::Excluded(key) => Excluded(key),
+    };
+    (start, end)
 }
 
 /// Deserializes an optional vector of `u8`

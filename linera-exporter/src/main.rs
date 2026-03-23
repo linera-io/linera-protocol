@@ -319,8 +319,7 @@ impl DestinationsCommand {
         };
 
         let cache_sizes = options.common_storage_options.storage_cache_config();
-        store_config
-            .run_with_storage(None, false, cache_sizes, context)
+        Box::pin(store_config.run_with_storage(None, false, cache_sizes, context))
             .await?
             .map_err(Into::into)
     }

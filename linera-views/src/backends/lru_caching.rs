@@ -14,7 +14,9 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyInterval, KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -293,6 +295,13 @@ where
         Ok(result)
     }
 
+    async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), Self::Error> {
+        self.store.find_keys_in_interval(key_interval).await
+    }
+
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let Some(cache) = self.get_exclusive_cache() else {
             return self.store.find_keys_by_prefix(key_prefix).await;
@@ -315,6 +324,13 @@ where
         let mut cache = cache.lock().unwrap();
         cache.insert_find_keys(key_prefix.to_vec(), &keys);
         Ok(keys)
+    }
+
+    async fn find_key_values_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Self::Error> {
+        self.store.find_key_values_in_interval(key_interval).await
     }
 
     async fn find_key_values_by_prefix(
