@@ -15,12 +15,38 @@ use alloy::{
     providers::Provider,
     rpc::types::Filter,
 };
+use linera_base::identifiers::ApplicationId;
+use linera_execution::{Query, QueryResponse};
 use tokio::sync::RwLock;
 
 use crate::{
     proof::{deposit_event_signature, parse_deposit_event, DepositKey, ReceiptLog},
     relay::find_address20_credits,
 };
+
+/// GraphQL request body for application queries.
+#[derive(serde::Serialize)]
+struct GqlRequest {
+    query: String,
+}
+
+/// Queries the evm-bridge app to check whether a deposit has been processed on Linera.
+pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    bridge_app_id: ApplicationId,
+    deposit_key: &DepositKey,
+) -> anyhow::Result<bool> {
+    let hash_hex = format!("0x{}", hex::encode(deposit_key.hash()));
+    let gql = format!(r#"{{ isDepositProcessed(hash: "{hash_hex}") }}"#);
+    let query = Query::user_without_abi(bridge_app_id, &GqlRequest { query: gql })?;
+    let (outcome, _) = chain_client.query_application(query, None).await?;
+    let response_bytes = match outcome.response {
+        QueryResponse::User(bytes) => bytes,
+        other => anyhow::bail!("unexpected query response: {other:?}"),
+    };
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
+    Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
+}
 
 /// A tracked EVM→Linera deposit.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -183,10 +209,12 @@ pub struct StatusSummary {
 
 /// Background task that polls EVM for `DepositInitiated` events and checks
 /// Linera for completion.
-pub async fn evm_scan_loop(
+pub async fn evm_scan_loop<E: linera_core::environment::Environment>(
     monitor: Arc<RwLock<MonitorState>>,
     provider: impl Provider + Clone + 'static,
     bridge_addr: Address,
+    chain_client: linera_core::client::ChainClient<E>,
+    bridge_app_id: ApplicationId,
     scan_interval: Duration,
 ) {
     let event_sig = deposit_event_signature();
@@ -196,10 +224,14 @@ pub async fn evm_scan_loop(
             tracing::warn!("EVM scan iteration failed: {e:#}");
         }
 
+        if let Err(e) = check_deposit_completion(&monitor, &chain_client, bridge_app_id).await {
+            tracing::warn!("Deposit completion check failed: {e:#}");
+        }
+
         let summary = monitor.read().await.status_summary();
         tracing::info!(
             pending = summary.deposits_pending,
-            forwarded_to_linera = summary.deposits_completed,
+            completed = summary.deposits_completed,
             last_block = summary.last_scanned_evm_block,
             "EVM deposit scan complete"
         );
@@ -326,6 +358,30 @@ async fn evm_scan_iteration(
     Ok(())
 }
 
+/// For each pending deposit, query the evm-bridge app to check if it has been processed.
+async fn check_deposit_completion<E: linera_core::environment::Environment>(
+    monitor: &RwLock<MonitorState>,
+    chain_client: &linera_core::client::ChainClient<E>,
+    bridge_app_id: ApplicationId,
+) -> anyhow::Result<()> {
+    let pending: Vec<DepositKey> = {
+        let state = monitor.read().await;
+        state
+            .pending_deposits()
+            .into_iter()
+            .map(|d| d.deposit_key.clone())
+            .collect()
+    };
+
+    for key in pending {
+        if query_deposit_processed(chain_client, bridge_app_id, &key).await? {
+            monitor.write().await.complete_evm_to_linera(&key);
+        }
+    }
+
+    Ok(())
+}
+
 // ── Linera burn scan loop ──
 
 /// Background task that scans Linera block history for Credit messages
@@ -333,7 +389,9 @@ async fn evm_scan_iteration(
 pub async fn linera_scan_loop<E: linera_core::environment::Environment>(
     monitor: Arc<RwLock<MonitorState>>,
     chain_client: linera_core::client::ChainClient<E>,
-    fungible_app_id: linera_base::identifiers::ApplicationId,
+    fungible_app_id: ApplicationId,
+    provider: impl Provider + Clone + 'static,
+    bridge_addr: Address,
     scan_interval: Duration,
 ) {
     loop {
@@ -341,10 +399,14 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment>(
             tracing::warn!("Linera scan iteration failed: {e:#}");
         }
 
+        if let Err(e) = check_burn_completion(&monitor, &provider, bridge_addr).await {
+            tracing::warn!("Burn completion check failed: {e:#}");
+        }
+
         let summary = monitor.read().await.status_summary();
         tracing::info!(
             pending = summary.burns_pending,
-            forwarded = summary.burns_forwarded,
+            completed = summary.burns_forwarded,
             last_height = summary.last_scanned_linera_height,
             "Linera burn scan complete"
         );
@@ -398,6 +460,54 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
         state.track_linera_to_evm(height, burn_index, recipient, amount);
     }
     state.last_scanned_linera_height = current_height;
+    Ok(())
+}
+
+/// ERC-20 Transfer(address indexed from, address indexed to, uint256 value) event signature.
+fn transfer_event_signature() -> B256 {
+    alloy::primitives::keccak256("Transfer(address,address,uint256)")
+}
+
+/// For each pending burn, scan EVM for a matching ERC-20 Transfer event
+/// from the FungibleBridge address to the burn recipient.
+async fn check_burn_completion(
+    monitor: &RwLock<MonitorState>,
+    provider: &impl Provider,
+    bridge_addr: Address,
+) -> anyhow::Result<()> {
+    let pending: Vec<(u64, usize, Address)> = {
+        let state = monitor.read().await;
+        state
+            .pending_burns()
+            .into_iter()
+            .filter_map(|b| {
+                let addr: Address = b.evm_recipient.parse().ok()?;
+                Some((b.linera_height, b.burn_index, addr))
+            })
+            .collect()
+    };
+
+    if pending.is_empty() {
+        return Ok(());
+    }
+
+    let transfer_sig = transfer_event_signature();
+
+    for (height, burn_index, recipient) in pending {
+        // Look for Transfer events from the bridge to the recipient.
+        let filter = Filter::new()
+            .address(bridge_addr)
+            .event_signature(transfer_sig)
+            .topic2(B256::left_padding_from(recipient.as_slice()));
+        let logs = provider.get_logs(&filter).await?;
+        if !logs.is_empty() {
+            monitor
+                .write()
+                .await
+                .complete_linera_to_evm(height, burn_index);
+        }
+    }
+
     Ok(())
 }
 

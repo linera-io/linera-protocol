@@ -578,20 +578,26 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let evm_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let provider = provider.clone();
+        let chain_client = chain_client.clone();
         tokio::spawn(monitor::evm_scan_loop(
             monitor,
             provider,
             bridge_addr,
+            chain_client,
+            bridge_app_id,
             scan_interval,
         ))
     };
     let linera_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let chain_client = chain_client.clone();
+        let provider = provider.clone();
         tokio::spawn(monitor::linera_scan_loop(
             monitor,
             chain_client,
             fungible_app_id,
+            provider,
+            bridge_addr,
             scan_interval,
         ))
     };
