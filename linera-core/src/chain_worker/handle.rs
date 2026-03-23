@@ -92,34 +92,37 @@ pub(crate) struct ServiceRuntimeActor {
     pub(crate) endpoint: ServiceRuntimeEndpoint,
 }
 
-/// Spawns a blocking task to execute the service runtime actor.
-pub(crate) async fn spawn_service_runtime_actor(
-    chain_id: ChainId,
-    thread_pool: &linera_execution::ThreadPool,
-) -> ServiceRuntimeActor {
-    let (execution_state_sender, incoming_execution_requests) = futures::channel::mpsc::unbounded();
-    let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
-    let task = thread_pool
-        .run((), move |()| async move {
-            // The dummy context is overwritten by `prepare_for_query`
-            // before the first actual query is executed.
-            ServiceSyncRuntime::new(
-                execution_state_sender,
-                QueryContext {
-                    chain_id,
-                    next_block_height: BlockHeight(0),
-                    local_time: Timestamp::from(0),
-                },
-            )
-            .run(&runtime_request_receiver)
-        })
-        .await;
-    ServiceRuntimeActor {
-        endpoint: ServiceRuntimeEndpoint {
-            incoming_execution_requests,
-            runtime_request_sender,
-        },
-        task,
+impl ServiceRuntimeActor {
+    /// Spawns a blocking task to execute the service runtime actor.
+    pub(crate) async fn spawn(
+        chain_id: ChainId,
+        thread_pool: &linera_execution::ThreadPool,
+    ) -> Self {
+        let (execution_state_sender, incoming_execution_requests) =
+            futures::channel::mpsc::unbounded();
+        let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
+        let task = thread_pool
+            .run((), move |()| async move {
+                // The dummy context is overwritten by `prepare_for_query`
+                // before the first actual query is executed.
+                ServiceSyncRuntime::new(
+                    execution_state_sender,
+                    QueryContext {
+                        chain_id,
+                        next_block_height: BlockHeight(0),
+                        local_time: Timestamp::from(0),
+                    },
+                )
+                .run(&runtime_request_receiver)
+            })
+            .await;
+        ServiceRuntimeActor {
+            endpoint: ServiceRuntimeEndpoint {
+                incoming_execution_requests,
+                runtime_request_sender,
+            },
+            task,
+        }
     }
 }
 

@@ -747,7 +747,7 @@ where
     /// dropped harmlessly.
     ///
     /// Returns a type-erased future to keep `!Sync` intermediate types (e.g.
-    /// `std::sync::mpsc::Receiver` from `handle::spawn_service_runtime_actor`) out of
+    /// `std::sync::mpsc::Receiver` from `handle::ServiceRuntimeActor::spawn`) out of
     /// the caller's future type.
     fn get_or_create_chain_worker(
         &self,
@@ -838,7 +838,7 @@ where
         let (service_runtime_endpoint, service_runtime_task) =
             if self.chain_worker_config.long_lived_services {
                 let actor =
-                    handle::spawn_service_runtime_actor(chain_id, self.storage.thread_pool()).await;
+                    handle::ServiceRuntimeActor::spawn(chain_id, self.storage.thread_pool()).await;
                 (Some(actor.endpoint), Some(actor.task))
             } else {
                 (None, None)
