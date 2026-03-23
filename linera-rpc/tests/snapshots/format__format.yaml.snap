@@ -952,14 +952,14 @@ Reason:
         STRUCT:
           - height:
               TYPENAME: BlockHeight
-          - hash:
+          - block_hash:
               TYPENAME: CryptoHash
     1:
       NewEvents:
         STRUCT:
           - height:
               TYPENAME: BlockHeight
-          - hash:
+          - block_hash:
               TYPENAME: CryptoHash
           - event_streams:
               SEQ:
@@ -983,7 +983,7 @@ Reason:
         STRUCT:
           - height:
               TYPENAME: BlockHeight
-          - hash:
+          - block_hash:
               TYPENAME: CryptoHash
 ResourceControlPolicy:
   STRUCT:

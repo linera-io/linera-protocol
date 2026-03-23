@@ -63,22 +63,45 @@ where
 {
     /// Notifies all the clients waiting for a notification from a given chain.
     pub fn notify_chain(&self, chain_id: &ChainId, notification: &N) {
-        self.inner.pin().compute(*chain_id, |senders| {
-            let Some((_key, senders)) = senders else {
-                trace!("Chain {chain_id} has no subscribers.");
-                return papaya::Operation::Abort(());
-            };
-            let live_senders = senders
-                .iter()
-                .filter(|sender| sender.send(notification.clone()).is_ok())
-                .cloned()
-                .collect::<Vec<_>>();
-            if live_senders.is_empty() {
-                trace!("No more subscribers for chain {chain_id}. Removing entry.");
-                return papaya::Operation::Remove;
+        let pinned = self.inner.pin();
+
+        // Read senders outside of `compute` to avoid side effects in a
+        // retriable closure. papaya's `compute` may call its closure
+        // multiple times on CAS contention, so `send()` must not happen
+        // inside it.
+        let Some(senders) = pinned.get(chain_id).cloned() else {
+            trace!("Chain {chain_id} has no subscribers.");
+            return;
+        };
+
+        // Send notifications (side effect — must happen exactly once).
+        let mut has_dead = false;
+        for sender in &senders {
+            if sender.send(notification.clone()).is_err() {
+                has_dead = true;
             }
-            papaya::Operation::Insert(live_senders)
-        });
+        }
+
+        // Clean up dead senders. The closure is pure: `is_closed()` is
+        // idempotent and has no side effects, so retries are safe.
+        if has_dead {
+            pinned.compute(*chain_id, |entry| {
+                let Some((_key, current_senders)) = entry else {
+                    return papaya::Operation::Abort(());
+                };
+                let live: Vec<_> = current_senders
+                    .iter()
+                    .filter(|s| !s.is_closed())
+                    .cloned()
+                    .collect();
+                if live.is_empty() {
+                    trace!("No more subscribers for chain {chain_id}. Removing entry.");
+                    papaya::Operation::Remove
+                } else {
+                    papaya::Operation::Insert(live)
+                }
+            });
+        }
     }
 }
 

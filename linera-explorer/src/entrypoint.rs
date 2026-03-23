@@ -113,7 +113,7 @@ fn forge_response(output: &Value) -> String {
     if empty_response_aux(output) {
         "".to_string()
     } else {
-        forge_response_type(output, None, true).unwrap_or("".to_string())
+        forge_response_type(output, None, true).unwrap_or_default()
     }
 }
 

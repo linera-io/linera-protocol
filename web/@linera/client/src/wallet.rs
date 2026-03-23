@@ -21,6 +21,18 @@ pub struct Wallet {
     pub(crate) lock: Option<Rc<Lock>>,
 }
 
+impl Wallet {
+    /// Create a new wallet from a genesis config.
+    pub fn new(genesis_config: GenesisConfig) -> Self {
+        Self {
+            chains: Rc::new(wallet::Memory::default()),
+            default: None,
+            genesis_config,
+            lock: None,
+        }
+    }
+}
+
 #[wasm_bindgen]
 impl Wallet {
     /// Set the owner of a chain (the account used to sign blocks on this chain).
@@ -49,10 +61,15 @@ impl Wallet {
 
     /// Lock the wallet, preventing anyone else from using a wallet with this name.
     ///
+    /// If the wallet is already locked, this is a no-op.
+    ///
     /// # Errors
-    /// If the wallet is already locked.
+    /// If the wallet is locked elsewhere.
     pub async fn lock(&mut self) -> Result<()> {
-        self.lock = Some(Rc::new(Lock::try_acquire(&self.name()).await?));
+        if self.lock.is_none() {
+            self.lock = Some(Rc::new(Lock::try_acquire(&self.name()).await?));
+        }
+
         Ok(())
     }
 }

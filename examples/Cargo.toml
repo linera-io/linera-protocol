@@ -5,6 +5,7 @@ members = [
     "call-evm-counter",
     "controller",
     "counter",
+    "evm-bridge",
     "counter-no-graphql",
     "crowd-funding",
     "ethereum-tracker",
@@ -19,6 +20,7 @@ members = [
     "rfq",
     "social",
     "task-processor",
+    "wrapped-fungible",
 ]
 
 [workspace.dependencies]
@@ -59,10 +61,12 @@ counter = { path = "./counter" }
 create-and-call = { path = "./create-and-call" }
 crowd-funding = { path = "./crowd-funding" }
 ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
+evm-bridge = { path = "./evm-bridge" }
 fungible = { path = "./fungible" }
 matching-engine = { path = "./matching-engine" }
 native-fungible = { path = "./native-fungible" }
 non-fungible = { path = "./non-fungible" }
+wrapped-fungible = { path = "./wrapped-fungible" }
 
 [profile.release]
 debug = true

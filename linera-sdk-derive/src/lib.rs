@@ -8,8 +8,8 @@ mod utils;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use syn::{
-    parse_macro_input, Fields, ItemEnum,
     __private::{quote::quote, TokenStream2},
+    parse_macro_input, Fields, ItemEnum,
 };
 
 use crate::utils::{concat, snakify};
@@ -132,7 +132,7 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
 
 #[cfg(test)]
 pub mod tests {
-    use syn::{parse_quote, ItemEnum, __private::quote::quote};
+    use syn::{__private::quote::quote, parse_quote, ItemEnum};
 
     use crate::generate_mutation_root_code;
 

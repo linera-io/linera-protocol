@@ -2667,7 +2667,9 @@ impl<Env: Environment> ChainClient<Env> {
                     "NewBlock: processed notification",
                 );
             }
-            Reason::NewEvents { height, hash, .. } => {
+            Reason::NewEvents {
+                height, block_hash, ..
+            } => {
                 let chain_id = notification.chain_id;
                 let local_height = self.local_next_block_height(chain_id, &local_node).await?;
                 if local_height > height {
@@ -2693,7 +2695,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .download_event_bearing_blocks(
                         self.chain_id,
-                        BTreeSet::from([(height, hash)]),
+                        BTreeSet::from([(height, block_hash)]),
                         local_height,
                         &relevant_streams,
                         &remote_node,
