@@ -100,7 +100,6 @@ impl OutputType for RawJson {
         // ConstValue serializer recognises (with feature `raw_value`).
         // When the response is serialised to JSON the raw string is emitted
         // verbatim, avoiding any parsing or tree conversion.
-        //
         Ok(async_graphql::Value::Object(
             std::iter::once((
                 async_graphql::Name::new(async_graphql_value::RAW_VALUE_TOKEN),

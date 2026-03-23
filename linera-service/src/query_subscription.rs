@@ -324,8 +324,8 @@ async fn execute_and_maybe_send<C: ClientContext + 'static>(
             // from the application service.
             let json_string = match String::from_utf8(response_bytes) {
                 Ok(s) => s,
-                Err(e) => {
-                    warn!(name = %key.name, "response bytes are not valid UTF-8: {e}");
+                Err(error) => {
+                    warn!(%error, name = %key.name, "response bytes are not valid UTF-8");
                     return;
                 }
             };
