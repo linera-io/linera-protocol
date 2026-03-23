@@ -58,6 +58,8 @@ jobs:
         FAUCET_PORT=$(echo "$LINERA_FAUCET_URL" | cut -d: -f3)
         LOG_FILE="/tmp/linera-net-up.log"
         mkdir /tmp/local-linera-net
+        ulimit -c unlimited
+        export RUST_BACKTRACE=full
         cargo run --features storage-service --bin linera -- net up --storage service:tcp:$LINERA_STORAGE_SERVICE:table --policy-config testnet --path /tmp/local-linera-net --validators 2 --shards 2 --with-faucet --faucet-port $FAUCET_PORT --faucet-amount 1000 > "$LOG_FILE" 2>&1 &
         FAUCET_PID=$!
         bash scripts/wait-for-kubernetes-service.sh "$LINERA_FAUCET_URL" "$FAUCET_PID" "$LOG_FILE"
