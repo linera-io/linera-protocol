@@ -958,7 +958,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(receiver.chain_id(), BlockHeight::from(6), 3)
+            .check_that_validators_have_certificate(receiver.chain_id(), BlockHeight::from(8), 3)
             .await,
         Some(cert)
     );
@@ -978,7 +978,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(2), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(4), 3)
             .await,
         Some(cert)
     );
