@@ -2342,7 +2342,9 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
-    notifications2.wait_for_block(height2.try_add_one()?).await?;
+    notifications2
+        .wait_for_block(height2.try_add_one()?)
+        .await?;
     assert_eq!(app2.query(query).await?, expected_response1);
 
     let tip_after_first_post = node_service2.chain_tip(chain1).await?;
@@ -2381,8 +2383,10 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         if response == expected_response2 {
             break;
         }
-        assert_eq!(response, expected_response1,
-            "unexpected intermediate state: expected either both posts or only the first post");
+        assert_eq!(
+            response, expected_response1,
+            "unexpected intermediate state: expected either both posts or only the first post"
+        );
     }
 
     let tip_after_second_post = node_service2.chain_tip(chain1).await?;
