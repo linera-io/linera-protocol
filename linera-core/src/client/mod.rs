@@ -612,6 +612,7 @@ impl<Env: Environment> Client<Env> {
             let result = communicate_concurrently(
                 &validators,
                 move |remote_node| {
+                    let validator_key = remote_node.public_key;
                     Box::pin(async move {
                         // Query this validator for the block heights.
                         let heights = remote_node
@@ -687,7 +688,7 @@ impl<Env: Environment> Client<Env> {
                                 checked_certificates.push(cert);
                             }
                         }
-                        Ok((checked_certificates, unresolved))
+                        Ok((checked_certificates, unresolved, validator_key))
                     })
                 },
                 |errors| {
@@ -701,24 +702,18 @@ impl<Env: Environment> Client<Env> {
             .await;
 
             match result {
-                Ok((certificates, unresolved)) => {
+                Ok((certificates, unresolved, validator_key)) => {
                     for certificate in certificates {
                         let mode = ReceiveCertificateMode::AlreadyChecked;
                         self.receive_sender_certificate(certificate, mode, None)
                             .await?;
                     }
-                    if unresolved.len() == remaining_event_ids.len() {
-                        // No progress — all remaining events are still unresolved.
-                        break;
-                    }
+                    validators.retain(|node| node.public_key != validator_key);
                     remaining_event_ids = unresolved;
                 }
-                Err(faulty_validators) => {
-                    validators.retain(|node| !faulty_validators.contains(&node.public_key));
-                    if validators.is_empty() {
-                        break;
-                    }
-                    continue;
+                Err(_) => {
+                    // All validators failed; no point retrying.
+                    break;
                 }
             }
         }
