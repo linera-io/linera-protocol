@@ -21,5 +21,6 @@ linera-rpc
 linera-client
 linera-faucet-client
 linera-faucet-server
+linera-bridge
 linera-service
 linera-service-graphql-client

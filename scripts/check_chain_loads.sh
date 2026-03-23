@@ -44,6 +44,12 @@ if [ "$(grep 'linera-client/src/config.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; the
     sed -i -e '/linera-client\/src\/config\.rs/d' "$USAGES_FILE"
 fi
 
+# Client::extend_with_chain uses it to add a new chain to the tracked wallet.
+# This should happen in isolation from the workers.
+if [ "$(grep 'linera-client/src/client_context.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; then
+    sed -i -e '/linera-client\/src\/client_context\.rs/d' "$USAGES_FILE"
+fi
+
 cat "$USAGES_FILE"
 
 if grep . "$USAGES_FILE"; then

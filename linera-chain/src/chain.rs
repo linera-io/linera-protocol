@@ -466,26 +466,6 @@ where
         Ok(())
     }
 
-    /// Returns the next block height to receive and the last anticipated block height
-    /// for the given origin, loading the inbox read-only.
-    pub async fn inbox_cursors(
-        &self,
-        origin: &ChainId,
-    ) -> Result<(BlockHeight, Option<BlockHeight>), ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
-        match inbox {
-            Some(inbox) => {
-                let next_height = inbox.next_block_height_to_receive()?;
-                let last_anticipated = match inbox.removed_bundles.back().await? {
-                    Some(bundle) => Some(bundle.height),
-                    None => None,
-                };
-                Ok((next_height, last_anticipated))
-            }
-            None => Ok((BlockHeight::ZERO, None)),
-        }
-    }
-
     /// Returns the height of the highest block we have, plus one. Includes preprocessed blocks.
     ///
     /// The "+ 1" is so that it can be used in the same places as `next_block_height`.
@@ -507,8 +487,9 @@ where
         origin = %origin,
         bundle_height = %bundle.height
     ))]
-    pub async fn receive_message_bundle(
+    pub async fn receive_message_bundle_with_inbox(
         &mut self,
+        inbox: &mut InboxStateView<C>,
         origin: &ChainId,
         bundle: MessageBundle,
         local_time: Timestamp,
@@ -540,7 +521,6 @@ where
         }
 
         // Process the inbox bundle and update the inbox state.
-        let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
         let newly_added = inbox
             .add_bundle(bundle)
             .await
