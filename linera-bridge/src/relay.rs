@@ -189,6 +189,34 @@ async fn deposit_handler(
 
 // ── Helpers ──
 
+/// Find all Credit-to-Address20 messages in a block's transactions for a given app.
+///
+/// Returns `(owner, amount)` pairs for each matching credit.
+pub(crate) fn find_address20_credits(
+    transactions: &[Transaction],
+    fungible_app_id: ApplicationId,
+) -> Vec<(AccountOwner, Amount)> {
+    let mut credits = Vec::new();
+    for txn in transactions {
+        if let Transaction::ReceiveMessages(bundle) = txn {
+            for posted in &bundle.bundle.messages {
+                if let Message::User {
+                    application_id,
+                    bytes,
+                } = &posted.message
+                {
+                    if *application_id == fungible_app_id {
+                        if let Some(credit) = try_parse_credit_to_address20(bytes.as_slice()) {
+                            credits.push(credit);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    credits
+}
+
 /// Extract (owner, amount) from a fungible Credit message if the target is Address20.
 ///
 /// BCS layout: variant 0 (Credit) + target: AccountOwner + amount: Amount + source: AccountOwner
@@ -567,21 +595,11 @@ async fn serve_loop<E: linera_core::environment::Environment>(
                 // Scan inbox certs for Credit messages to Address20 and submit Burns.
                 let mut burn_ops = vec![];
                 for cert in &certs {
-                    for txn in &cert.block().body.transactions {
-                        if let Transaction::ReceiveMessages(bundle) = txn {
-                            for posted in &bundle.bundle.messages {
-                                if let Message::User { application_id, bytes } = &posted.message {
-                                    if application_id == &fungible_app_id {
-                                        if let Some((owner, amount)) = try_parse_credit_to_address20(bytes.as_slice()) {
-                                            burn_ops.push(Operation::User {
-                                                application_id: fungible_app_id,
-                                                bytes: serialize_burn_operation(&owner, &amount),
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    for (owner, amount) in find_address20_credits(&cert.block().body.transactions, fungible_app_id) {
+                        burn_ops.push(Operation::User {
+                            application_id: fungible_app_id,
+                            bytes: serialize_burn_operation(&owner, &amount),
+                        });
                     }
                 }
 
