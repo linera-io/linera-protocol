@@ -88,8 +88,8 @@ impl<S: Storage + Clone + 'static> Drop for RollbackGuard<S> {
 
 /// The endpoint and background task for a long-lived service runtime.
 pub(crate) struct ServiceRuntimeActor {
-    pub(crate) endpoint: ServiceRuntimeEndpoint,
     pub(crate) task: web_thread_pool::Task<()>,
+    pub(crate) endpoint: ServiceRuntimeEndpoint,
 }
 
 /// Spawns a blocking task to execute the service runtime actor.
