@@ -2256,6 +2256,7 @@ dependencies = [
 name = "linera-cache"
 version = "0.15.15"
 dependencies = [
+ "allocative",
  "cfg_aliases",
  "linera-base",
  "lru",

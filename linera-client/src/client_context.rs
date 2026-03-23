@@ -278,7 +278,7 @@ where
         options: &Options,
         default_chain: Option<ChainId>,
         genesis_config: GenesisConfig,
-        block_cache_size: usize,
+        block_cache_size: u64,
         execution_state_cache_size: usize,
     ) -> Result<Self, Error> {
         #[cfg(not(web))]

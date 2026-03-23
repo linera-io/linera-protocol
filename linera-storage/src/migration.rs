@@ -576,11 +576,11 @@ mod tests {
         write_storage_state_old_schema(&database, storage_state.clone()).await?;
         // Creating a storage and migrate to the new database schema.
         let cache_sizes = StorageCacheSizes {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            lite_certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
+            blob_cache_size: 1024 * 1024,
+            confirmed_block_cache_size: 1024 * 1024,
+            lite_certificate_cache_size: 1024 * 1024,
+            certificate_raw_cache_size: 1024 * 1024,
+            event_cache_size: 1024 * 1024,
         };
         let storage = DbStorage::<D, WallClock>::new(database, None, cache_sizes, WallClock);
         storage.migrate_if_needed().await?;

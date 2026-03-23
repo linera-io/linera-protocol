@@ -83,31 +83,31 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "10000000", global = true)]
     pub storage_max_cache_find_key_values_size: usize,
 
-    /// The maximal number of entries in the blob cache.
-    #[arg(long, default_value = "1000", global = true)]
-    pub blob_cache_size: usize,
+    /// Maximum bytes in the blob cache.
+    #[arg(long, default_value_t = 52_428_800, global = true)]
+    pub blob_cache_size: u64,
 
-    /// The maximal number of entries in the confirmed block cache.
-    #[arg(long, default_value = "1000", global = true)]
-    pub confirmed_block_cache_size: usize,
+    /// Maximum bytes in the confirmed block cache.
+    #[arg(long, default_value_t = 52_428_800, global = true)]
+    pub confirmed_block_cache_size: u64,
 
-    /// The maximal number of entries in the lite certificate cache.
-    #[arg(long, default_value = "1000", global = true)]
-    pub lite_certificate_cache_size: usize,
+    /// Maximum bytes in the lite certificate cache.
+    #[arg(long, default_value_t = 52_428_800, global = true)]
+    pub lite_certificate_cache_size: u64,
 
-    /// The maximal number of entries in the raw certificate cache.
-    #[arg(long, default_value = "1000", global = true)]
-    pub certificate_raw_cache_size: usize,
+    /// Maximum bytes in the raw certificate cache.
+    #[arg(long, default_value_t = 52_428_800, global = true)]
+    pub certificate_raw_cache_size: u64,
 
-    /// The maximal number of entries in the event cache.
-    #[arg(long, default_value = "1000", global = true)]
-    pub event_cache_size: usize,
+    /// Maximum bytes in the event cache.
+    #[arg(long, default_value_t = 52_428_800, global = true)]
+    pub event_cache_size: u64,
 
-    /// The number of entries in the block cache.
-    #[arg(long, default_value = "5000", global = true)]
-    pub block_cache_size: usize,
+    /// Maximum bytes in the block cache.
+    #[arg(long, default_value_t = 52_428_800, global = true)]
+    pub block_cache_size: u64,
 
-    /// The number of entries in the execution state cache.
+    /// Maximum entries in the execution state cache.
     #[arg(long, default_value = "10000", global = true)]
     pub execution_state_cache_size: usize,
 

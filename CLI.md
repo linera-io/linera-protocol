@@ -260,25 +260,25 @@ Client implementation and command-line tool for the Linera blockchain
 * `--storage-max-cache-find-key-values-size <STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE>` — The maximal memory used in the find_key_values_by_prefix cache
 
   Default value: `10000000`
-* `--blob-cache-size <BLOB_CACHE_SIZE>` — The maximal number of entries in the blob cache
+* `--blob-cache-size <BLOB_CACHE_SIZE>` — Maximum bytes in the blob cache
 
-  Default value: `1000`
-* `--confirmed-block-cache-size <CONFIRMED_BLOCK_CACHE_SIZE>` — The maximal number of entries in the confirmed block cache
+  Default value: `52428800`
+* `--confirmed-block-cache-size <CONFIRMED_BLOCK_CACHE_SIZE>` — Maximum bytes in the confirmed block cache
 
-  Default value: `1000`
-* `--lite-certificate-cache-size <LITE_CERTIFICATE_CACHE_SIZE>` — The maximal number of entries in the lite certificate cache
+  Default value: `52428800`
+* `--lite-certificate-cache-size <LITE_CERTIFICATE_CACHE_SIZE>` — Maximum bytes in the lite certificate cache
 
-  Default value: `1000`
-* `--certificate-raw-cache-size <CERTIFICATE_RAW_CACHE_SIZE>` — The maximal number of entries in the raw certificate cache
+  Default value: `52428800`
+* `--certificate-raw-cache-size <CERTIFICATE_RAW_CACHE_SIZE>` — Maximum bytes in the raw certificate cache
 
-  Default value: `1000`
-* `--event-cache-size <EVENT_CACHE_SIZE>` — The maximal number of entries in the event cache
+  Default value: `52428800`
+* `--event-cache-size <EVENT_CACHE_SIZE>` — Maximum bytes in the event cache
 
-  Default value: `1000`
-* `--block-cache-size <BLOCK_CACHE_SIZE>` — The number of entries in the block cache
+  Default value: `52428800`
+* `--block-cache-size <BLOCK_CACHE_SIZE>` — Maximum bytes in the block cache
 
-  Default value: `5000`
-* `--execution-state-cache-size <EXECUTION_STATE_CACHE_SIZE>` — The number of entries in the execution state cache
+  Default value: `52428800`
+* `--execution-state-cache-size <EXECUTION_STATE_CACHE_SIZE>` — Maximum entries in the execution state cache
 
   Default value: `10000`
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace

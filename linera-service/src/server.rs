@@ -71,7 +71,7 @@ struct ServerContext {
     block_time_grace_period: Duration,
     chain_worker_ttl: Duration,
     chain_info_max_received_log_entries: usize,
-    block_cache_size: usize,
+    block_cache_size: u64,
     execution_state_cache_size: usize,
 }
 

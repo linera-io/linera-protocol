@@ -354,11 +354,11 @@ impl MultiPartitionBatch {
 /// Individual cache sizes for each `ValueCache` in `DbStorage`.
 #[derive(Clone, Copy, Debug)]
 pub struct StorageCacheSizes {
-    pub blob_cache_size: usize,
-    pub confirmed_block_cache_size: usize,
-    pub lite_certificate_cache_size: usize,
-    pub certificate_raw_cache_size: usize,
-    pub event_cache_size: usize,
+    pub blob_cache_size: u64,
+    pub confirmed_block_cache_size: u64,
+    pub lite_certificate_cache_size: u64,
+    pub certificate_raw_cache_size: u64,
+    pub event_cache_size: u64,
 }
 
 /// Raw certificate bytes: (lite_certificate_bytes, confirmed_block_bytes).
@@ -1937,17 +1937,20 @@ where
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
-            blob_cache: Arc::new(ValueCache::new(cache_sizes.blob_cache_size)),
+            blob_cache: Arc::new(ValueCache::new("blob", cache_sizes.blob_cache_size)),
             confirmed_block_cache: Arc::new(ValueCache::new(
+                "confirmed_block",
                 cache_sizes.confirmed_block_cache_size,
             )),
             lite_certificate_cache: Arc::new(ValueCache::new(
+                "lite_certificate",
                 cache_sizes.lite_certificate_cache_size,
             )),
             certificate_raw_cache: Arc::new(ValueCache::new(
+                "certificate_raw",
                 cache_sizes.certificate_raw_cache_size,
             )),
-            event_cache: Arc::new(ValueCache::new(cache_sizes.event_cache_size)),
+            event_cache: Arc::new(ValueCache::new("event", cache_sizes.event_cache_size)),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
@@ -2058,11 +2061,11 @@ where
     ) -> Result<Self, ViewError> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
         let default_cache_sizes = StorageCacheSizes {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            lite_certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
+            blob_cache_size: 1024 * 1024,
+            confirmed_block_cache_size: 1024 * 1024,
+            lite_certificate_cache_size: 1024 * 1024,
+            certificate_raw_cache_size: 1024 * 1024,
+            event_cache_size: 1024 * 1024,
         };
         let storage = Self::new(database, wasm_runtime, default_cache_sizes, clock);
         storage.assert_is_migrated_storage().await?;
