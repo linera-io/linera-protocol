@@ -975,7 +975,7 @@ where
             return Ok(Vec::new());
         }
         // Group event IDs by chain ID for batch lookups per partition.
-        let mut chain_groups: BTreeMap<ChainId, Vec<(usize, Vec<u8>)>> = BTreeMap::new();
+        let mut chain_groups = BTreeMap::<_, Vec<_>>::new();
         for (i, event_id) in event_ids.iter().enumerate() {
             chain_groups
                 .entry(event_id.chain_id)
