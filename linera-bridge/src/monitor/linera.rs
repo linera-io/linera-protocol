@@ -194,6 +194,7 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
 
     let mut state = monitor.write().await;
     state.last_scanned_linera_height = current_height;
+    crate::relay::metrics::set_last_scanned_linera_height(current_height);
     Ok(())
 }
 

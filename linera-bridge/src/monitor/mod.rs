@@ -115,6 +115,7 @@ impl MonitorState {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
                 e.insert(Tracked::new(pending));
+                crate::relay::metrics::deposit_detected();
                 true
             }
         }
@@ -123,6 +124,7 @@ impl MonitorState {
     pub fn complete_deposit(&mut self, key: &DepositKey) {
         if let Some(d) = self.deposits.get_mut(key) {
             d.forwarded = true;
+            crate::relay::metrics::deposit_completed();
         } else {
             tracing::warn!(deposit_id = ?key, "Attempted to complete unknown deposit");
         }
@@ -137,6 +139,7 @@ impl MonitorState {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
                 e.insert(Tracked::new(pending));
+                crate::relay::metrics::burn_detected();
                 true
             }
         }
@@ -145,6 +148,7 @@ impl MonitorState {
     pub fn complete_burn(&mut self, linera_height: u64, burn_index: usize) {
         if let Some(b) = self.burns.get_mut(&(linera_height, burn_index)) {
             b.forwarded = true;
+            crate::relay::metrics::burn_completed();
         } else {
             tracing::warn!(
                 linera_height,
@@ -210,6 +214,7 @@ impl MonitorState {
     pub fn mark_deposit_failed(&mut self, key: &DepositKey) {
         if let Some(d) = self.deposits.get_mut(key) {
             d.failed = true;
+            crate::relay::metrics::deposit_failed();
         }
     }
 
@@ -223,6 +228,7 @@ impl MonitorState {
     pub fn mark_burn_failed(&mut self, height: u64, burn_index: usize) {
         if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
             b.failed = true;
+            crate::relay::metrics::burn_failed();
         }
     }
 

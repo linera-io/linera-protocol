@@ -233,6 +233,7 @@ async fn evm_scan_iteration(
 
         // Save progress per chunk so we don't rescan on failure.
         state.last_scanned_evm_block = current_block.min(fetcher.from.saturating_sub(1));
+        crate::relay::metrics::set_last_scanned_evm_block(state.last_scanned_evm_block);
     }
 
     Ok(())

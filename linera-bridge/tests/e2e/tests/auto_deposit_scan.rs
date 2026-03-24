@@ -337,7 +337,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let client = reqwest::Client::new();
     for attempt in 0..30 {
         tokio::time::sleep(Duration::from_secs(2)).await;
-        if client.get(format!("{relay_url}/monitor/status")).send().await.is_ok() {
+        if client.get(format!("{relay_url}/metrics")).send().await.is_ok() {
             tracing::info!(attempt, "Relay is ready");
             break;
         }
@@ -380,13 +380,20 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
 
     tracing::info!("Depositing on EVM targeting chain B...");
     let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
-    bridge_contract
+    let deposit_receipt = bridge_contract
         .deposit(chain_b_b256, app_id_bytes32.parse()?, owner_b_b256, deposit_amount)
         .send()
         .await?
         .get_receipt()
         .await?;
     tracing::info!("Deposit confirmed on EVM");
+
+    let deposit_key = linera_bridge::proof::DepositKey {
+        source_chain_id: 31337,
+        block_hash: deposit_receipt.block_hash.unwrap().0,
+        tx_index: 0,
+        log_index: 0,
+    };
 
     // Wait for relay to auto-process the deposit.
     tracing::info!("Waiting for relay scanner to auto-process the deposit...");
@@ -397,13 +404,18 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         cc_b.synchronize_from_validators().await?;
         cc_b.process_inbox().await?;
 
-        if let Ok(resp) = client.get(format!("{relay_url}/monitor/status")).send().await {
-            if let Ok(status) = resp.json::<serde_json::Value>().await {
-                tracing::info!(attempt, ?status, "Monitor status");
-                if status["deposits_completed"].as_u64().unwrap_or(0) > 0 {
-                    tracing::info!("Deposit auto-processed!");
-                    break;
-                }
+        // Check on-chain whether the deposit was processed.
+        match linera_bridge_e2e::query_deposit_processed(&cc_a, bridge_app_id, &deposit_key).await
+        {
+            Ok(true) => {
+                tracing::info!(attempt, "Deposit auto-processed!");
+                break;
+            }
+            Ok(false) => {
+                tracing::info!(attempt, "Deposit not yet processed, waiting...");
+            }
+            Err(e) => {
+                tracing::warn!(attempt, "Deposit query failed: {e:#}");
             }
         }
         if attempt == 59 {
@@ -448,12 +460,6 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
 
     for attempt in 0..60 {
         tokio::time::sleep(Duration::from_secs(5)).await;
-
-        if let Ok(resp) = client.get(format!("{relay_url}/monitor/status")).send().await {
-            if let Ok(status) = resp.json::<serde_json::Value>().await {
-                tracing::info!(attempt, ?status, "Monitor status");
-            }
-        }
 
         let balance = erc20_contract.balanceOf(evm_recipient_addr).call().await?;
         tracing::info!(attempt, ?balance, "ERC-20 balance");

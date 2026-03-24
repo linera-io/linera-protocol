@@ -12,8 +12,8 @@
 //!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
 
 pub mod evm;
-mod http;
 pub mod linera;
+pub(crate) mod metrics;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
@@ -356,7 +356,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         ))
     };
 
-    let app = http::build_router(Arc::clone(&monitor));
+    let app = metrics::build_router();
 
     let bind_addr = format!("0.0.0.0:{port}");
     tracing::info!("HTTP server listening on {bind_addr}");

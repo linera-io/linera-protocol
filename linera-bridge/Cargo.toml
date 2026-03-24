@@ -47,6 +47,7 @@ relay = [
     "dep:fungible",
     "dep:wrapped-fungible",
     "dep:futures",
+    "dep:prometheus",
     "dep:hex",
     "dep:linera-chain",
     "dep:linera-client",
@@ -107,6 +108,7 @@ dirs = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 linera-chain = { workspace = true, optional = true }
+prometheus = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
 linera-core = { workspace = true, optional = true, features = ["fs"] }
 linera-faucet-client = { workspace = true, optional = true }
