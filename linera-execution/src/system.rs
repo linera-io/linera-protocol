@@ -150,7 +150,12 @@ impl Default for EventSubscriptions {
 
 impl EventSubscriptions {
     pub(crate) fn recalculate_min(&mut self) {
-        self.min_next_index = self.applications.values().copied().min().unwrap_or(u32::MAX);
+        self.min_next_index = self
+            .applications
+            .values()
+            .copied()
+            .min()
+            .unwrap_or(u32::MAX);
     }
 }
 
@@ -597,7 +602,9 @@ where
                     app_next_index,
                     next_index,
                 );
-                subscriptions.applications.insert(application_id, next_index);
+                subscriptions
+                    .applications
+                    .insert(application_id, next_index);
                 subscriptions.recalculate_min();
                 let index = next_index
                     .checked_sub(1)

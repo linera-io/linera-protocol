@@ -461,16 +461,17 @@ mod from {
                     )
                 })?;
                 let stream_id: StreamId = stream.stream_id.parse().map_err(|e| {
-                    ConversionError::UnexpectedCertificateType(format!(
-                        "Invalid stream_id: {e}"
-                    ))
+                    ConversionError::UnexpectedCertificateType(format!("Invalid stream_id: {e}"))
                 })?;
                 let application_id =
-                    stream.application_id.parse::<RealApplicationId>().map_err(|e| {
-                        ConversionError::UnexpectedCertificateType(format!(
-                            "Invalid application_id: {e}"
-                        ))
-                    })?;
+                    stream
+                        .application_id
+                        .parse::<RealApplicationId>()
+                        .map_err(|e| {
+                            ConversionError::UnexpectedCertificateType(format!(
+                                "Invalid application_id: {e}"
+                            ))
+                        })?;
                 Ok(SystemOperation::UpdateStream {
                     application_id,
                     chain_id: stream.chain_id,

@@ -347,8 +347,8 @@ impl ActiveChain {
                         .get(&stream_id)
                         .await
                         .expect("Failed to query chain's event counts");
-                    let Some(next_index) = next_index
-                        .filter(|next_index| *next_index > subscriptions.min_next_index)
+                    let Some(next_index) =
+                        next_index.filter(|next_index| *next_index > subscriptions.min_next_index)
                     else {
                         return Vec::new();
                     };
@@ -356,13 +356,11 @@ impl ActiveChain {
                         .applications
                         .into_iter()
                         .filter(|(_, app_index)| *app_index < next_index)
-                        .map(|(application_id, _)| {
-                            SystemOperation::UpdateStream {
-                                application_id,
-                                chain_id,
-                                stream_id: stream_id.clone(),
-                                next_index,
-                            }
+                        .map(|(application_id, _)| SystemOperation::UpdateStream {
+                            application_id,
+                            chain_id,
+                            stream_id: stream_id.clone(),
+                            next_index,
                         })
                         .collect::<Vec<_>>()
                 }

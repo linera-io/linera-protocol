@@ -744,40 +744,43 @@ where
             // On transient errors (e.g. missing blobs) we fail, so it can be retried after
             // syncing. In auto-retry mode, we can discard or reject message bundles that failed
             // with non-transient errors.
-            let (error, context, incoming_bundle, saved_chain, saved_tracker) =
-                match (result, transaction, checkpoint) {
-                    (Ok(()), _, _) => {
-                        i += 1;
-                        continue;
-                    }
-                    (
-                        Err(ChainError::ExecutionError(error, context)),
-                        Transaction::ReceiveMessages(incoming_bundle),
-                        Some((saved_chain, saved_tracker)),
-                    ) if !error.is_transient_error() => {
-                        (error, context, incoming_bundle, saved_chain, saved_tracker)
-                    }
-                    (
-                        Err(ChainError::ExecutionError(error, _context)),
-                        transaction,
-                        Some((saved_chain, saved_tracker)),
-                    ) if transaction.is_update_stream()
-                        && !error.is_transient_error()
-                        && error.is_limit_error()
-                        && i > 0 =>
-                    {
-                        *chain = saved_chain;
-                        block_execution_tracker.restore_checkpoint(&saved_tracker);
-                        info!(
-                            %error,
-                            index = i,
-                            "UpdateStream exceeded block limits, discarding remaining stream updates"
-                        );
-                        Self::discard_remaining_stream_updates(block, i);
-                        continue;
-                    }
-                    (Err(e), _, _) => return Err(e),
-                };
+            let (error, context, incoming_bundle, saved_chain, saved_tracker) = match (
+                result,
+                transaction,
+                checkpoint,
+            ) {
+                (Ok(()), _, _) => {
+                    i += 1;
+                    continue;
+                }
+                (
+                    Err(ChainError::ExecutionError(error, context)),
+                    Transaction::ReceiveMessages(incoming_bundle),
+                    Some((saved_chain, saved_tracker)),
+                ) if !error.is_transient_error() => {
+                    (error, context, incoming_bundle, saved_chain, saved_tracker)
+                }
+                (
+                    Err(ChainError::ExecutionError(error, _context)),
+                    transaction,
+                    Some((saved_chain, saved_tracker)),
+                ) if transaction.is_update_stream()
+                    && !error.is_transient_error()
+                    && error.is_limit_error()
+                    && i > 0 =>
+                {
+                    *chain = saved_chain;
+                    block_execution_tracker.restore_checkpoint(&saved_tracker);
+                    info!(
+                        %error,
+                        index = i,
+                        "UpdateStream exceeded block limits, discarding remaining stream updates"
+                    );
+                    Self::discard_remaining_stream_updates(block, i);
+                    continue;
+                }
+                (Err(e), _, _) => return Err(e),
+            };
 
             // Restore checkpoint.
             *chain = saved_chain;
@@ -899,10 +902,7 @@ where
         ))
     }
 
-    fn discard_remaining_stream_updates(
-        block: &mut ProposedBlock,
-        mut index: usize,
-    ) {
+    fn discard_remaining_stream_updates(block: &mut ProposedBlock, mut index: usize) {
         while index < block.transactions.len() {
             if block.transactions[index].is_update_stream() {
                 block.transactions.remove(index);
