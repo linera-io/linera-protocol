@@ -74,36 +74,18 @@ impl Chain {
     /// If the handler function fails.
     #[wasm_bindgen(js_name = onNotification)]
     pub fn on_notification(&self, handler: js_sys::Function) -> JsResult<()> {
-        match &self.chain_client {
-            ChainClientInner::Idb(cc) => {
-                let mut notifications = cc.subscribe()?;
-                wasm_bindgen_futures::spawn_local(async move {
-                    while let Some(notification) = notifications.next().await {
-                        tracing::debug!("received notification: {notification:?}");
-                        handler
-                            .call1(
-                                &JsValue::null(),
-                                &serde_wasm_bindgen::to_value(&notification).unwrap(),
-                            )
-                            .unwrap_throw();
-                    }
-                });
+        let mut notifications = with_chain_client!(self, |cc| cc.subscribe()?);
+        wasm_bindgen_futures::spawn_local(async move {
+            while let Some(notification) = notifications.next().await {
+                tracing::debug!("received notification: {notification:?}");
+                handler
+                    .call1(
+                        &JsValue::null(),
+                        &serde_wasm_bindgen::to_value(&notification).unwrap(),
+                    )
+                    .unwrap_throw();
             }
-            ChainClientInner::Mem(cc) => {
-                let mut notifications = cc.subscribe()?;
-                wasm_bindgen_futures::spawn_local(async move {
-                    while let Some(notification) = notifications.next().await {
-                        tracing::debug!("received notification: {notification:?}");
-                        handler
-                            .call1(
-                                &JsValue::null(),
-                                &serde_wasm_bindgen::to_value(&notification).unwrap(),
-                            )
-                            .unwrap_throw();
-                    }
-                });
-            }
-        }
+        });
         Ok(())
     }
 
