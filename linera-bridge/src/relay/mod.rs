@@ -78,15 +78,14 @@ pub async fn run(
     let default_dir = dirs::config_dir()
         .context("no config directory on this platform")?
         .join("linera");
-    let wallet_path = wallet_path
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| default_dir.join("wallet.json"));
-    let keystore_path = keystore_path
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| default_dir.join("keystore.json"));
-    let storage_path = storage_config
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("rocksdb:{}", default_dir.join("wallet.db").display()));
+    let wallet_path =
+        wallet_path.map_or_else(|| default_dir.join("wallet.json"), |p| p.to_path_buf());
+    let keystore_path =
+        keystore_path.map_or_else(|| default_dir.join("keystore.json"), |p| p.to_path_buf());
+    let storage_path = storage_config.map_or_else(
+        || format!("rocksdb:{}", default_dir.join("wallet.db").display()),
+        |s| s.to_string(),
+    );
 
     tracing::info!(
         wallet = %wallet_path.display(),

@@ -90,15 +90,12 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
 
             // Check if this block has burn operations for the fungible app.
             let has_burn = block.block().body.transactions.iter().any(|txn| {
-                if let linera_chain::data_types::Transaction::ExecuteOperation(op) = txn {
-                    if let linera_execution::Operation::User { application_id, .. } = op {
-                        *application_id == fungible_app_id
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
+                matches!(
+                    txn,
+                    linera_chain::data_types::Transaction::ExecuteOperation(
+                        linera_execution::Operation::User { application_id, .. }
+                    ) if *application_id == fungible_app_id
+                )
             });
 
             if has_burn {

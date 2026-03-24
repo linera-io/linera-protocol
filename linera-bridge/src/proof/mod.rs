@@ -118,7 +118,7 @@ impl DepositKey {
         data[8..40].copy_from_slice(&self.block_hash);
         data[40..48].copy_from_slice(&self.tx_index.to_le_bytes());
         data[48..56].copy_from_slice(&self.log_index.to_le_bytes());
-        keccak256(&data).0
+        keccak256(data).0
     }
 }
 

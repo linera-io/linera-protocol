@@ -256,6 +256,7 @@ pub struct StatusSummary {
 
 /// Runs deposit and burn retry loops concurrently.
 /// Returns if either encounters an unrecoverable error.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn retry_loop<E: linera_core::environment::Environment>(
     monitor: Arc<RwLock<MonitorState>>,
     deposit_tx: tokio::sync::mpsc::Sender<crate::relay::DepositRequest>,

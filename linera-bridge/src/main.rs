@@ -18,7 +18,7 @@ enum Cli {
     GenerateDepositProof(GenerateDepositProofOptions),
     /// Run the relay server (proof generation + chain inbox processing + EVM forwarding)
     #[cfg(feature = "relay")]
-    Serve(ServeOptions),
+    Serve(Box<ServeOptions>),
 }
 
 #[derive(clap::Args, Debug, Clone)]
