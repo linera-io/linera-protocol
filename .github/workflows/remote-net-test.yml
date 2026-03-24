@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   remote-net-test:
-    if: ${{ github.event_name == 'merge_group' || github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
@@ -58,8 +58,6 @@ jobs:
         FAUCET_PORT=$(echo "$LINERA_FAUCET_URL" | cut -d: -f3)
         LOG_FILE="/tmp/linera-net-up.log"
         mkdir /tmp/local-linera-net
-        ulimit -c unlimited
-        export RUST_BACKTRACE=full
         cargo run --features storage-service --bin linera -- net up --storage service:tcp:$LINERA_STORAGE_SERVICE:table --policy-config testnet --path /tmp/local-linera-net --validators 2 --shards 2 --with-faucet --faucet-port $FAUCET_PORT --faucet-amount 1000 > "$LOG_FILE" 2>&1 &
         FAUCET_PID=$!
         bash scripts/wait-for-kubernetes-service.sh "$LINERA_FAUCET_URL" "$FAUCET_PID" "$LOG_FILE"
@@ -68,41 +66,6 @@ jobs:
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- storage initialize --genesis /tmp/local-linera-net/genesis.json
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 1000
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
-    - name: Start memory and process monitor
-      run: |
-        (while true; do
-          echo "=== $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
-          free -m
-          echo "--- linera processes ---"
-          ps -eo pid,rss,vsz,stat,comm | grep -E 'linera|PID' || true
-          echo "--- dmesg OOM ---"
-          dmesg -T 2>/dev/null | grep -i -E 'oom|killed process|out of memory' | tail -5 || true
-          sleep 10
-        done) > /tmp/memory-monitor.log 2>&1 &
-        echo $! > /tmp/memory-monitor.pid
     - name: Run the remote-net tests
       run: |
         cargo test -p linera-service remote_net_grpc --features remote-net
-    - name: Show memory monitor log
-      if: always()
-      run: cat /tmp/memory-monitor.log || true
-    - name: Check for OOM kills and crashes
-      if: always()
-      run: |
-        echo "=== dmesg OOM entries ==="
-        dmesg -T 2>/dev/null | grep -i -E 'oom|killed process|out of memory' || echo "No OOM entries found"
-        echo ""
-        echo "=== dmesg segfault/trap entries ==="
-        dmesg -T 2>/dev/null | grep -i -E 'segfault|trap|general protection' || echo "No segfault entries found"
-        echo ""
-        echo "=== zombie linera processes ==="
-        ps -eo pid,stat,comm | grep -E 'Z.*linera' || echo "No zombie linera processes"
-        echo ""
-        echo "=== full linera-net-up log (errors/warnings/panics, excluding 'tcp connect error') ==="
-        grep -i -E 'error|panic|abort|signal|segfault|fatal|thread.*crash' /tmp/linera-net-up.log 2>/dev/null | grep -v 'tcp connect error' | tail -100 || echo "No matches"
-        echo ""
-        echo "=== linera-net-up log (last 500 lines, excluding tcp connect noise) ==="
-        grep -v 'tcp connect error' /tmp/linera-net-up.log 2>/dev/null | tail -500 || true
-        echo ""
-        echo "=== core dumps ==="
-        coredumpctl list 2>/dev/null | tail -10 || echo "coredumpctl not available"

@@ -291,74 +291,11 @@ impl Validator {
     }
 
     fn add_proxy(&mut self, proxy: Child) {
-        Self::monitor_child(&proxy, "linera-proxy");
         self.proxies.push(proxy)
     }
 
     fn add_server(&mut self, server: Child) {
-        Self::monitor_child(&server, "linera-server");
         self.servers.push(server)
-    }
-
-    /// Spawns a background task that monitors a child process via `/proc/<pid>/status`
-    /// and logs an error if the process exits unexpectedly.
-    fn monitor_child(child: &Child, name: &str) {
-        let Some(pid) = child.id() else { return };
-        let name = name.to_owned();
-        tokio::spawn(async move {
-            let status_path = format!("/proc/{pid}/status");
-            let stat_path = format!("/proc/{pid}/stat");
-            loop {
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                match tokio::fs::read_to_string(&status_path).await {
-                    Ok(status) => {
-                        if status.contains("State:\tZ") {
-                            // Read /proc/<pid>/stat to get the exit signal (field 42, 1-indexed)
-                            let stat = tokio::fs::read_to_string(&stat_path)
-                                .await
-                                .unwrap_or_default();
-                            // Fields in /proc/pid/stat are space-separated after the comm field
-                            // which is in parens. exit_signal is field 38 (0-indexed after comm).
-                            let exit_signal = stat
-                                .rfind(')')
-                                .and_then(|i| stat[i + 2..].split_whitespace().nth(36))
-                                .unwrap_or("unknown");
-                            tracing::error!(
-                                pid,
-                                name,
-                                exit_signal,
-                                "Child process became a zombie!\n{status}"
-                            );
-                            // Also dump the stack of all threads that were running
-                            let task_dir = format!("/proc/{pid}/task");
-                            if let Ok(mut entries) = tokio::fs::read_dir(&task_dir).await {
-                                while let Ok(Some(entry)) = entries.next_entry().await {
-                                    let wchan_path = entry.path().join("wchan");
-                                    let stack_path = entry.path().join("stack");
-                                    let wchan = tokio::fs::read_to_string(&wchan_path)
-                                        .await
-                                        .unwrap_or_default();
-                                    let stack = tokio::fs::read_to_string(&stack_path)
-                                        .await
-                                        .unwrap_or_default();
-                                    let tid = entry.file_name();
-                                    tracing::error!(
-                                        pid,
-                                        ?tid,
-                                        "Thread wchan={wchan} stack:\n{stack}"
-                                    );
-                                }
-                            }
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        tracing::error!(pid, name, "Child process disappeared from /proc");
-                        break;
-                    }
-                }
-            }
-        });
     }
 
     #[cfg(with_testing)]
