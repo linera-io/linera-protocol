@@ -61,7 +61,6 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment>(
     }
 }
 
-
 /// Receives pending deposits from the scanner and retries them.
 pub(crate) async fn retry_pending_deposits(
     monitor: &RwLock<MonitorState>,
@@ -119,7 +118,6 @@ pub(crate) async fn retry_pending_deposits(
 
     anyhow::bail!("Pending deposit channel closed");
 }
-
 
 /// Maximum block range per `eth_getLogs` query. Most RPC providers reject
 /// ranges that are too large or return too many results.

@@ -11,30 +11,25 @@
 //! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
 //!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
 
+pub mod evm;
+mod http;
+pub mod linera;
+
 use std::{path::Path, sync::Arc, time::Duration};
 
 use alloy::{
     network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
-    signers::local::PrivateKeySigner, sol,
+    signers::local::PrivateKeySigner,
 };
 use anyhow::{Context as _, Result};
-use axum::{
-    extract::{Query, State},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, post},
-    Json, Router,
-};
 use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
-    data_types::Amount,
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
-use linera_chain::data_types::Transaction;
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, wallet::PersistentWallet, worker::Reason};
-use linera_execution::{Message, Operation, WasmRuntime};
+use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_persistent::Persist;
 use linera_storage::DbStorage;
@@ -46,323 +41,11 @@ use linera_views::{
     lru_prefix_cache::StorageCacheConfig,
 };
 use tokio::sync::{mpsc, oneshot, RwLock};
-use tower_http::cors::CorsLayer;
 
 use crate::{
     monitor::{self, MonitorState},
-    proof::gen::{DepositProofClient, HttpDepositProofClient, ProofError},
+    proof::gen::HttpDepositProofClient,
 };
-
-// ── Alloy ABI for FungibleBridge.addBlock ──
-
-sol! {
-    #[sol(rpc)]
-    interface IFungibleBridge {
-        function addBlock(bytes calldata data) external;
-    }
-}
-
-// ── BCS-compatible type matching evm_bridge::BridgeOperation ──
-
-/// Must match `evm_bridge::BridgeOperation` variant-for-variant for BCS compatibility.
-#[derive(serde::Serialize)]
-enum BridgeOperation {
-    ProcessDeposit {
-        block_header_rlp: Vec<u8>,
-        receipt_rlp: Vec<u8>,
-        proof_nodes: Vec<Vec<u8>>,
-        tx_index: u64,
-        log_index: u64,
-    },
-}
-
-// ── Channel types for deposit requests ──
-
-pub(crate) struct DepositRequest {
-    pub(crate) proof: crate::proof::gen::DepositProof,
-    pub(crate) response: oneshot::Sender<Result<(), String>>,
-}
-
-// ── Shared state for the HTTP server ──
-
-struct AppState {
-    proof_client: HttpDepositProofClient,
-    deposit_tx: mpsc::Sender<DepositRequest>,
-    monitor: Arc<RwLock<MonitorState>>,
-}
-
-// ── HTTP handlers ──
-
-#[derive(serde::Deserialize)]
-struct DepositHttpRequest {
-    tx_hash: String,
-}
-
-async fn deposit_handler(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<DepositHttpRequest>,
-) -> impl IntoResponse {
-    tracing::info!(tx_hash = %req.tx_hash, "Received deposit request");
-
-    let tx_hash = match req.tx_hash.parse() {
-        Ok(h) => h,
-        Err(_) => {
-            tracing::error!(tx_hash = %req.tx_hash, "Invalid tx_hash format");
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "invalid tx_hash"})),
-            );
-        }
-    };
-
-    // Retry proof generation — on public testnets the RPC may not have
-    // indexed the receipt yet when the frontend sends the tx hash.
-    // Permanent errors (invalid tx, missing deposit event) fail immediately.
-    tracing::info!(%tx_hash, "Generating deposit proof...");
-    let mut proof = None;
-    for attempt in 0..5 {
-        match state.proof_client.generate_deposit_proof(tx_hash).await {
-            Ok(p) => {
-                tracing::info!(
-                    %tx_hash,
-                    tx_index = p.tx_index,
-                    log_count = p.log_indices.len(),
-                    "Deposit proof generated"
-                );
-                proof = Some(p);
-                break;
-            }
-            Err(ProofError::Permanent(e)) => {
-                tracing::error!(%tx_hash, "Deposit proof generation failed permanently: {e:#}");
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(serde_json::json!({"error": format!("{e:#}")})),
-                );
-            }
-            Err(ProofError::Transient(e)) => {
-                if attempt < 4 {
-                    tracing::warn!(
-                        %tx_hash, attempt, "Deposit proof generation failed, retrying: {e:#}"
-                    );
-                    tokio::time::sleep(std::time::Duration::from_secs(2 * (attempt + 1))).await;
-                } else {
-                    tracing::error!(%tx_hash, "Deposit proof generation failed after 5 attempts: {e:#}");
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({"error": format!("{e:#}")})),
-                    );
-                }
-            }
-        }
-    }
-    let proof = proof.unwrap();
-
-    tracing::info!(%tx_hash, "Sending deposit to processing channel...");
-    let (resp_tx, resp_rx) = oneshot::channel();
-    if state
-        .deposit_tx
-        .send(DepositRequest {
-            proof,
-            response: resp_tx,
-        })
-        .await
-        .is_err()
-    {
-        tracing::error!(%tx_hash, "Relay deposit channel closed");
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "relay channel closed"})),
-        );
-    }
-
-    match resp_rx.await {
-        Ok(Ok(())) => {
-            tracing::info!(%tx_hash, "Deposit processed successfully");
-            (StatusCode::OK, Json(serde_json::json!({"status": "ok"})))
-        }
-        Ok(Err(e)) => {
-            tracing::error!(%tx_hash, "Deposit processing failed: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": e})),
-            )
-        }
-        Err(_) => {
-            tracing::error!(%tx_hash, "Deposit response channel closed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "channel closed"})),
-            )
-        }
-    }
-}
-
-// ── Monitor HTTP handlers ──
-
-async fn monitor_status_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let summary = state.monitor.read().await.status_summary();
-    Json(summary)
-}
-
-#[derive(serde::Deserialize)]
-struct MonitorFilterParams {
-    status: Option<String>,
-}
-
-async fn monitor_deposits_handler(
-    State(state): State<Arc<AppState>>,
-    Query(params): Query<MonitorFilterParams>,
-) -> impl IntoResponse {
-    let monitor = state.monitor.read().await;
-    let deposits: Vec<_> = match params.status.as_deref() {
-        Some("pending") => monitor.pending_deposits().into_iter().cloned().collect(),
-        Some("completed") => monitor.completed_deposits().into_iter().cloned().collect(),
-        _ => monitor.all_deposits().into_iter().cloned().collect(),
-    };
-    Json(deposits)
-}
-
-async fn monitor_burns_handler(
-    State(state): State<Arc<AppState>>,
-    Query(params): Query<MonitorFilterParams>,
-) -> impl IntoResponse {
-    let monitor = state.monitor.read().await;
-    let burns: Vec<_> = match params.status.as_deref() {
-        Some("pending") => monitor.pending_burns().into_iter().cloned().collect(),
-        Some("completed") => monitor.completed_burns().into_iter().cloned().collect(),
-        _ => monitor.all_burns().into_iter().cloned().collect(),
-    };
-    Json(burns)
-}
-
-// ── Helpers ──
-
-/// Find all Credit-to-Address20 messages in a block's transactions for a given app.
-///
-/// Returns `(owner, amount)` pairs for each matching credit.
-pub(crate) fn find_address20_credits(
-    transactions: &[Transaction],
-    fungible_app_id: ApplicationId,
-) -> Vec<(AccountOwner, Amount)> {
-    let mut credits = Vec::new();
-    for txn in transactions {
-        if let Transaction::ReceiveMessages(bundle) = txn {
-            for posted in &bundle.bundle.messages {
-                if let Message::User {
-                    application_id,
-                    bytes,
-                } = &posted.message
-                {
-                    if *application_id == fungible_app_id {
-                        if let Some(credit) = try_parse_credit_to_address20(bytes.as_slice()) {
-                            credits.push(credit);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    credits
-}
-
-/// Extract (owner, amount) from a fungible Credit message if the target is Address20.
-///
-/// BCS layout: variant 0 (Credit) + target: AccountOwner + amount: Amount + source: AccountOwner
-fn try_parse_credit_to_address20(bytes: &[u8]) -> Option<(AccountOwner, Amount)> {
-    // Variant 0 = Credit
-    if bytes.first() != Some(&0) {
-        return None;
-    }
-    #[derive(serde::Deserialize)]
-    struct Credit {
-        target: AccountOwner,
-        amount: Amount,
-        _source: AccountOwner,
-    }
-    let credit: Credit = bcs::from_bytes(&bytes[1..]).ok()?;
-    if !matches!(credit.target, AccountOwner::Address20(_)) {
-        return None;
-    }
-    Some((credit.target, credit.amount))
-}
-
-/// BCS-serialize a WrappedFungibleOperation::Burn (variant index 7).
-fn serialize_burn_operation(owner: &AccountOwner, amount: &Amount) -> Vec<u8> {
-    let mut buf = vec![7u8];
-    buf.extend(bcs::to_bytes(owner).unwrap());
-    buf.extend(bcs::to_bytes(amount).unwrap());
-    buf
-}
-
-// ── EVM forwarding helper ──
-
-/// BCS-serialize and forward a certified block to FungibleBridge on EVM.
-pub(crate) async fn forward_cert_to_evm(
-    cert: &impl serde::Serialize,
-    bridge_addr: Address,
-    provider: &impl alloy::providers::Provider,
-) -> Result<()> {
-    let cert_bytes = bcs::to_bytes(cert).context("failed to BCS-serialize certificate")?;
-
-    tracing::info!(
-        size = cert_bytes.len(),
-        "Calling addBlock on FungibleBridge..."
-    );
-
-    let bridge_contract = IFungibleBridge::new(bridge_addr, provider);
-    let pending_tx = bridge_contract
-        .addBlock(cert_bytes.into())
-        .send()
-        .await
-        .context("addBlock send failed")?;
-    let receipt = pending_tx
-        .get_receipt()
-        .await
-        .context("addBlock receipt failed")?;
-
-    tracing::info!(
-        tx = ?receipt.transaction_hash,
-        "addBlock transaction confirmed"
-    );
-    Ok(())
-}
-
-// ── RocksDB storage helper ──
-
-type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
-
-async fn create_rocksdb_storage(
-    path: &Path,
-    cache_sizes: linera_storage::StorageCacheSizes,
-) -> Result<RocksDbStorage> {
-    let config = LruCachingConfig {
-        inner_config: RocksDbStoreInternalConfig {
-            path_with_guard: PathWithGuard::new(path.to_path_buf()),
-            spawn_mode: RocksDbSpawnMode::get_spawn_mode_from_runtime(),
-            max_stream_queries: 10,
-        },
-        storage_cache_config: StorageCacheConfig {
-            max_cache_size: 10_000_000,
-            max_value_entry_size: 1_000_000,
-            max_find_keys_entry_size: 10_000_000,
-            max_find_key_values_entry_size: 10_000_000,
-            max_cache_entries: 1000,
-            max_cache_value_size: 10_000_000,
-            max_cache_find_keys_size: 10_000_000,
-            max_cache_find_key_values_size: 10_000_000,
-        },
-    };
-    let storage = DbStorage::<RocksDbDatabase, _>::maybe_create_and_connect(
-        &config,
-        "bridge_relay",
-        Some(WasmRuntime::default()),
-        cache_sizes,
-    )
-    .await?;
-    Ok(storage)
-}
-
-// ── Entry point ──
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
@@ -538,7 +221,43 @@ pub async fn run(
     .await
 }
 
-// ── Main event loop ──
+pub(crate) struct DepositRequest {
+    pub(crate) proof: crate::proof::gen::DepositProof,
+    pub(crate) response: oneshot::Sender<Result<(), String>>,
+}
+
+type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
+
+async fn create_rocksdb_storage(
+    path: &Path,
+    cache_sizes: linera_storage::StorageCacheSizes,
+) -> Result<RocksDbStorage> {
+    let config = LruCachingConfig {
+        inner_config: RocksDbStoreInternalConfig {
+            path_with_guard: PathWithGuard::new(path.to_path_buf()),
+            spawn_mode: RocksDbSpawnMode::get_spawn_mode_from_runtime(),
+            max_stream_queries: 10,
+        },
+        storage_cache_config: StorageCacheConfig {
+            max_cache_size: 10_000_000,
+            max_value_entry_size: 1_000_000,
+            max_find_keys_entry_size: 10_000_000,
+            max_find_key_values_entry_size: 10_000_000,
+            max_cache_entries: 1000,
+            max_cache_value_size: 10_000_000,
+            max_cache_find_keys_size: 10_000_000,
+            max_cache_find_key_values_size: 10_000_000,
+        },
+    };
+    let storage = DbStorage::<RocksDbDatabase, _>::maybe_create_and_connect(
+        &config,
+        "bridge_relay",
+        Some(WasmRuntime::default()),
+        cache_sizes,
+    )
+    .await?;
+    Ok(storage)
+}
 
 #[allow(clippy::too_many_arguments)]
 async fn serve_loop<E: linera_core::environment::Environment + 'static>(
@@ -638,19 +357,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     };
 
     let proof_client = HttpDepositProofClient::new(rpc_url)?;
-    let app_state = Arc::new(AppState {
-        proof_client,
-        deposit_tx,
-        monitor: Arc::clone(&monitor),
-    });
-
-    let app = Router::new()
-        .route("/deposit", post(deposit_handler))
-        .route("/monitor/status", get(monitor_status_handler))
-        .route("/monitor/deposits", get(monitor_deposits_handler))
-        .route("/monitor/burns", get(monitor_burns_handler))
-        .layer(CorsLayer::permissive())
-        .with_state(app_state);
+    let app = http::build_router(proof_client, deposit_tx, Arc::clone(&monitor));
 
     let bind_addr = format!("0.0.0.0:{port}");
     tracing::info!("HTTP server listening on {bind_addr}");
@@ -731,10 +438,13 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                 // Scan inbox certs for Credit messages to Address20 and submit Burns.
                 let mut burn_ops = vec![];
                 for cert in &certs {
-                    for (owner, amount) in find_address20_credits(&cert.block().body.transactions, fungible_app_id) {
+                    for (owner, amount) in linera::find_address20_credits(
+                        &cert.block().body.transactions,
+                        fungible_app_id,
+                    ) {
                         burn_ops.push(Operation::User {
                             application_id: fungible_app_id,
-                            bytes: serialize_burn_operation(&owner, &amount),
+                            bytes: linera::serialize_burn_operation(&owner, &amount),
                         });
                     }
                 }
@@ -751,8 +461,12 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                                 height = %cert.block().header.height,
                                 "Burn operations committed"
                             );
-                            if let Err(e) = forward_cert_to_evm(&cert, bridge_addr, &provider).await {
-                                tracing::error!("Failed to forward burn cert to EVM: {e:#}");
+                            if let Err(e) = evm::forward_cert_to_evm(
+                                &cert, bridge_addr, &provider,
+                            ).await {
+                                tracing::error!(
+                                    "Failed to forward burn cert to EVM: {e:#}"
+                                );
                             }
                         }
                         Ok(other) => tracing::error!("Burn not committed: {other:?}"),
@@ -766,7 +480,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                     let proof = &deposit_req.proof;
 
                     let operations: Vec<_> = proof.log_indices.iter().map(|&log_index| {
-                        let op = BridgeOperation::ProcessDeposit {
+                        let op = evm::BridgeOperation::ProcessDeposit {
                             block_header_rlp: proof.block_header_rlp.clone(),
                             receipt_rlp: proof.receipt_rlp.clone(),
                             proof_nodes: proof.proof_nodes.clone(),

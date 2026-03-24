@@ -5424,6 +5424,7 @@ dependencies = [
  "clap",
  "dirs",
  "fs-err",
+ "fungible",
  "futures",
  "hex",
  "insta",

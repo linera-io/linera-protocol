@@ -16,7 +16,7 @@ use linera_base::identifiers::ApplicationId;
 use tokio::sync::RwLock;
 
 use super::{MonitorState, PendingBurn};
-use crate::relay::find_address20_credits;
+use crate::relay::linera::find_address20_credits;
 
 /// Background task that scans Linera block history for Credit messages
 /// to Address20 owners and checks EVM for completion.
@@ -102,7 +102,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             });
 
             if has_burn {
-                match crate::relay::forward_cert_to_evm(&block, bridge_addr, provider).await {
+                match crate::relay::evm::forward_cert_to_evm(&block, bridge_addr, provider).await {
                     Ok(()) => {
                         tracing::info!(height, "Burn cert re-forwarded to EVM");
                         forwarded = true;
@@ -141,8 +141,6 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
 
     anyhow::bail!("Pending burn channel closed");
 }
-
-// ── private ──
 
 async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     monitor: &RwLock<MonitorState>,
