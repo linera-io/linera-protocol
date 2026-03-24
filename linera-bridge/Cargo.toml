@@ -32,13 +32,7 @@ codegen = [
     "dep:serde-reflection",
     "dep:serde_yaml",
 ]
-cli = [
-    "offchain",
-    "dep:clap",
-    "dep:reqwest",
-    "dep:serde_json",
-    "dep:fs-err",
-]
+cli = ["offchain", "dep:clap", "dep:reqwest", "dep:serde_json", "dep:fs-err"]
 relay = [
     "offchain",
     "cli",
@@ -98,9 +92,9 @@ url = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 fs-err = { workspace = true, optional = true }
 fungible = { path = "../examples/fungible", optional = true }
-wrapped-fungible = { path = "../examples/wrapped-fungible", optional = true }
 reqwest = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+wrapped-fungible = { path = "../examples/wrapped-fungible", optional = true }
 
 # relay feature deps
 axum = { workspace = true, optional = true }
@@ -108,13 +102,13 @@ dirs = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 linera-chain = { workspace = true, optional = true }
-prometheus = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
 linera-core = { workspace = true, optional = true, features = ["fs"] }
 linera-faucet-client = { workspace = true, optional = true }
 linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 linera-storage = { workspace = true, optional = true }
 linera-views = { workspace = true, optional = true }
+prometheus = { workspace = true, optional = true }
 rustls = { version = "0.23", optional = true, features = ["ring"] }
 tower-http = { workspace = true, optional = true, features = ["cors"] }
 tracing = { workspace = true, optional = true }
