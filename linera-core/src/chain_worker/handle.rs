@@ -101,27 +101,27 @@ impl ServiceRuntimeActor {
         let (execution_state_sender, incoming_execution_requests) =
             futures::channel::mpsc::unbounded();
         let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
-        let task = thread_pool
-            .run((), move |()| async move {
-                // The dummy context is overwritten by `prepare_for_query`
-                // before the first actual query is executed.
-                ServiceSyncRuntime::new(
-                    execution_state_sender,
-                    QueryContext {
-                        chain_id,
-                        next_block_height: BlockHeight(0),
-                        local_time: Timestamp::from(0),
-                    },
-                )
-                .run(&runtime_request_receiver)
-            })
-            .await;
-        ServiceRuntimeActor {
+
+        Self {
             endpoint: ServiceRuntimeEndpoint {
                 incoming_execution_requests,
                 runtime_request_sender,
             },
-            task,
+            task: thread_pool
+                .run((), move |()| async move {
+                    // The dummy context is overwritten by `prepare_for_query`
+                    // before the first actual query is executed.
+                    ServiceSyncRuntime::new(
+                        execution_state_sender,
+                        QueryContext {
+                            chain_id,
+                            next_block_height: BlockHeight(0),
+                            local_time: Timestamp::from(0),
+                        },
+                    )
+                    .run(&runtime_request_receiver)
+                })
+                .await,
         }
     }
 }
