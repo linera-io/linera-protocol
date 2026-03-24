@@ -83,31 +83,6 @@ sol! {
     }
 }
 
-/// Queries the evm-bridge app to check whether a deposit has been processed.
-/// Mirrors `linera_bridge::monitor::query_deposit_processed` for use in tests
-/// without enabling the `relay` feature.
-async fn query_deposit_processed<E: linera_core::environment::Environment>(
-    chain_client: &linera_core::client::ChainClient<E>,
-    bridge_app_id: ApplicationId,
-    deposit_key: &linera_bridge::proof::DepositKey,
-) -> anyhow::Result<bool> {
-    #[derive(Serialize)]
-    struct GqlRequest {
-        query: String,
-    }
-
-    let hash_hex = format!("0x{}", alloy::primitives::hex::encode(deposit_key.hash()));
-    let gql = format!(r#"{{ isDepositProcessed(hash: "{hash_hex}") }}"#);
-    let query = Query::user_without_abi(bridge_app_id, &GqlRequest { query: gql })?;
-    let (outcome, _) = chain_client.query_application(query, None).await?;
-    let response_bytes = match outcome.response {
-        QueryResponse::User(bytes) => bytes,
-        other => anyhow::bail!("unexpected query response: {other:?}"),
-    };
-    let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
-    Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
-}
-
 #[tokio::test]
 #[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
 async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
@@ -360,7 +335,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
 
     // ── Phase 7a: Verify deposit is NOT yet processed ──
     assert!(
-        !query_deposit_processed(&cc, bridge_app_id, &deposit_key).await?,
+        !linera_bridge_e2e::query_deposit_processed(&cc, bridge_app_id, &deposit_key).await?,
         "deposit should NOT be processed before ProcessDeposit"
     );
     tracing::info!("Confirmed: deposit not yet processed.");
@@ -424,7 +399,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
 
     // ── Phase 9: Verify deposit IS now processed ──
     assert!(
-        query_deposit_processed(&cc, bridge_app_id, &deposit_key).await?,
+        linera_bridge_e2e::query_deposit_processed(&cc, bridge_app_id, &deposit_key).await?,
         "deposit should be marked as processed after ProcessDeposit"
     );
     tracing::info!("Test passed! Deposit confirmed as processed via GraphQL query.");

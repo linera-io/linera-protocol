@@ -78,9 +78,9 @@ enum BridgeOperation {
 
 // ── Channel types for deposit requests ──
 
-struct DepositRequest {
-    proof: crate::proof::gen::DepositProof,
-    response: oneshot::Sender<Result<(), String>>,
+pub(crate) struct DepositRequest {
+    pub(crate) proof: crate::proof::gen::DepositProof,
+    pub(crate) response: oneshot::Sender<Result<(), String>>,
 }
 
 // ── Shared state for the HTTP server ──
@@ -297,7 +297,7 @@ fn serialize_burn_operation(owner: &AccountOwner, amount: &Amount) -> Vec<u8> {
 // ── EVM forwarding helper ──
 
 /// BCS-serialize and forward a certified block to FungibleBridge on EVM.
-async fn forward_cert_to_evm(
+pub(crate) async fn forward_cert_to_evm(
     cert: &impl serde::Serialize,
     bridge_addr: Address,
     provider: &impl alloy::providers::Provider,
@@ -380,6 +380,7 @@ pub async fn run(
     cache_sizes: linera_storage::StorageCacheSizes,
     monitor_scan_interval: u64,
     monitor_start_block: u64,
+    max_retries: u32,
 ) -> Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -483,6 +484,10 @@ pub async fn run(
             .await?;
         }
 
+        // Register for notifications so the listener can connect to validators.
+        ctx.client
+            .extend_chain_mode(cid, linera_core::client::ListeningMode::FullChain);
+
         // Sync from validators.
         let chain_client = ctx.make_chain_client(cid).await?;
         chain_client.synchronize_from_validators().await?;
@@ -528,6 +533,7 @@ pub async fn run(
         port,
         monitor_scan_interval,
         monitor_start_block,
+        max_retries,
     ))
     .await
 }
@@ -545,6 +551,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     port: u16,
     monitor_scan_interval: u64,
     monitor_start_block: u64,
+    max_retries: u32,
 ) -> Result<()> {
     // ── Set up EVM provider ──
     let bridge_addr: Address = evm_bridge_address
@@ -571,9 +578,12 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let (listener, _abort_handle, _) = chain_client.listen().await?;
     let chain_listener_handle = tokio::spawn(listener);
 
-    // ── Monitor state + scan loops ──
+    // ── Monitor state + scan/retry channels ──
     let monitor = Arc::new(RwLock::new(MonitorState::new(monitor_start_block)));
     let scan_interval = Duration::from_secs(monitor_scan_interval);
+    let (pending_deposit_tx, pending_deposit_rx) =
+        tokio::sync::mpsc::channel::<monitor::PendingDeposit>(64);
+    let (pending_burn_tx, pending_burn_rx) = tokio::sync::mpsc::channel::<monitor::PendingBurn>(64);
 
     let evm_scan_handle = {
         let monitor = Arc::clone(&monitor);
@@ -585,6 +595,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             bridge_addr,
             chain_client,
             bridge_app_id,
+            pending_deposit_tx,
             scan_interval,
         ))
     };
@@ -598,13 +609,35 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             fungible_app_id,
             provider,
             bridge_addr,
+            pending_burn_tx,
             scan_interval,
         ))
     };
 
-    // ── Start HTTP server ──
-    let proof_client = HttpDepositProofClient::new(rpc_url)?;
+    // ── Start HTTP server + retry loop ──
     let (deposit_tx, mut deposit_rx) = mpsc::channel::<DepositRequest>(16);
+
+    let retry_handle = {
+        let monitor = Arc::clone(&monitor);
+        let deposit_tx = deposit_tx.clone();
+        let proof_client = HttpDepositProofClient::new(rpc_url)?;
+        let chain_client = chain_client.clone();
+        let provider = provider.clone();
+        tokio::spawn(monitor::retry_loop(
+            monitor,
+            deposit_tx,
+            proof_client,
+            pending_deposit_rx,
+            chain_client,
+            fungible_app_id,
+            bridge_addr,
+            provider,
+            pending_burn_rx,
+            max_retries,
+        ))
+    };
+
+    let proof_client = HttpDepositProofClient::new(rpc_url)?;
     let app_state = Arc::new(AppState {
         proof_client,
         deposit_tx,
@@ -641,6 +674,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let mut chain_listener_handle = chain_listener_handle;
     let mut evm_scan_handle = evm_scan_handle;
     let mut linera_scan_handle = linera_scan_handle;
+    let mut retry_handle = retry_handle;
     let mut http_server_handle = http_server_handle;
     loop {
         tokio::select! {
@@ -652,6 +686,9 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             }
             result = &mut linera_scan_handle => {
                 anyhow::bail!("Linera scan loop exited unexpectedly: {result:?}");
+            }
+            result = &mut retry_handle => {
+                anyhow::bail!("Retry loop exited unexpectedly: {result:?}");
             }
             result = &mut http_server_handle => {
                 anyhow::bail!("HTTP server exited unexpectedly: {result:?}");

@@ -121,6 +121,10 @@ struct ServeOptions {
     /// EVM block number to start scanning from for deposit monitoring.
     #[arg(long, default_value = "0")]
     monitor_start_block: u64,
+
+    /// Maximum number of retry attempts for pending deposits and burns.
+    #[arg(long, default_value = "10")]
+    max_retries: u32,
 }
 
 fn main() -> Result<()> {
@@ -160,6 +164,7 @@ impl ServeOptions {
             },
             self.monitor_scan_interval,
             self.monitor_start_block,
+            self.max_retries,
         ))
         .await
     }

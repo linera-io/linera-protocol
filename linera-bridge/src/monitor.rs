@@ -8,7 +8,11 @@
 //! - **Linera scan**: walks block history for Credit-to-Address20 messages, checks EVM
 //!   for completion via ERC-20 `Transfer` events.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use alloy::{
     primitives::{Address, B256, U256},
@@ -48,6 +52,25 @@ pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
     Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
 }
 
+/// A pending deposit detected by the EVM scanner, sent to the retry loop.
+#[derive(Debug, Clone)]
+pub struct PendingDeposit {
+    pub key: DepositKey,
+    pub tx_hash: B256,
+    pub depositor: Address,
+    pub amount: U256,
+    pub nonce: U256,
+}
+
+/// A pending burn detected by the Linera scanner, sent to the retry loop.
+#[derive(Debug, Clone)]
+pub struct PendingBurn {
+    pub linera_height: u64,
+    pub burn_index: usize,
+    pub evm_recipient: String,
+    pub amount: String,
+}
+
 /// A tracked EVM→Linera deposit.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TrackedDeposit {
@@ -57,6 +80,11 @@ pub struct TrackedDeposit {
     pub amount: String,
     pub nonce: String,
     pub forwarded_to_linera: bool,
+    pub failed: bool,
+    #[serde(skip)]
+    pub retry_count: u32,
+    #[serde(skip)]
+    pub last_retry_at: Option<Instant>,
 }
 
 /// A tracked Linera→EVM burn (Credit to Address20).
@@ -67,6 +95,24 @@ pub struct TrackedBurn {
     pub evm_recipient: String,
     pub amount: String,
     pub forwarded_to_evm: bool,
+    pub failed: bool,
+    #[serde(skip)]
+    pub retry_count: u32,
+    #[serde(skip)]
+    pub last_retry_at: Option<Instant>,
+}
+
+/// Whether an item is eligible for retry based on exponential backoff.
+/// Backoff schedule: 30s, 60s, 120s, 240s, 480s (capped).
+fn retry_eligible(retry_count: u32, last_retry_at: Option<Instant>, max_retries: u32) -> bool {
+    if retry_count >= max_retries {
+        return false;
+    }
+    let backoff = Duration::from_secs(30 * 2u64.pow(retry_count.min(4)));
+    match last_retry_at {
+        None => true,
+        Some(t) => t.elapsed() >= backoff,
+    }
 }
 
 /// In-memory monitoring state shared across scan loops and HTTP handlers.
@@ -87,6 +133,9 @@ impl MonitorState {
         }
     }
 
+    /// Tracks a deposit. Returns `true` if this is a newly discovered deposit.
+    /// Uses Entry API instead of insert() to avoid overwriting existing entries
+    /// that may have accumulated retry state.
     pub fn track_evm_to_linera(
         &mut self,
         key: DepositKey,
@@ -94,15 +143,24 @@ impl MonitorState {
         depositor: Address,
         amount: U256,
         nonce: U256,
-    ) {
-        self.deposits.entry(key.clone()).or_insert(TrackedDeposit {
-            deposit_key: key,
-            tx_hash: format!("{tx_hash:#x}"),
-            depositor: format!("{depositor:#x}"),
-            amount: amount.to_string(),
-            nonce: nonce.to_string(),
-            forwarded_to_linera: false,
-        });
+    ) -> bool {
+        match self.deposits.entry(key.clone()) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(e) => {
+                e.insert(TrackedDeposit {
+                    deposit_key: key,
+                    tx_hash: format!("{tx_hash:#x}"),
+                    depositor: format!("{depositor:#x}"),
+                    amount: amount.to_string(),
+                    nonce: nonce.to_string(),
+                    forwarded_to_linera: false,
+                    failed: false,
+                    retry_count: 0,
+                    last_retry_at: None,
+                });
+                true
+            }
+        }
     }
 
     pub fn complete_evm_to_linera(&mut self, key: &DepositKey) {
@@ -113,21 +171,33 @@ impl MonitorState {
         }
     }
 
+    /// Tracks a burn. Returns `true` if this is a newly discovered burn.
+    /// Uses Entry API instead of insert() to avoid overwriting existing entries
+    /// that may have accumulated retry state.
     pub fn track_linera_to_evm(
         &mut self,
         linera_height: u64,
         burn_index: usize,
         evm_recipient: String,
         amount: String,
-    ) {
+    ) -> bool {
         let key = (linera_height, burn_index);
-        self.burns.entry(key).or_insert(TrackedBurn {
-            linera_height,
-            burn_index,
-            evm_recipient,
-            amount,
-            forwarded_to_evm: false,
-        });
+        match self.burns.entry(key) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(e) => {
+                e.insert(TrackedBurn {
+                    linera_height,
+                    burn_index,
+                    evm_recipient,
+                    amount,
+                    forwarded_to_evm: false,
+                    failed: false,
+                    retry_count: 0,
+                    last_retry_at: None,
+                });
+                true
+            }
+        }
     }
 
     pub fn complete_linera_to_evm(&mut self, linera_height: u64, burn_index: usize) {
@@ -175,6 +245,54 @@ impl MonitorState {
         self.burns.values().filter(|b| b.forwarded_to_evm).collect()
     }
 
+    pub fn deposits_ready_for_retry(&self, max_retries: u32) -> Vec<&TrackedDeposit> {
+        self.deposits
+            .values()
+            .filter(|d| {
+                !d.forwarded_to_linera
+                    && !d.failed
+                    && retry_eligible(d.retry_count, d.last_retry_at, max_retries)
+            })
+            .collect()
+    }
+
+    pub fn burns_ready_for_retry(&self, max_retries: u32) -> Vec<&TrackedBurn> {
+        self.burns
+            .values()
+            .filter(|b| {
+                !b.forwarded_to_evm
+                    && !b.failed
+                    && retry_eligible(b.retry_count, b.last_retry_at, max_retries)
+            })
+            .collect()
+    }
+
+    pub fn mark_deposit_retried(&mut self, key: &DepositKey) {
+        if let Some(d) = self.deposits.get_mut(key) {
+            d.retry_count += 1;
+            d.last_retry_at = Some(Instant::now());
+        }
+    }
+
+    pub fn mark_deposit_failed(&mut self, key: &DepositKey) {
+        if let Some(d) = self.deposits.get_mut(key) {
+            d.failed = true;
+        }
+    }
+
+    pub fn mark_burn_retried(&mut self, height: u64, burn_index: usize) {
+        if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
+            b.retry_count += 1;
+            b.last_retry_at = Some(Instant::now());
+        }
+    }
+
+    pub fn mark_burn_failed(&mut self, height: u64, burn_index: usize) {
+        if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
+            b.failed = true;
+        }
+    }
+
     pub fn status_summary(&self) -> StatusSummary {
         StatusSummary {
             deposits_pending: self
@@ -215,21 +333,32 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment>(
     bridge_addr: Address,
     chain_client: linera_core::client::ChainClient<E>,
     bridge_app_id: ApplicationId,
+    pending_deposit_tx: tokio::sync::mpsc::Sender<PendingDeposit>,
     scan_interval: Duration,
 ) {
     let event_sig = deposit_event_signature();
 
     loop {
-        if let Err(e) = evm_scan_iteration(&monitor, &provider, bridge_addr, event_sig).await {
-            tracing::warn!("EVM scan iteration failed: {e:#}");
-        }
+        let (scan_result, completion_result) = tokio::join!(
+            evm_scan_iteration(
+                &monitor,
+                &provider,
+                bridge_addr,
+                event_sig,
+                &pending_deposit_tx
+            ),
+            check_deposit_completion(&monitor, &chain_client, bridge_app_id),
+        );
 
-        if let Err(e) = check_deposit_completion(&monitor, &chain_client, bridge_app_id).await {
-            tracing::warn!("Deposit completion check failed: {e:#}");
+        if let Err(error) = scan_result {
+            tracing::warn!(error = ?error, "EVM scan iteration failed");
+        }
+        if let Err(error) = completion_result {
+            tracing::warn!(error = ?error, "Deposit completion check failed");
         }
 
         let summary = monitor.read().await.status_summary();
-        tracing::info!(
+        tracing::debug!(
             pending = summary.deposits_pending,
             completed = summary.deposits_completed,
             last_block = summary.last_scanned_evm_block,
@@ -288,6 +417,7 @@ async fn evm_scan_iteration(
     provider: &impl Provider,
     bridge_addr: Address,
     event_sig: B256,
+    pending_tx: &tokio::sync::mpsc::Sender<PendingDeposit>,
 ) -> anyhow::Result<()> {
     let last_block = monitor.read().await.last_scanned_evm_block;
 
@@ -342,13 +472,13 @@ async fn evm_scan_iteration(
                 log_index,
             };
 
-            state.track_evm_to_linera(
+            let _ = pending_tx.try_send(PendingDeposit {
                 key,
                 tx_hash,
-                deposit.depositor,
-                deposit.amount,
-                deposit.nonce,
-            );
+                depositor: deposit.depositor,
+                amount: deposit.amount,
+                nonce: deposit.nonce,
+            });
         }
 
         // Save progress per chunk so we don't rescan on failure.
@@ -392,15 +522,20 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment>(
     fungible_app_id: ApplicationId,
     provider: impl Provider + Clone + 'static,
     bridge_addr: Address,
+    pending_burn_tx: tokio::sync::mpsc::Sender<PendingBurn>,
     scan_interval: Duration,
 ) {
     loop {
-        if let Err(e) = linera_scan_iteration(&monitor, &chain_client, fungible_app_id).await {
-            tracing::warn!("Linera scan iteration failed: {e:#}");
-        }
+        let (scan_result, completion_result) = tokio::join!(
+            linera_scan_iteration(&monitor, &chain_client, fungible_app_id, &pending_burn_tx),
+            check_burn_completion(&monitor, &provider, bridge_addr),
+        );
 
-        if let Err(e) = check_burn_completion(&monitor, &provider, bridge_addr).await {
-            tracing::warn!("Burn completion check failed: {e:#}");
+        if let Err(error) = scan_result {
+            tracing::warn!(?error, "Linera scan iteration failed");
+        }
+        if let Err(error) = completion_result {
+            tracing::warn!(?error, "Burn completion check failed");
         }
 
         let summary = monitor.read().await.status_summary();
@@ -419,6 +554,7 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     monitor: &RwLock<MonitorState>,
     chain_client: &linera_core::client::ChainClient<E>,
     fungible_app_id: linera_base::identifiers::ApplicationId,
+    pending_burn_tx: &tokio::sync::mpsc::Sender<PendingBurn>,
 ) -> anyhow::Result<()> {
     let last_height = monitor.read().await.last_scanned_linera_height;
 
@@ -455,10 +591,16 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
         }
     }
 
-    let mut state = monitor.write().await;
-    for (height, burn_index, recipient, amount) in new_burns {
-        state.track_linera_to_evm(height, burn_index, recipient, amount);
+    for (height, burn_index, recipient, amount) in &new_burns {
+        let _ = pending_burn_tx.try_send(PendingBurn {
+            linera_height: *height,
+            burn_index: *burn_index,
+            evm_recipient: recipient.clone(),
+            amount: amount.clone(),
+        });
     }
+
+    let mut state = monitor.write().await;
     state.last_scanned_linera_height = current_height;
     Ok(())
 }
@@ -509,6 +651,191 @@ async fn check_burn_completion(
     }
 
     Ok(())
+}
+
+// ── Retry loop ──
+
+/// Runs deposit and burn retry loops concurrently.
+/// Returns if either encounters an unrecoverable error.
+pub(crate) async fn retry_loop<E: linera_core::environment::Environment>(
+    monitor: Arc<RwLock<MonitorState>>,
+    deposit_tx: tokio::sync::mpsc::Sender<crate::relay::DepositRequest>,
+    proof_client: crate::proof::gen::HttpDepositProofClient,
+    pending_deposit_rx: tokio::sync::mpsc::Receiver<PendingDeposit>,
+    chain_client: linera_core::client::ChainClient<E>,
+    fungible_app_id: ApplicationId,
+    bridge_addr: Address,
+    provider: impl Provider + Clone + 'static,
+    pending_burn_rx: tokio::sync::mpsc::Receiver<PendingBurn>,
+    max_retries: u32,
+) -> anyhow::Result<()> {
+    tokio::select! {
+        result = retry_pending_deposits(
+            &monitor, &deposit_tx, &proof_client, pending_deposit_rx, max_retries,
+        ) => result,
+        result = retry_pending_burns(
+            &monitor, &chain_client, fungible_app_id, bridge_addr, &provider,
+            pending_burn_rx, max_retries,
+        ) => result,
+    }
+}
+
+/// Receives pending deposits from the scanner and retries them.
+async fn retry_pending_deposits(
+    monitor: &RwLock<MonitorState>,
+    deposit_tx: &tokio::sync::mpsc::Sender<crate::relay::DepositRequest>,
+    proof_client: &crate::proof::gen::HttpDepositProofClient,
+    mut pending_rx: tokio::sync::mpsc::Receiver<PendingDeposit>,
+    max_retries: u32,
+) -> anyhow::Result<()> {
+    use crate::proof::gen::DepositProofClient as _;
+
+    while let Some(pending) = pending_rx.recv().await {
+        // Track in MonitorState for HTTP visibility + completion detection.
+        monitor.write().await.track_evm_to_linera(
+            pending.key.clone(),
+            pending.tx_hash,
+            pending.depositor,
+            pending.amount,
+            pending.nonce,
+        );
+
+        let tx_hash = pending.tx_hash;
+        tracing::info!(%tx_hash, "Retrying pending deposit...");
+        match proof_client.generate_deposit_proof(tx_hash).await {
+            Ok(proof) => {
+                let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+                let req = crate::relay::DepositRequest {
+                    proof,
+                    response: resp_tx,
+                };
+                if deposit_tx.send(req).await.is_err() {
+                    anyhow::bail!("Deposit channel closed during retry");
+                }
+                match resp_rx.await {
+                    Ok(Ok(())) => {
+                        tracing::info!(%tx_hash, "Deposit retry succeeded");
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!(%tx_hash, "Deposit retry failed: {e}");
+                    }
+                    Err(_) => {
+                        tracing::warn!(%tx_hash, "Deposit retry response channel closed");
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(%tx_hash, "Deposit proof generation failed during retry: {e:#}");
+            }
+        }
+
+        let mut state = monitor.write().await;
+        if state
+            .deposits
+            .get(&pending.key)
+            .is_some_and(|d| d.retry_count + 1 >= max_retries)
+        {
+            state.mark_deposit_failed(&pending.key);
+            tracing::error!(%tx_hash, "Deposit marked as failed after max retries");
+        } else {
+            state.mark_deposit_retried(&pending.key);
+        }
+    }
+
+    anyhow::bail!("Pending deposit channel closed");
+}
+
+/// Receives pending burns from the scanner and retries them.
+async fn retry_pending_burns<E: linera_core::environment::Environment>(
+    monitor: &RwLock<MonitorState>,
+    chain_client: &linera_core::client::ChainClient<E>,
+    fungible_app_id: ApplicationId,
+    bridge_addr: Address,
+    provider: &impl Provider,
+    mut pending_rx: tokio::sync::mpsc::Receiver<PendingBurn>,
+    max_retries: u32,
+) -> anyhow::Result<()> {
+    while let Some(pending) = pending_rx.recv().await {
+        let credit_height = pending.linera_height;
+        let burn_index = pending.burn_index;
+
+        // Track in MonitorState for HTTP visibility + completion detection.
+        monitor.write().await.track_linera_to_evm(
+            credit_height,
+            burn_index,
+            pending.evm_recipient,
+            pending.amount,
+        );
+
+        tracing::info!(credit_height, burn_index, "Retrying unforwarded burn...");
+
+        // Sync chain state to ensure we have the latest blocks.
+        chain_client.synchronize_from_validators().await?;
+        let chain_info = chain_client.chain_info().await?;
+
+        // Walk blocks backward from tip to find the burn execution block.
+        let mut hash = chain_info.block_hash;
+        let mut forwarded = false;
+        while let Some(h) = hash {
+            let block = chain_client.read_confirmed_block(h).await?;
+            let height = block.block().header.height.0;
+            if height <= credit_height {
+                break;
+            }
+            hash = block.block().header.previous_block_hash;
+
+            // Check if this block has burn operations for the fungible app.
+            let has_burn = block.block().body.transactions.iter().any(|txn| {
+                if let linera_chain::data_types::Transaction::ExecuteOperation(op) = txn {
+                    if let linera_execution::Operation::User { application_id, .. } = op {
+                        *application_id == fungible_app_id
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            });
+
+            if has_burn {
+                match crate::relay::forward_cert_to_evm(&block, bridge_addr, provider).await {
+                    Ok(()) => {
+                        tracing::info!(height, "Burn cert re-forwarded to EVM");
+                        forwarded = true;
+                        break;
+                    }
+                    Err(e) => {
+                        let msg = format!("{e:#}");
+                        if msg.contains("already verified") {
+                            tracing::debug!(height, "Block already verified on EVM, skipping");
+                        } else {
+                            tracing::warn!(height, "Failed to re-forward burn cert: {e:#}");
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut state = monitor.write().await;
+        if forwarded {
+            state.complete_linera_to_evm(credit_height, burn_index);
+        } else if state
+            .burns
+            .get(&(credit_height, burn_index))
+            .is_some_and(|b| b.retry_count + 1 >= max_retries)
+        {
+            state.mark_burn_failed(credit_height, burn_index);
+            tracing::error!(
+                credit_height,
+                burn_index,
+                "Burn marked as failed after max retries"
+            );
+        } else {
+            state.mark_burn_retried(credit_height, burn_index);
+        }
+    }
+
+    anyhow::bail!("Pending burn channel closed");
 }
 
 // ── Tests ──
@@ -616,5 +943,56 @@ mod tests {
         assert_eq!(summary.burns_pending, 1);
         assert_eq!(summary.burns_forwarded, 0);
         assert_eq!(summary.last_scanned_evm_block, 100);
+    }
+
+    #[test]
+    fn test_retry_eligible_first_attempt() {
+        assert!(retry_eligible(0, None, 10));
+    }
+
+    #[test]
+    fn test_retry_eligible_max_retries_exceeded() {
+        assert!(!retry_eligible(10, None, 10));
+    }
+
+    #[test]
+    fn test_retry_eligible_backoff_not_elapsed() {
+        let just_now = Instant::now();
+        assert!(!retry_eligible(0, Some(just_now), 10));
+    }
+
+    #[test]
+    fn test_retry_eligible_backoff_elapsed() {
+        let long_ago = Instant::now() - Duration::from_secs(60);
+        assert!(retry_eligible(0, Some(long_ago), 10));
+    }
+
+    #[test]
+    fn test_deposits_ready_for_retry() {
+        let mut state = MonitorState::new(0);
+        let key = DepositKey {
+            source_chain_id: 1,
+            block_hash: [0; 32],
+            tx_index: 0,
+            log_index: 0,
+        };
+        state.track_evm_to_linera(
+            key.clone(),
+            B256::ZERO,
+            Address::ZERO,
+            U256::ZERO,
+            U256::ZERO,
+        );
+
+        // First attempt: eligible immediately.
+        assert_eq!(state.deposits_ready_for_retry(10).len(), 1);
+
+        // After marking retried: not eligible (backoff not elapsed).
+        state.mark_deposit_retried(&key);
+        assert_eq!(state.deposits_ready_for_retry(10).len(), 0);
+
+        // After marking failed: never eligible.
+        state.mark_deposit_failed(&key);
+        assert_eq!(state.deposits_ready_for_retry(10).len(), 0);
     }
 }
