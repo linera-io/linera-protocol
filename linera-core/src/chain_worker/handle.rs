@@ -15,6 +15,38 @@ use std::{
     },
 };
 
+/// An atomically-updatable timestamp backed by microseconds since the Unix epoch.
+///
+/// This wraps the raw `AtomicU64` microsecond encoding so that call sites work
+/// exclusively with [`Duration`] and never see the underlying representation.
+pub(crate) struct AtomicTimestamp(AtomicU64);
+
+impl AtomicTimestamp {
+    /// Creates a new `AtomicTimestamp` set to the current time.
+    pub(crate) fn now() -> Self {
+        Self(AtomicU64::new(Self::current_micros()))
+    }
+
+    /// Updates the stored timestamp to the current time.
+    pub(crate) fn store_now(&self) {
+        self.0.store(Self::current_micros(), Ordering::Relaxed);
+    }
+
+    /// Returns how long has passed since the stored timestamp.
+    pub(crate) fn elapsed(&self) -> Duration {
+        let last = self.0.load(Ordering::Relaxed);
+        let now = Self::current_micros();
+        Duration::from_micros(now.saturating_sub(last))
+    }
+
+    fn current_micros() -> u64 {
+        linera_base::time::SystemTime::now()
+            .duration_since(linera_base::time::UNIX_EPOCH)
+            .map(|d| d.as_micros() as u64)
+            .unwrap_or(0)
+    }
+}
+
 use linera_base::{
     data_types::{BlockHeight, Timestamp},
     identifiers::ChainId,
@@ -54,7 +86,7 @@ impl<S: Storage + Clone + 'static> Drop for RollbackGuard<S> {
     }
 }
 
-/// Actor that manages a long-lived service runtime in a background thread.
+/// The endpoint and background task for a long-lived service runtime.
 pub(crate) struct ServiceRuntimeActor {
     pub(crate) task: web_thread_pool::Task<()>,
     pub(crate) endpoint: ServiceRuntimeEndpoint,
@@ -102,6 +134,7 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
     config: &ChainWorkerConfig,
 ) -> Arc<RwLock<ChainWorkerState<S>>> {
     let last_access = state.last_access_arc();
+    let chain_id = state.chain().chain_id();
     let arc = Arc::new(RwLock::new(state));
     let ttl = if is_tracked {
         config.sender_chain_ttl
@@ -109,7 +142,7 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
         config.ttl
     };
     if let Some(ttl) = ttl {
-        spawn_keep_alive(Arc::clone(&arc), last_access, ttl);
+        spawn_keep_alive(chain_id, Arc::clone(&arc), last_access, ttl);
     }
     arc
 }
@@ -158,46 +191,44 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
 
 /// Spawns a background task that keeps the chain state alive for at least `ttl`
 /// after the last access. When the state has been idle for the full TTL, the task
-/// shuts down the service runtime, drops its strong reference, and exits.
+/// drops the state if it holds the only strong reference.
 fn spawn_keep_alive<S: Storage + Clone + 'static>(
-    state: Arc<RwLock<ChainWorkerState<S>>>,
-    last_access: Arc<AtomicU64>,
+    chain_id: ChainId,
+    mut state: Arc<RwLock<ChainWorkerState<S>>>,
+    last_access: Arc<AtomicTimestamp>,
     ttl: Duration,
 ) {
     linera_base::Task::spawn(async move {
         loop {
-            linera_base::time::timer::sleep(ttl).await;
-            let last = last_access.load(Ordering::Relaxed);
-            let now = current_time_micros();
-            let idle_micros = now.saturating_sub(last);
-            let ttl_micros = u64::try_from(ttl.as_micros()).unwrap_or(u64::MAX);
-            if idle_micros >= ttl_micros {
-                break;
+            while let Some(remaining) = ttl
+                .checked_sub(last_access.elapsed())
+                .filter(|remaining| *remaining > Duration::ZERO)
+            {
+                // Touched recently — sleep for the remaining time.
+                linera_base::time::timer::sleep(remaining).await;
             }
-            // Touched recently — sleep for the remaining time.
-            let remaining = Duration::from_micros(ttl_micros - idle_micros);
-            linera_base::time::timer::sleep(remaining).await;
-        }
-        // Shut down: acquire write lock to drain outstanding guards, then
-        // clear the endpoint and await the runtime task.
-        let task = {
-            let mut guard = RollbackGuard(state.clone().write_owned().await);
-            guard.clear_service_runtime()
-        };
-        if let Some(task) = task {
-            if let Err(err) = task.await {
-                tracing::warn!(%err, "Failed to shut down service runtime");
+            // Idle long enough. Drop our strong reference if it's the only one.
+            match Arc::try_unwrap(state) {
+                Ok(rw_lock) => {
+                    tracing::debug!(%chain_id, "Dropping chain worker");
+                    // We have sole ownership — extract the state and
+                    // shut down the service runtime gracefully.
+                    let mut worker_state = RwLock::into_inner(rw_lock);
+                    let task = worker_state.clear_service_runtime();
+                    drop(worker_state);
+                    if let Some(task) = task {
+                        if let Err(err) = task.await {
+                            tracing::warn!(%err, "Failed to shut down service runtime");
+                        }
+                    }
+                    break;
+                }
+                Err(arc) => {
+                    arc.read().await.touch();
+                    state = arc;
+                }
             }
         }
-        drop(state);
     })
     .forget();
-}
-
-/// Returns current time in microseconds since the Unix epoch.
-pub(crate) fn current_time_micros() -> u64 {
-    linera_base::time::SystemTime::now()
-        .duration_since(linera_base::time::UNIX_EPOCH)
-        .map(|d| d.as_micros() as u64)
-        .unwrap_or(0)
 }
