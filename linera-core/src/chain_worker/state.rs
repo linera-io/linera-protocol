@@ -6,11 +6,7 @@
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::{
-        self,
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::{self, Arc},
 };
 
 use futures::future::Either;
@@ -50,8 +46,8 @@ use linera_views::{
 use tokio::sync::oneshot;
 use tracing::{debug, instrument, trace, warn};
 
-use super::{ChainWorkerConfig, DeliveryNotifier};
 use crate::{
+    chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
@@ -98,12 +94,16 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
+    /// The background task running the service runtime. Must be kept alive for the
+    /// lifetime of the worker: the pool `Guard` wrapper returns the thread-pool slot
+    /// when dropped, so dropping this early lets the pool schedule unrelated work on a
+    /// thread that is still running the service runtime.
     service_runtime_task: Option<web_thread_pool::Task<()>>,
-    /// Timestamp of the last access, in microseconds since the Unix epoch.
+    /// Timestamp of the last access.
     /// Used by the keep-alive task to determine when the worker has been idle.
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
-    last_access: Arc<AtomicU64>,
+    last_access: Arc<AtomicTimestamp>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -146,7 +146,7 @@ where
             chain,
             service_runtime_endpoint,
             service_runtime_task,
-            last_access: Arc::new(AtomicU64::new(super::handle::current_time_micros())),
+            last_access: Arc::new(AtomicTimestamp::now()),
             block_values,
             execution_state_cache,
             chain_modes,
@@ -177,12 +177,11 @@ where
 
     /// Updates the last-access timestamp to the current time.
     pub(crate) fn touch(&self) {
-        self.last_access
-            .store(super::handle::current_time_micros(), Ordering::Relaxed);
+        self.last_access.store_now();
     }
 
     /// Returns a clone of the last-access `Arc`, for use by the keep-alive task.
-    pub(crate) fn last_access_arc(&self) -> Arc<AtomicU64> {
+    pub(crate) fn last_access_arc(&self) -> Arc<AtomicTimestamp> {
         Arc::clone(&self.last_access)
     }
 

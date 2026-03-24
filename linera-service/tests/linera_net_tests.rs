@@ -5762,9 +5762,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     admin_notifications
         .wait_for_block(BlockHeight::from(start_h + 18))
         .await
-        .unwrap_or_else(|_| {
-            panic!("should receive a notification about a block on chain {admin_chain}")
-        });
+        .with_context(|| {
+            format!("should receive a notification about a block on chain {admin_chain}")
+        })?;
 
     admin_fungible_app
         .assert_balances([(admin_owner, Amount::from_tokens(100))])
