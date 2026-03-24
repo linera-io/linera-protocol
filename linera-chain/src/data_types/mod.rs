@@ -19,7 +19,9 @@ use linera_base::{
     doc_scalar, ensure, hex, hex_debug,
     identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
-use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
+use linera_execution::{
+    committee::Committee, Message, MessageKind, Operation, OutgoingMessage, SystemOperation,
+};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
@@ -171,6 +173,14 @@ impl Transaction {
             Transaction::ReceiveMessages(bundle) => Some(bundle),
             _ => None,
         }
+    }
+
+    pub fn is_update_stream(&self) -> bool {
+        matches!(
+            self,
+            Transaction::ExecuteOperation(Operation::System(op))
+            if matches!(**op, SystemOperation::UpdateStream { .. })
+        )
     }
 }
 

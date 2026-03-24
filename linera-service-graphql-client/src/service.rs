@@ -454,27 +454,29 @@ mod from {
                     epoch_val as u32,
                 )))
             }
-            "UpdateStreams" => {
-                let update_streams = system_op.update_streams.ok_or_else(|| {
+            "UpdateStream" => {
+                let stream = system_op.update_stream.ok_or_else(|| {
                     ConversionError::UnexpectedCertificateType(
-                        "Missing update_streams metadata for UpdateStreams operation".to_string(),
+                        "Missing update_stream metadata for UpdateStream operation".to_string(),
                     )
                 })?;
-
-                let streams = update_streams
-                    .into_iter()
-                    .map(|stream| {
-                        let stream_id_parsed: StreamId =
-                            stream.stream_id.parse().map_err(|_| {
-                                ConversionError::UnexpectedCertificateType(
-                                    "Invalid stream_id format".to_string(),
-                                )
-                            })?;
-                        Ok((stream.chain_id, stream_id_parsed, stream.next_index as u32))
-                    })
-                    .collect::<Result<Vec<_>, ConversionError>>()?;
-
-                Ok(SystemOperation::UpdateStreams(streams))
+                let stream_id: StreamId = stream.stream_id.parse().map_err(|e| {
+                    ConversionError::UnexpectedCertificateType(format!(
+                        "Invalid stream_id: {e}"
+                    ))
+                })?;
+                let application_id =
+                    stream.application_id.parse::<RealApplicationId>().map_err(|e| {
+                        ConversionError::UnexpectedCertificateType(format!(
+                            "Invalid application_id: {e}"
+                        ))
+                    })?;
+                Ok(SystemOperation::UpdateStream {
+                    application_id,
+                    chain_id: stream.chain_id,
+                    stream_id,
+                    next_index: stream.next_index as u32,
+                })
             }
             _ => Err(ConversionError::UnexpectedCertificateType(format!(
                 "Unknown system operation type: {}",

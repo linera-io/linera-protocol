@@ -768,7 +768,6 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
         panic!("Expected one operation, got {:?}", operations);
@@ -779,7 +778,12 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 1)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender.chain_id(),
+            stream_id,
+            next_index: 1,
+        }
     );
 
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
@@ -846,7 +850,6 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
         panic!("Expected one operation, got {:?}", operations);
@@ -857,7 +860,12 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 2)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender.chain_id(),
+            stream_id,
+            next_index: 2,
+        }
     );
 
     // Let's receive from everyone again.
@@ -868,7 +876,6 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
         panic!("Expected one operation, got {:?}", operations);
@@ -879,7 +886,12 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender2.chain_id(), stream_id, 1)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender2.chain_id(),
+            stream_id,
+            next_index: 1,
+        }
     );
 
     // Request to unsubscribe from the sender.

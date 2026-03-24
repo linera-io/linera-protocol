@@ -725,9 +725,9 @@ where
         while i < block.transactions.len() {
             let transaction = &mut block.transactions[i];
             let is_bundle = matches!(transaction, Transaction::ReceiveMessages(_));
+            let is_stream_update = transaction.is_update_stream();
 
-            // Checkpoint before bundle transactions if using auto-retry.
-            let checkpoint = if auto_retry && is_bundle {
+            let checkpoint = if auto_retry && (is_bundle || is_stream_update) {
                 Some((
                     chain.clone_unchecked()?,
                     block_execution_tracker.create_checkpoint(),
@@ -756,6 +756,25 @@ where
                         Some((saved_chain, saved_tracker)),
                     ) if !error.is_transient_error() => {
                         (error, context, incoming_bundle, saved_chain, saved_tracker)
+                    }
+                    (
+                        Err(ChainError::ExecutionError(error, _context)),
+                        transaction,
+                        Some((saved_chain, saved_tracker)),
+                    ) if transaction.is_update_stream()
+                        && !error.is_transient_error()
+                        && error.is_limit_error()
+                        && i > 0 =>
+                    {
+                        *chain = saved_chain;
+                        block_execution_tracker.restore_checkpoint(&saved_tracker);
+                        info!(
+                            %error,
+                            index = i,
+                            "UpdateStream exceeded block limits, discarding remaining stream updates"
+                        );
+                        Self::discard_remaining_stream_updates(block, i);
+                        continue;
                     }
                     (Err(e), _, _) => return Err(e),
                 };
@@ -880,7 +899,19 @@ where
         ))
     }
 
-    /// Discards all bundles from the given origin (or all if `None`), starting at the given index.
+    fn discard_remaining_stream_updates(
+        block: &mut ProposedBlock,
+        mut index: usize,
+    ) {
+        while index < block.transactions.len() {
+            if block.transactions[index].is_update_stream() {
+                block.transactions.remove(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
     fn discard_remaining_bundles(
         block: &mut ProposedBlock,
         mut index: usize,
