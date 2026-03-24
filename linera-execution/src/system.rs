@@ -6,7 +6,7 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use allocative::Allocative;
 use custom_debug_derive::Debug;
@@ -133,14 +133,25 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
     }
 }
 
-/// The applications subscribing to a particular stream, and the next event index.
-#[derive(Debug, Default, Clone, Serialize, Deserialize, Allocative)]
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative)]
 pub struct EventSubscriptions {
-    /// The next event index, i.e. the total number of events in this stream that have already
-    /// been processed by this chain.
-    pub next_index: u32,
-    /// The applications that are subscribed to this stream.
-    pub applications: BTreeSet<ApplicationId>,
+    pub min_next_index: u32,
+    pub applications: BTreeMap<ApplicationId, u32>,
+}
+
+impl Default for EventSubscriptions {
+    fn default() -> Self {
+        Self {
+            min_next_index: u32::MAX,
+            applications: BTreeMap::new(),
+        }
+    }
+}
+
+impl EventSubscriptions {
+    pub(crate) fn recalculate_min(&mut self) {
+        self.min_next_index = self.applications.values().copied().min().unwrap_or(u32::MAX);
+    }
 }
 
 /// The initial configuration for a new chain.
@@ -245,7 +256,12 @@ pub enum SystemOperation {
     /// Processes an event about a removed epoch and committee.
     ProcessRemovedEpoch(Epoch),
     /// Updates the event stream trackers.
-    UpdateStreams(Vec<(ChainId, StreamId, u32)>),
+    UpdateStream {
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        stream_id: StreamId,
+        next_index: u32,
+    },
 }
 
 /// Operations that are only allowed on the admin chain.
@@ -555,46 +571,53 @@ where
                     })
                     .await?;
             }
-            UpdateStreams(streams) => {
+            UpdateStream {
+                application_id,
+                chain_id,
+                stream_id,
+                next_index,
+            } => {
+                let subscriptions = self
+                    .event_subscriptions
+                    .get_mut_or_default(&(chain_id, stream_id.clone()))
+                    .await?;
+                let app_next_index = subscriptions
+                    .applications
+                    .get(&application_id)
+                    .copied()
+                    .unwrap_or(0);
+                ensure!(
+                    app_next_index < next_index,
+                    ExecutionError::OutdatedUpdateStream
+                );
+                txn_tracker.add_stream_to_process(
+                    application_id,
+                    chain_id,
+                    stream_id.clone(),
+                    app_next_index,
+                    next_index,
+                );
+                subscriptions.applications.insert(application_id, next_index);
+                subscriptions.recalculate_min();
+                let index = next_index
+                    .checked_sub(1)
+                    .ok_or(ArithmeticError::Underflow)?;
+                let event_id = EventId {
+                    chain_id,
+                    stream_id,
+                    index,
+                };
+                let context = self.context();
+                let extra = context.extra();
                 let mut missing_events = Vec::new();
-                for (chain_id, stream_id, next_index) in streams {
-                    let subscriptions = self
-                        .event_subscriptions
-                        .get_mut_or_default(&(chain_id, stream_id.clone()))
-                        .await?;
-                    ensure!(
-                        subscriptions.next_index < next_index,
-                        ExecutionError::OutdatedUpdateStreams
-                    );
-                    for application_id in &subscriptions.applications {
-                        txn_tracker.add_stream_to_process(
-                            *application_id,
-                            chain_id,
-                            stream_id.clone(),
-                            subscriptions.next_index,
-                            next_index,
-                        );
-                    }
-                    subscriptions.next_index = next_index;
-                    let index = next_index
-                        .checked_sub(1)
-                        .ok_or(ArithmeticError::Underflow)?;
-                    let event_id = EventId {
-                        chain_id,
-                        stream_id,
-                        index,
-                    };
-                    let context = self.context();
-                    let extra = context.extra();
-                    txn_tracker
-                        .oracle(|| async {
-                            if !extra.contains_event(event_id.clone()).await? {
-                                missing_events.push(event_id.clone());
-                            }
-                            Ok(OracleResponse::EventExists(event_id))
-                        })
-                        .await?;
-                }
+                txn_tracker
+                    .oracle(|| async {
+                        if !extra.contains_event(event_id.clone()).await? {
+                            missing_events.push(event_id.clone());
+                        }
+                        Ok(OracleResponse::EventExists(event_id))
+                    })
+                    .await?;
                 ensure!(
                     missing_events.is_empty(),
                     ExecutionError::EventsNotFound(missing_events)
