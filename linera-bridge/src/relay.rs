@@ -589,7 +589,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         let monitor = Arc::clone(&monitor);
         let provider = provider.clone();
         let chain_client = chain_client.clone();
-        tokio::spawn(monitor::evm_scan_loop(
+        tokio::spawn(monitor::evm::evm_scan_loop(
             monitor,
             provider,
             bridge_addr,
@@ -603,7 +603,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         let monitor = Arc::clone(&monitor);
         let chain_client = chain_client.clone();
         let provider = provider.clone();
-        tokio::spawn(monitor::linera_scan_loop(
+        tokio::spawn(monitor::linera::linera_scan_loop(
             monitor,
             chain_client,
             fungible_app_id,
