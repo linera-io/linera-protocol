@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::identifiers::ApplicationId;
-use linera_core::client::ChainClient;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use crate::{Client, Environment, JsResult};
+use crate::{
+    client::{ChainClientInner, ClientContextInner},
+    Client, JsResult,
+};
 
 #[wasm_bindgen]
 pub struct Application {
     pub(crate) client: Client,
-    pub(crate) chain_client: ChainClient<Environment>,
+    pub(crate) chain_client: ChainClientInner,
     pub(crate) id: ApplicationId,
 }
 
@@ -43,43 +45,68 @@ impl Application {
     pub async fn query(&self, query: &str, options: Option<QueryOptions>) -> JsResult<String> {
         tracing::debug!("querying application: {query}");
         let QueryOptions { block_hash } = options.unwrap_or_default();
-        let chain_client = self.chain_client.clone();
         let block_hash = if let Some(hash) = block_hash {
             Some(hash.as_str().parse()?)
         } else {
             None
         };
-        let (
-            linera_execution::QueryOutcome {
-                response: linera_execution::QueryResponse::User(response),
-                operations,
-            },
-            _,
-        ) = chain_client
-            .query_application(
-                linera_execution::Query::User {
-                    application_id: self.id,
-                    bytes: query.as_bytes().to_vec(),
-                },
-                block_hash,
-            )
-            .await?
-        else {
-            panic!("system response to user query")
+        let app_query = linera_execution::Query::User {
+            application_id: self.id,
+            bytes: query.as_bytes().to_vec(),
         };
 
-        if !operations.is_empty() {
-            let _hash = self
-                .client
-                .client_context
-                .lock()
-                .await
-                .apply_client_command(&chain_client, |_chain_client| {
-                    chain_client.execute_operations(operations.clone(), vec![])
-                })
-                .await?;
-        }
+        match (&self.client.inner, &self.chain_client) {
+            (ClientContextInner::Idb(ctx), ChainClientInner::Idb(cc)) => {
+                let cc = cc.clone();
+                let (
+                    linera_execution::QueryOutcome {
+                        response: linera_execution::QueryResponse::User(response),
+                        operations,
+                    },
+                    _,
+                ) = cc.query_application(app_query, block_hash).await?
+                else {
+                    panic!("system response to user query")
+                };
 
-        Ok(String::from_utf8(response)?)
+                if !operations.is_empty() {
+                    let _hash = ctx
+                        .lock()
+                        .await
+                        .apply_client_command(&cc, |_| {
+                            cc.execute_operations(operations.clone(), vec![])
+                        })
+                        .await?;
+                }
+
+                Ok(String::from_utf8(response)?)
+            }
+            (ClientContextInner::Mem(ctx), ChainClientInner::Mem(cc)) => {
+                let cc = cc.clone();
+                let (
+                    linera_execution::QueryOutcome {
+                        response: linera_execution::QueryResponse::User(response),
+                        operations,
+                    },
+                    _,
+                ) = cc.query_application(app_query, block_hash).await?
+                else {
+                    panic!("system response to user query")
+                };
+
+                if !operations.is_empty() {
+                    let _hash = ctx
+                        .lock()
+                        .await
+                        .apply_client_command(&cc, |_| {
+                            cc.execute_operations(operations.clone(), vec![])
+                        })
+                        .await?;
+                }
+
+                Ok(String::from_utf8(response)?)
+            }
+            _ => unreachable!("mismatched client and chain storage backends"),
+        }
     }
 }
