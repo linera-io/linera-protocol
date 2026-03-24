@@ -1977,7 +1977,7 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     // We use a newly opened chain for the publisher, so that client2 and client3 will not be
     // listening to that chain by default.
     let chain1 = client1
-        .open_and_assign(&client1, Amount::from_tokens(10))
+        .open_and_assign(&client1, Amount::from_tokens(20))
         .await?;
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
     let chain3 = client1.open_and_assign(&client3, Amount::ONE).await?;
@@ -2003,22 +2003,24 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         .await?;
     let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
 
-    let mut notifications = node_service2.notifications(chain2).await?;
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     let app1 = node_service1.make_application(&chain1, &application_id)?;
     app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
         .await?;
 
     let query = "receivedPosts { keys { author, index } }";
-    let expected_response = json!({
+    let expected_response1 = json!({
         "receivedPosts": {
             "keys": [
                 { "author": chain1, "index": 0 }
             ]
         }
     });
-    notifications.wait_for_block(height2.try_add_one()?).await?;
-    assert_eq!(app2.query(query).await?, expected_response);
+    notifications2
+        .wait_for_block(height2.try_add_one()?)
+        .await?;
+    assert_eq!(app2.query(query).await?, expected_response1);
 
     let tip_after_first_post = node_service2.chain_tip(chain1).await?;
 
@@ -2037,7 +2039,7 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     app1.mutate("post(text: \"Second post!\")").await?;
 
     let query = "receivedPosts { keys { author, index } }";
-    let expected_response = json!({
+    let expected_response2 = json!({
         "receivedPosts": {
             "keys": [
                 { "author": chain1, "index": 1 },
@@ -2045,13 +2047,74 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
-    notifications.wait_for_block(height2.try_add_one()?).await?;
-    assert_eq!(app2.query(query).await?, expected_response);
+    // The transfer on chain1 may cause an intermediate block on chain2 via
+    // automatic inbox processing of the event stream subscription, so the
+    // next block may not yet contain the second post.
+    let mut latest_height = height2;
+    loop {
+        latest_height = latest_height.try_add_one()?;
+        notifications2.wait_for_block(latest_height).await?;
+        let response = app2.query(query).await?;
+        if response == expected_response2 {
+            break;
+        }
+        assert_eq!(
+            response, expected_response1,
+            "unexpected intermediate state: expected either both posts or only the first post"
+        );
+    }
 
     let tip_after_second_post = node_service2.chain_tip(chain1).await?;
     // The second post should not have moved the tip hash - client 2 should have only preprocessed
     // that block, without downloading the transfer block in between.
     assert_eq!(tip_after_first_post, tip_after_second_post);
+
+    node_service1.ensure_is_running()?;
+    node_service2.ensure_is_running()?;
+
+    // We stop the service.
+    // Client 1 will produce another post, then we will restart the service and:
+    // 1) Check that client 2 receives the post.
+    // 2) Check that the event chain is still sparse (that the tip hasn't moved).
+    node_service2.terminate().await?;
+
+    // Client 1 posts again.
+    app1.mutate("post(text: \"Third post!\")").await?;
+
+    // Restart the service for node 2. Get a fresh chain tip (the third post may already
+    // have been synced on startup), then subscribe to notifications before posting.
+    let mut node_service2 = client2
+        .run_node_service(port2, ProcessInbox::Automatic)
+        .await?;
+    let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
+    let mut notifications2 = node_service2.notifications(chain2).await?;
+
+    // Client 1 posts again, to trigger downloading missing events in client 2.
+    app1.mutate("post(text: \"Fourth post!\")").await?;
+
+    let query = "receivedPosts { keys { author, index } }";
+    let expected_response = json!({
+        "receivedPosts": {
+            "keys": [
+                { "author": chain1, "index": 3 },
+                { "author": chain1, "index": 2 },
+                { "author": chain1, "index": 1 },
+                { "author": chain1, "index": 0 }
+            ]
+        }
+    });
+
+    // The posts may arrive in any number of blocks, and some may already be processed.
+    let mut next_height = height2.try_add_one()?;
+    while app2.query(query).await? != expected_response {
+        notifications2.wait_for_block(next_height).await?;
+        next_height = next_height.try_add_one()?;
+    }
+
+    let tip_after_fourth_post = node_service2.chain_tip(chain1).await?;
+    // The third post should not have moved the tip hash, either (the block with the
+    // transfer should still not have been downloaded).
+    assert_eq!(tip_after_first_post, tip_after_fourth_post);
 
     // Test that a new subscriber gets pre-existing events: client3 subscribes after the posts
     // and should eventually receive them via sparse sync + chain listener processing.
@@ -2067,26 +2130,30 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     let (_, height3) = node_service3.chain_tip(chain3).await?.unwrap();
     let mut notifications3 = node_service3.notifications(chain3).await?;
 
-    // Wait for the chain listener to process both pre-existing events.
-    // They may arrive in one or two blocks, so wait for the first and check,
-    // then wait for a second block if needed.
+    // Wait for the chain listener to process the pre-existing events.
+    // They may arrive in any number of blocks, and some may already be processed.
     let expected_response = json!({
         "receivedPosts": {
             "keys": [
+                { "author": chain1, "index": 3 },
+                { "author": chain1, "index": 2 },
                 { "author": chain1, "index": 1 },
                 { "author": chain1, "index": 0 }
             ]
         }
     });
     let query = "receivedPosts { keys { author, index } }";
-    let next_height = height3.try_add_one()?;
-    notifications3.wait_for_block(next_height).await?;
-    if app3.query(query).await? != expected_response {
-        notifications3
-            .wait_for_block(next_height.try_add_one()?)
-            .await?;
+    let mut next_height = height3.try_add_one()?;
+    while app3.query(query).await? != expected_response {
+        notifications3.wait_for_block(next_height).await?;
+        next_height = next_height.try_add_one()?;
     }
-    assert_eq!(app3.query(query).await?, expected_response);
+
+    // Verify that the sparse sync for client3 did not download the non-event transfer block:
+    // the tip of chain1 as seen by client3 should match the tip seen by client2 (which also
+    // only has event-bearing blocks).
+    let tip_client3 = node_service3.chain_tip(chain1).await?;
+    assert_eq!(tip_after_first_post, tip_client3);
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
