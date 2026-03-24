@@ -2826,7 +2826,17 @@ impl<Env: Environment> ChainClient<Env> {
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, Error> {
         let (nodes, local_node) = {
-            let committee = self.local_committee().await?;
+            // For EventsOnly chains we may not have the chain's own committee locally,
+            // and attempting to fetch it would trigger a full sync. Use the admin
+            // committee instead — we only need it to know which validators to connect to.
+            let committee = if self
+                .listening_mode()
+                .is_some_and(|m| m.should_sync_chain_state())
+            {
+                self.local_committee().await?
+            } else {
+                self.client.admin_committee().await?.1
+            };
             let nodes: HashMap<_, _> = self
                 .client
                 .validator_node_provider()
