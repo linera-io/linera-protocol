@@ -61,9 +61,7 @@ discovery.relabel "linera_metrics" {
 prometheus.scrape "linera_metrics" {
   targets = discovery.relabel.linera_metrics.output
 
-  // Conditionally forward to OTLP converter if Prometheus export is enabled
-  // Otherwise, just collect metrics without exporting
-  forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
 
   scrape_interval = "15s"
   scrape_timeout  = "10s"
@@ -74,17 +72,14 @@ prometheus.exporter.self "alloy" {}
 
 prometheus.scrape "alloy_metrics" {
   targets    = prometheus.exporter.self.alloy.targets
-  // Conditionally forward to OTLP converter if Prometheus export is enabled
-  forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
 }
 
-// ==================== Prometheus Metrics Export (Optional) ====================
+// ==================== Prometheus Metrics Export ====================
 
 // Convert Prometheus metrics to OTLP and send to external Prometheus
-// Enabled via PROMETHEUS_ENABLED environment variable
 // Requires: PROMETHEUS_OTLP_URL, PROMETHEUS_OTLP_USER, PROMETHEUS_OTLP_PASS
 
-// Export Prometheus metrics as OTLP (only if enabled)
 otelcol.exporter.otlphttp "prometheus" {
   client {
     endpoint = env("PROMETHEUS_OTLP_URL")
@@ -94,19 +89,26 @@ otelcol.exporter.otlphttp "prometheus" {
     tls {
       insecure_skip_verify = false
     }
+
+    compression = "gzip"
+
+    headers = {
+      "Content-Type" = "application/x-protobuf",
+    }
   }
+
+  encoding = "proto"
 }
 
-// Basic auth for Prometheus OTLP
 otelcol.auth.basic "prometheus_credentials" {
   username = env("PROMETHEUS_OTLP_USER")
   password = env("PROMETHEUS_OTLP_PASS")
 }
 
-// Convert Prometheus metrics to OTLP format (only if enabled)
+// Convert Prometheus metrics to OTLP format
 otelcol.receiver.prometheus "default" {
   output {
-    metrics = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.exporter.otlphttp.prometheus.input] : []
+    metrics = [otelcol.exporter.otlphttp.prometheus.input]
   }
 }
 
@@ -154,12 +156,10 @@ discovery.relabel "pod_logs" {
 // Read pod logs
 loki.source.kubernetes "pods" {
   targets    = discovery.relabel.pod_logs.output
-  // Conditionally forward to Loki if export is enabled
-  forward_to = env("LOKI_ENABLED") == "true" ? [loki.write.central.receiver] : []
+  forward_to = [loki.write.central.receiver]
 }
 
-// Write logs to external Loki (only if enabled)
-// Enabled via LOKI_ENABLED environment variable
+// Write logs to external Loki
 // Requires: LOKI_PUSH_URL, LOKI_PUSH_USER, LOKI_PUSH_PASS
 loki.write "central" {
   endpoint {
@@ -194,13 +194,11 @@ otelcol.receiver.otlp "default" {
   }
 
   output {
-    // Conditionally forward to Tempo if export is enabled
-    traces  = env("TEMPO_ENABLED") == "true" ? [otelcol.exporter.otlphttp.central.input] : []
+    traces = [otelcol.exporter.otlphttp.central.input]
   }
 }
 
-// Export traces to external Tempo (only if enabled)
-// Enabled via TEMPO_ENABLED environment variable
+// Export traces to external Tempo
 // Requires: TEMPO_OTLP_URL, TEMPO_OTLP_USER, TEMPO_OTLP_PASS
 otelcol.exporter.otlphttp "central" {
   client {
@@ -214,14 +212,7 @@ otelcol.exporter.otlphttp "central" {
   }
 }
 
-// Basic auth for OTLP
 otelcol.auth.basic "credentials" {
   username = env("TEMPO_OTLP_USER")
   password = env("TEMPO_OTLP_PASS")
 }
-
-// ==================== Metrics Exposition ====================
-
-// Expose Prometheus-compatible metrics endpoint for central Prometheus to scrape
-// This runs on port 12345 and exposes all collected metrics
-// Note: Alloy's own metrics are already exposed via prometheus.exporter.self
