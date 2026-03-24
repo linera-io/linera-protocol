@@ -613,6 +613,7 @@ impl<Env: Environment> Client<Env> {
                 &validators,
                 move |remote_node| {
                     let validator_key = remote_node.public_key;
+                    let validator_address = remote_node.address();
                     Box::pin(async move {
                         // Query this validator for the block heights.
                         let heights = remote_node
@@ -661,11 +662,14 @@ impl<Env: Environment> Client<Env> {
                                 // Verify the block contains the expected events.
                                 let block = cert.block();
                                 let block_event_ids = block.event_ids().collect::<HashSet<_>>();
-                                if let Some(expected) =
+                                if let Some(expected_event_ids) =
                                     expected_events.get(&(chain_id, block.header.height))
                                 {
-                                    if !expected.is_subset(&block_event_ids) {
-                                        // Faulty validator: block doesn't contain expected events.
+                                    if !expected_event_ids.is_subset(&block_event_ids) {
+                                        tracing::debug!(
+                                            %validator_address, ?expected_event_ids, ?block_event_ids,
+                                            "validator lied about events in block."
+                                        );
                                         return Err(());
                                     }
                                 }
@@ -674,14 +678,14 @@ impl<Env: Environment> Client<Env> {
                                 Self::check_certificate(max_epoch, committees_ref, &cert)
                                     .map_err(|error| {
                                         tracing::debug!(
-                                            validator = %remote_node.address(), %error,
+                                            %validator_address, %error,
                                             "invalid certificate"
                                         );
                                     })?
                                     .into_result()
                                     .map_err(|error| {
                                         tracing::debug!(
-                                            validator = %remote_node.address(), %error,
+                                            %validator_address, %error,
                                             "could not check certificate"
                                         );
                                     })?;
