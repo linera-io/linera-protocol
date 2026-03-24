@@ -405,7 +405,7 @@
       const FAUCET_URL       = import.meta.env.LINERA_FAUCET_URL;
       const APP_ID           = import.meta.env.LINERA_APPLICATION_ID;   // wrapped-fungible
       const BRIDGE_APP_ID    = import.meta.env.LINERA_BRIDGE_APP_ID;    // evm-bridge
-      const RELAY_URL        = import.meta.env.LINERA_RELAY_URL;
+      // RELAY_URL is no longer needed — the relay auto-detects deposits via active scanning.
       const BRIDGE_ADDRESS   = import.meta.env.LINERA_BRIDGE_ADDRESS;   // FungibleBridge on EVM
       const TOKEN_ADDRESS    = import.meta.env.LINERA_TOKEN_ADDRESS;    // ERC-20 on EVM
       const BRIDGE_CHAIN_ID  = import.meta.env.LINERA_BRIDGE_CHAIN_ID;  // relay's chain
@@ -547,32 +547,20 @@
           const ownerHex = lineraOwner.replace(/^0x/, '');
           const ownerBytes32 = '0x' + ownerHex.slice(0, 64).padStart(64, '0');
 
-          // Step 1: Approve
-          setStatus('Step 1/3: Approving ERC-20 spend...');
+          // Step 1: Approve + Deposit on EVM
+          setStatus('Step 1/2: Approving ERC-20 spend...');
           const approveTx = await token.approve(BRIDGE_ADDRESS, amountWei);
-          setStatus('Step 1/3: Waiting for approval confirmation...');
+          setStatus('Step 1/2: Waiting for approval confirmation...');
           await waitForTx(approveTx.hash);
 
-          // Step 2: Deposit on EVM
-          setStatus('Step 2/3: Depositing to FungibleBridge...');
+          setStatus('Step 1/2: Depositing to FungibleBridge...');
           const depositTx = await bridge.deposit(chainIdBytes, appIdBytes32, ownerBytes32, amountWei);
-          setStatus('Step 2/3: Waiting for deposit confirmation...');
+          setStatus('Step 1/2: Waiting for deposit confirmation...');
           const receipt = await waitForTx(depositTx.hash);
           const txHash = receipt.hash;
 
-          // Step 3: Send to relay (generates proof + submits to Linera)
-          setStatus('Step 3/3: Relay processing deposit...');
-          const depositResp = await fetch(`${RELAY_URL}/deposit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tx_hash: txHash }),
-          });
-          if (!depositResp.ok) {
-            const body = await depositResp.json().catch(() => ({}));
-            throw new Error(body.error || `Relay returned ${depositResp.status}`);
-          }
-
-          setStatus('Deposit complete! Waiting for balance update...');
+          // Step 3: Wait for relay to auto-detect and process the deposit
+          setStatus('Step 2/2: Waiting for relay to process deposit...');
           await updateEvmBalance();
           // Poll for balance update (cross-chain Credit may take a few seconds)
           const depositDeadline = Date.now() + 60_000;

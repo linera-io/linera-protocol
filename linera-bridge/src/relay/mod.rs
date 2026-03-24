@@ -356,8 +356,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         ))
     };
 
-    let proof_client = HttpDepositProofClient::new(rpc_url)?;
-    let app = http::build_router(proof_client, deposit_tx, Arc::clone(&monitor));
+    let app = http::build_router(Arc::clone(&monitor));
 
     let bind_addr = format!("0.0.0.0:{port}");
     tracing::info!("HTTP server listening on {bind_addr}");

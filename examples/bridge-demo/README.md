@@ -243,7 +243,7 @@ the deposit/withdraw forms.
 
 1. User approves ERC-20 spend on `FungibleBridge`
 2. User calls `FungibleBridge.deposit(chainId, appId, owner, amount)`
-3. Frontend POSTs the tx hash to the relay's `/deposit` endpoint
+3. Relay's EVM scanner detects the `DepositInitiated` event
 4. Relay generates a receipt inclusion proof (MPT) and submits it to the
    `evm-bridge` Linera app
 5. `evm-bridge` verifies the proof and tells `wrapped-fungible` to mint tokens
@@ -282,7 +282,7 @@ Monitoring endpoints:
 | Endpoint | Description |
 |----------|-------------|
 | `GET /monitor/status` | Summary counts of pending/completed deposits and burns |
-| `GET /monitor/deposits?status=pending` | List pending deposits (with `tx_hash` for manual retry) |
+| `GET /monitor/deposits?status=pending` | List pending deposits |
 | `GET /monitor/burns?status=pending` | List unforwarded burns |
 
 Relay flags for tuning:
