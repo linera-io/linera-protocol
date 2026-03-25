@@ -47,6 +47,8 @@ pub const DEFAULT_QUORUM_GRACE_PERIOD: f64 = 0.2;
 /// The maximum timeout for requests to a stake-weighted quorum if no quorum is reached.
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
+pub const CERTIFICATE_UPDATER_BATCH_SIZE : usize = 200;
+
 /// A report of clock skew from a validator, sent before retrying due to `InvalidTimestamp`.
 pub type ClockSkewReport = (ValidatorPublicKey, TimeDelta);
 
@@ -778,8 +780,7 @@ where
             return Ok(info);
         }
 
-        let batch_size = DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE as usize;
-        for chunk in heights.chunks(batch_size) {
+        for chunk in heights.chunks(CERTIFICATE_UPDATER_BATCH_SIZE) {
             let certificates = self
                 .read_certificates_for_heights(chain_id, chunk.to_vec())
                 .await?;

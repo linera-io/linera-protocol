@@ -1931,7 +1931,7 @@ struct CircuitBreakerState {
     probe_interval: Duration,
 }
 
-pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
+pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 1000;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 
 #[cfg(with_testing)]
