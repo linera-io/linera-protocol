@@ -56,7 +56,7 @@ use linera_execution::{
 use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
 use serde::Serialize;
-pub(crate) use state::ChainClientState;
+pub(crate) use state::State;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -337,9 +337,9 @@ impl<Env: Environment> ChainClient<Env> {
         client: Arc<Client<Env>>,
         chain_id: ChainId,
         options: Options,
-        preferred_owner: Option<AccountOwner>,
-        initial_next_block_height: BlockHeight,
         initial_block_hash: Option<CryptoHash>,
+        initial_next_block_height: BlockHeight,
+        preferred_owner: Option<AccountOwner>,
         timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
     ) -> Self {
         ChainClient {
@@ -347,8 +347,8 @@ impl<Env: Environment> ChainClient<Env> {
             chain_id,
             options,
             preferred_owner,
-            initial_next_block_height,
             initial_block_hash,
+            initial_next_block_height,
             timing_sender,
         }
     }
@@ -523,35 +523,6 @@ impl<Env: Environment> ChainClient<Env> {
     /// Returns the chain's description. Fetches it from the validators if necessary.
     pub async fn get_chain_description(&self) -> Result<ChainDescription, Error> {
         self.client.get_chain_description(self.chain_id).await
-    }
-
-    /// Prepares the chain for the specified owner.
-    ///
-    /// Ensures we have the chain description blob, gets chain info, and validates
-    /// that the owner can propose on this chain (either by being an owner or via
-    /// `open_multi_leader_rounds`).
-    pub async fn prepare_for_owner(&self, owner: AccountOwner) -> Result<Box<ChainInfo>, Error> {
-        ensure!(
-            self.client.has_key_for(&owner).await?,
-            Error::CannotFindKeyForChain(self.chain_id)
-        );
-        // Ensure we have the chain description blob.
-        self.client
-            .get_chain_description_blob(self.chain_id)
-            .await?;
-
-        // Get chain info.
-        let info = self.chain_info().await?;
-
-        // Validate that the owner can propose on this chain.
-        ensure!(
-            info.manager
-                .ownership
-                .can_propose_in_multi_leader_round(&owner),
-            Error::NotAnOwner(self.chain_id)
-        );
-
-        Ok(info)
     }
 
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
@@ -780,6 +751,38 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(preferred_owner)
     }
 
+    /// Prepares the chain for a new owner by fetching the chain description and validating access.
+    ///
+    /// This is useful when assigning a chain to a client that may not have the owner key,
+    /// e.g. when a faucet creates a chain with `open_multi_leader_rounds`.
+    ///
+    /// Returns the chain info if the owner can propose on this chain (either because they are
+    /// an owner, or because `open_multi_leader_rounds` is enabled).
+    #[instrument(level = "trace")]
+    pub async fn prepare_for_owner(&self, owner: AccountOwner) -> Result<Box<ChainInfo>, Error> {
+        ensure!(
+            self.client.has_key_for(&owner).await?,
+            Error::CannotFindKeyForChain(self.chain_id)
+        );
+        // Ensure we have the chain description blob.
+        self.client
+            .get_chain_description_blob(self.chain_id)
+            .await?;
+
+        // Get chain info.
+        let info = self.chain_info().await?;
+
+        // Validate that the owner can propose on this chain.
+        ensure!(
+            info.manager
+                .ownership
+                .can_propose_in_multi_leader_round(&owner),
+            Error::NotAnOwner(self.chain_id)
+        );
+
+        Ok(info)
+    }
+
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
     /// its current height.
     #[instrument(level = "trace")]
@@ -834,7 +837,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn update_validators(
         &self,
         old_committee: Option<&Committee>,
-        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
+        latest_certificate: Option<ConfirmedBlockCertificate>,
     ) -> Result<(), Error> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
@@ -1171,8 +1174,9 @@ impl<Env: Environment> ChainClient<Env> {
         nodes: &[RemoteNode<Env::ValidatorNode>],
         other_sender_chains: Vec<ChainId>,
     ) {
-        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(
-            |chain_id| async move {
+        let stream = other_sender_chains
+            .into_iter()
+            .map(|chain_id| async move {
                 if let Err(error) = match self
                     .client
                     .retry_pending_cross_chain_requests(chain_id)
@@ -1204,8 +1208,8 @@ impl<Env: Environment> ChainClient<Env> {
                         "Failed to retry outgoing messages from chain"
                     );
                 }
-            },
-        ));
+            })
+            .collect::<FuturesUnordered<_>>();
         stream.for_each(future::ready).await;
     }
 
@@ -1451,8 +1455,8 @@ impl<Env: Environment> ChainClient<Env> {
             ClientOutcome::Committed(None) => {
                 Err(Error::BlockProposalError("Unexpected block proposal error"))
             }
-            ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
+            ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
         }
     }
 
@@ -2450,8 +2454,9 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
         {
             ClientOutcome::Committed(_) => {}
-            outcome @ ClientOutcome::WaitForTimeout(_) => return Ok(outcome),
-            outcome @ ClientOutcome::Conflict(_) => return Ok(outcome),
+            outcome @ ClientOutcome::WaitForTimeout(_) | outcome @ ClientOutcome::Conflict(_) => {
+                return Ok(outcome)
+            }
         }
         let epoch = Box::pin(self.chain_info()).await?.epoch.try_add_one()?;
         Box::pin(
@@ -2692,15 +2697,15 @@ impl<Env: Environment> ChainClient<Env> {
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) -> Result<(), Error> {
-        let mode = self.client.chain_mode(notification.chain_id);
-        let is_relevant = mode
+        let listening_mode = self.client.chain_mode(notification.chain_id);
+        let is_relevant = listening_mode
             .as_ref()
             .is_some_and(|mode| mode.is_relevant(&notification.reason));
         if !is_relevant {
             debug!(
                 chain_id = %notification.chain_id,
                 reason = ?notification.reason,
-                listening_mode = ?mode,
+                ?listening_mode,
                 "Ignoring notification due to listening mode"
             );
             return Ok(());
@@ -2831,7 +2836,7 @@ impl<Env: Environment> ChainClient<Env> {
                 }
             }
             Reason::BlockExecuted { .. } => {
-                // Ignored.
+                // No action needed.
             }
         }
         Ok(())
@@ -2855,7 +2860,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn listen(
         &self,
     ) -> Result<(impl Future<Output = ()>, AbortOnDrop, NotificationStream), Error> {
-        use futures::future::FutureExt as _;
+        use future::FutureExt as _;
 
         async fn await_while_polling<F: FusedFuture>(
             future: F,
