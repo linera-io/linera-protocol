@@ -16,7 +16,7 @@ ARG binaries=
 ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
-ARG build_features=scylladb,metrics,opentelemetry
+ARG build_features=scylladb,metrics,opentelemetry,jemalloc
 ARG rustflags="-C force-frame-pointers=yes"
 
 FROM rust:1.86-slim-bookworm AS builder

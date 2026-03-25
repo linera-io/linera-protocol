@@ -43,6 +43,10 @@ pub struct Options {
     #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
     pub otlp_exporter_endpoint: Option<String>,
 
+    /// Enable jemalloc memory profiling endpoints on the metrics server.
+    #[cfg(feature = "jemalloc")]
+    #[arg(long, env = "LINERA_ENABLE_MEMORY_PROFILING")]
+    pub enable_memory_profiling: bool,
     /// Subcommand.
     #[command(subcommand)]
     pub command: ClientCommand,
@@ -51,6 +55,17 @@ pub struct Options {
 impl Options {
     pub fn init() -> Self {
         <Options as clap::Parser>::parse()
+    }
+
+    pub fn enable_memory_profiling(&self) -> bool {
+        #[cfg(feature = "jemalloc")]
+        {
+            self.enable_memory_profiling
+        }
+        #[cfg(not(feature = "jemalloc"))]
+        {
+            false
+        }
     }
 
     pub async fn create_client_context<S, Si>(

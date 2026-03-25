@@ -154,12 +154,19 @@ struct RunOptions {
     /// Port for the metrics server.
     #[arg(long)]
     pub metrics_port: Option<u16>,
+
+    /// Enable jemalloc memory profiling endpoints on the metrics server.
+    #[cfg(feature = "jemalloc")]
+    #[arg(long, env = "LINERA_ENABLE_MEMORY_PROFILING")]
+    pub enable_memory_profiling: bool,
 }
 
+#[cfg_attr(not(with_metrics), allow(unused_variables))]
 async fn start_health_server(
     address: std::net::SocketAddr,
     shutdown_signal: CancellationToken,
     health: Arc<AtomicBool>,
+    enable_memory_profiling: bool,
 ) {
     let health_router = axum::Router::new().route(
         "/health",
@@ -176,7 +183,16 @@ async fn start_health_server(
     );
 
     #[cfg(with_metrics)]
-    monitoring_server::start_metrics_with_extras(address, shutdown_signal, Some(health_router));
+    {
+        let memory_profiling =
+            monitoring_server::MemoryProfiling::try_activate(enable_memory_profiling).await;
+        monitoring_server::start_metrics_with_extras(
+            address,
+            shutdown_signal,
+            memory_profiling,
+            Some(health_router),
+        );
+    }
 
     #[cfg(not(with_metrics))]
     {
@@ -199,6 +215,8 @@ async fn start_health_server(
 struct ExporterContext {
     node_options: NodeOptions,
     config: BlockExporterConfig,
+    #[cfg(with_metrics)]
+    enable_memory_profiling: bool,
 }
 
 #[async_trait]
@@ -213,10 +231,21 @@ impl Runnable for ExporterContext {
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
         let health = Arc::new(AtomicBool::new(true));
+        let enable_memory_profiling = {
+            #[cfg(with_metrics)]
+            {
+                self.enable_memory_profiling
+            }
+            #[cfg(not(with_metrics))]
+            {
+                false
+            }
+        };
         start_health_server(
             self.config.metrics_address(),
             shutdown_notifier.clone(),
             health.clone(),
+            enable_memory_profiling,
         )
         .await;
 
@@ -245,15 +274,6 @@ impl Runnable for ExporterContext {
     }
 }
 
-impl ExporterContext {
-    fn new(node_options: NodeOptions, config: BlockExporterConfig) -> ExporterContext {
-        Self {
-            config,
-            node_options,
-        }
-    }
-}
-
 fn main() -> Result<()> {
     linera_base::tracing::init("linera-exporter");
     let cli = <Cli as clap::Parser>::parse();
@@ -264,6 +284,18 @@ fn main() -> Result<()> {
 }
 
 impl RunOptions {
+    #[cfg(with_metrics)]
+    fn enable_memory_profiling(&self) -> bool {
+        #[cfg(feature = "jemalloc")]
+        {
+            self.enable_memory_profiling
+        }
+        #[cfg(not(feature = "jemalloc"))]
+        {
+            false
+        }
+    }
+
     fn run(&self) -> anyhow::Result<()> {
         let config_string = fs_err::read_to_string(&self.config_path)
             .expect("Unable to read the configuration file");
@@ -289,7 +321,12 @@ impl RunOptions {
             }
         }
 
-        let context = ExporterContext::new(node_options, config);
+        let context = ExporterContext {
+            node_options,
+            config,
+            #[cfg(with_metrics)]
+            enable_memory_profiling: self.enable_memory_profiling(),
+        };
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .thread_name("block-exporter-worker")
@@ -515,7 +552,13 @@ mod health_tests {
         // Start the production health server on a free port.
         let health_port = get_free_port().await?;
         let health_addr = std::net::SocketAddr::from(([127, 0, 0, 1], health_port));
-        start_health_server(health_addr, cancellation_token.clone(), health.clone()).await;
+        start_health_server(
+            health_addr,
+            cancellation_token.clone(),
+            health.clone(),
+            false,
+        )
+        .await;
 
         // Start a faulty indexer destination.
         let indexer_port = get_free_port().await?;
