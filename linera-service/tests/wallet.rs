@@ -26,7 +26,7 @@ pub async fn new_test_client_context(
     _block_cache_size: usize,
     _execution_state_cache_size: usize,
 ) -> anyhow::Result<ClientContext<impl linera_core::Environment>> {
-    use linera_core::{client::ChainClientOptions, node::CrossChainMessageDelivery};
+    use linera_core::{client::chain_client, node::CrossChainMessageDelivery};
 
     let send_recv_timeout = Duration::from_millis(4000);
     let retry_delay = Duration::from_millis(1000);
@@ -66,9 +66,9 @@ pub async fn new_test_client_context(
             chain_worker_ttl,
             sender_chain_worker_ttl,
             HashSet::new(),
-            ChainClientOptions {
+            chain_client::Options {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
-                ..ChainClientOptions::test_default()
+                ..chain_client::Options::test_default()
             },
             linera_core::client::RequestsSchedulerConfig::default(),
             DEFAULT_BLOCK_CACHE_SIZE,

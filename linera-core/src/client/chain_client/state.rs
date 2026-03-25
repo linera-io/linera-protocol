@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use super::PendingProposal;
+use super::super::PendingProposal;
 
 /// Per-chain state holding the proposal mutex.
 ///
@@ -29,7 +29,7 @@ impl ChainClientState {
     }
 
     /// Returns the proposal mutex for this chain.
-    pub(super) fn proposal_mutex(&self) -> Arc<Mutex<Option<PendingProposal>>> {
+    pub(in crate::client) fn proposal_mutex(&self) -> Arc<Mutex<Option<PendingProposal>>> {
         Arc::clone(&self.proposal_mutex)
     }
 }

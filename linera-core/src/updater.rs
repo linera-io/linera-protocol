@@ -33,7 +33,7 @@ use tokio::sync::mpsc;
 use tracing::{instrument, Level};
 
 use crate::{
-    client::{ChainClientError, Client},
+    client::{chain_client, Client},
     data_types::{ChainInfo, ChainInfoQuery},
     environment::Environment,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
@@ -136,7 +136,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
 where
     A: ValidatorNode + Clone + 'static,
     F: Clone + Fn(RemoteNode<A>) -> R,
-    R: Future<Output = Result<V, ChainClientError>> + 'a,
+    R: Future<Output = Result<V, chain_client::Error>> + 'a,
     G: Fn(&V) -> K,
     K: Hash + PartialEq + Eq + Clone + 'static,
     V: 'static,
@@ -184,7 +184,7 @@ where
             Err(err) => {
                 // TODO(#2857): Handle non-remote errors properly.
                 let err = match err {
-                    ChainClientError::RemoteNodeError(err) => err,
+                    chain_client::Error::RemoteNodeError(err) => err,
                     err => NodeError::ResponseHandlingError {
                         error: err.to_string(),
                     },
@@ -267,7 +267,7 @@ where
         &mut self,
         certificate: GenericCertificate<ConfirmedBlock>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
             .remote_node
             .handle_optimized_confirmed_certificate(&certificate, delivery)
@@ -321,7 +321,7 @@ where
         &mut self,
         certificate: GenericCertificate<ValidatedBlock>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let result = self
             .remote_node
             .handle_optimized_validated_certificate(&certificate, delivery)
@@ -372,7 +372,7 @@ where
         chain_id: ChainId,
         round: Round,
         height: BlockHeight,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
         let result = self
             .remote_node
@@ -392,7 +392,7 @@ where
         round: Round,
         height: BlockHeight,
         error: &NodeError,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let address = &self.remote_node.address();
         match error {
             NodeError::WrongRound(validator_round) if *validator_round > round => {
@@ -475,7 +475,7 @@ where
         proposal: Box<BlockProposal>,
         mut blob_ids: Vec<BlobId>,
         clock_skew_sender: mpsc::UnboundedSender<ClockSkewReport>,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = BTreeMap::new();
         let mut publisher_chain_ids_sent = BTreeSet::new();
@@ -641,7 +641,7 @@ where
         }
     }
 
-    async fn update_admin_chain(&mut self) -> Result<(), ChainClientError> {
+    async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
         let local_admin_info = self
             .client
             .local_node
@@ -692,7 +692,7 @@ where
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
         latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         // Phase 1: Height synchronization
         let info = if target_block_height.0 > 0 {
             self.sync_chain_height(chain_id, target_block_height, delivery, latest_certificate)
@@ -738,7 +738,7 @@ where
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
         latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let height = target_block_height.try_sub_one()?;
 
         // Get the certificate for the last block we want to send
@@ -750,7 +750,7 @@ where
                 .into_iter()
                 .next()
                 .ok_or_else(|| {
-                    ChainClientError::InternalError(
+                    chain_client::Error::InternalError(
                         "failed to read latest certificate for height sync",
                     )
                 })?
@@ -803,7 +803,7 @@ where
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Result<Vec<GenericCertificate<ConfirmedBlock>>, ChainClientError> {
+    ) -> Result<Vec<GenericCertificate<ConfirmedBlock>>, chain_client::Error> {
         let storage = self.client.local_node.storage_client();
 
         // First, try the direct height-based lookup
@@ -838,7 +838,7 @@ where
                 Ok(certs)
             }
             ResultReadCertificates::InvalidHashes(hashes) => {
-                Err(ChainClientError::ReadCertificatesError(hashes))
+                Err(chain_client::Error::ReadCertificatesError(hashes))
             }
         }
     }
@@ -851,7 +851,7 @@ where
     async fn initialize_new_chain_on_validator(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         // Send chain description and all dependency chains
         self.send_chain_info_for_blobs(
             &[BlobId::new(chain_id.0, BlobType::ChainDescription)],
@@ -875,7 +875,7 @@ where
         &mut self,
         remote_round: Round,
         manager: &linera_chain::manager::ChainManagerInfo,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         // Try to send a proposal for the current round
         for proposal in manager
             .requested_proposed
@@ -955,7 +955,7 @@ where
         &mut self,
         blob_ids: &[BlobId],
         delivery: CrossChainMessageDelivery,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let blob_states = self
             .client
             .local_node
@@ -985,7 +985,7 @@ where
         &mut self,
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, heights)| {
             let mut updater = self.clone();
             async move {
@@ -1008,7 +1008,7 @@ where
                         .await?;
                 }
 
-                Ok::<_, ChainClientError>(())
+                Ok::<_, chain_client::Error>(())
             }
         }))
         .try_collect::<Vec<_>>()
@@ -1020,7 +1020,7 @@ where
         &mut self,
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, height)| {
             let mut updater = self.clone();
             async move {
@@ -1037,7 +1037,7 @@ where
     pub async fn send_chain_update(
         &mut self,
         action: CommunicateAction,
-    ) -> Result<LiteVote, ChainClientError> {
+    ) -> Result<LiteVote, chain_client::Error> {
         let chain_id = match &action {
             CommunicateAction::SubmitBlock { proposal, .. } => proposal.content.block.chain_id,
             CommunicateAction::FinalizeBlock { certificate, .. } => {

@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_core::{
     client::{
-        ChainClientOptions, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        chain_client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
@@ -300,8 +300,8 @@ impl Default for Options {
 }
 
 impl Options {
-    /// Creates [`ChainClientOptions`] with the corresponding values.
-    pub(crate) fn to_chain_client_options(&self) -> ChainClientOptions {
+    /// Creates [`chain_client::Options`] with the corresponding values.
+    pub(crate) fn to_chain_client_options(&self) -> chain_client::Options {
         let message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
@@ -312,7 +312,7 @@ impl Options {
         );
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
-        ChainClientOptions {
+        chain_client::Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
             max_new_events_per_block: self.max_new_events_per_block,
