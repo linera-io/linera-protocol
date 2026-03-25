@@ -280,7 +280,7 @@ services:
           memory: ${LIMIT_MEM_GRAFANA:-512M}
 
   watchtower:
-    image: nickfedor/watchtower:1.14.2
+    image: nickfedor/watchtower:1.15.0
     container_name: watchtower
     restart: unless-stopped
     volumes:
