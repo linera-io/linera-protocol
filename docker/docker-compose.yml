@@ -2,6 +2,7 @@ services:
   web:
     image: caddy:2.10.2-alpine
     container_name: web
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
@@ -34,6 +35,7 @@ services:
   scylla:
     image: scylladb/scylla:6.2.3
     container_name: scylla
+    restart: unless-stopped
     volumes:
       - linera-scylla-data:/var/lib/scylla
     environment:
@@ -61,6 +63,7 @@ services:
   proxy:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: proxy
+    restart: unless-stopped
     ports:
       - "19100:19100"
     command:
@@ -97,6 +100,7 @@ services:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-1
     hostname: docker-shard-1
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
@@ -119,12 +123,13 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SHARD:-1.50}"
-          memory: ${LIMIT_MEM_SHARD:-1536M}
+          memory: ${LIMIT_MEM_SHARD:-2560M}
 
   shard-1:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-2
     hostname: docker-shard-2
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
@@ -147,12 +152,13 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SHARD:-1.50}"
-          memory: ${LIMIT_MEM_SHARD:-1536M}
+          memory: ${LIMIT_MEM_SHARD:-2560M}
 
   shard-2:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-3
     hostname: docker-shard-3
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
@@ -175,12 +181,13 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SHARD:-1.50}"
-          memory: ${LIMIT_MEM_SHARD:-1536M}
+          memory: ${LIMIT_MEM_SHARD:-2560M}
 
   shard-3:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-4
     hostname: docker-shard-4
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
@@ -203,7 +210,7 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SHARD:-1.50}"
-          memory: ${LIMIT_MEM_SHARD:-1536M}
+          memory: ${LIMIT_MEM_SHARD:-2560M}
 
   shard-init:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
@@ -243,6 +250,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
+    restart: unless-stopped
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
@@ -256,6 +264,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
+    restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     ports:
@@ -273,6 +282,7 @@ services:
   watchtower:
     image: containrrr/watchtower:latest
     container_name: watchtower
+    restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: ["--interval", "30"]
