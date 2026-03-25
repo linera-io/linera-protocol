@@ -11,7 +11,7 @@ use linera_base::{
         ValidatorSignature,
     },
     data_types::{Amount, BlockHeight, ChainDescription, Epoch, Round, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{AccountOwner, ChainId, StreamId},
 };
 use linera_chain::{
     data_types::{ChainAndHeight, IncomingBundle, MessageBundle},
@@ -58,6 +58,10 @@ pub struct ChainInfoQuery {
     /// Query for certificate hashes at block heights.
     #[debug(skip_if = Vec::is_empty)]
     pub request_sent_certificate_hashes_by_heights: Vec<BlockHeight>,
+    /// Query the previous event blocks for specific streams.
+    #[debug(skip_if = Vec::is_empty)]
+    #[cfg_attr(with_testing, strategy(proptest::strategy::Just(Vec::new())))]
+    pub request_previous_event_blocks: Vec<StreamId>,
     #[serde(default = "default_true")]
     pub create_network_actions: bool,
 }
@@ -81,6 +85,7 @@ impl ChainInfoQuery {
             request_leader_timeout: None,
             request_fallback: false,
             request_sent_certificate_hashes_by_heights: Vec::new(),
+            request_previous_event_blocks: Vec::new(),
             create_network_actions: false,
         }
     }
@@ -107,6 +112,11 @@ impl ChainInfoQuery {
 
     pub fn with_sent_certificate_hashes_by_heights(mut self, heights: Vec<BlockHeight>) -> Self {
         self.request_sent_certificate_hashes_by_heights = heights;
+        self
+    }
+
+    pub fn with_previous_event_blocks(mut self, stream_ids: Vec<StreamId>) -> Self {
+        self.request_previous_event_blocks = stream_ids;
         self
     }
 
@@ -177,6 +187,9 @@ pub struct ChainInfo {
     /// The response to `request_received_certificates_excluding_first_n`
     #[debug(skip_if = Vec::is_empty)]
     pub requested_received_log: Vec<ChainAndHeight>,
+    /// The response to `request_previous_event_blocks`.
+    #[debug(skip_if = BTreeMap::is_empty)]
+    pub requested_previous_event_blocks: BTreeMap<StreamId, (BlockHeight, CryptoHash)>,
 }
 
 impl ChainInfo {
@@ -275,6 +288,7 @@ where
             requested_sent_certificate_hashes: Vec::new(),
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
+            requested_previous_event_blocks: BTreeMap::new(),
         }
     }
 }

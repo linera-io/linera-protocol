@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::BTreeMap,
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -214,6 +215,7 @@ impl ValidatorNode for DummyValidator {
             requested_sent_certificate_hashes: vec![],
             count_received_log: 0,
             requested_received_log: vec![],
+            requested_previous_event_blocks: BTreeMap::new(),
         };
 
         let response = if missing_blobs.is_empty() {

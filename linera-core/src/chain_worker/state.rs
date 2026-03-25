@@ -104,7 +104,7 @@ where
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
     last_access: Arc<AtomicTimestamp>,
-    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_values: Arc<ValueCache<CryptoHash, Block>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
@@ -130,7 +130,7 @@ where
     pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, Block>>,
         execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
@@ -1644,6 +1644,32 @@ where
         }
         if query.request_manager_values {
             info.manager.add_values(&chain.manager);
+        }
+        if !query.request_previous_event_blocks.is_empty() {
+            let stream_ids = query.request_previous_event_blocks;
+            let heights = chain
+                .execution_state
+                .previous_event_blocks
+                .multi_get(&stream_ids)
+                .await?;
+            let mut indices = Vec::new();
+            let mut streams_with_heights = Vec::new();
+            for (stream_id, height) in stream_ids.into_iter().zip(heights) {
+                if let Some(height) = height {
+                    let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
+                    indices.push(index);
+                    streams_with_heights.push((stream_id, height));
+                }
+            }
+            let hashes = chain.confirmed_log.multi_get(indices).await?;
+            for (maybe_hash, (stream_id, height)) in hashes.into_iter().zip(streams_with_heights) {
+                let hash = maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
+                    height,
+                    chain_id: info.chain_id,
+                })?;
+                info.requested_previous_event_blocks
+                    .insert(stream_id, (height, hash));
+            }
         }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }

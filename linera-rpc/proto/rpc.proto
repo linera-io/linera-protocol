@@ -252,6 +252,9 @@ message ChainInfoQuery {
 
   // Whether to create network actions as part of the query.
   optional bool create_network_actions = 12;
+
+  // Query the previous event blocks for specific streams.
+  optional bytes request_previous_event_blocks = 13;
 }
 
 // An authenticated proposal for a new block.
