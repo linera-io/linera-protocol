@@ -135,8 +135,9 @@ pub enum TimingType {
     UpdateValidators,
 }
 
-/// Defines how we listen to a chain:
-/// - do we care about every block notification?
+/// Defines what type of notifications we should process for a chain:
+/// - do we fully participate in consensus and download sender chains?
+/// - or do we only follow the chain's blocks without participating?
 /// - or do we only care about blocks containing events from some particular streams?
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ListeningMode {
@@ -160,10 +161,12 @@ impl PartialOrd for ListeningMode {
             (ListeningMode::FollowChain, ListeningMode::FollowChain) => Some(Ordering::Equal),
             (ListeningMode::FollowChain, ListeningMode::EventsOnly(_)) => Some(Ordering::Greater),
             (ListeningMode::EventsOnly(_), ListeningMode::FollowChain) => Some(Ordering::Less),
-            (ListeningMode::EventsOnly(events_a), ListeningMode::EventsOnly(events_b)) => {
-                if events_a.is_superset(events_b) {
+            (ListeningMode::EventsOnly(a), ListeningMode::EventsOnly(b)) => {
+                if a == b {
+                    Some(Ordering::Equal)
+                } else if a.is_superset(b) {
                     Some(Ordering::Greater)
-                } else if events_b.is_superset(events_a) {
+                } else if b.is_superset(a) {
                     Some(Ordering::Less)
                 } else {
                     None

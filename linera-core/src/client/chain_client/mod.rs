@@ -1075,7 +1075,7 @@ impl<Env: Environment> ChainClient<Env> {
         nodes: &[RemoteNode<Env::ValidatorNode>],
         other_sender_chains: Vec<ChainId>,
     ) {
-        let stream: FuturesUnordered<_> = other_sender_chains
+        let stream = other_sender_chains
             .into_iter()
             .map(|chain_id| async move {
                 if let Err(error) = match self
@@ -1110,7 +1110,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                 }
             })
-            .collect();
+            .collect::<FuturesUnordered<_>>();
         stream.for_each(future::ready).await;
     }
 
@@ -1915,7 +1915,7 @@ impl<Env: Environment> ChainClient<Env> {
         if let Some(round_timeout) = info.manager.round_timeout {
             if round_timeout <= self.storage_client().clock().current_time() {
                 if let Err(e) = self.request_leader_timeout().await {
-                    info!("Failed to obtain a timeout certificate: {}", e);
+                    debug!("Failed to obtain a timeout certificate: {}", e);
                 } else {
                     info = self.chain_info_with_manager_values().await?;
                 }
@@ -2724,7 +2724,7 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(());
                 };
                 if (info.next_block_height, info.manager.current_round) < (height, round) {
-                    error!(
+                    info!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to synchronize new block after notification"
                     );
