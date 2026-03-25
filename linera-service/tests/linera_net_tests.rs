@@ -2401,13 +2401,16 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 
     let client2 = net.make_client().await;
     client2.wallet_init(None).await?;
+    let client3 = net.make_client().await;
+    client3.wallet_init(None).await?;
 
-    // We use a newly opened chain for the publisher, so that client2 will not be listening to that
-    // chain by default.
+    // We use a newly opened chain for the publisher, so that client2 and client3 will not be
+    // listening to that chain by default.
     let chain1 = client1
         .open_and_assign(&client1, Amount::from_tokens(100))
         .await?;
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let chain3 = client1.open_and_assign(&client3, Amount::ONE).await?;
     let (contract, service) = client1.build_example("social").await?;
     let module_id = client1
         .publish_module::<SocialAbi, (), ()>(contract, service, VmRuntime::Wasm, None)
@@ -2508,10 +2511,13 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     // Client 1 posts again.
     app1.mutate("post(text: \"Third post!\")").await?;
 
-    // Restart the service for node 2.
+    // Restart the service for node 2. Get a fresh chain tip (the third post may already
+    // have been synced on startup), then subscribe to notifications before posting.
     let mut node_service2 = client2
         .run_node_service(port2, ProcessInbox::Automatic)
         .await?;
+    let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     // Client 1 posts again, to trigger downloading missing events in client 2.
     app1.mutate("post(text: \"Fourth post!\")").await?;
@@ -2528,23 +2534,60 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         }
     });
 
-    loop {
-        let (_, height4) = node_service2.chain_tip(chain2).await?.unwrap();
-        if height4 > latest_height {
-            break;
-        }
-        linera_base::time::timer::sleep(Duration::from_millis(500)).await;
+    // The posts may arrive in any number of blocks, and some may already be processed.
+    let mut next_height = height2.try_add_one()?;
+    while app2.query(query).await? != expected_response {
+        notifications2.wait_for_block(next_height).await?;
+        next_height = next_height.try_add_one()?;
     }
-
-    assert_eq!(app2.query(query).await?, expected_response);
 
     let tip_after_fourth_post = node_service2.chain_tip(chain1).await?;
     // The third post should not have moved the tip hash, either (the block with the
     // transfer should still not have been downloaded).
     assert_eq!(tip_after_first_post, tip_after_fourth_post);
 
+    // Test that a new subscriber gets pre-existing events: client3 subscribes after the posts
+    // and should eventually receive them via sparse sync + chain listener processing.
+    let port3 = get_node_port().await;
+    let mut node_service3 = client3
+        .run_node_service(port3, ProcessInbox::Automatic)
+        .await?;
+
+    let app3 = node_service3.make_application(&chain3, &application_id)?;
+    app3.mutate(format!("subscribe(chainId: \"{chain1}\")"))
+        .await?;
+
+    let (_, height3) = node_service3.chain_tip(chain3).await?.unwrap();
+    let mut notifications3 = node_service3.notifications(chain3).await?;
+
+    // Wait for the chain listener to process the pre-existing events.
+    // They may arrive in any number of blocks, and some may already be processed.
+    let expected_response = json!({
+        "receivedPosts": {
+            "keys": [
+                { "author": chain1, "index": 3 },
+                { "author": chain1, "index": 2 },
+                { "author": chain1, "index": 1 },
+                { "author": chain1, "index": 0 }
+            ]
+        }
+    });
+    let query = "receivedPosts { keys { author, index } }";
+    let mut next_height = height3.try_add_one()?;
+    while app3.query(query).await? != expected_response {
+        notifications3.wait_for_block(next_height).await?;
+        next_height = next_height.try_add_one()?;
+    }
+
+    // Verify that the sparse sync for client3 did not download the non-event transfer block:
+    // the tip of chain1 as seen by client3 should match the tip seen by client2 (which also
+    // only has event-bearing blocks).
+    let tip_client3 = node_service3.chain_tip(chain1).await?;
+    assert_eq!(tip_after_first_post, tip_client3);
+
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
+    node_service3.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;

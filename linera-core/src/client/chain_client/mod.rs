@@ -55,7 +55,6 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
-use rand::seq::SliceRandom;
 use serde::Serialize;
 pub use state::State;
 use thiserror::Error;
@@ -791,28 +790,73 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Synchronizes all chains that any application on this chain subscribes to.
     /// We always consider the admin chain a relevant publishing chain, for new epochs.
+    /// For event publisher chains, only event-bearing blocks are downloaded (partial sync).
     async fn synchronize_publisher_chains(&self) -> Result<(), Error> {
         let subscriptions = self
             .client
             .local_node
             .get_event_subscriptions(self.chain_id)
             .await?;
-        let chain_ids = subscriptions
-            .iter()
-            .map(|((chain_id, _), _)| *chain_id)
-            .chain(iter::once(self.client.admin_chain_id))
-            .filter(|chain_id| *chain_id != self.chain_id)
-            .collect::<BTreeSet<_>>();
-        stream::iter(
-            chain_ids
-                .into_iter()
-                .map(|chain_id| self.client.synchronize_chain_state(chain_id)),
+        // Group subscribed streams by publisher chain.
+        let mut streams_by_chain = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
+        for ((chain_id, stream_id), _) in &subscriptions {
+            if *chain_id != self.chain_id {
+                streams_by_chain
+                    .entry(*chain_id)
+                    .or_default()
+                    .insert(stream_id.clone());
+            }
+        }
+        // Always fully sync the admin chain for epoch changes.
+        let admin_chain_id = self.client.admin_chain_id;
+        if admin_chain_id != self.chain_id {
+            self.client.synchronize_chain_state(admin_chain_id).await?;
+        }
+        // For event publisher chains, do a partial sync using previous_event_blocks.
+        let (_, committee) = self.admin_committee().await?;
+        let nodes = self.client.make_nodes(&committee)?;
+        let tasks = streams_by_chain
+            .into_iter()
+            .filter(|(chain_id, _)| *chain_id != admin_chain_id)
+            .map(|(chain_id, stream_ids)| {
+                self.sync_publisher_chain_events(chain_id, stream_ids, &nodes, &committee)
+            })
+            .collect::<Vec<_>>();
+        stream::iter(tasks)
+            .buffer_unordered(self.options.max_joined_tasks)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(())
+    }
+
+    /// Downloads only event-bearing blocks for the given publisher chain and streams.
+    ///
+    /// Uses `communicate_with_quorum` so that each validator is queried for
+    /// `previous_event_blocks` and the claimed blocks are downloaded from that same
+    /// validator. Waiting for a quorum guarantees that any confirmed event is discovered,
+    /// since at least one honest validator in the quorum must have it.
+    async fn sync_publisher_chain_events(
+        &self,
+        publisher_chain_id: ChainId,
+        stream_ids: BTreeSet<StreamId>,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
+        committee: &Committee,
+    ) -> Result<(), Error> {
+        let stream_ids_ref = &stream_ids;
+        communicate_with_quorum(
+            nodes,
+            committee,
+            |_: &()| (),
+            |remote_node| async move {
+                self.client
+                    .sync_events_from_node(publisher_chain_id, stream_ids_ref, &remote_node)
+                    .await
+            },
+            self.options.quorum_grace_period,
         )
-        .buffer_unordered(self.options.max_joined_tasks)
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?;
+        .await?;
         Ok(())
     }
 
@@ -980,8 +1024,7 @@ impl<Env: Environment> ChainClient<Env> {
                 let remote_heights = remote_heights.into_iter().collect::<Vec<_>>();
                 let sender = sender.clone();
                 let client = self.client.clone();
-                let mut nodes = nodes.to_vec();
-                nodes.shuffle(&mut rand::thread_rng());
+                let nodes = nodes.to_vec();
                 Some(async move {
                     client
                         .download_and_process_sender_chain(
@@ -1032,7 +1075,7 @@ impl<Env: Environment> ChainClient<Env> {
         nodes: &[RemoteNode<Env::ValidatorNode>],
         other_sender_chains: Vec<ChainId>,
     ) {
-        let stream: FuturesUnordered<_> = other_sender_chains
+        let stream = other_sender_chains
             .into_iter()
             .map(|chain_id| async move {
                 if let Err(error) = match self
@@ -1067,7 +1110,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                 }
             })
-            .collect();
+            .collect::<FuturesUnordered<_>>();
         stream.for_each(future::ready).await;
     }
 
@@ -1872,7 +1915,7 @@ impl<Env: Environment> ChainClient<Env> {
         if let Some(round_timeout) = info.manager.round_timeout {
             if round_timeout <= self.storage_client().clock().current_time() {
                 if let Err(e) = self.request_leader_timeout().await {
-                    info!("Failed to obtain a timeout certificate: {}", e);
+                    debug!("Failed to obtain a timeout certificate: {}", e);
                 } else {
                     info = self.chain_info_with_manager_values().await?;
                 }
@@ -2652,8 +2695,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .download_event_bearing_blocks(
                         self.chain_id,
-                        height,
-                        block_hash,
+                        BTreeSet::from([(height, block_hash)]),
                         local_height,
                         &relevant_streams,
                         &remote_node,
@@ -2682,7 +2724,7 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(());
                 };
                 if (info.next_block_height, info.manager.current_round) < (height, round) {
-                    error!(
+                    info!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to synchronize new block after notification"
                     );
@@ -2784,7 +2826,17 @@ impl<Env: Environment> ChainClient<Env> {
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, Error> {
         let (nodes, local_node) = {
-            let committee = self.local_committee().await?;
+            // For EventsOnly chains we may not have the chain's own committee locally,
+            // and attempting to fetch it would trigger a full sync. Use the admin
+            // committee instead — we only need it to know which validators to connect to.
+            let committee = if self
+                .listening_mode()
+                .is_some_and(|m| m.should_sync_chain_state())
+            {
+                self.local_committee().await?
+            } else {
+                self.client.admin_committee().await?.1
+            };
             let nodes: HashMap<_, _> = self
                 .client
                 .validator_node_provider()
@@ -2814,13 +2866,33 @@ impl<Env: Environment> ChainClient<Env> {
                     let stream = node.subscribe(vec![this.chain_id]).await?;
                     // Only now the notification stream is established. We may have missed
                     // notifications since the last time we synchronized.
-                    // For EventsOnly mode, skip full sync - we'll lazily download
-                    // event-relevant blocks when we receive notifications.
                     let remote_node = RemoteNode { public_key, node };
-                    if listening_mode_for_sync.is_some_and(|mode| mode.should_sync_chain_state()) {
+                    if listening_mode_for_sync
+                        .as_ref()
+                        .is_some_and(|mode| mode.should_sync_chain_state())
+                    {
                         this.client
                             .synchronize_chain_state_from(&remote_node, this.chain_id)
                             .await?;
+                    } else {
+                        // For EventsOnly chains, do a lightweight initial sync:
+                        // query the validator for the latest event-bearing blocks
+                        // for our subscribed streams, then download them sparsely.
+                        if let Some(ListeningMode::EventsOnly(subscribed)) =
+                            listening_mode_for_sync.as_ref()
+                        {
+                            if let Err(error) = this
+                                .client
+                                .sync_events_from_node(this.chain_id, subscribed, &remote_node)
+                                .await
+                            {
+                                debug!(
+                                    chain_id = %this.chain_id,
+                                    %error,
+                                    "Failed initial sparse sync for EventsOnly chain"
+                                );
+                            }
+                        }
                     }
                     Ok::<_, Error>(stream)
                 }
