@@ -1395,29 +1395,6 @@ where
     }
 
     /// Executes a block without persisting any changes to the state.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        block_height = %block.height
-    ))]
-    pub(crate) async fn stage_block_execution(
-        &mut self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
-        let (_, executed_block, response, resource_tracker) = self
-            .stage_block_execution_with_policy(
-                block,
-                round,
-                published_blobs,
-                BundleExecutionPolicy::committed(),
-            )
-            .await?;
-        Ok((executed_block, response, resource_tracker))
-    }
-
-    /// Executes a block without persisting any changes to the state, with a specified
-    /// policy for handling bundle failures.
     ///
     /// The block may be modified to reflect the actual executed transactions
     /// (bundles may be rejected or removed based on the policy).
@@ -1425,7 +1402,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
-    pub(crate) async fn stage_block_execution_with_policy(
+    pub(crate) async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
         round: Option<u32>,

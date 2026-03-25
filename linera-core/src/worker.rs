@@ -895,32 +895,12 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
-        let chain_id = block.chain_id;
-        self.chain_write(chain_id, |mut guard| async move {
-            guard
-                .stage_block_execution(block, round, &published_blobs)
-                .await
-        })
-        .await
-    }
-
-    /// Tries to execute a block proposal with a policy for handling bundle failures.
-    ///
-    /// Returns the modified block (bundles may be rejected/removed), the executed block,
-    /// chain info response, and resource tracker.
-    #[instrument(level = "trace", skip(self, block))]
-    pub async fn stage_block_execution_with_policy(
-        &self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
     ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         let chain_id = block.chain_id;
         self.chain_write(chain_id, |mut guard| async move {
             guard
-                .stage_block_execution_with_policy(block, round, &published_blobs, policy)
+                .stage_block_execution(block, round, &published_blobs, policy)
                 .await
         })
         .await

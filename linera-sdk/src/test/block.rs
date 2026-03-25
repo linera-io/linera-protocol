@@ -247,7 +247,7 @@ impl BlockBuilder {
         let (_, block, _, resource_tracker) = self
             .validator
             .worker()
-            .stage_block_execution_with_policy(
+            .stage_block_execution(
                 self.block,
                 None,
                 published_blobs,

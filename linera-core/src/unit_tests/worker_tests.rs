@@ -788,7 +788,7 @@ where
     // Stage execution to get the block for certificate creation.
     let (_, block, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block,
             None,
             vec![],
@@ -817,7 +817,7 @@ where
         .unwrap();
     let (_, block, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block,
             None,
             vec![],
@@ -845,7 +845,7 @@ where
         .unwrap();
     let (_, block, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block,
             None,
             vec![],
@@ -3496,7 +3496,7 @@ where
         .with_authenticated_signer(Some(owner0));
     let (_, block0, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block0,
             None,
             vec![],
@@ -3563,7 +3563,7 @@ where
     let proposed_block1 = make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
     let (_, block1, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block1.clone(),
             None,
             vec![],
@@ -3618,7 +3618,7 @@ where
     let proposed_block2 = make_child_block(&value0.clone()).with_simple_transfer(chain_1, amount);
     let (_, block2, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block2.clone(),
             None,
             vec![],
@@ -3762,7 +3762,7 @@ where
         });
     let (_, block0, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block0,
             None,
             vec![],
@@ -3879,7 +3879,7 @@ where
         });
     let (_, block0, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block0,
             None,
             vec![],
@@ -3912,7 +3912,7 @@ where
         .unwrap();
     let (_, block1, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block1.clone(),
             None,
             vec![],
@@ -3974,7 +3974,7 @@ where
     // A validated block certificate from a later round can override the locked fast block.
     let (_, block2, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block2.clone(),
             None,
             vec![],
@@ -4345,7 +4345,7 @@ where
     // Test stage_block_execution directly - this should fail with IncorrectMessageOrder.
     assert_matches!(
         env.worker()
-            .stage_block_execution_with_policy(bad_proposed_block.clone(), None, vec![], BundleExecutionPolicy::committed())
+            .stage_block_execution(bad_proposed_block.clone(), None, vec![], BundleExecutionPolicy::committed())
             .await,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })

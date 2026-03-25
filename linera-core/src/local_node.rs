@@ -150,7 +150,7 @@ where
         Ok(self
             .node
             .state
-            .stage_block_execution_with_policy(block, round, published_blobs, policy)
+            .stage_block_execution(block, round, published_blobs, policy)
             .await?)
     }
 
