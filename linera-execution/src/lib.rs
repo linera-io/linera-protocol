@@ -365,6 +365,8 @@ pub enum ExecutionError {
     InternalError(&'static str),
     #[error("UpdateStream is outdated")]
     OutdatedUpdateStream,
+    #[error("UpdateStream references an application that is not subscribed")]
+    UnsubscribedUpdateStream,
 }
 
 impl ExecutionError {
@@ -419,6 +421,7 @@ impl ExecutionError {
             | ExecutionError::MissingOracleResponse
             | ExecutionError::UnprocessedStreams
             | ExecutionError::OutdatedUpdateStream
+            | ExecutionError::UnsubscribedUpdateStream
             | ExecutionError::ViewError(ViewError::NotFound(_)) => false,
             #[cfg(with_wasm_runtime)]
             ExecutionError::WasmError(_) => false,

@@ -133,9 +133,15 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
     }
 }
 
+/// The applications subscribing to a particular stream, and their per-application event indices.
 #[derive(Debug, Clone, Serialize, Deserialize, Allocative)]
 pub struct EventSubscriptions {
+    /// Cached minimum of all per-application `next_index` values. Used for short-circuit
+    /// filtering: if the next available event index is <= this value, no application needs
+    /// processing. Set to `u32::MAX` when no applications are subscribed.
     pub min_next_index: u32,
+    /// The applications that are subscribed to this stream, each mapped to the next event
+    /// index that they need to process.
     pub applications: BTreeMap<ApplicationId, u32>,
 }
 
@@ -586,11 +592,10 @@ where
                     .event_subscriptions
                     .get_mut_or_default(&(chain_id, stream_id.clone()))
                     .await?;
-                let app_next_index = subscriptions
+                let app_next_index = *subscriptions
                     .applications
                     .get(&application_id)
-                    .copied()
-                    .unwrap_or(0);
+                    .ok_or(ExecutionError::UnsubscribedUpdateStream)?;
                 ensure!(
                     app_next_index < next_index,
                     ExecutionError::OutdatedUpdateStream
