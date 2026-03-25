@@ -669,6 +669,7 @@ where
                     );
                 }
             }
+            inbox.observe_size_metric();
             if inbox.added_bundles.count() == 0 {
                 if let Some(set) = self.nonempty_inboxes.get_mut() {
                     set.remove(&origin);
