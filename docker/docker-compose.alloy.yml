@@ -50,3 +50,8 @@ services:
       - shard-1
       - shard-2
       - shard-3
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_ALLOY:-0.50}"
+          memory: ${LIMIT_MEM_ALLOY:-512M}
