@@ -5,6 +5,7 @@
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashSet},
+    slice,
     sync::{Arc, RwLock},
 };
 
@@ -119,6 +120,17 @@ mod metrics {
             exponential_bucket_latencies(500.0),
         )
     });
+}
+
+pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
+pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
+
+#[derive(Debug, Clone, Copy)]
+pub enum TimingType {
+    ExecuteOperations,
+    ExecuteBlock,
+    SubmitBlockProposal,
+    UpdateValidators,
 }
 
 /// Defines what type of notifications we should process for a chain:
@@ -243,8 +255,8 @@ pub struct Client<Env: Environment> {
 
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
-    #[expect(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         environment: Env,
         admin_chain_id: ChainId,
@@ -368,7 +380,7 @@ impl<Env: Environment> Client<Env> {
             .chain_modes
             .write()
             .expect("Panics should not happen while holding a lock to `chain_modes`");
-        let entry = chain_modes.entry(chain_id).or_insert(mode.clone());
+        let entry = chain_modes.entry(chain_id).or_insert_with(|| mode.clone());
         entry.extend(Some(mode));
         entry.clone()
     }
@@ -404,17 +416,17 @@ impl<Env: Environment> Client<Env> {
     ) -> ChainClient<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
-        self.chains
-            .pin()
-            .get_or_insert_with(chain_id, || chain_client::State::new(pending_proposal.clone()));
+        self.chains.pin().get_or_insert_with(chain_id, || {
+            chain_client::State::new(pending_proposal.clone())
+        });
 
         ChainClient::new(
             self.clone(),
             chain_id,
             self.options.clone(),
-            preferred_owner,
-            next_block_height,
             block_hash,
+            next_block_height,
+            preferred_owner,
             timing_sender,
         )
     }
@@ -732,7 +744,7 @@ impl<Env: Environment> Client<Env> {
             .await
         {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                self.download_blobs(&[remote_node.clone()], &blob_ids)
+                self.download_blobs(slice::from_ref(remote_node), &blob_ids)
                     .await?;
             }
             x => {
@@ -744,7 +756,7 @@ impl<Env: Environment> Client<Env> {
             info = Some(
                 match self.handle_certificate(certificate.clone()).await {
                     Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        self.download_blobs(&[remote_node.clone()], &blob_ids)
+                        self.download_blobs(slice::from_ref(remote_node), &blob_ids)
                             .await?;
                         self.handle_certificate(certificate).await?
                     }
@@ -1440,6 +1452,7 @@ impl<Env: Environment> Client<Env> {
 
                 certificate
             };
+
             let block = certificate.block();
             // Walk previous_event_blocks for subscribed streams.
             for stream_id in subscribed_streams {
@@ -1705,7 +1718,7 @@ impl<Env: Environment> Client<Env> {
                     if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
                         self.update_local_node_with_blobs_from(
                             blob_ids.clone(),
-                            &[remote_node.clone()],
+                            slice::from_ref(remote_node),
                         )
                         .await?;
                         // We found the missing blobs: retry.
@@ -1886,17 +1899,6 @@ impl<Env: Environment> Client<Env> {
         }
     }
 }
-
-#[derive(Debug, Clone, Copy)]
-pub enum TimingType {
-    ExecuteOperations,
-    ExecuteBlock,
-    SubmitBlockProposal,
-    UpdateValidators,
-}
-
-pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
-pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 
 /// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay on
 /// each subsequent node. Returns error `err` if all of the nodes fail.
