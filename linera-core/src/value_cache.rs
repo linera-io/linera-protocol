@@ -79,15 +79,6 @@ where
         Self::track_cache_usage(self.cache.lock().unwrap().pop(hash))
     }
 
-    /// Returns a `V` from the cache, if present.
-    #[allow(dead_code)]
-    pub fn get(&self, hash: &K) -> Option<V>
-    where
-        V: Clone,
-    {
-        Self::track_cache_usage(self.cache.lock().unwrap().get(hash).cloned())
-    }
-
     fn track_cache_usage(maybe_value: Option<V>) -> Option<V> {
         #[cfg(with_metrics)]
         {
