@@ -107,11 +107,11 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         "e2l-bridge-e2e-test",
         Some(WasmRuntime::default()),
         StorageCacheSizes {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            lite_certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
+            blob_cache_size: 1024 * 1024,
+            confirmed_block_cache_size: 1024 * 1024,
+            lite_certificate_cache_size: 1024 * 1024,
+            certificate_raw_cache_size: 1024 * 1024,
+            event_cache_size: 1024 * 1024,
         },
     )
     .await?;

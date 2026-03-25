@@ -5463,6 +5463,7 @@ dependencies = [
 name = "linera-cache"
 version = "0.15.15"
 dependencies = [
+ "allocative",
  "cfg_aliases",
  "linera-base",
  "linera-cache",
@@ -6061,6 +6062,7 @@ dependencies = [
  "kube",
  "linera-base",
  "linera-bridge",
+ "linera-cache",
  "linera-chain",
  "linera-client",
  "linera-core",
@@ -6077,7 +6079,6 @@ dependencies = [
  "linera-storage-service",
  "linera-version",
  "linera-views",
- "lru 0.15.0",
  "matching-engine",
  "mini-moka",
  "native-fungible",

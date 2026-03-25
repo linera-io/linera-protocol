@@ -94,25 +94,25 @@ struct ServeOptions {
     #[arg(long, default_value = "3001")]
     port: u16,
 
-    /// The maximal number of entries in the blob cache.
-    #[arg(long, default_value = "1000")]
-    blob_cache_size: usize,
+    /// Maximum bytes in the blob cache.
+    #[arg(long, default_value_t = 52_428_800)]
+    blob_cache_size: u64,
 
-    /// The maximal number of entries in the confirmed block cache.
-    #[arg(long, default_value = "1000")]
-    confirmed_block_cache_size: usize,
+    /// Maximum bytes in the confirmed block cache.
+    #[arg(long, default_value_t = 52_428_800)]
+    confirmed_block_cache_size: u64,
 
-    /// The maximal number of entries in the lite certificate cache.
-    #[arg(long, default_value = "1000")]
-    lite_certificate_cache_size: usize,
+    /// Maximum bytes in the lite certificate cache.
+    #[arg(long, default_value_t = 52_428_800)]
+    lite_certificate_cache_size: u64,
 
-    /// The maximal number of entries in the raw certificate cache.
-    #[arg(long, default_value = "1000")]
-    certificate_raw_cache_size: usize,
+    /// Maximum bytes in the raw certificate cache.
+    #[arg(long, default_value_t = 52_428_800)]
+    certificate_raw_cache_size: u64,
 
-    /// The maximal number of entries in the event cache.
-    #[arg(long, default_value = "1000")]
-    event_cache_size: usize,
+    /// Maximum bytes in the event cache.
+    #[arg(long, default_value_t = 52_428_800)]
+    event_cache_size: u64,
 }
 
 fn main() -> Result<()> {

@@ -33,6 +33,7 @@ use linera_base::{
     vm::VmRuntime,
     BcsHexParseError,
 };
+use linera_cache::ValueCache;
 use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate},
     ChainStateView,
@@ -53,7 +54,6 @@ use linera_execution::{
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
 use linera_sdk::linera_base_types::BlobContent;
-use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::{mpsc::UnboundedReceiver, OwnedRwLockReadGuard};
@@ -988,45 +988,10 @@ where
     }
 }
 
-#[cfg(with_metrics)]
-mod query_cache_metrics {
-    use std::sync::LazyLock;
-
-    use linera_base::prometheus_util::{register_int_counter_vec, register_int_gauge};
-    use prometheus::{IntCounterVec, IntGauge};
-
-    pub static QUERY_CACHE_HIT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("query_response_cache_hit", "Query response cache hits", &[])
-    });
-
-    pub static QUERY_CACHE_MISS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "query_response_cache_miss",
-            "Query response cache misses",
-            &[],
-        )
-    });
-
-    pub static QUERY_CACHE_INVALIDATION: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "query_response_cache_invalidation",
-            "Query response cache invalidations (per chain)",
-            &[],
-        )
-    });
-
-    pub static QUERY_CACHE_ENTRIES: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "query_response_cache_entries",
-            "Current number of cached query responses across all chains",
-        )
-    });
-}
-
-/// Per-chain cache state: an LRU map plus the `next_block_height` at the time the
+/// Per-chain cache state: a `ValueCache` plus the `next_block_height` at the time the
 /// cache was last invalidated. Both are behind the same mutex.
 struct PerChainCache {
-    lru: LruCache<(ApplicationId, Vec<u8>), Vec<u8>>,
+    cache: ValueCache<(ApplicationId, Vec<u8>), Vec<u8>>,
     next_block_height: BlockHeight,
 }
 
@@ -1044,17 +1009,17 @@ struct QueryResponseCache {
     subscribed: papaya::HashSet<ChainId>,
     /// Sender half of the notification channel, used to subscribe new chains lazily.
     notification_sender: StdMutex<Option<tokio::sync::mpsc::UnboundedSender<Notification>>>,
-    capacity_per_chain: std::num::NonZeroUsize,
+    weight_capacity_per_chain: u64,
 }
 
 impl QueryResponseCache {
-    fn new(capacity_per_chain: usize) -> Self {
+    fn new(weight_capacity_per_chain: u64) -> Self {
+        assert!(weight_capacity_per_chain > 0, "weight capacity must be > 0");
         Self {
             chains: papaya::HashMap::new(),
             subscribed: papaya::HashSet::new(),
             notification_sender: StdMutex::new(None),
-            capacity_per_chain: std::num::NonZeroUsize::new(capacity_per_chain)
-                .expect("capacity must be > 0"),
+            weight_capacity_per_chain,
         }
     }
 
@@ -1092,34 +1057,22 @@ impl QueryResponseCache {
         }
     }
 
+    fn new_per_chain_cache(&self, next_block_height: BlockHeight) -> StdMutex<PerChainCache> {
+        StdMutex::new(PerChainCache {
+            cache: ValueCache::new("query_response", self.weight_capacity_per_chain),
+            next_block_height,
+        })
+    }
+
     /// Looks up a cached response. Returns `Some(bytes)` on hit, `None` on miss
     /// (including when the chain has no cache entry yet).
     #[allow(clippy::question_mark)]
     fn get(&self, chain_id: ChainId, app_id: &ApplicationId, request: &[u8]) -> Option<Vec<u8>> {
         let pinned = self.chains.pin();
-        let Some(mutex) = pinned.get(&chain_id) else {
-            #[cfg(with_metrics)]
-            query_cache_metrics::QUERY_CACHE_MISS
-                .with_label_values(&[])
-                .inc();
-            return None;
-        };
-        let mut cache = mutex.lock().expect("LRU mutex poisoned");
+        let mutex = pinned.get(&chain_id)?;
+        let cache = mutex.lock().expect("cache mutex poisoned");
         let key = (*app_id, request.to_vec());
-        let result = cache.lru.get(&key).cloned();
-        #[cfg(with_metrics)]
-        {
-            if result.is_some() {
-                query_cache_metrics::QUERY_CACHE_HIT
-                    .with_label_values(&[])
-                    .inc();
-            } else {
-                query_cache_metrics::QUERY_CACHE_MISS
-                    .with_label_values(&[])
-                    .inc();
-            }
-        }
-        result
+        cache.cache.get(&key)
     }
 
     /// Inserts a response into the cache, unless the chain's `next_block_height` has
@@ -1134,66 +1087,33 @@ impl QueryResponseCache {
         next_block_height: BlockHeight,
     ) {
         let pinned = self.chains.pin();
-        let capacity = self.capacity_per_chain;
-        let mutex = pinned.get_or_insert_with(chain_id, || {
-            StdMutex::new(PerChainCache {
-                lru: LruCache::new(capacity),
-                next_block_height,
-            })
-        });
-        let mut cache = mutex.lock().expect("LRU mutex poisoned");
+        let mutex =
+            pinned.get_or_insert_with(chain_id, || self.new_per_chain_cache(next_block_height));
+        let mut cache = mutex.lock().expect("cache mutex poisoned");
         if next_block_height < cache.next_block_height {
             return; // A new block arrived since this query started; discard stale response.
         }
-        // If the chain has advanced since the last cache update, also clear stale entries.
-        // Note: This should not happen if notifications are timely. Also, this only
-        // works when we have a cache miss.
         if next_block_height > cache.next_block_height {
             debug!(
                 "Unexpected query cache invalidation for chain {chain_id}:\
                  {next_block_height} > {}",
                 cache.next_block_height
             );
-            #[cfg(with_metrics)]
-            {
-                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
-                query_cache_metrics::QUERY_CACHE_INVALIDATION
-                    .with_label_values(&[])
-                    .inc();
-            }
-            cache.lru.clear();
+            cache.cache.invalidate();
             cache.next_block_height = next_block_height;
         }
-        #[cfg(with_metrics)]
-        let prev_len = cache.lru.len();
-        cache.lru.put((app_id, request), response);
-        #[cfg(with_metrics)]
-        if cache.lru.len() != prev_len {
-            query_cache_metrics::QUERY_CACHE_ENTRIES.inc();
-        }
+        cache.cache.insert(&(app_id, request), response);
     }
 
     /// Called when a `NewBlock` notification arrives. Records the new
     /// `next_block_height` and clears all cached responses for the chain.
     fn invalidate_chain(&self, chain_id: &ChainId, next_block_height: BlockHeight) {
         let pinned = self.chains.pin();
-        let capacity = self.capacity_per_chain;
-        let mutex = pinned.get_or_insert_with(*chain_id, || {
-            StdMutex::new(PerChainCache {
-                lru: LruCache::new(capacity),
-                next_block_height,
-            })
-        });
-        let mut cache = mutex.lock().expect("LRU mutex poisoned");
+        let mutex =
+            pinned.get_or_insert_with(*chain_id, || self.new_per_chain_cache(next_block_height));
+        let mut cache = mutex.lock().expect("cache mutex poisoned");
         if next_block_height > cache.next_block_height {
-            #[cfg(with_metrics)]
-            {
-                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
-                query_cache_metrics::QUERY_CACHE_INVALIDATION
-                    .with_label_values(&[])
-                    .inc();
-            }
-            cache.lru.clear();
+            cache.cache.invalidate();
             cache.next_block_height = next_block_height;
         } else {
             debug!(
@@ -1269,7 +1189,12 @@ where
         cancellation_token: CancellationToken,
         enable_memory_profiling: bool,
     ) -> Self {
-        let query_cache = query_cache_size.map(|size| Arc::new(QueryResponseCache::new(size)));
+        // Convert per-chain item capacity (from CLI) to a weight capacity.
+        // Assume ~4 KB average response size.
+        let query_cache = query_cache_size.map(|item_count| {
+            let weight_capacity = (item_count as u64).saturating_mul(4 * 1024);
+            Arc::new(QueryResponseCache::new(weight_capacity))
+        });
         Self {
             config,
             port,
@@ -1590,7 +1515,7 @@ mod tests {
 
     #[test]
     fn cache_hit_and_miss() {
-        let cache = QueryResponseCache::new(100);
+        let cache = QueryResponseCache::new(1_000_000);
         let chain = test_chain(0);
         let app = test_app(0);
         let request = b"query { balance }".to_vec();
@@ -1614,7 +1539,7 @@ mod tests {
 
     #[test]
     fn per_chain_isolation() {
-        let cache = QueryResponseCache::new(100);
+        let cache = QueryResponseCache::new(1_000_000);
         let chain_a = test_chain(0);
         let chain_b = test_chain(1);
         let app = test_app(0);
@@ -1636,7 +1561,7 @@ mod tests {
 
     #[test]
     fn invalidation_clears_all_entries() {
-        let cache = QueryResponseCache::new(100);
+        let cache = QueryResponseCache::new(1_000_000);
         let chain = test_chain(0);
         let app = test_app(0);
 
@@ -1649,24 +1574,32 @@ mod tests {
     }
 
     #[test]
-    fn lru_eviction() {
-        let cache = QueryResponseCache::new(2);
+    fn weight_based_eviction() {
+        // Each (ApplicationId, Vec<u8>) + Vec<u8> entry weighs ~230 bytes via allocative
+        // (32 for ApplicationId + Vec overhead + heap). A capacity of 600 fits ~2 entries,
+        // so inserting 3 must evict at least one.
+        let cache = QueryResponseCache::new(600);
         let chain = test_chain(0);
         let app = test_app(0);
+        let response = vec![0u8; 50];
 
-        cache.insert(chain, app, b"q1".to_vec(), b"r1".to_vec(), BlockHeight(1));
-        cache.insert(chain, app, b"q2".to_vec(), b"r2".to_vec(), BlockHeight(1));
-        // Third insert evicts q1 (least recently used).
-        cache.insert(chain, app, b"q3".to_vec(), b"r3".to_vec(), BlockHeight(1));
+        cache.insert(chain, app, b"q1".to_vec(), response.clone(), BlockHeight(1));
+        cache.insert(chain, app, b"q2".to_vec(), response.clone(), BlockHeight(1));
+        cache.insert(chain, app, b"q3".to_vec(), response, BlockHeight(1));
 
-        assert!(cache.get(chain, &app, b"q1").is_none());
-        assert!(cache.get(chain, &app, b"q2").is_some());
-        assert!(cache.get(chain, &app, b"q3").is_some());
+        let remaining = [b"q1", b"q2", b"q3"]
+            .iter()
+            .filter(|q| cache.get(chain, &app, q.as_slice()).is_some())
+            .count();
+        assert!(
+            remaining < 3,
+            "expected eviction to remove at least one entry, but all 3 are still present"
+        );
     }
 
     #[test]
     fn stale_insert_rejected_after_invalidation() {
-        let cache = QueryResponseCache::new(100);
+        let cache = QueryResponseCache::new(1_000_000);
         let chain = test_chain(0);
         let app = test_app(0);
 

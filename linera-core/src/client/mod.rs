@@ -268,7 +268,7 @@ impl<Env: Environment> Client<Env> {
         priority_bundle_origins: HashSet<ChainId>,
         options: chain_client::Options,
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
-        block_cache_size: usize,
+        block_cache_size: u64,
         execution_state_cache_size: usize,
     ) -> Self {
         let chain_modes = Arc::new(RwLock::new(chain_modes.into_iter().collect()));

@@ -23,7 +23,7 @@ pub async fn new_test_client_context(
     storage: impl linera_core::environment::Storage,
     wallet: Wallet,
     signer: impl linera_core::environment::Signer,
-    _block_cache_size: usize,
+    _block_cache_size: u64,
     _execution_state_cache_size: usize,
 ) -> anyhow::Result<ClientContext<impl linera_core::Environment>> {
     use linera_core::{client::chain_client, node::CrossChainMessageDelivery};

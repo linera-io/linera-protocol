@@ -18,6 +18,7 @@ metrics = ["prometheus", "linera-base/metrics"]
 test = ["linera-base/test"]
 
 [dependencies]
+allocative.workspace = true
 linera-base.workspace = true
 lru.workspace = true
 prometheus = { workspace = true, optional = true }

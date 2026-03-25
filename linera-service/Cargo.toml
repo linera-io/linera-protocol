@@ -95,6 +95,7 @@ k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-bridge.workspace = true
+linera-cache.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
 linera-core = { workspace = true, features = ["fs"] }
@@ -113,7 +114,6 @@ linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
-lru.workspace = true
 mini-moka.workspace = true
 nonzero_lit.workspace = true
 papaya.workspace = true
