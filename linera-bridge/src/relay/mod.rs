@@ -40,7 +40,7 @@ use linera_views::{
     },
     lru_prefix_cache::StorageCacheConfig,
 };
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::{mpsc, RwLock};
 
 use crate::{
     monitor::{self, MonitorState},
@@ -220,11 +220,6 @@ pub async fn run(
     .await
 }
 
-pub(crate) struct DepositRequest {
-    pub(crate) proof: crate::proof::gen::DepositProof,
-    pub(crate) response: oneshot::Sender<Result<(), String>>,
-}
-
 type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
 
 async fn create_rocksdb_storage(
@@ -271,7 +266,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     monitor_start_block: u64,
     max_retries: u32,
 ) -> Result<()> {
-    // ── Set up EVM provider ──
+    // ── Set up centralized clients ──
     let bridge_addr: Address = evm_bridge_address
         .parse()
         .context("invalid --evm-bridge-address")?;
@@ -283,7 +278,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    // ── Parse app IDs ──
+    let evm_client = Arc::new(evm::EvmClient::new(provider, bridge_addr));
+
     let bridge_app_id: ApplicationId = linera_bridge_address
         .parse()
         .context("invalid --linera-bridge-address")?;
@@ -291,12 +287,20 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .parse()
         .context("invalid --linera-fungible-address")?;
 
+    let (op_tx, mut op_rx) = mpsc::channel::<linera::ChainOperation>(16);
+    let linera_client = Arc::new(linera::LineraClient::new(
+        chain_client.clone(),
+        op_tx,
+        bridge_app_id,
+        fungible_app_id,
+    ));
+
     // ── Start notification listener ──
     let mut notifications = chain_client.subscribe()?;
     let (listener, _abort_handle, _) = chain_client.listen().await?;
     let chain_listener_handle = tokio::spawn(listener);
 
-    // ── Monitor state + scan/retry channels ──
+    // ── Monitor state + scan/retry ──
     let monitor = Arc::new(RwLock::new(MonitorState::new(monitor_start_block)));
     let scan_interval = Duration::from_secs(monitor_scan_interval);
     let (pending_deposit_tx, pending_deposit_rx) =
@@ -305,53 +309,43 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
 
     let evm_scan_handle = {
         let monitor = Arc::clone(&monitor);
-        let provider = provider.clone();
-        let chain_client = chain_client.clone();
+        let evm_client = Arc::clone(&evm_client);
+        let linera_client = Arc::clone(&linera_client);
         tokio::spawn(monitor::evm::evm_scan_loop(
             monitor,
-            provider,
-            bridge_addr,
-            chain_client,
-            bridge_app_id,
+            evm_client,
+            linera_client,
             pending_deposit_tx,
             scan_interval,
+            max_retries,
         ))
     };
     let linera_scan_handle = {
         let monitor = Arc::clone(&monitor);
-        let chain_client = chain_client.clone();
-        let provider = provider.clone();
+        let evm_client = Arc::clone(&evm_client);
+        let linera_client = Arc::clone(&linera_client);
         tokio::spawn(monitor::linera::linera_scan_loop(
             monitor,
-            chain_client,
-            fungible_app_id,
-            provider,
-            bridge_addr,
+            evm_client,
+            linera_client,
             pending_burn_tx,
             scan_interval,
+            max_retries,
         ))
     };
 
-    // ── Start HTTP server + retry loop ──
-    let (deposit_tx, mut deposit_rx) = mpsc::channel::<DepositRequest>(16);
-
     let retry_handle = {
         let monitor = Arc::clone(&monitor);
-        let deposit_tx = deposit_tx.clone();
+        let evm_client = Arc::clone(&evm_client);
+        let linera_client = Arc::clone(&linera_client);
         let proof_client = HttpDepositProofClient::new(rpc_url)?;
-        let chain_client = chain_client.clone();
-        let provider = provider.clone();
         tokio::spawn(monitor::retry_loop(
             monitor,
-            deposit_tx,
             proof_client,
+            evm_client,
+            linera_client,
             pending_deposit_rx,
-            chain_client,
-            fungible_app_id,
-            bridge_addr,
-            provider,
             pending_burn_rx,
-            max_retries,
         ))
     };
 
@@ -374,8 +368,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         "Relay is ready"
     );
 
-    // ── Main loop: process notifications + deposit requests ──
-    tracing::info!("Listening for notifications and deposit requests...");
+    // ── Main loop: process chain operations + notifications ──
+    tracing::info!("Listening for chain operations and notifications...");
     let mut chain_listener_handle = chain_listener_handle;
     let mut evm_scan_handle = evm_scan_handle;
     let mut linera_scan_handle = linera_scan_handle;
@@ -432,96 +426,95 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                 }
 
                 tracing::info!(count = certs.len(), "Processed inbox certificates");
-
-                // Scan inbox certs for Credit messages to Address20 and submit Burns.
-                let mut burn_ops = vec![];
-                for cert in &certs {
-                    for (owner, amount) in linera::find_address20_credits(
-                        &cert.block().body.transactions,
-                        fungible_app_id,
-                    ) {
-                        burn_ops.push(Operation::User {
-                            application_id: fungible_app_id,
-                            bytes: linera::serialize_burn_operation(&owner, &amount),
-                        });
-                    }
-                }
-
-                if !burn_ops.is_empty() {
-                    tracing::info!(count = burn_ops.len(), "Submitting burn operations...");
-                    if let Err(e) = chain_client.synchronize_from_validators().await {
-                        tracing::error!("Failed to synchronize before burn: {e}");
-                        continue;
-                    }
-                    match chain_client.execute_operations(burn_ops, vec![]).await {
-                        Ok(linera_core::data_types::ClientOutcome::Committed(cert)) => {
-                            tracing::info!(
-                                height = %cert.block().header.height,
-                                "Burn operations committed"
-                            );
-                            if let Err(e) = evm::forward_cert_to_evm(
-                                &cert, bridge_addr, &provider,
-                            ).await {
-                                tracing::error!(
-                                    "Failed to forward burn cert to EVM: {e:#}"
-                                );
-                            }
-                        }
-                        Ok(other) => tracing::error!("Burn not committed: {other:?}"),
-                        Err(e) => tracing::error!("Burn submission failed: {e}"),
-                    }
-                }
             }
 
-            Some(deposit_req) = deposit_rx.recv() => {
-                let result = async {
-                    let proof = &deposit_req.proof;
+            Some(op) = op_rx.recv() => {
+                match op {
+                    linera::ChainOperation::ProcessInbox { response } => {
+                        let result = async {
+                            chain_client.synchronize_from_validators().await
+                                .context("failed to synchronize")?;
+                            let (certs, _) = chain_client.process_inbox().await?;
+                            Ok(certs)
+                        }.await;
+                        let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                    }
+                    linera::ChainOperation::ProcessDeposit { proof, response } => {
+                        let result = async {
+                            let operations: Vec<_> = proof.log_indices.iter().map(|&log_index| {
+                                let op = evm::BridgeOperation::ProcessDeposit {
+                                    block_header_rlp: proof.block_header_rlp.clone(),
+                                    receipt_rlp: proof.receipt_rlp.clone(),
+                                    proof_nodes: proof.proof_nodes.clone(),
+                                    tx_index: proof.tx_index,
+                                    log_index,
+                                };
+                                let op_bytes = bcs::to_bytes(&op)
+                                    .expect("failed to BCS-serialize BridgeOperation");
+                                Operation::User {
+                                    application_id: bridge_app_id,
+                                    bytes: op_bytes,
+                                }
+                            }).collect();
 
-                    let operations: Vec<_> = proof.log_indices.iter().map(|&log_index| {
-                        let op = evm::BridgeOperation::ProcessDeposit {
-                            block_header_rlp: proof.block_header_rlp.clone(),
-                            receipt_rlp: proof.receipt_rlp.clone(),
-                            proof_nodes: proof.proof_nodes.clone(),
-                            tx_index: proof.tx_index,
-                            log_index,
-                        };
-                        let op_bytes = bcs::to_bytes(&op)
-                            .expect("failed to BCS-serialize BridgeOperation");
-                        Operation::User {
-                            application_id: bridge_app_id,
-                            bytes: op_bytes,
-                        }
-                    }).collect();
-
-                    tracing::info!(
-                        count = operations.len(),
-                        "Submitting ProcessDeposit operations on bridge chain..."
-                    );
-
-                    chain_client.synchronize_from_validators().await
-                        .context("failed to synchronize")?;
-
-                    let outcome = chain_client
-                        .execute_operations(operations, vec![])
-                        .await?;
-                    match outcome {
-                        linera_core::data_types::ClientOutcome::Committed(cert) => {
                             tracing::info!(
-                                height = %cert.block().header.height,
-                                "ProcessDeposit committed"
+                                count = operations.len(),
+                                "Submitting ProcessDeposit operations..."
                             );
-                        }
-                        other => {
-                            anyhow::bail!("ProcessDeposit not committed: {other:?}");
-                        }
-                    };
 
-                    Ok::<(), anyhow::Error>(())
-                }.await;
+                            chain_client.synchronize_from_validators().await
+                                .context("failed to synchronize")?;
 
-                let _ = deposit_req.response.send(
-                    result.map_err(|e| format!("{e:#}"))
-                );
+                            let outcome = chain_client
+                                .execute_operations(operations, vec![])
+                                .await?;
+                            match outcome {
+                                linera_core::data_types::ClientOutcome::Committed(cert) => {
+                                    tracing::info!(
+                                        height = %cert.block().header.height,
+                                        "ProcessDeposit committed"
+                                    );
+                                }
+                                other => {
+                                    anyhow::bail!("ProcessDeposit not committed: {other:?}");
+                                }
+                            };
+                            Ok(())
+                        }.await;
+                        let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                    }
+                    linera::ChainOperation::Burn { owner, amount, response } => {
+                        let result = async {
+                            let burn_bytes = linera::serialize_burn_operation(&owner, &amount);
+                            let burn_op = Operation::User {
+                                application_id: fungible_app_id,
+                                bytes: burn_bytes,
+                            };
+
+                            tracing::info!("Submitting Burn operation...");
+
+                            chain_client.synchronize_from_validators().await
+                                .context("failed to synchronize")?;
+
+                            let outcome = chain_client
+                                .execute_operations(vec![burn_op], vec![])
+                                .await?;
+                            match outcome {
+                                linera_core::data_types::ClientOutcome::Committed(cert) => {
+                                    tracing::info!(
+                                        height = %cert.block().header.height,
+                                        "Burn operation committed"
+                                    );
+                                    Ok(cert)
+                                }
+                                other => {
+                                    anyhow::bail!("Burn not committed: {other:?}");
+                                }
+                            }
+                        }.await;
+                        let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                    }
+                }
             }
         }
     }

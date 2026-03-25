@@ -256,26 +256,20 @@ pub struct StatusSummary {
 
 /// Runs deposit and burn retry loops concurrently.
 /// Returns if either encounters an unrecoverable error.
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn retry_loop<E: linera_core::environment::Environment>(
+pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
-    deposit_tx: tokio::sync::mpsc::Sender<crate::relay::DepositRequest>,
     proof_client: crate::proof::gen::HttpDepositProofClient,
+    evm_client: Arc<crate::relay::evm::EvmClient<impl alloy::providers::Provider + 'static>>,
+    linera_client: Arc<crate::relay::linera::LineraClient<E>>,
     pending_deposit_rx: tokio::sync::mpsc::Receiver<PendingDeposit>,
-    chain_client: linera_core::client::ChainClient<E>,
-    fungible_app_id: ApplicationId,
-    bridge_addr: Address,
-    provider: impl alloy::providers::Provider + Clone + 'static,
     pending_burn_rx: tokio::sync::mpsc::Receiver<PendingBurn>,
-    max_retries: u32,
 ) -> anyhow::Result<()> {
     tokio::select! {
         result = evm::retry_pending_deposits(
-            &monitor, &deposit_tx, &proof_client, pending_deposit_rx, max_retries,
+            &monitor, &linera_client, &proof_client, pending_deposit_rx,
         ) => result,
         result = linera::retry_pending_burns(
-            &monitor, &chain_client, fungible_app_id, bridge_addr, &provider,
-            pending_burn_rx, max_retries,
+            &monitor, &evm_client, &linera_client, pending_burn_rx,
         ) => result,
     }
 }
@@ -287,12 +281,12 @@ struct GqlRequest {
 }
 
 /// Whether an item is eligible for retry based on exponential backoff.
-/// Backoff schedule: 30s, 60s, 120s, 240s, 480s (capped).
+/// Backoff schedule: 5s, 10s, 20s, 40s, 80s (capped).
 fn retry_eligible(retry_count: u32, last_retry_at: Option<Instant>, max_retries: u32) -> bool {
     if retry_count >= max_retries {
         return false;
     }
-    let backoff = Duration::from_secs(30 * 2u64.pow(retry_count.min(4)));
+    let backoff = Duration::from_secs(5 * 2u64.pow(retry_count.min(4)));
     match last_retry_at {
         None => true,
         Some(t) => t.elapsed() >= backoff,
