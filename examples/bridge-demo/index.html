@@ -693,6 +693,12 @@
           }
         });
 
+        // Periodically refresh balances to catch relay-driven changes.
+        setInterval(async () => {
+          await updateEvmBalance();
+          await updateLineraBalance();
+        }, 5_000);
+
         setStatus('Ready. Connect MetaMask to begin.');
       }
 
