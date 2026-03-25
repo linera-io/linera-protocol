@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_chain::{manager::LockingBlock, types::ConfirmedBlockCertificate};
 use linera_core::{
-    client::{ChainClient, ChainClientError, Client, ListeningMode},
+    client::{chain_client, ChainClient, Client, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::ValidatorNode,
@@ -588,7 +588,7 @@ impl<Env: Environment> ClientContext<Env> {
         match result? {
             ClientOutcome::Committed(t) => return Ok(t),
             ClientOutcome::Conflict(certificate) => {
-                return Err(ChainClientError::Conflict(certificate.hash()).into());
+                return Err(chain_client::Error::Conflict(certificate.hash()).into());
             }
             ClientOutcome::WaitForTimeout(_) => {}
         }
@@ -604,7 +604,7 @@ impl<Env: Environment> ClientContext<Env> {
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::Conflict(certificate) => {
-                    return Err(ChainClientError::Conflict(certificate.hash()).into());
+                    return Err(chain_client::Error::Conflict(certificate.hash()).into());
                 }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
@@ -1014,7 +1014,7 @@ impl<Env: Environment> ClientContext<Env> {
                 .map(|chain_client| async move {
                     chain_client.process_inbox().await?;
                     info!("Processed inbox for chain {:?}", chain_client.chain_id());
-                    Ok::<(), ChainClientError>(())
+                    Ok::<(), chain_client::Error>(())
                 })
                 .buffer_unordered(wrap_up_max_in_flight);
             stream.try_collect::<Vec<_>>().await?;

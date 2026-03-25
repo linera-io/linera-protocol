@@ -41,7 +41,7 @@ use linera_client::chain_listener::{
     ChainListener, ChainListenerConfig, ClientContext, ListenerCommand,
 };
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::{chain_client, ChainClient},
     data_types::ClientOutcome,
     wallet::Wallet as _,
     worker::{ChainStateViewReadGuard, Notification, Reason},
@@ -139,7 +139,7 @@ pub struct MutationRoot<C> {
 #[derive(Debug, thiserror::Error)]
 enum NodeServiceError {
     #[error(transparent)]
-    ChainClient(#[from] ChainClientError),
+    ChainClient(#[from] chain_client::Error),
     #[error(transparent)]
     BcsHex(#[from] BcsHexParseError),
     #[error(transparent)]
@@ -272,7 +272,7 @@ where
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::Conflict(certificate) => {
-                    return Err(ChainClientError::Conflict(certificate.hash()).into());
+                    return Err(chain_client::Error::Conflict(certificate.hash()).into());
                 }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
@@ -1478,12 +1478,12 @@ where
             {
                 ClientOutcome::Committed(certificate) => break certificate.hash(),
                 ClientOutcome::Conflict(certificate) => {
-                    return Err(ChainClientError::Conflict(certificate.hash()).into());
+                    return Err(chain_client::Error::Conflict(certificate.hash()).into());
                 }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             let mut stream = client.subscribe().map_err(|_| {
-                ChainClientError::InternalError("Could not subscribe to the local node.")
+                chain_client::Error::InternalError("Could not subscribe to the local node.")
             })?;
             util::wait_for_next_round(&mut stream, timeout).await;
         };

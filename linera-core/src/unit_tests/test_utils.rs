@@ -48,7 +48,7 @@ use {
 };
 
 use crate::{
-    client::{ChainClientOptions, Client, ListeningMode},
+    client::{chain_client, Client, ListeningMode},
     data_types::*,
     environment::{wallet::Chain, TestSigner, TestWallet},
     node::{
@@ -1061,7 +1061,7 @@ where
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
-        options: ChainClientOptions,
+        options: chain_client::Options,
     ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
@@ -1110,7 +1110,7 @@ where
             chain_id,
             block_hash,
             block_height,
-            ChainClientOptions::test_default(),
+            chain_client::Options::test_default(),
         )
         .await
     }

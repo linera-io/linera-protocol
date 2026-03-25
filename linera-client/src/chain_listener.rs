@@ -16,7 +16,7 @@ use linera_base::{
     Task,
 };
 use linera_core::{
-    client::{AbortOnDrop, ChainClient, ChainClientError, ListeningMode},
+    client::{chain_client, AbortOnDrop, ChainClient, ListeningMode},
     node::NotificationStream,
     worker::{Notification, Reason},
     Environment, Wallet,
@@ -408,7 +408,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .storage
             .read_confirmed_block(hash)
             .await?
-            .ok_or(ChainClientError::MissingConfirmedBlock(hash))?
+            .ok_or(chain_client::Error::MissingConfirmedBlock(hash))?
             .into_block();
         let parent_chain_id = block.header.chain_id;
         let blobs = block.created_blobs().into_iter();
@@ -727,7 +727,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     .signer()
                     .contains_key(&owner)
                     .await
-                    .map_err(ChainClientError::signer_failure)?
+                    .map_err(chain_client::Error::signer_failure)?
                 {
                     // Try to modify existing chain entry, setting the owner.
                     let modified = context_guard
@@ -816,7 +816,7 @@ async fn inbox_processing_loop<C: ClientContext>(
                 // A new notification or cancellation can interrupt the sleep.
                 loop {
                     match client.process_inbox_without_prepare().await {
-                        Err(ChainClientError::CannotFindKeyForChain(chain_id)) => {
+                        Err(chain_client::Error::CannotFindKeyForChain(chain_id)) => {
                             debug!(%chain_id, "Cannot find key for chain");
                             break;
                         }
