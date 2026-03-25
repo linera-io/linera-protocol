@@ -32,7 +32,7 @@ use linera_client::{
     config::GenesisConfig,
 };
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::{chain_client, ChainClient},
     data_types::ClientOutcome,
     worker::WorkerError,
     LocalNodeError,
@@ -904,7 +904,7 @@ where
             "wallet updated after executing operations"
         );
         let certificate = match result {
-            Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+            Err(chain_client::Error::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_err),
             ))) => {
                 tracing::debug!(error=?chain_err, "local worker errored when executing operations");
@@ -948,7 +948,7 @@ where
                     chain_err => {
                         Self::send_err(requests, chain_err.to_string());
                         return Err(
-                            ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                            chain_client::Error::LocalNodeError(LocalNodeError::WorkerError(
                                 WorkerError::ChainError(chain_err.into()),
                             ))
                             .into(),

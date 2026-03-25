@@ -44,7 +44,7 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 #[cfg(feature = "storage-service")]
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
-    client::{ChainClient, ChainClientError, ChainClientOptions, ClientOutcome, ListeningMode},
+    client::{chain_client, ChainClient, ClientOutcome, ListeningMode},
     environment::wallet::Chain,
     local_node::LocalNodeError,
     node::{
@@ -71,7 +71,7 @@ fn test_listener_is_send() {
 
     async fn check_listener(
         chain_client: ChainClient<impl Environment>,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let (listener, _abort_notifications, _notifications) = chain_client.listen().await?;
         ensure_send(&listener);
         Ok(())
@@ -342,7 +342,7 @@ where
     assert!(sender.pending_proposal().await.is_none());
     assert_matches!(
         sender.identity().await,
-        Err(ChainClientError::NotAnOwner(_))
+        Err(chain_client::Error::NotAnOwner(_))
     );
     assert_eq!(
         builder
@@ -361,7 +361,7 @@ where
         sender
             .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
             .await,
-        Err(ChainClientError::NotAnOwner(_))
+        Err(chain_client::Error::NotAnOwner(_))
     );
     Ok(())
 }
@@ -422,7 +422,7 @@ where
     // the blocks yet.
     assert_matches!(
         client.local_balance().await,
-        Err(ChainClientError::WalletSynchronizationError)
+        Err(chain_client::Error::WalletSynchronizationError)
     );
     client.synchronize_from_validators().await.unwrap();
     assert_eq!(
@@ -435,7 +435,7 @@ where
     let result = client.burn(AccountOwner::CHAIN, Amount::ONE).await;
     assert_matches!(
         result,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. }),
         ))
     );
@@ -443,7 +443,7 @@ where
     builder.set_fault_type([2, 3], FaultType::Offline);
     assert_matches!(
         sender.burn(AccountOwner::CHAIN, Amount::ONE).await,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. })
         ))
     );
@@ -775,7 +775,7 @@ where
     assert!(
         matches!(
             &result,
-            Err(ChainClientError::LocalNodeError(
+            Err(chain_client::Error::LocalNodeError(
                 LocalNodeError::WorkerError(WorkerError::ChainError(err))
             )) if matches!(**err, ChainError::ClosedChain)
         ),
@@ -817,7 +817,7 @@ where
     // Since blocks are free of charge on closed chains, empty blocks are not allowed.
     assert_matches!(
         client1.execute_operations(vec![], vec![]).await,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
         )) if matches!(*error, ChainError::EmptyBlock)
     );
@@ -853,7 +853,7 @@ where
     // Malicious validators always return ArithmeticError when handling a proposal.
     assert_matches!(
         result,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(NodeError::InactiveChain(_))
         )),
         "unexpected result"
@@ -1205,11 +1205,11 @@ where
     // Revoking the current or an already revoked epoch fails.
     assert_matches!(
         admin.revoke_epochs(Epoch::ZERO).await,
-        Err(ChainClientError::EpochAlreadyRevoked)
+        Err(chain_client::Error::EpochAlreadyRevoked)
     );
     assert_matches!(
         admin.revoke_epochs(Epoch::from(3)).await,
-        Err(ChainClientError::CannotRevokeCurrentEpoch(Epoch(2)))
+        Err(chain_client::Error::CannotRevokeCurrentEpoch(Epoch(2)))
     );
 
     // Have the admin chain deprecate the previous epoch.
@@ -1420,7 +1420,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
+        Err(chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
             if not_found_blob_ids == [blob0_id]
     );
 
@@ -2019,11 +2019,11 @@ where
     let result = client.request_leader_timeout().await;
     if !matches!(
         result,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(NodeError::ChainError { .. })
         ))
     ) && !matches!(&result,
-        Err(ChainClientError::CommunicationError(CommunicationError::Sample(samples)))
+        Err(chain_client::Error::CommunicationError(CommunicationError::Sample(samples)))
         if samples.iter().any(|(err, _)| matches!(err, NodeError::ChainError { .. }))
     ) {
         panic!("unexpected leader timeout result: {:?}", result);
@@ -2799,14 +2799,14 @@ where
     let result = client1.publish_data_blobs(blob_bytes).await;
     assert_matches!(
         result,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(*chain_error, ChainError::BlockProposalTooLarge(_))
     );
 
     assert_matches!(
         client1.publish_data_blob(large_blob_bytes).await,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
@@ -3077,7 +3077,7 @@ where
             user.chain_id(),
             None,
             BlockHeight::ZERO,
-            ChainClientOptions {
+            chain_client::Options {
                 message_policy: MessagePolicy::new(
                     BlanketMessagePolicy::Reject,
                     None,
@@ -3085,7 +3085,7 @@ where
                     None,
                     None,
                 ),
-                ..ChainClientOptions::test_default()
+                ..chain_client::Options::test_default()
             },
         )
         .await?;
@@ -3483,7 +3483,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(ref chain_error))
         )) if matches!(&**chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Operation(_)
