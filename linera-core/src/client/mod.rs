@@ -1046,7 +1046,9 @@ impl<Env: Environment> Client<Env> {
         // * each answer is a vote signed by the expected validator.
         let certificate = LiteCertificate::try_from_votes(votes)
             .ok_or_else(|| {
-                chain_client::Error::InternalError("Vote values or rounds don't match; this is a bug")
+                chain_client::Error::InternalError(
+                    "Vote values or rounds don't match; this is a bug",
+                )
             })?
             .with_value(value)
             .ok_or_else(|| {

@@ -52,8 +52,9 @@ use crate::client::client_tests::ScyllaDbStorageBuilder;
 use crate::client::client_tests::ServiceStorageBuilder;
 use crate::{
     client::{
+        chain_client,
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        chain_client, ChainClient, ClientOutcome,
+        ChainClient, ClientOutcome,
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},
