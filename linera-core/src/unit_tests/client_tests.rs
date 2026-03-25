@@ -122,7 +122,7 @@ where
         );
         assert_eq!(
             builder
-                .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+                .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
                 .await
                 .unwrap(),
             certificate
@@ -299,7 +299,7 @@ where
     assert_eq!(sender.identity().await?, new_owner);
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -346,7 +346,7 @@ where
     );
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -389,10 +389,10 @@ where
         BlockHeight::from(1)
     );
     assert!(sender.pending_proposal().await.is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -412,7 +412,7 @@ where
     // Make a client to try the new key.
     let mut client = builder
         .make_client(
-            sender.chain_id,
+            sender.chain_id(),
             sender_info.block_hash,
             BlockHeight::from(2),
         )
@@ -513,7 +513,7 @@ where
         BlockHeight::from(1)
     );
     assert!(sender.pending_proposal().await.is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
     client.set_preferred_owner(new_public_key.into());
@@ -630,7 +630,7 @@ where
         BlockHeight::from(1)
     );
     assert!(sender.pending_proposal().await.is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     assert_matches!(
         &certificate.block().body.transactions[0],
         Transaction::ExecuteOperation(Operation::System(system_op)) if matches!(**system_op, SystemOperation::OpenChain(_)),
@@ -638,7 +638,7 @@ where
     );
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(parent.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(parent.chain_id(), BlockHeight::from(0), 3)
             .await
             .unwrap(),
         certificate
@@ -707,7 +707,7 @@ where
         BlockHeight::from(2)
     );
     assert!(sender.pending_proposal().await.is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
     client.set_preferred_owner(new_public_key.into());
@@ -763,7 +763,7 @@ where
     assert!(client1.identity().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(client1.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -902,7 +902,7 @@ where
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(3),
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap_ok_committed();
@@ -926,7 +926,7 @@ where
 
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(client1.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -956,7 +956,7 @@ where
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client1.chain_id),
+            Account::chain(client1.chain_id()),
         )
         .await
         .unwrap();
@@ -1006,7 +1006,7 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap_ok_committed();
@@ -1056,7 +1056,7 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap();
@@ -1064,7 +1064,7 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap();
@@ -1079,7 +1079,7 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
-            Account::chain(client3.chain_id),
+            Account::chain(client3.chain_id()),
         )
         .await;
     assert_insufficient_funding(obtained_error, ChainExecutionContext::Operation(0));
@@ -1095,7 +1095,7 @@ where
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
-            Account::chain(client3.chain_id),
+            Account::chain(client3.chain_id()),
         )
         .await
         .unwrap_ok_committed();
@@ -2242,7 +2242,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
-    let owner0 = client0.preferred_owner.unwrap();
+    let owner0 = client0.preferred_owner().unwrap();
 
     let owners = [(owner0, 100), (owner1, 100)];
     let timeout_config = TimeoutConfig {

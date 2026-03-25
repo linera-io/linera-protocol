@@ -526,9 +526,9 @@ where
     let module_id = sender.publish_wasm_example("fungible").await?;
     let module_id = module_id.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
 
-    let sender_owner = sender.preferred_owner.unwrap();
-    let receiver_owner = receiver.preferred_owner.unwrap();
-    let receiver2_owner = receiver2.preferred_owner.unwrap();
+    let sender_owner = sender.preferred_owner().unwrap();
+    let receiver_owner = receiver.preferred_owner().unwrap();
+    let receiver2_owner = receiver2.preferred_owner().unwrap();
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
@@ -765,7 +765,7 @@ where
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
                     "keys": [
-                        { "author": sender.chain_id, "index": 0 }
+                        { "author": sender.chain_id(), "index": 0 }
                     ]
                 }
             }))
@@ -2085,7 +2085,7 @@ where
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
                     "keys": [
-                        { "author": sender.chain_id, "index": 0 }
+                        { "author": sender.chain_id(), "index": 0 }
                     ]
                 }
             }))
