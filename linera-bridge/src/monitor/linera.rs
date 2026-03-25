@@ -57,7 +57,7 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
         }
 
         let summary = monitor.read().await.status_summary();
-        tracing::info!(
+        tracing::trace!(
             pending = summary.burns_pending,
             completed = summary.burns_forwarded,
             last_height = summary.last_scanned_linera_height,
@@ -99,7 +99,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             let mut state = monitor.write().await;
             if let Some(b) = state.burns.get_mut(&(credit_height, burn_index)) {
                 if b.forwarded {
-                    tracing::debug!(
+                    tracing::trace!(
                         credit_height,
                         burn_index,
                         "Burn already completed, skipping"
@@ -139,7 +139,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             Err(e) => {
                 let msg = format!("{e:#}");
                 if msg.contains("already verified") {
-                    tracing::debug!(credit_height, burn_index, "Block already verified on EVM");
+                    tracing::trace!(credit_height, burn_index, "Block already verified on EVM");
                     monitor
                         .write()
                         .await

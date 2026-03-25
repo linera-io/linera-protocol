@@ -53,7 +53,7 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
         }
 
         let summary = monitor.read().await.status_summary();
-        tracing::debug!(
+        tracing::trace!(
             pending = summary.deposits_pending,
             completed = summary.deposits_completed,
             last_block = summary.last_scanned_evm_block,
@@ -79,7 +79,7 @@ pub(crate) async fn retry_pending_deposits<E: linera_core::environment::Environm
             let mut state = monitor.write().await;
             if let Some(d) = state.deposits.get_mut(&pending.key) {
                 if d.forwarded {
-                    tracing::debug!(%tx_hash, "Deposit already completed, skipping");
+                    tracing::trace!(%tx_hash, "Deposit already completed, skipping");
                     continue;
                 }
                 d.last_retry_at = Some(std::time::Instant::now());
@@ -121,7 +121,9 @@ async fn evm_scan_iteration(
         return Ok(());
     }
 
-    let logs = evm_client.get_deposit_logs(last_block + 1, current_block).await?;
+    let logs = evm_client
+        .get_deposit_logs(last_block + 1, current_block)
+        .await?;
     let bridge_addr = evm_client.bridge_addr();
 
     for log in &logs {

@@ -421,7 +421,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                 };
 
                 if certs.is_empty() {
-                    tracing::info!("No certificates from inbox processing");
+                    tracing::debug!("No certificates from inbox processing");
                     continue;
                 }
 
