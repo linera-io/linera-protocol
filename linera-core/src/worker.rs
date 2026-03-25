@@ -631,6 +631,14 @@ where
         self
     }
 
+    /// Returns an instance with the specified set of chain IDs whose incoming bundles
+    /// should be ignored.
+    #[instrument(level = "trace", skip(self, origins))]
+    pub fn with_ignored_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
+        self.chain_worker_config.ignored_bundle_origins = origins;
+        self
+    }
+
     /// Returns an instance with the specified maximum size for received_log entries.
     ///
     /// Sizes below `CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES` should be avoided.

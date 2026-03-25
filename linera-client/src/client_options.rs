@@ -76,6 +76,10 @@ pub struct Options {
     #[arg(long, value_parser = util::parse_chain_set)]
     pub prioritize_bundles_from: Option<HashSet<ChainId>>,
 
+    /// Comma-separated list of chain IDs whose incoming bundles should be ignored.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub ignore_bundles_from: Option<HashSet<ChainId>>,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     #[arg(
         long = "chain-worker-ttl-ms",
