@@ -194,6 +194,14 @@ where
         }
     }
 
+    /// Observes the current inbox size in the metrics histogram.
+    pub fn observe_size_metric(&self) {
+        #[cfg(with_metrics)]
+        metrics::INBOX_SIZE
+            .with_label_values(&[])
+            .observe(self.added_bundles.count() as f64);
+    }
+
     /// Consumes a bundle from the inbox.
     ///
     /// Returns `true` if the bundle was already known, i.e. it was present in `added_bundles`.
@@ -253,10 +261,6 @@ where
                 false
             }
         };
-        #[cfg(with_metrics)]
-        metrics::INBOX_SIZE
-            .with_label_values(&[])
-            .observe(self.added_bundles.count() as f64);
         self.next_cursor_to_remove.set(cursor.try_add_one()?);
         Ok(already_known)
     }
@@ -309,10 +313,6 @@ where
             None => {
                 // Otherwise, schedule the messages for execution.
                 self.added_bundles.push_back(bundle);
-                #[cfg(with_metrics)]
-                metrics::INBOX_SIZE
-                    .with_label_values(&[])
-                    .observe(self.added_bundles.count() as f64);
                 true
             }
         };

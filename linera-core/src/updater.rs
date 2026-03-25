@@ -33,7 +33,7 @@ use tokio::sync::mpsc;
 use tracing::{instrument, Level};
 
 use crate::{
-    client::{chain_client, Client},
+    client::{chain_client, Client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE},
     data_types::{ChainInfo, ChainInfoQuery},
     environment::Environment,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
@@ -778,14 +778,16 @@ where
             return Ok(info);
         }
 
-        // Send any additional missing certificates in order
-        let certificates = self
-            .read_certificates_for_heights(chain_id, heights)
-            .await?;
-
-        for certificate in certificates {
-            self.send_confirmed_certificate(certificate, delivery)
+        let batch_size = DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE as usize;
+        for chunk in heights.chunks(batch_size) {
+            let certificates = self
+                .read_certificates_for_heights(chain_id, chunk.to_vec())
                 .await?;
+
+            for certificate in certificates {
+                self.send_confirmed_certificate(certificate, delivery)
+                    .await?;
+            }
         }
 
         Ok(info)

@@ -37,6 +37,8 @@ env:
   RUST_LOG_FORMAT: plain
   # The remote faucet for this branch
   LINERA_FAUCET_URL: https://faucet.testnet-conway.linera.net
+  # Remote testnet notifications can be slow due to validator latency
+  LINERA_TEST_NOTIFICATION_TIMEOUT_MS: 60000
 
 permissions:
   contents: read
