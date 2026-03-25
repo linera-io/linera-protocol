@@ -80,6 +80,7 @@ where
     }
 
     /// Returns a `V` from the cache, if present.
+    #[allow(dead_code)]
     pub fn get(&self, hash: &K) -> Option<V>
     where
         V: Clone,
@@ -104,8 +105,11 @@ where
     }
 }
 
-impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
-    /// Inserts a [`HashedCertificateValue`] into the cache, if it's not already present.
+impl<T: Clone> ValueCache<CryptoHash, T> {
+    /// Inserts a [`Hashed`] value into the cache, storing only the inner value.
+    ///
+    /// The hash from the [`Hashed`] wrapper is used as the cache key, avoiding
+    /// redundant storage of the hash in both key and value.
     ///
     /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it needs to be
     /// inserted in the cache.
@@ -119,13 +123,22 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
             cache.promote(&hash);
             false
         } else {
-            // Cache the certificate so that clients don't have to send the value again.
-            cache.push(hash, value.into_owned());
+            // Cache only the inner value; the hash is already stored as the key.
+            cache.push(hash, value.into_owned().into_inner());
             true
         }
     }
 
-    /// Inserts multiple [`HashedCertificateValue`]s into the cache. If they're not
+    /// Retrieves a value from the cache and reconstructs the [`Hashed`] wrapper.
+    ///
+    /// The hash used as the cache key is combined with the stored value to
+    /// reconstruct the [`Hashed<T>`] without redundant storage.
+    pub fn get_hashed(&self, hash: &CryptoHash) -> Option<Hashed<T>> {
+        let value = Self::track_cache_usage(self.cache.lock().unwrap().get(hash).cloned())?;
+        Some(Hashed::unchecked_new(value, *hash))
+    }
+
+    /// Inserts multiple [`Hashed`] values into the cache. If they're not
     /// already present.
     ///
     /// The `values` are wrapped in [`Cow`]s so that each `value` is only cloned if it
@@ -139,7 +152,7 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
         for value in values {
             let hash = (*value).hash();
             if !cache.contains(&hash) {
-                cache.push(hash, value.into_owned());
+                cache.push(hash, value.into_owned().into_inner());
             }
         }
     }

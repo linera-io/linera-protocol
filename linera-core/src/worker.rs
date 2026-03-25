@@ -19,7 +19,6 @@ use linera_base::{
         Timestamp,
     },
     doc_scalar,
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
 #[cfg(with_testing)]
@@ -524,7 +523,7 @@ pub struct WorkerState<StorageClient: Storage> {
     storage: StorageClient,
     /// Configuration options for chain workers.
     chain_worker_config: ChainWorkerConfig,
-    block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_cache: Arc<ValueCache<CryptoHash, Block>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     /// Chains tracked by a worker, along with their listening modes.
     chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -587,7 +586,7 @@ where
     ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
         let block = self
             .block_cache
-            .get(&certificate.value.value_hash)
+            .get_hashed(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?;
 
         match certificate.value.kind {
