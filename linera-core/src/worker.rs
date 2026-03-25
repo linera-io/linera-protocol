@@ -15,7 +15,6 @@ use linera_base::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
     },
     doc_scalar,
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
     time::Instant,
     util::traits::DynError,
@@ -490,7 +489,7 @@ where
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
-    block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_cache: Arc<ValueCache<CryptoHash, Block>>,
     execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     /// Chains tracked by a worker, along with their listening modes.
     chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -679,7 +678,7 @@ where
     ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
         let block = self
             .block_cache
-            .get(&certificate.value.value_hash)
+            .get_hashed(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?;
 
         match certificate.value.kind {

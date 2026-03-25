@@ -14,7 +14,6 @@ use futures::FutureExt;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
-    hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
     time::Instant,
     Task,
@@ -303,7 +302,7 @@ where
     chain_id: ChainId,
     config: ChainWorkerConfig,
     storage: StorageClient,
-    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_values: Arc<ValueCache<CryptoHash, Block>>,
     execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
@@ -356,7 +355,7 @@ where
     pub(crate) async fn run(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, Block>>,
         execution_state_cache: Arc<
             UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>,
         >,

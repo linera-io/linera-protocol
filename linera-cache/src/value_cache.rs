@@ -78,8 +78,11 @@ where
     }
 }
 
-impl<T: Clone + Send + Sync + 'static> ValueCache<CryptoHash, Hashed<T>> {
-    /// Inserts a [`Hashed<T>`] into the cache if its hash is not already present.
+impl<T: Clone + Send + Sync + 'static> ValueCache<CryptoHash, T> {
+    /// Inserts a [`Hashed`] value into the cache, storing only the inner value.
+    ///
+    /// The hash from the [`Hashed`] wrapper is used as the cache key, avoiding
+    /// redundant storage of the hash in both key and value.
     ///
     /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it needs to be
     /// inserted in the cache.
@@ -90,9 +93,19 @@ impl<T: Clone + Send + Sync + 'static> ValueCache<CryptoHash, Hashed<T>> {
         if self.cache.peek(&hash).is_some() {
             false
         } else {
-            self.cache.insert(hash, value.into_owned());
+            // Cache only the inner value; the hash is already stored as the key.
+            self.cache.insert(hash, value.into_owned().into_inner());
             true
         }
+    }
+
+    /// Retrieves a value from the cache and reconstructs the [`Hashed`] wrapper.
+    ///
+    /// The hash used as the cache key is combined with the stored value to
+    /// reconstruct the [`Hashed<T>`] without redundant storage.
+    pub fn get_hashed(&self, hash: &CryptoHash) -> Option<Hashed<T>> {
+        let value = Self::track_cache_usage(self.cache.get(hash))?;
+        Some(Hashed::unchecked_new(value, *hash))
     }
 
     /// Inserts multiple [`Hashed<T>`]s into the cache.
@@ -104,7 +117,7 @@ impl<T: Clone + Send + Sync + 'static> ValueCache<CryptoHash, Hashed<T>> {
         for value in values {
             let hash = (*value).hash();
             if self.cache.peek(&hash).is_none() {
-                self.cache.insert(hash, value.into_owned());
+                self.cache.insert(hash, value.into_owned().into_inner());
             }
         }
     }
@@ -146,7 +159,7 @@ mod tests {
     /// Test cache size for unit tests.
     const TEST_CACHE_SIZE: usize = 10;
 
-    /// A minimal hashable value for testing `ValueCache<CryptoHash, Hashed<T>>`.
+    /// A minimal hashable value for testing `ValueCache<CryptoHash, T>`.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct TestValue(u64);
 
@@ -162,27 +175,27 @@ mod tests {
 
     #[test]
     fn test_retrieve_missing_value() {
-        let cache = ValueCache::<CryptoHash, Hashed<TestValue>>::new(TEST_CACHE_SIZE);
+        let cache = ValueCache::<CryptoHash, TestValue>::new(TEST_CACHE_SIZE);
         let hash = CryptoHash::test_hash("Missing value");
 
-        assert!(cache.get(&hash).is_none());
+        assert!(cache.get_hashed(&hash).is_none());
         assert!(!cache.contains(&hash));
     }
 
     #[test]
     fn test_insert_single_value() {
-        let cache = ValueCache::<CryptoHash, Hashed<TestValue>>::new(TEST_CACHE_SIZE);
+        let cache = ValueCache::<CryptoHash, TestValue>::new(TEST_CACHE_SIZE);
         let value = create_test_value(0);
         let hash = value.hash();
 
         assert!(cache.insert_hashed(Cow::Borrowed(&value)));
         assert!(cache.contains(&hash));
-        assert_eq!(cache.get(&hash), Some(value));
+        assert_eq!(cache.get_hashed(&hash), Some(value));
     }
 
     #[test]
     fn test_insert_many_values_individually() {
-        let cache = ValueCache::<CryptoHash, Hashed<TestValue>>::new(TEST_CACHE_SIZE);
+        let cache = ValueCache::<CryptoHash, TestValue>::new(TEST_CACHE_SIZE);
         let values = create_test_values(0..TEST_CACHE_SIZE as u64);
 
         for value in &values {
@@ -191,26 +204,26 @@ mod tests {
 
         for value in &values {
             assert!(cache.contains(&value.hash()));
-            assert_eq!(cache.get(&value.hash()).as_ref(), Some(value));
+            assert_eq!(cache.get_hashed(&value.hash()).as_ref(), Some(value));
         }
     }
 
     #[test]
     fn test_insert_many_values_together() {
-        let cache = ValueCache::<CryptoHash, Hashed<TestValue>>::new(TEST_CACHE_SIZE);
+        let cache = ValueCache::<CryptoHash, TestValue>::new(TEST_CACHE_SIZE);
         let values = create_test_values(0..TEST_CACHE_SIZE as u64);
 
         cache.insert_all_hashed(values.iter().map(Cow::Borrowed));
 
         for value in &values {
             assert!(cache.contains(&value.hash()));
-            assert_eq!(cache.get(&value.hash()).as_ref(), Some(value));
+            assert_eq!(cache.get_hashed(&value.hash()).as_ref(), Some(value));
         }
     }
 
     #[test]
     fn test_reinsertion_of_values() {
-        let cache = ValueCache::<CryptoHash, Hashed<TestValue>>::new(TEST_CACHE_SIZE);
+        let cache = ValueCache::<CryptoHash, TestValue>::new(TEST_CACHE_SIZE);
         let values = create_test_values(0..TEST_CACHE_SIZE as u64);
 
         cache.insert_all_hashed(values.iter().map(Cow::Borrowed));
@@ -221,13 +234,13 @@ mod tests {
 
         for value in &values {
             assert!(cache.contains(&value.hash()));
-            assert_eq!(cache.get(&value.hash()).as_ref(), Some(value));
+            assert_eq!(cache.get_hashed(&value.hash()).as_ref(), Some(value));
         }
     }
 
     #[test]
     fn test_eviction() {
-        let cache = ValueCache::<CryptoHash, Hashed<TestValue>>::new(TEST_CACHE_SIZE);
+        let cache = ValueCache::<CryptoHash, TestValue>::new(TEST_CACHE_SIZE);
         // Insert 3x capacity to guarantee evictions (quick_cache capacity is approximate).
         let total = TEST_CACHE_SIZE * 3;
         let values = create_test_values(0..total as u64);
@@ -247,13 +260,13 @@ mod tests {
 
     #[test]
     fn test_accessed_entry_survives_eviction() {
-        let cache = ValueCache::<CryptoHash, Hashed<TestValue>>::new(TEST_CACHE_SIZE);
+        let cache = ValueCache::<CryptoHash, TestValue>::new(TEST_CACHE_SIZE);
         let promoted = create_test_value(0);
         let promoted_hash = promoted.hash();
 
         // Insert the promoted entry first, then access it to mark it as "hot".
         cache.insert_hashed(Cow::Borrowed(&promoted));
-        cache.get(&promoted_hash);
+        cache.get_hashed(&promoted_hash);
 
         // Insert many more entries to force evictions.
         let extras = create_test_values(1..=TEST_CACHE_SIZE as u64 * 2);
@@ -269,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_promotion_of_reinsertion() {
-        let cache = ValueCache::<CryptoHash, Hashed<TestValue>>::new(TEST_CACHE_SIZE);
+        let cache = ValueCache::<CryptoHash, TestValue>::new(TEST_CACHE_SIZE);
         let promoted = create_test_value(0);
         let promoted_hash = promoted.hash();
 

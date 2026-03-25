@@ -89,7 +89,7 @@ where
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
-    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_values: Arc<ValueCache<CryptoHash, Block>>,
     execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
@@ -115,7 +115,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, Block>>,
         execution_state_cache: Arc<
             UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>,
         >,
@@ -531,7 +531,7 @@ where
         let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
 
         for hash in hashes {
-            if let Some(hashed_block) = self.block_values.get(&hash) {
+            if let Some(hashed_block) = self.block_values.get_hashed(&hash) {
                 height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
             } else {
                 uncached_hashes.push(hash);
