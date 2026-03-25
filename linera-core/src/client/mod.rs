@@ -622,8 +622,7 @@ impl<Env: Environment> Client<Env> {
                         let heights = remote_node
                             .node
                             .event_block_heights(remaining_ref.to_vec())
-                            .await
-                            .map_err(|_| ())?;
+                            .await?;
 
                         // Separate resolved and unresolved events.
                         let mut chain_heights = BTreeMap::<_, BTreeSet<_>>::new();
@@ -645,7 +644,7 @@ impl<Env: Environment> Client<Env> {
                         }
                         if chain_heights.is_empty() {
                             // This validator has no useful information.
-                            return Err(());
+                            return Err(chain_client::Error::from(NodeError::EventsNotFound(remaining_ref.clone())));
                         }
 
                         // Download certificates and verify them.
@@ -659,8 +658,7 @@ impl<Env: Environment> Client<Env> {
                                     chain_id,
                                     heights_vec,
                                 )
-                                .await
-                                .map_err(|_| ())?;
+                                .await?;
                             for cert in &certificates {
                                 // Verify the block contains the expected events.
                                 let block = cert.block();
@@ -673,7 +671,7 @@ impl<Env: Environment> Client<Env> {
                                             %validator_address, ?expected_event_ids, ?block_event_ids,
                                             "validator lied about events in block."
                                         );
-                                        return Err(());
+                                        return Err(NodeError::UnexpectedCertificateValue.into());
                                     }
                                 }
                             }
@@ -684,6 +682,7 @@ impl<Env: Environment> Client<Env> {
                                             %validator_address, %error,
                                             "invalid certificate"
                                         );
+                                        error
                                     })?
                                     .into_result()
                                     .map_err(|error| {
@@ -691,6 +690,7 @@ impl<Env: Environment> Client<Env> {
                                             %validator_address, %error,
                                             "could not check certificate"
                                         );
+                                        error
                                     })?;
                                 checked_certificates.push(cert);
                             }
@@ -1150,7 +1150,7 @@ impl<Env: Environment> Client<Env> {
                     if remote_heights.is_empty() {
                         // It makes no sense to return `Ok(_)` if we aren't going to try downloading
                         // anything from the validator - let the function try the other validators
-                        return Err(());
+                        return Err(NodeError::MissingCertificateValue);
                     }
                     let certificates = self
                         .requests_scheduler
@@ -1159,19 +1159,13 @@ impl<Env: Environment> Client<Env> {
                             sender_chain_id,
                             remote_heights,
                         )
-                        .await
-                        .map_err(|_| ())?;
+                        .await?;
                     let mut certificates_with_check_results = vec![];
                     for cert in certificates {
-                        if let Ok(check_result) =
-                            Self::check_certificate(max_epoch, committees_ref, &cert)
-                        {
-                            certificates_with_check_results
-                                .push((cert, check_result.into_result().is_ok()));
-                        } else {
-                            // Invalid signature - the validator is faulty
-                            return Err(());
-                        }
+                        let check_result =
+                            Self::check_certificate(max_epoch, committees_ref, &cert)?;
+                        certificates_with_check_results
+                            .push((cert, check_result.into_result().is_ok()));
                     }
                     Ok(certificates_with_check_results)
                 },
