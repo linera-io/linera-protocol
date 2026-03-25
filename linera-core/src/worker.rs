@@ -586,7 +586,7 @@ where
     ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
         let block = self
             .block_cache
-            .get_hashed(&certificate.value.value_hash)
+            .get(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?;
 
         match certificate.value.kind {

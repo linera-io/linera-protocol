@@ -415,7 +415,7 @@ where
         let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
 
         for hash in hashes {
-            if let Some(hashed_block) = self.block_values.get_hashed(&hash) {
+            if let Some(hashed_block) = self.block_values.get(&hash) {
                 height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
             } else {
                 uncached_hashes.push(hash);

@@ -124,7 +124,7 @@ impl<T: Clone> ValueCache<CryptoHash, T> {
     ///
     /// The hash used as the cache key is combined with the stored value to
     /// reconstruct the [`Hashed<T>`] without redundant storage.
-    pub fn get_hashed(&self, hash: &CryptoHash) -> Option<Hashed<T>> {
+    pub fn get(&self, hash: &CryptoHash) -> Option<Hashed<T>> {
         let value = Self::track_cache_usage(self.cache.lock().unwrap().get(hash).cloned())?;
         Some(Hashed::unchecked_new(value, *hash))
     }
