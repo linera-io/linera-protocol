@@ -628,8 +628,12 @@ where
         Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
     }
 
-    /// Initializes `next_expected_events` for any streams that don't have entries yet,
-    /// for backwards compatibility with chains from older DB versions.
+    /// Initializes `next_expected_events` from `stream_event_counts` (which reflects
+    /// all executed blocks), then replays any preprocessed-but-not-yet-executed blocks to
+    /// advance the indices further.
+    ///
+    /// This handles the migration case where the `next_expected_events` field was added to
+    /// `ChainStateView` after blocks had already been processed.
     async fn initialize_next_expected_events(&mut self) -> Result<(), WorkerError> {
         if self.chain.next_expected_events.count().await? > 0 {
             return Ok(()); // Already initialized.
@@ -755,17 +759,17 @@ where
                 self.initialize_next_expected_events().await?;
             }
             // Update the outboxes and track emitted events.
-            let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
+            let event_streams = self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
             self.save().await?;
             let mut actions = self.create_network_actions(None).await?;
-            if !updated_event_streams.is_empty() {
+            if !event_streams.is_empty() {
                 actions.notifications.push(Notification {
                     chain_id,
                     reason: Reason::NewEvents {
                         height,
                         hash: block_hash,
-                        event_streams: updated_event_streams,
+                        event_streams,
                     },
                 });
             }
@@ -854,6 +858,7 @@ where
                 computed: Box::new(verified_outcome),
             }
         );
+
         // Update the rest of the chain state.
         let event_streams = chain
             .apply_confirmed_block(certificate.value(), local_time)
@@ -1244,6 +1249,10 @@ where
     }
 
     /// Votes for falling back to a public chain.
+    /// This is disabled on the testnet.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         Err(WorkerError::NoFallbackMode)
     }
@@ -1287,9 +1296,6 @@ where
     }
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
-    ///
-    /// Does not need `&mut self` because the chain is eagerly initialized when the
-    /// chain handle is created.
     #[cfg(with_testing)]
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
@@ -1643,6 +1649,7 @@ where
                 .await?;
         }
         if let Some(next_block_height) = query.test_next_block_height {
+            // If not, send the same error as if a block with next_block_height was proposed.
             ensure!(
                 self.chain.tip_state.get().next_block_height == next_block_height,
                 WorkerError::UnexpectedBlockHeight {
