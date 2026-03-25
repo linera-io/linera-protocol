@@ -20,6 +20,7 @@ services:
   alloy:
     image: grafana/alloy:latest
     container_name: alloy
+    restart: unless-stopped
     ports:
       - "12345:12345"  # Prometheus metrics exposition
       - "4317:4317"    # OTLP gRPC receiver
