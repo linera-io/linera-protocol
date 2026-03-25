@@ -73,6 +73,7 @@ use crate::{
         Reason::{self, NewBlock, NewIncomingBundle},
         WorkerError, WorkerState,
     },
+    ChainWorkerConfig,
 };
 
 /// The test worker accepts blocks with a timestamp this far in the future.
@@ -143,17 +144,16 @@ where
             .await
             .expect("writing a network description should not fail");
 
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            Some(validator_keypair.secret_key),
-            storage,
-            super::DEFAULT_BLOCK_CACHE_SIZE,
-            super::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-        )
-        .with_allow_inactive_chains(is_client)
-        .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_long_lived_services(has_long_lived_services)
-        .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+        let config = ChainWorkerConfig {
+            nickname: "Single validator node".to_string(),
+            allow_inactive_chains: is_client,
+            allow_messages_from_deprecated_epochs: is_client,
+            long_lived_services: has_long_lived_services,
+            block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+            ..ChainWorkerConfig::default()
+        }
+        .with_key_pair(Some(validator_keypair.secret_key));
+        let worker = WorkerState::new(storage, config, None);
         Self {
             committee,
             worker,
@@ -788,7 +788,7 @@ where
     // Stage execution to get the block for certificate creation.
     let (_, block, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block,
             None,
             vec![],
@@ -817,7 +817,7 @@ where
         .unwrap();
     let (_, block, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block,
             None,
             vec![],
@@ -845,7 +845,7 @@ where
         .unwrap();
     let (_, block, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block,
             None,
             vec![],
@@ -3496,7 +3496,7 @@ where
         .with_authenticated_signer(Some(owner0));
     let (_, block0, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block0,
             None,
             vec![],
@@ -3563,7 +3563,7 @@ where
     let proposed_block1 = make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
     let (_, block1, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block1.clone(),
             None,
             vec![],
@@ -3618,7 +3618,7 @@ where
     let proposed_block2 = make_child_block(&value0.clone()).with_simple_transfer(chain_1, amount);
     let (_, block2, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block2.clone(),
             None,
             vec![],
@@ -3762,7 +3762,7 @@ where
         });
     let (_, block0, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block0,
             None,
             vec![],
@@ -3879,7 +3879,7 @@ where
         });
     let (_, block0, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block0,
             None,
             vec![],
@@ -3912,7 +3912,7 @@ where
         .unwrap();
     let (_, block1, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block1.clone(),
             None,
             vec![],
@@ -3974,7 +3974,7 @@ where
     // A validated block certificate from a later round can override the locked fast block.
     let (_, block2, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block2.clone(),
             None,
             vec![],
@@ -4345,7 +4345,7 @@ where
     // Test stage_block_execution directly - this should fail with IncorrectMessageOrder.
     assert_matches!(
         env.worker()
-            .stage_block_execution(bad_proposed_block.clone(), None, vec![], BundleExecutionPolicy::committed())
+            .stage_block_execution_with_policy(bad_proposed_block.clone(), None, vec![], BundleExecutionPolicy::committed())
             .await,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })

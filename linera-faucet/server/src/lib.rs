@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 //! The server component of the Linera faucet.
 

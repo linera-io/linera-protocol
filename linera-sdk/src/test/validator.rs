@@ -21,9 +21,7 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
 };
-use linera_core::worker::{
-    WorkerState, DEFAULT_BLOCK_CACHE_SIZE, DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-};
+use linera_core::{worker::WorkerState, ChainWorkerConfig};
 use linera_execution::{
     committee::Committee,
     system::{AdminOperation, OpenChainConfig, SystemOperation},
@@ -90,13 +88,12 @@ impl TestValidator {
             .now_or_never()
             .expect("execution of DbStorage::new should not await anything");
         let clock = storage.clock().clone();
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            Some(validator_keypair.secret_key.copy()),
-            storage.clone(),
-            DEFAULT_BLOCK_CACHE_SIZE,
-            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-        );
+        let config = ChainWorkerConfig {
+            nickname: "Single validator node".to_string(),
+            key_pair: Some(Arc::new(validator_keypair.secret_key.copy())),
+            ..ChainWorkerConfig::default()
+        };
+        let worker = WorkerState::new(storage.clone(), config, None);
 
         // Create an admin chain.
         let key_pair = AccountSecretKey::generate();

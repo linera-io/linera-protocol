@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
+
 //! This module provides network abstractions and the data schemas for remote procedure
 //! calls (RPCs) in the Linera protocol.
 

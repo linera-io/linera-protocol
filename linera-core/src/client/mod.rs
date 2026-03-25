@@ -45,7 +45,7 @@ use linera_chain::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainStateView,
+    ChainError, ChainExecutionContext,
 };
 use linera_execution::{
     committee::Committee,
@@ -61,7 +61,7 @@ use rand::prelude::SliceRandom as _;
 use received_log::ReceivedLogs;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{mpsc, OwnedRwLockReadGuard};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 use validator_trackers::ValidatorTrackers;
@@ -78,7 +78,7 @@ use crate::{
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
-    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+    ChainWorkerConfig, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
 mod chain_client_state;
@@ -275,8 +275,8 @@ impl<Env: Environment> Client<Env> {
         long_lived_services: bool,
         chain_modes: impl IntoIterator<Item = (ChainId, ListeningMode)>,
         name: impl Into<String>,
-        chain_worker_ttl: Duration,
-        sender_chain_worker_ttl: Duration,
+        chain_worker_ttl: Option<Duration>,
+        sender_chain_worker_ttl: Option<Duration>,
         priority_bundle_origins: HashSet<ChainId>,
         options: ChainClientOptions,
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
@@ -284,19 +284,23 @@ impl<Env: Environment> Client<Env> {
         execution_state_cache_size: usize,
     ) -> Self {
         let chain_modes = Arc::new(RwLock::new(chain_modes.into_iter().collect()));
-        let state = WorkerState::new_for_client(
-            name.into(),
-            environment.storage().clone(),
-            chain_modes.clone(),
+        let config = ChainWorkerConfig {
+            nickname: name.into(),
+            long_lived_services,
+            allow_inactive_chains: true,
+            allow_messages_from_deprecated_epochs: true,
+            ttl: chain_worker_ttl,
+            sender_chain_ttl: sender_chain_worker_ttl,
+            priority_bundle_origins,
             block_cache_size,
             execution_state_cache_size,
-        )
-        .with_long_lived_services(long_lived_services)
-        .with_allow_inactive_chains(true)
-        .with_allow_messages_from_deprecated_epochs(true)
-        .with_chain_worker_ttl(chain_worker_ttl)
-        .with_sender_chain_worker_ttl(sender_chain_worker_ttl)
-        .with_priority_bundle_origins(priority_bundle_origins);
+            ..ChainWorkerConfig::default()
+        };
+        let state = WorkerState::new(
+            environment.storage().clone(),
+            config,
+            Some(chain_modes.clone()),
+        );
         let local_node = LocalNodeClient::new(state);
         let requests_scheduler = RequestsScheduler::new(vec![], requests_scheduler_config);
 
@@ -2244,7 +2248,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn chain_state_view(
         &self,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<Env::StorageContext>>, LocalNodeError> {
+    ) -> Result<crate::worker::ChainStateViewReadGuard<Env::Storage>, LocalNodeError> {
         self.client.local_node.chain_state_view(self.chain_id).await
     }
 

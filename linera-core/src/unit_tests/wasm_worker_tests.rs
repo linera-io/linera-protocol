@@ -398,7 +398,7 @@ where
         .with_operation(publish_meta_op);
     let (_, publish_executed, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             publish_block,
             None,
             all_blobs.to_vec(),
@@ -433,7 +433,7 @@ where
         .with_operation(create_counter_op);
     let (_, create_counter_executed, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             create_counter_block,
             None,
             vec![],
@@ -468,7 +468,7 @@ where
         .with_operation(create_meta_op);
     let (_, create_meta_executed, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             create_meta_block,
             None,
             vec![],
@@ -491,7 +491,7 @@ where
         });
     let (_, send_fail_executed, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             send_fail_block,
             None,
             vec![],
@@ -536,7 +536,7 @@ where
     // This should handle the failing message by rejecting the bundle.
     let (modified_block, auto_retry_executed, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             proposed_block.clone(),
             None,
             vec![],
@@ -565,7 +565,7 @@ where
     // and produce the same outcome.
     let (_, abort_executed, _, _) = env
         .worker()
-        .stage_block_execution(
+        .stage_block_execution_with_policy(
             modified_block.clone(),
             None,
             vec![],

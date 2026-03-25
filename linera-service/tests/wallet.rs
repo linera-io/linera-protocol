@@ -31,8 +31,8 @@ pub async fn new_test_client_context(
     let send_recv_timeout = Duration::from_millis(4000);
     let retry_delay = Duration::from_millis(1000);
     let max_retries = 10;
-    let chain_worker_ttl = Duration::from_secs(30);
-    let sender_chain_worker_ttl = Duration::from_secs(1);
+    let chain_worker_ttl = Some(Duration::from_secs(30));
+    let sender_chain_worker_ttl = Some(Duration::from_secs(1));
 
     let node_options = NodeOptions {
         send_timeout: send_recv_timeout,
