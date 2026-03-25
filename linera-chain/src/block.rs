@@ -14,7 +14,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{Blob, BlockHeight, Epoch, Event, OracleResponse, Timestamp},
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
 };
 use linera_execution::{BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
@@ -640,6 +640,12 @@ impl Block {
             operation_results: self.body.operation_results,
         };
         (proposed_block, outcome)
+    }
+
+    /// Returns the IDs of all events in this block.
+    pub fn event_ids(&self) -> impl Iterator<Item = EventId> + '_ {
+        let to_id = |event: &Event| event.id(self.header.chain_id);
+        self.body.events.iter().flatten().map(to_id)
     }
 
     pub fn iter_created_blobs(&self) -> impl Iterator<Item = (BlobId, Blob)> + '_ {

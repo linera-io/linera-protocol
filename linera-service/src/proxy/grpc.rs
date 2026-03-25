@@ -811,6 +811,28 @@ where
             .map_err(Self::view_error_to_status)?;
         Ok(Response::new(missing_blob_ids.try_into()?))
     }
+
+    #[instrument(skip_all, err(level = Level::WARN), fields(
+        method = "event_block_heights"
+    ))]
+    async fn event_block_heights(
+        &self,
+        request: Request<api::EventBlockHeightsRequest>,
+    ) -> Result<Response<api::EventBlockHeightsResponse>, Status> {
+        let event_ids: Vec<linera_base::identifiers::EventId> = request
+            .into_inner()
+            .try_into()
+            .map_err(|e: linera_rpc::grpc::GrpcProtoConversionError| {
+                Status::invalid_argument(e.to_string())
+            })?;
+        let heights = self
+            .0
+            .storage
+            .read_event_block_heights(&event_ids)
+            .await
+            .map_err(Self::view_error_to_status)?;
+        Ok(Response::new(heights.into()))
+    }
 }
 
 #[async_trait]

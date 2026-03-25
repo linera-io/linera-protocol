@@ -5,7 +5,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, EventId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
@@ -53,6 +53,7 @@ pub enum RpcMessage {
     DownloadCertificatesByHeights(ChainId, Vec<BlockHeight>),
     BlobLastUsedBy(Box<BlobId>),
     MissingBlobIds(Vec<BlobId>),
+    EventBlockHeights(Vec<EventId>),
     VersionInfoQuery,
     NetworkDescriptionQuery,
 
@@ -70,6 +71,7 @@ pub enum RpcMessage {
     DownloadCertificatesByHeightsResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Vec<BlobId>),
+    EventBlockHeightsResponse(Vec<Option<BlockHeight>>),
 
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
@@ -125,6 +127,8 @@ impl RpcMessage {
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIds(_)
             | MissingBlobIdsResponse(_)
+            | EventBlockHeights(_)
+            | EventBlockHeightsResponse(_)
             | ShardInfoResponse(_)
             | DownloadCertificatesResponse(_)
             | SubscribeNotifications(_)
@@ -151,6 +155,7 @@ impl RpcMessage {
             | BlobLastUsedBy(_)
             | BlobLastUsedByCertificate(_)
             | MissingBlobIds(_)
+            | EventBlockHeights(_)
             | DownloadCertificates(_)
             | DownloadCertificatesByHeights(_, _) => true,
             BlockProposal(_)
@@ -175,6 +180,7 @@ impl RpcMessage {
             | BlobLastUsedByResponse(_)
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIdsResponse(_)
+            | EventBlockHeightsResponse(_)
             | DownloadCertificatesResponse(_)
             | DownloadCertificatesByHeightsResponse(_)
             | SubscribeNotifications(_)
@@ -267,6 +273,17 @@ impl TryFrom<RpcMessage> for NetworkDescription {
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::NetworkDescriptionResponse(description) => Ok(*description),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for Vec<Option<BlockHeight>> {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::EventBlockHeightsResponse(heights) => Ok(heights),
+            RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }
     }

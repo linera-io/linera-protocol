@@ -40,9 +40,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, ChainAndHeight, IncomingBundle, LiteValue, LiteVote,
-        MessageAction, MessageBundle, OperationResult, PostedMessage, ProposedBlock,
-        SignatureAggregator, Transaction,
+        BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight,
+        IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
+        PostedMessage, ProposedBlock, SignatureAggregator, Transaction,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -573,9 +573,9 @@ where
         proposal: ProposedBlock,
         blobs: Vec<Blob>,
     ) -> Result<ConfirmedBlockCertificate, anyhow::Error> {
-        let (block, _, _) = self
+        let (_, block, _, _) = self
             .executing_worker
-            .stage_block_execution(proposal, None, blobs)
+            .stage_block_execution(proposal, None, blobs, BundleExecutionPolicy::Abort)
             .await?;
         let certificate = self.make_certificate(ConfirmedBlock::new(block));
         self.executing_worker
@@ -882,9 +882,9 @@ where
         .await
         .unwrap();
     // Stage execution to get the block for certificate creation.
-    let (block, _, _) = env
+    let (_, block, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block, None, vec![])
+        .stage_block_execution(proposed_block, None, vec![], BundleExecutionPolicy::Abort)
         .await?;
     // Past timestamp should be handled immediately (and succeed).
     let result = env
@@ -909,9 +909,9 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let (block, _, _) = env
+    let (_, block, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block, None, vec![])
+        .stage_block_execution(proposed_block, None, vec![], BundleExecutionPolicy::Abort)
         .await?;
     let result = env
         .executing_worker()
@@ -935,9 +935,9 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let (block, _, _) = env
+    let (_, block, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block, None, vec![])
+        .stage_block_execution(proposed_block, None, vec![], BundleExecutionPolicy::Abort)
         .await?;
 
     // Spawn the proposal handling. It should not complete immediately.
@@ -3439,9 +3439,9 @@ where
             timeout_config: TimeoutConfig::default(),
         })
         .with_authenticated_owner(Some(owner0));
-    let (block0, _, _) = env
+    let (_, block0, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block0, None, vec![])
+        .stage_block_execution(proposed_block0, None, vec![], BundleExecutionPolicy::Abort)
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
@@ -3508,9 +3508,14 @@ where
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let proposed_block1 = make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
-    let (block1, _, _) = env
+    let (_, block1, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block1.clone(), None, vec![])
+        .stage_block_execution(
+            proposed_block1.clone(),
+            None,
+            vec![],
+            BundleExecutionPolicy::Abort,
+        )
         .await?;
     let proposal1_wrong_owner = proposed_block1
         .clone()
@@ -3561,9 +3566,14 @@ where
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
     let proposed_block2 = make_child_block(&value0.clone()).with_simple_transfer(chain_1, amount);
-    let (block2, _, _) = env
+    let (_, block2, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block2.clone(), None, vec![])
+        .stage_block_execution(
+            proposed_block2.clone(),
+            None,
+            vec![],
+            BundleExecutionPolicy::Abort,
+        )
         .await?;
 
     // Since round 3 is already over, the validator won't vote for a validated block from round 3.
@@ -3709,9 +3719,9 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (block0, _, _) = env
+    let (_, block0, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block0, None, vec![])
+        .stage_block_execution(proposed_block0, None, vec![], BundleExecutionPolicy::Abort)
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
@@ -3833,9 +3843,9 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (block0, _, _) = env
+    let (_, block0, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block0, None, vec![])
+        .stage_block_execution(proposed_block0, None, vec![], BundleExecutionPolicy::Abort)
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
@@ -3861,9 +3871,14 @@ where
         .into_proposal_with_round(owner0, &signer, Round::Fast)
         .await
         .unwrap();
-    let (block1, _, _) = env
+    let (_, block1, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block1.clone(), None, vec![])
+        .stage_block_execution(
+            proposed_block1.clone(),
+            None,
+            vec![],
+            BundleExecutionPolicy::Abort,
+        )
         .await?;
     let value1 = ConfirmedBlock::new(block1);
     let (response, _) = env
@@ -3926,9 +3941,14 @@ where
         .await?;
 
     // A validated block certificate from a later round can override the locked fast block.
-    let (block2, _, _) = env
+    let (_, block2, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block2.clone(), None, vec![])
+        .stage_block_execution(
+            proposed_block2.clone(),
+            None,
+            vec![],
+            BundleExecutionPolicy::Abort,
+        )
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
     let certificate2 = env.make_certificate_with_round(value2.clone(), Round::MultiLeader(0));
@@ -4441,7 +4461,7 @@ where
     // Test stage_block_execution directly - this should fail with IncorrectMessageOrder.
     assert_matches!(
         env.executing_worker()
-            .stage_block_execution(bad_proposed_block.clone(), None, vec![])
+            .stage_block_execution(bad_proposed_block.clone(), None, vec![], BundleExecutionPolicy::Abort)
             .await,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })

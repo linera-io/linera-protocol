@@ -4,7 +4,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::{Arc, RwLock},
 };
 
@@ -19,7 +19,7 @@ use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta},
     ensure,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
     time::Duration,
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -48,7 +48,7 @@ use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
-    node::{CrossChainMessageDelivery, NodeError, ValidatorNodeProvider as _},
+    node::{CrossChainMessageDelivery, NodeError, ValidatorNode as _, ValidatorNodeProvider as _},
     notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
@@ -594,6 +594,139 @@ impl<Env: Environment> Client<Env> {
         self.local_node.store_blobs(blobs).await.map_err(Into::into)
     }
 
+    /// Downloads the publisher chain certificates that contain the given events,
+    /// using the event block height index on validators. Queries a validator for
+    /// the block heights, downloads those certificates, and processes them — all
+    /// as one atomic unit per validator attempt, with staggered fallback.
+    #[instrument(level = "trace", skip_all)]
+    async fn download_certificates_for_events(
+        &self,
+        event_ids: &[EventId],
+    ) -> Result<(), chain_client::Error> {
+        let mut validators = self.validator_nodes().await?;
+        let timeout = self.options.certificate_batch_download_timeout;
+        let (max_epoch, committees) = self.admin_committees().await?;
+        let committees_ref = &committees;
+        let mut remaining_event_ids = event_ids.to_vec();
+
+        while !remaining_event_ids.is_empty() {
+            let remaining_ref = &remaining_event_ids;
+            validators.shuffle(&mut rand::thread_rng());
+            let result = communicate_concurrently(
+                &validators,
+                move |remote_node| {
+                    let validator_key = remote_node.public_key;
+                    let validator_address = remote_node.address();
+                    Box::pin(async move {
+                        // Query this validator for the block heights.
+                        let heights = remote_node
+                            .node
+                            .event_block_heights(remaining_ref.to_vec())
+                            .await?;
+
+                        // Separate resolved and unresolved events.
+                        let mut chain_heights = BTreeMap::<_, BTreeSet<_>>::new();
+                        let mut expected_events = BTreeMap::<_, HashSet<EventId>>::new();
+                        let mut unresolved = Vec::new();
+                        for (event_id, maybe_height) in remaining_ref.iter().zip(heights) {
+                            if let Some(height) = maybe_height {
+                                chain_heights
+                                    .entry(event_id.chain_id)
+                                    .or_default()
+                                    .insert(height);
+                                expected_events
+                                    .entry((event_id.chain_id, height))
+                                    .or_default()
+                                    .insert(event_id.clone());
+                            } else {
+                                unresolved.push(event_id.clone());
+                            }
+                        }
+                        if chain_heights.is_empty() {
+                            // This validator has no useful information.
+                            return Err(chain_client::Error::from(NodeError::EventsNotFound(remaining_ref.clone())));
+                        }
+
+                        // Download certificates and verify them.
+                        let mut checked_certificates = Vec::<ConfirmedBlockCertificate>::new();
+                        for (chain_id, heights) in chain_heights {
+                            let heights_vec = heights.into_iter().collect::<Vec<_>>();
+                            let certificates = self
+                                .requests_scheduler
+                                .download_certificates_by_heights(
+                                    &remote_node,
+                                    chain_id,
+                                    heights_vec,
+                                )
+                                .await?;
+                            for cert in &certificates {
+                                // Verify the block contains the expected events.
+                                let block = cert.block();
+                                let block_event_ids = block.event_ids().collect::<HashSet<_>>();
+                                if let Some(expected_event_ids) =
+                                    expected_events.get(&(chain_id, block.header.height))
+                                {
+                                    if !expected_event_ids.is_subset(&block_event_ids) {
+                                        tracing::debug!(
+                                            %validator_address, ?expected_event_ids, ?block_event_ids,
+                                            "validator lied about events in block."
+                                        );
+                                        return Err(NodeError::UnexpectedCertificateValue.into());
+                                    }
+                                }
+                            }
+                            for cert in certificates {
+                                Self::check_certificate(max_epoch, committees_ref, &cert)
+                                    .map_err(|error| {
+                                        tracing::debug!(
+                                            %validator_address, %error,
+                                            "invalid certificate"
+                                        );
+                                        error
+                                    })?
+                                    .into_result()
+                                    .map_err(|error| {
+                                        tracing::debug!(
+                                            %validator_address, %error,
+                                            "could not check certificate"
+                                        );
+                                        error
+                                    })?;
+                                checked_certificates.push(cert);
+                            }
+                        }
+                        Ok((checked_certificates, unresolved, validator_key))
+                    })
+                },
+                |errors| {
+                    errors
+                        .into_iter()
+                        .map(|(validator, _error)| validator)
+                        .collect::<BTreeSet<_>>()
+                },
+                timeout,
+            )
+            .await;
+
+            match result {
+                Ok((certificates, unresolved, validator_key)) => {
+                    for certificate in certificates {
+                        let mode = ReceiveCertificateMode::AlreadyChecked;
+                        self.receive_sender_certificate(certificate, mode, None)
+                            .await?;
+                    }
+                    validators.retain(|node| node.public_key != validator_key);
+                    remaining_event_ids = unresolved;
+                }
+                Err(_) => {
+                    // All validators failed; no point retrying.
+                    return Err(NodeError::EventsNotFound(remaining_event_ids).into());
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Tries to process all the certificates, requesting any missing blobs from the given node.
     /// Returns the chain info of the last successfully processed certificate.
     #[instrument(level = "trace", skip_all)]
@@ -1017,7 +1150,7 @@ impl<Env: Environment> Client<Env> {
                     if remote_heights.is_empty() {
                         // It makes no sense to return `Ok(_)` if we aren't going to try downloading
                         // anything from the validator - let the function try the other validators
-                        return Err(());
+                        return Err(NodeError::MissingCertificateValue);
                     }
                     let certificates = self
                         .requests_scheduler
@@ -1026,19 +1159,13 @@ impl<Env: Environment> Client<Env> {
                             sender_chain_id,
                             remote_heights,
                         )
-                        .await
-                        .map_err(|_| ())?;
+                        .await?;
                     let mut certificates_with_check_results = vec![];
                     for cert in certificates {
-                        if let Ok(check_result) =
-                            Self::check_certificate(max_epoch, committees_ref, &cert)
-                        {
-                            certificates_with_check_results
-                                .push((cert, check_result.into_result().is_ok()));
-                        } else {
-                            // Invalid signature - the validator is faulty
-                            return Err(());
-                        }
+                        let check_result =
+                            Self::check_certificate(max_epoch, committees_ref, &cert)?;
+                        certificates_with_check_results
+                            .push((cert, check_result.into_result().is_ok()));
                     }
                     Ok(certificates_with_check_results)
                 },
@@ -1708,28 +1835,37 @@ impl<Env: Environment> Client<Env> {
     /// Returns the modified block (bundles may be rejected/removed based on the policy)
     /// and the execution result.
     #[instrument(level = "trace", skip(self, block))]
-    async fn stage_block_execution_with_policy(
+    async fn stage_block_execution(
         &self,
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
     ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
+        let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self
                 .local_node
-                .stage_block_execution_with_policy(
-                    block.clone(),
-                    round,
-                    published_blobs.clone(),
-                    policy,
-                )
+                .stage_block_execution(block.clone(), round, published_blobs.clone(), policy)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.validator_nodes().await?;
                 self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
                     .await?;
                 continue; // We found the missing blob: retry.
+            }
+            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
+                let new_events = event_ids
+                    .iter()
+                    .filter(|id| !downloaded_events.contains(id))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if !new_events.is_empty() {
+                    Box::pin(self.download_certificates_for_events(&new_events)).await?;
+                    downloaded_events.extend(new_events);
+                    continue; // We downloaded new publisher chain data: retry.
+                }
+                // All reported events were already downloaded; don't loop forever.
             }
             if let Ok((_, executed_block, _, _)) = &result {
                 let block_hash = CryptoHash::new(executed_block);
@@ -1744,42 +1880,6 @@ impl<Env: Environment> Client<Env> {
             }
             let (_modified_block, executed_block, response, _resource_tracker) = result?;
             return Ok((executed_block, response));
-        }
-    }
-
-    /// Attempts to execute the block locally. If any attempt to read a blob fails, the blob is
-    /// downloaded and execution is retried.
-    #[instrument(level = "trace", skip(self, block))]
-    async fn stage_block_execution(
-        &self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
-        loop {
-            let result = self
-                .local_node
-                .stage_block_execution(block.clone(), round, published_blobs.clone())
-                .await;
-            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                let validators = self.validator_nodes().await?;
-                self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
-                    .await?;
-                continue; // We found the missing blob: retry.
-            }
-            if let Ok((block, _, _)) = &result {
-                let block_hash = CryptoHash::new(block);
-                let notification = Notification {
-                    chain_id: block.header.chain_id,
-                    reason: Reason::BlockExecuted {
-                        height: block.header.height,
-                        block_hash,
-                    },
-                };
-                self.notifier.notify(&[notification]);
-            }
-            let (block, response, _resource_tracker) = result?;
-            return Ok((block, response));
         }
     }
 }

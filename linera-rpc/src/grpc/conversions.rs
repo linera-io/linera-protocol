@@ -8,7 +8,7 @@ use linera_base::{
     },
     data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
-    identifiers::{AccountOwner, BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId, EventId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
@@ -1040,6 +1040,38 @@ impl TryFrom<api::DownloadCertificatesByHeightsRequest> for CertificatesByHeight
             chain_id: try_proto_convert(request.chain_id)?,
             heights: request.heights.into_iter().map(Into::into).collect(),
         })
+    }
+}
+
+impl From<Vec<EventId>> for api::EventBlockHeightsRequest {
+    fn from(event_ids: Vec<EventId>) -> Self {
+        Self {
+            event_ids: bincode::serialize(&event_ids).expect("serialize event_ids"),
+        }
+    }
+}
+
+impl TryFrom<api::EventBlockHeightsRequest> for Vec<EventId> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::EventBlockHeightsRequest) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(&request.event_ids)?)
+    }
+}
+
+impl From<Vec<Option<BlockHeight>>> for api::EventBlockHeightsResponse {
+    fn from(heights: Vec<Option<BlockHeight>>) -> Self {
+        Self {
+            heights: bincode::serialize(&heights).expect("serialize heights"),
+        }
+    }
+}
+
+impl TryFrom<api::EventBlockHeightsResponse> for Vec<Option<BlockHeight>> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(response: api::EventBlockHeightsResponse) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(&response.heights)?)
     }
 }
 

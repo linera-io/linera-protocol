@@ -17,7 +17,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey},
     data_types::*,
-    identifiers::{AccountOwner, BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId, EventId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -275,6 +275,16 @@ where
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_missing_blob_ids(blob_ids, sender)
+        })
+        .await
+    }
+
+    async fn event_block_heights(
+        &self,
+        event_ids: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_event_block_heights(event_ids, sender)
         })
         .await
     }
@@ -701,6 +711,21 @@ where
             .await
             .map_err(Into::into);
         sender.send(missing_blob_ids)
+    }
+
+    async fn do_event_block_heights(
+        self,
+        event_ids: Vec<EventId>,
+        sender: oneshot::Sender<Result<Vec<Option<BlockHeight>>, NodeError>>,
+    ) -> Result<(), Result<Vec<Option<BlockHeight>>, NodeError>> {
+        let validator = self.client.lock().await;
+        let heights = validator
+            .state
+            .storage_client()
+            .read_event_block_heights(&event_ids)
+            .await
+            .map_err(Into::into);
+        sender.send(heights)
     }
 }
 
