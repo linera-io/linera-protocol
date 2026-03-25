@@ -62,9 +62,11 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
+#[cfg(not(target_arch = "wasm32"))]
+use super::create_bytecode_blobs;
 use super::{
-    create_bytecode_blobs, received_log::ReceivedLogs, validator_trackers::ValidatorTrackers,
-    AbortOnDrop, Client, ListeningMode, PendingProposal, TimingType,
+    received_log::ReceivedLogs, validator_trackers::ValidatorTrackers, AbortOnDrop, Client,
+    ListeningMode, PendingProposal, TimingType,
 };
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
