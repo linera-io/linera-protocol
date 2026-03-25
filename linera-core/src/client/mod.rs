@@ -8,7 +8,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use chain_client::ChainClientState;
 use custom_debug_derive::Debug;
 use futures::{
     future::Future,
@@ -237,7 +236,7 @@ pub struct Client<Env: Environment> {
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
     /// Chain state for the managed chains.
-    chains: papaya::HashMap<ChainId, ChainClientState>,
+    chains: papaya::HashMap<ChainId, chain_client::State>,
     /// Configuration options.
     options: chain_client::Options,
 }
@@ -407,7 +406,7 @@ impl<Env: Environment> Client<Env> {
         // the arguments: If they were read from the wallet file, they might be stale.
         self.chains
             .pin()
-            .get_or_insert_with(chain_id, || ChainClientState::new(pending_proposal.clone()));
+            .get_or_insert_with(chain_id, || chain_client::State::new(pending_proposal.clone()));
 
         ChainClient::new(
             self.clone(),

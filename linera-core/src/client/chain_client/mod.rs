@@ -56,7 +56,7 @@ use linera_execution::{
 use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
 use serde::Serialize;
-pub(crate) use state::ChainClientState;
+pub(crate) use state::State;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;

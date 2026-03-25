@@ -15,15 +15,15 @@ use super::super::PendingProposal;
 ///    (which could brick the chain in the Fast consensus round).
 /// 2. Its locked value holds the pending proposal, ensuring that reads and writes
 ///    to the pending proposal are always synchronized with the proposal flow.
-pub struct ChainClientState {
+pub struct State {
     /// Mutex that serializes block proposals. The locked value is the pending proposal
     /// (if any) that we are currently trying to commit.
     proposal_mutex: Arc<Mutex<Option<PendingProposal>>>,
 }
 
-impl ChainClientState {
-    pub fn new(pending_proposal: Option<PendingProposal>) -> ChainClientState {
-        ChainClientState {
+impl State {
+    pub fn new(pending_proposal: Option<PendingProposal>) -> State {
+        State {
             proposal_mutex: Arc::new(Mutex::new(pending_proposal)),
         }
     }
