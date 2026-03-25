@@ -487,32 +487,59 @@ type ChainWorkerFuture<S> = Shared<oneshot::Receiver<ChainWorkerWeak<S>>>;
 /// Callers that find a pending entry clone the `Shared` future and await it.
 type ChainWorkerMap<S> = Arc<papaya::HashMap<ChainId, ChainWorkerFuture<S>>>;
 
+/// Default sweep interval when no TTL is configured. Dead weak references
+/// and empty delivery notifiers still need periodic cleanup.
+const DEFAULT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+
 /// Starts a background task that periodically removes dead weak references
-/// from the chain handle map. The actual lifetime management is handled by
-/// each handle's keep-alive task.
+/// from the chain handle map and empty delivery notifiers. The actual
+/// lifetime management is handled by each handle's keep-alive task.
 fn start_sweep<S: Storage + Clone + 'static>(
     chain_workers: &ChainWorkerMap<S>,
+    delivery_notifiers: &Arc<Mutex<DeliveryNotifiers>>,
     config: &ChainWorkerConfig,
 ) {
-    // Sweep at the smaller of the two TTLs. If both are None, workers
-    // live forever so there's nothing to sweep.
+    // Sweep at the smaller of the two TTLs, or a default interval if
+    // neither TTL is set (dead weak refs and delivery notifiers still
+    // need cleanup).
     let interval = match (config.ttl, config.sender_chain_ttl) {
-        (None, None) => return,
+        (None, None) => DEFAULT_SWEEP_INTERVAL,
         (Some(d), None) | (None, Some(d)) => d,
         (Some(a), Some(b)) => a.min(b),
     };
     let weak_map = Arc::downgrade(chain_workers);
+    let weak_notifiers = Arc::downgrade(delivery_notifiers);
     linera_base::Task::spawn(async move {
         loop {
             linera_base::time::timer::sleep(interval).await;
-            let Some(map) = weak_map.upgrade() else {
-                break;
+
+            // Sweep dead chain worker entries.
+            let map_alive = if let Some(map) = weak_map.upgrade() {
+                map.pin_owned().retain(|_, shared| match shared.peek() {
+                    Some(Ok(weak)) => weak.strong_count() > 0,
+                    Some(Err(_)) => false, // Loading failed; clean up.
+                    None => true,          // Still loading; keep.
+                });
+                drop(map);
+                true
+            } else {
+                false
             };
-            map.pin_owned().retain(|_, shared| match shared.peek() {
-                Some(Ok(weak)) => weak.strong_count() > 0,
-                Some(Err(_)) => false, // Loading failed; clean up.
-                None => true,          // Still loading; keep.
-            });
+
+            // Sweep delivery notifiers whose inner BTreeMap is empty.
+            let notifiers_alive = if let Some(notifiers) = weak_notifiers.upgrade() {
+                let mut guard = notifiers.lock().unwrap();
+                guard.retain(|_, notifier| !notifier.is_empty());
+                drop(guard);
+                drop(notifiers);
+                true
+            } else {
+                false
+            };
+
+            if !map_alive && !notifiers_alive {
+                break;
+            }
         }
     })
     .forget();
@@ -663,7 +690,8 @@ where
         chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     ) -> Self {
         let chain_workers = Arc::new(papaya::HashMap::new());
-        start_sweep(&chain_workers, &chain_worker_config);
+        let delivery_notifiers: Arc<Mutex<DeliveryNotifiers>> = Arc::default();
+        start_sweep(&chain_workers, &delivery_notifiers, &chain_worker_config);
         let block_cache_size = chain_worker_config.block_cache_size;
         let execution_state_cache_size = chain_worker_config.execution_state_cache_size;
         WorkerState {
@@ -672,7 +700,7 @@ where
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
             execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
             chain_modes,
-            delivery_notifiers: Arc::default(),
+            delivery_notifiers,
             chain_workers,
         }
     }

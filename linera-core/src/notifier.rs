@@ -28,12 +28,20 @@ impl<N> Default for ChannelNotifier<N> {
 
 impl<N> ChannelNotifier<N> {
     /// Registers a sender for notifications on the given chain IDs.
+    /// Also prunes any closed senders encountered during the update.
     pub fn add_sender(&self, chain_ids: Vec<ChainId>, sender: &UnboundedSender<N>) {
         let pinned = self.inner.pin();
         for id in chain_ids {
             pinned.update_or_insert_with(
                 id,
-                |senders| senders.iter().cloned().chain([sender.clone()]).collect(),
+                |senders| {
+                    senders
+                        .iter()
+                        .filter(|s| !s.is_closed())
+                        .cloned()
+                        .chain([sender.clone()])
+                        .collect()
+                },
                 || vec![sender.clone()],
             );
         }
