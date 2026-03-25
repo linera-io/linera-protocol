@@ -139,7 +139,10 @@ fn test_eviction_of_second_entry() {
     assert!(cache.insert(Cow::Borrowed(&values[TEST_CACHE_SIZE])));
 
     assert!(cache.contains(&values[0].hash()));
-    assert_eq!(cache.get_hashed(&values[0].hash()).as_ref(), Some(&values[0]));
+    assert_eq!(
+        cache.get_hashed(&values[0].hash()).as_ref(),
+        Some(&values[0])
+    );
 
     assert!(!cache.contains(&values[1].hash()));
     assert!(cache.get_hashed(&values[1].hash()).is_none());
@@ -171,7 +174,10 @@ fn test_promotion_of_reinsertion() {
     assert!(cache.insert(Cow::Borrowed(&values[TEST_CACHE_SIZE])));
 
     assert!(cache.contains(&values[0].hash()));
-    assert_eq!(cache.get_hashed(&values[0].hash()).as_ref(), Some(&values[0]));
+    assert_eq!(
+        cache.get_hashed(&values[0].hash()).as_ref(),
+        Some(&values[0])
+    );
 
     assert!(!cache.contains(&values[1].hash()));
     assert!(cache.get_hashed(&values[1].hash()).is_none());
