@@ -22,12 +22,33 @@ pub enum MemoryProfilerError {
     ProfCtlNotAvailable,
     #[error("another profiler is already running")]
     AnotherProfilerAlreadyRunning,
+    #[error("failed to activate jemalloc profiling: {0}")]
+    ActivationFailed(String),
 }
 
 /// Memory profiler using safe jemalloc_pprof wrapper (pull model only)
 pub struct MemoryProfiler;
 
 impl MemoryProfiler {
+    /// Activates jemalloc profiling at runtime.
+    ///
+    /// This enables sampling (prof_active) which is off by default to avoid
+    /// the libgcc DWARF unwinder livelock (jemalloc/jemalloc#2282).
+    pub async fn activate() -> Result<(), MemoryProfilerError> {
+        if let Some(prof_ctl) = PROF_CTL.as_ref() {
+            let mut prof_ctl = prof_ctl.lock().await;
+
+            prof_ctl
+                .activate()
+                .map_err(|e| MemoryProfilerError::ActivationFailed(e.to_string()))?;
+
+            info!("jemalloc memory profiling activated");
+            Ok(())
+        } else {
+            Err(MemoryProfilerError::ProfCtlNotAvailable)
+        }
+    }
+
     pub fn check_prof_ctl() -> Result<(), MemoryProfilerError> {
         // Check if jemalloc profiling is available
         if let Some(prof_ctl) = PROF_CTL.as_ref() {
