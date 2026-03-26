@@ -65,7 +65,7 @@ pub async fn run(
     monitor_start_block: u64,
     max_retries: u32,
 ) -> Result<()> {
-    tracing_subscriber::fmt::init();
+    linera_base::tracing::init("linera-bridge");
 
     // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
     rustls::crypto::ring::default_provider()
