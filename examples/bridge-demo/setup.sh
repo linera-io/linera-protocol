@@ -428,15 +428,16 @@ params = {
 }
 print(json.dumps(params))
 ")
-WRAPPED_APP_OUTPUT=$(linera_exec publish-and-create \
-    "$WASM_DIR/wrapped_fungible_contract.wasm" \
-    "$WASM_DIR/wrapped_fungible_service.wasm" \
-    --json-parameters "$WRAPPED_PARAMS" \
-    --json-argument '{"accounts":{}}' 2>&1) || {
-    echo "ERROR: publish-and-create wrapped-fungible failed:" >&2
-    echo "$WRAPPED_APP_OUTPUT" >&2
-    exit 1
-}
+for attempt in 1 2 3; do
+    WRAPPED_APP_OUTPUT=$(linera_exec publish-and-create \
+        "$WASM_DIR/wrapped_fungible_contract.wasm" \
+        "$WASM_DIR/wrapped_fungible_service.wasm" \
+        --json-parameters "$WRAPPED_PARAMS" \
+        --json-argument '{"accounts":{}}' 2>&1) && break
+    echo "  Attempt $attempt failed, retrying..." >&2
+    sleep 2
+done
+[[ -z "$WRAPPED_APP_OUTPUT" ]] && { echo "ERROR: publish-and-create wrapped-fungible failed after retries" >&2; exit 1; }
 # The application ID is the last 64-hex-char token on its own line.
 WRAPPED_APP_ID=$(echo "$WRAPPED_APP_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -1)
 validate_hex64 "Wrapped-fungible app ID" "$WRAPPED_APP_ID"
@@ -465,7 +466,6 @@ BRIDGE_OUTPUT=$(evm_exec \
     --constructor-args \
     "$LIGHT_CLIENT_ADDR" \
     "$CHAIN_BYTES32" \
-    0 \
     "$APP_ID_BYTES32" \
     "$TOKEN_ADDRESS")
 BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
@@ -490,6 +490,7 @@ BRIDGE_PARAMS=$(
     BRIDGE_HEX="$BRIDGE_ADDR_HEX" \
     APP_ID="$WRAPPED_APP_ID" \
     TOKEN_HEX="$TOKEN_ADDR_HEX" \
+    EVM_RPC_URL="$EVM_RPC_URL" \
     python3 -c "
 import json, os
 def hex_to_array(h):
@@ -504,16 +505,17 @@ params = {
 print(json.dumps(params))
 ")
 
-BRIDGE_APP_OUTPUT=$(linera_exec publish-and-create \
-    "$WASM_DIR/evm_bridge_contract.wasm" \
-    "$WASM_DIR/evm_bridge_service.wasm" \
-    --json-parameters "$BRIDGE_PARAMS" \
-    --json-argument 'null' \
-    --required-application-ids "$WRAPPED_APP_ID" 2>&1) || {
-    echo "ERROR: publish-and-create evm-bridge failed:" >&2
-    echo "$BRIDGE_APP_OUTPUT" >&2
-    exit 1
-}
+for attempt in 1 2 3; do
+    BRIDGE_APP_OUTPUT=$(linera_exec publish-and-create \
+        "$WASM_DIR/evm_bridge_contract.wasm" \
+        "$WASM_DIR/evm_bridge_service.wasm" \
+        --json-parameters "$BRIDGE_PARAMS" \
+        --json-argument 'null' \
+        --required-application-ids "$WRAPPED_APP_ID" 2>&1) && break
+    echo "  Attempt $attempt failed, retrying..." >&2
+    sleep 2
+done
+[[ -z "$BRIDGE_APP_OUTPUT" ]] && { echo "ERROR: publish-and-create evm-bridge failed after retries" >&2; exit 1; }
 BRIDGE_APP_ID=$(echo "$BRIDGE_APP_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -1)
 validate_hex64 "Linera bridge app ID" "$BRIDGE_APP_ID"
 echo "  Linera bridge app: $BRIDGE_APP_ID"
@@ -551,6 +553,11 @@ LINERA_BRIDGE_CHAIN_ID=$BRIDGE_CHAIN_ID
 LINERA_EVM_CHAIN_ID=$EVM_CHAIN_ID
 EOF
 
+# Write setup-complete marker so the relay knows it's safe to start.
+if [[ -n "$COMPOSE_FILE" ]]; then
+    dc_exec --user root foundry-tools sh -c "echo 'done' > /shared/setup-complete"
+fi
+
 echo ""
 echo "=== Setup Complete ==="
 echo ""
@@ -568,15 +575,24 @@ echo "Environment written to:       $OUTPUT_FILE"
 echo "Shared state dir:             $SHARED_DIR"
 echo ""
 echo "Next steps:"
+if [[ -n "$COMPOSE_FILE" ]]; then
+echo "  1. The relay is running via docker-compose (linera-relay service)."
+else
 echo "  1. Start the relay:"
 echo "     linera-bridge serve \\"
 echo "       --rpc-url $EVM_RPC_URL \\"
 echo "       --faucet-url $FAUCET_URL \\"
+echo "       --wallet $LINERA_WALLET_PATH \\"
+echo "       --keystore $LINERA_KEYSTORE_PATH \\"
+echo "       --storage $LINERA_STORAGE_PATH \\"
 echo "       --linera-bridge-chain-id $BRIDGE_CHAIN_ID \\"
 echo "       --evm-bridge-address $BRIDGE_ADDRESS \\"
 echo "       --linera-bridge-address $BRIDGE_APP_ID \\"
 echo "       --linera-fungible-address $WRAPPED_APP_ID \\"
-echo "       --evm-private-key 0x..."
+echo "       --evm-private-key 0x... \\"
+echo "       --monitor-scan-interval 30 \\"
+echo "       --max-retries 10"
+fi
 echo "  2. Start the frontend:"
 echo "     cd examples/bridge-demo"
 echo "     pnpm install && pnpm dev"
