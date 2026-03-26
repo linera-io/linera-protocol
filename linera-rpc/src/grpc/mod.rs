@@ -102,10 +102,7 @@ mod method_name_tests {
 
     #[test]
     fn non_grpc_no_dot_in_service() {
-        assert_eq!(
-            extract_grpc_method_name("/NoDotService/Method"),
-            "non_grpc"
-        );
+        assert_eq!(extract_grpc_method_name("/NoDotService/Method"), "non_grpc");
     }
 
     #[test]
