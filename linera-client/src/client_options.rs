@@ -136,6 +136,11 @@ pub struct Options {
     #[arg(long, value_parser = util::parse_app_set)]
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 
+    /// A set of application IDs. If specified, only events coming from streams created by
+    /// applications from this set will be processed.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
+
     /// Enable timing reports during operations
     #[cfg(not(web))]
     #[arg(long)]
@@ -271,6 +276,7 @@ impl Options {
             self.reject_message_bundles_without_application_ids.clone(),
             self.reject_message_bundles_with_other_application_ids
                 .clone(),
+            self.process_events_from_application_ids.clone(),
         );
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);

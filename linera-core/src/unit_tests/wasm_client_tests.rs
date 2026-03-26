@@ -24,8 +24,8 @@ use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
     data_types::{
-        Amount, BlanketMessagePolicy, BlobContent, BlockHeight, Bytecode, ChainDescription, Event,
-        MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
+        Amount, BlanketMessagePolicy, BlobContent, BlockHeight, Bytecode, ChainDescription, Epoch,
+        Event, MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId,
@@ -709,11 +709,12 @@ where
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     builder.set_fault_type([3], FaultType::Offline);
-
     // Root chain 0 is used as the admin chain; use higher indices for test chains so
     // that the publisher chains are not the admin chain (which is always fully synced).
+    let admin_client = builder.add_root_chain(0, Amount::ONE).await?;
     let sender = builder.add_root_chain(1, Amount::ONE).await?;
     let sender2 = builder.add_root_chain(2, Amount::ONE).await?;
+
     // Make sure that sender's chain ID is less than sender2's - important for the final
     // query check
     let (sender, sender2) = if sender.chain_id() < sender2.chain_id() {
@@ -840,6 +841,7 @@ where
         Some([sender.chain_id()].into_iter().collect()),
         None,
         None,
+        None,
     );
 
     // Receiver should only process the event from sender now.
@@ -862,7 +864,7 @@ where
 
     // Let's receive from everyone again.
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None);
 
     // Receiver should now process the event from sender2 as well.
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -882,6 +884,83 @@ where
         SystemOperation::UpdateStreams(vec![(sender2.chain_id(), stream_id, 1)])
     );
 
+    // Make one more post.
+    let text = "Have you followed already?".to_string();
+    let post = social::Operation::Post {
+        text: text.clone(),
+        image_url: None,
+    };
+    sender
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+
+    receiver.synchronize_from_validators().await.unwrap();
+
+    // Turn on the events publishing whitelist: with no applications on it, processing the
+    // events will effectively be disabled.
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        None,
+        None,
+        Some(Default::default()),
+    );
+
+    // Receiver should not process the event.
+    let certs = receiver.process_inbox().await.unwrap().0;
+    assert!(certs.is_empty());
+
+    // Let's whitelist the social app now.
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        None,
+        None,
+        Some([application_id.forget_abi().into()].into_iter().collect()),
+    );
+
+    // Receiver should process the new event now.
+    let certs = receiver.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 1);
+
+    // There should be an UpdateStreams operation due to the new post.
+    let operations = certs[0].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(operation)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
+    };
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    assert_eq!(
+        **operation,
+        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 3)])
+    );
+
+    // Make sure that the receiver is still at epoch 0.
+    let info = receiver
+        .synchronize_chain_state(receiver.chain_id())
+        .await?;
+    assert_eq!(info.epoch, Epoch(0));
+
+    // While only the social app is whitelisted, the admin chain publishes a new
+    // committee.
+    admin_client
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap();
+
+    // The whitelist should not affect migration to a new epoch.
+    receiver.synchronize_from_validators().await.unwrap();
+    receiver.process_inbox().await.unwrap();
+
+    // The receiver should now be at epoch 1.
+    let info = receiver
+        .synchronize_chain_state(receiver.chain_id())
+        .await?;
+    assert_eq!(info.epoch, Epoch(1));
+
     // Request to unsubscribe from the sender.
     let request_unsubscribe = social::Operation::Unsubscribe {
         chain_id: sender.chain_id(),
@@ -892,7 +971,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(receiver.chain_id(), BlockHeight::from(6), 3)
+            .check_that_validators_have_certificate(receiver.chain_id(), BlockHeight::from(8), 3)
             .await,
         Some(cert)
     );
@@ -912,7 +991,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(3), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(5), 3)
             .await,
         Some(cert)
     );
@@ -922,7 +1001,7 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert!(certs.is_empty());
 
-    // There is still only one post it can see.
+    // There should be four posts it can see.
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
     let outcome = receiver
         .query_user_application(application_id, &query)
@@ -932,7 +1011,8 @@ where
         response: async_graphql::Response::new(
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
-                    "keys": [ { "author": sender.chain_id(), "index": 1 },
+                    "keys": [ { "author": sender.chain_id(), "index": 2 },
+                              { "author": sender.chain_id(), "index": 1 },
                               { "author": sender.chain_id(), "index": 0 },
                               { "author": sender2.chain_id(), "index": 0 } ]
                 }
@@ -1126,6 +1206,7 @@ where
         None,
         Some([fungible_id.forget_abi().into()].into_iter().collect()),
         None,
+        None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(certs.len(), 1, "Should accept bundle with fungible message");
@@ -1148,6 +1229,7 @@ where
         BlanketMessagePolicy::Accept,
         None,
         Some([crowd_funding_id.forget_abi().into()].into_iter().collect()),
+        None,
         None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
@@ -1177,6 +1259,7 @@ where
         BlanketMessagePolicy::Accept,
         None,
         Some([fake_app_id.into()].into_iter().collect()),
+        None,
         None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
@@ -1213,6 +1296,7 @@ where
         None,
         None,
         Some([fungible_id.forget_abi().into()].into_iter().collect()),
+        None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
@@ -1254,6 +1338,7 @@ where
             .into_iter()
             .collect(),
         ),
+        None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(

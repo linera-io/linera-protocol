@@ -536,12 +536,32 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         if !listening_client.client.is_tracked() {
             return Ok(BTreeMap::new());
         }
+        let app_filter = listening_client
+            .client
+            .options()
+            .message_policy
+            .process_events_from_application_ids
+            .clone();
         let publishing_chains: BTreeMap<_, _> = listening_client
             .client
             .event_stream_publishers()
             .await?
             .into_iter()
-            .map(|(chain_id, streams)| (chain_id, ListeningMode::EventsOnly(streams)))
+            .filter_map(|(chain_id, streams)| {
+                let streams = if let Some(app_set) = &app_filter {
+                    streams
+                        .into_iter()
+                        .filter(|s| app_set.contains(&s.application_id))
+                        .collect::<BTreeSet<_>>()
+                } else {
+                    streams
+                };
+                if streams.is_empty() {
+                    None
+                } else {
+                    Some((chain_id, ListeningMode::EventsOnly(streams)))
+                }
+            })
             .collect();
         for publisher_id in publishing_chains.keys() {
             self.event_subscribers
