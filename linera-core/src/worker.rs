@@ -642,6 +642,15 @@ where
         self
     }
 
+    /// Returns an instance with the specified set of chain IDs whose incoming bundles
+    /// should be ignored.
+    #[cfg(with_testing)]
+    #[instrument(level = "trace", skip(self, origins))]
+    pub fn with_ignored_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
+        self.chain_worker_config.ignored_bundle_origins = origins;
+        self
+    }
+
     /// Returns an instance with the specified cross-chain message chunk limit.
     #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self))]

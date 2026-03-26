@@ -50,6 +50,7 @@ async fn make_context(
         Some(Duration::from_secs(30)),
         Some(Duration::from_secs(1)),
         HashSet::new(),
+        HashSet::new(),
         chain_client::Options::test_default(),
         DEFAULT_BLOCK_CACHE_SIZE,
         DEFAULT_EXECUTION_STATE_CACHE_SIZE,

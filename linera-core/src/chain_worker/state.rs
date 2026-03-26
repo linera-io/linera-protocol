@@ -2021,6 +2021,10 @@ where
                     });
                 }
             }
+            let ignored_origins = &self.config.ignored_bundle_origins;
+            if !ignored_origins.is_empty() {
+                bundles.retain(|b| !ignored_origins.contains(&b.origin));
+            }
             let priority_origins = &self.config.priority_bundle_origins;
             bundles.sort_by(|a, b| {
                 let a_priority = priority_origins.contains(&a.origin);
