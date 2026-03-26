@@ -751,16 +751,21 @@ where
                 (
                     Err(ChainError::ExecutionError(error, _context)),
                     Transaction::ReceiveMessages(incoming_bundle),
-                    Some(_),
+                    Some((saved_chain, saved_tracker)),
                 ) if !error.is_transient_error() && error.is_limit_error() && i > 0 => {
+                    // Restore checkpoint.
+                    *chain = saved_chain;
+                    block_execution_tracker.restore_checkpoint(&saved_tracker);
                     failure_count += 1;
                     // If we've exceeded max failures, discard all remaining message bundles.
                     let maybe_sender = if failure_count > max_failures {
                         info!(
-                        failure_count,
-                        max_failures,
-                        "Exceeded max bundle failures, discarding all remaining message bundles"
-                    );
+                            failure_count,
+                            max_failures,
+                            "Exceeded max bundle failures, discarding all remaining message \
+                            bundles and stream updates"
+                        );
+                        Self::discard_remaining_stream_updates(block, i);
                         None
                     } else {
                         // Not the first - discard it and same-sender subsequent bundles.
@@ -815,8 +820,10 @@ where
                         info!(
                             failure_count,
                             max_failures,
-                            "Exceeded max failures, discarding all remaining stream updates"
+                            "Exceeded max failures, discarding all remaining stream updates and \
+                            message bundles"
                         );
+                        Self::discard_remaining_bundles(block, i, None);
                         Self::discard_remaining_stream_updates(block, i);
                     } else {
                         info!(
