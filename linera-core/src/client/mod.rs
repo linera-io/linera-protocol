@@ -643,83 +643,49 @@ impl<Env: Environment> Client<Env> {
         self.local_node.store_blobs(blobs).await.map_err(Into::into)
     }
 
-    /// Downloads publisher chain certificates starting from height 0 until all the
-    /// given events are locally available. For each unique publisher chain referenced
-    /// in the event IDs, certificates are downloaded in batches and after each batch
-    /// we check whether the missing events have been found, stopping early.
+    /// Downloads the publisher chain certificates that contain the given events,
+    /// using the event block height index on validators. Queries a validator for
+    /// the block heights, downloads those certificates, and processes them — all
+    /// as one atomic unit per validator attempt, with staggered fallback.
     #[instrument(level = "trace", skip_all)]
-    async fn download_publisher_chains_for_events(
+    async fn download_certificates_for_events(
         &self,
-        event_ids: &[EventId],
-    ) -> Result<(), chain_client::Error> {
-        // Group events by publisher chain.
-        let mut events_by_chain: BTreeMap<ChainId, Vec<EventId>> = BTreeMap::new();
-        for event_id in event_ids {
-            events_by_chain
-                .entry(event_id.chain_id)
-                .or_default()
-                .push(event_id.clone());
-        }
-        for (chain_id, chain_event_ids) in events_by_chain {
-            self.download_chain_until_events_found(chain_id, &chain_event_ids)
-                .await?;
-        }
-        Ok(())
-    }
-
-    /// Downloads certificates for `chain_id` one at a time, stopping as soon as all
-    /// requested events are locally available or all validators fail to provide the
-    /// next height (i.e. the chain is exhausted).
-    /// Uses all validators with staggered concurrent requests for each height.
-    #[instrument(level = "trace", skip_all, fields(chain_id, num_events = event_ids.len()))]
-    async fn download_chain_until_events_found(
-        &self,
-        chain_id: ChainId,
         event_ids: &[EventId],
     ) -> Result<(), chain_client::Error> {
         let validators = self.validator_nodes().await?;
-        let info = Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
-        let mut missing_events = HashSet::new();
+        let timeout = self.options.certificate_batch_download_timeout;
+        let mut stream_ids = BTreeMap::<_, BTreeSet<_>>::new();
         for event_id in event_ids {
-            if !self
-                .storage_client()
-                .contains_event(event_id.clone())
-                .await?
-            {
-                missing_events.insert(event_id.clone());
-            }
+            stream_ids
+                .entry(event_id.chain_id)
+                .or_default()
+                .insert(event_id.stream_id.clone());
         }
-        let mut next_height = info.next_block_height;
-        // Download one certificate at a time so we never overshoot the chain length.
-        while !missing_events.is_empty() {
-            let result = self
-                .requests_scheduler
-                .download_certificates_from_validators(
-                    &validators,
-                    chain_id,
-                    next_height,
-                    1,
-                    self.options.certificate_batch_download_timeout,
-                )
-                .await;
-            let certificates = match result {
-                Ok(certificates) => certificates,
-                Err(_) => break, // No validator has a certificate at this height.
-            };
-            for event_id in certificates
-                .iter()
-                .flat_map(|cert| cert.block().event_ids())
-            {
-                missing_events.remove(&event_id);
+
+        for (chain_id, stream_ids) in stream_ids {
+            let stream_ids_ref = &stream_ids;
+            let result = communicate_concurrently(
+                &validators,
+                move |remote_node| {
+                    Box::pin(async move {
+                        self.sync_events_from_node(chain_id, stream_ids_ref, &remote_node)
+                            .await
+                    })
+                },
+                |errors| {
+                    errors
+                        .into_iter()
+                        .map(|(validator, _error)| validator)
+                        .collect::<BTreeSet<_>>()
+                },
+                timeout,
+            )
+            .await;
+
+            if result.is_err() {
+                // All validators failed; no point retrying.
+                return Err(NodeError::EventsNotFound(event_ids.to_vec()).into());
             }
-            let Some(batch_info) = self
-                .process_certificates_using_all(&validators, certificates)
-                .await?
-            else {
-                break;
-            };
-            assert!(batch_info.next_block_height > next_height);
-            next_height = batch_info.next_block_height;
         }
         Ok(())
     }
@@ -1876,8 +1842,7 @@ impl<Env: Environment> Client<Env> {
                     .cloned()
                     .collect::<Vec<_>>();
                 if !new_events.is_empty() {
-                    self.download_publisher_chains_for_events(&new_events)
-                        .await?;
+                    Box::pin(self.download_certificates_for_events(&new_events)).await?;
                     downloaded_events.extend(new_events);
                     continue; // We downloaded new publisher chain data: retry.
                 }
