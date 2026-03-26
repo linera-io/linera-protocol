@@ -151,7 +151,7 @@ where
             caller: Address::ZERO,
             value: U256::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
-            changes: HashMap::new(),
+            changes: EvmState::default(),
             is_revm_instantiated: false,
             error: Arc::new(Mutex::new(None)),
         }

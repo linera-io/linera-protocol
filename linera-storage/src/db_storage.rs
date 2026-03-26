@@ -279,13 +279,12 @@ impl MultiPartitionBatch {
         self.put_key_values(root_key, vec![(key, value)]);
     }
 
-    fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
+    fn add_blob(&mut self, blob: &Blob) {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let root_key = RootKey::BlobId(blob.id()).bytes();
         let key = BLOB_KEY.to_vec();
         self.put_key_value(root_key, key, blob.bytes().to_vec());
-        Ok(())
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
@@ -333,16 +332,31 @@ impl MultiPartitionBatch {
         let index_value = bcs::to_bytes(&hash)?;
         self.put_key_value(index_root_key, height_key, index_value);
 
+        // Write event block height index: chain_id -> (stream_id, index) -> height
+        let event_index_root_key = RootKey::EventBlockHeight(chain_id).bytes();
+        let height_value = bcs::to_bytes(&height)?;
+        for event in certificate.value().block().body.events.iter().flatten() {
+            let event_key = to_event_key(&EventId {
+                chain_id,
+                stream_id: event.stream_id.clone(),
+                index: event.index,
+            });
+            self.put_key_value(
+                event_index_root_key.clone(),
+                event_key,
+                height_value.clone(),
+            );
+        }
+
         Ok(())
     }
 
-    fn add_event(&mut self, event_id: &EventId, value: Vec<u8>) -> Result<(), ViewError> {
+    fn add_event(&mut self, event_id: &EventId, value: Vec<u8>) {
         #[cfg(with_metrics)]
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
         let key = to_event_key(event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         self.put_key_value(root_key, key, value);
-        Ok(())
     }
 
     fn add_network_description(
@@ -382,6 +396,7 @@ enum RootKey {
     BlobId(BlobId),
     Event(ChainId),
     BlockByHeight(ChainId),
+    EventBlockHeight(ChainId),
 }
 
 const CHAIN_ID_TAG: u8 = 2;
@@ -761,7 +776,7 @@ where
     #[instrument(skip_all, fields(blob_id = %blob.id()))]
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
-        batch.add_blob(blob)?;
+        batch.add_blob(blob);
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -815,7 +830,7 @@ where
             let has_state = store.contains_key(BLOB_STATE_KEY).await?;
             blob_states.push(has_state);
             if has_state {
-                batch.add_blob(blob)?;
+                batch.add_blob(blob);
             }
         }
         self.write_batch(batch).await?;
@@ -829,7 +844,7 @@ where
         }
         let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
-            batch.add_blob(blob)?;
+            batch.add_blob(blob);
         }
         self.write_batch(batch).await
     }
@@ -842,7 +857,7 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
-            batch.add_blob(blob)?;
+            batch.add_blob(blob);
         }
         batch.add_certificate(certificate)?;
         self.write_batch(batch).await
@@ -950,6 +965,39 @@ where
             .collect::<Result<_, _>>()?;
 
         Ok(hash_options)
+    }
+
+    async fn read_event_block_heights(
+        &self,
+        event_ids: &[EventId],
+    ) -> Result<Vec<Option<BlockHeight>>, ViewError> {
+        if event_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Group event IDs by chain ID for batch lookups per partition.
+        let mut chain_groups = BTreeMap::<_, Vec<_>>::new();
+        for (i, event_id) in event_ids.iter().enumerate() {
+            chain_groups
+                .entry(event_id.chain_id)
+                .or_default()
+                .push((i, to_event_key(event_id)));
+        }
+        let mut results = vec![None; event_ids.len()];
+        for (chain_id, entries) in chain_groups {
+            let root_key = RootKey::EventBlockHeight(chain_id).bytes();
+            let store = self.database.open_shared(&root_key)?;
+            let keys = entries
+                .iter()
+                .map(|(_, key)| key.clone())
+                .collect::<Vec<_>>();
+            let values = store.read_multi_values_bytes(&keys).await?;
+            for ((original_index, _), value) in entries.into_iter().zip(values) {
+                if let Some(bytes) = value {
+                    results[original_index] = Some(bcs::from_bytes::<BlockHeight>(&bytes)?);
+                }
+            }
+        }
+        Ok(results)
     }
 
     #[instrument(skip_all)]
@@ -1076,7 +1124,7 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         for (event_id, value) in events {
-            batch.add_event(&event_id, value)?;
+            batch.add_event(&event_id, value);
         }
         self.write_batch(batch).await
     }

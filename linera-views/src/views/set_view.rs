@@ -248,7 +248,7 @@ impl<C: Context> ByteSetView<C> {
     /// assert_eq!(set.keys().await.unwrap(), vec![vec![0, 1], vec![0, 2]]);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
         let mut count = 0;
         self.for_each_key(|_key| {
             count += 1;
@@ -562,11 +562,11 @@ impl<C: Context, I: Serialize + DeserializeOwned + Send> SetView<C, I> {
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut set: SetView<_, u32> = SetView::load(context).await.unwrap();
     /// set.insert(&(34 as u32));
-    /// assert_eq!(set.count().await.unwrap(), 1);
+    /// assert_eq!(set.iterative_count().await.unwrap(), 1);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
-        self.set.count().await
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
+        self.set.iterative_count().await
     }
 
     /// Applies a function f on each index. Indices are visited in an order
@@ -846,11 +846,11 @@ where
     /// let mut set = CustomSetView::<_, u128>::load(context).await.unwrap();
     /// set.insert(&(34 as u128));
     /// set.insert(&(37 as u128));
-    /// assert_eq!(set.count().await.unwrap(), 2);
+    /// assert_eq!(set.iterative_count().await.unwrap(), 2);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
-        self.set.count().await
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
+        self.set.iterative_count().await
     }
 
     /// Applies a function f on each index. Indices are visited in an order
@@ -999,7 +999,7 @@ mod graphql {
 
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.count().await? as u32)
+            Ok(self.iterative_count().await? as u32)
         }
     }
 
@@ -1030,7 +1030,7 @@ mod graphql {
 
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.count().await? as u32)
+            Ok(self.iterative_count().await? as u32)
         }
     }
 }
@@ -1066,7 +1066,7 @@ mod tests {
 
         // Check keys after flush
         assert_eq!(set.keys().await?, vec![vec![1, 2, 3], vec![4, 5, 6]]);
-        assert_eq!(set.count().await?, 2);
+        assert_eq!(set.iterative_count().await?, 2);
 
         // Now clear the set (this sets delete_storage_first = true)
         set.clear();
@@ -1572,8 +1572,8 @@ mod tests {
         // Initially no pending changes
         assert!(!set.has_pending_changes().await);
 
-        // Test line 557: self.set.count().await - SetView delegates to ByteSetView
-        assert_eq!(set.count().await?, 0);
+        // Test line 557: self.set.iterative_count().await - SetView delegates to ByteSetView
+        assert_eq!(set.iterative_count().await?, 0);
 
         // Add items and verify delegation works
         set.insert(&42)?;
@@ -1594,7 +1594,7 @@ mod tests {
         assert_eq!(set.indices().await?, vec![42, 84, 126]);
 
         // This calls line 557 which delegates to the underlying ByteSetView
-        assert_eq!(set.count().await?, 3);
+        assert_eq!(set.iterative_count().await?, 3);
 
         Ok(())
     }
@@ -1795,14 +1795,14 @@ mod tests {
     async fn test_custom_set_view_for_each_index_while_method_signature() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set = CustomSetView::<_, u128>::load(context).await?;
-        assert_eq!(set.count().await?, 0);
+        assert_eq!(set.iterative_count().await?, 0);
 
         // Add some data to test the method
         set.insert(&100u128)?;
         set.insert(&200u128)?;
         set.insert(&300u128)?;
 
-        assert_eq!(set.count().await?, 3);
+        assert_eq!(set.iterative_count().await?, 3);
 
         let mut collected_indices = Vec::new();
 
@@ -1934,7 +1934,7 @@ mod tests {
             }
 
             async fn count(&self) -> Result<u32, async_graphql::Error> {
-                Ok(self.set.count().await? as u32)
+                Ok(self.set.iterative_count().await? as u32)
             }
         }
 

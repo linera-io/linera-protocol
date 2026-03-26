@@ -3,21 +3,17 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-mod state;
-
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{OwnerSpender, Parameters};
+use fungible::{state::FungibleTokenState, Parameters};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
     graphql::GraphQLMutationRoot as _,
-    linera_base_types::{AccountOwner, Amount, WithServiceAbi},
+    linera_base_types::{AccountOwner, Amount, OwnerSpender, WithServiceAbi},
     views::{MapView, View},
     Service, ServiceRuntime,
 };
-
-use self::state::FungibleTokenState;
 
 #[derive(Clone)]
 pub struct FungibleTokenService {

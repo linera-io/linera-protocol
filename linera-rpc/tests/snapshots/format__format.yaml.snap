@@ -330,6 +330,14 @@ ChainInfo:
     - requested_received_log:
         SEQ:
           TYPENAME: ChainAndHeight
+    - requested_previous_event_blocks:
+        MAP:
+          KEY:
+            TYPENAME: StreamId
+          VALUE:
+            TUPLE:
+              - TYPENAME: BlockHeight
+              - TYPENAME: CryptoHash
 ChainInfoQuery:
   STRUCT:
     - chain_id:
@@ -353,6 +361,9 @@ ChainInfoQuery:
     - request_sent_certificate_hashes_by_heights:
         SEQ:
           TYPENAME: BlockHeight
+    - request_previous_event_blocks:
+        SEQ:
+          TYPENAME: StreamId
     - create_network_actions: BOOL
 ChainInfoResponse:
   STRUCT:
@@ -808,6 +819,12 @@ NodeError:
           - local_time:
               TYPENAME: Timestamp
           - block_time_grace_period_ms: U64
+Notification:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - reason:
+        TYPENAME: Reason
 OpenChainConfig:
   STRUCT:
     - ownership:
@@ -928,6 +945,46 @@ ProposedBlock:
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
+Reason:
+  ENUM:
+    0:
+      NewBlock:
+        STRUCT:
+          - height:
+              TYPENAME: BlockHeight
+          - block_hash:
+              TYPENAME: CryptoHash
+    1:
+      NewEvents:
+        STRUCT:
+          - height:
+              TYPENAME: BlockHeight
+          - block_hash:
+              TYPENAME: CryptoHash
+          - event_streams:
+              SEQ:
+                TYPENAME: StreamId
+    2:
+      NewIncomingBundle:
+        STRUCT:
+          - origin:
+              TYPENAME: ChainId
+          - height:
+              TYPENAME: BlockHeight
+    3:
+      NewRound:
+        STRUCT:
+          - height:
+              TYPENAME: BlockHeight
+          - round:
+              TYPENAME: Round
+    4:
+      BlockExecuted:
+        STRUCT:
+          - height:
+              TYPENAME: BlockHeight
+          - block_hash:
+              TYPENAME: CryptoHash
 ResourceControlPolicy:
   STRUCT:
     - wasm_fuel_unit:
@@ -1075,84 +1132,104 @@ RpcMessage:
           SEQ:
             TYPENAME: BlobId
     15:
-      VersionInfoQuery: UNIT
+      EventBlockHeights:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: EventId
     16:
-      NetworkDescriptionQuery: UNIT
+      VersionInfoQuery: UNIT
     17:
+      NetworkDescriptionQuery: UNIT
+    18:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    18:
+    19:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    19:
+    20:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    20:
+    21:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    21:
+    22:
       NetworkDescriptionResponse:
         NEWTYPE:
           TYPENAME: NetworkDescription
-    22:
+    23:
       UploadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobId
-    23:
+    24:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    24:
+    25:
       DownloadPendingBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    25:
+    26:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: Block
-    26:
+    27:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    27:
+    28:
       DownloadCertificatesByHeightsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    28:
+    29:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    29:
+    30:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    30:
+    31:
+      EventBlockHeightsResponse:
+        NEWTYPE:
+          SEQ:
+            OPTION:
+              TYPENAME: BlockHeight
+    32:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
-    31:
+    33:
       BlobLastUsedByCertificate:
         NEWTYPE:
           TYPENAME: BlobId
-    32:
+    34:
       BlobLastUsedByCertificateResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlockCertificate
-    33:
+    35:
       ShardInfoQuery:
         NEWTYPE:
           TYPENAME: ChainId
-    34:
+    36:
       ShardInfoResponse:
         NEWTYPE:
           TYPENAME: ShardInfo
+    37:
+      SubscribeNotifications:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: ChainId
+    38:
+      Notification:
+        NEWTYPE:
+          TYPENAME: Notification
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

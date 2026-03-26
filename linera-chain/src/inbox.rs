@@ -222,10 +222,6 @@ where
                 }
             );
             self.added_bundles.delete_front();
-            #[cfg(with_metrics)]
-            metrics::INBOX_SIZE
-                .with_label_values(&[])
-                .observe(self.added_bundles.count() as f64);
             tracing::trace!("Skipping previously received bundle {:?}", previous_bundle);
         }
         // Reconcile the bundle with the next added bundle, or mark it as removed.
@@ -244,10 +240,6 @@ where
                     }
                 );
                 self.added_bundles.delete_front();
-                #[cfg(with_metrics)]
-                metrics::INBOX_SIZE
-                    .with_label_values(&[])
-                    .observe(self.added_bundles.count() as f64);
                 tracing::trace!("Consuming bundle {:?}", bundle);
                 true
             }
@@ -261,6 +253,10 @@ where
                 false
             }
         };
+        #[cfg(with_metrics)]
+        metrics::INBOX_SIZE
+            .with_label_values(&[])
+            .observe(self.added_bundles.count() as f64);
         self.next_cursor_to_remove.set(cursor.try_add_one()?);
         Ok(already_known)
     }

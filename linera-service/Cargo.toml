@@ -69,6 +69,7 @@ anyhow.workspace = true
 assert_matches.workspace = true
 async-graphql.workspace = true
 async-graphql-axum.workspace = true
+async-graphql-value.workspace = true
 async-lock.workspace = true
 async-trait.workspace = true
 async-tungstenite.workspace = true
@@ -97,6 +98,7 @@ is-terminal.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
+linera-bridge.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
 linera-core.workspace = true

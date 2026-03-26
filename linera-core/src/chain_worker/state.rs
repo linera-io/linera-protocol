@@ -6,11 +6,7 @@
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::{
-        self,
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::{self, Arc},
 };
 
 use futures::future::Either;
@@ -31,7 +27,10 @@ use linera_chain::{
         OriginalProposal, ProposalContent, ProposedBlock,
     },
     manager,
-    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{
+        Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
+        ValidatedBlockCertificate,
+    },
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
@@ -47,8 +46,8 @@ use linera_views::{
 use tokio::sync::oneshot;
 use tracing::{debug, instrument, trace, warn};
 
-use super::{ChainWorkerConfig, DeliveryNotifier};
 use crate::{
+    chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
@@ -95,13 +94,17 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
+    /// The background task running the service runtime. Must be kept alive for the
+    /// lifetime of the worker: the pool `Guard` wrapper returns the thread-pool slot
+    /// when dropped, so dropping this early lets the pool schedule unrelated work on a
+    /// thread that is still running the service runtime.
     service_runtime_task: Option<web_thread_pool::Task<()>>,
-    /// Timestamp of the last access, in microseconds since the Unix epoch.
+    /// Timestamp of the last access.
     /// Used by the keep-alive task to determine when the worker has been idle.
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
-    last_access: Arc<AtomicU64>,
-    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    last_access: Arc<AtomicTimestamp>,
+    block_values: Arc<ValueCache<CryptoHash, Block>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
@@ -127,7 +130,7 @@ where
     pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, Block>>,
         execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
@@ -143,7 +146,7 @@ where
             chain,
             service_runtime_endpoint,
             service_runtime_task,
-            last_access: Arc::new(AtomicU64::new(super::handle::current_time_micros())),
+            last_access: Arc::new(AtomicTimestamp::now()),
             block_values,
             execution_state_cache,
             chain_modes,
@@ -174,12 +177,11 @@ where
 
     /// Updates the last-access timestamp to the current time.
     pub(crate) fn touch(&self) {
-        self.last_access
-            .store(super::handle::current_time_micros(), Ordering::Relaxed);
+        self.last_access.store_now();
     }
 
     /// Returns a clone of the last-access `Arc`, for use by the keep-alive task.
-    pub(crate) fn last_access_arc(&self) -> Arc<AtomicU64> {
+    pub(crate) fn last_access_arc(&self) -> Arc<AtomicTimestamp> {
         Arc::clone(&self.last_access)
     }
 
@@ -367,7 +369,11 @@ where
         heights_by_recipient: BTreeMap<ChainId, Vec<BlockHeight>>,
     ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
-        let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
+        let heights = heights_by_recipient
+            .values()
+            .flatten()
+            .copied()
+            .collect::<BTreeSet<_>>();
         let next_block_height = self.chain.tip_state.get().next_block_height;
         let log_heights = heights
             .range(..next_block_height)
@@ -756,7 +762,7 @@ where
                     chain_id,
                     reason: Reason::NewEvents {
                         height,
-                        hash: certificate.hash(),
+                        block_hash,
                         event_streams: updated_event_streams,
                     },
                 });
@@ -807,58 +813,58 @@ where
                 block.body.incoming_bundles(),
             )
             .await?;
-        let oracle_responses = Some(block.body.oracle_responses.clone());
-        let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome =
-            if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
-                chain.execution_state = execution_state
-                    .with_context(|ctx| {
-                        chain
-                            .execution_state
-                            .context()
-                            .clone_with_base_key(ctx.base_key().bytes.clone())
-                    })
-                    .await;
-                outcome.clone()
-            } else {
-                let (_, verified, _resource_tracker) = chain
-                    .execute_block(
-                        proposed_block,
-                        local_time,
-                        None,
-                        &published_blobs,
-                        oracle_responses,
-                        BundleExecutionPolicy::Abort,
-                    )
-                    .await?;
-                verified
-            };
-        // We should always agree on the messages and state hash.
-        ensure!(
-            outcome == verified_outcome,
-            WorkerError::IncorrectOutcome {
-                submitted: Box::new(outcome),
-                computed: Box::new(verified_outcome),
-            }
-        );
+        let confirmed_block = if let Some(mut execution_state) =
+            self.execution_state_cache.remove(&block_hash)
+        {
+            chain.execution_state = execution_state
+                .with_context(|ctx| {
+                    chain
+                        .execution_state
+                        .context()
+                        .clone_with_base_key(ctx.base_key().bytes.clone())
+                })
+                .await;
+            certificate.into_value()
+        } else {
+            let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
+            let oracle_responses = Some(outcome.oracle_responses.clone());
+            let (proposed_block, verified, _resource_tracker) = chain
+                .execute_block(
+                    proposed_block,
+                    local_time,
+                    None,
+                    &published_blobs,
+                    oracle_responses,
+                    BundleExecutionPolicy::Abort,
+                )
+                .await?;
+            // We should always agree on the messages and state hash.
+            ensure!(
+                outcome == verified,
+                WorkerError::IncorrectOutcome {
+                    submitted: Box::new(outcome),
+                    computed: Box::new(verified),
+                }
+            );
+            ConfirmedBlock::new(Block::new(proposed_block, verified))
+        };
 
         // Update the rest of the chain state.
         let updated_streams = chain
-            .apply_confirmed_block(certificate.value(), local_time)
+            .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
-        let hash = certificate.hash();
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock { height, hash },
+            reason: Reason::NewBlock { height, block_hash },
         });
         if !updated_streams.is_empty() {
             actions.notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewEvents {
                     height,
-                    hash,
+                    block_hash,
                     event_streams: updated_streams,
                 },
             });
@@ -867,7 +873,7 @@ where
         self.save().await?;
 
         self.block_values
-            .insert(Cow::Owned(certificate.into_inner().into_inner()));
+            .insert(Cow::Owned(confirmed_block.into_inner()));
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
@@ -909,8 +915,12 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
-        let (next_height_to_receive, last_anticipated_block_height) =
-            self.chain.inbox_cursors(&origin).await?;
+        let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+        let next_height_to_receive = inbox.next_block_height_to_receive()?;
+        let last_anticipated_block_height = match inbox.removed_bundles.back().await? {
+            Some(bundle) => Some(bundle.height),
+            None => None,
+        };
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(
@@ -931,9 +941,16 @@ where
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
             self.chain
-                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
+                .receive_message_bundle_with_inbox(
+                    &mut inbox,
+                    &origin,
+                    bundle,
+                    local_time,
+                    add_to_received_log,
+                )
                 .await?;
         }
+        drop(inbox);
         if !self.config.allow_inactive_chains && !self.chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
@@ -1233,7 +1250,7 @@ where
                     .check_blob_size(blob.content())
                     .with_execution_context(ChainExecutionContext::Block)?;
                 ensure!(
-                    u64::try_from(pending_blobs.pending_blobs.count().await?)
+                    u64::try_from(pending_blobs.pending_blobs.iterative_count().await?)
                         .is_ok_and(|count| count < policy.maximum_published_blobs),
                     WorkerError::TooManyPublishedBlobs(policy.maximum_published_blobs)
                 );
@@ -1346,28 +1363,6 @@ where
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
-    /// Executes a block without persisting any changes to the state.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        block_height = %block.height
-    ))]
-    pub(crate) async fn stage_block_execution(
-        &mut self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
-        let (_, executed_block, response, resource_tracker) = self
-            .stage_block_execution_with_policy(
-                block,
-                round,
-                published_blobs,
-                BundleExecutionPolicy::Abort,
-            )
-            .await?;
-        Ok((executed_block, response, resource_tracker))
-    }
-
     /// Executes a block without persisting any changes to the state, with a specified
     /// policy for handling bundle failures.
     ///
@@ -1377,7 +1372,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
-    pub(crate) async fn stage_block_execution_with_policy(
+    pub(crate) async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
         round: Option<u32>,
@@ -1608,17 +1603,22 @@ where
         }
         if query.request_pending_message_bundles {
             let mut bundles = Vec::new();
-            let pairs = chain.inboxes.try_load_all_entries().await?;
+            let nonempty_origins: Vec<ChainId> =
+                chain.nonempty_inboxes.get().iter().copied().collect();
             #[cfg(with_metrics)]
             metrics::NUM_INBOXES
                 .with_label_values(&[])
-                .observe(pairs.len() as f64);
+                .observe(nonempty_origins.len() as f64);
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
             };
-            for (origin, inbox) in pairs {
+            let inboxes = chain.inboxes.try_load_entries(&nonempty_origins).await?;
+            for (origin, inbox) in nonempty_origins.into_iter().zip(inboxes) {
+                let inbox = inbox.ok_or_else(|| {
+                    ChainError::InternalError(format!("Missing inbox for origin {origin}"))
+                })?;
                 for bundle in inbox.added_bundles.elements().await? {
                     bundles.push(IncomingBundle {
                         origin,
@@ -1644,6 +1644,32 @@ where
         }
         if query.request_manager_values {
             info.manager.add_values(&chain.manager);
+        }
+        if !query.request_previous_event_blocks.is_empty() {
+            let stream_ids = query.request_previous_event_blocks;
+            let heights = chain
+                .execution_state
+                .previous_event_blocks
+                .multi_get(&stream_ids)
+                .await?;
+            let mut indices = Vec::new();
+            let mut streams_with_heights = Vec::new();
+            for (stream_id, height) in stream_ids.into_iter().zip(heights) {
+                if let Some(height) = height {
+                    let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
+                    indices.push(index);
+                    streams_with_heights.push((stream_id, height));
+                }
+            }
+            let hashes = chain.confirmed_log.multi_get(indices).await?;
+            for (maybe_hash, (stream_id, height)) in hashes.into_iter().zip(streams_with_heights) {
+                let hash = maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
+                    height,
+                    chain_id: info.chain_id,
+                })?;
+                info.requested_previous_event_blocks
+                    .insert(stream_id, (height, hash));
+            }
         }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }

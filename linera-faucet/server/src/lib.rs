@@ -19,7 +19,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     bcs,
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, ApplicationPermissions, ChainDescription, Timestamp},
+    data_types::{Amount, ApplicationPermissions, ChainDescription, Epoch, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
 };
@@ -192,7 +192,7 @@ pub struct MutationRoot<S> {
     request_notifier: Arc<Notify>,
     storage: S,
     /// Amount for initial claims (chain creation).
-    amount: Amount,
+    initial_claim_amount: Amount,
     /// Amount for daily claims (token transfer).
     daily_claim_amount: Amount,
 }
@@ -208,12 +208,12 @@ pub struct ClaimOutcome {
     pub amount: Amount,
 }
 
-/// Information about a previous claim.
+/// Information about the initial chain claim.
 #[derive(Clone, Debug, SimpleObject)]
-pub struct LastClaim {
+pub struct InitialClaim {
     /// The chain ID that was created.
     pub chain_id: ChainId,
-    /// The timestamp when the chain was created.
+    /// The block timestamp when the chain was created.
     pub timestamp: Timestamp,
 }
 
@@ -268,6 +268,7 @@ impl PendingRequest {
 }
 
 /// Configuration for the batch processor.
+#[derive(Clone)]
 struct BatchProcessorConfig {
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
@@ -318,6 +319,12 @@ where
         Ok(self.client.local_committee().await?)
     }
 
+    /// Returns the current epoch of the faucet's chain.
+    async fn current_epoch(&self) -> Result<Epoch, Error> {
+        let info = self.client.chain_info().await?;
+        Ok(info.epoch)
+    }
+
     /// Find the existing chain with the given authentication key, if any.
     async fn chain_id(&self, owner: AccountOwner) -> Result<ChainId, Error> {
         // Check if this owner already has a chain.
@@ -328,14 +335,14 @@ where
 
         let chain_id = self.faucet_storage.get_chain_id(&owner).await?;
 
-        chain_id.ok_or(Error::new("This user has no chain yet"))
+        chain_id.ok_or_else(|| Error::new("This user has no chain yet"))
     }
 
-    /// Returns the last claim for the given owner, if any.
-    async fn last_claim(&self, owner: AccountOwner) -> Result<Option<LastClaim>, Error> {
-        let claim_record = self.faucet_storage.last_claim(&owner).await?;
+    /// Returns the initial claim for the given owner, if any.
+    async fn initial_claim(&self, owner: AccountOwner) -> Result<Option<InitialClaim>, Error> {
+        let claim_record = self.faucet_storage.initial_claim(&owner).await?;
 
-        Ok(claim_record.map(|r| LastClaim {
+        Ok(claim_record.map(|r| InitialClaim {
             chain_id: r.chain_id,
             timestamp: r.timestamp,
         }))
@@ -345,7 +352,7 @@ where
     /// If the returned timestamp is in the past (or now), the user can claim immediately.
     /// Returns `None` if the user has not yet completed the initial claim.
     async fn next_daily_claim(&self, owner: AccountOwner) -> Result<Option<Timestamp>, Error> {
-        let initial_claim = match self.faucet_storage.last_claim(&owner).await? {
+        let initial_claim = match self.faucet_storage.initial_claim(&owner).await? {
             Some(record) => record,
             None => return Ok(None),
         };
@@ -367,7 +374,7 @@ where
 }
 
 /// Duration of one daily claim period in microseconds (24 hours).
-const DAILY_PERIOD_MICROS: u64 = 24 * 60 * 60 * 1_000_000;
+const DAILY_PERIOD_MICROS: u64 = TimeDelta::from_secs(24 * 60 * 60).as_micros();
 
 /// Computes the current daily claim period from timestamps.
 fn current_daily_period(initial_claim_micros: u64, now_micros: u64) -> u64 {
@@ -443,7 +450,7 @@ where
             requests.push_back(PendingRequest {
                 owner,
                 target_chain_id: None,
-                amount: self.amount,
+                amount: self.initial_claim_amount,
                 daily_period: 0,
                 responder: tx,
                 #[cfg(with_metrics)]
@@ -489,7 +496,7 @@ where
         // The user must have done the initial claim first.
         let initial_claim = self
             .faucet_storage
-            .last_claim(&owner)
+            .initial_claim(&owner)
             .await?
             .ok_or_else(|| Error::new("You must claim a chain before making daily claims"))?;
 
@@ -745,7 +752,7 @@ where
     async fn validate_request(&self, request: &PendingRequest) -> Result<(), Error> {
         if request.is_daily() {
             // Verify the initial claim still exists.
-            let initial_claim = match self.faucet_storage.last_claim(&request.owner).await {
+            let initial_claim = match self.faucet_storage.initial_claim(&request.owner).await {
                 Ok(Some(record)) => record,
                 Ok(None) => {
                     return Err(Error::new(
@@ -1057,7 +1064,7 @@ where
     port: u16,
     #[cfg(feature = "metrics")]
     metrics_port: u16,
-    amount: Amount,
+    initial_claim_amount: Amount,
     daily_claim_amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
@@ -1085,7 +1092,7 @@ where
             port: self.port,
             #[cfg(feature = "metrics")]
             metrics_port: self.metrics_port,
-            amount: self.amount,
+            initial_claim_amount: self.initial_claim_amount,
             daily_claim_amount: self.daily_claim_amount,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
@@ -1104,7 +1111,7 @@ pub struct FaucetConfig {
     #[cfg(feature = "metrics")]
     pub metrics_port: u16,
     pub chain_id: ChainId,
-    pub amount: Amount,
+    pub initial_claim_amount: Amount,
     pub daily_claim_amount: Amount,
     pub end_timestamp: Timestamp,
     pub genesis_config: std::sync::Arc<GenesisConfig>,
@@ -1155,7 +1162,7 @@ where
             port: config.port,
             #[cfg(feature = "metrics")]
             metrics_port: config.metrics_port,
-            amount: config.amount,
+            initial_claim_amount: config.initial_claim_amount,
             daily_claim_amount: config.daily_claim_amount,
             end_timestamp: config.end_timestamp,
             start_timestamp,
@@ -1180,7 +1187,7 @@ where
             pending_requests: Arc::clone(&self.pending_requests),
             request_notifier: Arc::clone(&self.request_notifier),
             storage: self.storage.clone(),
-            amount: self.amount,
+            initial_claim_amount: self.initial_claim_amount,
             daily_claim_amount: self.daily_claim_amount,
         };
         let query_root = QueryRoot {

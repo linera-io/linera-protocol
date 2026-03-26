@@ -271,7 +271,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
         let mut new_state_vec = state_vec.clone();
         for _ in 0..count_oper {
             let choice = rng.gen_range(0..7);
-            let count = view.map.count().await?;
+            let count = view.map.iterative_count().await?;
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
@@ -446,7 +446,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
                 // changing some random entries
                 let pos = rng.gen_range(0..count);
                 let val = rng.gen::<u8>();
-                let mut iter = view.queue.iter_mut().await?;
+                let mut iter = view.queue.try_iter_mut().await?;
                 (for _ in 0..pos {
                     iter.next();
                 });
@@ -682,7 +682,7 @@ async fn queue_view_mutability_check() -> Result<()> {
                 // changing some random entries
                 let pos = rng.gen_range(0..count);
                 let val = rng.gen::<u8>();
-                let mut iter = view.queue.iter_mut().await?;
+                let mut iter = view.queue.try_iter_mut().await?;
                 (for _ in 0..pos {
                     iter.next();
                 });

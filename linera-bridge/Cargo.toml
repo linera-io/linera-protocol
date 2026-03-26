@@ -1,0 +1,150 @@
+[package]
+name = "linera-bridge"
+description = "Bridge between Linera and EVM chains."
+readme = "README.md"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[features]
+default = ["offchain"]
+chain = []
+testing = []
+offchain = [
+    "dep:alloy",
+    "dep:alloy-sol-types",
+    "dep:async-trait",
+    "dep:bcs",
+    "dep:linera-base",
+    "dep:linera-execution",
+    "dep:op-alloy-network",
+    "dep:tokio",
+    "dep:url",
+]
+codegen = [
+    "offchain",
+    "dep:serde-generate",
+    "dep:serde-reflection",
+    "dep:serde_yaml",
+]
+cli = [
+    "offchain",
+    "dep:clap",
+    "dep:reqwest",
+    "dep:serde_json",
+    "dep:serde",
+    "dep:fs-err",
+]
+relay = [
+    "offchain",
+    "cli",
+    "dep:axum",
+    "dep:futures",
+    "dep:hex",
+    "dep:linera-chain",
+    "dep:linera-client",
+    "dep:linera-core",
+    "dep:linera-faucet-client",
+    "dep:linera-storage",
+    "dep:linera-views",
+    "dep:rustls",
+    "dep:tower-http",
+    "dep:tracing",
+    "dep:tracing-subscriber",
+]
+
+[lints]
+workspace = true
+
+[dependencies]
+# Always available (lightweight, Wasm-compatible)
+alloy-primitives.workspace = true
+alloy-rlp.workspace = true
+alloy-trie.workspace = true
+anyhow.workspace = true
+
+async-trait = { workspace = true, optional = true }
+
+# Off-chain only (heavy, native deps — enabled by `offchain` feature)
+alloy = { workspace = true, optional = true, default-features = false, features = [
+    "rpc-types-eth",
+    "json-rpc",
+    "signer-local",
+    "contract",
+    "reqwest",
+    "reqwest-rustls-tls",
+] }
+alloy-sol-types = { workspace = true, optional = true }
+bcs = { workspace = true, optional = true }
+linera-base = { workspace = true, optional = true }
+linera-execution = { workspace = true, optional = true }
+op-alloy-network = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["full"] }
+url = { workspace = true, optional = true }
+
+clap = { workspace = true, optional = true }
+fs-err = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+# relay feature deps
+axum = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+linera-chain = { workspace = true, optional = true }
+linera-client = { workspace = true, optional = true }
+linera-core = { workspace = true, optional = true }
+linera-faucet-client = { workspace = true, optional = true }
+linera-storage = { workspace = true, optional = true }
+linera-views = { workspace = true, optional = true }
+rustls = { version = "0.23", optional = true, features = ["ring"] }
+tower-http = { workspace = true, optional = true, features = ["cors"] }
+tracing = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true, features = ["fmt"] }
+
+[[bin]]
+name = "linera-bridge"
+required-features = ["cli"]
+
+[build-dependencies]
+serde-generate = { version = "0.33", features = ["solidity"], optional = true }
+serde-reflection = { workspace = true, optional = true }
+serde_yaml = { version = "0.8.26", optional = true }
+
+[dev-dependencies]
+bcs.workspace = true
+hex.workspace = true
+insta = { workspace = true, features = ["yaml"] }
+linera-base = { workspace = true, features = ["test"] }
+linera-chain.workspace = true
+linera-execution.workspace = true
+proptest.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+revm = { workspace = true, default-features = false, features = [
+    "std",
+    "kzg-rs",
+    "secp256k1",
+    "portable",
+] }
+revm-context.workspace = true
+serde-reflection.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+wrapped-fungible.workspace = true
+# Anvil-based integration tests
+alloy = { workspace = true, default-features = false, features = [
+    "rpc-types-eth",
+    "json-rpc",
+    "node-bindings",
+    "signer-local",
+    "contract",
+    "reqwest",
+] }
+alloy-sol-types.workspace = true
+tokio = { workspace = true, features = ["full"] }
