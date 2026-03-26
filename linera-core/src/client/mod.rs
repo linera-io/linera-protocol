@@ -477,12 +477,9 @@ impl<Env: Environment> Client<Env> {
         if target_next_block_height <= info.next_block_height {
             return Ok(info);
         }
-        if let Some(new_info) = self
+        info = self
             .download_certificates_using_all(&validators, chain_id, target_next_block_height)
-            .await?
-        {
-            info = new_info;
-        }
+            .await?;
         ensure!(
             target_next_block_height <= info.next_block_height,
             chain_client::Error::CannotDownloadCertificates {
@@ -494,14 +491,12 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Loads and processes certificates from local storage for the given chain, from the
-    /// current local height up to `stop`. Returns the info from the last processed
-    /// certificate and the next height to download from validators.
+    /// current local height up to `stop`. Returns the chain info after processing.
     async fn load_local_certificates(
         &self,
         chain_id: ChainId,
         stop: BlockHeight,
-    ) -> Result<(Option<Box<ChainInfo>>, BlockHeight), chain_client::Error> {
-        let mut last_info = None;
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_info = self.local_node.chain_info(chain_id).await?;
         let next_height = chain_info.next_block_height;
         let hashes = self
@@ -516,9 +511,9 @@ impl<Env: Environment> Client<Env> {
             }
         };
         for certificate in certificates {
-            last_info = Some(self.handle_certificate(certificate).await?.info);
+            self.handle_certificate(certificate).await?;
         }
-        Ok((last_info, next_height))
+        Ok(self.local_node.chain_info(chain_id).await?)
     }
 
     /// Downloads and processes all certificates up to (excluding) the specified height from the
@@ -529,8 +524,9 @@ impl<Env: Environment> Client<Env> {
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
         stop: BlockHeight,
-    ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
-        let (mut last_info, mut next_height) = self.load_local_certificates(chain_id, stop).await?;
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        let mut last_info = self.load_local_certificates(chain_id, stop).await?;
+        let mut next_height = last_info.next_block_height;
         // Now download the rest in batches from the remote node.
         while next_height < stop {
             // TODO(#2045): Analyze network errors instead of using a fixed batch size.
@@ -551,7 +547,7 @@ impl<Env: Environment> Client<Env> {
             };
             assert!(info.next_block_height > next_height);
             next_height = info.next_block_height;
-            last_info = Some(info);
+            last_info = info;
         }
         Ok(last_info)
     }
@@ -565,8 +561,9 @@ impl<Env: Environment> Client<Env> {
         validators: &[RemoteNode<Env::ValidatorNode>],
         chain_id: ChainId,
         stop: BlockHeight,
-    ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
-        let (mut last_info, mut next_height) = self.load_local_certificates(chain_id, stop).await?;
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        let mut last_info = self.load_local_certificates(chain_id, stop).await?;
+        let mut next_height = last_info.next_block_height;
         // Download remaining batches using all validators with staggered fallback.
         while next_height < stop {
             let limit = u64::from(stop)
@@ -588,7 +585,7 @@ impl<Env: Environment> Client<Env> {
             };
             assert!(info.next_block_height > next_height);
             next_height = info.next_block_height;
-            last_info = Some(info);
+            last_info = info;
         }
         Ok(last_info)
     }
@@ -1607,15 +1604,7 @@ impl<Env: Environment> Client<Env> {
         }
 
         // If we are at the same height as the remote node, we also update our chain manager.
-        let local_height = match local_info {
-            Some(info) => info.next_block_height,
-            None => {
-                self.local_node
-                    .chain_info(chain_id)
-                    .await?
-                    .next_block_height
-            }
-        };
+        let local_height = local_info.next_block_height;
         if local_height != remote_info.next_block_height {
             debug!(
                 remote_node = remote_node.address(),
