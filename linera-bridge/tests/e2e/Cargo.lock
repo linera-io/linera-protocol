@@ -2652,6 +2652,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs4"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7e180ac76c23b45e767bd7ae9579bc0bb458618c4bc71835926e098e61d15f8"
+dependencies = [
+ "rustix 0.38.44",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "fungible"
 version = "0.1.0"
 dependencies = [
@@ -3637,6 +3647,7 @@ dependencies = [
  "linera-base",
  "linera-execution",
  "op-alloy-network",
+ "serde",
  "thiserror 1.0.69",
  "tokio",
  "url",
@@ -3656,11 +3667,14 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
+ "linera-persistent",
  "linera-storage",
  "linera-views",
  "rand 0.8.5",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "tempfile",
  "testcontainers",
  "tokio",
  "tracing",
@@ -3670,15 +3684,24 @@ dependencies = [
 
 [[package]]
 name = "linera-cache"
+<<<<<<< HEAD
 version = "0.16.0"
+=======
+version = "0.15.15"
+>>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
 dependencies = [
  "cfg_aliases",
  "linera-base",
  "lru 0.15.0",
+<<<<<<< HEAD
  "papaya",
  "prometheus",
  "quick_cache",
  "tokio",
+=======
+ "prometheus",
+ "quick_cache",
+>>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
 ]
 
 [[package]]
@@ -3838,6 +3861,23 @@ name = "linera-parity-wasm"
 version = "0.45.1-linera.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
+
+[[package]]
+name = "linera-persistent"
+version = "0.15.15"
+dependencies = [
+ "cfg-if",
+ "cfg_aliases",
+ "derive_more 1.0.0",
+ "fs-err",
+ "fs4",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "thiserror-context",
+ "tracing",
+ "trait-variant",
+]
 
 [[package]]
 name = "linera-rpc"
@@ -4171,6 +4211,12 @@ name = "linked-hash-map"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.4.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
 
 [[package]]
 name = "linux-raw-sys"
@@ -5124,7 +5170,11 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls 0.23.37",
+<<<<<<< HEAD
  "socket2 0.6.3",
+=======
+ "socket2 0.6.2",
+>>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -5161,7 +5211,11 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
+<<<<<<< HEAD
  "socket2 0.6.3",
+=======
+ "socket2 0.6.2",
+>>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -5634,6 +5688,19 @@ dependencies = [
 
 [[package]]
 name = "rustix"
+version = "0.38.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
+dependencies = [
+ "bitflags 2.11.0",
+ "errno",
+ "libc",
+ "linux-raw-sys 0.4.15",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rustix"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190"
@@ -5641,7 +5708,7 @@ dependencies = [
  "bitflags 2.11.0",
  "errno",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.12.1",
  "windows-sys 0.61.2",
 ]
 
@@ -6472,7 +6539,7 @@ dependencies = [
  "fastrand",
  "getrandom 0.4.2",
  "once_cell",
- "rustix",
+ "rustix 1.1.4",
  "windows-sys 0.61.2",
 ]
 
@@ -8183,7 +8250,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
 dependencies = [
  "libc",
- "rustix",
+ "rustix 1.1.4",
 ]
 
 [[package]]

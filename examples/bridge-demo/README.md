@@ -243,7 +243,7 @@ the deposit/withdraw forms.
 
 1. User approves ERC-20 spend on `FungibleBridge`
 2. User calls `FungibleBridge.deposit(chainId, appId, owner, amount)`
-3. Frontend POSTs the tx hash to the relay's `/deposit` endpoint
+3. Relay's EVM scanner detects the `DepositInitiated` event
 4. Relay generates a receipt inclusion proof (MPT) and submits it to the
    `evm-bridge` Linera app
 5. `evm-bridge` verifies the proof and tells `wrapped-fungible` to mint tokens
@@ -258,6 +258,40 @@ the deposit/withdraw forms.
    `FungibleBridge.addBlock()`
 4. `FungibleBridge` verifies the block via `LightClient`, deserializes the
    `Credit`, and transfers ERC-20 tokens to the user's EVM address
+
+## Active scanning and auto-retry
+
+The relay actively scans both chains to detect missed or failed bridging
+requests and automatically retries them:
+
+- **EVM→Linera deposits**: the relay polls EVM for `DepositInitiated` events
+  and checks the Linera `evm-bridge` app to see if each deposit has been
+  processed. Unprocessed deposits are retried by regenerating the MPT proof
+  and resubmitting.
+- **Linera→EVM burns**: the relay scans Linera blocks for Credit messages to
+  EVM addresses and checks EVM for matching ERC-20 `Transfer` events.
+  Unforwarded burns are retried by re-reading the burn execution block from
+  chain storage and re-calling `addBlock`.
+
+This means the relay self-heals after crashes or transient RPC failures
+without operator intervention. On-chain replay protection (`processed_deposits`
+on Linera, `verifiedBlocks` on EVM) makes retries safe.
+
+Monitoring endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /monitor/status` | Summary counts of pending/completed deposits and burns |
+| `GET /monitor/deposits?status=pending` | List pending deposits |
+| `GET /monitor/burns?status=pending` | List unforwarded burns |
+
+Relay flags for tuning:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--monitor-scan-interval` | 30 | Seconds between chain scan iterations |
+| `--monitor-start-block` | 0 | EVM block to start scanning from |
+| `--max-retries` | 10 | Max retry attempts before marking an item as failed |
 
 ## Frontend environment
 

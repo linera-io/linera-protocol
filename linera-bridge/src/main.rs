@@ -18,7 +18,7 @@ enum Cli {
     GenerateDepositProof(GenerateDepositProofOptions),
     /// Run the relay server (proof generation + chain inbox processing + EVM forwarding)
     #[cfg(feature = "relay")]
-    Serve(ServeOptions),
+    Serve(Box<ServeOptions>),
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -97,6 +97,37 @@ struct ServeOptions {
     /// The maximal number of entries in the blob cache.
     #[arg(long, default_value = "1000")]
     blob_cache_size: usize,
+<<<<<<< HEAD
+=======
+
+    /// The maximal number of entries in the confirmed block cache.
+    #[arg(long, default_value = "1000")]
+    confirmed_block_cache_size: usize,
+
+    /// The maximal number of entries in the lite certificate cache.
+    #[arg(long, default_value = "1000")]
+    lite_certificate_cache_size: usize,
+
+    /// The maximal number of entries in the raw certificate cache.
+    #[arg(long, default_value = "1000")]
+    certificate_raw_cache_size: usize,
+
+    /// The maximal number of entries in the event cache.
+    #[arg(long, default_value = "1000")]
+    event_cache_size: usize,
+
+    /// Interval between monitor scan loops, in seconds.
+    #[arg(long, default_value = "30")]
+    monitor_scan_interval: u64,
+
+    /// EVM block number to start scanning from for deposit monitoring.
+    #[arg(long, default_value = "0")]
+    monitor_start_block: u64,
+
+    /// Maximum number of retry attempts for pending deposits and burns.
+    #[arg(long, default_value = "10")]
+    max_retries: u32,
+>>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
 }
 
 fn main() -> Result<()> {
@@ -127,7 +158,20 @@ impl ServeOptions {
             &self.linera_fungible_address,
             &self.evm_private_key,
             self.port,
+<<<<<<< HEAD
             self.blob_cache_size,
+=======
+            linera_storage::StorageCacheSizes {
+                blob_cache_size: self.blob_cache_size,
+                confirmed_block_cache_size: self.confirmed_block_cache_size,
+                lite_certificate_cache_size: self.lite_certificate_cache_size,
+                certificate_raw_cache_size: self.certificate_raw_cache_size,
+                event_cache_size: self.event_cache_size,
+            },
+            self.monitor_scan_interval,
+            self.monitor_start_block,
+            self.max_retries,
+>>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
         ))
         .await
     }

@@ -18,7 +18,7 @@ use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi};
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
-    pub processed_deposits: SetView<DepositKey>,
+    pub processed_deposits: SetView<[u8; 32]>,
     pub verified_block_hashes: SetView<[u8; 32]>,
 }
 
@@ -193,19 +193,20 @@ impl EvmBridgeContract {
             tx_index,
             log_index,
         };
+        let deposit_hash = deposit_key.hash();
         assert!(
             !self
                 .state
                 .processed_deposits
-                .contains(&deposit_key)
+                .contains(&deposit_hash)
                 .await
                 .expect("failed to check processed deposits"),
             "deposit already processed"
         );
         self.state
             .processed_deposits
-            .insert(&deposit_key)
-            .expect("failed to insert deposit key");
+            .insert(&deposit_hash)
+            .expect("failed to insert deposit hash");
 
         // 5b. Cache the verified block hash so subsequent deposits from the same
         //     block skip the RPC finality check.

@@ -7,6 +7,7 @@
 //! on EVM and mints wrapped tokens on Linera via the wrapped-fungible app.
 
 use async_graphql::{Request, Response};
+pub use linera_bridge::proof::DepositKey;
 use linera_sdk::linera_base_types::{ApplicationId, ContractAbi, ServiceAbi};
 use serde::{Deserialize, Serialize};
 
@@ -25,15 +26,6 @@ pub struct BridgeParameters {
     /// When non-empty, `ProcessDeposit` requires the block hash to be verified first
     /// via `VerifyBlockHash`.
     pub rpc_endpoint: String,
-}
-
-/// Replay-protection key for processed deposits.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
-pub struct DepositKey {
-    pub source_chain_id: u64,
-    pub block_hash: [u8; 32],
-    pub tx_index: u64,
-    pub log_index: u64,
 }
 
 /// Operations accepted by the bridge contract.
