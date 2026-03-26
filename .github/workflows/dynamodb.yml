@@ -28,7 +28,7 @@ env:
   RUST_BACKTRACE: short
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
-  RUST_LOG: warn
+  RUST_LOG: ${{ runner.debug == '1' && 'linera=debug' || 'warn' }}
 
 permissions:
   contents: read

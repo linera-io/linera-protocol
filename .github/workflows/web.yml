@@ -22,7 +22,7 @@ env:
   # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
   RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
   RUSTUP_MAX_RETRIES: 10
-  RUST_LOG: linera=debug
+  RUST_LOG: ${{ runner.debug == '1' && 'linera=debug' || 'info' }}
   RUST_LOG_FORMAT: plain
   LINERA_STORAGE_SERVICE: 127.0.0.1:1235
   LINERA_WALLET: /tmp/local-linera-net/wallet_0.json
