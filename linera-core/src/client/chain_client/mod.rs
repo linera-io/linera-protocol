@@ -636,37 +636,6 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(Some(SystemOperation::UpdateStreams(updates).into()))
     }
 
-    /// Creates a vector of transactions which, in addition to the provided operations,
-    /// also contains epoch changes, receiving message bundles and event stream updates
-    /// (if there are any to be processed).
-    /// This should be called when executing a block, in order to make sure that any pending
-    /// messages or events are included in it.
-    #[instrument(level = "trace", skip(operations))]
-    async fn prepend_epochs_messages_and_events(
-        &self,
-        operations: Vec<Operation>,
-    ) -> Result<Vec<Transaction>, Error> {
-        let incoming_bundles = self.pending_message_bundles().await?;
-        let stream_updates = self.collect_stream_updates().await?;
-        Ok(self
-            .collect_epoch_changes()
-            .await?
-            .into_iter()
-            .map(Transaction::ExecuteOperation)
-            .chain(
-                incoming_bundles
-                    .into_iter()
-                    .map(Transaction::ReceiveMessages),
-            )
-            .chain(
-                stream_updates
-                    .into_iter()
-                    .map(Transaction::ExecuteOperation),
-            )
-            .chain(operations.into_iter().map(Transaction::ExecuteOperation))
-            .collect::<Vec<_>>())
-    }
-
     #[instrument(level = "trace")]
     async fn chain_info_with_committees(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
         self.client.chain_info_with_committees(self.chain_id).await
@@ -1458,6 +1427,37 @@ impl<Env: Environment> ChainClient<Env> {
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
             ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
         }
+    }
+
+    /// Creates a vector of transactions which, in addition to the provided operations,
+    /// also contains epoch changes, receiving message bundles and event stream updates
+    /// (if there are any to be processed).
+    /// This should be called when executing a block, in order to make sure that any pending
+    /// messages or events are included in it.
+    #[instrument(level = "trace", skip(operations))]
+    async fn prepend_epochs_messages_and_events(
+        &self,
+        operations: Vec<Operation>,
+    ) -> Result<Vec<Transaction>, Error> {
+        let incoming_bundles = self.pending_message_bundles().await?;
+        let stream_updates = self.collect_stream_updates().await?;
+        Ok(self
+            .collect_epoch_changes()
+            .await?
+            .into_iter()
+            .map(Transaction::ExecuteOperation)
+            .chain(
+                incoming_bundles
+                    .into_iter()
+                    .map(Transaction::ReceiveMessages),
+            )
+            .chain(
+                stream_updates
+                    .into_iter()
+                    .map(Transaction::ExecuteOperation),
+            )
+            .chain(operations.into_iter().map(Transaction::ExecuteOperation))
+            .collect::<Vec<_>>())
     }
 
     /// Creates a new pending block and stores it in `proposal_guard`.
