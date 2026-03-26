@@ -1,0 +1,44 @@
+# Docker Compose override file for local Prometheus + Grafana dashboards
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local-monitoring.yml up -d
+#
+# Most validators should use Alloy (docker-compose.alloy.yml) to push metrics
+# to central monitoring instead. Use this file only if you need a local
+# Grafana dashboard on the validator itself.
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_PROMETHEUS:-0.50}"
+          memory: ${LIMIT_MEM_PROMETHEUS:-512M}
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./dashboards:/var/lib/grafana/dashboards
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_GRAFANA:-0.50}"
+          memory: ${LIMIT_MEM_GRAFANA:-1024M}
+
+volumes:
+  grafana-storage:
