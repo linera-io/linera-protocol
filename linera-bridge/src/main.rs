@@ -54,9 +54,9 @@ struct ServeOptions {
     #[arg(long)]
     rpc_url: String,
 
-    /// URL of the Linera faucet
+    /// URL of the Linera faucet (required when wallet doesn't exist or chain ID not provided)
     #[arg(long)]
-    faucet_url: String,
+    faucet_url: Option<String>,
 
     /// Path to the wallet state file.
     #[arg(long = "wallet", env = "LINERA_WALLET")]
@@ -145,7 +145,7 @@ impl ServeOptions {
     async fn run(&self) -> Result<()> {
         Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
-            &self.faucet_url,
+            self.faucet_url.as_deref(),
             self.wallet.as_deref(),
             self.keystore.as_deref(),
             self.storage.as_deref(),

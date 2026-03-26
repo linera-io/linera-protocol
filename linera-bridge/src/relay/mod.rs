@@ -51,7 +51,7 @@ use crate::{
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
-    faucet_url: &str,
+    faucet_url: Option<&str>,
     wallet_path: Option<&Path>,
     keystore_path: Option<&Path>,
     storage_config: Option<&str>,
@@ -96,10 +96,10 @@ pub async fn run(
     );
 
     // ── Common init ──
-    tracing::info!("Connecting to Linera faucet at {faucet_url}...");
-    let faucet = Faucet::new(faucet_url.to_string());
-    let genesis_config = faucet.genesis_config().await?;
-    tracing::info!("Genesis config received");
+    let faucet = faucet_url.map(|url| {
+        tracing::info!("Using Linera faucet at {url}");
+        Faucet::new(url.to_string())
+    });
 
     let mut signer: InMemorySigner =
         linera_persistent::File::<InMemorySigner>::read(&keystore_path)
@@ -113,16 +113,21 @@ pub async fn run(
     let mut storage = create_rocksdb_storage(Path::new(db_path), cache_sizes).await?;
 
     // ── Wallet: load existing or create fresh ──
-    let wallet_exists = wallet_path.exists();
-
-    // Always initialize storage — this is a no-op if already initialized.
-    genesis_config.initialize_storage(&mut storage).await?;
-
-    let wallet = if wallet_exists {
+    let wallet = if wallet_path.exists() {
         tracing::info!("Loading existing wallet from {}", wallet_path.display());
-        PersistentWallet::read(&wallet_path).context("failed to read wallet")?
+        let wallet = PersistentWallet::read(&wallet_path).context("failed to read wallet")?;
+        wallet
+            .genesis_config()
+            .initialize_storage(&mut storage)
+            .await?;
+        wallet
     } else {
+        let faucet = faucet
+            .as_ref()
+            .context("--faucet-url is required when no wallet exists")?;
         tracing::info!("Creating new wallet at {}", wallet_path.display());
+        let genesis_config = faucet.genesis_config().await?;
+        genesis_config.initialize_storage(&mut storage).await?;
         PersistentWallet::create(&wallet_path, genesis_config).context("failed to create wallet")?
     };
 
@@ -142,15 +147,8 @@ pub async fn run(
 
     // ── Sync admin chain (always) ──
     tracing::info!(%admin_chain_id, "Syncing admin chain from validators...");
-    let committee = faucet.current_committee().await?;
-    tracing::info!(
-        validators = committee.validators().iter().count(),
-        "Fetched current committee, downloading chain state..."
-    );
     let admin_client = ctx.make_chain_client(admin_chain_id).await?;
-    admin_client
-        .synchronize_chain_state_from_committee(committee)
-        .await?;
+    admin_client.synchronize_from_validators().await?;
     tracing::info!("Admin chain synced");
 
     // ── Resolve bridge chain ──
@@ -187,6 +185,9 @@ pub async fn run(
         (cid, owner)
     } else {
         // Claim from faucet.
+        let faucet = faucet
+            .as_ref()
+            .context("--faucet-url is required when --linera-bridge-chain-id is not provided")?;
         tracing::info!("Claiming bridge chain from faucet...");
         let owner = AccountOwner::from(signer.generate_new());
         let chain_desc = faucet.claim(&owner).await?;
