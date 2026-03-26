@@ -318,6 +318,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             "--keystore", keystore_path.to_str().unwrap(),
             "--storage", &storage_path,
             &format!("--linera-bridge-chain-id={chain_a}"),
+            &format!("--linera-bridge-chain-owner={owner_a}"),
             &format!("--evm-bridge-address={bridge_addr}"),
             &format!("--linera-bridge-address={bridge_app_id}"),
             &format!("--linera-fungible-address={fungible_app_id}"),

@@ -11,6 +11,8 @@
 //! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
 //!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
 
+use linera_base::crypto::Signer as _;
+
 pub mod evm;
 pub mod linera;
 pub(crate) mod metrics;
@@ -55,6 +57,7 @@ pub async fn run(
     keystore_path: Option<&Path>,
     storage_config: Option<&str>,
     chain_id_arg: Option<ChainId>,
+    chain_owner_arg: Option<AccountOwner>,
     evm_bridge_address: &str,
     linera_bridge_address: &str,
     linera_fungible_address: &str,
@@ -152,17 +155,27 @@ pub async fn run(
 
     // ── Resolve bridge chain ──
     let (chain_id, _owner) = if let Some(cid) = chain_id_arg {
-        // Register in wallet if not already there.
-        if ctx.wallet().get(cid).is_none() {
-            let key_owner = signer.keys().first().context("keystore has no keys")?.0;
-            ctx.update_wallet_for_new_chain(
-                cid,
-                Some(key_owner),
-                linera_base::data_types::Timestamp::default(),
-                linera_base::data_types::Epoch::ZERO,
-            )
-            .await?;
-        }
+        let owner = chain_owner_arg.context(
+            "--linera-bridge-chain-owner is required when --linera-bridge-chain-id is provided",
+        )?;
+
+        // Verify the keystore has the signing key for this owner.
+        anyhow::ensure!(
+            signer
+                .contains_key(&owner)
+                .await
+                .context("failed to query keystore")?,
+            "keystore does not contain a key for owner {owner}"
+        );
+
+        // Register the chain with the specified owner.
+        ctx.update_wallet_for_new_chain(
+            cid,
+            Some(owner),
+            linera_base::data_types::Timestamp::default(),
+            linera_base::data_types::Epoch::ZERO,
+        )
+        .await?;
 
         // Register for notifications so the listener can connect to validators.
         ctx.client
@@ -172,13 +185,6 @@ pub async fn run(
         let chain_client = ctx.make_chain_client(cid).await?;
         chain_client.synchronize_from_validators().await?;
 
-        // Verify our keystore contains an owner key for this chain.
-        let ownership = chain_client.query_chain_ownership().await?;
-        let our_keys: Vec<AccountOwner> = signer.keys().into_iter().map(|(o, _)| o).collect();
-        let owner = our_keys
-            .into_iter()
-            .find(|o| ownership.super_owners.contains(o) || ownership.owners.contains_key(o))
-            .context("keystore has no key that is an owner of the specified --chain-id")?;
         tracing::info!(%cid, %owner, "Using pre-existing chain");
         (cid, owner)
     } else {
