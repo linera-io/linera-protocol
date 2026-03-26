@@ -325,41 +325,30 @@ services:
   linera-relay:
     image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
     network_mode: "service:linera-network"
+    entrypoint: ["sh", "-c"]
     command:
-      - sh
-      - -c
       - |
-        # Remove stale marker from previous runs.
         rm -f /shared/setup-complete
         echo "Waiting for setup to complete..."
         while [ ! -f /shared/setup-complete ]; do sleep 1; done
 
-        CHAIN_ID=$$(cat /shared/bridge-chain-id | tr -d '[:space:]')
-        BRIDGE_ADDR=$$(cat /shared/bridge-address | tr -d '[:space:]')
-        BRIDGE_APP=$$(cat /shared/bridge-app-id | tr -d '[:space:]')
-        FUNGIBLE_APP=$$(cat /shared/wrapped-app-id | tr -d '[:space:]')
+        export RPC_URL=http://anvil:8545
+        export FAUCET_URL=http://localhost:${FAUCET_PORT:-8080}
+        export EVM_BRIDGE_ADDRESS=$$(cat /shared/bridge-address | tr -d '[:space:]')
+        export LINERA_BRIDGE_APP=$$(cat /shared/bridge-app-id | tr -d '[:space:]')
+        export LINERA_FUNGIBLE_APP=$$(cat /shared/wrapped-app-id | tr -d '[:space:]')
+        export LINERA_BRIDGE_CHAIN_ID=$$(cat /shared/bridge-chain-id | tr -d '[:space:]')
+        export EVM_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+        export LINERA_WALLET=/shared/relay-wallet/wallet.json
+        export LINERA_KEYSTORE=/shared/relay-wallet/keystore.json
+        export LINERA_STORAGE=rocksdb:/shared/relay-wallet/client.db
 
-        echo "Starting relay: chain=$$CHAIN_ID bridge=$$BRIDGE_ADDR"
-        exec linera-bridge serve \
-          --rpc-url=http://anvil:8545 \
-          --faucet-url=http://localhost:${FAUCET_PORT:-8080} \
-          --wallet=/shared/relay-wallet/wallet.json \
-          --keystore=/shared/relay-wallet/keystore.json \
-          --storage=rocksdb:/shared/relay-wallet/client.db \
-          --linera-bridge-chain-id="$$CHAIN_ID" \
-          --evm-bridge-address="$$BRIDGE_ADDR" \
-          --linera-bridge-address="$$BRIDGE_APP" \
-          --linera-fungible-address="$$FUNGIBLE_APP" \
-          --evm-private-key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-          --port=${RELAY_PORT:-3001} \
-          --monitor-scan-interval=${MONITOR_SCAN_INTERVAL:-5} \
-          --monitor-start-block=${MONITOR_START_BLOCK:-0} \
-          --max-retries=${MAX_RETRIES:-10}
+        echo "Starting relay: chain=$$LINERA_BRIDGE_CHAIN_ID bridge=$$EVM_BRIDGE_ADDRESS"
+        exec bridge-entrypoint.sh serve
     environment:
       - RUST_LOG=linera=info,linera_bridge=debug
-      - FAUCET_PORT=${FAUCET_PORT:-8080}
-      - RELAY_PORT=${RELAY_PORT:-3001}
-      - MONITOR_SCAN_INTERVAL=${MONITOR_SCAN_INTERVAL:-30}
+      - PORT=${RELAY_PORT:-3001}
+      - MONITOR_SCAN_INTERVAL=${MONITOR_SCAN_INTERVAL:-5}
       - MONITOR_START_BLOCK=${MONITOR_START_BLOCK:-0}
       - MAX_RETRIES=${MAX_RETRIES:-10}
     volumes:
