@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="EVM receipt proof verification and deposit event parsing. EVM receipt proof verification for the EVM→Linera bridge."><title>linera_bridge::proof - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="linera_bridge" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../linera_bridge/index.html">linera_<wbr>bridge</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module proof</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#verification-pipeline" title="Verification pipeline">Verification pipeline</a></li><li><a href="#example" title="Example">Example</a></li><li><a href="#replay-protection" title="Replay protection">Replay protection</a></li></ul><h3><a href="#modules">Module Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#constants" title="Constants">Constants</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate linera_<wbr>bridge</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">linera_bridge</a></div><h1>Module <span>proof</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/linera_bridge/proof/mod.rs.html#4-1169">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>EVM receipt proof verification and deposit event parsing.
+EVM receipt proof verification for the EVM→Linera bridge.</p>
+<p>This module implements the cryptographic verification pipeline for processing
+EVM deposit events on Linera. When a user deposits ERC-20 tokens into the
+<code>FungibleBridge</code> contract on an EVM chain (e.g. Base), a <code>DepositInitiated</code> event
+is emitted. An off-chain relayer constructs a Merkle Patricia Trie (MPT) inclusion
+proof for that event’s transaction receipt, which the bridge Wasm application on
+Linera then verifies before minting wrapped tokens.</p>
+<h2 id="verification-pipeline"><a class="doc-anchor" href="#verification-pipeline">§</a>Verification pipeline</h2>
+<p>The pipeline has four stages, each corresponding to a public function:</p>
+<ol>
+<li><strong><code>decode_block_header</code></strong> — Extract the <code>receipts_root</code> and <code>block_hash</code> from
+an RLP-encoded Ethereum block header.</li>
+<li><strong><code>verify_receipt_inclusion</code></strong> — Verify that a transaction receipt is included
+in the block’s receipt trie using an MPT proof.</li>
+<li><strong><code>decode_receipt_logs</code></strong> — Decode the receipt’s RLP to extract its event logs.
+Handles both legacy and EIP-2718 typed receipts.</li>
+<li><strong><code>parse_deposit_event</code></strong> — Parse and validate a <code>DepositInitiated</code> log entry,
+checking the event signature and ABI-decoding the fields.</li>
+</ol>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>alloy_primitives::Bytes;
+<span class="kw">use </span>linera_bridge::proof::{
+    decode_block_header, decode_receipt_logs, parse_deposit_event, verify_receipt_inclusion,
+};
+
+<span class="kw">fn </span>verify_deposit(
+    block_header_rlp: <span class="kw-2">&amp;</span>[u8],
+    receipt_rlp: <span class="kw-2">&amp;</span>[u8],
+    proof_nodes: <span class="kw-2">&amp;</span>[Bytes],
+    tx_index: u64,
+    log_index: usize,
+) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="comment">// 1. Decode the block header to get the receipts root.
+    </span><span class="kw">let </span>(block_hash, receipts_root) = decode_block_header(block_header_rlp)<span class="question-mark">?</span>;
+
+    <span class="comment">// 2. Verify the receipt is included in the block's receipt trie.
+    </span>verify_receipt_inclusion(receipts_root, tx_index, receipt_rlp, proof_nodes)<span class="question-mark">?</span>;
+
+    <span class="comment">// 3. Decode the receipt to extract its logs.
+    </span><span class="kw">let </span>logs = decode_receipt_logs(receipt_rlp)<span class="question-mark">?</span>;
+
+    <span class="comment">// 4. Parse the deposit event from the target log.
+    </span><span class="kw">let </span>bridge_contract = alloy_primitives::Address::ZERO; <span class="comment">// your bridge address
+    </span><span class="kw">let </span>deposit = parse_deposit_event(<span class="kw-2">&amp;</span>logs[log_index], bridge_contract)<span class="question-mark">?</span>;
+
+    <span class="macro">println!</span>(
+        <span class="string">"Verified deposit: {} tokens from chain {} in block {:?}"</span>,
+        deposit.amount, deposit.source_chain_id, block_hash,
+    );
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h2 id="replay-protection"><a class="doc-anchor" href="#replay-protection">§</a>Replay protection</h2>
+<p>This module is stateless — it only verifies proofs. The caller (bridge Wasm app) is
+responsible for replay protection using the canonical key
+<code>(source_chain_id, block_hash, tx_index, log_index)</code> and for checking block finality
+via an HTTP oracle before accepting a deposit.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="gen/index.html" title="mod linera_bridge::proof::gen">gen</a></dt><dd>Off-chain deposit proof generation via EVM JSON-RPC.
+Off-chain deposit proof client for EVM→Linera deposits.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.DepositEvent.html" title="struct linera_bridge::proof::DepositEvent">Deposit<wbr>Event</a></dt><dd>Parsed <code>DepositInitiated</code> event data.</dd><dt><a class="struct" href="struct.ReceiptLog.html" title="struct linera_bridge::proof::ReceiptLog">Receipt<wbr>Log</a></dt><dd>A decoded log from an EVM transaction receipt.</dd></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.DEPOSIT_EVENT_SIGNATURE_HASH.html" title="constant linera_bridge::proof::DEPOSIT_EVENT_SIGNATURE_HASH">DEPOSIT_<wbr>EVENT_<wbr>SIGNATURE_<wbr>HASH</a></dt><dd>Known keccak256 hash of the <code>DepositInitiated</code> event signature, for regression testing.
+If the event signature string changes, this constant must be updated.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.build_receipt_proof.html" title="fn linera_bridge::proof::build_receipt_proof">build_<wbr>receipt_<wbr>proof</a></dt><dd>Builds a receipts MPT trie from <code>(tx_index, receipt_bytes)</code> pairs and generates
+a Merkle proof for the receipt at <code>target_tx_index</code>.</dd><dt><a class="fn" href="fn.decode_block_header.html" title="fn linera_bridge::proof::decode_block_header">decode_<wbr>block_<wbr>header</a></dt><dd>Decodes an RLP-encoded Ethereum block header, returning <code>(block_hash, receipts_root)</code>.</dd><dt><a class="fn" href="fn.decode_receipt_logs.html" title="fn linera_bridge::proof::decode_receipt_logs">decode_<wbr>receipt_<wbr>logs</a></dt><dd>Decodes a receipt’s RLP and extracts its logs.</dd><dt><a class="fn" href="fn.deposit_event_signature.html" title="fn linera_bridge::proof::deposit_event_signature">deposit_<wbr>event_<wbr>signature</a></dt><dd>Returns the keccak256 hash of the <code>DepositInitiated</code> event signature.</dd><dt><a class="fn" href="fn.find_deposit_log_indices.html" title="fn linera_bridge::proof::find_deposit_log_indices">find_<wbr>deposit_<wbr>log_<wbr>indices</a></dt><dd>Returns the indices of all logs that match the <code>DepositInitiated</code> event signature.</dd><dt><a class="fn" href="fn.parse_deposit_event.html" title="fn linera_bridge::proof::parse_deposit_event">parse_<wbr>deposit_<wbr>event</a></dt><dd>Parses a <code>DepositInitiated</code> event from a receipt log.</dd><dt><a class="fn" href="fn.receipt_trie_key.html" title="fn linera_bridge::proof::receipt_trie_key">receipt_<wbr>trie_<wbr>key</a></dt><dd>Computes the receipt trie key for a given transaction index.
+The key is the RLP encoding of the index, converted to nibbles.</dd><dt><a class="fn" href="fn.verify_receipt_inclusion.html" title="fn linera_bridge::proof::verify_receipt_inclusion">verify_<wbr>receipt_<wbr>inclusion</a></dt><dd>Verifies that a receipt is included in the receipts trie via MPT proof.</dd></dl></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DummyHost"],"trait":["Host"]};

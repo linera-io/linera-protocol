@@ -1,0 +1,92 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A small macro library providing safe, easy, and zero-cost way to construct constant or literal instances of the `NonZero*` types from `core::num`."><title>nonzero_lit - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="nonzero_lit" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../nonzero_lit/index.html">nonzero_<wbr>lit</a><span class="version">0.1.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#overview" title="Overview">Overview</a></li><li><a href="#features" title="Features">Features</a></li><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#basic-usage" title="Basic usage">Basic usage</a></li><li><a href="#constants" title="Constants">Constants</a></li><li><a href="#zero-detection" title="Zero Detection">Zero Detection</a></li></ul></li></ul><h3><a href="#macros">Crate Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>nonzero_lit</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/nonzero_lit/lib.rs.html#1-736">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A small macro library providing safe, easy, and zero-cost way to construct
+constant or literal instances of the <code>NonZero*</code> types from <a href="https://doc.rust-lang.org/1.86.0/core/num/index.html" title="mod core::num"><code>core::num</code></a>.</p>
+<p>The parameters to the macro must be constants expressions, but they can be
+arbitrary arithmetic, calls to const fns, etc. They’re fully evaluated and
+checked for <code>NonZero</code>-ness at compile time, and thus have truly no cost —
+even in debug mode.</p>
+<p>All misuse is detected at compile time, which can make it much easier to
+audit and be confident there’s no problems with the complex expression used
+to initialized one <code>NonZero</code> or another.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>This crate provides 12 macros for constructing constants, one for each
+non-zero integral type.</p>
+<ul>
+<li><a href="macro.usize.html" title="macro nonzero_lit::usize"><code>nonzero_lit::usize!</code></a>, producing a
+<a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroUsize.html" title="type core::num::nonzero::NonZeroUsize"><code>core::num::NonZeroUsize</code></a>.</li>
+<li><a href="macro.isize.html" title="macro nonzero_lit::isize"><code>nonzero_lit::isize!</code></a>, producing a
+<a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroIsize.html" title="type core::num::nonzero::NonZeroIsize"><code>core::num::NonZeroIsize</code></a>.</li>
+<li><a href="macro.u128.html" title="macro nonzero_lit::u128"><code>nonzero_lit::u128!</code></a>, producing a
+<a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU128.html" title="type core::num::nonzero::NonZeroU128"><code>core::num::NonZeroU128</code></a>.</li>
+<li><a href="macro.i128.html" title="macro nonzero_lit::i128"><code>nonzero_lit::i128!</code></a>, producing a
+<a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI128.html" title="type core::num::nonzero::NonZeroI128"><code>core::num::NonZeroI128</code></a>.</li>
+<li><a href="macro.u64.html" title="macro nonzero_lit::u64"><code>nonzero_lit::u64!</code></a>, producing a <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU64.html" title="type core::num::nonzero::NonZeroU64"><code>core::num::NonZeroU64</code></a>.</li>
+<li><a href="macro.i64.html" title="macro nonzero_lit::i64"><code>nonzero_lit::i64!</code></a>, producing a <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI64.html" title="type core::num::nonzero::NonZeroI64"><code>core::num::NonZeroI64</code></a>.</li>
+<li><a href="macro.u32.html" title="macro nonzero_lit::u32"><code>nonzero_lit::u32!</code></a>, producing a <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU32.html" title="type core::num::nonzero::NonZeroU32"><code>core::num::NonZeroU32</code></a>.</li>
+<li><a href="macro.i32.html" title="macro nonzero_lit::i32"><code>nonzero_lit::i32!</code></a>, producing a <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI32.html" title="type core::num::nonzero::NonZeroI32"><code>core::num::NonZeroI32</code></a>.</li>
+<li><a href="macro.u16.html" title="macro nonzero_lit::u16"><code>nonzero_lit::u16!</code></a>, producing a <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU16.html" title="type core::num::nonzero::NonZeroU16"><code>core::num::NonZeroU16</code></a>.</li>
+<li><a href="macro.i16.html" title="macro nonzero_lit::i16"><code>nonzero_lit::i16!</code></a>, producing a <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI16.html" title="type core::num::nonzero::NonZeroI16"><code>core::num::NonZeroI16</code></a>.</li>
+<li><a href="macro.u8.html" title="macro nonzero_lit::u8"><code>nonzero_lit::u8!</code></a>, producing a <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU8.html" title="type core::num::nonzero::NonZeroU8"><code>core::num::NonZeroU8</code></a>.</li>
+<li><a href="macro.i8.html" title="macro nonzero_lit::i8"><code>nonzero_lit::i8!</code></a>, producing a <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI8.html" title="type core::num::nonzero::NonZeroI8"><code>core::num::NonZeroI8</code></a>.</li>
+</ul>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<ul>
+<li>Crate fully supports <code>no_std</code>.</li>
+<li>All <code>NonZero</code> types are supported.</li>
+<li>Fully zero cost, even for debug builds (we always evaluate the constant as
+a <code>const</code>).</li>
+<li>Input to the macros can be arbitrary constant expressions. This includes
+<code>const fn</code> calls, which would be more difficult to verify the result as
+non-zero by hand.</li>
+<li>Misuse (trying to make a <code>NonZero$Int</code> with a zero value) is always
+detected at compile time, even when the macro is not being used to
+initialize a constant.</li>
+<li>No unsafe code.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h4 id="basic-usage"><a class="doc-anchor" href="#basic-usage">§</a>Basic usage</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>x = <span class="macro">nonzero_lit::i32!</span>(<span class="number">4</span>);
+<span class="macro">assert_eq!</span>(x.get(), <span class="number">4</span>);</code></pre></div>
+<h4 id="constants"><a class="doc-anchor" href="#constants">§</a>Constants</h4><h5 id="basic-constants"><a class="doc-anchor" href="#basic-constants">§</a>Basic Constants</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">const </span>FERRIS: core::num::NonZeroU32 = <span class="macro">nonzero_lit::u32!</span>(<span class="number">0xf34415</span>);
+<span class="macro">assert_eq!</span>(FERRIS.get(), <span class="number">0xf34415</span>);</code></pre></div>
+<h5 id="use-in-const-fn"><a class="doc-anchor" href="#use-in-const-fn">§</a>Use in <code>const fn</code></h5>
+<p>There’s no restriction on use in <code>const fn</code> (as there are with some constant
+macros):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">const fn </span>get_magic() -&gt; core::num::NonZeroU32 {
+    <span class="macro">nonzero_lit::u32!</span>(<span class="number">25252</span>)
+}
+<span class="macro">assert_eq!</span>(get_magic().get(), <span class="number">25252</span>)</code></pre></div>
+<p>However, note that the parameters to the macro still must be constants.</p>
+<h5 id="complex-expressions"><a class="doc-anchor" href="#complex-expressions">§</a>Complex Expressions</h5>
+<p>Arbitrary constant expressions (including <code>const fn</code>s) are allowed.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::num::NonZeroU64;
+
+<span class="kw">const </span>MASK: NonZeroU64 = <span class="macro">nonzero_lit::u64!</span>(<span class="number">0xffff_00ff_00ff_0f0f</span>);
+<span class="kw">const </span>MASKEE: NonZeroU64 = <span class="macro">nonzero_lit::u64!</span>(<span class="number">0xaabb_ccdd_eeff_1122</span>);
+<span class="comment">// Note: as the complexity increases, it might become less trivial to
+// verify that the result of an expression is not zero.
+</span><span class="kw">const </span>MASKED: NonZeroU64 = <span class="macro">nonzero_lit::u64!</span>(MASK.get() &amp; MASKEE.get());
+<span class="macro">assert_eq!</span>(MASKED.get(), <span class="number">0xaabb_00dd_00ff_0102_u64</span>);</code></pre></div>
+<h4 id="zero-detection"><a class="doc-anchor" href="#zero-detection">§</a>Zero Detection</h4>
+<p>These tests are deliberately fail to compile, to demonstrate that we detect
+misuse at compile time.</p>
+<h5 id="basic-zero-detection"><a class="doc-anchor" href="#basic-zero-detection">§</a>Basic Zero Detection</h5>
+<p>If an attempt to construct a zero NonZero is made, a compile error is
+emitted.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">const </span>OH_NO: core::num::NonZeroU8 = <span class="macro">nonzero_lit::i8!</span>(<span class="number">0</span>);</code></pre></div>
+<h5 id="complex-and-non-const-zero-detection"><a class="doc-anchor" href="#complex-and-non-const-zero-detection">§</a>Complex and Non-<code>const</code> Zero Detection</h5>
+<p>Zero detection works for complex expressions, even when not initializing a
+constant (and even both simultaneously).</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>shucks = <span class="macro">nonzero_lit::i128!</span>(i128::MIN.count_zeros());</code></pre></div>
+<h5 id="robust-against-disabling-const_err-lint"><a class="doc-anchor" href="#robust-against-disabling-const_err-lint">§</a>Robust against disabling <code>const_err</code> lint</h5>
+<p>Zero detection even works in the face of <code>#[allow(const_err)]</code> (which can
+frequently be used to bypast const evaluation checks of this sort).</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![allow(const_err)]
+</span><span class="kw">use </span>core::num::NonZeroU16;
+
+<span class="kw">const </span>UH_OH: NonZeroU16 = <span class="macro">nonzero_lit::u16!</span>(<span class="number">30 </span>/ !<span class="number">0</span>);</code></pre></div>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.i8.html" title="macro nonzero_lit::i8">i8</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI8.html" title="type core::num::nonzero::NonZeroI8"><code>NonZeroI8</code></a>.</dd><dt><a class="macro" href="macro.i16.html" title="macro nonzero_lit::i16">i16</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI16.html" title="type core::num::nonzero::NonZeroI16"><code>NonZeroI16</code></a>.</dd><dt><a class="macro" href="macro.i32.html" title="macro nonzero_lit::i32">i32</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI32.html" title="type core::num::nonzero::NonZeroI32"><code>NonZeroI32</code></a>.</dd><dt><a class="macro" href="macro.i64.html" title="macro nonzero_lit::i64">i64</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI64.html" title="type core::num::nonzero::NonZeroI64"><code>NonZeroI64</code></a>.</dd><dt><a class="macro" href="macro.i128.html" title="macro nonzero_lit::i128">i128</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroI128.html" title="type core::num::nonzero::NonZeroI128"><code>NonZeroI128</code></a>.</dd><dt><a class="macro" href="macro.isize.html" title="macro nonzero_lit::isize">isize</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroIsize.html" title="type core::num::nonzero::NonZeroIsize"><code>NonZeroIsize</code></a>.</dd><dt><a class="macro" href="macro.u8.html" title="macro nonzero_lit::u8">u8</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU8.html" title="type core::num::nonzero::NonZeroU8"><code>NonZeroU8</code></a>.</dd><dt><a class="macro" href="macro.u16.html" title="macro nonzero_lit::u16">u16</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU16.html" title="type core::num::nonzero::NonZeroU16"><code>NonZeroU16</code></a>.</dd><dt><a class="macro" href="macro.u32.html" title="macro nonzero_lit::u32">u32</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU32.html" title="type core::num::nonzero::NonZeroU32"><code>NonZeroU32</code></a>.</dd><dt><a class="macro" href="macro.u64.html" title="macro nonzero_lit::u64">u64</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU64.html" title="type core::num::nonzero::NonZeroU64"><code>NonZeroU64</code></a>.</dd><dt><a class="macro" href="macro.u128.html" title="macro nonzero_lit::u128">u128</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroU128.html" title="type core::num::nonzero::NonZeroU128"><code>NonZeroU128</code></a>.</dd><dt><a class="macro" href="macro.usize.html" title="macro nonzero_lit::usize">usize</a></dt><dd>Create a literal <a href="https://doc.rust-lang.org/1.86.0/core/num/nonzero/type.NonZeroUsize.html" title="type core::num::nonzero::NonZeroUsize"><code>NonZeroUsize</code></a>.</dd></dl></section></div></main></body></html>

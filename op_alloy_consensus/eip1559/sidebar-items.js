@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EIP1559ParamError"],"fn":["decode_eip_1559_params","decode_holocene_extra_data","decode_jovian_extra_data","encode_holocene_extra_data","encode_jovian_extra_data"]};

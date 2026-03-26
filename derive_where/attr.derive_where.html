@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Item-level options:"><title>derive_where in derive_where - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="derive_where" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../derive_where/index.html">derive_<wbr>where</a><span class="version">1.6.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">derive_where</a></div><h1>Attribute Macro <span class="attr">derive_where</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/derive_where/lib.rs.html#475-499">Source</a> </span></div><pre class="rust item-decl"><code>#[derive_where]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Item-level options:</p>
+<ul>
+<li><code>#[derive_where(crate = path)]</code>: Specify path to the <code>derive_where</code> crate.</li>
+<li><code>#[derive_where(Clone, ..; T, ..)]</code>: Specify traits to implement and
+optionally bounds.
+<ul>
+<li><code>#[derive_where(Zeroize(crate = path))]</code>: Specify path to <a href="https://docs.rs/zeroize/latest/zeroize/trait.Zeroize.html"><code>Zeroize</code></a>
+trait.</li>
+<li><code>#[derive_where(ZeroizeOnDrop(crate = path))]</code>: Specify path to
+<a href="https://docs.rs/zeroize/latest/zeroize/trait.ZeroizeOnDrop.html"><code>ZeroizeOnDrop</code></a> trait.</li>
+<li><code>#[derive_where(ZeroizeOnDrop(no_drop))]</code>: no <a href="https://doc.rust-lang.org/1.86.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop"><code>Drop</code></a> implementation.</li>
+</ul>
+</li>
+<li><code>#[derive_where(skip_inner(EqHashOrd, ..))]</code>: Skip all fields in the item.
+Optionally specify trait groups to constrain skipping fields. Only works
+for structs, for enums use this on the variant-level.</li>
+</ul>
+<p>Variant-level options:</p>
+<ul>
+<li><code>#[derive_where(default)]</code>: Uses this variant as the default for the
+<a href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html" title="trait core::default::Default"><code>Default</code></a> implementation.</li>
+<li><code>#[derive_where(skip_inner(EqHashOrd, ..))]</code>: Skip all fields in this
+variant. Optionally specify trait groups to constrain skipping fields.</li>
+</ul>
+<p>Field-level options:</p>
+<ul>
+<li><code>#[derive_where(skip(EqHashOrd, ...))]</code>: Skip field. Optionally specify
+trait groups to constrain skipping field.</li>
+<li><code>#[derive_where(Zeroize(fqs))]</code>: Use fully-qualified-syntax when
+implementing <a href="https://docs.rs/zeroize/latest/zeroize/trait.Zeroize.html"><code>Zeroize</code></a>.</li>
+</ul>
+<p>See the <a href="index.html" title="mod derive_where">crate</a> level description for more details.</p>
+</div></details></section></div></main></body></html>

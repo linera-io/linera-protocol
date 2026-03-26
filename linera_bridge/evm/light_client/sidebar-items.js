@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SOURCE"],"struct":["addCommitteeCall","addCommitteeReturn","currentEpochCall","currentEpochReturn","verifyBlockCall","verifyBlockReturn"]};

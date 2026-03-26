@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DefaultInvocationIdGenerator","InvocationId","InvocationIdInterceptor","SharedInvocationIdGenerator"],"trait":["InvocationIdGenerator"]};

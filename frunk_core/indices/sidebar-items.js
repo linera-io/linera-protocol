@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["IdentityTransMog"],"struct":["DoTransmog","Here","LabelledGenericTransmogIndicesWrapper","MappingIndicesWrapper","PluckedLabelledGenericIndicesWrapper","Suffixed","There"]};

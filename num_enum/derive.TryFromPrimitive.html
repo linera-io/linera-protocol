@@ -1,0 +1,26 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implements `TryFrom&#60;Primitive&#62;` for a `#[repr(Primitive)] enum`."><title>TryFromPrimitive in num_enum - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="num_enum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../num_enum/index.html">num_<wbr>enum</a><span class="version">0.7.4</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">TryFrom<wbr>Primitive</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#attempting-to-turn-a-primitive-into-an-enum-with-try_from" title="Attempting to turn a primitive into an enum with `try_from`.">Attempting to turn a primitive into an enum with <code>try_from</code>.</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate num_<wbr>enum</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">num_enum</a></div><h1>Derive Macro <span class="derive">TryFromPrimitive</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/num_enum_derive/lib.rs.html#191">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(TryFromPrimitive)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[num_enum]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implements <code>TryFrom&lt;Primitive&gt;</code> for a <code>#[repr(Primitive)] enum</code>.</p>
+<h3 id="attempting-to-turn-a-primitive-into-an-enum-with-try_from"><a class="doc-anchor" href="#attempting-to-turn-a-primitive-into-an-enum-with-try_from">§</a>Attempting to turn a primitive into an enum with <code>try_from</code>.</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_enum::TryFromPrimitive;
+<span class="kw">use </span>std::convert::TryFrom;
+
+<span class="attr">#[derive(Debug, Eq, PartialEq, TryFromPrimitive)]
+#[repr(u8)]
+</span><span class="kw">enum </span>Number {
+    Zero,
+    One,
+}
+
+<span class="kw">let </span>zero = Number::try_from(<span class="number">0u8</span>);
+<span class="macro">assert_eq!</span>(zero, <span class="prelude-val">Ok</span>(Number::Zero));
+
+<span class="kw">let </span>three = Number::try_from(<span class="number">3u8</span>);
+<span class="macro">assert_eq!</span>(
+    three.unwrap_err().to_string(),
+    <span class="string">"No discriminant in enum `Number` matches the value `3`"</span>,
+);</code></pre></div>
+</div></details></section></div></main></body></html>

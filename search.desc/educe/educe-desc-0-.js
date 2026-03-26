@@ -1,0 +1,1 @@
+searchState.loadedDescShard("educe", 0, "Educe")

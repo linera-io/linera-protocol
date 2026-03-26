@@ -1,0 +1,171 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h2-0.4.12/src/frame/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="h2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">h2/frame/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">crate</span>::hpack;
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>bytes::Bytes;
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>std::fmt;
+<a href=#6 id=6 data-nosnippet>6</a>
+<a href=#7 id=7 data-nosnippet>7</a><span class="doccomment">/// A helper macro that unpacks a sequence of 4 bytes found in the buffer with
+<a href=#8 id=8 data-nosnippet>8</a>/// the given identifier, starting at the given offset, into the given integer
+<a href=#9 id=9 data-nosnippet>9</a>/// type. Obviously, the integer type should be able to support at least 4
+<a href=#10 id=10 data-nosnippet>10</a>/// bytes.
+<a href=#11 id=11 data-nosnippet>11</a>///
+<a href=#12 id=12 data-nosnippet>12</a>/// # Examples
+<a href=#13 id=13 data-nosnippet>13</a>///
+<a href=#14 id=14 data-nosnippet>14</a>/// ```ignore
+<a href=#15 id=15 data-nosnippet>15</a>/// # // We ignore this doctest because the macro is not exported.
+<a href=#16 id=16 data-nosnippet>16</a>/// let buf: [u8; 4] = [0, 0, 0, 1];
+<a href=#17 id=17 data-nosnippet>17</a>/// assert_eq!(1u32, unpack_octets_4!(buf, 0, u32));
+<a href=#18 id=18 data-nosnippet>18</a>/// ```
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="macro">macro_rules!</span> unpack_octets_4 {
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="comment">// TODO: Get rid of this macro
+<a href=#21 id=21 data-nosnippet>21</a>    </span>(<span class="macro-nonterminal">$buf</span>:expr, <span class="macro-nonterminal">$offset</span>:expr, <span class="macro-nonterminal">$tip</span>:ty) =&gt; {
+<a href=#22 id=22 data-nosnippet>22</a>        ((<span class="macro-nonterminal">$buf</span>[<span class="macro-nonterminal">$offset </span>+ <span class="number">0</span>] <span class="kw">as </span><span class="macro-nonterminal">$tip</span>) &lt;&lt; <span class="number">24</span>)
+<a href=#23 id=23 data-nosnippet>23</a>            | ((<span class="macro-nonterminal">$buf</span>[<span class="macro-nonterminal">$offset </span>+ <span class="number">1</span>] <span class="kw">as </span><span class="macro-nonterminal">$tip</span>) &lt;&lt; <span class="number">16</span>)
+<a href=#24 id=24 data-nosnippet>24</a>            | ((<span class="macro-nonterminal">$buf</span>[<span class="macro-nonterminal">$offset </span>+ <span class="number">2</span>] <span class="kw">as </span><span class="macro-nonterminal">$tip</span>) &lt;&lt; <span class="number">8</span>)
+<a href=#25 id=25 data-nosnippet>25</a>            | ((<span class="macro-nonterminal">$buf</span>[<span class="macro-nonterminal">$offset </span>+ <span class="number">3</span>] <span class="kw">as </span><span class="macro-nonterminal">$tip</span>) &lt;&lt; <span class="number">0</span>)
+<a href=#26 id=26 data-nosnippet>26</a>    };
+<a href=#27 id=27 data-nosnippet>27</a>}
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a><span class="attr">#[cfg(test)]
+<a href=#30 id=30 data-nosnippet>30</a></span><span class="kw">mod </span>tests {
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="attr">#[test]
+<a href=#32 id=32 data-nosnippet>32</a>    </span><span class="kw">fn </span>test_unpack_octets_4() {
+<a href=#33 id=33 data-nosnippet>33</a>        <span class="kw">let </span>buf: [u8; <span class="number">4</span>] = [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>];
+<a href=#34 id=34 data-nosnippet>34</a>        <span class="macro">assert_eq!</span>(<span class="number">1u32</span>, <span class="macro">unpack_octets_4!</span>(buf, <span class="number">0</span>, u32));
+<a href=#35 id=35 data-nosnippet>35</a>    }
+<a href=#36 id=36 data-nosnippet>36</a>}
+<a href=#37 id=37 data-nosnippet>37</a>
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">mod </span>data;
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">mod </span>go_away;
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">mod </span>head;
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">mod </span>headers;
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">mod </span>ping;
+<a href=#43 id=43 data-nosnippet>43</a><span class="kw">mod </span>priority;
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">mod </span>reason;
+<a href=#45 id=45 data-nosnippet>45</a><span class="kw">mod </span>reset;
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">mod </span>settings;
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">mod </span>stream_id;
+<a href=#48 id=48 data-nosnippet>48</a><span class="kw">mod </span>util;
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">mod </span>window_update;
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a><span class="kw">pub use </span><span class="self">self</span>::data::Data;
+<a href=#52 id=52 data-nosnippet>52</a><span class="kw">pub use </span><span class="self">self</span>::go_away::GoAway;
+<a href=#53 id=53 data-nosnippet>53</a><span class="kw">pub use </span><span class="self">self</span>::head::{Head, Kind};
+<a href=#54 id=54 data-nosnippet>54</a><span class="kw">pub use </span><span class="self">self</span>::headers::{
+<a href=#55 id=55 data-nosnippet>55</a>    parse_u64, Continuation, Headers, Pseudo, PushPromise, PushPromiseHeaderError,
+<a href=#56 id=56 data-nosnippet>56</a>};
+<a href=#57 id=57 data-nosnippet>57</a><span class="kw">pub use </span><span class="self">self</span>::ping::Ping;
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">pub use </span><span class="self">self</span>::priority::{Priority, StreamDependency};
+<a href=#59 id=59 data-nosnippet>59</a><span class="kw">pub use </span><span class="self">self</span>::reason::Reason;
+<a href=#60 id=60 data-nosnippet>60</a><span class="kw">pub use </span><span class="self">self</span>::reset::Reset;
+<a href=#61 id=61 data-nosnippet>61</a><span class="kw">pub use </span><span class="self">self</span>::settings::Settings;
+<a href=#62 id=62 data-nosnippet>62</a><span class="kw">pub use </span><span class="self">self</span>::stream_id::{StreamId, StreamIdOverflow};
+<a href=#63 id=63 data-nosnippet>63</a><span class="kw">pub use </span><span class="self">self</span>::window_update::WindowUpdate;
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a><span class="attr">#[cfg(feature = <span class="string">"unstable"</span>)]
+<a href=#66 id=66 data-nosnippet>66</a></span><span class="kw">pub use </span><span class="kw">crate</span>::hpack::BytesStr;
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a><span class="comment">// Re-export some constants
+<a href=#69 id=69 data-nosnippet>69</a>
+<a href=#70 id=70 data-nosnippet>70</a></span><span class="kw">pub use </span><span class="self">self</span>::settings::{
+<a href=#71 id=71 data-nosnippet>71</a>    DEFAULT_INITIAL_WINDOW_SIZE, DEFAULT_MAX_FRAME_SIZE, DEFAULT_SETTINGS_HEADER_TABLE_SIZE,
+<a href=#72 id=72 data-nosnippet>72</a>    MAX_MAX_FRAME_SIZE,
+<a href=#73 id=73 data-nosnippet>73</a>};
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a><span class="kw">pub type </span>FrameSize = u32;
+<a href=#76 id=76 data-nosnippet>76</a>
+<a href=#77 id=77 data-nosnippet>77</a><span class="kw">pub const </span>HEADER_LEN: usize = <span class="number">9</span>;
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a><span class="attr">#[derive(Eq, PartialEq)]
+<a href=#80 id=80 data-nosnippet>80</a></span><span class="kw">pub enum </span>Frame&lt;T = Bytes&gt; {
+<a href=#81 id=81 data-nosnippet>81</a>    Data(Data&lt;T&gt;),
+<a href=#82 id=82 data-nosnippet>82</a>    Headers(Headers),
+<a href=#83 id=83 data-nosnippet>83</a>    Priority(Priority),
+<a href=#84 id=84 data-nosnippet>84</a>    PushPromise(PushPromise),
+<a href=#85 id=85 data-nosnippet>85</a>    Settings(Settings),
+<a href=#86 id=86 data-nosnippet>86</a>    Ping(Ping),
+<a href=#87 id=87 data-nosnippet>87</a>    GoAway(GoAway),
+<a href=#88 id=88 data-nosnippet>88</a>    WindowUpdate(WindowUpdate),
+<a href=#89 id=89 data-nosnippet>89</a>    Reset(Reset),
+<a href=#90 id=90 data-nosnippet>90</a>}
+<a href=#91 id=91 data-nosnippet>91</a>
+<a href=#92 id=92 data-nosnippet>92</a><span class="kw">impl</span>&lt;T&gt; Frame&lt;T&gt; {
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">pub fn </span>map&lt;F, U&gt;(<span class="self">self</span>, f: F) -&gt; Frame&lt;U&gt;
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">where
+<a href=#95 id=95 data-nosnippet>95</a>        </span>F: FnOnce(T) -&gt; U,
+<a href=#96 id=96 data-nosnippet>96</a>    {
+<a href=#97 id=97 data-nosnippet>97</a>        <span class="kw">use </span><span class="self">self</span>::Frame::<span class="kw-2">*</span>;
+<a href=#98 id=98 data-nosnippet>98</a>
+<a href=#99 id=99 data-nosnippet>99</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#100 id=100 data-nosnippet>100</a>            Data(frame) =&gt; frame.map(f).into(),
+<a href=#101 id=101 data-nosnippet>101</a>            Headers(frame) =&gt; frame.into(),
+<a href=#102 id=102 data-nosnippet>102</a>            Priority(frame) =&gt; frame.into(),
+<a href=#103 id=103 data-nosnippet>103</a>            PushPromise(frame) =&gt; frame.into(),
+<a href=#104 id=104 data-nosnippet>104</a>            Settings(frame) =&gt; frame.into(),
+<a href=#105 id=105 data-nosnippet>105</a>            Ping(frame) =&gt; frame.into(),
+<a href=#106 id=106 data-nosnippet>106</a>            GoAway(frame) =&gt; frame.into(),
+<a href=#107 id=107 data-nosnippet>107</a>            WindowUpdate(frame) =&gt; frame.into(),
+<a href=#108 id=108 data-nosnippet>108</a>            Reset(frame) =&gt; frame.into(),
+<a href=#109 id=109 data-nosnippet>109</a>        }
+<a href=#110 id=110 data-nosnippet>110</a>    }
+<a href=#111 id=111 data-nosnippet>111</a>}
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a><span class="kw">impl</span>&lt;T&gt; fmt::Debug <span class="kw">for </span>Frame&lt;T&gt; {
+<a href=#114 id=114 data-nosnippet>114</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, fmt: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">use </span><span class="self">self</span>::Frame::<span class="kw-2">*</span>;
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+<a href=#118 id=118 data-nosnippet>118</a>            Data(<span class="kw-2">ref </span>frame) =&gt; fmt::Debug::fmt(frame, fmt),
+<a href=#119 id=119 data-nosnippet>119</a>            Headers(<span class="kw-2">ref </span>frame) =&gt; fmt::Debug::fmt(frame, fmt),
+<a href=#120 id=120 data-nosnippet>120</a>            Priority(<span class="kw-2">ref </span>frame) =&gt; fmt::Debug::fmt(frame, fmt),
+<a href=#121 id=121 data-nosnippet>121</a>            PushPromise(<span class="kw-2">ref </span>frame) =&gt; fmt::Debug::fmt(frame, fmt),
+<a href=#122 id=122 data-nosnippet>122</a>            Settings(<span class="kw-2">ref </span>frame) =&gt; fmt::Debug::fmt(frame, fmt),
+<a href=#123 id=123 data-nosnippet>123</a>            Ping(<span class="kw-2">ref </span>frame) =&gt; fmt::Debug::fmt(frame, fmt),
+<a href=#124 id=124 data-nosnippet>124</a>            GoAway(<span class="kw-2">ref </span>frame) =&gt; fmt::Debug::fmt(frame, fmt),
+<a href=#125 id=125 data-nosnippet>125</a>            WindowUpdate(<span class="kw-2">ref </span>frame) =&gt; fmt::Debug::fmt(frame, fmt),
+<a href=#126 id=126 data-nosnippet>126</a>            Reset(<span class="kw-2">ref </span>frame) =&gt; fmt::Debug::fmt(frame, fmt),
+<a href=#127 id=127 data-nosnippet>127</a>        }
+<a href=#128 id=128 data-nosnippet>128</a>    }
+<a href=#129 id=129 data-nosnippet>129</a>}
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a><span class="doccomment">/// Errors that can occur during parsing an HTTP/2 frame.
+<a href=#132 id=132 data-nosnippet>132</a></span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq)]
+<a href=#133 id=133 data-nosnippet>133</a></span><span class="kw">pub enum </span>Error {
+<a href=#134 id=134 data-nosnippet>134</a>    <span class="doccomment">/// A length value other than 8 was set on a PING message.
+<a href=#135 id=135 data-nosnippet>135</a>    </span>BadFrameSize,
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a>    <span class="doccomment">/// The padding length was larger than the frame-header-specified
+<a href=#138 id=138 data-nosnippet>138</a>    /// length of the payload.
+<a href=#139 id=139 data-nosnippet>139</a>    </span>TooMuchPadding,
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a>    <span class="doccomment">/// An invalid setting value was provided
+<a href=#142 id=142 data-nosnippet>142</a>    </span>InvalidSettingValue,
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="doccomment">/// An invalid window update value
+<a href=#145 id=145 data-nosnippet>145</a>    </span>InvalidWindowUpdateValue,
+<a href=#146 id=146 data-nosnippet>146</a>
+<a href=#147 id=147 data-nosnippet>147</a>    <span class="doccomment">/// The payload length specified by the frame header was not the
+<a href=#148 id=148 data-nosnippet>148</a>    /// value necessary for the specific frame type.
+<a href=#149 id=149 data-nosnippet>149</a>    </span>InvalidPayloadLength,
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a>    <span class="doccomment">/// Received a payload with an ACK settings frame
+<a href=#152 id=152 data-nosnippet>152</a>    </span>InvalidPayloadAckSettings,
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="doccomment">/// An invalid stream identifier was provided.
+<a href=#155 id=155 data-nosnippet>155</a>    ///
+<a href=#156 id=156 data-nosnippet>156</a>    /// This is returned if a SETTINGS or PING frame is received with a stream
+<a href=#157 id=157 data-nosnippet>157</a>    /// identifier other than zero.
+<a href=#158 id=158 data-nosnippet>158</a>    </span>InvalidStreamId,
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="doccomment">/// A request or response is malformed.
+<a href=#161 id=161 data-nosnippet>161</a>    </span>MalformedMessage,
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="doccomment">/// An invalid stream dependency ID was provided
+<a href=#164 id=164 data-nosnippet>164</a>    ///
+<a href=#165 id=165 data-nosnippet>165</a>    /// This is returned if a HEADERS or PRIORITY frame is received with an
+<a href=#166 id=166 data-nosnippet>166</a>    /// invalid stream identifier.
+<a href=#167 id=167 data-nosnippet>167</a>    </span>InvalidDependencyId,
+<a href=#168 id=168 data-nosnippet>168</a>
+<a href=#169 id=169 data-nosnippet>169</a>    <span class="doccomment">/// Failed to perform HPACK decoding
+<a href=#170 id=170 data-nosnippet>170</a>    </span>Hpack(hpack::DecoderError),
+<a href=#171 id=171 data-nosnippet>171</a>}</code></pre></div></section></main></body></html>

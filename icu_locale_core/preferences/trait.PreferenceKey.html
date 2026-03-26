@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A low-level trait implemented on each preference exposed in component preferences."><title>PreferenceKey in icu_locale_core::preferences - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="icu_locale_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../icu_locale_core/index.html">icu_<wbr>locale_<wbr>core</a><span class="version">2.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Preference<wbr>Key</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.try_from_key_value" title="try_from_key_value">try_from_key_value</a></li><li><a href="#method.unicode_extension_key" title="unicode_extension_key">unicode_extension_key</a></li><li><a href="#method.unicode_extension_value" title="unicode_extension_value">unicode_extension_value</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In icu_<wbr>locale_<wbr>core::<wbr>preferences</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">icu_locale_core</a>::<wbr><a href="index.html">preferences</a></div><h1>Trait <span class="trait">PreferenceKey</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/icu_locale_core/preferences/mod.rs.html#396-418">Source</a> </span></div><pre class="rust item-decl"><code>pub trait PreferenceKey: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    // Provided methods
+    fn <a href="#method.try_from_key_value" class="fn">try_from_key_value</a>(
+        _key: &amp;<a class="struct" href="../extensions/unicode/struct.Key.html" title="struct icu_locale_core::extensions::unicode::Key">Key</a>,
+        _value: &amp;<a class="struct" href="../extensions/unicode/struct.Value.html" title="struct icu_locale_core::extensions::unicode::Value">Value</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;, <a class="enum" href="extensions/unicode/errors/enum.PreferencesParseError.html" title="enum icu_locale_core::preferences::extensions::unicode::errors::PreferencesParseError">PreferencesParseError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.unicode_extension_key" class="fn">unicode_extension_key</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../extensions/unicode/struct.Key.html" title="struct icu_locale_core::extensions::unicode::Key">Key</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.unicode_extension_value" class="fn">unicode_extension_value</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../extensions/unicode/struct.Value.html" title="struct icu_locale_core::extensions::unicode::Value">Value</a>&gt; { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A low-level trait implemented on each preference exposed in component preferences.</p>
+<p><a href="trait.PreferenceKey.html" title="trait icu_locale_core::preferences::PreferenceKey"><code>PreferenceKey</code></a> has to be implemented on
+preferences that are to be included in Formatter preferences.
+The trait may be implemented to indicate that the given preference has
+a unicode key corresponding to it or be a custom one.</p>
+<p><code>ICU4X</code> provides an implementation of <a href="trait.PreferenceKey.html" title="trait icu_locale_core::preferences::PreferenceKey"><code>PreferenceKey</code></a> for all
+Unicode Extension Keys. The only external use of this trait is to implement
+it on custom preferences that are to be included in a component preferences bag.</p>
+<p>The below example show cases a manual generation of an <code>em</code> (emoji) unicode extension key
+and a custom struct to showcase the difference in their behavior. For all use purposes,
+the <a href="crate::preferences::extensions::unicode::keywords::EmojiPresentationStyle"><code>EmojiPresentationStyle</code></a> preference exposed by this crate should be used.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>icu::locale::{
+  extensions::unicode::{key, Key, value, Value},
+  preferences::{
+    define_preferences, PreferenceKey,
+    extensions::unicode::errors::PreferencesParseError,
+  },
+};
+
+<span class="attr">#[non_exhaustive]
+#[derive(Debug, Clone, Eq, PartialEq, Copy, Hash, Default)]
+</span><span class="kw">pub enum </span>EmojiPresentationStyle {
+    Emoji,
+    Text,
+    <span class="attr">#[default]
+    </span>Default,
+}
+
+<span class="kw">impl </span>PreferenceKey <span class="kw">for </span>EmojiPresentationStyle {
+    <span class="kw">fn </span>unicode_extension_key() -&gt; <span class="prelude-ty">Option</span>&lt;Key&gt; {
+        <span class="prelude-val">Some</span>(<span class="macro">key!</span>(<span class="string">"em"</span>))
+    }
+
+    <span class="kw">fn </span>try_from_key_value(
+        key: <span class="kw-2">&amp;</span>Key,
+        value: <span class="kw-2">&amp;</span>Value,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;, PreferencesParseError&gt; {
+        <span class="kw">if </span><span class="self">Self</span>::unicode_extension_key() == <span class="prelude-val">Some</span>(<span class="kw-2">*</span>key) {
+            <span class="kw">let </span>subtag = value.as_single_subtag()
+                              .ok_or(PreferencesParseError::InvalidKeywordValue)<span class="question-mark">?</span>;
+            <span class="kw">match </span>subtag.as_str() {
+                <span class="string">"emoji" </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="self">Self</span>::Emoji)),
+                <span class="string">"text" </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="self">Self</span>::Text)),
+                <span class="string">"default" </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="self">Self</span>::Default)),
+                <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(PreferencesParseError::InvalidKeywordValue)
+            }
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+        }
+    }
+
+    <span class="kw">fn </span>unicode_extension_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Value&gt; {
+        <span class="prelude-val">Some</span>(<span class="kw">match </span><span class="self">self </span>{
+            EmojiPresentationStyle::Emoji =&gt; <span class="macro">value!</span>(<span class="string">"emoji"</span>),
+            EmojiPresentationStyle::Text =&gt; <span class="macro">value!</span>(<span class="string">"text"</span>),
+            EmojiPresentationStyle::Default =&gt; <span class="macro">value!</span>(<span class="string">"default"</span>),
+        })
+    }
+}
+
+<span class="attr">#[non_exhaustive]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+</span><span class="kw">pub struct </span>CustomFormat {
+    value: String
+}
+
+<span class="kw">impl </span>PreferenceKey <span class="kw">for </span>CustomFormat {}
+
+<span class="macro">define_preferences!</span>(
+    MyFormatterPreferences,
+    {
+        emoji: EmojiPresentationStyle,
+        custom: CustomFormat
+    }
+);</code></pre></div>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.try_from_key_value" class="method"><a class="src rightside" href="../../src/icu_locale_core/preferences/mod.rs.html#401-407">Source</a><h4 class="code-header">fn <a href="#method.try_from_key_value" class="fn">try_from_key_value</a>(
+    _key: &amp;<a class="struct" href="../extensions/unicode/struct.Key.html" title="struct icu_locale_core::extensions::unicode::Key">Key</a>,
+    _value: &amp;<a class="struct" href="../extensions/unicode/struct.Value.html" title="struct icu_locale_core::extensions::unicode::Value">Value</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;, <a class="enum" href="extensions/unicode/errors/enum.PreferencesParseError.html" title="enum icu_locale_core::preferences::extensions::unicode::errors::PreferencesParseError">PreferencesParseError</a>&gt;</h4></section></summary><div class="docblock"><p>Optional constructor of the given preference. It takes the
+unicode extension key and if the key matches it attemptes to construct
+the preference based on the given value.
+If the value is not a valid value for the given key, the constructor throws.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.unicode_extension_key" class="method"><a class="src rightside" href="../../src/icu_locale_core/preferences/mod.rs.html#410-412">Source</a><h4 class="code-header">fn <a href="#method.unicode_extension_key" class="fn">unicode_extension_key</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../extensions/unicode/struct.Key.html" title="struct icu_locale_core::extensions::unicode::Key">Key</a>&gt;</h4></section></summary><div class="docblock"><p>Retrieve unicode extension key corresponding to a given preference.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.unicode_extension_value" class="method"><a class="src rightside" href="../../src/icu_locale_core/preferences/mod.rs.html#415-417">Source</a><h4 class="code-header">fn <a href="#method.unicode_extension_value" class="fn">unicode_extension_value</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../extensions/unicode/struct.Value.html" title="struct icu_locale_core::extensions::unicode::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Retrieve unicode extension value corresponding to the given instance of the preference.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-PreferenceKey-for-CurrencyType" class="impl"><a class="src rightside" href="../../src/icu_locale_core/preferences/extensions/unicode/keywords/currency.rs.html#10-31">Source</a><a href="#impl-PreferenceKey-for-CurrencyType" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.PreferenceKey.html" title="trait icu_locale_core::preferences::PreferenceKey">PreferenceKey</a> for <a class="struct" href="extensions/unicode/keywords/struct.CurrencyType.html" title="struct icu_locale_core::preferences::extensions::unicode::keywords::CurrencyType">CurrencyType</a></h3></section><section id="impl-PreferenceKey-for-NumberingSystem" class="impl"><a class="src rightside" href="../../src/icu_locale_core/preferences/extensions/unicode/keywords/numbering_system.rs.html#9-26">Source</a><a href="#impl-PreferenceKey-for-NumberingSystem" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.PreferenceKey.html" title="trait icu_locale_core::preferences::PreferenceKey">PreferenceKey</a> for <a class="struct" href="extensions/unicode/keywords/struct.NumberingSystem.html" title="struct icu_locale_core::preferences::extensions::unicode::keywords::NumberingSystem">NumberingSystem</a></h3></section><section id="impl-PreferenceKey-for-RegionOverride" class="impl"><a class="src rightside" href="../../src/icu_locale_core/preferences/extensions/unicode/keywords/region_override.rs.html#9-26">Source</a><a href="#impl-PreferenceKey-for-RegionOverride" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.PreferenceKey.html" title="trait icu_locale_core::preferences::PreferenceKey">PreferenceKey</a> for <a class="struct" href="extensions/unicode/keywords/struct.RegionOverride.html" title="struct icu_locale_core::preferences::extensions::unicode::keywords::RegionOverride">RegionOverride</a></h3></section><section id="impl-PreferenceKey-for-RegionalSubdivision" class="impl"><a class="src rightside" href="../../src/icu_locale_core/preferences/extensions/unicode/keywords/regional_subdivision.rs.html#12-30">Source</a><a href="#impl-PreferenceKey-for-RegionalSubdivision" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.PreferenceKey.html" title="trait icu_locale_core::preferences::PreferenceKey">PreferenceKey</a> for <a class="struct" href="extensions/unicode/keywords/struct.RegionalSubdivision.html" title="struct icu_locale_core::preferences::extensions::unicode::keywords::RegionalSubdivision">RegionalSubdivision</a></h3></section><section id="impl-PreferenceKey-for-TimeZoneShortId" class="impl"><a class="src rightside" href="../../src/icu_locale_core/preferences/extensions/unicode/keywords/timezone.rs.html#9-26">Source</a><a href="#impl-PreferenceKey-for-TimeZoneShortId" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.PreferenceKey.html" title="trait icu_locale_core::preferences::PreferenceKey">PreferenceKey</a> for <a class="struct" href="extensions/unicode/keywords/struct.TimeZoneShortId.html" title="struct icu_locale_core::preferences::extensions::unicode::keywords::TimeZoneShortId">TimeZoneShortId</a></h3></section></div><script src="../../trait.impl/icu_locale_core/preferences/trait.PreferenceKey.js" async></script></section></div></main></body></html>

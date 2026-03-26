@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Coordinates","Tag"],"trait":["FromEncodedPoint","ModulusSize","ToCompactEncodedPoint","ToEncodedPoint","ValidatePublicKey"],"type":["CompressedPoint","CompressedPointSize","EncodedPoint","UncompressedPoint","UncompressedPointSize"]};

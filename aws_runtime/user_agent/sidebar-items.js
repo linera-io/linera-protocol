@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BusinessMetric"],"struct":["ApiMetadata","AwsUserAgent","InvalidMetadataValue","UserAgentInterceptor"]};

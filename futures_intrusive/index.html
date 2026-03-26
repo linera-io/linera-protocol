@@ -1,0 +1,188 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Synchronization primitives and utilities based on intrusive collections."><title>futures_intrusive - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="futures_intrusive" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../futures_intrusive/index.html">futures_<wbr>intrusive</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#intrusive-collections" title="Intrusive collections?">Intrusive collections?</a><ul><li><a href="#application-in-futures" title="Application in Futures">Application in Futures</a></li></ul></li><li><a href="#features-of-this-library" title="Features of this library">Features of this library</a></li><li><a href="#design-goals-for-the-library" title="Design goals for the library">Design goals for the library</a></li><li><a href="#non-goals" title="Non goals">Non goals</a></li><li><a href="#local-non-local-and-shared-flavors" title="Local, Non-local and shared flavors">Local, Non-local and shared flavors</a><ul><li><a href="#local-flavor" title="Local flavor">Local flavor</a></li><li><a href="#non-local-flavor" title="Non-local flavor">Non-local flavor</a></li><li><a href="#shared-flavor" title="Shared flavor">Shared flavor</a></li><li><a href="#generic-flavor" title="Generic flavor">Generic flavor</a></li></ul></li><li><a href="#relation-to-types-in-other-libraries" title="Relation to types in other libraries">Relation to types in other libraries</a></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>futures_intrusive</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/futures_intrusive/lib.rs.html#1-235">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Synchronization primitives and utilities based on intrusive collections.</p>
+<p>This crate provides a variety of <code>Futures</code>-based and <code>async/await</code> compatible
+types that are based on the idea of intrusive collections:</p>
+<ul>
+<li>Channels in a variety of flavors:
+<ul>
+<li>Oneshot</li>
+<li>Multi-Producer Multi-Consumer (MPMC)</li>
+<li>State Broadcast</li>
+</ul>
+</li>
+<li>Synchronization Primitives:
+<ul>
+<li>Manual Reset Event</li>
+<li>Mutex</li>
+<li>Semaphore</li>
+</ul>
+</li>
+<li>A timer</li>
+</ul>
+<h3 id="intrusive-collections"><a class="doc-anchor" href="#intrusive-collections">§</a>Intrusive collections?</h3>
+<p>In an intrusive collection, the elements that want to get stored inside the
+collection provide the means to store themselves inside the collection.
+E.g. in an intrusive linked list, each element that gets stored inside the
+list contains a pointer field that points to the next list element. E.g.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// The element which is intended to be stored inside an intrusive container
+</span><span class="kw">struct </span>ListElement {
+   data: u32,
+   next: <span class="kw-2">*mut </span>ListElement,
+}
+
+<span class="comment">// The intrusive container
+</span><span class="kw">struct </span>List {
+    head: <span class="kw-2">*mut </span>ListElement,
+}</code></pre></div>
+<p>The advantage here is that the intrusive collection (here: the list) requires
+only a fixed amount of memory. In this case it only needs a pointer to the
+first element.</p>
+<p>The list container itself has a fixed size of a single pointer independent
+of the number of stored elements.</p>
+<p>Intrusive lists are often used in low-level code like in operating system
+kernels.  E.g. they can be used for storing elements that represent threads
+that are blocked and waiting on queue.  In that case the stored elements can
+be on the call stack of the caller of each blocked thread, since the
+call stack won’t change as long as the thread is blocked.</p>
+<h4 id="application-in-futures"><a class="doc-anchor" href="#application-in-futures">§</a>Application in Futures</h4>
+<p>This library brings this idea into the world of Rusts <code>Future</code>s. Due to the
+addition of <code>Pin</code>ning, the address of a certain <code>Future</code> is not allowed to
+change between the first call to <code>poll()</code> and when the <code>Future</code> is dropped.
+This means the data inside the <code>Future</code> itself can be inserted into an
+intrusive container. If the the call to <code>Future::poll()</code> is not immedately
+ready, some parts of the <code>Future</code> itself are registered in the type which
+yielded the <code>Future</code>. Each <code>Future</code> can store a <code>Waker</code>. When the original
+type becomes ready, it can iterate through the list of registered <code>Future</code>s,
+wakeup associated tasks, and potentially remove them from its queue.</p>
+<p>The result is that the future-yielding type is not required to copy an
+arbitrary number of <code>Waker</code> objects into itself, and thereby does not require
+dynamic memory for this task.</p>
+<p>When a <code>Future</code> gets destructed/dropped, it must make sure to remove itself
+from any collections that refer to it to avoid invalid memory accesses.</p>
+<p>This library implements common synchronization primitives for the usage in
+asychronous code based on this concept.</p>
+<p>The implementation requires the usage of a fair chunk of <code>unsafe</code>
+annotations. However the provided user-level API is intended to be fully safe.</p>
+<h3 id="features-of-this-library"><a class="doc-anchor" href="#features-of-this-library">§</a>Features of this library</h3>
+<p>The following types are currently implemented:</p>
+<ul>
+<li>Channels (oneshot and multi-producer-multi-consumer)</li>
+<li>Synchronization primitives (async mutexes and events)</li>
+<li>Timers</li>
+</ul>
+<h3 id="design-goals-for-the-library"><a class="doc-anchor" href="#design-goals-for-the-library">§</a>Design goals for the library</h3>
+<ul>
+<li>Provide implementations of common synchronization primitives in a platform
+independent fashion.</li>
+<li>Support <code>no-std</code> environments. As many types as possible are also provided
+for <code>no-std</code> environments. The library should boost the ability to use
+async Rust code in environments like:
+<ul>
+<li>Microcontrollers (RTOS and bare-metal)</li>
+<li>Kernels</li>
+<li>Drivers</li>
+</ul>
+</li>
+<li>Avoid dynamic memory allocations at runtime.  After objects from this
+library have been created, they should not require allocation of any
+further memory at runtime.  E.g. they should not need to allocate memory
+for each call to an asynchronous function or each time a new task accesses
+the same object in parallel.</li>
+<li>Offer familiar APIs.
+The library tries to mimic the APIs of existing Rust libraries like the
+standard library and <code>futures-rs</code> as closely as possible.</li>
+</ul>
+<h3 id="non-goals"><a class="doc-anchor" href="#non-goals">§</a>Non goals</h3>
+<ul>
+<li>Provide IO primitives (like sockets), or platform specific implementations.</li>
+<li>Reach the highest possible performance in terms of throughput and latency.
+While code in this library is optimized for performance, portability
+and deterministic memory usage are more important goals.</li>
+<li>Provide future wrappers for platform-specific APIs.</li>
+</ul>
+<h3 id="local-non-local-and-shared-flavors"><a class="doc-anchor" href="#local-non-local-and-shared-flavors">§</a>Local, Non-local and shared flavors</h3>
+<p>The library provides types in a variety of flavors:</p>
+<ul>
+<li>A local flavor (e.g. <a href="channel/type.LocalChannel.html" title="type futures_intrusive::channel::LocalChannel"><code>channel::LocalChannel</code></a>)</li>
+<li>A non-local flavor (e.g. <a href="channel/type.Channel.html" title="type futures_intrusive::channel::Channel"><code>channel::Channel</code></a>)</li>
+<li>A shared flavor (e.g. <a href="channel/shared/type.Sender.html" title="type futures_intrusive::channel::shared::Sender"><code>channel::shared::Sender</code></a>)</li>
+<li>A generic flavor (e.g. <a href="channel/struct.GenericChannel.html" title="struct futures_intrusive::channel::GenericChannel"><code>channel::GenericChannel</code></a> and
+<a href="channel/shared/struct.GenericSender.html" title="struct futures_intrusive::channel::shared::GenericSender"><code>channel::shared::GenericSender</code></a>)</li>
+</ul>
+<p>The difference between these types lie in their thread-safety. The non-local
+flavors of types can be accessed from multiple threads (and thereby also
+futures tasks) concurrently. This means they implement the <code>Sync</code> trait in
+addition to the <code>Send</code> trait.
+The local flavors only implement the <code>Send</code> trait.</p>
+<h4 id="local-flavor"><a class="doc-anchor" href="#local-flavor">§</a>Local flavor</h4>
+<p>The local flavors will require no internal synchronization (e.g. internal
+Mutexes) and can therefore be provided for all platforms (including <code>no-std</code>).
+Due the lack of required synchronization, they are also very fast.</p>
+<p>It might seem counter-intuitive to provide synchronization primitives that
+only work within a single task. However there are a variety of applications
+where these can be used to coordinate sub-tasks (futures that are polled on
+a single task concurrently).</p>
+<p>The following example demonstrates this use-case:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>async_fn() {
+    <span class="kw">let </span>event = LocalManualResetEvent::new(<span class="bool-val">false</span>);
+    <span class="kw">let </span>task_a = <span class="kw">async </span>{
+        <span class="comment">// Wait for the event
+        </span>event.wait().<span class="kw">await</span>;
+        <span class="comment">// Do something with the knowledge that task_b reached a certain state
+    </span>};
+    <span class="kw">let </span>task_b = <span class="kw">async </span>{
+        <span class="comment">// Some complex asynchronous workflow here
+        // ...
+        // Signal task_a
+        </span>event.set();
+    };
+    <span class="macro">join!</span>(task_a, task_b);
+}</code></pre></div>
+<h4 id="non-local-flavor"><a class="doc-anchor" href="#non-local-flavor">§</a>Non-local flavor</h4>
+<p>The non-local flavors can be used between arbitrary tasks and threads.  They
+use internal synchronization for this in form of an embedded <code>Mutex</code> of
+<a href="../parking_lot/mutex/type.Mutex.html" title="type parking_lot::mutex::Mutex"><code>parking_lot::Mutex</code></a> type.</p>
+<p>The non-local flavors are only available in <code>alloc</code> environments.</p>
+<h4 id="shared-flavor"><a class="doc-anchor" href="#shared-flavor">§</a>Shared flavor</h4>
+<p>For some types a shared flavor is provided. Non-local flavors of types are
+<code>Sync</code>, but they still can only be shared by reference between various tasks.
+Shared flavors are also <code>Sync</code>, but the types additionally implement the
+<code>Clone</code> trait, which allows duplicating the object, and passing ownership of
+it to a different task. These types allow avoiding references (and thereby
+lifetimes) in some scenarios, which makes them more convenient to use.  The
+types also return <code>Future</code>s which do not have an associated lifetime.  This
+allows using those types as implementations of traits without the need for
+generic associated types (GATs).</p>
+<p>Due to the requirement of atomic reference counting, these types are
+currently only available for <code>alloc</code> environments.</p>
+<h4 id="generic-flavor"><a class="doc-anchor" href="#generic-flavor">§</a>Generic flavor</h4>
+<p>The generic flavors of provided types are parameterized around a
+<a href="../lock_api/mutex/trait.RawMutex.html" title="trait lock_api::mutex::RawMutex"><code>lock_api::RawMutex</code></a> type. These form the base for the non-local and shared
+flavors which simply parameterize the generic flavor in either a
+non-thread-safe or thread-safe fashion.</p>
+<p>Users can directly use the generic flavors to adapt the provided thread-safe
+types for use in <code>no-std</code> environments.</p>
+<p>E.g. by providing a custom <a href="../lock_api/mutex/trait.RawMutex.html" title="trait lock_api::mutex::RawMutex"><code>lock_api::RawMutex</code></a>
+implementation, the following platforms can be supported:</p>
+<ul>
+<li>For RTOS platforms, RTOS-specific mutexes can be wrapped.</li>
+<li>For kernel development, spinlock based mutexes can be created.</li>
+<li>For embedded development, mutexes which just disable interrupts can be
+utilized.</li>
+</ul>
+<h3 id="relation-to-types-in-other-libraries"><a class="doc-anchor" href="#relation-to-types-in-other-libraries">§</a>Relation to types in other libraries</h3>
+<p>Other libraries (e.g. <code>futures-rs</code> and <code>tokio</code>) provide many primitives that
+are comparable feature-wise to the types in this library.</p>
+<p>The most important differences are:</p>
+<ul>
+<li>This library has a bigger focus on <code>no-std</code> environments, and does not
+only try to provide an implementation for <code>alloc</code> or <code>std</code>.</li>
+<li>The types in this library do not require dynamic memory allocation for
+waking up an arbitrary number of tasks waiting on a particular
+<code>Future</code>. Other libraries typically require heap-allocated nodes of
+growing vectors for handling a varying number of tasks.</li>
+<li>The <code>Future</code>s produced by this library are all <code>!Unpin</code>, which might make
+them less ergonomic to use.</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="buffer/index.html" title="mod futures_intrusive::buffer">buffer</a></dt><dd>Buffer types</dd><dt><a class="mod" href="channel/index.html" title="mod futures_intrusive::channel">channel</a></dt><dd>Asynchronous channels.</dd><dt><a class="mod" href="sync/index.html" title="mod futures_intrusive::sync">sync</a></dt><dd>Asynchronous synchronization primitives based on intrusive collections.</dd><dt><a class="mod" href="timer/index.html" title="mod futures_intrusive::timer">timer</a></dt><dd>Asynchronous timers.</dd></dl><script type="text/json" id="notable-traits-data">{"ChannelReceiveFuture<'_, MutexType, T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"channel/struct.ChannelReceiveFuture.html\" title=\"struct futures_intrusive::channel::ChannelReceiveFuture\">ChannelReceiveFuture</a>&lt;'a, MutexType, T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, MutexType, T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"channel/struct.ChannelReceiveFuture.html\" title=\"struct futures_intrusive::channel::ChannelReceiveFuture\">ChannelReceiveFuture</a>&lt;'a, MutexType, T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;T&gt;;</div>","ChannelReceiveFuture<MutexType, T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"channel/shared/struct.ChannelReceiveFuture.html\" title=\"struct futures_intrusive::channel::shared::ChannelReceiveFuture\">ChannelReceiveFuture</a>&lt;MutexType, T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;MutexType, T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"channel/shared/struct.ChannelReceiveFuture.html\" title=\"struct futures_intrusive::channel::shared::ChannelReceiveFuture\">ChannelReceiveFuture</a>&lt;MutexType, T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;T&gt;;</div>","ChannelSendFuture<'_, MutexType, T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"channel/struct.ChannelSendFuture.html\" title=\"struct futures_intrusive::channel::ChannelSendFuture\">ChannelSendFuture</a>&lt;'a, MutexType, T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, MutexType, T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"channel/struct.ChannelSendFuture.html\" title=\"struct futures_intrusive::channel::ChannelSendFuture\">ChannelSendFuture</a>&lt;'a, MutexType, T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.unit.html\">()</a>, <a class=\"struct\" href=\"channel/struct.ChannelSendError.html\" title=\"struct futures_intrusive::channel::ChannelSendError\">ChannelSendError</a>&lt;T&gt;&gt;;</div>","ChannelSendFuture<MutexType, T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"channel/shared/struct.ChannelSendFuture.html\" title=\"struct futures_intrusive::channel::shared::ChannelSendFuture\">ChannelSendFuture</a>&lt;MutexType, T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;MutexType, T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"channel/shared/struct.ChannelSendFuture.html\" title=\"struct futures_intrusive::channel::shared::ChannelSendFuture\">ChannelSendFuture</a>&lt;MutexType, T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.unit.html\">()</a>, <a class=\"struct\" href=\"channel/struct.ChannelSendError.html\" title=\"struct futures_intrusive::channel::ChannelSendError\">ChannelSendError</a>&lt;T&gt;&gt;;</div>","GenericMutexLockFuture<'_, MutexType, T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"sync/struct.GenericMutexLockFuture.html\" title=\"struct futures_intrusive::sync::GenericMutexLockFuture\">GenericMutexLockFuture</a>&lt;'a, MutexType, T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, MutexType: <a class=\"trait\" href=\"../lock_api/mutex/trait.RawMutex.html\" title=\"trait lock_api::mutex::RawMutex\">RawMutex</a>, T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"sync/struct.GenericMutexLockFuture.html\" title=\"struct futures_intrusive::sync::GenericMutexLockFuture\">GenericMutexLockFuture</a>&lt;'a, MutexType, T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"struct\" href=\"sync/struct.GenericMutexGuard.html\" title=\"struct futures_intrusive::sync::GenericMutexGuard\">GenericMutexGuard</a>&lt;'a, MutexType, T&gt;;</div>","GenericSemaphoreAcquireFuture<'_, MutexType>":"<h3>Notable traits for <code><a class=\"struct\" href=\"sync/struct.GenericSemaphoreAcquireFuture.html\" title=\"struct futures_intrusive::sync::GenericSemaphoreAcquireFuture\">GenericSemaphoreAcquireFuture</a>&lt;'a, MutexType&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, MutexType: <a class=\"trait\" href=\"../lock_api/mutex/trait.RawMutex.html\" title=\"trait lock_api::mutex::RawMutex\">RawMutex</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"sync/struct.GenericSemaphoreAcquireFuture.html\" title=\"struct futures_intrusive::sync::GenericSemaphoreAcquireFuture\">GenericSemaphoreAcquireFuture</a>&lt;'a, MutexType&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"struct\" href=\"sync/struct.GenericSemaphoreReleaser.html\" title=\"struct futures_intrusive::sync::GenericSemaphoreReleaser\">GenericSemaphoreReleaser</a>&lt;'a, MutexType&gt;;</div>","GenericSharedSemaphoreAcquireFuture<MutexType>":"<h3>Notable traits for <code><a class=\"struct\" href=\"sync/struct.GenericSharedSemaphoreAcquireFuture.html\" title=\"struct futures_intrusive::sync::GenericSharedSemaphoreAcquireFuture\">GenericSharedSemaphoreAcquireFuture</a>&lt;MutexType&gt;</code></h3><pre><code><div class=\"where\">impl&lt;MutexType: <a class=\"trait\" href=\"../lock_api/mutex/trait.RawMutex.html\" title=\"trait lock_api::mutex::RawMutex\">RawMutex</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"sync/struct.GenericSharedSemaphoreAcquireFuture.html\" title=\"struct futures_intrusive::sync::GenericSharedSemaphoreAcquireFuture\">GenericSharedSemaphoreAcquireFuture</a>&lt;MutexType&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"struct\" href=\"sync/struct.GenericSharedSemaphoreReleaser.html\" title=\"struct futures_intrusive::sync::GenericSharedSemaphoreReleaser\">GenericSharedSemaphoreReleaser</a>&lt;MutexType&gt;;</div>","GenericWaitForEventFuture<'_, MutexType>":"<h3>Notable traits for <code><a class=\"struct\" href=\"sync/struct.GenericWaitForEventFuture.html\" title=\"struct futures_intrusive::sync::GenericWaitForEventFuture\">GenericWaitForEventFuture</a>&lt;'a, MutexType&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, MutexType: <a class=\"trait\" href=\"../lock_api/mutex/trait.RawMutex.html\" title=\"trait lock_api::mutex::RawMutex\">RawMutex</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"sync/struct.GenericWaitForEventFuture.html\" title=\"struct futures_intrusive::sync::GenericWaitForEventFuture\">GenericWaitForEventFuture</a>&lt;'a, MutexType&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.unit.html\">()</a>;</div>","LocalTimerFuture<'_>":"<h3>Notable traits for <code><a class=\"struct\" href=\"timer/struct.LocalTimerFuture.html\" title=\"struct futures_intrusive::timer::LocalTimerFuture\">LocalTimerFuture</a>&lt;'a&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"timer/struct.LocalTimerFuture.html\" title=\"struct futures_intrusive::timer::LocalTimerFuture\">LocalTimerFuture</a>&lt;'a&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.unit.html\">()</a>;</div>","StateReceiveFuture<'_, MutexType, T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"channel/struct.StateReceiveFuture.html\" title=\"struct futures_intrusive::channel::StateReceiveFuture\">StateReceiveFuture</a>&lt;'a, MutexType, T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, MutexType, T: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html\" title=\"trait core::clone::Clone\">Clone</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"channel/struct.StateReceiveFuture.html\" title=\"struct futures_intrusive::channel::StateReceiveFuture\">StateReceiveFuture</a>&lt;'a, MutexType, T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;(<a class=\"struct\" href=\"channel/struct.StateId.html\" title=\"struct futures_intrusive::channel::StateId\">StateId</a>, T)&gt;;</div>","StateReceiveFuture<MutexType, T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"channel/shared/struct.StateReceiveFuture.html\" title=\"struct futures_intrusive::channel::shared::StateReceiveFuture\">StateReceiveFuture</a>&lt;MutexType, T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;MutexType, T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"channel/shared/struct.StateReceiveFuture.html\" title=\"struct futures_intrusive::channel::shared::StateReceiveFuture\">StateReceiveFuture</a>&lt;MutexType, T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;(<a class=\"struct\" href=\"channel/struct.StateId.html\" title=\"struct futures_intrusive::channel::StateId\">StateId</a>, T)&gt;;</div>","TimerFuture<'_>":"<h3>Notable traits for <code><a class=\"struct\" href=\"timer/struct.TimerFuture.html\" title=\"struct futures_intrusive::timer::TimerFuture\">TimerFuture</a>&lt;'a&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"timer/struct.TimerFuture.html\" title=\"struct futures_intrusive::timer::TimerFuture\">TimerFuture</a>&lt;'a&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.unit.html\">()</a>;</div>"}</script></section></div></main></body></html>

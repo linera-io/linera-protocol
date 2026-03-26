@@ -1,0 +1,141 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An identity function that hints to the compiler to be maximally pessimistic about what `black_box` could do."><title>black_box in wasmtime_environ::__core::hint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">black_<wbr>box</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#when-is-this-useful" title="When is this useful?">When is this useful?</a></li><li><a href="#how-to-use-this" title="How to use this">How to use this</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>hint</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">hint</a></div><h1>Function <span class="fn">black_box</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.66.0, const since 1.86.0">1.66.0 (const: 1.86.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/hint.rs.html#476">Source</a> </span></div><pre class="rust item-decl"><code>pub const fn black_box&lt;T&gt;(dummy: T) -&gt; T</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An identity function that <em><strong>hints</strong></em> to the compiler to be maximally pessimistic about what
+<code>black_box</code> could do.</p>
+<p>Unlike <a href="../convert/fn.identity.html" title="fn wasmtime_environ::__core::convert::identity"><code>std::convert::identity</code></a>, a Rust compiler is encouraged to assume that <code>black_box</code> can
+use <code>dummy</code> in any possible valid way that Rust code is allowed to without introducing undefined
+behavior in the calling code. This property makes <code>black_box</code> useful for writing code in which
+certain optimizations are not desired, such as benchmarks.</p>
+<div class="warning">
+<p>Note however, that <code>black_box</code> is only (and can only be) provided on a “best-effort” basis. The
+extent to which it can block optimisations may vary depending upon the platform and code-gen
+backend used. Programs cannot rely on <code>black_box</code> for <em>correctness</em>, beyond it behaving as the
+identity function. As such, it <strong>must not be relied upon to control critical program behavior.</strong>
+This also means that this function does not offer any guarantees for cryptographic or security
+purposes.</p>
+</div>
+<h2 id="when-is-this-useful"><a class="doc-anchor" href="#when-is-this-useful">§</a>When is this useful?</h2>
+<p>While not suitable in those mission-critical cases, <code>black_box</code>’s functionality can generally be
+relied upon for benchmarking, and should be used there. It will try to ensure that the
+compiler doesn’t optimize away part of the intended test code based on context. For
+example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>contains(haystack: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str], needle: <span class="kw-2">&amp;</span>str) -&gt; bool {
+    haystack.iter().any(|x| x == <span class="kw-2">&amp;</span>needle)
+}
+
+<span class="kw">pub fn </span>benchmark() {
+    <span class="kw">let </span>haystack = <span class="macro">vec!</span>[<span class="string">"abc"</span>, <span class="string">"def"</span>, <span class="string">"ghi"</span>, <span class="string">"jkl"</span>, <span class="string">"mno"</span>];
+    <span class="kw">let </span>needle = <span class="string">"ghi"</span>;
+    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+        contains(<span class="kw-2">&amp;</span>haystack, needle);
+    }
+}</code></pre></div>
+<p>The compiler could theoretically make optimizations like the following:</p>
+<ul>
+<li>The <code>needle</code> and <code>haystack</code> do not change, move the call to <code>contains</code> outside the loop and
+delete the loop</li>
+<li>Inline <code>contains</code></li>
+<li><code>needle</code> and <code>haystack</code> have values known at compile time, <code>contains</code> is always true. Remove
+the call and replace with <code>true</code></li>
+<li>Nothing is done with the result of <code>contains</code>: delete this function call entirely</li>
+<li><code>benchmark</code> now has no purpose: delete this function</li>
+</ul>
+<p>It is not likely that all of the above happens, but the compiler is definitely able to make some
+optimizations that could result in a very inaccurate benchmark. This is where <code>black_box</code> comes
+in:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hint::black_box;
+
+<span class="comment">// Same `contains` function.
+</span><span class="kw">fn </span>contains(haystack: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str], needle: <span class="kw-2">&amp;</span>str) -&gt; bool {
+    haystack.iter().any(|x| x == <span class="kw-2">&amp;</span>needle)
+}
+
+<span class="kw">pub fn </span>benchmark() {
+    <span class="kw">let </span>haystack = <span class="macro">vec!</span>[<span class="string">"abc"</span>, <span class="string">"def"</span>, <span class="string">"ghi"</span>, <span class="string">"jkl"</span>, <span class="string">"mno"</span>];
+    <span class="kw">let </span>needle = <span class="string">"ghi"</span>;
+    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+        <span class="comment">// Force the compiler to run `contains`, even though it is a pure function whose
+        // results are unused.
+        </span>black_box(contains(
+            <span class="comment">// Prevent the compiler from making assumptions about the input.
+            </span>black_box(<span class="kw-2">&amp;</span>haystack),
+            black_box(needle),
+        ));
+    }
+}</code></pre></div>
+<p>This essentially tells the compiler to block optimizations across any calls to <code>black_box</code>. So,
+it now:</p>
+<ul>
+<li>Treats both arguments to <code>contains</code> as unpredictable: the body of <code>contains</code> can no longer be
+optimized based on argument values</li>
+<li>Treats the call to <code>contains</code> and its result as volatile: the body of <code>benchmark</code> cannot
+optimize this away</li>
+</ul>
+<p>This makes our benchmark much more realistic to how the function would actually be used, where
+arguments are usually not known at compile time and the result is used in some way.</p>
+<h2 id="how-to-use-this"><a class="doc-anchor" href="#how-to-use-this">§</a>How to use this</h2>
+<p>In practice, <code>black_box</code> serves two purposes:</p>
+<ol>
+<li>It prevents the compiler from making optimizations related to the value returned by <code>black_box</code></li>
+<li>It forces the value passed to <code>black_box</code> to be calculated, even if the return value of <code>black_box</code> is unused</li>
+</ol>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hint::black_box;
+
+<span class="kw">let </span>zero = <span class="number">0</span>;
+<span class="kw">let </span>five = <span class="number">5</span>;
+
+<span class="comment">// The compiler will see this and remove the `* five` call, because it knows that multiplying
+// any integer by 0 will result in 0.
+</span><span class="kw">let </span>c = zero * five;
+
+<span class="comment">// Adding `black_box` here disables the compiler's ability to reason about the first operand in the multiplication.
+// It is forced to assume that it can be any possible number, so it cannot remove the `* five`
+// operation.
+</span><span class="kw">let </span>c = black_box(zero) * five;</code></pre></div>
+<p>While most cases will not be as clear-cut as the above example, it still illustrates how
+<code>black_box</code> can be used. When benchmarking a function, you usually want to wrap its inputs in
+<code>black_box</code> so the compiler cannot make optimizations that would be unrealistic in real-life
+use.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hint::black_box;
+
+<span class="comment">// This is a simple function that increments its input by 1. Note that it is pure, meaning it
+// has no side-effects. This function has no effect if its result is unused. (An example of a
+// function *with* side-effects is `println!()`.)
+</span><span class="kw">fn </span>increment(x: u8) -&gt; u8 {
+    x + <span class="number">1
+</span>}
+
+<span class="comment">// Here, we call `increment` but discard its result. The compiler, seeing this and knowing that
+// `increment` is pure, will eliminate this function call entirely. This may not be desired,
+// though, especially if we're trying to track how much time `increment` takes to execute.
+</span><span class="kw">let _ </span>= increment(black_box(<span class="number">5</span>));
+
+<span class="comment">// Here, we force `increment` to be executed. This is because the compiler treats `black_box`
+// as if it has side-effects, and thus must compute its input.
+</span><span class="kw">let _ </span>= black_box(increment(black_box(<span class="number">5</span>)));</code></pre></div>
+<p>There may be additional situations where you want to wrap the result of a function in
+<code>black_box</code> to force its execution. This is situational though, and may not have any effect
+(such as when the function returns a zero-sized type such as <a href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html" title="primitive unit"><code>()</code> unit</a>).</p>
+<p>Note that <code>black_box</code> has no effect on how its input is treated, only its output. As such,
+expressions passed to <code>black_box</code> may still be optimized:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hint::black_box;
+
+<span class="comment">// The compiler sees this...
+</span><span class="kw">let </span>y = black_box(<span class="number">5 </span>* <span class="number">10</span>);
+
+<span class="comment">// ...as this. As such, it will likely simplify `5 * 10` to just `50`.
+</span><span class="kw">let </span>_0 = <span class="number">5 </span>* <span class="number">10</span>;
+<span class="kw">let </span>y = black_box(_0);</code></pre></div>
+<p>In the above example, the <code>5 * 10</code> expression is considered distinct from the <code>black_box</code> call,
+and thus is still optimized by the compiler. You can prevent this by moving the multiplication
+operation outside of <code>black_box</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hint::black_box;
+
+<span class="comment">// No assumptions can be made about either operand, so the multiplication is not optimized out.
+</span><span class="kw">let </span>y = black_box(<span class="number">5</span>) * black_box(<span class="number">10</span>);</code></pre></div>
+<p>During constant evaluation, <code>black_box</code> is treated as a no-op.</p>
+</div></details></section></div></main></body></html>

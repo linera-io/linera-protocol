@@ -1,0 +1,81 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/alloy-hardforks-0.2.13/src/ethereum/mainnet.rs`."><title>mainnet.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="alloy_hardforks" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">alloy_hardforks/ethereum/</div>mainnet.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Ethereum Mainnet hardfork starting points
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span>alloy_primitives::{U256, uint};
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a><span class="doccomment">/// Frontier hard fork activation block is 0.
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">pub const </span>MAINNET_FRONTIER_BLOCK: u64 = <span class="number">0</span>;
+<a href=#7 id=7 data-nosnippet>7</a><span class="doccomment">/// Homestead hard fork activation block is 1150000.
+<a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">pub const </span>MAINNET_HOMESTEAD_BLOCK: u64 = <span class="number">1_150_000</span>;
+<a href=#9 id=9 data-nosnippet>9</a><span class="doccomment">/// Dao hard fork activation  is 1920000.
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">pub const </span>MAINNET_DAO_BLOCK: u64 = <span class="number">1_920_000</span>;
+<a href=#11 id=11 data-nosnippet>11</a><span class="doccomment">///Tangerine hard fork activation block is 2463000.
+<a href=#12 id=12 data-nosnippet>12</a></span><span class="kw">pub const </span>MAINNET_TANGERINE_BLOCK: u64 = <span class="number">2_463_000</span>;
+<a href=#13 id=13 data-nosnippet>13</a><span class="doccomment">/// Spurious Dragon hard fork activation block is 2675000.
+<a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">pub const </span>MAINNET_SPURIOUS_DRAGON_BLOCK: u64 = <span class="number">2_675_000</span>;
+<a href=#15 id=15 data-nosnippet>15</a><span class="doccomment">/// Byzantium hard fork activation block is 4370000.
+<a href=#16 id=16 data-nosnippet>16</a></span><span class="kw">pub const </span>MAINNET_BYZANTIUM_BLOCK: u64 = <span class="number">4_370_000</span>;
+<a href=#17 id=17 data-nosnippet>17</a><span class="doccomment">/// Constantinople hard fork activation block is 7280000, same as [`MAINNET_PETERSBURG_BLOCK`].
+<a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">pub const </span>MAINNET_CONSTANTINOPLE_BLOCK: u64 = MAINNET_PETERSBURG_BLOCK;
+<a href=#19 id=19 data-nosnippet>19</a><span class="doccomment">/// Petersburg hard fork activation block is 7280000.
+<a href=#20 id=20 data-nosnippet>20</a></span><span class="kw">pub const </span>MAINNET_PETERSBURG_BLOCK: u64 = <span class="number">7_280_000</span>;
+<a href=#21 id=21 data-nosnippet>21</a><span class="doccomment">/// Istanbul hard fork activation block is 9069000.
+<a href=#22 id=22 data-nosnippet>22</a></span><span class="kw">pub const </span>MAINNET_ISTANBUL_BLOCK: u64 = <span class="number">9_069_000</span>;
+<a href=#23 id=23 data-nosnippet>23</a><span class="doccomment">/// Muir Glacier hard fork activation block is 9200000.
+<a href=#24 id=24 data-nosnippet>24</a></span><span class="kw">pub const </span>MAINNET_MUIR_GLACIER_BLOCK: u64 = <span class="number">9_200_000</span>;
+<a href=#25 id=25 data-nosnippet>25</a><span class="doccomment">/// Berlin hard fork activation block is 12244000.
+<a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">pub const </span>MAINNET_BERLIN_BLOCK: u64 = <span class="number">12_244_000</span>;
+<a href=#27 id=27 data-nosnippet>27</a><span class="doccomment">/// London hard fork activation block is 12965000.
+<a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">pub const </span>MAINNET_LONDON_BLOCK: u64 = <span class="number">12_965_000</span>;
+<a href=#29 id=29 data-nosnippet>29</a><span class="doccomment">/// Arrow Glacier hard fork activation block is 13773000.
+<a href=#30 id=30 data-nosnippet>30</a></span><span class="kw">pub const </span>MAINNET_ARROW_GLACIER_BLOCK: u64 = <span class="number">13_773_000</span>;
+<a href=#31 id=31 data-nosnippet>31</a><span class="doccomment">/// Gray Glacier hard fork activation block is 15050000.
+<a href=#32 id=32 data-nosnippet>32</a></span><span class="kw">pub const </span>MAINNET_GRAY_GLACIER_BLOCK: u64 = <span class="number">15_050_000</span>;
+<a href=#33 id=33 data-nosnippet>33</a><span class="doccomment">/// Paris hard fork activation block is 15537394.
+<a href=#34 id=34 data-nosnippet>34</a></span><span class="kw">pub const </span>MAINNET_PARIS_BLOCK: u64 = <span class="number">15_537_394</span>;
+<a href=#35 id=35 data-nosnippet>35</a><span class="doccomment">/// Shanghai hard fork activation block is 17034870.
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="kw">pub const </span>MAINNET_SHANGHAI_BLOCK: u64 = <span class="number">17_034_870</span>;
+<a href=#37 id=37 data-nosnippet>37</a><span class="doccomment">/// Cancun hard fork activation block is 19426587.
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">pub const </span>MAINNET_CANCUN_BLOCK: u64 = <span class="number">19_426_587</span>;
+<a href=#39 id=39 data-nosnippet>39</a><span class="doccomment">/// Prague hard fork activation block is 22431084.
+<a href=#40 id=40 data-nosnippet>40</a></span><span class="kw">pub const </span>MAINNET_PRAGUE_BLOCK: u64 = <span class="number">22_431_084</span>;
+<a href=#41 id=41 data-nosnippet>41</a>
+<a href=#42 id=42 data-nosnippet>42</a><span class="doccomment">/// Paris hard fork activation terminal total difficulty is 58_750_000_000_000_000_000_000_U256.
+<a href=#43 id=43 data-nosnippet>43</a></span><span class="kw">pub const </span>MAINNET_PARIS_TTD: U256 = <span class="macro">uint!</span>(<span class="number">58_750_000_000_000_000_000_000_U256</span>);
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a><span class="doccomment">/// Frontier hard fork activation timestamp is 1438226773.
+<a href=#46 id=46 data-nosnippet>46</a></span><span class="kw">pub const </span>MAINNET_FRONTIER_TIMESTAMP: u64 = <span class="number">1_438_226_773</span>;
+<a href=#47 id=47 data-nosnippet>47</a><span class="doccomment">/// Homestead hard fork activation timestamp is 1457938193.
+<a href=#48 id=48 data-nosnippet>48</a></span><span class="kw">pub const </span>MAINNET_HOMESTEAD_TIMESTAMP: u64 = <span class="number">1_457_938_193</span>;
+<a href=#49 id=49 data-nosnippet>49</a><span class="doccomment">/// Dao hard fork activation timestamp is 1468977640.
+<a href=#50 id=50 data-nosnippet>50</a></span><span class="kw">pub const </span>MAINNET_DAO_TIMESTAMP: u64 = <span class="number">1_468_977_640</span>;
+<a href=#51 id=51 data-nosnippet>51</a><span class="doccomment">/// Tangerine hard fork activation timestamp is 1476753571.
+<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">pub const </span>MAINNET_TANGERINE_TIMESTAMP: u64 = <span class="number">1_476_753_571</span>;
+<a href=#53 id=53 data-nosnippet>53</a><span class="doccomment">/// Spurious Dragon hard fork activation timestamp is 1479788144.
+<a href=#54 id=54 data-nosnippet>54</a></span><span class="kw">pub const </span>MAINNET_SPURIOUS_DRAGON_TIMESTAMP: u64 = <span class="number">1_479_788_144</span>;
+<a href=#55 id=55 data-nosnippet>55</a><span class="doccomment">/// Byzantium hard fork activation timestamp is 1508131331.
+<a href=#56 id=56 data-nosnippet>56</a></span><span class="kw">pub const </span>MAINNET_BYZANTIUM_TIMESTAMP: u64 = <span class="number">1_508_131_331</span>;
+<a href=#57 id=57 data-nosnippet>57</a><span class="doccomment">/// Constantinople hard fork activation timestamp is 1551340324.
+<a href=#58 id=58 data-nosnippet>58</a></span><span class="kw">pub const </span>MAINNET_CONSTANTINOPLE_TIMESTAMP: u64 = MAINNET_PETERSBURG_TIMESTAMP;
+<a href=#59 id=59 data-nosnippet>59</a><span class="doccomment">/// Petersburg hard fork activation timestamp is 1551340324, same as
+<a href=#60 id=60 data-nosnippet>60</a>/// [`MAINNET_PETERSBURG_TIMESTAMP`].
+<a href=#61 id=61 data-nosnippet>61</a></span><span class="kw">pub const </span>MAINNET_PETERSBURG_TIMESTAMP: u64 = <span class="number">1_551_340_324</span>;
+<a href=#62 id=62 data-nosnippet>62</a><span class="doccomment">/// Istanbul hard fork activation timestamp is 1575807909.
+<a href=#63 id=63 data-nosnippet>63</a></span><span class="kw">pub const </span>MAINNET_ISTANBUL_TIMESTAMP: u64 = <span class="number">1_575_807_909</span>;
+<a href=#64 id=64 data-nosnippet>64</a><span class="doccomment">/// Muir Glacier hard fork activation timestamp is 1577953849.
+<a href=#65 id=65 data-nosnippet>65</a></span><span class="kw">pub const </span>MAINNET_MUIR_GLACIER_TIMESTAMP: u64 = <span class="number">1_577_953_849</span>;
+<a href=#66 id=66 data-nosnippet>66</a><span class="doccomment">/// Berlin hard fork activation timestamp is 1618481223.
+<a href=#67 id=67 data-nosnippet>67</a></span><span class="kw">pub const </span>MAINNET_BERLIN_TIMESTAMP: u64 = <span class="number">1_618_481_223</span>;
+<a href=#68 id=68 data-nosnippet>68</a><span class="doccomment">/// London hard fork activation timestamp is 1628166822.
+<a href=#69 id=69 data-nosnippet>69</a></span><span class="kw">pub const </span>MAINNET_LONDON_TIMESTAMP: u64 = <span class="number">1_628_166_822</span>;
+<a href=#70 id=70 data-nosnippet>70</a><span class="doccomment">/// Arrow Glacier hard fork activation timestamp is 1639036523.
+<a href=#71 id=71 data-nosnippet>71</a></span><span class="kw">pub const </span>MAINNET_ARROW_GLACIER_TIMESTAMP: u64 = <span class="number">1_639_036_523</span>;
+<a href=#72 id=72 data-nosnippet>72</a><span class="doccomment">/// Gray Glacier hard fork activation timestamp is 1656586444.
+<a href=#73 id=73 data-nosnippet>73</a></span><span class="kw">pub const </span>MAINNET_GRAY_GLACIER_TIMESTAMP: u64 = <span class="number">1_656_586_444</span>;
+<a href=#74 id=74 data-nosnippet>74</a><span class="doccomment">/// Paris hard fork activation timestamp is 1663224162.
+<a href=#75 id=75 data-nosnippet>75</a></span><span class="kw">pub const </span>MAINNET_PARIS_TIMESTAMP: u64 = <span class="number">1_663_224_162</span>;
+<a href=#76 id=76 data-nosnippet>76</a><span class="doccomment">/// Shanghai hard fork activation timestamp is 1681338455.
+<a href=#77 id=77 data-nosnippet>77</a></span><span class="kw">pub const </span>MAINNET_SHANGHAI_TIMESTAMP: u64 = <span class="number">1_681_338_455</span>;
+<a href=#78 id=78 data-nosnippet>78</a><span class="doccomment">/// Cancun hard fork activation timestamp is 1710338135.
+<a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub const </span>MAINNET_CANCUN_TIMESTAMP: u64 = <span class="number">1_710_338_135</span>;
+<a href=#80 id=80 data-nosnippet>80</a><span class="doccomment">/// Prague hard fork activation timestamp is 1746612311.
+<a href=#81 id=81 data-nosnippet>81</a></span><span class="kw">pub const </span>MAINNET_PRAGUE_TIMESTAMP: u64 = <span class="number">1_746_612_311</span>;</code></pre></div></section></main></body></html>

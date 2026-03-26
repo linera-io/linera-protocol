@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["IntervalLogWriterError","LogEntry","LogIteratorError"],"struct":["IntervalLogHistogram","IntervalLogIterator","IntervalLogWriter","IntervalLogWriterBuilder","Tag"]};

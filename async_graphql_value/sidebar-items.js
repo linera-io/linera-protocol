@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["RAW_VALUE_TOKEN"],"enum":["ConstValue","Value"],"fn":["from_value","to_value"],"macro":["value"],"struct":["DeserializerError","Extensions","Name","Number","SerializerError","Variables"]};

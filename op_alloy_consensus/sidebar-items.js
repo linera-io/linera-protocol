@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DepositSourceDomain","DepositSourceDomainIdentifier","OpReceiptEnvelope"],"mod":["eip1559","interop","transaction"],"struct":["InteropBlockReplacementDepositSource","L1InfoDepositSource","OpDepositReceipt","UpgradeDepositSource","UserDepositSource"],"trait":["OpTxReceipt"],"type":["OpBlock","OpDepositReceiptWithBloom"]};

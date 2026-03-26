@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This section collects together goal-oriented documentation."><title>rustls::manual::_03_howto - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../rustls/index.html">rustls</a><span class="version">0.23.31</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module _03_<wbr>howto</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#customising-private-key-usage" title="Customising private key usage">Customising private key usage</a></li><li><a href="#unexpected-eof" title="Unexpected EOF">Unexpected EOF</a></li><li><a href="#debugging" title="Debugging">Debugging</a><ul><li><a href="#collecting-logs" title="Collecting logs">Collecting logs</a></li><li><a href="#taking-a-packet-capture" title="Taking a packet capture">Taking a packet capture</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In rustls::<wbr>manual</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">rustls</a>::<wbr><a href="../index.html">manual</a></div><h1>Module <span>_03_howto</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/rustls/manual/howto.rs.html#1-124">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This section collects together goal-oriented documentation.</p>
+<h2 id="customising-private-key-usage"><a class="doc-anchor" href="#customising-private-key-usage">§</a>Customising private key usage</h2>
+<p>By default rustls supports PKCS#8-format<sup id="fnref1"><a href="#fn1">1</a></sup> RSA or ECDSA keys, plus PKCS#1-format RSA keys.</p>
+<p>However, if your private key resides in a HSM, or in another process, or perhaps
+another machine, rustls has some extension points to support this:</p>
+<p>The main trait you must implement is <a href="../../sign/trait.SigningKey.html" title="trait rustls::sign::SigningKey"><code>sign::SigningKey</code></a>. The primary method here
+is <a href="../../sign/trait.SigningKey.html#tymethod.choose_scheme" title="method rustls::sign::SigningKey::choose_scheme"><code>choose_scheme()</code></a> where you are given a set of <a href="../../enum.SignatureScheme.html" title="enum rustls::SignatureScheme"><code>SignatureScheme</code>s</a> the client says
+it supports: you must choose one (or return <code>None</code> – this aborts the handshake). Having
+done that, you return an implementation of the <a href="../../sign/trait.Signer.html" title="trait rustls::sign::Signer"><code>sign::Signer</code></a> trait.
+The <a href="../../sign/trait.Signer.html#tymethod.sign" title="method rustls::sign::Signer::sign"><code>sign()</code></a> performs the signature and returns it.</p>
+<p>(Unfortunately this is currently designed for keys with low latency access, like in a
+PKCS#11 provider, Microsoft CryptoAPI, etc. so is blocking rather than asynchronous.
+It’s a TODO to make these and other extension points async.)</p>
+<p>Once you have these two pieces, configuring a server to use them involves, briefly:</p>
+<ul>
+<li>packaging your <a href="../../sign/trait.SigningKey.html" title="trait rustls::sign::SigningKey"><code>sign::SigningKey</code></a> with the matching certificate chain into a <a href="../../sign/struct.CertifiedKey.html" title="struct rustls::sign::CertifiedKey"><code>sign::CertifiedKey</code></a></li>
+<li>making a <a href="../../server/struct.ResolvesServerCertUsingSni.html" title="struct rustls::server::ResolvesServerCertUsingSni"><code>ResolvesServerCertUsingSni</code></a> and feeding in your <a href="../../sign/struct.CertifiedKey.html" title="struct rustls::sign::CertifiedKey"><code>sign::CertifiedKey</code></a> for all SNI hostnames you want to use it for,</li>
+<li>setting that as your <code>ServerConfig</code>’s <a href="../../server/struct.ServerConfig.html#structfield.cert_resolver" title="field rustls::server::ServerConfig::cert_resolver"><code>cert_resolver</code></a></li>
+</ul>
+<p>For a complete example of implementing a custom <a href="../../sign/trait.SigningKey.html" title="trait rustls::sign::SigningKey"><code>sign::SigningKey</code></a> and
+<a href="../../sign/trait.Signer.html" title="trait rustls::sign::Signer"><code>sign::Signer</code></a> see the <a href="https://github.com/rustls/rustls-cng/blob/dev/src/signer.rs"><code>signer</code> module in the <code>rustls-cng</code> crate</a>.</p>
+<h2 id="unexpected-eof"><a class="doc-anchor" href="#unexpected-eof">§</a>Unexpected EOF</h2>
+<p>TLS has a <code>close_notify</code> mechanism to prevent truncation attacks<sup id="fnref2"><a href="#fn2">2</a></sup>.
+According to the TLS RFCs, each party is required to send a <code>close_notify</code> message before
+closing the write side of the connection. However, some implementations don’t send it.
+So long as the application layer protocol (for instance HTTP/2) has message length framing
+and can reject truncated messages, this is not a security problem.</p>
+<p>Rustls treats an EOF without <code>close_notify</code> as an error of type <code>std::io::Error</code> with
+<code>ErrorKind::UnexpectedEof</code>. In some situations it’s appropriate for the application to handle
+this error the same way it would handle a normal EOF (a read returning <code>Ok(0)</code>). In particular
+if <code>UnexpectedEof</code> occurs on an idle connection it is appropriate to treat it the same way as a
+clean shutdown. And if an application always uses messages with length framing (in other words,
+messages are never delimited by the close of the TCP connection), it can unconditionally
+ignore <code>UnexpectedEof</code> errors from rustls.</p>
+<h2 id="debugging"><a class="doc-anchor" href="#debugging">§</a>Debugging</h2>
+<p>If you encounter a bug with Rustls it can be helpful to collect up as much diagnostic
+information as possible.</p>
+<h3 id="collecting-logs"><a class="doc-anchor" href="#collecting-logs">§</a>Collecting logs</h3>
+<p>If your bug reproduces with one of the <a href="https://github.com/rustls/rustls/tree/main/examples">Rustls examples</a> you can use the
+<a href="https://docs.rs/env_logger/latest/env_logger/#enabling-logging"><code>RUST_LOG</code></a> environment variable to increase the log verbosity. If you’re using
+your own application, you may need to configure it with a logging backend
+like <code>env_logger</code>.</p>
+<p>Consider reproducing your bug with <code>RUST_LOG=rustls=trace</code> and sharing the result
+in a <a href="https://docs.github.com/en/get-started/writing-on-github/editing-and-sharing-content-with-gists/creating-gists">GitHub gist</a>.</p>
+<h3 id="taking-a-packet-capture"><a class="doc-anchor" href="#taking-a-packet-capture">§</a>Taking a packet capture</h3>
+<p>When logs aren’t enough taking a packet capture (“pcap”) is another helpful tool.
+The details of how to accomplish this vary by operating system/context.</p>
+<h4 id="tcpdump"><a class="doc-anchor" href="#tcpdump">§</a>tcpdump</h4>
+<p>As one example, on Linux using <a href="https://www.redhat.com/en/blog/introduction-using-tcpdump-linux-command-line"><code>tcpdump</code></a> is often easiest.</p>
+<p>If you know the IP address of the remote server your bug demonstrates with you
+could take a short packet capture with this command (after replacing
+<code>XX.XX.XX.XX</code> with the correct IP address):</p>
+<div class="example-wrap"><pre class="language-bash"><code>sudo tcpdump -i any tcp and dst host XX.XX.XX.XX -C5 -w rustls.pcap</code></pre></div>
+<p>The <code>-i any</code> captures on any network interface. The <code>tcp and dst host XX.XX.XX.XX</code>
+portion target the capture to TCP traffic to the specified IP address. The <code>-C5</code>
+argument limits the capture to at most 5MB. Lastly the <code>-w</code> argument writes the
+capture to <code>rustls.pcap</code>.</p>
+<p>Another approach is to use <code>tcp and port XXXX</code> instead of <code>tcp and dst host XX.XX.XX.XX</code>
+to capture all traffic to a specific port instead of a specific host server.</p>
+<h4 id="sslkeylogfile"><a class="doc-anchor" href="#sslkeylogfile">§</a>SSLKEYLOGFILE</h4>
+<p>If the bug you are reporting happens after data is encrypted you may also wish to
+share the secret keys required to decrypt the post-handshake traffic.</p>
+<p>If you’re using one of the <a href="https://github.com/rustls/rustls/tree/main/examples">Rustls examples</a> you can set the <code>SSLKEYLOGFILE</code> environment
+variable to a path where secrets will be written. E.g. <code>SSLKEYLOGFILE=rustls.pcap.keys</code>.</p>
+<p>If you’re using your own application you may need to customize the Rustls <code>ClientConfig</code>
+or <code>ServerConfig</code>’s <code>key_log</code> setting like the example applications do.</p>
+<p>With the file from <code>SSLKEYLOGFILE</code> it is possible to use <a href="https://www.wireshark.org/download.html">Wireshark</a> or another tool to
+decrypt the post-handshake messages, following <a href="https://everything.curl.dev/usingcurl/tls/sslkeylogfile.html">these instructions</a>.</p>
+<p>Remember this allows plaintext decryption and should only be done in testing contexts
+where no sensitive data (API keys, etc) are being shared.</p>
+<div class="footnotes"><hr><ol><li id="fn1"><p>For PKCS#8 it does not support password encryption – there’s not a meaningful threat
+model addressed by this, and the encryption supported is typically extremely poor.&nbsp;<a href="#fnref1">↩</a></p></li><li id="fn2"><p><a href="https://datatracker.ietf.org/doc/html/rfc8446#section-6.1">https://datatracker.ietf.org/doc/html/rfc8446#section-6.1</a>&nbsp;<a href="#fnref2">↩</a></p></li></ol></div></div></details></section></div></main></body></html>

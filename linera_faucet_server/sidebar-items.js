@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ClaimOutcome","FaucetConfig","FaucetService","InitialClaim","MutationRoot","QueryRoot","Validator"]};

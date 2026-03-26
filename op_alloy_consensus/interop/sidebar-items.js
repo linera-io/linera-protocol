@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CROSS_L2_INBOX_ADDRESS"],"enum":["SafetyLevel"],"struct":["SafetyLevelParseError"]};
