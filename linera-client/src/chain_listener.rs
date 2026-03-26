@@ -377,7 +377,9 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 self.update_validators(&notification).await?;
             }
             Reason::NewBlock { hash, .. } => {
-                self.update_wallet(notification.chain_id).await?;
+                if !matches!(listening_mode, ListeningMode::EventsOnly(_)) {
+                    self.update_wallet(notification.chain_id).await?;
+                }
                 if listening_mode.is_full() {
                     self.add_new_chains(*hash).await?;
                     let publishers = self

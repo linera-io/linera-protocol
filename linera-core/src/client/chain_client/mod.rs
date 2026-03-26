@@ -2951,7 +2951,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let events_only = self
             .listening_mode()
-            .is_some_and(|m| matches!(m, ListeningMode::EventsOnly(_)));
+            .is_none_or(|m| matches!(m, ListeningMode::EventsOnly(_)));
         let (nodes, local_node) = {
             // For EventsOnly chains, use the admin chain's committee: the chain's own
             // committee may be stale (we don't track epoch changes), and
