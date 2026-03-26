@@ -567,10 +567,7 @@ impl<Env: Environment> Client<Env> {
                     self.options.certificate_batch_download_timeout,
                 )
                 .await?;
-            let Some(info) = self
-                .process_certificates(validators, certificates)
-                .await?
-            else {
+            let Some(info) = self.process_certificates(validators, certificates).await? else {
                 break;
             };
             assert!(info.next_block_height > next_height);
