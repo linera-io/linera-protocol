@@ -28,7 +28,8 @@ use linera_base::{
         Event, MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId,
+        StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -708,7 +709,8 @@ where
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     builder.set_fault_type([3], FaultType::Offline);
-
+    // Root chain 0 is used as the admin chain; use higher indices for test chains so
+    // that the publisher chains are not the admin chain (which is always fully synced).
     let admin_client = builder.add_root_chain(0, Amount::ONE).await?;
     let sender = builder.add_root_chain(1, Amount::ONE).await?;
     let sender2 = builder.add_root_chain(2, Amount::ONE).await?;
@@ -720,7 +722,7 @@ where
     } else {
         (sender2, sender)
     };
-    let mut receiver = builder.add_root_chain(2, Amount::ONE).await?;
+    let mut receiver = builder.add_root_chain(3, Amount::ONE).await?;
 
     let module_id = receiver.publish_wasm_example("social").await?;
     let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
@@ -754,7 +756,7 @@ where
         text: text.clone(),
         image_url: None,
     };
-    sender
+    let cert0 = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
         .unwrap_ok_committed();
@@ -800,13 +802,24 @@ where
     };
     assert_eq!(outcome, expected);
 
-    // Make two more posts.
+    // Make a non-event operation on the sender chain (self-transfer), then another post.
+    // Non-event block between two event blocks, to test sparse sync gaps.
+    let non_event_cert = sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_millis(1),
+            Account::chain(sender.chain_id()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
     let text = "Follow sender2!".to_string();
     let post = social::Operation::Post {
         text: text.clone(),
         image_url: None,
     };
-    sender
+    let cert2 = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
         .unwrap_ok_committed();
@@ -1009,6 +1022,64 @@ where
         operations: vec![],
     };
     assert_eq!(outcome, expected);
+
+    // Now test synchronize_publisher_chains: a second receiver subscribes after events
+    // already exist, and gets them via partial sync (not full chain download).
+    let receiver2 = builder.add_root_chain(4, Amount::ONE).await?;
+
+    // Subscribe to the sender's events using the same application as the first receiver.
+    let request_subscribe2 = social::Operation::Subscribe {
+        chain_id: sender.chain_id(),
+    };
+    receiver2
+        .execute_operation(Operation::user(application_id, &request_subscribe2)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Verify receiver2 doesn't have the sender's blocks yet.
+    assert!(
+        !receiver2
+            .storage_client()
+            .contains_certificate(cert0.hash())
+            .await?
+    );
+
+    // synchronize_from_validators calls synchronize_publisher_chains, which should
+    // do a partial sync: only download event-bearing blocks from the sender.
+    receiver2.synchronize_from_validators().await.unwrap();
+
+    // Event-bearing blocks should be downloaded.
+    assert!(
+        receiver2
+            .storage_client()
+            .contains_certificate(cert0.hash())
+            .await?
+    );
+    // Non-event block should NOT be downloaded (partial sync).
+    assert!(
+        !receiver2
+            .storage_client()
+            .contains_certificate(non_event_cert.hash())
+            .await?
+    );
+    // Latest event-bearing block should be downloaded.
+    assert!(
+        receiver2
+            .storage_client()
+            .contains_certificate(cert2.hash())
+            .await?
+    );
+
+    // Verify that receiver2 can process its inbox and consume the pre-existing events.
+    let certs = receiver2.process_inbox().await?.0;
+    assert!(!certs.is_empty(), "receiver2 should have events to process");
+    // The inbox processing should produce UpdateStreams operations for the events.
+    let has_update_streams = certs.iter().any(|cert| {
+        cert.block().body.operations().any(|op| {
+            matches!(op, Operation::System(op) if matches!(**op, SystemOperation::UpdateStreams(_)))
+        })
+    });
+    assert!(has_update_streams, "should have UpdateStreams operations");
 
     Ok(())
 }
@@ -1793,6 +1864,100 @@ where
         response: async_graphql::Response::new(async_graphql::Value::from_json(
             json!({"value": 5}),
         )?),
+        operations: vec![],
+    };
+    assert_eq!(outcome, expected);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_read_event_downloads_publisher_chain(
+    wasm_runtime: WasmRuntime,
+) -> anyhow::Result<()> {
+    run_test_read_event_downloads_publisher_chain(MemoryStorageBuilder::with_wasm_runtime(
+        wasm_runtime,
+    ))
+    .await
+}
+
+/// Tests that when a block execution needs events from a publisher chain that isn't
+/// locally available, the client automatically downloads the publisher chain certificates
+/// using the event block height index and retries.
+async fn run_test_read_event_downloads_publisher_chain<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+
+    let sender = builder.add_root_chain(0, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(1, Amount::ONE).await?;
+
+    // Deploy the social app on the receiver chain.
+    let module_id = receiver.publish_wasm_example("social").await?;
+    let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
+    let (application_id, _cert) = receiver
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Subscribe the receiver to the sender's events.
+    let request_subscribe = social::Operation::Subscribe {
+        chain_id: sender.chain_id(),
+    };
+    receiver
+        .execute_operation(Operation::user(application_id, &request_subscribe)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Sender creates a post, which emits an event. Validators confirm this.
+    let post = social::Operation::Post {
+        text: "Hello from sender!".to_string(),
+        image_url: None,
+    };
+    sender
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Do NOT call receiver.synchronize_from_validators().
+    // Instead, directly execute an UpdateStreams operation that references the
+    // sender's event. The receiver doesn't have the sender's chain locally, so
+    // this will fail with EventsNotFound. The retry logic should use the event
+    // block height index to download only the needed certificates and succeed.
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    receiver
+        .execute_operations(
+            vec![SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 1)]).into()],
+            vec![],
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Verify that the event was processed: query the received posts.
+    let query = Request::new("{ receivedPosts { keys { author, index } } }");
+    let outcome = receiver
+        .query_user_application(application_id, &query)
+        .await?;
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({
+                "receivedPosts": {
+                    "keys": [
+                        { "author": sender.chain_id(), "index": 0 }
+                    ]
+                }
+            }))
+            .unwrap(),
+        ),
         operations: vec![],
     };
     assert_eq!(outcome, expected);

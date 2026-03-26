@@ -1976,6 +1976,7 @@ async fn test_wasm_end_to_end_counter_subscription(config: impl LineraNetConfig)
             &[],
             false,
             &["query CounterValue { value }".to_string()],
+            &[],
         )
         .await?;
 
@@ -2015,6 +2016,107 @@ async fn test_wasm_end_to_end_counter_subscription(config: impl LineraNetConfig)
         .next()
         .await
         .context("expected updated query result")??;
+    let updated_value: u64 = serde_json::from_value(updated["data"]["value"].clone())?;
+    assert_eq!(updated_value, original_counter_value + increment);
+
+    // A second subscriber should immediately receive the current value without
+    // needing a new block.
+    let mut subscription2 = node_service
+        .query_result("CounterValue", chain, &application_id.forget_abi())
+        .await?;
+    let immediate = subscription2
+        .next()
+        .await
+        .context("expected immediate value for second subscriber")??;
+    let immediate_value: u64 = serde_json::from_value(immediate["data"]["value"].clone())?;
+    assert_eq!(immediate_value, original_counter_value + increment);
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_counter_subscription_ttl(config: impl LineraNetConfig) -> Result<()> {
+    use counter::CounterAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    let original_counter_value = 10;
+    let increment = 3;
+
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let (contract, service) = client.build_example("counter").await?;
+
+    let application_id = client
+        .publish_and_create::<CounterAbi, (), u64>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            &(),
+            &original_counter_value,
+            &[],
+            None,
+        )
+        .await?;
+
+    // Start node service with a subscription query and a 4-second TTL.
+    let ttl_secs = 4;
+    let port = get_node_port().await;
+    let mut node_service = client
+        .run_node_service_with_all_options(
+            port,
+            ProcessInbox::Skip,
+            &[],
+            &[],
+            false,
+            &["query CounterValue { value }".to_string()],
+            &[("CounterValue".to_string(), ttl_secs)],
+        )
+        .await?;
+
+    let application = node_service.make_application(&chain, &application_id)?;
+
+    // Subscribe to query results via WebSocket.
+    let mut subscription = node_service
+        .query_result("CounterValue", chain, &application_id.forget_abi())
+        .await?;
+
+    // The watcher fires immediately with the initial value.
+    let initial = subscription
+        .next()
+        .await
+        .context("expected initial query result")??;
+    let initial_value: u64 = serde_json::from_value(initial["data"]["value"].clone())?;
+    assert_eq!(initial_value, original_counter_value);
+
+    // Increment the counter. With a TTL, the notification should be deferred.
+    let mutation = format!("increment(value: {increment})");
+    application.mutate(mutation).await?;
+
+    // The update should NOT arrive within 2 seconds (TTL is 4s).
+    let no_update =
+        tokio::time::timeout(std::time::Duration::from_secs(2), subscription.next()).await;
+    assert!(
+        no_update.is_err(),
+        "expected no notification during TTL window"
+    );
+
+    // But it should arrive after the TTL expires (wait up to 5 more seconds).
+    let updated = tokio::time::timeout(std::time::Duration::from_secs(5), subscription.next())
+        .await
+        .context("expected deferred notification after TTL")?
+        .context("subscription stream ended")??;
     let updated_value: u64 = serde_json::from_value(updated["data"]["value"].clone())?;
     assert_eq!(updated_value, original_counter_value + increment);
 
@@ -2299,13 +2401,16 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 
     let client2 = net.make_client().await;
     client2.wallet_init(None).await?;
+    let client3 = net.make_client().await;
+    client3.wallet_init(None).await?;
 
-    // We use a newly opened chain for the publisher, so that client2 will not be listening to that
-    // chain by default.
+    // We use a newly opened chain for the publisher, so that client2 and client3 will not be
+    // listening to that chain by default.
     let chain1 = client1
         .open_and_assign(&client1, Amount::from_tokens(100))
         .await?;
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let chain3 = client1.open_and_assign(&client3, Amount::ONE).await?;
     let (contract, service) = client1.build_example("social").await?;
     let module_id = client1
         .publish_module::<SocialAbi, (), ()>(contract, service, VmRuntime::Wasm, None)
@@ -2328,22 +2433,24 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         .await?;
     let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
 
-    let mut notifications = node_service2.notifications(chain2).await?;
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     let app1 = node_service1.make_application(&chain1, &application_id)?;
     app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
         .await?;
 
     let query = "receivedPosts { keys { author, index } }";
-    let expected_response = json!({
+    let expected_response1 = json!({
         "receivedPosts": {
             "keys": [
                 { "author": chain1, "index": 0 }
             ]
         }
     });
-    notifications.wait_for_block(height2.try_add_one()?).await?;
-    assert_eq!(app2.query(query).await?, expected_response);
+    notifications2
+        .wait_for_block(height2.try_add_one()?)
+        .await?;
+    assert_eq!(app2.query(query).await?, expected_response1);
 
     let tip_after_first_post = node_service2.chain_tip(chain1).await?;
 
@@ -2362,7 +2469,7 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     app1.mutate("post(text: \"Second post!\")").await?;
 
     let query = "receivedPosts { keys { author, index } }";
-    let expected_response = json!({
+    let expected_response2 = json!({
         "receivedPosts": {
             "keys": [
                 { "author": chain1, "index": 1 },
@@ -2370,9 +2477,22 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
-    let latest_height = height2.try_add_one()?;
-    notifications.wait_for_block(latest_height).await?;
-    assert_eq!(app2.query(query).await?, expected_response);
+    // The transfer on chain1 may cause an intermediate block on chain2 via
+    // automatic inbox processing of the event stream subscription, so the
+    // next block may not yet contain the second post.
+    let mut latest_height = height2;
+    loop {
+        latest_height = latest_height.try_add_one()?;
+        notifications2.wait_for_block(latest_height).await?;
+        let response = app2.query(query).await?;
+        if response == expected_response2 {
+            break;
+        }
+        assert_eq!(
+            response, expected_response1,
+            "unexpected intermediate state: expected either both posts or only the first post"
+        );
+    }
 
     let tip_after_second_post = node_service2.chain_tip(chain1).await?;
     // The second post should not have moved the tip hash - client 2 should have only preprocessed
@@ -2391,10 +2511,13 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     // Client 1 posts again.
     app1.mutate("post(text: \"Third post!\")").await?;
 
-    // Restart the service for node 2.
+    // Restart the service for node 2. Get a fresh chain tip (the third post may already
+    // have been synced on startup), then subscribe to notifications before posting.
     let mut node_service2 = client2
         .run_node_service(port2, ProcessInbox::Automatic)
         .await?;
+    let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     // Client 1 posts again, to trigger downloading missing events in client 2.
     app1.mutate("post(text: \"Fourth post!\")").await?;
@@ -2411,23 +2534,60 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         }
     });
 
-    loop {
-        let (_, height4) = node_service2.chain_tip(chain2).await?.unwrap();
-        if height4 > latest_height {
-            break;
-        }
-        linera_base::time::timer::sleep(Duration::from_millis(500)).await;
+    // The posts may arrive in any number of blocks, and some may already be processed.
+    let mut next_height = height2.try_add_one()?;
+    while app2.query(query).await? != expected_response {
+        notifications2.wait_for_block(next_height).await?;
+        next_height = next_height.try_add_one()?;
     }
-
-    assert_eq!(app2.query(query).await?, expected_response);
 
     let tip_after_fourth_post = node_service2.chain_tip(chain1).await?;
     // The third post should not have moved the tip hash, either (the block with the
     // transfer should still not have been downloaded).
     assert_eq!(tip_after_first_post, tip_after_fourth_post);
 
+    // Test that a new subscriber gets pre-existing events: client3 subscribes after the posts
+    // and should eventually receive them via sparse sync + chain listener processing.
+    let port3 = get_node_port().await;
+    let mut node_service3 = client3
+        .run_node_service(port3, ProcessInbox::Automatic)
+        .await?;
+
+    let app3 = node_service3.make_application(&chain3, &application_id)?;
+    app3.mutate(format!("subscribe(chainId: \"{chain1}\")"))
+        .await?;
+
+    let (_, height3) = node_service3.chain_tip(chain3).await?.unwrap();
+    let mut notifications3 = node_service3.notifications(chain3).await?;
+
+    // Wait for the chain listener to process the pre-existing events.
+    // They may arrive in any number of blocks, and some may already be processed.
+    let expected_response = json!({
+        "receivedPosts": {
+            "keys": [
+                { "author": chain1, "index": 3 },
+                { "author": chain1, "index": 2 },
+                { "author": chain1, "index": 1 },
+                { "author": chain1, "index": 0 }
+            ]
+        }
+    });
+    let query = "receivedPosts { keys { author, index } }";
+    let mut next_height = height3.try_add_one()?;
+    while app3.query(query).await? != expected_response {
+        notifications3.wait_for_block(next_height).await?;
+        next_height = next_height.try_add_one()?;
+    }
+
+    // Verify that the sparse sync for client3 did not download the non-event transfer block:
+    // the tip of chain1 as seen by client3 should match the tip seen by client2 (which also
+    // only has event-bearing blocks).
+    let tip_client3 = node_service3.chain_tip(chain1).await?;
+    assert_eq!(tip_after_first_post, tip_client3);
+
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
+    node_service3.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
@@ -5645,9 +5805,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     admin_notifications
         .wait_for_block(BlockHeight::from(start_h + 18))
         .await
-        .unwrap_or_else(|_| {
-            panic!("should receive a notification about a block on chain {admin_chain}")
-        });
+        .with_context(|| {
+            format!("should receive a notification about a block on chain {admin_chain}")
+        })?;
 
     admin_fungible_app
         .assert_balances([(admin_owner, Amount::from_tokens(100))])

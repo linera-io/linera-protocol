@@ -448,7 +448,7 @@ where
     // This should handle the failing message by rejecting the bundle.
     let (modified_block, auto_retry_executed, _, _) = env
         .executing_worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block.clone(),
             None,
             vec![],
@@ -474,7 +474,7 @@ where
     // and produce the same outcome.
     let (_, abort_executed, _, _) = env
         .executing_worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             modified_block.clone(),
             None,
             vec![],

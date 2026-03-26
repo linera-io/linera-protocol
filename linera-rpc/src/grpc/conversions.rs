@@ -8,7 +8,7 @@ use linera_base::{
     },
     data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
-    identifiers::{AccountOwner, BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId, EventId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
@@ -600,6 +600,11 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             .request_leader_timeout
             .map(|height_and_round| bincode::deserialize(&height_and_round))
             .transpose()?;
+        let request_previous_event_blocks = chain_info_query
+            .request_previous_event_blocks
+            .map(|stream_ids| bincode::deserialize(&stream_ids))
+            .transpose()?
+            .unwrap_or_default();
 
         Ok(Self {
             request_committees: chain_info_query.request_committees,
@@ -613,6 +618,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
             request_sent_certificate_hashes_by_heights,
+            request_previous_event_blocks,
             create_network_actions: chain_info_query.create_network_actions.unwrap_or(true),
         })
     }
@@ -629,6 +635,8 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             .request_leader_timeout
             .map(|height_and_round| bincode::serialize(&height_and_round))
             .transpose()?;
+        let request_previous_event_blocks =
+            bincode::serialize(&chain_info_query.request_previous_event_blocks)?;
 
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
@@ -645,6 +653,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
             create_network_actions: Some(chain_info_query.create_network_actions),
+            request_previous_event_blocks: Some(request_previous_event_blocks),
         })
     }
 }
@@ -1034,9 +1043,41 @@ impl TryFrom<api::DownloadCertificatesByHeightsRequest> for CertificatesByHeight
     }
 }
 
+impl From<Vec<EventId>> for api::EventBlockHeightsRequest {
+    fn from(event_ids: Vec<EventId>) -> Self {
+        Self {
+            event_ids: bincode::serialize(&event_ids).expect("serialize event_ids"),
+        }
+    }
+}
+
+impl TryFrom<api::EventBlockHeightsRequest> for Vec<EventId> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::EventBlockHeightsRequest) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(&request.event_ids)?)
+    }
+}
+
+impl From<Vec<Option<BlockHeight>>> for api::EventBlockHeightsResponse {
+    fn from(heights: Vec<Option<BlockHeight>>) -> Self {
+        Self {
+            heights: bincode::serialize(&heights).expect("serialize heights"),
+        }
+    }
+}
+
+impl TryFrom<api::EventBlockHeightsResponse> for Vec<Option<BlockHeight>> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(response: api::EventBlockHeightsResponse) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(&response.heights)?)
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
-    use std::{borrow::Cow, fmt::Debug};
+    use std::{borrow::Cow, collections::BTreeMap, fmt::Debug};
 
     use linera_base::{
         crypto::{AccountSecretKey, BcsSignable, CryptoHash, Secp256k1SecretKey, ValidatorKeypair},
@@ -1137,6 +1178,7 @@ pub mod tests {
             requested_sent_certificate_hashes: vec![],
             count_received_log: 0,
             requested_received_log: vec![],
+            requested_previous_event_blocks: BTreeMap::new(),
         });
 
         let chain_info_response_none = ChainInfoResponse {
@@ -1173,6 +1215,7 @@ pub mod tests {
             request_leader_timeout: None,
             request_fallback: true,
             request_sent_certificate_hashes_by_heights: (3..8).map(BlockHeight::from).collect(),
+            request_previous_event_blocks: Vec::new(),
             create_network_actions: true,
         };
         round_trip_check::<_, api::ChainInfoQuery>(&chain_info_query_some);

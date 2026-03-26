@@ -6,11 +6,7 @@
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::{
-        self,
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::{self, Arc},
 };
 
 use futures::future::Either;
@@ -50,8 +46,8 @@ use linera_views::{
 use tokio::sync::oneshot;
 use tracing::{debug, instrument, trace, warn};
 
-use super::{ChainWorkerConfig, DeliveryNotifier};
 use crate::{
+    chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
@@ -98,13 +94,17 @@ where
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
+    /// The background task running the service runtime. Must be kept alive for the
+    /// lifetime of the worker: the pool `Guard` wrapper returns the thread-pool slot
+    /// when dropped, so dropping this early lets the pool schedule unrelated work on a
+    /// thread that is still running the service runtime.
     service_runtime_task: Option<web_thread_pool::Task<()>>,
-    /// Timestamp of the last access, in microseconds since the Unix epoch.
+    /// Timestamp of the last access.
     /// Used by the keep-alive task to determine when the worker has been idle.
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
-    last_access: Arc<AtomicU64>,
-    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    last_access: Arc<AtomicTimestamp>,
+    block_values: Arc<ValueCache<CryptoHash, Block>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
@@ -130,7 +130,7 @@ where
     pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, Block>>,
         execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
@@ -146,7 +146,7 @@ where
             chain,
             service_runtime_endpoint,
             service_runtime_task,
-            last_access: Arc::new(AtomicU64::new(super::handle::current_time_micros())),
+            last_access: Arc::new(AtomicTimestamp::now()),
             block_values,
             execution_state_cache,
             chain_modes,
@@ -177,12 +177,11 @@ where
 
     /// Updates the last-access timestamp to the current time.
     pub(crate) fn touch(&self) {
-        self.last_access
-            .store(super::handle::current_time_micros(), Ordering::Relaxed);
+        self.last_access.store_now();
     }
 
     /// Returns a clone of the last-access `Arc`, for use by the keep-alive task.
-    pub(crate) fn last_access_arc(&self) -> Arc<AtomicU64> {
+    pub(crate) fn last_access_arc(&self) -> Arc<AtomicTimestamp> {
         Arc::clone(&self.last_access)
     }
 
@@ -1364,28 +1363,6 @@ where
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
-    /// Executes a block without persisting any changes to the state.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        block_height = %block.height
-    ))]
-    pub(crate) async fn stage_block_execution(
-        &mut self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
-        let (_, executed_block, response, resource_tracker) = self
-            .stage_block_execution_with_policy(
-                block,
-                round,
-                published_blobs,
-                BundleExecutionPolicy::Abort,
-            )
-            .await?;
-        Ok((executed_block, response, resource_tracker))
-    }
-
     /// Executes a block without persisting any changes to the state, with a specified
     /// policy for handling bundle failures.
     ///
@@ -1395,7 +1372,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
-    pub(crate) async fn stage_block_execution_with_policy(
+    pub(crate) async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
         round: Option<u32>,
@@ -1667,6 +1644,32 @@ where
         }
         if query.request_manager_values {
             info.manager.add_values(&chain.manager);
+        }
+        if !query.request_previous_event_blocks.is_empty() {
+            let stream_ids = query.request_previous_event_blocks;
+            let heights = chain
+                .execution_state
+                .previous_event_blocks
+                .multi_get(&stream_ids)
+                .await?;
+            let mut indices = Vec::new();
+            let mut streams_with_heights = Vec::new();
+            for (stream_id, height) in stream_ids.into_iter().zip(heights) {
+                if let Some(height) = height {
+                    let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
+                    indices.push(index);
+                    streams_with_heights.push((stream_id, height));
+                }
+            }
+            let hashes = chain.confirmed_log.multi_get(indices).await?;
+            for (maybe_hash, (stream_id, height)) in hashes.into_iter().zip(streams_with_heights) {
+                let hash = maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
+                    height,
+                    chain_id: info.chain_id,
+                })?;
+                info.requested_previous_event_blocks
+                    .insert(stream_id, (height, hash));
+            }
         }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }
