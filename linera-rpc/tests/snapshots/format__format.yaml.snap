@@ -819,6 +819,8 @@ NodeError:
           - local_time:
               TYPENAME: Timestamp
           - block_time_grace_period_ms: U64
+    32:
+      NoValidators: UNIT
 Notification:
   STRUCT:
     - chain_id:

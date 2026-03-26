@@ -379,6 +379,9 @@ impl<Env: Environment> RequestsScheduler<Env> {
         limit: u64,
         timeout: Duration,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        if peers.is_empty() {
+            return Err(NodeError::NoValidators);
+        }
         let heights = (start.0..start.0 + limit)
             .map(BlockHeight)
             .collect::<Vec<_>>();
