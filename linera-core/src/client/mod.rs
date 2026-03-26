@@ -1139,7 +1139,7 @@ impl<Env: Environment> Client<Env> {
                     if remote_heights.is_empty() {
                         // It makes no sense to return `Ok(_)` if we aren't going to try downloading
                         // anything from the validator - let the function try the other validators
-                        return Err(());
+                        return Err(NodeError::MissingCertificateValue);
                     }
                     let certificates = self
                         .requests_scheduler
@@ -1148,19 +1148,13 @@ impl<Env: Environment> Client<Env> {
                             sender_chain_id,
                             remote_heights,
                         )
-                        .await
-                        .map_err(|_| ())?;
+                        .await?;
                     let mut certificates_with_check_results = vec![];
                     for cert in certificates {
-                        if let Ok(check_result) =
-                            Self::check_certificate(max_epoch, committees_ref, &cert)
-                        {
-                            certificates_with_check_results
-                                .push((cert, check_result.into_result().is_ok()));
-                        } else {
-                            // Invalid signature - the validator is faulty
-                            return Err(());
-                        }
+                        let check_result =
+                            Self::check_certificate(max_epoch, committees_ref, &cert)?;
+                        certificates_with_check_results
+                            .push((cert, check_result.into_result().is_ok()));
                     }
                     Ok(certificates_with_check_results)
                 },
