@@ -82,6 +82,19 @@ enum SlotState<V> {
 }
 
 /// Type alias for the stream used in multi-get operations.
+#[cfg(web)]
+type MultiGetStream<'a, C> = std::pin::Pin<
+    Box<
+        dyn futures::stream::Stream<
+                Item = Result<
+                    Option<Vec<u8>>,
+                    <<C as Context>::Store as crate::store::WithError>::Error,
+                >,
+            > + 'a,
+    >,
+>;
+
+#[cfg(not(web))]
 type MultiGetStream<'a, C> = std::pin::Pin<
     Box<
         dyn futures::stream::Stream<
@@ -445,7 +458,7 @@ where
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut map = ByteMapView::load(context).await.unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
-    /// let mut iter = map.multi_get_iter(vec![vec![0, 1], vec![0, 2]]);
+    /// let mut iter = map.multi_get_iter(&[vec![0, 1], vec![0, 2]]);
     /// let value1 = iter.next().await.unwrap().unwrap();
     /// assert_eq!(value1, Some(String::from("Hello")));
     /// assert!(iter.next().await.unwrap().unwrap().is_none());
@@ -454,7 +467,7 @@ where
     /// ```
     pub fn multi_get_iter(
         &self,
-        short_keys: Vec<Vec<u8>>,
+        short_keys: &[Vec<u8>],
     ) -> MapViewMultiGet<V, MultiGetStream<'_, C>> {
         let size = short_keys.len();
         let mut vector_query = Vec::new();
@@ -1350,8 +1363,8 @@ where
         let short_keys = indices
             .into_iter()
             .map(|index| BaseKey::derive_short_key(index))
-            .collect::<Result<_, _>>()?;
-        Ok(self.map.multi_get_iter(short_keys))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(self.map.multi_get_iter(&short_keys))
     }
 
     /// Reads the index-value pairs at the given positions, if any.
@@ -1919,8 +1932,8 @@ where
         let short_keys = indices
             .into_iter()
             .map(|index| index.to_custom_bytes())
-            .collect::<Result<_, _>>()?;
-        Ok(self.map.multi_get_iter(short_keys))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(self.map.multi_get_iter(&short_keys))
     }
 
     /// Read index-value pairs at several positions, if any.

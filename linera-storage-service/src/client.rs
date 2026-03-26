@@ -11,7 +11,7 @@ use std::{
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use futures::{future::join_all, stream::Stream};
-use linera_base::ensure;
+use linera_base::{ensure, util::future::FutureSyncExt as _};
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredDatabase;
 #[cfg(with_testing)]

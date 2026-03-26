@@ -15,7 +15,7 @@ use std::{
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use futures::{future::join_all, stream::Stream, StreamExt as _};
-use linera_base::ensure;
+use linera_base::{ensure, util::future::FutureSyncExt as _};
 use scylla::{
     client::{
         execution_profile::{ExecutionProfile, ExecutionProfileHandle},
