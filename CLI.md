@@ -197,6 +197,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--certificate-download-batch-size <CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of certificates that we download at a time from one validator when synchronizing one of our chains
 
   Default value: `500`
+* `--certificate-upload-batch-size <CERTIFICATE_UPLOAD_BATCH_SIZE>` — Maximum number of certificates read from local storage and uploaded to a validator at a time when synchronizing a chain
+
+  Default value: `500`
 * `--sender-certificate-download-batch-size <SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of sender certificates we try to download and receive in one go when syncing sender chains
 
   Default value: `20000`
