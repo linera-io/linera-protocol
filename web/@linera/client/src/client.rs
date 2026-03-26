@@ -41,8 +41,8 @@ pub(crate) enum ChainClientInner {
 impl Clone for ChainClientInner {
     fn clone(&self) -> Self {
         match self {
-            Self::Idb(c) => Self::Idb(c.clone()),
-            Self::Mem(c) => Self::Mem(c.clone()),
+            Self::Idb(client) => Self::Idb(client.clone()),
+            Self::Mem(client) => Self::Mem(client.clone()),
         }
     }
 }
@@ -115,15 +115,15 @@ impl Client {
     pub async fn chain(&self, chain: ChainId, options: Option<ChainOptions>) -> Result<Chain> {
         let options = options.unwrap_or_default();
         let chain_client = match &self.inner {
-            ClientContextInner::Idb(ctx) => {
-                let mut chain_client = ctx.lock().await.make_chain_client(chain).await?;
+            ClientContextInner::Idb(context) => {
+                let mut chain_client = context.lock().await.make_chain_client(chain).await?;
                 if let Some(owner) = options.owner {
                     chain_client.set_preferred_owner(owner);
                 }
                 ChainClientInner::Idb(chain_client)
             }
-            ClientContextInner::Mem(ctx) => {
-                let mut chain_client = ctx.lock().await.make_chain_client(chain).await?;
+            ClientContextInner::Mem(context) => {
+                let mut chain_client = context.lock().await.make_chain_client(chain).await?;
                 if let Some(owner) = options.owner {
                     chain_client.set_preferred_owner(owner);
                 }
@@ -157,13 +157,13 @@ impl Client {
         }
 
         match self.inner {
-            ClientContextInner::Idb(ctx) => {
-                Arc::into_inner(ctx).ok_or(Error::new(
+            ClientContextInner::Idb(context) => {
+                Arc::into_inner(context).ok_or(Error::new(
                     "Client disposed while being referenced elsewhere",
                 ))?;
             }
-            ClientContextInner::Mem(ctx) => {
-                Arc::into_inner(ctx).ok_or(Error::new(
+            ClientContextInner::Mem(context) => {
+                Arc::into_inner(context).ok_or(Error::new(
                     "Client disposed while being referenced elsewhere",
                 ))?;
             }

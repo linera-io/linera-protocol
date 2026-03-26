@@ -43,20 +43,20 @@ pub struct AddOwnerOptions {
 
 /// Helper macro to dispatch a method call on `ChainClientInner`.
 macro_rules! with_chain_client {
-    ($self:expr, |$cc:ident| $body:expr) => {
+    ($self:expr, |$chain_client:ident| $body:expr) => {
         match &$self.chain_client {
-            ChainClientInner::Idb($cc) => $body,
-            ChainClientInner::Mem($cc) => $body,
+            ChainClientInner::Idb($chain_client) => $body,
+            ChainClientInner::Mem($chain_client) => $body,
         }
     };
 }
 
 /// Helper macro to dispatch on both `ClientContextInner` and `ChainClientInner`.
 macro_rules! with_client_and_chain {
-    ($self:expr, |$ctx:ident, $cc:ident| $body:expr) => {
+    ($self:expr, |$context:ident, $chain_client:ident| $body:expr) => {
         match (&$self.client.inner, &$self.chain_client) {
-            (ClientContextInner::Idb($ctx), ChainClientInner::Idb($cc)) => $body,
-            (ClientContextInner::Mem($ctx), ChainClientInner::Mem($cc)) => $body,
+            (ClientContextInner::Idb($context), ChainClientInner::Idb($chain_client)) => $body,
+            (ClientContextInner::Mem($context), ChainClientInner::Mem($chain_client)) => $body,
             _ => unreachable!("mismatched client and chain storage backends"),
         }
     };
@@ -74,7 +74,8 @@ impl Chain {
     /// If the handler function fails.
     #[wasm_bindgen(js_name = onNotification)]
     pub fn on_notification(&self, handler: js_sys::Function) -> JsResult<()> {
-        let mut notifications = with_chain_client!(self, |cc| cc.subscribe()?);
+        let mut notifications =
+            with_chain_client!(self, |chain_client| chain_client.subscribe()?);
         wasm_bindgen_futures::spawn_local(async move {
             while let Some(notification) = notifications.next().await {
                 tracing::debug!("received notification: {notification:?}");
@@ -103,11 +104,13 @@ impl Chain {
         let donor = params.donor.unwrap_or(AccountOwner::CHAIN);
         let amount = linera_base::data_types::Amount::from_tokens(params.amount.into());
         let recipient = params.recipient;
-        with_client_and_chain!(self, |ctx, cc| {
-            let _hash = ctx
+        with_client_and_chain!(self, |context, chain_client| {
+            let _hash = context
                 .lock()
                 .await
-                .apply_client_command(cc, |_| cc.transfer(donor, amount, recipient))
+                .apply_client_command(chain_client, |_| {
+                    chain_client.transfer(donor, amount, recipient)
+                })
                 .await?;
         });
         Ok(())
@@ -118,7 +121,7 @@ impl Chain {
     /// # Errors
     /// If the chain couldn't be established.
     pub async fn balance(&self) -> JsResult<String> {
-        Ok(with_chain_client!(self, |cc| cc
+        Ok(with_chain_client!(self, |chain_client| chain_client
             .query_balance()
             .await?
             .to_string()))
@@ -129,7 +132,9 @@ impl Chain {
     /// # Errors
     /// If the chain couldn't be established.
     pub async fn identity(&self) -> JsResult<AccountOwner> {
-        Ok(with_chain_client!(self, |cc| cc.identity().await?))
+        Ok(with_chain_client!(self, |chain_client| chain_client
+            .identity()
+            .await?))
     }
 
     /// Adds a new owner to the default chain.
@@ -144,10 +149,13 @@ impl Chain {
         options: Option<AddOwnerOptions>,
     ) -> JsResult<()> {
         let AddOwnerOptions { weight } = options.unwrap_or_default();
-        with_client_and_chain!(self, |ctx, cc| {
-            ctx.lock()
+        with_client_and_chain!(self, |context, chain_client| {
+            context
+                .lock()
                 .await
-                .apply_client_command(cc, |_| cc.share_ownership(owner, weight))
+                .apply_client_command(chain_client, |_| {
+                    chain_client.share_ownership(owner, weight)
+                })
                 .await?;
         });
         Ok(())
@@ -159,11 +167,11 @@ impl Chain {
     /// If a validator is unreachable.
     #[wasm_bindgen(js_name = validatorVersionInfo)]
     pub async fn validator_version_info(&self) -> JsResult<JsValue> {
-        with_client_and_chain!(self, |ctx, cc| {
-            cc.synchronize_from_validators().await?;
-            let result = cc.local_committee().await;
-            let mut client = ctx.lock().await;
-            client.update_wallet(cc).await?;
+        with_client_and_chain!(self, |context, chain_client| {
+            chain_client.synchronize_from_validators().await?;
+            let result = chain_client.local_committee().await;
+            let mut client = context.lock().await;
+            client.update_wallet(chain_client).await?;
             let committee = result?;
             let node_provider = client.make_node_provider();
 

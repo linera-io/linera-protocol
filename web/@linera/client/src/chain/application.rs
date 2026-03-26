@@ -56,50 +56,54 @@ impl Application {
         };
 
         match (&self.client.inner, &self.chain_client) {
-            (ClientContextInner::Idb(ctx), ChainClientInner::Idb(cc)) => {
-                let cc = cc.clone();
+            (ClientContextInner::Idb(context), ChainClientInner::Idb(chain_client)) => {
+                let chain_client = chain_client.clone();
                 let (
                     linera_execution::QueryOutcome {
                         response: linera_execution::QueryResponse::User(response),
                         operations,
                     },
                     _,
-                ) = cc.query_application(app_query, block_hash).await?
+                ) = chain_client
+                    .query_application(app_query, block_hash)
+                    .await?
                 else {
                     panic!("system response to user query")
                 };
 
                 if !operations.is_empty() {
-                    let _hash = ctx
+                    let _hash = context
                         .lock()
                         .await
-                        .apply_client_command(&cc, |_| {
-                            cc.execute_operations(operations.clone(), vec![])
+                        .apply_client_command(&chain_client, |_| {
+                            chain_client.execute_operations(operations.clone(), vec![])
                         })
                         .await?;
                 }
 
                 Ok(String::from_utf8(response)?)
             }
-            (ClientContextInner::Mem(ctx), ChainClientInner::Mem(cc)) => {
-                let cc = cc.clone();
+            (ClientContextInner::Mem(context), ChainClientInner::Mem(chain_client)) => {
+                let chain_client = chain_client.clone();
                 let (
                     linera_execution::QueryOutcome {
                         response: linera_execution::QueryResponse::User(response),
                         operations,
                     },
                     _,
-                ) = cc.query_application(app_query, block_hash).await?
+                ) = chain_client
+                    .query_application(app_query, block_hash)
+                    .await?
                 else {
                     panic!("system response to user query")
                 };
 
                 if !operations.is_empty() {
-                    let _hash = ctx
+                    let _hash = context
                         .lock()
                         .await
-                        .apply_client_command(&cc, |_| {
-                            cc.execute_operations(operations.clone(), vec![])
+                        .apply_client_command(&chain_client, |_| {
+                            chain_client.execute_operations(operations.clone(), vec![])
                         })
                         .await?;
                 }
