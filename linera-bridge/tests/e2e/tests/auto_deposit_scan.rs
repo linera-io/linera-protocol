@@ -328,7 +328,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         ])
         .env("RUST_LOG", "linera=info,linera_bridge=debug")
         .kill_on_drop(true)
-        .stdout(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::inherit())
         .spawn()
         .context("failed to spawn relay binary")?;
