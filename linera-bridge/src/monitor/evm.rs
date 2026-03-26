@@ -84,20 +84,40 @@ pub(crate) async fn retry_pending_deposits<E: linera_core::environment::Environm
                 }
                 d.last_retry_at = Some(std::time::Instant::now());
             } else {
-                state.track_deposit(pending.clone());
+                state.track_deposit(pending.clone()).await;
             }
         }
 
         tracing::info!(%tx_hash, "Processing pending deposit...");
         match proof_client.generate_deposit_proof(tx_hash).await {
-            Ok(proof) => match linera_client.process_deposit(proof).await {
-                Ok(()) => {
-                    tracing::info!(%tx_hash, "Deposit processed successfully");
+            Ok(proof) => {
+                // Persist raw BCS operation bytes so deposits can be replayed without the relayer.
+                if let Some(db) = monitor.read().await.db() {
+                    for &log_index in &proof.log_indices {
+                        let op = crate::relay::evm::BridgeOperation::ProcessDeposit {
+                            block_header_rlp: proof.block_header_rlp.clone(),
+                            receipt_rlp: proof.receipt_rlp.clone(),
+                            proof_nodes: proof.proof_nodes.clone(),
+                            tx_index: proof.tx_index,
+                            log_index,
+                        };
+                        if let Ok(raw) = bcs::to_bytes(&op) {
+                            if let Err(e) = db.store_deposit_raw(&pending.key, &raw).await {
+                                tracing::warn!(%tx_hash, "Failed to store deposit raw bytes: {e:#}");
+                            }
+                        }
+                    }
                 }
-                Err(e) => {
-                    tracing::warn!(%tx_hash, "Deposit processing failed: {e}");
+
+                match linera_client.process_deposit(proof).await {
+                    Ok(()) => {
+                        tracing::info!(%tx_hash, "Deposit processed successfully");
+                    }
+                    Err(e) => {
+                        tracing::warn!(%tx_hash, "Deposit processing failed: {e}");
+                    }
                 }
-            },
+            }
             Err(e) => {
                 tracing::warn!(%tx_hash, "Proof generation failed: {e:#}");
             }
@@ -195,7 +215,7 @@ async fn check_deposit_completion<E: linera_core::environment::Environment>(
 
     for key in pending {
         if linera_client.query_deposit_processed(&key).await? {
-            monitor.write().await.complete_deposit(&key);
+            monitor.write().await.complete_deposit(&key).await;
         }
     }
 
