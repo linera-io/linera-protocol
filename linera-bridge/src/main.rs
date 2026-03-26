@@ -18,7 +18,7 @@ enum Cli {
     GenerateDepositProof(GenerateDepositProofOptions),
     /// Run the relay server (proof generation + chain inbox processing + EVM forwarding)
     #[cfg(feature = "relay")]
-    Serve(ServeOptions),
+    Serve(Box<ServeOptions>),
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -113,6 +113,18 @@ struct ServeOptions {
     /// The maximal number of entries in the event cache.
     #[arg(long, default_value = "1000")]
     event_cache_size: usize,
+
+    /// Interval between monitor scan loops, in seconds.
+    #[arg(long, default_value = "30")]
+    monitor_scan_interval: u64,
+
+    /// EVM block number to start scanning from for deposit monitoring.
+    #[arg(long, default_value = "0")]
+    monitor_start_block: u64,
+
+    /// Maximum number of retry attempts for pending deposits and burns.
+    #[arg(long, default_value = "10")]
+    max_retries: u32,
 }
 
 fn main() -> Result<()> {
@@ -150,6 +162,9 @@ impl ServeOptions {
                 certificate_raw_cache_size: self.certificate_raw_cache_size,
                 event_cache_size: self.event_cache_size,
             },
+            self.monitor_scan_interval,
+            self.monitor_start_block,
+            self.max_retries,
         ))
         .await
     }

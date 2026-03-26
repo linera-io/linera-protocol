@@ -323,14 +323,31 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         "Deposit proof generated"
     );
 
-    // ── Phase 7: Submit ProcessDeposit on Linera ──
+    // Build the DepositKey for completion checks.
+    let tx_index = proof.tx_index;
+    let log_index = proof.log_indices[0];
+    let deposit_key = linera_bridge::proof::DepositKey {
+        source_chain_id: 31337, // Anvil chain ID
+        block_hash: deposit_receipt.block_hash.unwrap().0,
+        tx_index,
+        log_index,
+    };
+
+    // ── Phase 7a: Verify deposit is NOT yet processed ──
+    assert!(
+        !linera_bridge_e2e::query_deposit_processed(&cc, bridge_app_id, &deposit_key).await?,
+        "deposit should NOT be processed before ProcessDeposit"
+    );
+    tracing::info!("Confirmed: deposit not yet processed.");
+
+    // ── Phase 7b: Submit ProcessDeposit on Linera ──
     tracing::info!("Submitting ProcessDeposit operation...");
     let bridge_op = BridgeOperation::ProcessDeposit {
         block_header_rlp: proof.block_header_rlp,
         receipt_rlp: proof.receipt_rlp,
         proof_nodes: proof.proof_nodes,
-        tx_index: proof.tx_index,
-        log_index: proof.log_indices[0],
+        tx_index,
+        log_index,
     };
     let op_bytes = bcs::to_bytes(&bridge_op)?;
     let op = Operation::User {
@@ -378,6 +395,13 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         "wrapped-fungible balance should match the 100-token deposit"
     );
 
-    tracing::info!(%balance, "Test passed! Wrapped-fungible balance matches deposit.");
+    tracing::info!(%balance, "Wrapped-fungible balance matches deposit.");
+
+    // ── Phase 9: Verify deposit IS now processed ──
+    assert!(
+        linera_bridge_e2e::query_deposit_processed(&cc, bridge_app_id, &deposit_key).await?,
+        "deposit should be marked as processed after ProcessDeposit"
+    );
+    tracing::info!("Test passed! Deposit confirmed as processed via GraphQL query.");
     Ok(())
 }
