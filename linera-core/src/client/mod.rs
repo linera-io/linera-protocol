@@ -464,12 +464,9 @@ impl<Env: Environment> Client<Env> {
         if target_next_block_height <= info.next_block_height {
             return Ok(info);
         }
-        if let Some(new_info) = self
+        info = self
             .download_certificates_using_all(&validators, chain_id, target_next_block_height)
-            .await?
-        {
-            info = new_info;
-        }
+            .await?;
         ensure!(
             target_next_block_height <= info.next_block_height,
             chain_client::Error::CannotDownloadCertificates {
@@ -480,19 +477,15 @@ impl<Env: Environment> Client<Env> {
         Ok(info)
     }
 
-    /// Downloads and processes all certificates up to (excluding) the specified height from the
-    /// given validator.
-    #[instrument(level = "trace", skip_all)]
-    async fn download_certificates_from(
+    /// Loads and processes certificates from local storage for the given chain, from the
+    /// current local height up to `stop`. Returns the chain info after processing.
+    async fn load_local_certificates(
         &self,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
         stop: BlockHeight,
-    ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
-        let mut last_info = None;
-        // First load any blocks from local storage, if available.
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_info = self.local_node.chain_info(chain_id).await?;
-        let mut next_height = chain_info.next_block_height;
+        let next_height = chain_info.next_block_height;
         let hashes = self
             .local_node
             .get_preprocessed_block_hashes(chain_id, next_height, stop)
@@ -505,8 +498,22 @@ impl<Env: Environment> Client<Env> {
             }
         };
         for certificate in certificates {
-            last_info = Some(self.handle_certificate(certificate).await?.info);
+            self.handle_certificate(certificate).await?;
         }
+        Ok(self.local_node.chain_info(chain_id).await?)
+    }
+
+    /// Downloads and processes all certificates up to (excluding) the specified height from the
+    /// given validator.
+    #[instrument(level = "trace", skip_all)]
+    async fn download_certificates_from(
+        &self,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+        chain_id: ChainId,
+        stop: BlockHeight,
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        let mut last_info = self.load_local_certificates(chain_id, stop).await?;
+        let mut next_height = last_info.next_block_height;
         // Now download the rest in batches from the remote node.
         while next_height < stop {
             // TODO(#2045): Analyze network errors instead of using a fixed batch size.
@@ -519,12 +526,15 @@ impl<Env: Environment> Client<Env> {
                 .requests_scheduler
                 .download_certificates(remote_node, chain_id, next_height, limit)
                 .await?;
-            let Some(info) = self.process_certificates(remote_node, certificates).await? else {
+            let Some(info) = self
+                .process_certificates(slice::from_ref(remote_node), certificates)
+                .await?
+            else {
                 break;
             };
             assert!(info.next_block_height > next_height);
             next_height = info.next_block_height;
-            last_info = Some(info);
+            last_info = info;
         }
         Ok(last_info)
     }
@@ -538,25 +548,9 @@ impl<Env: Environment> Client<Env> {
         validators: &[RemoteNode<Env::ValidatorNode>],
         chain_id: ChainId,
         stop: BlockHeight,
-    ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
-        let mut last_info = None;
-        // First load any blocks from local storage, if available.
-        let chain_info = self.local_node.chain_info(chain_id).await?;
-        let mut next_height = chain_info.next_block_height;
-        let hashes = self
-            .local_node
-            .get_preprocessed_block_hashes(chain_id, next_height, stop)
-            .await?;
-        let certificates = self.storage_client().read_certificates(&hashes).await?;
-        let certificates = match ResultReadCertificates::new(certificates, hashes) {
-            ResultReadCertificates::Certificates(certificates) => certificates,
-            ResultReadCertificates::InvalidHashes(hashes) => {
-                return Err(chain_client::Error::ReadCertificatesError(hashes))
-            }
-        };
-        for certificate in certificates {
-            last_info = Some(self.handle_certificate(certificate).await?.info);
-        }
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        let mut last_info = self.load_local_certificates(chain_id, stop).await?;
+        let mut next_height = last_info.next_block_height;
         // Download remaining batches using all validators with staggered fallback.
         while next_height < stop {
             let limit = u64::from(stop)
@@ -574,58 +568,16 @@ impl<Env: Environment> Client<Env> {
                 )
                 .await?;
             let Some(info) = self
-                .process_certificates_using_all(validators, certificates)
+                .process_certificates(validators, certificates)
                 .await?
             else {
                 break;
             };
             assert!(info.next_block_height > next_height);
             next_height = info.next_block_height;
-            last_info = Some(info);
+            last_info = info;
         }
         Ok(last_info)
-    }
-
-    /// Processes certificates, downloading missing blobs from any of the given validators.
-    #[instrument(level = "trace", skip_all)]
-    async fn process_certificates_using_all(
-        &self,
-        validators: &[RemoteNode<Env::ValidatorNode>],
-        certificates: Vec<ConfirmedBlockCertificate>,
-    ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
-        let mut info = None;
-        let required_blob_ids: Vec<_> = certificates
-            .iter()
-            .flat_map(|certificate| certificate.value().required_blob_ids())
-            .collect();
-
-        match self
-            .local_node
-            .read_blob_states_from_storage(&required_blob_ids)
-            .await
-        {
-            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                self.download_blobs(validators, &blob_ids).await?;
-            }
-            x => {
-                x?;
-            }
-        }
-
-        for certificate in certificates {
-            info = Some(
-                match self.handle_certificate(certificate.clone()).await {
-                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        self.download_blobs(validators, &blob_ids).await?;
-                        self.handle_certificate(certificate).await?
-                    }
-                    x => x?,
-                }
-                .info,
-            );
-        }
-
-        Ok(info)
     }
 
     async fn download_blobs(
@@ -690,12 +642,12 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Tries to process all the certificates, requesting any missing blobs from the given node.
+    /// Tries to process all the certificates, requesting any missing blobs from the given nodes.
     /// Returns the chain info of the last successfully processed certificate.
     #[instrument(level = "trace", skip_all)]
     async fn process_certificates(
         &self,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
+        remote_nodes: &[RemoteNode<Env::ValidatorNode>],
         certificates: Vec<ConfirmedBlockCertificate>,
     ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
         let mut info = None;
@@ -710,8 +662,7 @@ impl<Env: Environment> Client<Env> {
             .await
         {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                self.download_blobs(slice::from_ref(remote_node), &blob_ids)
-                    .await?;
+                self.download_blobs(remote_nodes, &blob_ids).await?;
             }
             x => {
                 x?;
@@ -722,8 +673,7 @@ impl<Env: Environment> Client<Env> {
             info = Some(
                 match self.handle_certificate(certificate.clone()).await {
                     Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        self.download_blobs(slice::from_ref(remote_node), &blob_ids)
-                            .await?;
+                        self.download_blobs(remote_nodes, &blob_ids).await?;
                         self.handle_certificate(certificate).await?
                     }
                     x => x?,
@@ -732,7 +682,6 @@ impl<Env: Environment> Client<Env> {
             );
         }
 
-        // Done with all certificates.
         Ok(info)
     }
 
@@ -1584,15 +1533,7 @@ impl<Env: Environment> Client<Env> {
         }
 
         // If we are at the same height as the remote node, we also update our chain manager.
-        let local_height = match local_info {
-            Some(info) => info.next_block_height,
-            None => {
-                self.local_node
-                    .chain_info(chain_id)
-                    .await?
-                    .next_block_height
-            }
-        };
+        let local_height = local_info.next_block_height;
         if local_height != remote_info.next_block_height {
             debug!(
                 remote_node = remote_node.address(),
