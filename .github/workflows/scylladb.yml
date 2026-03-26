@@ -30,7 +30,7 @@ env:
   RUST_BACKTRACE: short
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
-  RUST_LOG: warn
+  RUST_LOG: ${{ runner.debug == '1' && 'linera=debug' || 'warn' }}
 
 permissions:
   contents: read
@@ -60,7 +60,7 @@ jobs:
         docker run --name my_scylla_container -d -p 9042:9042 scylladb/scylla:6.1 --smp 1
     - name: Run ScyllaDB tests
       run: |
-        RUST_LOG=linera=info cargo test --locked --features scylladb -- scylla --nocapture
+        RUST_LOG=${{ runner.debug == '1' && 'linera=debug' || 'linera=info' }} cargo test --locked --features scylladb -- scylla --nocapture
     - name: Run ScyllaDB opentelemetry tests
       run: |
-        RUST_LOG=linera=info cargo test test_end_to_end_benchmark::scylladb_ --features scylladb,opentelemetry
+        RUST_LOG=${{ runner.debug == '1' && 'linera=debug' || 'linera=info' }} cargo test test_end_to_end_benchmark::scylladb_ --features scylladb,opentelemetry

@@ -17,7 +17,7 @@ env:
   RUST_BACKTRACE: short
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
-  RUST_LOG: warn
+  RUST_LOG: ${{ runner.debug == '1' && 'linera=debug' || 'warn' }}
   GCP_REGISTRY: us-docker.pkg.dev/linera-io-dev/linera-public-registry
 
 permissions:
