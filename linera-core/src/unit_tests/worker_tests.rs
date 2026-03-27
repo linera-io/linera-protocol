@@ -575,7 +575,7 @@ where
     ) -> Result<ConfirmedBlockCertificate, anyhow::Error> {
         let (_, block, _, _) = self
             .executing_worker
-            .stage_block_execution(proposal, None, blobs, BundleExecutionPolicy::Abort)
+            .stage_block_execution(proposal, None, blobs, BundleExecutionPolicy::committed())
             .await?;
         let certificate = self.make_certificate(ConfirmedBlock::new(block));
         self.executing_worker
@@ -884,7 +884,12 @@ where
     // Stage execution to get the block for certificate creation.
     let (_, block, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block, None, vec![], BundleExecutionPolicy::Abort)
+        .stage_block_execution(
+            proposed_block,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     // Past timestamp should be handled immediately (and succeed).
     let result = env
@@ -911,7 +916,12 @@ where
         .unwrap();
     let (_, block, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block, None, vec![], BundleExecutionPolicy::Abort)
+        .stage_block_execution(
+            proposed_block,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let result = env
         .executing_worker()
@@ -937,7 +947,12 @@ where
         .unwrap();
     let (_, block, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block, None, vec![], BundleExecutionPolicy::Abort)
+        .stage_block_execution(
+            proposed_block,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
 
     // Spawn the proposal handling. It should not complete immediately.
@@ -3441,7 +3456,12 @@ where
         .with_authenticated_owner(Some(owner0));
     let (_, block0, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block0, None, vec![], BundleExecutionPolicy::Abort)
+        .stage_block_execution(
+            proposed_block0,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
@@ -3514,7 +3534,7 @@ where
             proposed_block1.clone(),
             None,
             vec![],
-            BundleExecutionPolicy::Abort,
+            BundleExecutionPolicy::committed(),
         )
         .await?;
     let proposal1_wrong_owner = proposed_block1
@@ -3572,7 +3592,7 @@ where
             proposed_block2.clone(),
             None,
             vec![],
-            BundleExecutionPolicy::Abort,
+            BundleExecutionPolicy::committed(),
         )
         .await?;
 
@@ -3721,7 +3741,12 @@ where
         });
     let (_, block0, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block0, None, vec![], BundleExecutionPolicy::Abort)
+        .stage_block_execution(
+            proposed_block0,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
@@ -3845,7 +3870,12 @@ where
         });
     let (_, block0, _, _) = env
         .executing_worker()
-        .stage_block_execution(proposed_block0, None, vec![], BundleExecutionPolicy::Abort)
+        .stage_block_execution(
+            proposed_block0,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
@@ -3877,7 +3907,7 @@ where
             proposed_block1.clone(),
             None,
             vec![],
-            BundleExecutionPolicy::Abort,
+            BundleExecutionPolicy::committed(),
         )
         .await?;
     let value1 = ConfirmedBlock::new(block1);
@@ -3947,7 +3977,7 @@ where
             proposed_block2.clone(),
             None,
             vec![],
-            BundleExecutionPolicy::Abort,
+            BundleExecutionPolicy::committed(),
         )
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
@@ -4461,7 +4491,7 @@ where
     // Test stage_block_execution directly - this should fail with IncorrectMessageOrder.
     assert_matches!(
         env.executing_worker()
-            .stage_block_execution(bad_proposed_block.clone(), None, vec![], BundleExecutionPolicy::Abort)
+            .stage_block_execution(bad_proposed_block.clone(), None, vec![], BundleExecutionPolicy::committed())
             .await,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })
