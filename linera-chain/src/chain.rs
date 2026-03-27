@@ -628,6 +628,7 @@ where
                     );
                 }
             }
+            inbox.observe_size_metric();
             if inbox.added_bundles.count() == 0 {
                 self.nonempty_inboxes.get_mut().remove(&origin);
             }
