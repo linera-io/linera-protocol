@@ -40,6 +40,8 @@ pub struct ChainWorkerConfig {
     pub execution_state_cache_size: usize,
     /// Chain IDs whose incoming bundles should be processed first.
     pub priority_bundle_origins: HashSet<ChainId>,
+    /// Chain IDs whose incoming bundles should be ignored.
+    pub ignored_bundle_origins: HashSet<ChainId>,
 }
 
 impl ChainWorkerConfig {
@@ -70,6 +72,7 @@ impl Default for ChainWorkerConfig {
             block_cache_size: crate::worker::DEFAULT_BLOCK_CACHE_SIZE,
             execution_state_cache_size: crate::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             priority_bundle_origins: HashSet::new(),
+            ignored_bundle_origins: HashSet::new(),
         }
     }
 }

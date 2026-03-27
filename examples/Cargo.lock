@@ -3960,6 +3960,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-trie",
  "anyhow",
+ "serde",
 ]
 
 [[package]]

@@ -35,11 +35,17 @@ linera-core = { path = "../../../linera-core", default-features = false, feature
 ] }
 linera-execution = { path = "../../../linera-execution" }
 linera-faucet-client = { path = "../../../linera-faucet/client" }
+linera-persistent = { path = "../../../linera-persistent", features = ["fs"] }
 linera-storage = { path = "../../../linera-storage", features = ["wasmer"] }
 linera-views = { path = "../../../linera-views" }
 rand = { version = "0.8", default-features = false, features = ["std_rng"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tempfile = "3"
 testcontainers = { version = "0.27", features = ["docker-compose"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"

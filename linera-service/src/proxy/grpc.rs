@@ -71,19 +71,14 @@ mod metrics {
     use linera_base::prometheus_util::{
         linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
+    use linera_rpc::grpc::{METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
     use prometheus::{HistogramVec, IntCounterVec};
-
-    /// Label for distinguishing organic vs synthetic (benchmark) traffic.
-    pub const TRAFFIC_TYPE_LABEL: &str = "traffic_type";
-
-    /// Label for the gRPC method name.
-    pub const METHOD_NAME_LABEL: &str = "method_name";
 
     pub static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "proxy_request_latency",
             "Proxy request latency",
-            &[TRAFFIC_TYPE_LABEL],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
             linear_bucket_interval(1.0, 50.0, 2000.0),
         )
     });
@@ -91,7 +86,7 @@ mod metrics {
         register_int_counter_vec(
             "proxy_request_count",
             "Proxy request count",
-            &[TRAFFIC_TYPE_LABEL],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
         )
     });
 
@@ -146,20 +141,9 @@ where
         #[cfg(with_metrics)]
         let start = linera_base::time::Instant::now();
 
-        // Extract the gRPC method name from the URI path. gRPC paths have the form
-        // `/{package}.{Service}/{Method}` — the first segment always contains a dot.
-        // Non-gRPC requests (bot probes, health checks, etc.) are bucketed as
-        // "non_grpc" to prevent unbounded label cardinality.
         #[cfg(with_metrics)]
-        let method_name = {
-            let path = request.uri().path();
-            let parts: Vec<&str> = path.splitn(3, '/').collect();
-            if parts.len() == 3 && parts[1].contains('.') {
-                parts[2].to_owned()
-            } else {
-                "non_grpc".to_owned()
-            }
-        };
+        let method_name =
+            linera_rpc::grpc::extract_grpc_method_name(request.uri().path()).to_owned();
 
         #[cfg(all(with_metrics, feature = "opentelemetry"))]
         let traffic_type: &'static str = get_traffic_type_from_request(&request);
@@ -172,10 +156,10 @@ where
             #[cfg(with_metrics)]
             {
                 metrics::PROXY_REQUEST_LATENCY
-                    .with_label_values(&[traffic_type])
+                    .with_label_values(&[&method_name, traffic_type])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
                 metrics::PROXY_REQUEST_COUNT
-                    .with_label_values(&[traffic_type])
+                    .with_label_values(&[&method_name, traffic_type])
                     .inc();
 
                 let is_error = !response.status().is_success()

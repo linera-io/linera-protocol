@@ -161,6 +161,33 @@ pub fn parse_deployed_address(output: &str) -> anyhow::Result<Address> {
     anyhow::bail!("Could not find 'Deployed to:' in forge output:\n{output}");
 }
 
+/// Queries the evm-bridge app to check whether a deposit has been processed.
+/// Mirrors `linera_bridge::monitor::query_deposit_processed` for use in tests
+/// without enabling the `relay` feature.
+pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    bridge_app_id: linera_base::identifiers::ApplicationId,
+    deposit_key: &linera_bridge::proof::DepositKey,
+) -> anyhow::Result<bool> {
+    use linera_execution::{Query, QueryResponse};
+
+    #[derive(serde::Serialize)]
+    struct GqlRequest {
+        query: String,
+    }
+
+    let hash_hex = format!("0x{}", alloy::primitives::hex::encode(deposit_key.hash()));
+    let gql = format!(r#"{{ isDepositProcessed(hash: "{hash_hex}") }}"#);
+    let query = Query::user_without_abi(bridge_app_id, &GqlRequest { query: gql })?;
+    let (outcome, _) = chain_client.query_application(query, None).await?;
+    let response_bytes = match outcome.response {
+        QueryResponse::User(bytes) => bytes,
+        other => anyhow::bail!("unexpected query response: {other:?}"),
+    };
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
+    Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
+}
+
 /// Starts docker compose stack with pre-cleanup of stale state.
 pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -> DockerCompose {
     let compose_file_str = compose_file

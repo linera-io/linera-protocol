@@ -109,6 +109,9 @@ pub struct Options {
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
+    /// Maximum number of certificates read from local storage and uploaded to a validator
+    /// at a time when synchronizing a chain.
+    pub certificate_upload_batch_size: u64,
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     pub sender_certificate_download_batch_size: usize,
@@ -135,7 +138,8 @@ struct CircuitBreakerState {
 impl Options {
     pub fn test_default() -> Self {
         use super::{
-            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
+            DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
@@ -150,6 +154,7 @@ impl Options {
             blob_download_timeout: Duration::from_secs(1),
             certificate_batch_download_timeout: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            certificate_upload_batch_size: DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
@@ -631,37 +636,6 @@ impl<Env: Environment> ChainClient<Env> {
             return Ok(None);
         }
         Ok(Some(SystemOperation::UpdateStreams(updates).into()))
-    }
-
-    /// Creates a vector of transactions which, in addition to the provided operations,
-    /// also contains epoch changes, receiving message bundles and event stream updates
-    /// (if there are any to be processed).
-    /// This should be called when executing a block, in order to make sure that any pending
-    /// messages or events are included in it.
-    #[instrument(level = "trace", skip(operations))]
-    async fn prepend_epochs_messages_and_events(
-        &self,
-        operations: Vec<Operation>,
-    ) -> Result<Vec<Transaction>, Error> {
-        let incoming_bundles = self.pending_message_bundles().await?;
-        let stream_updates = self.collect_stream_updates().await?;
-        Ok(self
-            .collect_epoch_changes()
-            .await?
-            .into_iter()
-            .map(Transaction::ExecuteOperation)
-            .chain(
-                incoming_bundles
-                    .into_iter()
-                    .map(Transaction::ReceiveMessages),
-            )
-            .chain(
-                stream_updates
-                    .into_iter()
-                    .map(Transaction::ExecuteOperation),
-            )
-            .chain(operations.into_iter().map(Transaction::ExecuteOperation))
-            .collect::<Vec<_>>())
     }
 
     #[instrument(level = "trace")]
@@ -1455,6 +1429,37 @@ impl<Env: Environment> ChainClient<Env> {
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
             ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
         }
+    }
+
+    /// Creates a vector of transactions which, in addition to the provided operations,
+    /// also contains epoch changes, receiving message bundles and event stream updates
+    /// (if there are any to be processed).
+    /// This should be called when executing a block, in order to make sure that any pending
+    /// messages or events are included in it.
+    #[instrument(level = "trace", skip(operations))]
+    async fn prepend_epochs_messages_and_events(
+        &self,
+        operations: Vec<Operation>,
+    ) -> Result<Vec<Transaction>, Error> {
+        let incoming_bundles = self.pending_message_bundles().await?;
+        let stream_updates = self.collect_stream_updates().await?;
+        Ok(self
+            .collect_epoch_changes()
+            .await?
+            .into_iter()
+            .map(Transaction::ExecuteOperation)
+            .chain(
+                incoming_bundles
+                    .into_iter()
+                    .map(Transaction::ReceiveMessages),
+            )
+            .chain(
+                stream_updates
+                    .into_iter()
+                    .map(Transaction::ExecuteOperation),
+            )
+            .chain(operations.into_iter().map(Transaction::ExecuteOperation))
+            .collect::<Vec<_>>())
     }
 
     /// Creates a new pending block and stores it in `proposal_guard`.
@@ -2948,7 +2953,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let events_only = self
             .listening_mode()
-            .is_some_and(|m| matches!(m, ListeningMode::EventsOnly(_)));
+            .is_none_or(|m| matches!(m, ListeningMode::EventsOnly(_)));
         let (nodes, local_node) = {
             // For EventsOnly chains, use the admin chain's committee: the chain's own
             // committee may be stale (we don't track epoch changes), and

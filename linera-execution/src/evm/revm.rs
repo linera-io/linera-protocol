@@ -180,7 +180,7 @@ mod metrics {
             "evm_contract_instantiation_latency",
             "EVM contract instantiation latency",
             &[],
-            exponential_bucket_latencies(1.0),
+            exponential_bucket_latencies(100.0),
         )
     });
 
@@ -189,7 +189,7 @@ mod metrics {
             "evm_service_instantiation_latency",
             "EVM service instantiation latency",
             &[],
-            exponential_bucket_latencies(1.0),
+            exponential_bucket_latencies(100.0),
         )
     });
 }

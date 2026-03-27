@@ -33,7 +33,7 @@ use tokio::sync::mpsc;
 use tracing::{instrument, Level};
 
 use crate::{
-    client::{chain_client, Client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE},
+    client::{chain_client, Client},
     data_types::{ChainInfo, ChainInfoQuery},
     environment::Environment,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
@@ -778,7 +778,7 @@ where
             return Ok(info);
         }
 
-        let batch_size = DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE as usize;
+        let batch_size = self.client.options().certificate_upload_batch_size as usize;
         for chunk in heights.chunks(batch_size) {
             let certificates = self
                 .read_certificates_for_heights(chain_id, chunk.to_vec())
