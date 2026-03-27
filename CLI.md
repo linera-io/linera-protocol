@@ -268,6 +268,18 @@ Client implementation and command-line tool for the Linera blockchain
 * `--blob-cache-size <BLOB_CACHE_SIZE>` — The maximal number of entries in the blob cache
 
   Default value: `1000`
+* `--confirmed-block-cache-size <CONFIRMED_BLOCK_CACHE_SIZE>` — The maximal number of entries in the confirmed block cache
+
+  Default value: `1000`
+* `--lite-certificate-cache-size <LITE_CERTIFICATE_CACHE_SIZE>` — The maximal number of entries in the lite certificate cache
+
+  Default value: `1000`
+* `--certificate-raw-cache-size <CERTIFICATE_RAW_CACHE_SIZE>` — The maximal number of entries in the raw certificate cache
+
+  Default value: `1000`
+* `--event-cache-size <EVENT_CACHE_SIZE>` — The maximal number of entries in the event cache
+
+  Default value: `1000`
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`

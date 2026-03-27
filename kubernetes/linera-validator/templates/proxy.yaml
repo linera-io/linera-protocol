@@ -137,6 +137,11 @@ spec:
                 --storage-max-cache-value-size {{ .Values.storageCacheConfig.maxCacheValueSize | int }} \
                 --storage-max-cache-find-keys-size {{ .Values.storageCacheConfig.maxCacheFindKeysSize | int }} \
                 --storage-max-cache-find-key-values-size {{ .Values.storageCacheConfig.maxCacheFindKeyValuesSize | int }} \
+                --blob-cache-size {{ .Values.storageCacheSizes.blobCacheSize | int }} \
+                --confirmed-block-cache-size {{ .Values.storageCacheSizes.confirmedBlockCacheSize | int }} \
+                --lite-certificate-cache-size {{ .Values.storageCacheSizes.liteCertificateCacheSize | int }} \
+                --certificate-raw-cache-size {{ .Values.storageCacheSizes.certificateRawCacheSize | int }} \
+                --event-cache-size {{ .Values.storageCacheSizes.eventCacheSize | int }} \
                 --id "$ORDINAL" \
                 /config/server.json
           env:
