@@ -221,7 +221,7 @@ impl Command {
 
         match self {
             Add(command) => command.run(context).await,
-            BatchQuery(command) => command.run(context).await,
+            BatchQuery(command) => Box::pin(command.run(context)).await,
             Update(command) => command.run(context).await,
             List(command) => command.run(context).await,
             Query(command) => command.run(context).await,
