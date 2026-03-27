@@ -1916,7 +1916,7 @@
             "type": "text"
         }
     ],
-    "refresh": "5s",
+    "refresh": "10s",
     "schemaVersion": 26,
     "style": "dark",
     "tags": [

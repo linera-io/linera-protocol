@@ -3669,7 +3669,7 @@
     }
   ],
   "preload": false,
-  "refresh": "5s",
+  "refresh": "10s",
   "schemaVersion": 42,
   "tags": [
     "linera"
