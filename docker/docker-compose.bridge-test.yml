@@ -338,6 +338,7 @@ services:
         export LINERA_BRIDGE_APP=$$(cat /shared/bridge-app-id | tr -d '[:space:]')
         export LINERA_FUNGIBLE_APP=$$(cat /shared/wrapped-app-id | tr -d '[:space:]')
         export LINERA_BRIDGE_CHAIN_ID=$$(cat /shared/bridge-chain-id | tr -d '[:space:]')
+        export LINERA_BRIDGE_CHAIN_OWNER=$$(cat /shared/relay-owner | tr -d '[:space:]')
         export EVM_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
         export LINERA_WALLET=/shared/relay-wallet/wallet.json
         export LINERA_KEYSTORE=/shared/relay-wallet/keystore.json

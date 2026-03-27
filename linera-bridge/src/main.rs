@@ -74,6 +74,10 @@ struct ServeOptions {
     #[arg(long)]
     linera_bridge_chain_id: Option<linera_base::identifiers::ChainId>,
 
+    /// Owner to use for the bridge chain. Required when --linera-bridge-chain-id is provided.
+    #[arg(long, requires = "linera_bridge_chain_id")]
+    linera_bridge_chain_owner: Option<linera_base::identifiers::AccountOwner>,
+
     /// Address of the FungibleBridge contract on EVM.
     #[arg(long)]
     evm_bridge_address: String,
@@ -150,6 +154,7 @@ impl ServeOptions {
             self.keystore.as_deref(),
             self.storage.as_deref(),
             self.linera_bridge_chain_id,
+            self.linera_bridge_chain_owner,
             &self.evm_bridge_address,
             &self.linera_bridge_address,
             &self.linera_fungible_address,
