@@ -21,6 +21,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
+use linera_cache::{UniqueValueCache, ValueCache};
 use linera_chain::{
     data_types::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
@@ -50,7 +51,6 @@ use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    value_cache::ValueCache,
     worker::{NetworkActions, Notification, Reason, WorkerError},
 };
 
@@ -104,8 +104,8 @@ where
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
     last_access: Arc<AtomicTimestamp>,
-    block_values: Arc<ValueCache<CryptoHash, Block>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -130,8 +130,10 @@ where
     pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Block>>,
-        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        execution_state_cache: Arc<
+            UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>,
+        >,
         chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -434,7 +436,8 @@ where
             for cert in certificates {
                 let hashed_block = cert.into_value().into_inner();
                 let height = hashed_block.inner().header.height;
-                self.block_values.insert(Cow::Owned(hashed_block.clone()));
+                self.block_values
+                    .insert_hashed(Cow::Owned(hashed_block.clone()));
                 height_to_blocks.insert(height, hashed_block);
             }
         }
@@ -628,7 +631,7 @@ where
         }
 
         self.block_values
-            .insert(Cow::Borrowed(certificate.inner().inner()));
+            .insert_hashed(Cow::Borrowed(certificate.inner().inner()));
         let required_blob_ids = block.required_blob_ids();
         let maybe_blobs = self
             .maybe_get_required_blobs(required_blob_ids, Some(&block.created_blobs()))
@@ -873,7 +876,7 @@ where
         self.save().await?;
 
         self.block_values
-            .insert(Cow::Owned(confirmed_block.into_inner()));
+            .insert_hashed(Cow::Owned(confirmed_block.into_inner()));
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
@@ -1324,8 +1327,7 @@ where
                 .query_application(context, query, self.service_runtime_endpoint.as_mut())
                 .await
                 .with_execution_context(ChainExecutionContext::Query)?;
-            self.execution_state_cache
-                .insert_owned(&requested_block, state);
+            self.execution_state_cache.insert(&requested_block, state);
             Ok((outcome, next_block_height))
         } else {
             if block_hash.is_some() {
@@ -1555,10 +1557,12 @@ where
         match manager.create_vote(&proposal, block, key_pair, local_time, blobs)? {
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
-                self.block_values.insert(Cow::Borrowed(vote.value.inner()));
+                self.block_values
+                    .insert_hashed(Cow::Borrowed(vote.value.inner()));
             }
             Some(Either::Right(vote)) => {
-                self.block_values.insert(Cow::Borrowed(vote.value.inner()));
+                self.block_values
+                    .insert_hashed(Cow::Borrowed(vote.value.inner()));
             }
             None => (),
         }
@@ -1707,7 +1711,7 @@ where
         .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
-        self.execution_state_cache.insert_owned(
+        self.execution_state_cache.insert(
             &block_hash,
             Box::pin(
                 self.chain

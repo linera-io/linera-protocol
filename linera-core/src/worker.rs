@@ -19,8 +19,10 @@ use linera_base::{
         Timestamp,
     },
     doc_scalar,
+    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
+use linera_cache::{UniqueValueCache, ValueCache};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
@@ -68,7 +70,6 @@ use crate::{
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     notifier::Notifier,
-    value_cache::ValueCache,
 };
 
 #[cfg(test)]
@@ -523,8 +524,8 @@ pub struct WorkerState<StorageClient: Storage> {
     storage: StorageClient,
     /// Configuration options for chain workers.
     chain_worker_config: ChainWorkerConfig,
-    block_cache: Arc<ValueCache<CryptoHash, Block>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     /// Chains tracked by a worker, along with their listening modes.
     chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -677,7 +678,7 @@ where
             storage,
             chain_worker_config,
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
+            execution_state_cache: Arc::new(UniqueValueCache::new(execution_state_cache_size)),
             chain_modes,
             delivery_notifiers: Arc::default(),
             chain_workers,
