@@ -45,6 +45,11 @@ services:
       - "0"
       - "--overprovisioned"
       - "1"
+      # NOTE: Uncomment --smp for optimal performance on fresh deployments.
+      # Uses the same value as LIMIT_CPUS_SCYLLA so shard count matches CPU limit.
+      # NOT safe on existing data — ScyllaDB tablets don't support reducing shards.
+      # - "--smp"
+      # - "${LIMIT_CPUS_SCYLLA:-2}"
     healthcheck:
       test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
       interval: 10s
