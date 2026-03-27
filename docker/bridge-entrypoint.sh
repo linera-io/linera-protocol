@@ -31,9 +31,10 @@ if [ -n "$FAUCET_URL" ]; then
     set -- "$@" --faucet-url="$FAUCET_URL"
 fi
 
-# Optional: bridge chain ID
+# Optional: bridge chain ID + owner (owner is required when chain ID is provided)
 if [ -n "$LINERA_BRIDGE_CHAIN_ID" ]; then
     set -- "$@" --linera-bridge-chain-id="$LINERA_BRIDGE_CHAIN_ID"
+    set -- "$@" --linera-bridge-chain-owner="${LINERA_BRIDGE_CHAIN_OWNER:?LINERA_BRIDGE_CHAIN_OWNER is required when LINERA_BRIDGE_CHAIN_ID is set}"
 fi
 
 # LINERA_WALLET, LINERA_KEYSTORE, LINERA_STORAGE are read directly by clap

@@ -130,6 +130,7 @@ ENV EVENT_CACHE_SIZE=1000
 
 # ── Optional ──
 # LINERA_BRIDGE_CHAIN_ID   Linera bridge chain ID (claims new if omitted)
+# LINERA_BRIDGE_CHAIN_OWNER  Owner for the bridge chain (required with LINERA_BRIDGE_CHAIN_ID)
 
 EXPOSE 3001
 
