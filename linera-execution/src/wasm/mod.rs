@@ -53,7 +53,7 @@ mod metrics {
             "wasm_contract_instantiation_latency",
             "Wasm contract instantiation latency",
             &[],
-            exponential_bucket_latencies(1.0),
+            exponential_bucket_latencies(100.0),
         )
     });
 
@@ -62,7 +62,7 @@ mod metrics {
             "wasm_service_instantiation_latency",
             "Wasm service instantiation latency",
             &[],
-            exponential_bucket_latencies(1.0),
+            exponential_bucket_latencies(100.0),
         )
     });
 }
