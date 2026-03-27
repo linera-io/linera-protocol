@@ -15,7 +15,7 @@ use linera_base::{
 use linera_core::{
     client::{
         chain_client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
-        DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
     DEFAULT_QUORUM_GRACE_PERIOD,
@@ -210,6 +210,14 @@ pub struct Options {
     )]
     pub certificate_download_batch_size: u64,
 
+    /// Maximum number of certificates read from local storage and uploaded to a validator
+    /// at a time when synchronizing a chain.
+    #[arg(
+        long,
+        default_value_t = DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
+    )]
+    pub certificate_upload_batch_size: u64,
+
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     #[arg(
@@ -319,6 +327,7 @@ impl Options {
             blob_download_timeout: self.blob_download_timeout,
             certificate_batch_download_timeout: self.certificate_batch_download_timeout,
             certificate_download_batch_size: self.certificate_download_batch_size,
+            certificate_upload_batch_size: self.certificate_upload_batch_size,
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
