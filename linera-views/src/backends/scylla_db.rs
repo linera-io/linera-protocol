@@ -920,12 +920,8 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
                     PRIMARY KEY (root_key, k) \
                 ) \
                 WITH compaction = {{ \
-                    'class'            : 'SizeTieredCompactionStrategy', \
-                    'min_sstable_size' : 52428800, \
-                    'bucket_low'       : 0.5, \
-                    'bucket_high'      : 1.5, \
-                    'min_threshold'    : 4, \
-                    'max_threshold'    : 32 \
+                    'class'          : 'LeveledCompactionStrategy', \
+                    'sstable_size_in_mb' : 160 \
                 }} \
                 AND compression = {{ \
                     'sstable_compression': 'LZ4Compressor', \
@@ -933,7 +929,9 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
                 }} \
                 AND caching = {{ \
                     'enabled': 'true' \
-                }}",
+                }} \
+                AND gc_grace_seconds = 0 \
+                AND tombstone_gc = {{'mode': 'immediate'}}",
                 KEYSPACE, namespace
             ))
             .await?;
