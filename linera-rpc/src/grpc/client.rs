@@ -324,6 +324,7 @@ impl ValidatorNode for GrpcClient {
         let retry_delay = self.retry_delay;
         let max_retries = self.max_retries;
         let max_backoff = self.max_backoff;
+        let address = self.address.clone();
         // Use shared atomic counter so unfold can reset it on successful reconnection.
         let retry_count = Arc::new(AtomicU32::new(0));
         let subscription_request = SubscriptionRequest {
@@ -405,12 +406,12 @@ impl ValidatorNode for GrpcClient {
                     true
                 })
             })
-            .filter_map(|result| {
+            .filter_map(move |result| {
                 future::ready(match result {
                     Ok(notification @ Some(_)) => notification,
                     Ok(None) => None,
                     Err(err) => {
-                        warn!("{}", err);
+                        warn!(%address, "{}", err);
                         None
                     }
                 })
