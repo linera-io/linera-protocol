@@ -310,6 +310,7 @@ pub async fn run(
     fungible_app_id_file: &str,
     evm_private_key: &str,
     port: u16,
+    blob_cache_size: usize,
 ) -> Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -336,6 +337,7 @@ pub async fn run(
         &config,
         "bridge-relay",
         Some(WasmRuntime::default()),
+        blob_cache_size,
     )
     .await?;
 

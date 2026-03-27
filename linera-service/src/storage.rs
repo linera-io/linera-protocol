@@ -82,6 +82,10 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "10000000", global = true)]
     pub storage_max_cache_find_key_values_size: usize,
 
+    /// The maximal number of entries in the blob cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub blob_cache_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
@@ -633,6 +637,7 @@ pub trait RunnableWithStore {
         self,
         config: D::Config,
         namespace: String,
+        blob_cache_size: usize,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -645,6 +650,7 @@ impl StoreConfig {
         self,
         wasm_runtime: Option<WasmRuntime>,
         allow_application_logs: bool,
+        blob_cache_size: usize,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
     where
@@ -660,6 +666,7 @@ impl StoreConfig {
                     &config,
                     &namespace,
                     wasm_runtime,
+                    blob_cache_size,
                 )
                 .await?
                 .with_allow_application_logs(allow_application_logs);
@@ -674,6 +681,7 @@ impl StoreConfig {
                     &config,
                     &namespace,
                     wasm_runtime,
+                    blob_cache_size,
                 )
                 .await?
                 .with_allow_application_logs(allow_application_logs);
@@ -681,26 +689,38 @@ impl StoreConfig {
             }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb { config, namespace } => {
-                let storage =
-                    DbStorage::<RocksDbDatabase, _>::connect(&config, &namespace, wasm_runtime)
-                        .await?
-                        .with_allow_application_logs(allow_application_logs);
+                let storage = DbStorage::<RocksDbDatabase, _>::connect(
+                    &config,
+                    &namespace,
+                    wasm_runtime,
+                    blob_cache_size,
+                )
+                .await?
+                .with_allow_application_logs(allow_application_logs);
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb { config, namespace } => {
-                let storage =
-                    DbStorage::<DynamoDbDatabase, _>::connect(&config, &namespace, wasm_runtime)
-                        .await?
-                        .with_allow_application_logs(allow_application_logs);
+                let storage = DbStorage::<DynamoDbDatabase, _>::connect(
+                    &config,
+                    &namespace,
+                    wasm_runtime,
+                    blob_cache_size,
+                )
+                .await?
+                .with_allow_application_logs(allow_application_logs);
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb { config, namespace } => {
-                let storage =
-                    DbStorage::<ScyllaDbDatabase, _>::connect(&config, &namespace, wasm_runtime)
-                        .await?
-                        .with_allow_application_logs(allow_application_logs);
+                let storage = DbStorage::<ScyllaDbDatabase, _>::connect(
+                    &config,
+                    &namespace,
+                    wasm_runtime,
+                    blob_cache_size,
+                )
+                .await?
+                .with_allow_application_logs(allow_application_logs);
                 Ok(job.run(storage).await)
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -708,7 +728,9 @@ impl StoreConfig {
                 let storage = DbStorage::<
                     DualDatabase<RocksDbDatabase, ScyllaDbDatabase, ChainStatesFirstAssignment>,
                     _,
-                >::connect(&config, &namespace, wasm_runtime)
+                >::connect(
+                    &config, &namespace, wasm_runtime, blob_cache_size
+                )
                 .await?
                 .with_allow_application_logs(allow_application_logs);
                 Ok(job.run(storage).await)
@@ -717,7 +739,11 @@ impl StoreConfig {
     }
 
     #[allow(unused_variables)]
-    pub async fn run_with_store<Job>(self, job: Job) -> Result<Job::Output, anyhow::Error>
+    pub async fn run_with_store<Job>(
+        self,
+        blob_cache_size: usize,
+        job: Job,
+    ) -> Result<Job::Output, anyhow::Error>
     where
         Job: RunnableWithStore,
     {
@@ -726,32 +752,39 @@ impl StoreConfig {
                 Err(anyhow!("Cannot run admin operations on the memory store"))
             }
             #[cfg(feature = "storage-service")]
-            StoreConfig::StorageService { config, namespace } => {
-                Ok(job.run::<StorageServiceDatabase>(config, namespace).await?)
-            }
+            StoreConfig::StorageService { config, namespace } => Ok(job
+                .run::<StorageServiceDatabase>(config, namespace, blob_cache_size)
+                .await?),
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb { config, namespace } => {
-                Ok(job.run::<RocksDbDatabase>(config, namespace).await?)
-            }
+            StoreConfig::RocksDb { config, namespace } => Ok(job
+                .run::<RocksDbDatabase>(config, namespace, blob_cache_size)
+                .await?),
             #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb { config, namespace } => {
-                Ok(job.run::<DynamoDbDatabase>(config, namespace).await?)
-            }
+            StoreConfig::DynamoDb { config, namespace } => Ok(job
+                .run::<DynamoDbDatabase>(config, namespace, blob_cache_size)
+                .await?),
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb { config, namespace } => {
-                Ok(job.run::<ScyllaDbDatabase>(config, namespace).await?)
-            }
+            StoreConfig::ScyllaDb { config, namespace } => Ok(job
+                .run::<ScyllaDbDatabase>(config, namespace, blob_cache_size)
+                .await?),
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StoreConfig::DualRocksDbScyllaDb { config, namespace } => Ok(job
                 .run::<DualDatabase<RocksDbDatabase, ScyllaDbDatabase, ChainStatesFirstAssignment>>(
-                    config, namespace,
+                    config,
+                    namespace,
+                    blob_cache_size,
                 )
                 .await?),
         }
     }
 
-    pub async fn initialize(self, config: &GenesisConfig) -> Result<(), anyhow::Error> {
-        self.run_with_store(InitializeStorageJob(config)).await
+    pub async fn initialize(
+        self,
+        blob_cache_size: usize,
+        config: &GenesisConfig,
+    ) -> Result<(), anyhow::Error> {
+        self.run_with_store(blob_cache_size, InitializeStorageJob(config))
+            .await
     }
 }
 
@@ -765,6 +798,7 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
         self,
         config: D::Config,
         namespace: String,
+        blob_cache_size: usize,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -772,7 +806,8 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
         D::Error: Send + Sync,
     {
         let mut storage =
-            DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+            DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None, blob_cache_size)
+                .await?;
         self.0.initialize_storage(&mut storage).await?;
         Ok(())
     }

@@ -1875,6 +1875,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
         self,
         config: D::Config,
         namespace: String,
+        blob_cache_size: usize,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -1915,8 +1916,13 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 genesis_config_path,
             } => {
                 let genesis_config: GenesisConfig = util::read_json(genesis_config_path)?;
-                let mut storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let mut storage = DbStorage::<D, _>::maybe_create_and_connect(
+                    &config,
+                    &namespace,
+                    None,
+                    blob_cache_size,
+                )
+                .await?;
                 genesis_config.initialize_storage(&mut storage).await?;
                 info!(
                     "Namespace {namespace} was initialized in {} ms",
@@ -1935,8 +1941,13 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListBlobIds => {
-                let storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let storage = DbStorage::<D, _>::maybe_create_and_connect(
+                    &config,
+                    &namespace,
+                    None,
+                    blob_cache_size,
+                )
+                .await?;
                 let blob_ids = storage.list_blob_ids().await?;
                 info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
                 info!("The list of blob IDs is:");
@@ -1945,8 +1956,13 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListChainIds => {
-                let storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let storage = DbStorage::<D, _>::maybe_create_and_connect(
+                    &config,
+                    &namespace,
+                    None,
+                    blob_cache_size,
+                )
+                .await?;
                 let chain_ids = storage.list_chain_ids().await?;
                 info!(
                     "Chain IDs listed in {} ms",
@@ -1958,8 +1974,13 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListEventIds => {
-                let storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let storage = DbStorage::<D, _>::maybe_create_and_connect(
+                    &config,
+                    &namespace,
+                    None,
+                    blob_cache_size,
+                )
+                .await?;
                 let event_ids = storage.list_event_ids().await?;
                 info!(
                     "Event IDs listed in {} ms",
