@@ -11,6 +11,7 @@ linera-views
 linera-execution
 linera-chain
 linera-storage-service
+linera-cache
 linera-storage
 linera-core
 linera-ethereum
