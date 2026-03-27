@@ -72,6 +72,9 @@ use crate::{
     notifier::Notifier,
 };
 
+pub const DEFAULT_BLOCK_CACHE_SIZE: usize = 5_000;
+pub const DEFAULT_EXECUTION_STATE_CACHE_SIZE: usize = 10_000;
+
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
