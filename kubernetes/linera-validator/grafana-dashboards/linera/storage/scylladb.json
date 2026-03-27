@@ -173,7 +173,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_write_batch_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -184,7 +184,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_write_batch_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -195,7 +195,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_write_batch_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -344,7 +344,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -355,7 +355,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -366,7 +366,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -515,7 +515,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_contains_key_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -526,7 +526,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_contains_key_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -537,7 +537,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_contains_key_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -686,7 +686,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -697,7 +697,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -708,7 +708,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -857,7 +857,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_write_batch_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -868,7 +868,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_write_batch_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -879,7 +879,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_write_batch_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1028,7 +1028,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_read_value_key_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1039,7 +1039,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_read_value_key_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1050,7 +1050,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_read_value_key_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1199,7 +1199,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_read_value_value_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1210,7 +1210,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_read_value_value_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1221,7 +1221,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_read_value_value_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1370,7 +1370,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_contains_keys_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1381,7 +1381,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_contains_keys_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1392,7 +1392,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_contains_keys_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1541,7 +1541,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1552,7 +1552,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1563,7 +1563,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1712,7 +1712,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1723,7 +1723,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1734,7 +1734,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1883,7 +1883,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1894,7 +1894,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1905,7 +1905,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2054,7 +2054,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2065,7 +2065,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2076,7 +2076,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2225,7 +2225,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_journaling_scylladb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2236,7 +2236,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_journaling_scylladb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2247,7 +2247,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_journaling_scylladb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2350,7 +2350,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_scylladb_internal_read_value_none_cases{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_journaling_scylladb_internal_read_value_none_cases{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
           "legendFormat": "rate",
           "range": true,
           "refId": "A"
