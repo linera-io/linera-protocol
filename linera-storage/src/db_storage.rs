@@ -376,6 +376,9 @@ impl MultiPartitionBatch {
     }
 }
 
+/// Raw certificate bytes: (lite_certificate_bytes, confirmed_block_bytes).
+type RawCertificate = (Vec<u8>, Vec<u8>);
+
 /// Main implementation of the [`Storage`] trait.
 #[derive(Clone)]
 pub struct DbStorage<Database, Clock = WallClock> {
@@ -386,6 +389,10 @@ pub struct DbStorage<Database, Clock = WallClock> {
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
     blob_cache: Arc<ValueCache<BlobId, Blob>>,
+    confirmed_block_cache: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
+    lite_certificate_cache: Arc<ValueCache<CryptoHash, LiteCertificate<'static>>>,
+    certificate_raw_cache: Arc<ValueCache<CryptoHash, RawCertificate>>,
+    event_cache: Arc<ValueCache<EventId, Vec<u8>>>,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 
@@ -646,6 +653,9 @@ where
 
     #[instrument(level = "trace", skip_all, fields(%blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        if self.blob_cache.contains(&blob_id) {
+            return Ok(true);
+        }
         let root_key = RootKey::BlobId(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let test = store.contains_key(BLOB_KEY).await?;
@@ -658,6 +668,9 @@ where
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
         let mut missing_blobs = Vec::new();
         for blob_id in blob_ids {
+            if self.blob_cache.contains(blob_id) {
+                continue;
+            }
             let root_key = RootKey::BlobId(*blob_id).bytes();
             let store = self.database.open_shared(&root_key)?;
             if !store.contains_key(BLOB_KEY).await? {
@@ -686,13 +699,19 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlock>, ViewError> {
+        if let Some(block) = self.confirmed_block_cache.get(&hash) {
+            return Ok(Some(block));
+        }
         let root_key = RootKey::BlockHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let value = store.read_value(BLOCK_KEY).await?;
+        let value = store.read_value::<ConfirmedBlock>(BLOCK_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
             .inc();
+        if let Some(ref block) = value {
+            self.confirmed_block_cache.insert(&hash, block.clone());
+        }
         Ok(value)
     }
 
@@ -705,17 +724,33 @@ where
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let root_keys = Self::get_root_keys_for_certificates(&hashes);
-        let mut blocks = Vec::new();
-        for root_key in root_keys {
-            let store = self.database.open_shared(&root_key)?;
-            blocks.push(store.read_value(BLOCK_KEY).await?);
+        let mut results = vec![None; hashes.len()];
+        let mut misses = Vec::new();
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(block) = self.confirmed_block_cache.get(hash) {
+                results[i] = Some(block);
+            } else {
+                misses.push(i);
+            }
+        }
+        if !misses.is_empty() {
+            let miss_hashes: Vec<_> = misses.iter().map(|&i| hashes[i]).collect();
+            let root_keys = Self::get_root_keys_for_certificates(&miss_hashes);
+            for (miss_idx, root_key) in misses.iter().zip(root_keys) {
+                let store = self.database.open_shared(&root_key)?;
+                let block = store.read_value::<ConfirmedBlock>(BLOCK_KEY).await?;
+                if let Some(ref b) = block {
+                    self.confirmed_block_cache
+                        .insert(&hashes[*miss_idx], b.clone());
+                }
+                results[*miss_idx] = block;
+            }
         }
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCKS_COUNTER
             .with_label_values(&[])
             .inc_by(hashes.len() as u64);
-        Ok(blocks)
+        Ok(results)
     }
 
     #[instrument(skip_all, fields(%blob_id))]
@@ -875,6 +910,12 @@ where
 
     #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
+        if self.certificate_raw_cache.contains(&hash)
+            || (self.lite_certificate_cache.contains(&hash)
+                && self.confirmed_block_cache.contains(&hash))
+        {
+            return Ok(true);
+        }
         let root_key = RootKey::BlockHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let results = store.contains_keys(&get_block_keys()).await?;
@@ -890,6 +931,20 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
+        // Deserialized components cache: combine LiteCertificate + ConfirmedBlock
+        if let Some(lite) = self.lite_certificate_cache.get(&hash) {
+            if let Some(block) = self.confirmed_block_cache.get(&hash) {
+                return Ok(lite.with_value(block));
+            }
+        }
+        // Raw bytes cache — deserialize + populate component caches
+        if let Some((lite_cert_bytes, confirmed_block_bytes)) =
+            self.certificate_raw_cache.get(&hash)
+        {
+            return self
+                .deserialize_and_cache_certificate(&lite_cert_bytes, &confirmed_block_bytes);
+        }
+        // DB
         let root_key = RootKey::BlockHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let values = store.read_multi_values_bytes(&get_block_keys()).await?;
@@ -897,7 +952,17 @@ where
         metrics::READ_CERTIFICATE_COUNTER
             .with_label_values(&[])
             .inc();
-        Self::deserialize_certificate(&values, hash)
+        let Some(lite_cert_bytes) = values[0].as_ref() else {
+            return Ok(None);
+        };
+        let Some(confirmed_block_bytes) = values[1].as_ref() else {
+            return Ok(None);
+        };
+        self.certificate_raw_cache.insert(
+            &hash,
+            (lite_cert_bytes.clone(), confirmed_block_bytes.clone()),
+        );
+        self.deserialize_and_cache_certificate(lite_cert_bytes, confirmed_block_bytes)
     }
 
     #[instrument(skip_all)]
@@ -909,18 +974,11 @@ where
 
         raw_certs
             .into_iter()
-            .zip(hashes)
-            .map(|(maybe_raw, hash)| {
+            .map(|maybe_raw| {
                 let Some((lite_cert_bytes, confirmed_block_bytes)) = maybe_raw else {
                     return Ok(None);
                 };
-                let cert = bcs::from_bytes::<LiteCertificate>(&lite_cert_bytes)?;
-                let value = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block_bytes)?;
-                assert_eq!(&value.hash(), hash);
-                let certificate = cert
-                    .with_value(value)
-                    .ok_or(ViewError::InconsistentEntries)?;
-                Ok(Some(certificate))
+                self.deserialize_and_cache_certificate(&lite_cert_bytes, &confirmed_block_bytes)
             })
             .collect()
     }
@@ -933,24 +991,37 @@ where
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let root_keys = Self::get_root_keys_for_certificates(hashes);
-        let mut values = Vec::new();
-        for root_key in root_keys {
-            let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
+        let mut results = vec![None; hashes.len()];
+        let mut misses = Vec::new();
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(raw) = self.certificate_raw_cache.get(hash) {
+                results[i] = Some(raw);
+            } else {
+                misses.push(i);
+            }
+        }
+        if !misses.is_empty() {
+            let miss_hashes: Vec<_> = misses.iter().map(|&i| hashes[i]).collect();
+            let root_keys = Self::get_root_keys_for_certificates(&miss_hashes);
+            for (miss_idx, root_key) in misses.iter().zip(root_keys) {
+                let store = self.database.open_shared(&root_key)?;
+                let values = store.read_multi_values_bytes(&get_block_keys()).await?;
+                let pair = match (values[0].as_ref(), values[1].as_ref()) {
+                    (Some(lite), Some(block)) => Some((lite.clone(), block.clone())),
+                    _ => None,
+                };
+                if let Some(ref raw) = pair {
+                    self.certificate_raw_cache
+                        .insert(&hashes[*miss_idx], raw.clone());
+                }
+                results[*miss_idx] = pair;
+            }
         }
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATES_COUNTER
             .with_label_values(&[])
             .inc_by(hashes.len() as u64);
-        Ok(values
-            .chunks_exact(2)
-            .map(|chunk| {
-                let lite_cert_bytes = chunk[0].as_ref()?;
-                let confirmed_block_bytes = chunk[1].as_ref()?;
-                Some((lite_cert_bytes.clone(), confirmed_block_bytes.clone()))
-            })
-            .collect())
+        Ok(results)
     }
 
     async fn read_certificate_hashes_by_heights(
@@ -1064,12 +1135,7 @@ where
             .map(|maybe_raw| match maybe_raw {
                 None => Ok(None),
                 Some((lite_cert_bytes, confirmed_block_bytes)) => {
-                    let cert = bcs::from_bytes::<LiteCertificate>(&lite_cert_bytes)?;
-                    let value = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block_bytes)?;
-                    let certificate = cert
-                        .with_value(value)
-                        .ok_or(ViewError::InconsistentEntries)?;
-                    Ok(Some(certificate))
+                    self.deserialize_and_cache_certificate(&lite_cert_bytes, &confirmed_block_bytes)
                 }
             })
             .collect()
@@ -1077,12 +1143,18 @@ where
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+        if let Some(event) = self.event_cache.get(&event_id) {
+            return Ok(Some(event));
+        }
         let event_key = to_event_key(&event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let event = store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
+        if let Some(ref e) = event {
+            self.event_cache.insert(&event_id, e.clone());
+        }
         Ok(event)
     }
 
@@ -1241,22 +1313,18 @@ where
             .collect()
     }
 
-    #[instrument(skip_all)]
-    fn deserialize_certificate(
-        pair: &[Option<Vec<u8>>],
-        hash: CryptoHash,
+    fn deserialize_and_cache_certificate(
+        &self,
+        lite_cert_bytes: &[u8],
+        confirmed_block_bytes: &[u8],
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
-        let Some(cert_bytes) = pair[0].as_ref() else {
-            return Ok(None);
-        };
-        let Some(value_bytes) = pair[1].as_ref() else {
-            return Ok(None);
-        };
-        let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
-        let value = bcs::from_bytes::<ConfirmedBlock>(value_bytes)?;
-        assert_eq!(value.hash(), hash);
-        let certificate = cert
-            .with_value(value)
+        let lite = bcs::from_bytes::<LiteCertificate>(lite_cert_bytes)?;
+        let block = bcs::from_bytes::<ConfirmedBlock>(confirmed_block_bytes)?;
+        let hash = block.hash();
+        self.lite_certificate_cache.insert(&hash, lite.clone());
+        self.confirmed_block_cache.insert(&hash, block.clone());
+        let certificate = lite
+            .with_value(block)
             .ok_or(ViewError::InconsistentEntries)?;
         Ok(Some(certificate))
     }
@@ -1306,6 +1374,10 @@ impl<Database, C> DbStorage<Database, C> {
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
             blob_cache: Arc::new(ValueCache::new(blob_cache_size)),
+            confirmed_block_cache: Arc::new(ValueCache::new(blob_cache_size)),
+            lite_certificate_cache: Arc::new(ValueCache::new(blob_cache_size)),
+            certificate_raw_cache: Arc::new(ValueCache::new(blob_cache_size)),
+            event_cache: Arc::new(ValueCache::new(blob_cache_size)),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }

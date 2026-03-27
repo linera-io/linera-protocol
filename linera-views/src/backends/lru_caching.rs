@@ -409,12 +409,8 @@ where
 
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
         let store = self.database.open_shared(root_key)?;
-        let store = LruCachingStore::new(
-            store,
-            self.config.clone(),
-            /* has_exclusive_access */ false,
-        );
-        Ok(store)
+        // Caching for immutable data is handled in DbStorage.
+        Ok(LruCachingStore { store, cache: None })
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
