@@ -93,6 +93,15 @@ storageCacheConfig:
   # Maximum total size of find-key-values entries in bytes
   maxCacheFindKeyValuesSize: 10000000
 
+# Individual cache sizes for DbStorage ValueCaches
+# These control the number of entries in each in-memory LRU cache
+storageCacheSizes:
+  blobCacheSize: 1000
+  confirmedBlockCacheSize: 10000
+  liteCertificateCacheSize: 5000
+  certificateRawCacheSize: 5000
+  eventCacheSize: 5000
+
 # Block cache size (number of entries)
 blockCacheSize: 20000
 
