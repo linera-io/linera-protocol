@@ -59,11 +59,7 @@ mod metrics {
     };
     use prometheus::{HistogramVec, IntCounterVec};
 
-    /// Label for distinguishing organic vs synthetic (benchmark) traffic.
-    pub const TRAFFIC_TYPE_LABEL: &str = "traffic_type";
-
-    /// Label for the gRPC method name.
-    pub const METHOD_NAME_LABEL: &str = "method_name";
+    use super::super::{METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
 
     pub static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
@@ -321,20 +317,8 @@ where
         #[cfg(with_metrics)]
         let start = Instant::now();
 
-        // Extract the gRPC method name from the URI path. gRPC paths have the form
-        // `/{package}.{Service}/{Method}` — the first segment always contains a dot.
-        // Non-gRPC requests (bot probes, health checks, etc.) are bucketed as
-        // "non_grpc" to prevent unbounded label cardinality.
         #[cfg(with_metrics)]
-        let method_name = {
-            let path = request.uri().path();
-            let parts: Vec<&str> = path.splitn(3, '/').collect();
-            if parts.len() == 3 && parts[1].contains('.') {
-                parts[2].to_owned()
-            } else {
-                "non_grpc".to_owned()
-            }
-        };
+        let method_name = super::extract_grpc_method_name(request.uri().path()).to_owned();
 
         // Extract traffic type from request extensions (set by OtelContextLayer).
         // When opentelemetry is enabled but no baggage is set, defaults to "organic".
