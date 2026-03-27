@@ -10,7 +10,7 @@ use std::{
 use futures::{future, lock::Mutex, Future, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, Signer},
-    data_types::{ChainDescription, Epoch, MessagePolicy, Timestamp},
+    data_types::{ChainDescription, Epoch, MessagePolicy, TimeDelta, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     util::future::FutureSyncExt as _,
     Task,
@@ -24,8 +24,8 @@ use linera_core::{
     worker::{Notification, Reason},
     Environment, Wallet,
 };
-use linera_storage::{Clock as _, Storage as _};
-use tokio::sync::mpsc::UnboundedReceiver;
+use linera_storage::Storage as _;
+use tokio::sync::{mpsc::UnboundedReceiver, Notify};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
@@ -157,35 +157,90 @@ struct ListeningClient<C: ClientContext> {
     listener: Task<()>,
     /// The stream of notifications from the local node.
     notification_stream: Arc<Mutex<NotificationStream>>,
-    /// This is only `< u64::MAX` when the client is waiting for a timeout to process the inbox.
-    timeout: Timestamp,
     /// The background sync process.
     background_sync: Task<()>,
+    /// Signal to wake the per-chain inbox processing task.
+    inbox_notify: Arc<Notify>,
+    /// The long-lived per-chain inbox processing task.
+    inbox_task: Task<()>,
+    /// Cancellation token for the per-chain inbox task (child of the global token).
+    inbox_cancellation: CancellationToken,
 }
 
-impl<C: ClientContext> ListeningClient<C> {
+impl<C: ClientContext + 'static> ListeningClient<C> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         client: ContextChainClient<C>,
         abort_handle: AbortOnDrop,
         listener: Task<()>,
         notification_stream: NotificationStream,
         background_sync: Task<()>,
+        context: &Arc<Mutex<C>>,
+        config: &Arc<ChainListenerConfig>,
+        parent_cancellation: &CancellationToken,
     ) -> Self {
+        let inbox_notify = Arc::new(Notify::new());
+        let inbox_cancellation = parent_cancellation.child_token();
+        let inbox_task =
+            Self::spawn_inbox_task(&client, context, config, &inbox_notify, &inbox_cancellation);
         Self {
             client,
             abort_handle,
             listener,
             #[allow(clippy::arc_with_non_send_sync)] // Only `Send` with `futures-util/alloc`.
             notification_stream: Arc::new(Mutex::new(notification_stream)),
-            timeout: Timestamp::from(u64::MAX),
             background_sync,
+            inbox_notify,
+            inbox_task,
+            inbox_cancellation,
         }
+    }
+
+    /// Respawns the per-chain inbox task with a fresh clone of the client.
+    /// The `inbox_notify` `Arc` is reused so no pending permits are lost.
+    fn respawn_inbox_task(
+        &mut self,
+        parent_cancellation: &CancellationToken,
+        context: &Arc<Mutex<C>>,
+        config: &Arc<ChainListenerConfig>,
+    ) {
+        self.inbox_cancellation.cancel();
+        self.inbox_cancellation = parent_cancellation.child_token();
+        self.inbox_task = Self::spawn_inbox_task(
+            &self.client,
+            context,
+            config,
+            &self.inbox_notify,
+            &self.inbox_cancellation,
+        );
+    }
+
+    fn spawn_inbox_task(
+        client: &ContextChainClient<C>,
+        context: &Arc<Mutex<C>>,
+        config: &Arc<ChainListenerConfig>,
+        inbox_notify: &Arc<Notify>,
+        inbox_cancellation: &CancellationToken,
+    ) -> Task<()> {
+        Task::spawn(inbox_processing_loop(
+            client.clone(),
+            Arc::clone(context),
+            Arc::clone(config),
+            Arc::clone(inbox_notify),
+            inbox_cancellation.clone(),
+        ))
     }
 
     async fn stop(self) {
         // TODO(#4965): this is unnecessary: the join handle now also acts as an abort handle
         drop(self.abort_handle);
-        futures::future::join(self.listener.cancel(), self.background_sync.cancel()).await;
+        self.inbox_cancellation.cancel();
+        futures::future::join3(
+            self.listener.cancel(),
+            self.background_sync.cancel(),
+            self.inbox_task.cancel(),
+        )
+        .await;
     }
 }
 
@@ -284,7 +339,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             loop {
                 match self.next_action().await? {
                     Action::Stop => break,
-                    Action::ProcessInbox(chain_id) => self.maybe_process_inbox(chain_id).await?,
                     Action::Notification(notification) => {
                         self.process_notification(notification).await?
                     }
@@ -322,7 +376,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         }
         match &notification.reason {
             Reason::NewIncomingBundle { .. } => {
-                self.maybe_process_inbox(notification.chain_id).await?;
+                self.maybe_notify_inbox_processing(notification.chain_id);
             }
             Reason::NewRound { .. } => {
                 self.update_validators(&notification).await?;
@@ -336,13 +390,13 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                         .await?;
                     if !publishers.is_empty() {
                         self.listen_recursively(publishers).await?;
-                        self.maybe_process_inbox(notification.chain_id).await?;
+                        self.maybe_notify_inbox_processing(notification.chain_id);
                     }
                 }
-                self.process_new_events(notification.chain_id).await?;
+                self.process_new_events(notification.chain_id);
             }
             Reason::NewEvents { .. } => {
-                self.process_new_events(notification.chain_id).await?;
+                self.process_new_events(notification.chain_id);
             }
             Reason::BlockExecuted { .. } => {}
         }
@@ -409,15 +463,14 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         Ok(())
     }
 
-    /// Processes the inboxes of all chains that are subscribed to `chain_id`.
-    async fn process_new_events(&mut self, chain_id: ChainId) -> Result<(), Error> {
-        let Some(subscribers) = self.event_subscribers.get(&chain_id).cloned() else {
-            return Ok(());
+    /// Notifies all chains subscribed to `chain_id` to process their inboxes.
+    fn process_new_events(&self, chain_id: ChainId) {
+        let Some(subscribers) = self.event_subscribers.get(&chain_id) else {
+            return;
         };
         for subscriber_id in subscribers {
-            self.maybe_process_inbox(subscriber_id).await?;
+            self.maybe_notify_inbox_processing(*subscriber_id);
         }
-        Ok(())
     }
 
     /// Starts listening for notifications about the given chains, and any chains that publish
@@ -492,10 +545,13 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             Task::spawn(listener.in_current_span()),
             notification_stream,
             background_sync_task,
+            &self.context,
+            &self.config,
+            &self.cancellation_token,
         );
         self.listening.insert(chain_id, listening_client);
         let publishing_chains = self.update_event_subscriptions(chain_id).await?;
-        self.maybe_process_inbox(chain_id).await?;
+        self.maybe_notify_inbox_processing(chain_id);
         Ok(publishing_chains)
     }
 
@@ -572,10 +628,9 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         Ok(publishing_chains)
     }
 
-    /// Returns the next notification or timeout to process.
+    /// Returns the next notification to process, or a stop signal.
     async fn next_action(&mut self) -> Result<Action, Error> {
         loop {
-            let (timeout_chain_id, timeout) = self.next_timeout()?;
             let notification_futures = self
                 .listening
                 .values_mut()
@@ -587,9 +642,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             futures::select! {
                 () = self.cancellation_token.cancelled().fuse() => {
                     return Ok(Action::Stop);
-                }
-                () = self.storage.clock().sleep_until(timeout).fuse() => {
-                    return Ok(Action::ProcessInbox(timeout_chain_id));
                 }
                 command = self.command_receiver.recv().then(async |maybe_command| {
                     if let Some(command) = maybe_command {
@@ -631,6 +683,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                     continue;
                                 };
                                 listening_client.client.options_mut().message_policy = policy;
+                                listening_client.respawn_inbox_task(
+                                    &self.cancellation_token,
+                                    &self.context,
+                                    &self.config,
+                                );
                             }
                         }
                     }
@@ -651,16 +708,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 }
             }
         }
-    }
-
-    /// Returns the next timeout to process, and the chain to which it applies.
-    fn next_timeout(&self) -> Result<(ChainId, Timestamp), Error> {
-        let (chain_id, client) = self
-            .listening
-            .iter()
-            .min_by_key(|(_, client)| client.timeout)
-            .expect("No chains left to listen to");
-        Ok((*chain_id, client.timeout))
     }
 
     /// Updates the validators about the chain.
@@ -756,62 +803,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         Ok(chains)
     }
 
-    /// Processes the inbox, unless `skip_process_inbox` is set.
-    ///
-    /// If no block can be produced because we are not the round leader, a timeout is returned
-    /// for when to retry; otherwise `u64::MAX` is returned.
-    ///
-    /// The wallet is persisted with any blocks that processing the inbox added. An error
-    /// is returned if persisting the wallet fails.
-    async fn maybe_process_inbox(&mut self, chain_id: ChainId) -> Result<(), Error> {
-        if self.config.skip_process_inbox {
-            debug!("Not processing inbox for {chain_id:.8} due to listener configuration");
-            return Ok(());
+    /// Signals the per-chain inbox processing task to wake up and process the inbox.
+    fn maybe_notify_inbox_processing(&self, chain_id: ChainId) {
+        if let Some(listening_client) = self.listening.get(&chain_id) {
+            listening_client.inbox_notify.notify_one();
         }
-        let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
-        if !listening_client.client.is_tracked() {
-            debug!("Not processing inbox for non-tracked chain {chain_id:.8}");
-            return Ok(());
-        }
-        if listening_client.client.preferred_owner().is_none() {
-            debug!("Not processing inbox for non-owned chain {chain_id:.8}");
-            return Ok(());
-        }
-        debug!("Processing inbox for {chain_id:.8}");
-        listening_client.timeout = Timestamp::from(u64::MAX);
-        match listening_client
-            .client
-            .process_inbox_without_prepare()
-            .await
-        {
-            Err(chain_client::Error::CannotFindKeyForChain(chain_id)) => {
-                debug!(%chain_id, "Cannot find key for chain");
-            }
-            Err(error) => warn!(%error, "Failed to process inbox."),
-            Ok((certs, None)) if certs.is_empty() => debug!(
-                %chain_id,
-                "done processing inbox: no blocks created",
-            ),
-            Ok((certs, None)) => info!(
-                %chain_id,
-                created_block_count = %certs.len(),
-                "done processing inbox",
-            ),
-            Ok((certs, Some(new_timeout))) => {
-                info!(
-                    %chain_id,
-                    created_block_count = %certs.len(),
-                    timeout = %new_timeout,
-                    "waiting for round timeout before continuing to process the inbox",
-                );
-                listening_client.timeout = new_timeout.timestamp;
-            }
-        }
-        let mut context_guard = self.context.lock().await;
-        context_guard
-            .update_wallet(&listening_client.client)
-            .await?;
-        Ok(())
     }
 
     /// Sleeps for the given number of milliseconds, if greater than 0.
@@ -822,8 +818,88 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     }
 }
 
+/// Per-chain inbox processing loop. Runs as a long-lived tokio task. Wakes on
+/// `inbox_notify` signals and processes the inbox, handling round-leader timeouts
+/// internally. Multiple notifications while busy collapse into a single permit.
+async fn inbox_processing_loop<C: ClientContext>(
+    client: ContextChainClient<C>,
+    context: Arc<Mutex<C>>,
+    config: Arc<ChainListenerConfig>,
+    inbox_notify: Arc<Notify>,
+    cancellation_token: CancellationToken,
+) {
+    let chain_id = client.chain_id();
+    loop {
+        futures::select! {
+            () = cancellation_token.cancelled().fuse() => break,
+            () = inbox_notify.notified().fuse() => {
+                if config.skip_process_inbox {
+                    debug!("Not processing inbox for {chain_id:.8} due to listener configuration");
+                    continue;
+                }
+                if !client.is_tracked() {
+                    debug!("Not processing inbox for non-tracked chain {chain_id:.8}");
+                    continue;
+                }
+                if client.preferred_owner().is_none() {
+                    debug!("Not processing inbox for follow-only chain {chain_id:.8}");
+                    continue;
+                }
+                debug!("Processing inbox for {chain_id:.8}");
+
+                // Inner loop handles round-leader timeouts: if we can't produce a block
+                // because we're not the leader, sleep until the timeout then retry.
+                // A new notification or cancellation can interrupt the sleep.
+                loop {
+                    match client.process_inbox_without_prepare().await {
+                        Err(chain_client::Error::CannotFindKeyForChain(chain_id)) => {
+                            debug!(%chain_id, "Cannot find key for chain");
+                            break;
+                        }
+                        Err(error) => {
+                            warn!(%error, "Failed to process inbox");
+                            break;
+                        }
+                        Ok((certs, None)) => {
+                            if certs.is_empty() {
+                                debug!(%chain_id, "done processing inbox: no blocks created");
+                            } else {
+                                info!(
+                                    %chain_id,
+                                    created_block_count = %certs.len(),
+                                    "done processing inbox",
+                                );
+                            }
+                            break;
+                        }
+                        Ok((certs, Some(new_timeout))) => {
+                            info!(
+                                %chain_id,
+                                created_block_count = %certs.len(),
+                                timeout = %new_timeout,
+                                "waiting for round timeout before continuing to process the inbox",
+                            );
+                            let delta = new_timeout.timestamp.delta_since(Timestamp::now());
+                            if delta > TimeDelta::ZERO {
+                                futures::select! {
+                                    () = cancellation_token.cancelled().fuse() => return,
+                                    () = linera_base::time::timer::sleep(delta.as_duration()).fuse() => {},
+                                    () = inbox_notify.notified().fuse() => {},
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Err(error) = context.lock().await.update_wallet(&client).await {
+                    warn!(%error, "Failed to update wallet after inbox processing");
+                }
+            }
+        }
+    }
+}
+
 enum Action {
-    ProcessInbox(ChainId),
     Notification(Notification),
     Stop,
 }
