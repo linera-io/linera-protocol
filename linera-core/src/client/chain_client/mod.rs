@@ -105,6 +105,9 @@ pub struct Options {
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
+    /// Maximum number of certificates read from local storage and uploaded to a validator
+    /// at a time when synchronizing a chain.
+    pub certificate_upload_batch_size: u64,
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     pub sender_certificate_download_batch_size: usize,
@@ -131,7 +134,8 @@ struct CircuitBreakerState {
 impl Options {
     pub fn test_default() -> Self {
         use super::{
-            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
+            DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
@@ -145,6 +149,7 @@ impl Options {
             blob_download_timeout: Duration::from_secs(1),
             certificate_batch_download_timeout: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            certificate_upload_batch_size: DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
