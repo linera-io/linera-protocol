@@ -33,7 +33,7 @@ use tokio::sync::mpsc;
 use tracing::{instrument, Level};
 
 use crate::{
-    client::{chain_client, Client},
+    client::{chain_client, Client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE},
     data_types::{ChainInfo, ChainInfoQuery},
     environment::Environment,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
