@@ -15,6 +15,7 @@ use linera_core::{
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
     wallet,
+    worker::{DEFAULT_BLOCK_CACHE_SIZE, DEFAULT_EXECUTION_STATE_CACHE_SIZE},
 };
 use linera_storage::Storage;
 use tokio_util::sync::CancellationToken;
@@ -120,8 +121,8 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             Some(Duration::from_secs(1)),
             HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
@@ -234,8 +235,8 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             Some(Duration::from_secs(1)),
             HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
@@ -390,8 +391,8 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             Some(Duration::from_secs(1)),
             HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
@@ -466,8 +467,8 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
             Some(Duration::from_secs(1)),
             HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
@@ -584,8 +585,8 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             Some(Duration::from_secs(1)),
             HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };

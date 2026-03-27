@@ -93,6 +93,12 @@ storageCacheConfig:
   # Maximum total size of find-key-values entries in bytes
   maxCacheFindKeyValuesSize: 10000000
 
+# Block cache size (number of entries)
+blockCacheSize: 20000
+
+# Execution state cache size (number of entries)
+executionStateCacheSize: 20000
+
 # Dual storage mode (RocksDB + ScyllaDB)
 dualStore: false
 
