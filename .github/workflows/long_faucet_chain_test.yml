@@ -18,7 +18,7 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   LINERA_STORAGE_SERVICE: 127.0.0.1:1235
-  RUST_LOG: ${{ runner.debug == '1' && 'linera=debug' || 'warn' }}
+  RUST_LOG: warn
   RUST_LOG_FORMAT: plain
   LINERA_TEST_ITERATIONS: 1000
 

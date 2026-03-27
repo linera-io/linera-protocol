@@ -27,7 +27,7 @@ env:
   RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
-  RUST_LOG: ${{ runner.debug == '1' && 'linera=debug' || 'warn' }}
+  RUST_LOG: warn
   DOCKER_COMPOSE_WAIT: "true"
 
 permissions:
