@@ -214,6 +214,7 @@ impl Client {
         )
         .await?;
 
+        // The `Arc` here is useless, but it is required by the `ChainListener` API.
         #[expect(clippy::arc_with_non_send_sync)]
         let client = Arc::new(AsyncMutex::new(client));
         let client_clone = client.clone();
@@ -226,7 +227,7 @@ impl Client {
             storage,
             cancellation_token.clone(),
             tokio::sync::mpsc::unbounded_channel().1,
-            true,
+            true, // Enable background sync
         )
         .run()
         .await?;
@@ -278,6 +279,7 @@ impl Client {
         )
         .await?;
 
+        // The `Arc` here is useless, but it is required by the `ChainListener` API.
         #[expect(clippy::arc_with_non_send_sync)]
         let client = Arc::new(AsyncMutex::new(client));
         let client_clone = client.clone();
@@ -290,7 +292,7 @@ impl Client {
             storage,
             cancellation_token.clone(),
             tokio::sync::mpsc::unbounded_channel().1,
-            true,
+            true, // Enable background sync
         )
         .run()
         .await?;
