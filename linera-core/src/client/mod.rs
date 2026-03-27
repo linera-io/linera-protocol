@@ -497,8 +497,8 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         stop: BlockHeight,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        let chain_info = self.local_node.chain_info(chain_id).await?;
-        let next_height = chain_info.next_block_height;
+        let mut info = self.local_node.chain_info(chain_id).await?;
+        let next_height = info.next_block_height;
         let hashes = self
             .local_node
             .get_preprocessed_block_hashes(chain_id, next_height, stop)
@@ -511,9 +511,9 @@ impl<Env: Environment> Client<Env> {
             }
         };
         for certificate in certificates {
-            self.handle_certificate(certificate).await?;
+            info = self.handle_certificate(certificate).await?.info;
         }
-        Ok(self.local_node.chain_info(chain_id).await?)
+        Ok(info)
     }
 
     /// Downloads and processes all certificates up to (excluding) the specified height from the
