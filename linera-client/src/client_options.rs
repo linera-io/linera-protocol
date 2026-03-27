@@ -68,6 +68,10 @@ pub struct Options {
     #[arg(long = "staging-bundles-time-budget-ms", value_parser = util::parse_millis)]
     pub staging_bundles_time_budget: Option<Duration>,
 
+    /// Comma-separated list of chain IDs whose incoming bundles should be processed first.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub prioritize_bundles_from: Option<HashSet<ChainId>>,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     /// Use 0 to disable expiry.
     #[arg(
