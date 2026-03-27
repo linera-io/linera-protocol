@@ -58,7 +58,7 @@ pub struct LogView<C, T> {
     /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
     /// The number of entries persisted in storage.
-    stored_count: usize,
+    stored_count: u32,
     /// New values not yet persisted to storage.
     new_values: Vec<T>,
 }
@@ -111,7 +111,7 @@ where
         }
         if !self.new_values.is_empty() {
             delete_view = false;
-            let mut count = self.stored_count;
+            let mut count = self.stored_count as usize;
             for value in &self.new_values {
                 let key = self
                     .context
@@ -120,8 +120,9 @@ where
                 batch.put_key_value(key, value)?;
                 count += 1;
             }
+            let count_u32 = self.stored_count + self.new_values.len() as u32;
             let key = self.context.base_key().base_tag(KeyTag::Count as u8);
-            batch.put_key_value(key, &count)?;
+            batch.put_key_value(key, &count_u32)?;
         }
         Ok(delete_view)
     }
@@ -130,7 +131,7 @@ where
         if self.delete_storage_first {
             self.stored_count = 0;
         }
-        self.stored_count += self.new_values.len();
+        self.stored_count += self.new_values.len() as u32;
         self.new_values.clear();
         self.delete_storage_first = false;
     }
@@ -192,7 +193,7 @@ where
         if self.delete_storage_first {
             self.new_values.len()
         } else {
-            self.stored_count + self.new_values.len()
+            self.stored_count as usize + self.new_values.len()
         }
     }
 
@@ -222,14 +223,16 @@ where
     pub async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
         let value = if self.delete_storage_first {
             self.new_values.get(index).cloned()
-        } else if index < self.stored_count {
+        } else if index < self.stored_count as usize {
             let key = self
                 .context
                 .base_key()
                 .derive_tag_key(KeyTag::Index as u8, &index)?;
             self.context.store().read_value(&key).await?
         } else {
-            self.new_values.get(index - self.stored_count).cloned()
+            self.new_values
+                .get(index - self.stored_count as usize)
+                .cloned()
         };
         Ok(value)
     }
@@ -259,11 +262,15 @@ where
         } else {
             let mut index_to_positions = BTreeMap::<usize, Vec<usize>>::new();
             for (pos, index) in indices.into_iter().enumerate() {
-                if index < self.stored_count {
+                if index < self.stored_count as usize {
                     index_to_positions.entry(index).or_default().push(pos);
                     result.push(None);
                 } else {
-                    result.push(self.new_values.get(index - self.stored_count).cloned());
+                    result.push(
+                        self.new_values
+                            .get(index - self.stored_count as usize)
+                            .cloned(),
+                    );
                 }
             }
             let mut keys = Vec::new();
@@ -356,7 +363,7 @@ where
         let effective_stored_count = if self.delete_storage_first {
             0
         } else {
-            self.stored_count
+            self.stored_count as usize
         };
         let end = match range.end_bound() {
             Bound::Included(end) => *end + 1,
