@@ -8,6 +8,7 @@
 //! - **Linera scan** ([`linera`]): walks block history for Credit-to-Address20 messages,
 //!   checks EVM for completion via ERC-20 `Transfer` events.
 
+pub mod db;
 pub mod evm;
 pub mod linera;
 
@@ -95,6 +96,7 @@ pub struct MonitorState {
     pub(crate) burns: HashMap<(u64, usize), TrackedBurn>,
     pub(crate) last_scanned_evm_block: u64,
     pub(crate) last_scanned_linera_height: u64,
+    db: Option<db::BridgeDb>,
 }
 
 impl MonitorState {
@@ -104,16 +106,32 @@ impl MonitorState {
             burns: HashMap::new(),
             last_scanned_evm_block: start_evm_block,
             last_scanned_linera_height: 0,
+            db: None,
         }
+    }
+
+    /// Sets the persistent SQLite database for write-through storage.
+    pub fn set_db(&mut self, db: db::BridgeDb) {
+        self.db = Some(db);
+    }
+
+    /// Returns a reference to the database, if configured.
+    pub fn db(&self) -> Option<&db::BridgeDb> {
+        self.db.as_ref()
     }
 
     /// Tracks a deposit. Returns `true` if this is a newly discovered deposit.
     /// Uses Entry API instead of insert() to avoid overwriting existing entries
     /// that may have accumulated retry state.
-    pub fn track_deposit(&mut self, pending: PendingDeposit) -> bool {
+    pub async fn track_deposit(&mut self, pending: PendingDeposit) -> bool {
         match self.deposits.entry(pending.key.clone()) {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
+                if let Some(db) = &self.db {
+                    if let Err(e) = db.insert_deposit(&pending).await {
+                        tracing::warn!("Failed to persist deposit to SQLite: {e:#}");
+                    }
+                }
                 e.insert(Tracked::new(pending));
                 crate::relay::metrics::deposit_detected();
                 true
@@ -121,10 +139,15 @@ impl MonitorState {
         }
     }
 
-    pub fn complete_deposit(&mut self, key: &DepositKey) {
+    pub async fn complete_deposit(&mut self, key: &DepositKey) {
         if let Some(d) = self.deposits.get_mut(key) {
             d.forwarded = true;
             crate::relay::metrics::deposit_completed();
+            if let Some(db) = &self.db {
+                if let Err(e) = db.update_deposit_status(key, "completed").await {
+                    tracing::warn!(?key, "Failed to update deposit status in SQLite: {e:#}");
+                }
+            }
         } else {
             tracing::warn!(deposit_id = ?key, "Attempted to complete unknown deposit");
         }
@@ -133,11 +156,16 @@ impl MonitorState {
     /// Tracks a burn. Returns `true` if this is a newly discovered burn.
     /// Uses Entry API instead of insert() to avoid overwriting existing entries
     /// that may have accumulated retry state.
-    pub fn track_burn(&mut self, pending: PendingBurn) -> bool {
+    pub async fn track_burn(&mut self, pending: PendingBurn) -> bool {
         let key = (pending.linera_height, pending.burn_index);
         match self.burns.entry(key) {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
+                if let Some(db) = &self.db {
+                    if let Err(err) = db.insert_burn(&pending).await {
+                        tracing::warn!("Failed to persist burn to SQLite: {err:#}");
+                    }
+                }
                 e.insert(Tracked::new(pending));
                 crate::relay::metrics::burn_detected();
                 true
@@ -145,10 +173,22 @@ impl MonitorState {
         }
     }
 
-    pub fn complete_burn(&mut self, linera_height: u64, burn_index: usize) {
+    pub async fn complete_burn(&mut self, linera_height: u64, burn_index: usize) {
         if let Some(b) = self.burns.get_mut(&(linera_height, burn_index)) {
             b.forwarded = true;
             crate::relay::metrics::burn_completed();
+            if let Some(db) = &self.db {
+                if let Err(e) = db
+                    .update_burn_status(linera_height, burn_index, "completed")
+                    .await
+                {
+                    tracing::warn!(
+                        linera_height,
+                        burn_index,
+                        "Failed to update burn status in SQLite: {e:#}"
+                    );
+                }
+            }
         } else {
             tracing::warn!(
                 linera_height,
@@ -211,10 +251,15 @@ impl MonitorState {
         }
     }
 
-    pub fn mark_deposit_failed(&mut self, key: &DepositKey) {
+    pub async fn mark_deposit_failed(&mut self, key: &DepositKey) {
         if let Some(d) = self.deposits.get_mut(key) {
             d.failed = true;
             crate::relay::metrics::deposit_failed();
+            if let Some(db) = &self.db {
+                if let Err(e) = db.update_deposit_status(key, "failed").await {
+                    tracing::warn!(?key, "Failed to update deposit status in SQLite: {e:#}");
+                }
+            }
         }
     }
 
@@ -225,10 +270,19 @@ impl MonitorState {
         }
     }
 
-    pub fn mark_burn_failed(&mut self, height: u64, burn_index: usize) {
+    pub async fn mark_burn_failed(&mut self, height: u64, burn_index: usize) {
         if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
             b.failed = true;
             crate::relay::metrics::burn_failed();
+            if let Some(db) = &self.db {
+                if let Err(e) = db.update_burn_status(height, burn_index, "failed").await {
+                    tracing::warn!(
+                        height,
+                        burn_index,
+                        "Failed to update burn status in SQLite: {e:#}"
+                    );
+                }
+            }
         }
     }
 
@@ -329,8 +383,8 @@ mod tests {
         assert_ne!(key1.hash(), key2.hash());
     }
 
-    #[test]
-    fn test_monitor_state_track_and_complete() {
+    #[tokio::test]
+    async fn test_monitor_state_track_and_complete() {
         let mut state = MonitorState::new(0);
 
         let key = DepositKey {
@@ -339,45 +393,49 @@ mod tests {
             tx_index: 1,
             log_index: 0,
         };
-        state.track_deposit(PendingDeposit {
-            key: key.clone(),
-            tx_hash: B256::ZERO,
-            depositor: Address::ZERO,
-            amount: U256::from(1000),
-            nonce: U256::from(0),
-        });
+        state
+            .track_deposit(PendingDeposit {
+                key: key.clone(),
+                tx_hash: B256::ZERO,
+                depositor: Address::ZERO,
+                amount: U256::from(1000),
+                nonce: U256::from(0),
+            })
+            .await;
 
         assert_eq!(state.pending_deposits().len(), 1);
         assert_eq!(state.completed_deposits().len(), 0);
 
-        state.complete_deposit(&key);
+        state.complete_deposit(&key).await;
 
         assert_eq!(state.pending_deposits().len(), 0);
         assert_eq!(state.completed_deposits().len(), 1);
     }
 
-    #[test]
-    fn test_monitor_state_track_and_forward_burn() {
+    #[tokio::test]
+    async fn test_monitor_state_track_and_forward_burn() {
         let mut state = MonitorState::new(0);
 
-        state.track_burn(PendingBurn {
-            linera_height: 10,
-            burn_index: 0,
-            evm_recipient: "0xabcd".to_string(),
-            amount: "500".to_string(),
-        });
+        state
+            .track_burn(PendingBurn {
+                linera_height: 10,
+                burn_index: 0,
+                evm_recipient: "0xabcd".to_string(),
+                amount: "500".to_string(),
+            })
+            .await;
 
         assert_eq!(state.pending_burns().len(), 1);
         assert_eq!(state.completed_burns().len(), 0);
 
-        state.complete_burn(10, 0);
+        state.complete_burn(10, 0).await;
 
         assert_eq!(state.pending_burns().len(), 0);
         assert_eq!(state.completed_burns().len(), 1);
     }
 
-    #[test]
-    fn test_status_summary() {
+    #[tokio::test]
+    async fn test_status_summary() {
         let mut state = MonitorState::new(100);
 
         let key = DepositKey {
@@ -386,19 +444,23 @@ mod tests {
             tx_index: 0,
             log_index: 0,
         };
-        state.track_deposit(PendingDeposit {
-            key: key.clone(),
-            tx_hash: B256::ZERO,
-            depositor: Address::ZERO,
-            amount: U256::ZERO,
-            nonce: U256::ZERO,
-        });
-        state.track_burn(PendingBurn {
-            linera_height: 5,
-            burn_index: 0,
-            evm_recipient: "0x1234".to_string(),
-            amount: "100".to_string(),
-        });
+        state
+            .track_deposit(PendingDeposit {
+                key: key.clone(),
+                tx_hash: B256::ZERO,
+                depositor: Address::ZERO,
+                amount: U256::ZERO,
+                nonce: U256::ZERO,
+            })
+            .await;
+        state
+            .track_burn(PendingBurn {
+                linera_height: 5,
+                burn_index: 0,
+                evm_recipient: "0x1234".to_string(),
+                amount: "100".to_string(),
+            })
+            .await;
 
         let summary = state.status_summary();
         assert_eq!(summary.deposits_pending, 1);
@@ -430,8 +492,8 @@ mod tests {
         assert!(retry_eligible(0, Some(long_ago), 10));
     }
 
-    #[test]
-    fn test_deposits_ready_for_retry() {
+    #[tokio::test]
+    async fn test_deposits_ready_for_retry() {
         let mut state = MonitorState::new(0);
         let key = DepositKey {
             source_chain_id: 1,
@@ -439,20 +501,22 @@ mod tests {
             tx_index: 0,
             log_index: 0,
         };
-        state.track_deposit(PendingDeposit {
-            key: key.clone(),
-            tx_hash: B256::ZERO,
-            depositor: Address::ZERO,
-            amount: U256::ZERO,
-            nonce: U256::ZERO,
-        });
+        state
+            .track_deposit(PendingDeposit {
+                key: key.clone(),
+                tx_hash: B256::ZERO,
+                depositor: Address::ZERO,
+                amount: U256::ZERO,
+                nonce: U256::ZERO,
+            })
+            .await;
 
         assert_eq!(state.deposits_ready_for_retry(10).len(), 1);
 
         state.mark_deposit_retried(&key);
         assert_eq!(state.deposits_ready_for_retry(10).len(), 0);
 
-        state.mark_deposit_failed(&key);
+        state.mark_deposit_failed(&key).await;
         assert_eq!(state.deposits_ready_for_retry(10).len(), 0);
     }
 }

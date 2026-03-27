@@ -125,6 +125,11 @@ struct ServeOptions {
     /// Maximum number of retry attempts for pending deposits and burns.
     #[arg(long, default_value = "10")]
     max_retries: u32,
+
+    /// Path to the SQLite database for persistent request storage.
+    /// Defaults to `bridge_relay.sqlite3` next to the RocksDB storage directory.
+    #[arg(long)]
+    sqlite_path: Option<std::path::PathBuf>,
 }
 
 fn main() -> Result<()> {
@@ -165,6 +170,7 @@ impl ServeOptions {
             self.monitor_scan_interval,
             self.monitor_start_block,
             self.max_retries,
+            self.sqlite_path.as_deref(),
         ))
         .await
     }
