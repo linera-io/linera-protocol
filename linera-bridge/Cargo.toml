@@ -55,6 +55,7 @@ relay = [
     "linera-views/rocksdb",
     "dep:rustls",
     "dep:tower-http",
+    "dep:sqlx",
     "dep:tracing",
     "dep:tracing-subscriber",
 ]
@@ -112,6 +113,10 @@ linera-views = { workspace = true, optional = true }
 linera-wallet-json = { workspace = true, optional = true }
 prometheus = { workspace = true, optional = true }
 rustls = { version = "0.23", optional = true, features = ["ring"] }
+sqlx = { workspace = true, optional = true, features = [
+    "runtime-tokio-rustls",
+    "sqlite",
+] }
 tower-http = { workspace = true, optional = true, features = ["cors"] }
 tracing = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true, features = ["fmt"] }
@@ -157,4 +162,6 @@ alloy = { workspace = true, default-features = false, features = [
     "reqwest",
 ] }
 alloy-sol-types.workspace = true
+sqlx = { workspace = true, features = ["runtime-tokio-rustls", "sqlite"] }
+test-case.workspace = true
 tokio = { workspace = true, features = ["full"] }
