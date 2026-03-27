@@ -4,5 +4,6 @@
 //! Helper module for the Linera CLI binary.
 
 pub mod command;
+pub mod common_options;
 pub mod net_up_utils;
 pub mod validator;
