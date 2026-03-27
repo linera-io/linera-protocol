@@ -64,6 +64,7 @@ pub async fn run(
     monitor_scan_interval: u64,
     monitor_start_block: u64,
     max_retries: u32,
+    sqlite_path: Option<&Path>,
 ) -> Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -217,6 +218,8 @@ pub async fn run(
         monitor_scan_interval,
         monitor_start_block,
         max_retries,
+        sqlite_path,
+        Path::new(db_path),
     ))
     .await
 }
@@ -266,6 +269,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     monitor_scan_interval: u64,
     monitor_start_block: u64,
     max_retries: u32,
+    sqlite_path_override: Option<&Path>,
+    storage_dir: &Path,
 ) -> Result<()> {
     // ── Set up centralized clients ──
     let bridge_addr: Address = evm_bridge_address
@@ -302,7 +307,26 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let chain_listener_handle = tokio::spawn(listener);
 
     // ── Monitor state + scan/retry ──
-    let monitor = Arc::new(RwLock::new(MonitorState::new(monitor_start_block)));
+    let mut monitor_state = MonitorState::new(monitor_start_block);
+    let default_sqlite_path = storage_dir
+        .parent()
+        .unwrap_or(storage_dir)
+        .join("bridge_relay.sqlite3");
+    let sqlite_path = match sqlite_path_override {
+        Some(p) => p,
+        None => &default_sqlite_path,
+    };
+    let db = monitor::db::BridgeDb::open(sqlite_path)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to open SQLite database at {}",
+                sqlite_path.display()
+            )
+        })?;
+    tracing::info!(path = %sqlite_path.display(), "Opened bridge relay SQLite database");
+    monitor_state.set_db(db);
+    let monitor = Arc::new(RwLock::new(monitor_state));
     let scan_interval = Duration::from_secs(monitor_scan_interval);
     let (pending_deposit_tx, pending_deposit_rx) =
         tokio::sync::mpsc::channel::<monitor::PendingDeposit>(64);
