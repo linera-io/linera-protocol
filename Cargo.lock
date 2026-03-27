@@ -5678,6 +5678,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-graphql",
+ "async-lock",
  "async-trait",
  "bcs",
  "cfg-if",

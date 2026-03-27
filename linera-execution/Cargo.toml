@@ -43,6 +43,7 @@ alloy-primitives = { workspace = true, optional = true }
 alloy-sol-types = { workspace = true, optional = true }
 anyhow.workspace = true
 async-graphql.workspace = true
+async-lock.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true

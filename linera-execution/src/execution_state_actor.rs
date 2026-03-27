@@ -3,8 +3,12 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
+use async_lock::RwLock;
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
 #[cfg(with_metrics)]
@@ -21,7 +25,9 @@ use linera_base::{
     ownership::ChainOwnership,
     time::Instant,
 };
-use linera_views::{batch::Batch, context::Context, views::View};
+use linera_views::{
+    batch::Batch, context::Context, key_value_store_view::KeyValueStoreView, views::View,
+};
 use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
 use tracing::{info_span, instrument, Instrument as _};
@@ -38,10 +44,12 @@ use crate::{
 };
 
 /// Actor for handling requests to the execution state.
-pub struct ExecutionStateActor<'a, C> {
+pub struct ExecutionStateActor<'a, C: Context> {
     state: &'a mut ExecutionStateView<C>,
     txn_tracker: &'a mut TransactionTracker,
     resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
+    /// Cached key-value store views for fast access during execution.
+    key_value_stores: BTreeMap<ApplicationId, Arc<RwLock<KeyValueStoreView<C>>>>,
 }
 
 #[cfg(with_metrics)]
@@ -89,6 +97,7 @@ where
             state,
             txn_tracker,
             resource_controller,
+            key_value_stores: BTreeMap::new(),
         }
     }
 
@@ -141,6 +150,20 @@ where
             .get_user_service(&description, self.txn_tracker)
             .await?;
         Ok((code, description))
+    }
+
+    /// Returns the cached key-value store view for the given application,
+    /// loading it from storage if necessary.
+    async fn get_or_load_key_value_store(
+        &mut self,
+        application_id: &ApplicationId,
+    ) -> Result<Arc<RwLock<KeyValueStoreView<C>>>, ExecutionError> {
+        if let Some(arc) = self.key_value_stores.get(application_id) {
+            return Ok(arc.clone());
+        }
+        let arc = self.state.users.try_load_view_arc(application_id).await?;
+        self.key_value_stores.insert(*application_id, arc.clone());
+        Ok(arc)
     }
 
     // TODO(#1416): Support concurrent I/O.
@@ -335,38 +358,30 @@ where
             }
 
             ContainsKey { id, key, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.contains_key(&key).await?,
-                    None => false,
-                };
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
+                let result = view.contains_key(&key).await?;
                 callback.respond(result);
             }
 
             ContainsKeys { id, keys, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.contains_keys(&keys).await?,
-                    None => vec![false; keys.len()],
-                };
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
+                let result = view.contains_keys(&keys).await?;
                 callback.respond(result);
             }
 
             ReadMultiValuesBytes { id, keys, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let values = match view {
-                    Some(view) => view.multi_get(&keys).await?,
-                    None => vec![None; keys.len()],
-                };
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
+                let values = view.multi_get(&keys).await?;
                 callback.respond(values);
             }
 
             ReadValueBytes { id, key, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.get(&key).await?,
-                    None => None,
-                };
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
+                let result = view.get(&key).await?;
                 callback.respond(result);
             }
 
@@ -375,11 +390,9 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.find_keys_by_prefix(&key_prefix).await?,
-                    None => Vec::new(),
-                };
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
+                let result = view.find_keys_by_prefix(&key_prefix).await?;
                 callback.respond(result);
             }
 
@@ -388,11 +401,9 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.find_key_values_by_prefix(&key_prefix).await?,
-                    None => Vec::new(),
-                };
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let view = store.read().await;
+                let result = view.find_key_values_by_prefix(&key_prefix).await?;
                 callback.respond(result);
             }
 
@@ -401,7 +412,8 @@ where
                 batch,
                 callback,
             } => {
-                let mut view = self.state.users.try_load_entry_mut(&id).await?;
+                let store = self.get_or_load_key_value_store(&id).await?;
+                let mut view = store.write().await;
                 view.write_batch(batch).await?;
                 callback.respond(());
             }
@@ -796,14 +808,10 @@ where
                 application,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry(&application).await?;
-                let result = match view {
-                    Some(view) => {
-                        let total_size = view.total_size();
-                        (total_size.key, total_size.value)
-                    }
-                    None => (0, 0),
-                };
+                let store = self.get_or_load_key_value_store(&application).await?;
+                let view = store.read().await;
+                let total_size = view.total_size();
+                let result = (total_size.key, total_size.value);
                 callback.respond(result);
             }
 
