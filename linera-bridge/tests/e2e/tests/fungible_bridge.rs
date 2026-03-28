@@ -90,8 +90,8 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         &Default::default(),
         None,
         genesis_config,
-        10_000,
-        10_000,
+        linera_core::worker::DEFAULT_BLOCK_CACHE_SIZE,
+        linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
     )
     .await?;
 
