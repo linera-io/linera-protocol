@@ -45,7 +45,9 @@ use crate::{
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
+    };
     use prometheus::HistogramVec;
 
     pub static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -63,6 +65,15 @@ mod metrics {
             "Wasm service instantiation latency",
             &[],
             exponential_bucket_latencies(1.0),
+        )
+    });
+
+    pub static WASM_BYTECODE_SIZE_BYTES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "wasm_bytecode_size_bytes",
+            "Size in bytes of WASM bytecodes being loaded",
+            &["type"],
+            exponential_bucket_interval(10_000.0, 100_000_000.0),
         )
     });
 }
