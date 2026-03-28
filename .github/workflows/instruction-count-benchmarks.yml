@@ -80,6 +80,12 @@ jobs:
       id: download-baseline
       run: |
         BASE_REF="${{ github.event.pull_request.base.ref || 'main' }}"
+        # For stacked PRs (e.g. via Graphite), the base ref is another feature
+        # branch that may not exist as a remote. Fall back to main.
+        if ! git rev-parse "origin/$BASE_REF" >/dev/null 2>&1; then
+          echo "Base ref origin/$BASE_REF not found, falling back to main"
+          BASE_REF="main"
+        fi
         MERGE_BASE=$(git merge-base HEAD "origin/$BASE_REF")
         MERGE_BASE_DATE=$(git log -1 --format=%aI "$MERGE_BASE")
         echo "Merge base: $MERGE_BASE (date: $MERGE_BASE_DATE)"
