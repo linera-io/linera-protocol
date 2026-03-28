@@ -41,7 +41,7 @@ impl Wallet for PersistentWallet {
     }
 
     async fn insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error> {
-        self.insert(id, chain)
+        self.insert(id, &chain)
     }
 
     async fn try_insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error> {
@@ -100,7 +100,7 @@ impl PersistentWallet {
     pub fn insert(
         &self,
         id: ChainId,
-        chain: Chain,
+        chain: &Chain,
     ) -> Result<Option<Chain>, persistent::file::Error> {
         let has_owner = chain.owner.is_some();
         let old_chain = self.0.chains.insert(id, chain.clone());

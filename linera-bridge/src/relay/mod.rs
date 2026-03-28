@@ -63,13 +63,14 @@ pub async fn run(
     linera_fungible_address: &str,
     evm_private_key: &str,
     port: u16,
-    cache_sizes: linera_storage::StorageCacheSizes,
     monitor_scan_interval: u64,
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path: Option<&Path>,
 ) -> Result<()> {
-    linera_base::tracing::init("linera-bridge");
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
 
     // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
     rustls::crypto::ring::default_provider()
@@ -113,7 +114,7 @@ pub async fn run(
     let db_path = storage_path
         .strip_prefix("rocksdb:")
         .context("storage config must start with 'rocksdb:'")?;
-    let mut storage = create_rocksdb_storage(Path::new(db_path), cache_sizes).await?;
+    let mut storage = create_rocksdb_storage(Path::new(db_path)).await?;
 
     // ── Wallet: load existing or create fresh ──
     let wallet = if wallet_path.exists() {
@@ -143,8 +144,8 @@ pub async fn run(
         &Default::default(),
         None,
         genesis_config,
-        linera_core::worker::DEFAULT_BLOCK_CACHE_SIZE,
-        linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+        5000,
+        10_000,
     )
     .await?;
 
@@ -232,10 +233,7 @@ pub async fn run(
 
 type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
 
-async fn create_rocksdb_storage(
-    path: &Path,
-    cache_sizes: linera_storage::StorageCacheSizes,
-) -> Result<RocksDbStorage> {
+async fn create_rocksdb_storage(path: &Path) -> Result<RocksDbStorage> {
     let config = LruCachingConfig {
         inner_config: RocksDbStoreInternalConfig {
             path_with_guard: PathWithGuard::new(path.to_path_buf()),
@@ -257,7 +255,6 @@ async fn create_rocksdb_storage(
         &config,
         "bridge_relay",
         Some(WasmRuntime::default()),
-        cache_sizes,
     )
     .await?;
     Ok(storage)
