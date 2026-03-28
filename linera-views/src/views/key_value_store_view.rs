@@ -25,13 +25,13 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         from_bytes_option, from_bytes_option_or_default, get_key_range_for_prefix, get_upper_bound,
-        DeletionSet, HasherOutput, SuffixClosedSetIterator, Update,
+        key_matches_interval, DeletionSet, HasherOutput, SuffixClosedSetIterator, Update,
     },
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
     map_view::ByteMapView,
-    store::ReadableKeyValueStore,
+    store::{KeyInterval, ReadableKeyValueStore},
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -1007,6 +1007,49 @@ impl<C: Context> KeyValueStoreView<C> {
         self.write_batch(batch).await
     }
 
+    /// Iterates over all keys matching the given interval.
+    pub async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), ViewError> {
+        let key_values = self.find_key_values_by_prefix(&[]).await?;
+        let mut keys = Vec::new();
+        for (key, _value) in key_values {
+            if key_matches_interval(&key, key_interval.start_bound(), key_interval.end_bound()) {
+                keys.push(key);
+                if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
+                    break;
+                }
+            }
+        }
+        let is_finished = key_interval.limit.is_none_or(|limit| keys.len() < limit);
+        Ok((keys, is_finished))
+    }
+
+    /// Iterates over all key-value pairs matching the given interval.
+    pub async fn find_key_values_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), ViewError> {
+        let entries = self.find_key_values_by_prefix(&[]).await?;
+        let mut key_values = Vec::new();
+        for (key, value) in entries {
+            if key_matches_interval(&key, key_interval.start_bound(), key_interval.end_bound()) {
+                key_values.push((key, value));
+                if key_interval
+                    .limit
+                    .is_some_and(|limit| key_values.len() >= limit)
+                {
+                    break;
+                }
+            }
+        }
+        let is_finished = key_interval
+            .limit
+            .is_none_or(|limit| key_values.len() < limit);
+        Ok((key_values, is_finished))
+    }
+
     /// Iterates over all the keys matching the given prefix. The prefix is not included in the returned keys.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1283,20 +1326,47 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
         Ok(view.multi_get(keys).await?)
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, ViewContainerError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), ViewContainerError> {
         let view = self.view.read().await;
-        Ok(view.find_keys_by_prefix(key_prefix).await?)
+        let key_values = view.find_key_values_by_prefix(&[]).await?;
+        let mut keys = Vec::new();
+        for (key, _value) in key_values {
+            if key_matches_interval(&key, key_interval.start_bound(), key_interval.end_bound()) {
+                keys.push(key);
+                if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
+                    break;
+                }
+            }
+        }
+        let is_finished = key_interval.limit.is_none_or(|limit| keys.len() < limit);
+        Ok((keys, is_finished))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewContainerError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), ViewContainerError> {
         let view = self.view.read().await;
-        Ok(view.find_key_values_by_prefix(key_prefix).await?)
+        let entries = view.find_key_values_by_prefix(&[]).await?;
+        let mut key_values = Vec::new();
+        for (key, value) in entries {
+            if key_matches_interval(&key, key_interval.start_bound(), key_interval.end_bound()) {
+                key_values.push((key, value));
+                if key_interval
+                    .limit
+                    .is_some_and(|limit| key_values.len() >= limit)
+                {
+                    break;
+                }
+            }
+        }
+        let is_finished = key_interval
+            .limit
+            .is_none_or(|limit| key_values.len() < limit);
+        Ok((key_values, is_finished))
     }
 }
 

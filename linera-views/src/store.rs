@@ -3,7 +3,11 @@
 
 //! This provides the trait definitions for the stores.
 
-use std::{fmt::Debug, future::Future};
+use std::{
+    fmt::Debug,
+    future::Future,
+    ops::Bound::{self, Excluded, Included, Unbounded},
+};
 
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -11,9 +15,73 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::random::generate_test_namespace;
 use crate::{
     batch::{Batch, SimplifiedBatch},
-    common::from_bytes_option,
+    common::{from_bytes_option, get_upper_bound_option},
     ViewError,
 };
+
+/// The lower bound of a key interval.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum KeyIntervalStart<T> {
+    /// Inclusive lower bound.
+    Included(T),
+    /// Exclusive lower bound.
+    Excluded(T),
+}
+
+/// A key interval for scan operations.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct KeyInterval {
+    /// The lower bound of the interval.
+    pub start: KeyIntervalStart<Vec<u8>>,
+    /// The upper bound of the interval.
+    pub end: Bound<Vec<u8>>,
+    /// The maximal number of entries to return.
+    pub limit: Option<usize>,
+}
+
+impl KeyInterval {
+    /// Creates a new interval.
+    pub fn new(start: KeyIntervalStart<Vec<u8>>, end: Bound<Vec<u8>>) -> Self {
+        Self {
+            start,
+            end,
+            limit: None,
+        }
+    }
+
+    /// Creates a prefix interval `[prefix, upper_bound(prefix))`.
+    pub fn for_prefix(key_prefix: &[u8]) -> Self {
+        let start = KeyIntervalStart::Included(key_prefix.to_vec());
+        let end = match get_upper_bound_option(key_prefix) {
+            Some(upper_bound) => Excluded(upper_bound),
+            None => Unbounded,
+        };
+        Self::new(start, end)
+    }
+
+    /// Sets the maximal number of entries to return.
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
+    /// Returns the interval start if it is bounded.
+    pub fn start_bound(&self) -> Bound<&[u8]> {
+        match &self.start {
+            KeyIntervalStart::Included(key) => Included(key.as_slice()),
+            KeyIntervalStart::Excluded(key) => Excluded(key.as_slice()),
+        }
+    }
+
+    /// Returns the interval end if it is bounded.
+    pub fn end_bound(&self) -> Bound<&[u8]> {
+        match &self.end {
+            Included(key) => Included(key.as_slice()),
+            Excluded(key) => Excluded(key.as_slice()),
+            Unbounded => Unbounded,
+        }
+    }
+}
 
 /// The error type for the key-value stores.
 pub trait KeyValueStoreError:
@@ -39,6 +107,7 @@ pub trait WithError {
 }
 
 /// Asynchronous read key-value operations.
+#[expect(clippy::type_complexity)]
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait ReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
@@ -65,14 +134,51 @@ pub trait ReadableKeyValueStore: WithError {
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
-    /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
+    /// Finds the `key`s matching the interval.
+    async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), Self::Error>;
 
-    /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
-    async fn find_key_values_by_prefix(
+    /// Finds the `(key, value)` pairs matching the interval.
+    async fn find_key_values_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Self::Error>;
+
+    /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
+    fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error>;
+    ) -> impl Future<Output = Result<Vec<Vec<u8>>, Self::Error>> {
+        async move {
+            let prefix_len = key_prefix.len();
+            let (keys, _) = self
+                .find_keys_in_interval(KeyInterval::for_prefix(key_prefix))
+                .await?;
+            Ok(keys
+                .into_iter()
+                .map(|key| key[prefix_len..].to_vec())
+                .collect())
+        }
+    }
+
+    /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
+    fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> impl Future<Output = Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error>> {
+        async move {
+            let prefix_len = key_prefix.len();
+            let (key_values, _) = self
+                .find_key_values_in_interval(KeyInterval::for_prefix(key_prefix))
+                .await?;
+            Ok(key_values
+                .into_iter()
+                .map(|(key, value)| (key[prefix_len..].to_vec(), value))
+                .collect())
+        }
+    }
 
     // We can't use `async fn` here in the below implementations due to
     // https://github.com/rust-lang/impl-trait-utils/issues/17, but once that bug is fixed
@@ -319,18 +425,18 @@ pub mod inactive_store {
             panic!("attempt to read from an inactive store!")
         }
 
-        async fn find_keys_by_prefix(
+        async fn find_keys_in_interval(
             &self,
-            _key_prefix: &[u8],
-        ) -> Result<Vec<Vec<u8>>, Self::Error> {
+            _key_interval: KeyInterval,
+        ) -> Result<(Vec<Vec<u8>>, bool), Self::Error> {
             panic!("attempt to read from an inactive store!")
         }
 
-        /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
-        async fn find_key_values_by_prefix(
+        /// Finds the `(key,value)` pairs matching the interval.
+        async fn find_key_values_in_interval(
             &self,
-            _key_prefix: &[u8],
-        ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+            _key_interval: KeyInterval,
+        ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Self::Error> {
             panic!("attempt to read from an inactive store!")
         }
     }

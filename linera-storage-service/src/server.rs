@@ -1,14 +1,21 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    ops::Bound::{Excluded, Included, Unbounded},
+    sync::Arc,
+};
 
 use async_lock::RwLock;
 use linera_storage_service::common::{KeyPrefix, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
     memory::{MemoryDatabase, MemoryStoreConfig},
-    store::{KeyValueDatabase, ReadableKeyValueStore, WritableKeyValueStore},
+    store::{
+        KeyInterval, KeyIntervalStart, KeyValueDatabase, ReadableKeyValueStore,
+        WritableKeyValueStore,
+    },
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
@@ -30,8 +37,9 @@ use crate::key_value_store::{
     ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
     ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
     RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace, RequestExistsNamespace,
-    RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListRootKeys,
-    RequestReadMultiValues, RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended,
+    RequestFindKeyValuesByPrefix, RequestFindKeyValuesInInterval, RequestFindKeysByPrefix,
+    RequestFindKeysInInterval, RequestListRootKeys, RequestReadMultiValues, RequestReadValue,
+    RequestSpecificChunk, RequestWriteBatchExtended,
 };
 
 pub mod key_value_store {
@@ -61,6 +69,30 @@ struct StorageServer {
     store: LocalStore,
     pending_big_puts: Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
     pending_big_reads: Arc<RwLock<PendingBigReads>>,
+}
+
+fn request_to_interval(
+    start: Option<Vec<u8>>,
+    start_inclusive: bool,
+    end: Option<Vec<u8>>,
+    end_inclusive: bool,
+    limit: Option<u32>,
+) -> KeyInterval {
+    let start = match start {
+        Some(key) if start_inclusive => KeyIntervalStart::Included(key),
+        Some(key) => KeyIntervalStart::Excluded(key),
+        None => KeyIntervalStart::Included(Vec::new()),
+    };
+    let end = match end {
+        Some(key) if end_inclusive => Included(key),
+        Some(key) => Excluded(key),
+        None => Unbounded,
+    };
+    KeyInterval {
+        start,
+        end,
+        limit: limit.map(|limit| limit as usize),
+    }
 }
 
 impl StorageServer {
@@ -121,43 +153,52 @@ impl StorageServer {
         }
     }
 
-    pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
+    pub async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), Status> {
         match &self.store {
-            LocalStore::Memory(store) => store.find_keys_by_prefix(key_prefix).await.map_err(|e| {
-                Status::unknown(format!("Memory error {:?} at find_keys_by_prefix", e))
-            }),
+            LocalStore::Memory(store) => {
+                store
+                    .find_keys_in_interval(key_interval)
+                    .await
+                    .map_err(|e| {
+                        Status::unknown(format!("Memory error {:?} at find_keys_in_interval", e))
+                    })
+            }
             #[cfg(with_rocksdb)]
             LocalStore::RocksDb(store) => {
-                store.find_keys_by_prefix(key_prefix).await.map_err(|e| {
-                    Status::unknown(format!("RocksDB error {:?} at find_keys_by_prefix", e))
-                })
+                store
+                    .find_keys_in_interval(key_interval)
+                    .await
+                    .map_err(|e| {
+                        Status::unknown(format!("RocksDB error {:?} at find_keys_in_interval", e))
+                    })
             }
         }
     }
 
-    pub async fn find_key_values_by_prefix(
+    pub async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Status> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Status> {
         match &self.store {
-            LocalStore::Memory(store) => {
-                store
-                    .find_key_values_by_prefix(key_prefix)
-                    .await
-                    .map_err(|e| {
-                        Status::unknown(format!(
-                            "Memory error {:?} at find_key_values_by_prefix",
-                            e
-                        ))
-                    })
-            }
-            #[cfg(with_rocksdb)]
-            LocalStore::RocksDb(store) => store
-                .find_key_values_by_prefix(key_prefix)
+            LocalStore::Memory(store) => store
+                .find_key_values_in_interval(key_interval)
                 .await
                 .map_err(|e| {
                     Status::unknown(format!(
-                        "RocksDB error {:?} at find_key_values_by_prefix",
+                        "Memory error {:?} at find_key_values_in_interval",
+                        e
+                    ))
+                }),
+            #[cfg(with_rocksdb)]
+            LocalStore::RocksDb(store) => store
+                .find_key_values_in_interval(key_interval)
+                .await
+                .map_err(|e| {
+                    Status::unknown(format!(
+                        "RocksDB error {:?} at find_key_values_in_interval",
                         e
                     ))
                 }),
@@ -179,14 +220,18 @@ impl StorageServer {
     }
 
     pub async fn list_all(&self) -> Result<Vec<Vec<u8>>, Status> {
-        self.find_keys_by_prefix(&[KeyPrefix::Namespace as u8])
-            .await
+        let (keys, _) = self
+            .find_keys_in_interval(KeyInterval::for_prefix(&[KeyPrefix::Namespace as u8]))
+            .await?;
+        Ok(keys)
     }
 
     pub async fn list_root_keys(&self, namespace: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
         let mut full_key = vec![KeyPrefix::RootKey as u8];
         full_key.extend(namespace);
-        let bcs_root_keys = self.find_keys_by_prefix(&full_key).await?;
+        let (bcs_root_keys, _) = self
+            .find_keys_in_interval(KeyInterval::for_prefix(&full_key))
+            .await?;
         let mut root_keys = Vec::new();
         for bcs_root_key in bcs_root_keys {
             let root_key = bcs::from_bytes::<Vec<u8>>(&bcs_root_key)
@@ -411,13 +456,16 @@ impl StorageService for StorageServer {
     ) -> Result<Response<ReplyFindKeysByPrefix>, Status> {
         let request = request.into_inner();
         let RequestFindKeysByPrefix { key_prefix } = request;
-        let keys = self.find_keys_by_prefix(&key_prefix).await?;
+        let (keys, is_finished) = self
+            .find_keys_in_interval(KeyInterval::for_prefix(&key_prefix))
+            .await?;
         let size = keys.iter().map(|x| x.len()).sum::<usize>();
         let response = if size < MAX_PAYLOAD_SIZE {
             ReplyFindKeysByPrefix {
                 keys,
                 message_index: 0,
                 num_chunks: 0,
+                is_finished,
             }
         } else {
             let (message_index, num_chunks) = self.insert_pending_read(keys).await;
@@ -425,6 +473,41 @@ impl StorageService for StorageServer {
                 keys: Vec::default(),
                 message_index,
                 num_chunks,
+                is_finished,
+            }
+        };
+        Ok(Response::new(response))
+    }
+
+    #[instrument(target = "store_server", skip_all, err)]
+    async fn process_find_keys_in_interval(
+        &self,
+        request: Request<RequestFindKeysInInterval>,
+    ) -> Result<Response<ReplyFindKeysByPrefix>, Status> {
+        let request = request.into_inner();
+        let key_interval = request_to_interval(
+            request.start,
+            request.start_inclusive,
+            request.end,
+            request.end_inclusive,
+            request.limit,
+        );
+        let (keys, is_finished) = self.find_keys_in_interval(key_interval).await?;
+        let size = keys.iter().map(|x| x.len()).sum::<usize>();
+        let response = if size < MAX_PAYLOAD_SIZE {
+            ReplyFindKeysByPrefix {
+                keys,
+                message_index: 0,
+                num_chunks: 0,
+                is_finished,
+            }
+        } else {
+            let (message_index, num_chunks) = self.insert_pending_read(keys).await;
+            ReplyFindKeysByPrefix {
+                keys: Vec::default(),
+                message_index,
+                num_chunks,
+                is_finished,
             }
         };
         Ok(Response::new(response))
@@ -437,7 +520,9 @@ impl StorageService for StorageServer {
     ) -> Result<Response<ReplyFindKeyValuesByPrefix>, Status> {
         let request = request.into_inner();
         let RequestFindKeyValuesByPrefix { key_prefix } = request;
-        let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
+        let (key_values, is_finished) = self
+            .find_key_values_in_interval(KeyInterval::for_prefix(&key_prefix))
+            .await?;
         let size = key_values
             .iter()
             .map(|x| x.0.len() + x.1.len())
@@ -454,6 +539,7 @@ impl StorageService for StorageServer {
                 key_values,
                 message_index: 0,
                 num_chunks: 0,
+                is_finished,
             }
         } else {
             let (message_index, num_chunks) = self.insert_pending_read(key_values).await;
@@ -461,6 +547,51 @@ impl StorageService for StorageServer {
                 key_values: Vec::default(),
                 message_index,
                 num_chunks,
+                is_finished,
+            }
+        };
+        Ok(Response::new(response))
+    }
+
+    #[instrument(target = "store_server", skip_all, err)]
+    async fn process_find_key_values_in_interval(
+        &self,
+        request: Request<RequestFindKeyValuesInInterval>,
+    ) -> Result<Response<ReplyFindKeyValuesByPrefix>, Status> {
+        let request = request.into_inner();
+        let key_interval = request_to_interval(
+            request.start,
+            request.start_inclusive,
+            request.end,
+            request.end_inclusive,
+            request.limit,
+        );
+        let (key_values, is_finished) = self.find_key_values_in_interval(key_interval).await?;
+        let size = key_values
+            .iter()
+            .map(|x| x.0.len() + x.1.len())
+            .sum::<usize>();
+        let response = if size < MAX_PAYLOAD_SIZE {
+            let key_values = key_values
+                .into_iter()
+                .map(|x| KeyValue {
+                    key: x.0,
+                    value: x.1,
+                })
+                .collect::<Vec<_>>();
+            ReplyFindKeyValuesByPrefix {
+                key_values,
+                message_index: 0,
+                num_chunks: 0,
+                is_finished,
+            }
+        } else {
+            let (message_index, num_chunks) = self.insert_pending_read(key_values).await;
+            ReplyFindKeyValuesByPrefix {
+                key_values: Vec::default(),
+                message_index,
+                num_chunks,
+                is_finished,
             }
         };
         Ok(Response::new(response))

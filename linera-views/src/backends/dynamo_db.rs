@@ -43,12 +43,12 @@ use crate::metering::MeteredDatabase;
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::SimpleUnorderedBatch,
-    common::get_uleb128_size,
+    common::{get_uleb128_size, key_matches_interval},
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyInterval, KeyValueDatabase, KeyValueStoreError,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -873,30 +873,51 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         Ok(results.into_iter().flatten().collect())
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), DynamoDbStoreInternalError> {
         let result_queries = self
-            .get_list_responses(KEY_ATTRIBUTE, &self.start_key, key_prefix)
+            .get_list_responses(KEY_ATTRIBUTE, &self.start_key, &[])
             .await?;
-        result_queries
-            .keys()
-            .map(|key| key.map(|k| k.to_vec()))
-            .collect()
+        let mut keys = Vec::new();
+        for key in result_queries.keys() {
+            let key = key?;
+            if key_matches_interval(key, key_interval.start_bound(), key_interval.end_bound()) {
+                keys.push(key.to_vec());
+                if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
+                    break;
+                }
+            }
+        }
+        let is_finished = key_interval.limit.is_none_or(|limit| keys.len() < limit);
+        Ok((keys, is_finished))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, DynamoDbStoreInternalError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), DynamoDbStoreInternalError> {
         let result_queries = self
-            .get_list_responses(KEY_VALUE_ATTRIBUTE, &self.start_key, key_prefix)
+            .get_list_responses(KEY_VALUE_ATTRIBUTE, &self.start_key, &[])
             .await?;
-        result_queries
-            .key_values()
-            .map(|entry| entry.map(|(key, value)| (key.to_vec(), value.to_vec())))
-            .collect()
+        let mut key_values = Vec::new();
+        for entry in result_queries.key_values() {
+            let (key, value) = entry?;
+            if key_matches_interval(key, key_interval.start_bound(), key_interval.end_bound()) {
+                key_values.push((key.to_vec(), value.to_vec()));
+                if key_interval
+                    .limit
+                    .is_some_and(|limit| key_values.len() >= limit)
+                {
+                    break;
+                }
+            }
+        }
+        let is_finished = key_interval
+            .limit
+            .is_none_or(|limit| key_values.len() < limit);
+        Ok((key_values, is_finished))
     }
 }
 

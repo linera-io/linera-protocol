@@ -72,10 +72,19 @@ message RequestFindKeysByPrefix {
   bytes key_prefix = 1;
 }
 
+message RequestFindKeysInInterval {
+  optional bytes start = 1;
+  bool start_inclusive = 2;
+  optional bytes end = 3;
+  bool end_inclusive = 4;
+  optional uint32 limit = 5;
+}
+
 message ReplyFindKeysByPrefix {
   repeated bytes keys = 1;
   int64 message_index = 2;
   int32 num_chunks = 3;
+  bool is_finished = 4;
 }
 
 
@@ -83,10 +92,19 @@ message RequestFindKeyValuesByPrefix {
   bytes key_prefix = 1;
 }
 
+message RequestFindKeyValuesInInterval {
+  optional bytes start = 1;
+  bool start_inclusive = 2;
+  optional bytes end = 3;
+  bool end_inclusive = 4;
+  optional uint32 limit = 5;
+}
+
 message ReplyFindKeyValuesByPrefix {
   repeated KeyValue key_values = 1;
   int64 message_index = 2;
   int32 num_chunks = 3;
+  bool is_finished = 4;
 }
 
 
@@ -143,7 +161,9 @@ service StorageService {
   rpc ProcessContainsKey (RequestContainsKey) returns (ReplyContainsKey) {}
   rpc ProcessContainsKeys (RequestContainsKeys) returns (ReplyContainsKeys) {}
   rpc ProcessReadMultiValues (RequestReadMultiValues) returns (ReplyReadMultiValues) {}
+  rpc ProcessFindKeysInInterval (RequestFindKeysInInterval) returns (ReplyFindKeysByPrefix) {}
   rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
+  rpc ProcessFindKeyValuesInInterval (RequestFindKeyValuesInInterval) returns (ReplyFindKeyValuesByPrefix) {}
   rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
   rpc ProcessWriteBatchExtended (RequestWriteBatchExtended) returns (google.protobuf.Empty) {}
   rpc ProcessSpecificChunk (RequestSpecificChunk) returns (ReplySpecificChunk) {}

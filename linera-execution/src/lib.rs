@@ -45,9 +45,12 @@ use linera_base::{
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
-use linera_views::{batch::Batch, ViewError};
+use linera_views::{batch::Batch, store::KeyInterval, ViewError};
 use serde::{Deserialize, Serialize};
 use system::AdminOperation;
+
+pub type IntervalKeys = (Vec<Vec<u8>>, bool);
+pub type IntervalKeyValues = (Vec<(Vec<u8>, Vec<u8>)>, bool);
 use thiserror::Error;
 pub use web_thread_pool::Pool as ThreadPool;
 use web_thread_select as web_thread;
@@ -731,6 +734,8 @@ pub trait BaseRuntime {
     type ReadValueBytes: fmt::Debug + Send + Sync;
     type FindKeysByPrefix: fmt::Debug + Send + Sync;
     type FindKeyValuesByPrefix: fmt::Debug + Send + Sync;
+    type FindKeysInInterval: fmt::Debug + Send + Sync;
+    type FindKeyValuesInInterval: fmt::Debug + Send + Sync;
 
     /// The current chain ID.
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError>;
@@ -871,6 +876,18 @@ pub trait BaseRuntime {
         promise: &Self::FindKeysByPrefix,
     ) -> Result<Vec<Vec<u8>>, ExecutionError>;
 
+    /// Creates the promise to access keys in a specific interval.
+    fn find_keys_in_interval_new(
+        &mut self,
+        key_interval: KeyInterval,
+    ) -> Result<Self::FindKeysInInterval, ExecutionError>;
+
+    /// Resolves the promise to access keys in a specific interval.
+    fn find_keys_in_interval_wait(
+        &mut self,
+        promise: &Self::FindKeysInInterval,
+    ) -> Result<IntervalKeys, ExecutionError>;
+
     /// Reads the data from the key/values having a specific prefix.
     #[cfg(feature = "test")]
     #[expect(clippy::type_complexity)]
@@ -894,6 +911,18 @@ pub trait BaseRuntime {
         &mut self,
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
+
+    /// Creates the promise to access key/values in a specific interval.
+    fn find_key_values_in_interval_new(
+        &mut self,
+        key_interval: KeyInterval,
+    ) -> Result<Self::FindKeyValuesInInterval, ExecutionError>;
+
+    /// Resolves the promise to access key/values in a specific interval.
+    fn find_key_values_in_interval_wait(
+        &mut self,
+        promise: &Self::FindKeyValuesInInterval,
+    ) -> Result<IntervalKeyValues, ExecutionError>;
 
     /// Makes an HTTP request to the given URL and returns the answer, if any.
     fn perform_http_request(
