@@ -88,9 +88,8 @@ pub struct Options {
     ///
     /// Discarded bundles can be retried in the next block.
     pub max_block_limit_errors: u32,
-    /// Time budget for staging message bundles. When set, limits bundle execution by time
-    /// rather than by count. This overrides `max_pending_message_bundles` for bundle limiting
-    /// purposes.
+    /// Time budget for staging message bundles. When set, limits bundle execution by
+    /// wall-clock time, in addition to the count limit from `max_pending_message_bundles`.
     pub staging_bundles_time_budget: Option<Duration>,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
@@ -534,16 +533,11 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
-        let max_bundles = if self.options.staging_bundles_time_budget.is_some() {
-            usize::MAX
-        } else {
-            self.options.max_pending_message_bundles
-        };
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
-            .take(max_bundles)
+            .take(self.options.max_pending_message_bundles)
             .collect())
     }
 
