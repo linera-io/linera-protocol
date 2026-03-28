@@ -43,7 +43,7 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
         TimeoutCertificate, ValidatedBlock,
     },
-    ChainError, ChainExecutionContext, ChainStateView,
+    ChainError, ChainExecutionContext,
 };
 use linera_execution::{
     committee::Committee,
@@ -450,10 +450,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn chain_state_view(
         &self,
-    ) -> Result<
-        tokio::sync::OwnedRwLockReadGuard<ChainStateView<Env::StorageContext>>,
-        LocalNodeError,
-    > {
+    ) -> Result<crate::worker::ChainStateViewReadGuard<Env::Storage>, LocalNodeError> {
         self.client.local_node.chain_state_view(self.chain_id).await
     }
 

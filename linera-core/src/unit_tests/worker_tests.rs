@@ -73,6 +73,7 @@ use crate::{
         Reason::{self, NewBlock, NewIncomingBundle},
         WorkerError, WorkerState,
     },
+    ChainWorkerConfig,
 };
 
 /// The test worker accepts blocks with a timestamp this far in the future.
@@ -143,17 +144,16 @@ where
             .await
             .expect("writing a network description should not fail");
 
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            Some(validator_keypair.secret_key),
-            storage,
-            super::DEFAULT_BLOCK_CACHE_SIZE,
-            super::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-        )
-        .with_allow_inactive_chains(is_client)
-        .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_long_lived_services(has_long_lived_services)
-        .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+        let config = ChainWorkerConfig {
+            nickname: "Single validator node".to_string(),
+            allow_inactive_chains: is_client,
+            allow_messages_from_deprecated_epochs: is_client,
+            long_lived_services: has_long_lived_services,
+            block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+            ..ChainWorkerConfig::default()
+        }
+        .with_key_pair(Some(validator_keypair.secret_key));
+        let worker = WorkerState::new(storage, config, None);
         Self {
             committee,
             worker,

@@ -56,10 +56,8 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{
-        Notification, ProcessableCertificate, WorkerState, DEFAULT_BLOCK_CACHE_SIZE,
-        DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-    },
+    worker::{Notification, ProcessableCertificate, WorkerState},
+    ChainWorkerConfig,
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -891,15 +889,12 @@ where
         for (i, (validator_keypair, _account_public_key)) in validators.into_iter().enumerate() {
             let validator_public_key = validator_keypair.public_key;
             let storage = storage_builder.build().await?;
-            let state = WorkerState::new(
-                format!("Node {}", i),
-                Some(validator_keypair.secret_key),
-                storage.clone(),
-                DEFAULT_BLOCK_CACHE_SIZE,
-                DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-            )
-            .with_allow_inactive_chains(false)
-            .with_allow_messages_from_deprecated_epochs(false);
+            let config = ChainWorkerConfig {
+                nickname: format!("Node {}", i),
+                ..ChainWorkerConfig::default()
+            }
+            .with_key_pair(Some(validator_keypair.secret_key));
+            let state = WorkerState::new(storage.clone(), config, None);
             let mut validator = LocalValidatorClient::new(validator_public_key, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(validator_public_key);
@@ -1094,14 +1089,14 @@ where
             false,
             [(chain_id, ListeningMode::FullChain)],
             format!("Client node for {:.8}", chain_id),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
             HashSet::new(),
             HashSet::new(),
             options,
             crate::client::RequestsSchedulerConfig::default(),
-            DEFAULT_BLOCK_CACHE_SIZE,
-            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+            crate::worker::DEFAULT_BLOCK_CACHE_SIZE,
+            crate::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         ));
         Ok(client.create_chain_client(chain_id, block_hash, block_height, None, owner, None))
     }

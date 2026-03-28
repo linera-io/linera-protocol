@@ -3,23 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
 
-use futures::future::Either;
+use futures::{
+    future::{Either, Shared},
+    FutureExt as _,
+};
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
+    crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, TimeDelta,
+        Timestamp,
     },
     doc_scalar,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
-    time::Instant,
-    util::traits::DynError,
 };
-use linera_cache::{UniqueValueCache, ValueCache};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
@@ -33,34 +34,64 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker};
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use linera_views::{context::InactiveContext, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{error, instrument, trace, warn};
+use tokio::sync::{oneshot, OwnedRwLockReadGuard};
+use tracing::{instrument, trace, warn};
+
+/// A read guard providing access to a chain's [`ChainStateView`].
+///
+/// Holds a read lock on the chain worker state, preventing writes for its
+/// lifetime. The `OwnedRwLockReadGuard` internally holds a strong `Arc`
+/// reference to the `RwLock<ChainWorkerState>`, keeping the state alive.
+/// Dereferences to `ChainStateView`.
+pub struct ChainStateViewReadGuard<S: Storage>(
+    OwnedRwLockReadGuard<ChainWorkerState<S>, ChainStateView<S::Context>>,
+);
+
+impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
+    type Target = ChainStateView<S::Context>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+use linera_cache::{UniqueValueCache, ValueCache};
 
 /// Re-export of [`EventSubscriptionsResult`] for use by other crate modules.
-pub(crate) use crate::chain_worker::{
-    ChainWorkerRequestReceiver, ChainWorkerRequestSender, EventSubscriptionsResult,
-};
+pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
+        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
-    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
-
-pub const DEFAULT_BLOCK_CACHE_SIZE: usize = 5_000;
-pub const DEFAULT_EXECUTION_STATE_CACHE_SIZE: usize = 10_000;
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
+
+/// Wraps a future in `SyncFuture` on non-web targets so that it satisfies `Sync` bounds.
+/// On web targets the future is returned as-is.
+#[cfg(not(web))]
+pub(crate) fn wrap_future<F: std::future::Future>(f: F) -> sync_wrapper::SyncFuture<F> {
+    sync_wrapper::SyncFuture::new(f)
+}
+
+/// Wraps a future in `SyncFuture` on non-web targets so that it satisfies `Sync` bounds.
+/// On web targets the future is returned as-is.
+#[cfg(web)]
+pub(crate) fn wrap_future<F: std::future::Future>(f: F) -> F {
+    f
+}
+
+pub const DEFAULT_BLOCK_CACHE_SIZE: usize = 5_000;
+pub const DEFAULT_EXECUTION_STATE_CACHE_SIZE: usize = 10_000;
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -68,10 +99,10 @@ mod metrics {
 
     use linera_base::prometheus_util::{
         exponential_bucket_interval, register_histogram, register_histogram_vec,
-        register_int_counter, register_int_counter_vec, register_int_gauge,
+        register_int_counter, register_int_counter_vec,
     };
     use linera_chain::types::ConfirmedBlockCertificate;
-    use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge};
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
 
     pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
@@ -143,14 +174,6 @@ mod metrics {
         register_int_counter(
             "chain_info_queries",
             "Number of chain info queries processed",
-        )
-    });
-
-    /// Number of cached chain worker channel endpoints in the map.
-    pub static CHAIN_WORKER_ENDPOINTS_CACHED: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "chain_worker_endpoints_cached",
-            "Number of cached chain worker channel endpoints",
         )
     });
 
@@ -307,7 +330,7 @@ pub enum WorkerError {
     #[error("Block was not signed by an authorized owner")]
     InvalidOwner,
 
-    #[error("Operations in the block are not authenticated by the proper signer: {0}")]
+    #[error("Operations in the block are not authenticated by the proper owner: {0}")]
     InvalidSigner(AccountOwner),
 
     // Chaining
@@ -381,17 +404,6 @@ pub enum WorkerError {
     TooManyPublishedBlobs(u64),
     #[error("Missing network description")]
     MissingNetworkDescription,
-    #[error("ChainWorkerActor for chain {chain_id} stopped executing unexpectedly: {error}")]
-    ChainActorSendError {
-        chain_id: ChainId,
-        error: Box<dyn DynError>,
-    },
-    #[error("ChainWorkerActor for chain {chain_id} stopped executing without responding: {error}")]
-    ChainActorRecvError {
-        chain_id: ChainId,
-        error: Box<dyn DynError>,
-    },
-
     #[error("thread error: {0}")]
     Thread(#[from] web_thread_pool::Error),
 
@@ -429,8 +441,6 @@ impl WorkerError {
             | WorkerError::ConfirmedLogEntryNotFound { .. }
             | WorkerError::PreprocessedBlocksEntryNotFound { .. }
             | WorkerError::MissingNetworkDescription
-            | WorkerError::ChainActorSendError { .. }
-            | WorkerError::ChainActorRecvError { .. }
             | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_)
             | WorkerError::IncorrectOutcome { .. } => true,
@@ -478,16 +488,55 @@ impl WorkerError {
     }
 }
 
+type ChainWorkerArc<S> = Arc<tokio::sync::RwLock<ChainWorkerState<S>>>;
+type ChainWorkerWeak<S> = std::sync::Weak<tokio::sync::RwLock<ChainWorkerState<S>>>;
+type ChainWorkerFuture<S> = Shared<oneshot::Receiver<ChainWorkerWeak<S>>>;
+
+/// Each map entry is a `Shared<oneshot::Receiver<Weak<...>>>`:
+///
+/// - `peek()` returns `None` while a task is loading the worker from storage.
+/// - `peek()` returns `Some(Ok(weak))` once the worker is loaded.
+/// - `peek()` returns `Some(Err(_))` if loading failed (sender dropped).
+///
+/// Callers that find a pending entry clone the `Shared` future and await it.
+type ChainWorkerMap<S> = Arc<papaya::HashMap<ChainId, ChainWorkerFuture<S>>>;
+
+/// Starts a background task that periodically removes dead weak references
+/// from the chain handle map. The actual lifetime management is handled by
+/// each handle's keep-alive task.
+fn start_sweep<S: Storage + Clone + 'static>(
+    chain_workers: &ChainWorkerMap<S>,
+    config: &ChainWorkerConfig,
+) {
+    // Sweep at the smaller of the two TTLs. If both are None, workers
+    // live forever so there's nothing to sweep.
+    let interval = match (config.ttl, config.sender_chain_ttl) {
+        (None, None) => return,
+        (Some(d), None) | (None, Some(d)) => d,
+        (Some(a), Some(b)) => a.min(b),
+    };
+    let weak_map = Arc::downgrade(chain_workers);
+    linera_base::Task::spawn(async move {
+        loop {
+            linera_base::time::timer::sleep(interval).await;
+            let Some(map) = weak_map.upgrade() else {
+                break;
+            };
+            map.pin_owned().retain(|_, shared| match shared.peek() {
+                Some(Ok(weak)) => weak.strong_count() > 0,
+                Some(Err(_)) => false, // Loading failed; clean up.
+                None => true,          // Still loading; keep.
+            });
+        }
+    })
+    .forget();
+}
+
 /// State of a worker in a validator or a local node.
-pub struct WorkerState<StorageClient>
-where
-    StorageClient: Storage,
-{
-    /// A name used for logging
-    nickname: String,
+pub struct WorkerState<StorageClient: Storage> {
     /// Access to local persistent storage.
     storage: StorageClient,
-    /// Configuration options for the [`ChainWorker`]s.
+    /// Configuration options for chain workers.
     chain_worker_config: ChainWorkerConfig,
     block_cache: Arc<ValueCache<CryptoHash, Block>>,
     execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
@@ -496,10 +545,10 @@ where
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
-    /// The set of spawned [`ChainWorkerActor`] tasks.
-    chain_worker_tasks: Arc<Mutex<JoinSet>>,
-    /// The cache of running [`ChainWorkerActor`]s.
-    chain_workers: Arc<Mutex<BTreeMap<ChainId, ChainActorEndpoint<StorageClient>>>>,
+    /// The cache of loaded chain workers. Stores weak references; each worker
+    /// manages its own lifetime via a keep-alive task. A background sweep
+    /// periodically removes dead entries.
+    chain_workers: ChainWorkerMap<StorageClient>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -508,25 +557,16 @@ where
 {
     fn clone(&self) -> Self {
         WorkerState {
-            nickname: self.nickname.clone(),
             storage: self.storage.clone(),
             chain_worker_config: self.chain_worker_config.clone(),
             block_cache: self.block_cache.clone(),
             execution_state_cache: self.execution_state_cache.clone(),
             chain_modes: self.chain_modes.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
-            chain_worker_tasks: self.chain_worker_tasks.clone(),
             chain_workers: self.chain_workers.clone(),
         }
     }
 }
-
-/// The sender endpoint for [`ChainWorkerRequest`]s.
-type ChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
-    ChainWorkerRequest<<StorageClient as Storage>::Context>,
-    tracing::Span,
-    Instant,
-)>;
 
 pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
@@ -534,134 +574,18 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
 {
-    #[instrument(level = "trace", skip(nickname, key_pair, storage))]
-    pub fn new(
-        nickname: String,
-        key_pair: Option<ValidatorSecretKey>,
-        storage: StorageClient,
-        block_cache_size: usize,
-        execution_state_cache_size: usize,
-    ) -> Self {
-        WorkerState {
-            nickname,
-            storage,
-            chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(UniqueValueCache::new(execution_state_cache_size)),
-            chain_modes: None,
-            delivery_notifiers: Arc::default(),
-            chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
-        }
-    }
-
-    #[instrument(level = "trace", skip(nickname, storage))]
-    pub fn new_for_client(
-        nickname: String,
-        storage: StorageClient,
-        chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
-        block_cache_size: usize,
-        execution_state_cache_size: usize,
-    ) -> Self {
-        WorkerState {
-            nickname,
-            storage,
-            chain_worker_config: ChainWorkerConfig::default(),
-            block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(UniqueValueCache::new(execution_state_cache_size)),
-            chain_modes: Some(chain_modes),
-            delivery_notifiers: Arc::default(),
-            chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
-        }
-    }
-
-    #[instrument(level = "trace", skip(self, value))]
-    pub fn with_allow_inactive_chains(mut self, value: bool) -> Self {
-        self.chain_worker_config.allow_inactive_chains = value;
-        self
-    }
-
-    #[instrument(level = "trace", skip(self, value))]
-    pub fn with_allow_messages_from_deprecated_epochs(mut self, value: bool) -> Self {
-        self.chain_worker_config
-            .allow_messages_from_deprecated_epochs = value;
-        self
-    }
-
-    #[instrument(level = "trace", skip(self, value))]
-    pub fn with_long_lived_services(mut self, value: bool) -> Self {
-        self.chain_worker_config.long_lived_services = value;
-        self
-    }
-
-    /// Returns an instance with the specified block time grace period.
-    ///
-    /// Blocks with a timestamp this far in the future will still be accepted, but the validator
-    /// will wait until that timestamp before voting.
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_block_time_grace_period(mut self, block_time_grace_period: Duration) -> Self {
-        self.chain_worker_config.block_time_grace_period = block_time_grace_period;
-        self
-    }
-
-    /// Returns an instance with the specified chain worker TTL.
-    ///
-    /// Idle chain workers free their memory after that duration without requests.
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_chain_worker_ttl(mut self, chain_worker_ttl: Duration) -> Self {
-        self.chain_worker_config.ttl = chain_worker_ttl;
-        self
-    }
-
-    /// Returns an instance with the specified sender chain worker TTL.
-    ///
-    /// Idle sender chain workers free their memory after that duration without requests.
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_sender_chain_worker_ttl(mut self, sender_chain_worker_ttl: Duration) -> Self {
-        self.chain_worker_config.sender_chain_ttl = sender_chain_worker_ttl;
-        self
-    }
-
-    /// Returns an instance with the specified set of chain IDs whose incoming bundles
-    /// should be processed first.
-    #[instrument(level = "trace", skip(self, origins))]
-    pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
-        self.chain_worker_config.priority_bundle_origins = origins;
-        self
-    }
-
-    /// Returns an instance with the specified set of chain IDs whose incoming bundles
-    /// should be ignored.
-    #[instrument(level = "trace", skip(self, origins))]
-    pub fn with_ignored_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
-        self.chain_worker_config.ignored_bundle_origins = origins;
-        self
-    }
-
-    /// Returns an instance with the specified maximum size for received_log entries.
-    ///
-    /// Sizes below `CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES` should be avoided.
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_chain_info_max_received_log_entries(
-        mut self,
-        chain_info_max_received_log_entries: usize,
-    ) -> Self {
-        if chain_info_max_received_log_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
-            warn!(
-                "The value set for the maximum size of received_log entries \
-                   may not be compatible with the latest clients: {} instead of {}",
-                chain_info_max_received_log_entries, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES
-            );
-        }
-        self.chain_worker_config.chain_info_max_received_log_entries =
-            chain_info_max_received_log_entries;
-        self
-    }
-
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
-        &self.nickname
+        &self.chain_worker_config.nickname
+    }
+
+    /// Sets the priority bundle origins.
+    pub fn with_priority_bundle_origins(
+        mut self,
+        origins: std::collections::HashSet<ChainId>,
+    ) -> Self {
+        self.chain_worker_config.priority_bundle_origins = origins;
+        self
     }
 
     /// Returns the storage client so that it can be manipulated or queried.
@@ -751,6 +675,31 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + 'static,
 {
+    /// Creates a new `WorkerState`.
+    ///
+    /// The `chain_worker_config` must be fully configured before calling this, because the
+    /// TTL sweep task is started immediately based on the config's TTL values.
+    #[instrument(level = "trace", skip(storage, chain_worker_config))]
+    pub fn new(
+        storage: StorageClient,
+        chain_worker_config: ChainWorkerConfig,
+        chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+    ) -> Self {
+        let chain_workers = Arc::new(papaya::HashMap::new());
+        start_sweep(&chain_workers, &chain_worker_config);
+        let block_cache_size = chain_worker_config.block_cache_size;
+        let execution_state_cache_size = chain_worker_config.execution_state_cache_size;
+        WorkerState {
+            storage,
+            chain_worker_config,
+            block_cache: Arc::new(ValueCache::new(block_cache_size)),
+            execution_state_cache: Arc::new(UniqueValueCache::new(execution_state_cache_size)),
+            chain_modes,
+            delivery_notifiers: Arc::default(),
+            chain_workers,
+        }
+    }
+
     #[instrument(level = "trace", skip(self, certificate, notifier))]
     #[inline]
     pub async fn fully_handle_certificate_with_notifications<T>(
@@ -778,10 +727,167 @@ where
         .await
     }
 
-    /// Tries to execute a block proposal with a policy for handling bundle failures.
+    /// Acquires a read lock on the chain worker and executes the given closure.
     ///
-    /// Returns the modified block (bundles may be rejected/removed), the executed block,
-    /// chain info response, and resource tracker.
+    /// The future is boxed to keep deeply nested types off the stack. On non-web
+    /// targets it is also wrapped in `SyncFuture` to satisfy `Sync` bounds.
+    async fn chain_read<R, F, Fut>(&self, chain_id: ChainId, f: F) -> Result<R, WorkerError>
+    where
+        F: FnOnce(OwnedRwLockReadGuard<ChainWorkerState<StorageClient>>) -> Fut,
+        Fut: std::future::Future<Output = Result<R, WorkerError>>,
+    {
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        Box::pin(wrap_future(async move {
+            let guard = handle::read_lock(&state).await;
+            f(guard).await
+        }))
+        .await
+    }
+
+    /// Acquires a write lock on the chain worker and executes the given closure.
+    ///
+    /// The [`RollbackGuard`] automatically rolls back uncommitted chain state changes
+    /// when dropped, ensuring cancellation safety. The future is boxed to keep deeply
+    /// nested types off the stack.
+    async fn chain_write<R, F, Fut>(&self, chain_id: ChainId, f: F) -> Result<R, WorkerError>
+    where
+        F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut,
+        Fut: std::future::Future<Output = Result<R, WorkerError>>,
+    {
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        Box::pin(wrap_future(async move {
+            let guard = handle::write_lock(&state).await;
+            f(guard).await
+        }))
+        .await
+    }
+
+    /// Gets or creates a chain worker for the given chain.
+    ///
+    /// The oneshot channel is created outside the `compute` closure to keep
+    /// the closure pure (papaya may call it more than once on CAS retry and
+    /// may memoize the output). If the fast path hits, the unused channel is
+    /// dropped harmlessly.
+    ///
+    /// Returns a type-erased future to keep `!Sync` intermediate types (e.g.
+    /// `std::sync::mpsc::Receiver` from `handle::ServiceRuntimeActor::spawn`) out of
+    /// the caller's future type.
+    fn get_or_create_chain_worker(
+        &self,
+        chain_id: ChainId,
+    ) -> std::pin::Pin<
+        Box<
+            impl std::future::Future<Output = Result<ChainWorkerArc<StorageClient>, WorkerError>> + '_,
+        >,
+    > {
+        Box::pin(wrap_future(async move {
+            loop {
+                // Create the channel outside the closure so that the tx/rx
+                // always match regardless of CAS retries.
+                let (tx, rx) = oneshot::channel();
+                let shared_rx = rx.shared();
+
+                // The papaya guard is !Send, so it must be dropped before
+                // any .await point.
+                let wait_or_tx = {
+                    let pin = self.chain_workers.pin();
+                    match pin.compute(chain_id, |existing| match existing {
+                        Some((_, entry)) => match entry.peek() {
+                            Some(Ok(weak)) => match weak.upgrade() {
+                                Some(arc) => papaya::Operation::Abort(Ok(arc)),
+                                None => papaya::Operation::Insert(shared_rx.clone()),
+                            },
+                            Some(Err(_)) => papaya::Operation::Insert(shared_rx.clone()),
+                            None => papaya::Operation::Abort(Err(entry.clone())),
+                        },
+                        None => papaya::Operation::Insert(shared_rx.clone()),
+                    }) {
+                        papaya::Compute::Aborted(Ok(arc), ..) => return Ok(arc),
+                        papaya::Compute::Aborted(Err(wait), ..) => Either::Left(wait),
+                        papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => {
+                            Either::Right(tx)
+                        }
+                        papaya::Compute::Removed { .. } => unreachable!(),
+                    }
+                };
+
+                match wait_or_tx {
+                    Either::Left(wait) => {
+                        // Another task is loading. Await the shared future.
+                        if let Ok(weak) = wait.await {
+                            if let Some(arc) = weak.upgrade() {
+                                return Ok(arc);
+                            }
+                        }
+                        // Loading failed or worker already dead; retry.
+                    }
+                    Either::Right(tx) => {
+                        // We claimed the loading slot. Load from storage.
+                        // On success, send the Weak through the channel.
+                        // On error, dropping tx wakes waiters so they can retry.
+                        let worker = self.load_chain_worker(chain_id).await?;
+                        if tx.send(Arc::downgrade(&worker)).is_err() {
+                            tracing::error!(%chain_id, "Receiver dropped while loading worker state.");
+                            continue;
+                        }
+                        return Ok(worker);
+                    }
+                }
+            }
+        }))
+    }
+
+    /// Loads a chain worker state from storage and wraps it in an Arc.
+    async fn load_chain_worker(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainWorkerArc<StorageClient>, WorkerError> {
+        let delivery_notifier = self
+            .delivery_notifiers
+            .lock()
+            .unwrap()
+            .entry(chain_id)
+            .or_default()
+            .clone();
+
+        let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
+            chain_modes
+                .read()
+                .unwrap()
+                .get(&chain_id)
+                .is_some_and(ListeningMode::is_full)
+        });
+
+        let (service_runtime_endpoint, service_runtime_task) =
+            if self.chain_worker_config.long_lived_services {
+                let actor =
+                    handle::ServiceRuntimeActor::spawn(chain_id, self.storage.thread_pool()).await;
+                (Some(actor.endpoint), Some(actor.task))
+            } else {
+                (None, None)
+            };
+
+        let state = crate::chain_worker::state::ChainWorkerState::load(
+            self.chain_worker_config.clone(),
+            self.storage.clone(),
+            self.block_cache.clone(),
+            self.execution_state_cache.clone(),
+            self.chain_modes.clone(),
+            delivery_notifier,
+            chain_id,
+            service_runtime_endpoint,
+            service_runtime_task,
+        )
+        .await?;
+
+        Ok(handle::create_chain_worker(
+            state,
+            is_tracked,
+            &self.chain_worker_config,
+        ))
+    }
+
+    /// Tries to execute a block proposal without any verification other than block execution.
     #[instrument(level = "trace", skip(self, block))]
     pub async fn stage_block_execution(
         &self,
@@ -790,14 +896,11 @@ where
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
     ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
-        self.query_chain_worker(block.chain_id, move |callback| {
-            ChainWorkerRequest::StageBlockExecution {
-                block,
-                round,
-                published_blobs,
-                policy,
-                callback,
-            }
+        let chain_id = block.chain_id;
+        self.chain_write(chain_id, |mut guard| async move {
+            guard
+                .stage_block_execution(block, round, &published_blobs, policy)
+                .await
         })
         .await
     }
@@ -813,18 +916,14 @@ where
         query: Query,
         block_hash: Option<CryptoHash>,
     ) -> Result<(QueryOutcome, BlockHeight), WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::QueryApplication {
-                query,
-                block_hash,
-                callback,
-            }
+        self.chain_write(chain_id, |mut guard| async move {
+            guard.query_application(query, block_hash).await
         })
         .await
     }
 
     #[instrument(level = "trace", skip(self, chain_id, application_id), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         application_id = %application_id
     ))]
@@ -833,13 +932,9 @@ where
         chain_id: ChainId,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::DescribeApplication {
-                application_id,
-                callback,
-            }
-        })
-        .await
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let guard = handle::read_lock_initialized(&state).await?;
+        guard.describe_application_readonly(application_id).await
     }
 
     /// Processes a confirmed block (aka a commit).
@@ -847,7 +942,7 @@ where
         level = "trace",
         skip(self, certificate, notify_when_messages_are_delivered),
         fields(
-            nickname = %self.nickname,
+            nickname = %self.nickname(),
             chain_id = %certificate.block().header.chain_id,
             block_height = %certificate.block().header.height
         )
@@ -858,19 +953,17 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::ProcessConfirmedBlock {
-                certificate,
-                notify_when_messages_are_delivered,
-                callback,
-            }
+        self.chain_write(chain_id, |mut guard| async move {
+            guard
+                .process_confirmed_block(certificate, notify_when_messages_are_delivered)
+                .await
         })
         .await
     }
 
     /// Processes a validated block issued from a multi-owner chain.
     #[instrument(level = "trace", skip(self, certificate), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %certificate.block().header.chain_id,
         block_height = %certificate.block().header.height
     ))]
@@ -879,18 +972,15 @@ where
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::ProcessValidatedBlock {
-                certificate,
-                callback,
-            }
+        self.chain_write(chain_id, |mut guard| async move {
+            guard.process_validated_block(certificate).await
         })
         .await
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
     #[instrument(level = "trace", skip(self, certificate), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %certificate.value().chain_id(),
         height = %certificate.value().height()
     ))]
@@ -899,17 +989,14 @@ where
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let chain_id = certificate.value().chain_id();
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::ProcessTimeout {
-                certificate,
-                callback,
-            }
+        self.chain_write(chain_id, |mut guard| async move {
+            guard.process_timeout(certificate).await
         })
         .await
     }
 
     #[instrument(level = "trace", skip(self, origin, recipient, bundles), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         origin = %origin,
         recipient = %recipient,
         num_bundles = %bundles.len()
@@ -920,19 +1007,15 @@ where
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
-        self.query_chain_worker(recipient, move |callback| {
-            ChainWorkerRequest::ProcessCrossChainUpdate {
-                origin,
-                bundles,
-                callback,
-            }
+        self.chain_write(recipient, |mut guard| async move {
+            guard.process_cross_chain_update(origin, bundles).await
         })
         .await
     }
 
     /// Returns a stored [`ConfirmedBlockCertificate`] for a chain's block.
     #[instrument(level = "trace", skip(self, chain_id, height), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         height = %height
     ))]
@@ -942,147 +1025,34 @@ where
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::ReadCertificate { height, callback }
-        })
-        .await
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let guard = handle::read_lock_initialized(&state).await?;
+        guard.read_certificate(height).await
     }
 
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///
-    /// The returned view holds a lock on the chain state, which prevents the worker from changing
-    /// the state of that chain.
+    /// The returned guard holds a read lock on the chain state, preventing writes for
+    /// its lifetime. Multiple concurrent readers are allowed.
     #[instrument(level = "trace", skip(self), fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id
     ))]
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
-        self.query_chain_worker(chain_id, |callback| ChainWorkerRequest::GetChainStateView {
-            callback,
-        })
-        .await
-    }
-
-    /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
-    #[instrument(level = "trace", skip(self, request_builder), fields(
-        nickname = %self.nickname,
-        chain_id = %chain_id
-    ))]
-    async fn query_chain_worker<Response>(
-        &self,
-        chain_id: ChainId,
-        request_builder: impl FnOnce(
-            oneshot::Sender<Result<Response, WorkerError>>,
-        ) -> ChainWorkerRequest<StorageClient::Context>,
-    ) -> Result<Response, WorkerError> {
-        // Build the request.
-        let (callback, response) = oneshot::channel();
-        let request = request_builder(callback);
-
-        // Call the endpoint, possibly a new one.
-        let new_channel = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
-
-        // We just created a channel: spawn the actor.
-        if let Some((sender, receiver)) = new_channel {
-            let delivery_notifier = self
-                .delivery_notifiers
-                .lock()
-                .unwrap()
-                .entry(chain_id)
-                .or_default()
-                .clone();
-
-            let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
-                chain_modes
-                    .read()
-                    .unwrap()
-                    .get(&chain_id)
-                    .is_some_and(ListeningMode::is_full)
-            });
-
-            let actor_task = ChainWorkerActor::run(
-                self.chain_worker_config.clone(),
-                self.storage.clone(),
-                self.block_cache.clone(),
-                self.execution_state_cache.clone(),
-                self.chain_modes.clone(),
-                delivery_notifier,
-                chain_id,
-                sender,
-                receiver,
-                is_tracked,
-            );
-
-            self.chain_worker_tasks
-                .lock()
-                .unwrap()
-                .spawn_task(actor_task);
-        }
-
-        // Finally, wait a response.
-        match response.await {
-            Err(e) => {
-                // The actor endpoint was dropped. Better luck next time!
-                Err(WorkerError::ChainActorRecvError {
-                    chain_id,
-                    error: Box::new(e),
-                })
-            }
-            Ok(response) => response,
-        }
-    }
-
-    /// Find an endpoint and call it. Create the endpoint if necessary.
-    ///
-    /// Returns `Some((sender, receiver))` if a new channel was created and the actor needs to be
-    /// spawned, or `None` if an existing endpoint was used.
-    #[instrument(level = "trace", skip(self), fields(
-        nickname = %self.nickname,
-        chain_id = %chain_id
-    ))]
-    #[expect(clippy::type_complexity)]
-    fn call_and_maybe_create_chain_worker_endpoint(
-        &self,
-        chain_id: ChainId,
-        request: ChainWorkerRequest<StorageClient::Context>,
-    ) -> Result<
-        Option<(
-            ChainWorkerRequestSender<StorageClient::Context>,
-            ChainWorkerRequestReceiver<StorageClient::Context>,
-        )>,
-        WorkerError,
-    > {
-        let mut chain_workers = self.chain_workers.lock().unwrap();
-
-        let (sender, new_channel) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
-            (endpoint, None)
-        } else {
-            let (sender, receiver) = mpsc::unbounded_channel();
-            (sender.clone(), Some((sender, receiver)))
-        };
-
-        if let Err(e) = sender.send((request, tracing::Span::current(), Instant::now())) {
-            // The actor was dropped. Give up without (re-)inserting the endpoint in the cache.
-            return Err(WorkerError::ChainActorSendError {
-                chain_id,
-                error: Box::new(e),
-            });
-        }
-
-        // Put back the sender in the cache for next time.
-        chain_workers.insert(chain_id, sender);
-        #[cfg(with_metrics)]
-        metrics::CHAIN_WORKER_ENDPOINTS_CACHED.set(chain_workers.len() as i64);
-
-        Ok(new_channel)
+    ) -> Result<ChainStateViewReadGuard<StorageClient>, WorkerError> {
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let guard = handle::read_lock(&state).await;
+        Ok(ChainStateViewReadGuard(OwnedRwLockReadGuard::map(
+            guard,
+            |s| s.chain(),
+        )))
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", proposal.content.block.chain_id),
         height = %proposal.content.block.height,
     ))]
@@ -1090,12 +1060,26 @@ where
         &self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, proposal);
+        trace!("{} <-- {:?}", self.nickname(), proposal);
         #[cfg(with_metrics)]
         let round = proposal.content.round;
+
+        let chain_id = proposal.content.block.chain_id;
+        // Delay if block timestamp is in the future but within grace period.
+        let now = self.storage.clock().current_time();
+        let block_timestamp = proposal.content.block.timestamp;
+        let delta = block_timestamp.delta_since(now);
+        let grace_period = TimeDelta::from_micros(
+            u64::try_from(self.chain_worker_config.block_time_grace_period.as_micros())
+                .unwrap_or(u64::MAX),
+        );
+        if delta > TimeDelta::ZERO && delta <= grace_period {
+            self.storage.clock().sleep_until(block_timestamp).await;
+        }
+
         let response = self
-            .query_chain_worker(proposal.content.block.chain_id, move |callback| {
-                ChainWorkerRequest::HandleBlockProposal { proposal, callback }
+            .chain_write(chain_id, |mut guard| async move {
+                guard.handle_block_proposal(proposal).await
             })
             .await?;
         #[cfg(with_metrics)]
@@ -1137,7 +1121,7 @@ where
 
     /// Processes a confirmed block certificate.
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
     ))]
@@ -1146,16 +1130,17 @@ where
         certificate: ConfirmedBlockCertificate,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, certificate);
+        trace!("{} <-- {:?}", self.nickname(), certificate);
         #[cfg(with_metrics)]
         let metrics_data = metrics::MetricsData::new(&certificate);
 
-        let (info, actions, _outcome) =
+        #[allow(unused_variables)]
+        let (info, actions, outcome) =
             Box::pin(self.process_confirmed_block(certificate, notify_when_messages_are_delivered))
                 .await?;
 
         #[cfg(with_metrics)]
-        if matches!(_outcome, BlockOutcome::Processed) {
+        if matches!(outcome, BlockOutcome::Processed) {
             metrics_data.record();
         }
         Ok((info, actions))
@@ -1163,7 +1148,7 @@ where
 
     /// Processes a validated block certificate.
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
     ))]
@@ -1171,17 +1156,18 @@ where
         &self,
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, certificate);
+        trace!("{} <-- {:?}", self.nickname(), certificate);
 
         #[cfg(with_metrics)]
         let round = certificate.round;
         #[cfg(with_metrics)]
         let cert_str = certificate.inner().to_log_str();
 
-        let (info, actions, _outcome) = Box::pin(self.process_validated_block(certificate)).await?;
+        #[allow(unused_variables)]
+        let (info, actions, outcome) = Box::pin(self.process_validated_block(certificate)).await?;
         #[cfg(with_metrics)]
         {
-            if matches!(_outcome, BlockOutcome::Processed) {
+            if matches!(outcome, BlockOutcome::Processed) {
                 metrics::NUM_ROUNDS_IN_CERTIFICATE
                     .with_label_values(&[cert_str, round.type_name()])
                     .observe(round.number() as f64);
@@ -1192,7 +1178,7 @@ where
 
     /// Processes a timeout certificate
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", certificate.inner().chain_id()),
         height = %certificate.inner().height(),
     ))]
@@ -1200,32 +1186,33 @@ where
         &self,
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, certificate);
+        trace!("{} <-- {:?}", self.nickname(), certificate);
         self.process_timeout(certificate).await
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", query.chain_id)
     ))]
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, query);
+        trace!("{} <-- {:?}", self.nickname(), query);
         #[cfg(with_metrics)]
         metrics::CHAIN_INFO_QUERIES.inc();
+        let chain_id = query.chain_id;
         let result = self
-            .query_chain_worker(query.chain_id, move |callback| {
-                ChainWorkerRequest::HandleChainInfoQuery { query, callback }
+            .chain_write(chain_id, |mut guard| async move {
+                guard.handle_chain_info_query(query).await
             })
             .await;
-        trace!("{} --> {:?}", self.nickname, result);
+        trace!("{} --> {:?}", self.nickname(), result);
         result
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", chain_id)
     ))]
     pub async fn download_pending_blob(
@@ -1235,23 +1222,23 @@ where
     ) -> Result<Blob, WorkerError> {
         trace!(
             "{} <-- download_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname
+            self.nickname()
         );
         let result = self
-            .query_chain_worker(chain_id, move |callback| {
-                ChainWorkerRequest::DownloadPendingBlob { blob_id, callback }
+            .chain_read(chain_id, |guard| async move {
+                guard.download_pending_blob(blob_id).await
             })
             .await;
         trace!(
             "{} --> {:?}",
-            self.nickname,
+            self.nickname(),
             result.as_ref().map(|_| blob_id)
         );
         result
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", chain_id)
     ))]
     pub async fn handle_pending_blob(
@@ -1262,30 +1249,30 @@ where
         let blob_id = blob.id();
         trace!(
             "{} <-- handle_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname
+            self.nickname()
         );
         let result = self
-            .query_chain_worker(chain_id, move |callback| {
-                ChainWorkerRequest::HandlePendingBlob { blob, callback }
+            .chain_write(chain_id, |mut guard| async move {
+                guard.handle_pending_blob(blob).await
             })
             .await;
         trace!(
             "{} --> {:?}",
-            self.nickname,
+            self.nickname(),
             result.as_ref().map(|_| blob_id)
         );
         result
     }
 
     #[instrument(skip_all, fields(
-        nick = self.nickname,
+        nick = self.nickname(),
         chain_id = format!("{:.8}", request.target_chain_id())
     ))]
     pub async fn handle_cross_chain_request(
         &self,
         request: CrossChainRequest,
     ) -> Result<NetworkActions, WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, request);
+        trace!("{} <-- {:?}", self.nickname(), request);
         match request {
             CrossChainRequest::UpdateRecipient {
                 sender,
@@ -1318,12 +1305,10 @@ where
                 recipient,
                 latest_height,
             } => {
-                self.query_chain_worker(sender, move |callback| {
-                    ChainWorkerRequest::ConfirmUpdatedRecipient {
-                        recipient,
-                        latest_height,
-                        callback,
-                    }
+                self.chain_write(sender, |mut guard| async move {
+                    guard
+                        .confirm_updated_recipient(recipient, latest_height)
+                        .await
                 })
                 .await?;
                 Ok(NetworkActions::default())
@@ -1333,7 +1318,7 @@ where
 
     /// Updates the received certificate trackers to at least the given values.
     #[instrument(skip_all, fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         num_trackers = %new_trackers.len()
     ))]
@@ -1342,18 +1327,17 @@ where
         chain_id: ChainId,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::UpdateReceivedCertificateTrackers {
-                new_trackers,
-                callback,
-            }
+        self.chain_write(chain_id, |mut guard| async move {
+            guard
+                .update_received_certificate_trackers(new_trackers)
+                .await
         })
         .await
     }
 
     /// Gets preprocessed block hashes in a given height range.
     #[instrument(skip_all, fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         start = %start,
         end = %end
@@ -1364,19 +1348,15 @@ where
         start: BlockHeight,
         end: BlockHeight,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::GetPreprocessedBlockHashes {
-                start,
-                end,
-                callback,
-            }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_preprocessed_block_hashes(start, end).await
         })
         .await
     }
 
     /// Gets the next block height to receive from an inbox.
     #[instrument(skip_all, fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         origin = %origin
     ))]
@@ -1385,8 +1365,8 @@ where
         chain_id: ChainId,
         origin: ChainId,
     ) -> Result<BlockHeight, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::GetInboxNextHeight { origin, callback }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_inbox_next_height(origin).await
         })
         .await
     }
@@ -1394,7 +1374,7 @@ where
     /// Gets locking blobs for specific blob IDs.
     /// Returns `Ok(None)` if any of the blobs is not found.
     #[instrument(skip_all, fields(
-        nickname = %self.nickname,
+        nickname = %self.nickname(),
         chain_id = %chain_id,
         num_blob_ids = %blob_ids.len()
     ))]
@@ -1403,8 +1383,8 @@ where
         chain_id: ChainId,
         blob_ids: Vec<BlobId>,
     ) -> Result<Option<Vec<Blob>>, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::GetLockingBlobs { blob_ids, callback }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_locking_blobs(blob_ids).await
         })
         .await
     }
@@ -1415,8 +1395,8 @@ where
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::GetBlockHashes { heights, callback }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_block_hashes(heights).await
         })
         .await
     }
@@ -1427,8 +1407,8 @@ where
         chain_id: ChainId,
         blob_ids: Vec<BlobId>,
     ) -> Result<Vec<Blob>, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::GetProposedBlobs { blob_ids, callback }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_proposed_blobs(blob_ids).await
         })
         .await
     }
@@ -1438,23 +1418,20 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<EventSubscriptionsResult, WorkerError> {
-        self.query_chain_worker(chain_id, |callback| {
-            ChainWorkerRequest::GetEventSubscriptions { callback }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_event_subscriptions().await
         })
         .await
     }
 
-    /// Gets the stream event count for a stream.
-    pub async fn get_stream_event_count(
+    /// Gets the next expected event index for a stream.
+    pub async fn get_next_expected_event(
         &self,
         chain_id: ChainId,
         stream_id: StreamId,
     ) -> Result<Option<u32>, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::GetStreamEventCount {
-                stream_id,
-                callback,
-            }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_next_expected_event(stream_id).await
         })
         .await
     }
@@ -1464,8 +1441,8 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
-        self.query_chain_worker(chain_id, |callback| {
-            ChainWorkerRequest::GetReceivedCertificateTrackers { callback }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_received_certificate_trackers().await
         })
         .await
     }
@@ -1476,11 +1453,8 @@ where
         chain_id: ChainId,
         receiver_id: ChainId,
     ) -> Result<(BlockHeight, Option<BlockHeight>), WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::GetTipStateAndOutboxInfo {
-                receiver_id,
-                callback,
-            }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_tip_state_and_outbox_info(receiver_id).await
         })
         .await
     }
@@ -1490,16 +1464,29 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<BlockHeight, WorkerError> {
-        self.query_chain_worker(chain_id, |callback| {
-            ChainWorkerRequest::GetNextHeightToPreprocess { callback }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_next_height_to_preprocess().await
         })
         .await
     }
 
     /// Gets the chain manager's seed for leader election.
     pub async fn get_manager_seed(&self, chain_id: ChainId) -> Result<u64, WorkerError> {
-        self.query_chain_worker(chain_id, |callback| ChainWorkerRequest::GetManagerSeed {
-            callback,
+        self.chain_read(
+            chain_id,
+            |guard| async move { guard.get_manager_seed().await },
+        )
+        .await
+    }
+
+    /// Gets the stream event count for a stream.
+    pub async fn get_stream_event_count(
+        &self,
+        chain_id: ChainId,
+        stream_id: StreamId,
+    ) -> Result<Option<u32>, WorkerError> {
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_stream_event_count(stream_id).await
         })
         .await
     }
@@ -1510,11 +1497,8 @@ where
         chain_id: ChainId,
         stream_ids: Vec<StreamId>,
     ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::GetPreviousEventBlocks {
-                stream_ids,
-                callback,
-            }
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_previous_event_blocks(stream_ids).await
         })
         .await
     }
@@ -1523,7 +1507,7 @@ where
 #[cfg(with_testing)]
 impl<StorageClient> WorkerState<StorageClient>
 where
-    StorageClient: Storage,
+    StorageClient: Storage + Clone + 'static,
 {
     /// Gets a reference to the validator's [`ValidatorPublicKey`].
     ///
