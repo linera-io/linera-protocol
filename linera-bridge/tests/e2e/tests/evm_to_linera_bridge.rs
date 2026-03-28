@@ -102,6 +102,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         &config,
         "e2l-bridge-e2e-test",
         Some(WasmRuntime::default()),
+        1000,
     )
     .await?;
 

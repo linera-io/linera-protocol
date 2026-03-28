@@ -262,6 +262,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--storage-max-cache-find-key-values-size <STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE>` — The maximal memory used in the find_key_values_by_prefix cache
 
   Default value: `10000000`
+* `--blob-cache-size <BLOB_CACHE_SIZE>` — The maximal number of entries in the blob cache
+
+  Default value: `1000`
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`

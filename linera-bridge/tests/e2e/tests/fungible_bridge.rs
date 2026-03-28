@@ -75,6 +75,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         &config,
         "bridge-e2e-test",
         Some(WasmRuntime::default()),
+        1000,
     )
     .await?;
 
