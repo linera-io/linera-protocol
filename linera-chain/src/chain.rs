@@ -102,7 +102,7 @@ pub(crate) mod metrics {
             "wasm_fuel_used_per_block",
             "Wasm fuel used per block",
             &[],
-            exponential_bucket_interval(10.0, 1_000_000.0),
+            exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
 
@@ -111,7 +111,7 @@ pub(crate) mod metrics {
             "evm_fuel_used_per_block",
             "EVM fuel used per block",
             &[],
-            exponential_bucket_interval(10.0, 1_000_000.0),
+            exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
 
