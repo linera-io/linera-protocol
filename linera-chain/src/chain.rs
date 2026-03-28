@@ -60,8 +60,7 @@ pub(crate) mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
-        register_int_counter_vec,
+        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
     use linera_execution::ResourceTracker;
     use prometheus::{HistogramVec, IntCounterVec};
@@ -146,9 +145,9 @@ pub(crate) mod metrics {
     pub static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "state_hash_computation_latency",
-            "Time to recompute the state hash",
+            "Time to recompute the state hash, in microseconds",
             &[],
-            exponential_bucket_latencies(2000.0),
+            exponential_bucket_interval(1.0, 2_000_000.0),
         )
     });
 
@@ -883,7 +882,7 @@ where
 
         let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency_us();
             chain.crypto_hash_mut().await?
         };
 
