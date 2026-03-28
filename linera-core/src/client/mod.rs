@@ -125,6 +125,7 @@ mod metrics {
 }
 
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
+pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 
 #[derive(Debug, Clone, Copy)]
@@ -341,6 +342,10 @@ impl<Env: Environment> Client<Env> {
 
     pub fn validator_node_provider(&self) -> &Env::Network {
         self.environment.network()
+    }
+
+    pub(crate) fn options(&self) -> &chain_client::Options {
+        &self.options
     }
 
     /// Handles any pending local cross-chain requests, notifying subscribers.
