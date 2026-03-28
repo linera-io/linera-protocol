@@ -130,6 +130,18 @@
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Proxy requests per second (averaged for the past minute)",
