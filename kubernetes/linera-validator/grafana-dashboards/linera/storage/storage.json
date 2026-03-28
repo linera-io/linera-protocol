@@ -2139,10 +2139,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_contains_blobs{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_contains_blobs{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_contains_blobs{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Contains Blobs Rate",
@@ -2235,10 +2247,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_contains_blob_state{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_contains_blob_state{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_contains_blob_state{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Contains Blob State Rate",
@@ -2331,10 +2355,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_write_event{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_write_event{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_write_event{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Write Event Rate",
@@ -2427,10 +2463,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_event{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_read_event{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_event{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Event Rate",
@@ -2523,7 +2571,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_certificates{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_read_certificates{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -2631,10 +2679,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_certificate{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_read_certificate{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_certificate{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Certificate Rate (single)",
@@ -2727,10 +2787,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_blob_states{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_read_blob_states{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_blob_states{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Blob States Rate (batch)",
@@ -2823,10 +2895,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_blob_state{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_read_blob_state{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_blob_state{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Blob State Rate (single)",
@@ -2919,10 +3003,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_write_blob{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_write_blob{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_write_blob{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Write Blob Rate",
@@ -3015,10 +3111,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_blob{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_read_blob{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_blob{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Blob Rate",
@@ -3111,7 +3219,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_write_certificate{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_write_certificate{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -3219,10 +3327,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_confirmed_block{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_read_confirmed_block{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_confirmed_block{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Confirmed Block Rate",
@@ -3315,10 +3435,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_contains_blob{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_contains_blob{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_contains_blob{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Contains Blob Rate",
@@ -3411,10 +3543,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_contains_certificate{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_contains_certificate{validator=~\"$validator\",pod!=\"\"}[1m])) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_contains_certificate{validator=~\"$validator\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Contains Certificate Rate",

@@ -1096,10 +1096,10 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_network_transmit_bytes_total{validator=~\"$validator\",pod=~\"shards-.*\"}[60s]))",
+          "expr": "sum(rate(container_network_transmit_bytes_total{validator=~\"$validator\",pod=~\"(proxy|shards)-.*\"}[60s]))",
           "hide": false,
           "instant": false,
-          "legendFormat": "tx - Total shards",
+          "legendFormat": "tx - Total",
           "range": true,
           "refId": "D"
         }
@@ -1208,10 +1208,10 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_network_receive_bytes_total{validator=~\"$validator\",pod=~\"shards-.*\"}[60s]))",
+          "expr": "sum(rate(container_network_receive_bytes_total{validator=~\"$validator\",pod=~\"(proxy|shards)-.*\"}[60s]))",
           "hide": false,
           "instant": false,
-          "legendFormat": "tx - Total shards",
+          "legendFormat": "rx - Total",
           "range": true,
           "refId": "D"
         }
@@ -1519,25 +1519,12 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_cpu_usage_seconds_total{validator=~\"$validator\",container=~\"linera-.*\"}[60s])) by (container)",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "{{container}}",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(container_cpu_usage_seconds_total{validator=~\"$validator\"}[60s]))",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{validator=~\"$validator\",pod=~\"(proxy|shards)-.*\"}[60s]))",
           "hide": false,
           "instant": false,
           "legendFormat": "Total",
           "range": true,
-          "refId": "C"
+          "refId": "B"
         }
       ],
       "title": "Container CPU Usage",
