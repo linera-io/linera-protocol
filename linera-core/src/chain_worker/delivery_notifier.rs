@@ -28,6 +28,7 @@ pub struct DeliveryNotifier {
 
 impl DeliveryNotifier {
     /// Registers a delivery `notifier` for a desired [`BlockHeight`].
+    /// Also prunes any closed oneshot senders to prevent unbounded accumulation.
     pub(super) fn register(&self, height: BlockHeight, notifier: oneshot::Sender<()>) {
         let mut notifiers = self
             .notifiers
@@ -35,6 +36,20 @@ impl DeliveryNotifier {
             .expect("Panics should never happen while holding a lock to the `notifiers`");
 
         notifiers.entry(height).or_default().push(notifier);
+
+        // Prune entries where all senders have been closed (receiver dropped).
+        notifiers.retain(|_, senders| {
+            senders.retain(|s| !s.is_closed());
+            !senders.is_empty()
+        });
+    }
+
+    /// Returns `true` if there are no pending notifiers.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.notifiers
+            .lock()
+            .expect("Panics should never happen while holding a lock to the `notifiers`")
+            .is_empty()
     }
 
     /// Notifies that all messages up to `height` have been delivered.
