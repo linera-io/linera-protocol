@@ -20,6 +20,7 @@ services:
   alloy:
     image: grafana/alloy:latest
     container_name: alloy
+    restart: unless-stopped
     ports:
       - "12345:12345"  # Prometheus metrics exposition
       - "4317:4317"    # OTLP gRPC receiver
@@ -50,3 +51,8 @@ services:
       - shard-1
       - shard-2
       - shard-3
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_ALLOY:-0.50}"
+          memory: ${LIMIT_MEM_ALLOY:-512M}

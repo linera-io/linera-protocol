@@ -2,6 +2,7 @@ services:
   web:
     image: caddy:2.10.2-alpine
     container_name: web
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
@@ -13,6 +14,11 @@ services:
       - DOMAIN=${DOMAIN:-localhost}
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_WEB:-1.00}"
+          memory: ${LIMIT_MEM_WEB:-1536M}
 
   scylla-setup:
     image: ubuntu:24.04
@@ -29,6 +35,7 @@ services:
   scylla:
     image: scylladb/scylla:6.2.3
     container_name: scylla
+    restart: unless-stopped
     volumes:
       - linera-scylla-data:/var/lib/scylla
     environment:
@@ -47,10 +54,16 @@ services:
     depends_on:
       scylla-setup:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SCYLLA:-2.00}"
+          memory: ${LIMIT_MEM_SCYLLA:-10G}
 
   proxy:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: proxy
+    restart: unless-stopped
     ports:
       - "19100:19100"
     command:
@@ -75,6 +88,11 @@ services:
         condition: service_completed_successfully
       scylla:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_PROXY:-1.00}"
+          memory: ${LIMIT_MEM_PROXY:-512M}
 
   # Each shard must run with a unique --shard number matching the server.json configuration.
   # Docker Compose replicas don't support per-replica arguments, so we define separate services.
@@ -82,6 +100,7 @@ services:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-1
     hostname: docker-shard-1
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
@@ -100,11 +119,17 @@ services:
     depends_on:
       shard-init:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD:-1.50}"
+          memory: ${LIMIT_MEM_SHARD:-2560M}
 
   shard-1:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-2
     hostname: docker-shard-2
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
@@ -123,11 +148,17 @@ services:
     depends_on:
       shard-init:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD:-1.50}"
+          memory: ${LIMIT_MEM_SHARD:-2560M}
 
   shard-2:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-3
     hostname: docker-shard-3
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
@@ -146,11 +177,17 @@ services:
     depends_on:
       shard-init:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD:-1.50}"
+          memory: ${LIMIT_MEM_SHARD:-2560M}
 
   shard-3:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-4
     hostname: docker-shard-4
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
@@ -169,6 +206,11 @@ services:
     depends_on:
       shard-init:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD:-1.50}"
+          memory: ${LIMIT_MEM_SHARD:-2560M}
 
   shard-init:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
@@ -208,14 +250,21 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
+    restart: unless-stopped
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_PROMETHEUS:-0.50}"
+          memory: ${LIMIT_MEM_PROMETHEUS:-512M}
 
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
+    restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     ports:
@@ -224,13 +273,24 @@ services:
       - grafana-storage:/var/lib/grafana
       - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
       - ./dashboards:/var/lib/grafana/dashboards
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_GRAFANA:-0.50}"
+          memory: ${LIMIT_MEM_GRAFANA:-512M}
 
   watchtower:
-    image: containrrr/watchtower:latest
+    image: nickfedor/watchtower:1.15.0
     container_name: watchtower
+    restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: ["--interval", "30"]
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_WATCHTOWER:-0.25}"
+          memory: ${LIMIT_MEM_WATCHTOWER:-256M}
 
 volumes:
   linera-scylla-data:

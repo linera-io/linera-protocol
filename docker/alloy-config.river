@@ -74,12 +74,6 @@ otelcol.exporter.otlphttp "prometheus" {
     tls {
       insecure_skip_verify = false
     }
-
-    compression = "gzip"
-
-    headers = {
-      "Content-Type" = "application/x-protobuf",
-    }
   }
 
   encoding = "proto"
