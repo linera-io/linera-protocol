@@ -141,6 +141,7 @@ Client implementation and command-line tool for the Linera blockchain
    Discarded bundles can be retried in the next block.
 
   Default value: `3`
+* `--staging-bundles-time-budget-ms <STAGING_BUNDLES_TIME_BUDGET>` — Time budget for staging message bundles in milliseconds. When set, limits bundle execution by time rather than by count. This overrides `max_pending_message_bundles` for bundle limiting purposes
 * `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory. Use 0 to disable expiry
 
   Default value: `30000`

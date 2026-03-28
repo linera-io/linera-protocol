@@ -253,7 +253,7 @@ impl BlockBuilder {
                 self.block,
                 None,
                 published_blobs,
-                BundleExecutionPolicy::Abort,
+                BundleExecutionPolicy::committed(),
             )
             .await?;
 

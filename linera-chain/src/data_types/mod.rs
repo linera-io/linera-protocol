@@ -18,6 +18,7 @@ use linera_base::{
     },
     doc_scalar, ensure, hex, hex_debug,
     identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
+    time::Duration,
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
@@ -324,7 +325,7 @@ pub enum MessageAction {
 
 /// Policy for handling message bundle execution failures during block execution.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub enum BundleExecutionPolicy {
+pub enum BundleFailurePolicy {
     /// Abort block execution on any bundle failure. The proposal is never modified.
     #[default]
     Abort,
@@ -342,6 +343,25 @@ pub enum BundleExecutionPolicy {
         /// Maximum number of discarded bundles before discarding all remaining message bundles.
         max_failures: u32,
     },
+}
+
+/// Policy for executing message bundles during block execution.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct BundleExecutionPolicy {
+    /// What to do when a bundle fails.
+    pub on_failure: BundleFailurePolicy,
+    /// Optional time budget for bundle execution.
+    pub time_budget: Option<Duration>,
+}
+
+impl BundleExecutionPolicy {
+    /// Returns a policy suitable for committed blocks: abort on failure, no time budget.
+    pub fn committed() -> Self {
+        BundleExecutionPolicy {
+            on_failure: BundleFailurePolicy::Abort,
+            time_budget: None,
+        }
+    }
 }
 
 /// A set of messages from a single block, for a single destination.

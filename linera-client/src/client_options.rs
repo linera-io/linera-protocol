@@ -62,6 +62,12 @@ pub struct Options {
     #[arg(long, default_value = "3")]
     pub max_block_limit_errors: u32,
 
+    /// Time budget for staging message bundles in milliseconds. When set, limits bundle
+    /// execution by time rather than by count. This overrides `max_pending_message_bundles`
+    /// for bundle limiting purposes.
+    #[arg(long = "staging-bundles-time-budget-ms", value_parser = util::parse_millis)]
+    pub staging_bundles_time_budget: Option<Duration>,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     /// Use 0 to disable expiry.
     #[arg(
@@ -283,6 +289,7 @@ impl Options {
         chain_client::Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
+            staging_bundles_time_budget: self.staging_bundles_time_budget,
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,

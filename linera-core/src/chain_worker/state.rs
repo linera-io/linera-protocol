@@ -835,7 +835,7 @@ where
                     None,
                     &published_blobs,
                     oracle_responses,
-                    BundleExecutionPolicy::Abort,
+                    BundleExecutionPolicy::committed(),
                 )
                 .await?;
             // We should always agree on the messages and state hash.
@@ -1526,7 +1526,7 @@ where
                 local_time,
                 round.multi_leader(),
                 &published_blobs,
-                BundleExecutionPolicy::Abort,
+                BundleExecutionPolicy::committed(),
             ))
             .await?;
             executed_block
