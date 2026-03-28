@@ -76,7 +76,7 @@ use linera_service::{
     controller::Controller,
     node_service::NodeService,
     project::{self, Project},
-    storage::{Runnable, RunnableWithStore},
+    storage::{Runnable, RunnableWithStore, StorageCacheSizes},
     task_processor::TaskProcessor,
     util,
 };
@@ -1875,7 +1875,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
         self,
         config: D::Config,
         namespace: String,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -1920,7 +1920,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     &config,
                     &namespace,
                     None,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?;
                 genesis_config.initialize_storage(&mut storage).await?;
@@ -1945,7 +1945,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     &config,
                     &namespace,
                     None,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?;
                 let blob_ids = storage.list_blob_ids().await?;
@@ -1960,7 +1960,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     &config,
                     &namespace,
                     None,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?;
                 let chain_ids = storage.list_chain_ids().await?;
@@ -1978,7 +1978,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     &config,
                     &namespace,
                     None,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?;
                 let event_ids = storage.list_event_ids().await?;
