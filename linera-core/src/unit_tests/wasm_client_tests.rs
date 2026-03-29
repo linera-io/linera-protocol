@@ -769,7 +769,6 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
         panic!("Expected one operation, got {:?}", operations);
@@ -780,7 +779,12 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 1)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender.chain_id(),
+            stream_id,
+            next_index: 1,
+        }
     );
 
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
@@ -848,7 +852,6 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
         panic!("Expected one operation, got {:?}", operations);
@@ -859,7 +862,12 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 2)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender.chain_id(),
+            stream_id,
+            next_index: 2,
+        }
     );
 
     // Let's receive from everyone again.
@@ -870,7 +878,6 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
         panic!("Expected one operation, got {:?}", operations);
@@ -881,7 +888,12 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender2.chain_id(), stream_id, 1)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender2.chain_id(),
+            stream_id,
+            next_index: 1,
+        }
     );
 
     // Make one more post.
@@ -1073,13 +1085,19 @@ where
     // Verify that receiver2 can process its inbox and consume the pre-existing events.
     let certs = receiver2.process_inbox().await?.0;
     assert!(!certs.is_empty(), "receiver2 should have events to process");
-    // The inbox processing should produce UpdateStreams operations for the events.
-    let has_update_streams = certs.iter().any(|cert| {
-        cert.block().body.operations().any(|op| {
-            matches!(op, Operation::System(op) if matches!(**op, SystemOperation::UpdateStreams(_)))
+    // The inbox processing should produce UpdateStream operations for the events.
+    let count_update_streams: usize = certs
+        .iter()
+        .map(|cert| {
+            cert.block().body.operations().filter(|op| {
+            matches!(op, Operation::System(op) if matches!(**op, SystemOperation::UpdateStream { .. }))
+        }).count()
         })
-    });
-    assert!(has_update_streams, "should have UpdateStreams operations");
+        .sum();
+    assert_eq!(
+        count_update_streams, 1,
+        "should have UpdateStreams operations"
+    );
 
     Ok(())
 }
@@ -1936,7 +1954,13 @@ where
     };
     receiver
         .execute_operations(
-            vec![SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 1)]).into()],
+            vec![SystemOperation::UpdateStream {
+                application_id: application_id.forget_abi(),
+                chain_id: sender.chain_id(),
+                stream_id,
+                next_index: 1,
+            }
+            .into()],
             vec![],
         )
         .await

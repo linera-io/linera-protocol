@@ -104,8 +104,8 @@ pub struct SystemOperationMetadata {
     pub publish_module: Option<PublishModuleMetadata>,
     /// Epoch operation details (`ProcessNewEpoch`, `ProcessRemovedEpoch`)
     pub epoch: Option<i32>,
-    /// `UpdateStreams` operation details
-    pub update_streams: Option<Vec<UpdateStreamMetadata>>,
+    /// `UpdateStream` operation details
+    pub update_stream: Option<UpdateStreamMetadata>,
 }
 
 impl SystemOperationMetadata {
@@ -124,7 +124,7 @@ impl SystemOperationMetadata {
             verify_blob: None,
             publish_module: None,
             epoch: None,
-            update_streams: None,
+            update_stream: None,
         }
     }
 }
@@ -216,6 +216,7 @@ pub struct PublishModuleMetadata {
 /// Update stream metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct UpdateStreamMetadata {
+    pub application_id: String,
     pub chain_id: ChainId,
     pub stream_id: String,
     pub next_index: i32,
@@ -377,18 +378,19 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 epoch: Some(epoch.0 as i32),
                 ..SystemOperationMetadata::new("ProcessRemovedEpoch")
             },
-            SystemOperation::UpdateStreams(streams) => SystemOperationMetadata {
-                update_streams: Some(
-                    streams
-                        .iter()
-                        .map(|(chain_id, stream_id, next_index)| UpdateStreamMetadata {
-                            chain_id: *chain_id,
-                            stream_id: stream_id.to_string(),
-                            next_index: *next_index as i32,
-                        })
-                        .collect(),
-                ),
-                ..SystemOperationMetadata::new("UpdateStreams")
+            SystemOperation::UpdateStream {
+                application_id,
+                chain_id,
+                stream_id,
+                next_index,
+            } => SystemOperationMetadata {
+                update_stream: Some(UpdateStreamMetadata {
+                    application_id: application_id.to_string(),
+                    chain_id: *chain_id,
+                    stream_id: stream_id.to_string(),
+                    next_index: *next_index as i32,
+                }),
+                ..SystemOperationMetadata::new("UpdateStream")
             },
         }
     }

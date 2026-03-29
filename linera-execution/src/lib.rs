@@ -363,8 +363,10 @@ pub enum ExecutionError {
     UnprocessedStreams,
     #[error("Internal error: {0}")]
     InternalError(&'static str),
-    #[error("UpdateStreams is outdated")]
-    OutdatedUpdateStreams,
+    #[error("UpdateStream is outdated")]
+    OutdatedUpdateStream,
+    #[error("UpdateStream references an application that is not subscribed")]
+    UnsubscribedUpdateStream,
 }
 
 impl ExecutionError {
@@ -418,7 +420,8 @@ impl ExecutionError {
             | ExecutionError::InvalidCommitteeRemoval
             | ExecutionError::MissingOracleResponse
             | ExecutionError::UnprocessedStreams
-            | ExecutionError::OutdatedUpdateStreams
+            | ExecutionError::OutdatedUpdateStream
+            | ExecutionError::UnsubscribedUpdateStream
             | ExecutionError::ViewError(ViewError::NotFound(_)) => false,
             #[cfg(with_wasm_runtime)]
             ExecutionError::WasmError(_) => false,
@@ -1496,7 +1499,7 @@ impl Operation {
             **system_op,
             SystemOperation::ProcessNewEpoch(_)
                 | SystemOperation::ProcessRemovedEpoch(_)
-                | SystemOperation::UpdateStreams(_)
+                | SystemOperation::UpdateStream { .. }
         )
     }
 }

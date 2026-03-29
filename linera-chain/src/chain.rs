@@ -725,9 +725,9 @@ where
         while i < block.transactions.len() {
             let transaction = &mut block.transactions[i];
             let is_bundle = matches!(transaction, Transaction::ReceiveMessages(_));
+            let is_stream_update = transaction.is_update_stream();
 
-            // Checkpoint before bundle transactions if using auto-retry.
-            let checkpoint = if auto_retry && is_bundle {
+            let checkpoint = if auto_retry && (is_bundle || is_stream_update) {
                 Some((
                     chain.clone_unchecked()?,
                     block_execution_tracker.create_checkpoint(),
@@ -744,66 +744,99 @@ where
             // On transient errors (e.g. missing blobs) we fail, so it can be retried after
             // syncing. In auto-retry mode, we can discard or reject message bundles that failed
             // with non-transient errors.
-            let (error, context, incoming_bundle, saved_chain, saved_tracker) =
-                match (result, transaction, checkpoint) {
-                    (Ok(()), _, _) => {
-                        i += 1;
-                        continue;
-                    }
-                    (
-                        Err(ChainError::ExecutionError(error, context)),
-                        Transaction::ReceiveMessages(incoming_bundle),
-                        Some((saved_chain, saved_tracker)),
-                    ) if !error.is_transient_error() => {
-                        (error, context, incoming_bundle, saved_chain, saved_tracker)
-                    }
-                    (Err(e), _, _) => return Err(e),
-                };
-
-            // Restore checkpoint.
-            *chain = saved_chain;
-            block_execution_tracker.restore_checkpoint(&saved_tracker);
-
-            if error.is_limit_error() && i > 0 {
-                failure_count += 1;
-                // If we've exceeded max failures, discard all remaining message bundles.
-                let maybe_sender = if failure_count > max_failures {
-                    info!(
-                        failure_count,
-                        max_failures,
-                        "Exceeded max bundle failures, discarding all remaining message bundles"
-                    );
-                    None
-                } else {
-                    // Not the first - discard it and same-sender subsequent bundles.
+            match (result, transaction, checkpoint) {
+                (Ok(()), _, _) => {
+                    i += 1;
+                }
+                (
+                    Err(ChainError::ExecutionError(error, _context)),
+                    Transaction::ReceiveMessages(incoming_bundle),
+                    Some((saved_chain, saved_tracker)),
+                ) if !error.is_transient_error() && error.is_limit_error() && i > 0 => {
+                    // Restore checkpoint.
+                    *chain = saved_chain;
+                    block_execution_tracker.restore_checkpoint(&saved_tracker);
+                    failure_count += 1;
+                    // If we've exceeded max failures, discard all remaining message bundles.
+                    let maybe_sender = if failure_count > max_failures {
+                        info!(
+                            failure_count,
+                            max_failures,
+                            "Exceeded max bundle failures, discarding all remaining message \
+                            bundles and stream updates"
+                        );
+                        Self::discard_remaining_stream_updates(block, i);
+                        None
+                    } else {
+                        // Not the first - discard it and same-sender subsequent bundles.
+                        info!(
+                            %error,
+                            index = i,
+                            origin = %incoming_bundle.origin,
+                            "Message bundle exceeded block limits and will be discarded for \
+                            retry in a later block"
+                        );
+                        Some(incoming_bundle.origin)
+                    };
+                    Self::discard_remaining_bundles(block, i, maybe_sender);
+                    // Do not increment i - the next transaction is now at i.
+                }
+                (
+                    Err(ChainError::ExecutionError(error, _context)),
+                    Transaction::ReceiveMessages(incoming_bundle),
+                    Some((saved_chain, saved_tracker)),
+                ) if !error.is_transient_error()
+                    && !incoming_bundle.bundle.is_protected()
+                    && incoming_bundle.action != MessageAction::Reject =>
+                {
+                    // Restore checkpoint.
+                    *chain = saved_chain;
+                    block_execution_tracker.restore_checkpoint(&saved_tracker);
+                    // Reject the bundle: either a non-limit error, or the first bundle
+                    // exceeded limits (and is inherently too large for any block).
                     info!(
                         %error,
                         index = i,
                         origin = %incoming_bundle.origin,
-                        "Message bundle exceeded block limits and will be discarded for \
-                        retry in a later block"
+                        "Message bundle failed to execute and will be rejected"
                     );
-                    Some(incoming_bundle.origin)
-                };
-                Self::discard_remaining_bundles(block, i, maybe_sender);
-                // Continue without incrementing i (next transaction is now at i).
-            } else if incoming_bundle.bundle.is_protected()
-                || incoming_bundle.action == MessageAction::Reject
-            {
-                // Protected bundles cannot be rejected. Failed rejected bundles fail the block.
-                return Err(ChainError::ExecutionError(error, context));
-            } else {
-                // Reject the bundle: either a non-limit error, or the first bundle
-                // exceeded limits (and is inherently too large for any block).
-                info!(
-                    %error,
-                    index = i,
-                    origin = %incoming_bundle.origin,
-                    "Message bundle failed to execute and will be rejected"
-                );
-                incoming_bundle.action = MessageAction::Reject;
-                // Retry the transaction as rejected (don't increment i).
-            }
+                    incoming_bundle.action = MessageAction::Reject;
+                    // Do not increment i - retry the transaction after modification.
+                }
+                (
+                    Err(ChainError::ExecutionError(error, _context)),
+                    transaction,
+                    Some((saved_chain, saved_tracker)),
+                ) if transaction.is_update_stream()
+                    && !error.is_transient_error()
+                    && error.is_limit_error()
+                    && i > 0 =>
+                {
+                    // Restore checkpoint.
+                    *chain = saved_chain;
+                    block_execution_tracker.restore_checkpoint(&saved_tracker);
+                    failure_count += 1;
+                    if failure_count > max_failures {
+                        info!(
+                            failure_count,
+                            max_failures,
+                            "Exceeded max failures, discarding all remaining stream updates and \
+                            message bundles"
+                        );
+                        Self::discard_remaining_bundles(block, i, None);
+                        Self::discard_remaining_stream_updates(block, i);
+                    } else {
+                        info!(
+                            %error,
+                            index = i,
+                            "UpdateStream exceeded block limits, discarding for retry"
+                        );
+                        block.transactions.remove(i);
+                    }
+                    // Do not increment i - the next transaction is now at i.
+                }
+                (Err(e), _, _) => return Err(e),
+            };
         }
 
         // This can only happen if all transactions were incoming bundles that all got discarded
@@ -880,7 +913,16 @@ where
         ))
     }
 
-    /// Discards all bundles from the given origin (or all if `None`), starting at the given index.
+    fn discard_remaining_stream_updates(block: &mut ProposedBlock, mut index: usize) {
+        while index < block.transactions.len() {
+            if block.transactions[index].is_update_stream() {
+                block.transactions.remove(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
     fn discard_remaining_bundles(
         block: &mut ProposedBlock,
         mut index: usize,
