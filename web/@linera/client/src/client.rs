@@ -49,7 +49,6 @@ impl Client {
     /// On transport or protocol error, if persistent storage is
     /// unavailable, or if `options` is incorrectly structured.
     #[wasm_bindgen(constructor)]
-    #[tracing::instrument(skip_all)]
     pub async fn new(
         mut wallet: Wallet,
         signer: Signer,
