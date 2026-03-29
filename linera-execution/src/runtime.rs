@@ -10,6 +10,7 @@ use std::{
 
 use custom_debug_derive::Debug;
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Bytecode,
         SendMessageRequest, Timestamp,
@@ -133,6 +134,8 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     user_context: UserInstance::UserContext,
     /// Whether contract log messages should be output.
     allow_application_logs: bool,
+    /// Counter for generating deterministic pseudo-random numbers.
+    random_number_counter: u64,
 }
 
 /// The runtime status of an application.
@@ -341,6 +344,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             scheduled_operations: Vec::new(),
             user_context,
             allow_application_logs,
+            random_number_counter: 0,
         }
     }
 
@@ -750,6 +754,26 @@ where
             .send_request(|callback| ExecutionRequest::ApplicationPermissions { callback })?
             .recv_response()?;
         Ok(application_permissions)
+    }
+
+    fn random_number(&mut self) -> Result<u64, ExecutionError> {
+        let mut this = self.inner();
+        let chain_id = this.chain_id;
+        let application_id = this.current_application().id;
+        let height = this.height;
+        let counter = this.random_number_counter;
+        this.random_number_counter += 1;
+        let seed = RandomNumberSeed {
+            chain_id,
+            application_id,
+            height,
+            counter,
+        };
+        let hash = CryptoHash::new(&seed);
+        let bytes = hash.as_bytes().0;
+        Ok(u64::from_le_bytes([
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+        ]))
     }
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
@@ -1930,6 +1954,17 @@ impl From<&MessageContext> for ExecutingMessage {
         }
     }
 }
+
+/// Seed for deterministic pseudo-random number generation.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct RandomNumberSeed {
+    chain_id: ChainId,
+    application_id: ApplicationId,
+    height: BlockHeight,
+    counter: u64,
+}
+
+impl linera_base::crypto::BcsHashable<'_> for RandomNumberSeed {}
 
 /// Creates a compressed contract and service bytecode synchronously.
 pub fn create_bytecode_blobs_sync(
