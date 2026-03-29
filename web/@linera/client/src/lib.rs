@@ -35,12 +35,10 @@ pub mod lock;
 pub mod signer;
 pub use signer::Signer;
 pub mod storage;
-pub use storage::Storage;
 pub mod wallet;
 pub use wallet::Wallet;
 
 pub type Network = linera_rpc::node_provider::NodeProvider;
-pub type Environment = linera_core::environment::Impl<Storage, Network, Signer, Wallet>;
 
 type JsResult<T> = std::result::Result<T, JsError>;
 type Result<T, E = Error> = std::result::Result<T, E>;
