@@ -816,10 +816,10 @@ impl<Env: Environment> ClientContext<Env> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract)
             .await
-            .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
+            .map_err(error::Inner::from)?;
         let service_bytecode = Bytecode::load_from_file(&service)
             .await
-            .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
+            .map_err(error::Inner::from)?;
 
         info!("Publishing module");
         let (blobs, module_id) =
