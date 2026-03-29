@@ -4,7 +4,7 @@
 # Two modes:
 #   Docker mode:  ./setup.sh --compose-file ../../docker/docker-compose.bridge-test.yml
 #   Direct mode:  ./setup.sh --evm-rpc-url URL --evm-private-key KEY \
-#                   --light-client-address ADDR --bridge-chain-id ID
+#                   --light-client-address ADDR --linera-bridge-chain-id ID
 #
 # Docker mode runs forge/cast/linera inside Docker containers (local dev).
 # Direct mode calls them directly on the host (real network deployments).
@@ -38,6 +38,9 @@ EXTRA_WALLET_ID=1
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LINERA_BIN=""
 LINERA_BRIDGE_BIN=""
+LINERA_WALLET_PATH=""
+LINERA_KEYSTORE_PATH=""
+LINERA_STORAGE_PATH=""
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -67,7 +70,7 @@ Docker mode (local dev):
 
 Direct mode (real networks):
   $(basename "$0") --evm-rpc-url URL --evm-private-key KEY \\
-    --bridge-chain-id ID --relay-owner OWNER --faucet-url URL
+    --linera-bridge-chain-id ID --relay-owner OWNER --faucet-url URL
 
 Options:
   --compose-file PATH       Docker Compose file (enables Docker mode)
@@ -80,7 +83,7 @@ Options:
   --light-client-address ADDR  LightClient contract address (skip deploy)
                             Docker mode reads from /shared/
                             Direct mode deploys if not provided
-  --bridge-chain-id ID      Linera bridge chain ID (64 hex chars)
+  --linera-bridge-chain-id ID      Linera bridge chain ID (64 hex chars)
                             Docker mode polls /shared/
   --token-address ADDR      ERC20 token address (skip MockERC20 deploy)
   --wasm-dir PATH           Directory with .wasm binaries
@@ -98,8 +101,10 @@ Options:
   --fund-amount WEI         Fund bridge with this many tokens; 0 to skip
                             (default: 500000000000000000000)
   --shared-dir PATH         Directory for shared state files (bridge-address,
-                            app IDs). Relay polls these files.
-                            Default: /tmp/bridge-demo-<timestamp>
+                            app IDs). Default: /tmp/bridge-demo-<timestamp>
+  --linera-wallet PATH      Path to existing Linera wallet.json
+  --linera-keystore PATH    Path to existing Linera keystore.json
+  --linera-storage CONFIG   Linera storage config (e.g. rocksdb:/path/to/client.db)
   --help                    Show this help
 EOF
     exit 0
@@ -113,7 +118,7 @@ while [[ $# -gt 0 ]]; do
         --evm-private-key)   EVM_PRIVATE_KEY="$2"; shift 2 ;;
         --evm-chain-id)      EVM_CHAIN_ID="$2"; shift 2 ;;
         --light-client-address) LIGHT_CLIENT_ADDR="$2"; shift 2 ;;
-        --bridge-chain-id)   BRIDGE_CHAIN_ID="$2"; shift 2 ;;
+        --linera-bridge-chain-id)   BRIDGE_CHAIN_ID="$2"; shift 2 ;;
         --token-address)     TOKEN_ADDRESS="$2"; shift 2 ;;
         --wasm-dir)          WASM_DIR="$2"; shift 2 ;;
         --contracts-dir)     CONTRACTS_DIR="$2"; shift 2 ;;
@@ -124,6 +129,9 @@ while [[ $# -gt 0 ]]; do
         --ticker-symbol)     TICKER_SYMBOL="$2"; shift 2 ;;
         --fund-amount)       FUND_AMOUNT="$2"; shift 2 ;;
         --shared-dir)        SHARED_DIR="$2"; shift 2 ;;
+        --linera-wallet)     LINERA_WALLET_PATH="$2"; shift 2 ;;
+        --linera-keystore)   LINERA_KEYSTORE_PATH="$2"; shift 2 ;;
+        --linera-storage)    LINERA_STORAGE_PATH="$2"; shift 2 ;;
         --help)              usage ;;
         *) die "Unknown option: $1" ;;
     esac
@@ -158,9 +166,9 @@ linera_exec() {
             LINERA_STORAGE="rocksdb:$WALLET_DIR/client_${EXTRA_WALLET_ID}.db" \
             ./linera "$@"
     else
-        LINERA_WALLET="$LINERA_TMP_DIR/wallet.json" \
-        LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json" \
-        LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db" \
+        LINERA_WALLET="$LINERA_WALLET_PATH" \
+        LINERA_KEYSTORE="$LINERA_KEYSTORE_PATH" \
+        LINERA_STORAGE="$LINERA_STORAGE_PATH" \
         "$LINERA_BIN" "$@"
     fi
 }
@@ -184,7 +192,7 @@ wait_for_tx() {
     fi
     echo "  Waiting for tx $tx_hash..."
     evm_exec cast receipt --confirmations 1 \
-        --rpc-url "$EVM_RPC_URL" "$tx_hash" >/dev/null 2>&1 || true
+        --rpc-url "$EVM_RPC_URL" "$tx_hash" >/dev/null
 }
 
 # ── Mode detection & defaults ──
@@ -202,7 +210,7 @@ if [[ -n "$COMPOSE_FILE" ]]; then
 else
     echo "Mode: Direct"
     [[ -z "$EVM_PRIVATE_KEY" ]] && die "--evm-private-key is required in direct mode"
-    [[ -z "$BRIDGE_CHAIN_ID" ]] && die "--bridge-chain-id is required in direct mode"
+    [[ -z "$BRIDGE_CHAIN_ID" ]] && die "--linera-bridge-chain-id is required in direct mode"
     EVM_RPC_URL="${EVM_RPC_URL:-http://localhost:8545}"
     WASM_DIR="${WASM_DIR:-$SCRIPT_DIR/../../examples/target/wasm32-unknown-unknown/release}"
     CONTRACTS_DIR="${CONTRACTS_DIR:-$SCRIPT_DIR/../../linera-bridge/src/solidity}"
@@ -245,19 +253,47 @@ echo "  Shared dir: $SHARED_DIR"
 
 echo "=== Bridge Demo Setup ==="
 
-# ── 0. Initialize Linera wallet (direct mode only) ──
+# ── 0. Resolve Linera wallet paths (direct mode only) ──
+# Resolve env var fallbacks early so we can print them.
 if [[ -z "$COMPOSE_FILE" ]]; then
-    LINERA_TMP_DIR="$SHARED_DIR/linera-wallet"
-    mkdir -p "$LINERA_TMP_DIR"
-    if [[ ! -f "$LINERA_TMP_DIR/wallet.json" ]]; then
-        echo "Initializing Linera wallet from faucet..."
-        linera_exec wallet init --faucet "$FAUCET_URL"
-        echo "Requesting a chain from faucet..."
-        linera_exec wallet request-chain --faucet "$FAUCET_URL"
+    LINERA_WALLET_PATH="${LINERA_WALLET_PATH:-${LINERA_WALLET:-}}"
+    LINERA_KEYSTORE_PATH="${LINERA_KEYSTORE_PATH:-${LINERA_KEYSTORE:-}}"
+    LINERA_STORAGE_PATH="${LINERA_STORAGE_PATH:-${LINERA_STORAGE:-}}"
+    if [[ -n "$LINERA_WALLET_PATH" ]]; then
+        # Use caller-provided wallet paths.
+        [[ -z "$LINERA_KEYSTORE_PATH" ]] && die "--linera-keystore is required when --linera-wallet is set"
+        [[ -z "$LINERA_STORAGE_PATH" ]] && die "--linera-storage is required when --linera-wallet is set"
+        echo "  Using wallet at $LINERA_WALLET_PATH"
     else
-        echo "  Using existing wallet at $LINERA_TMP_DIR"
+        # Create a temporary wallet.
+        LINERA_TMP_DIR="$SHARED_DIR/linera-wallet"
+        mkdir -p "$LINERA_TMP_DIR"
+        LINERA_WALLET_PATH="$LINERA_TMP_DIR/wallet.json"
+        LINERA_KEYSTORE_PATH="$LINERA_TMP_DIR/keystore.json"
+        LINERA_STORAGE_PATH="rocksdb:$LINERA_TMP_DIR/client.db"
+        if [[ ! -f "$LINERA_WALLET_PATH" ]]; then
+            echo "Initializing Linera wallet from faucet..."
+            linera_exec wallet init --faucet "$FAUCET_URL"
+        else
+            echo "  Using existing wallet at $LINERA_TMP_DIR"
+        fi
     fi
 fi
+
+echo ""
+echo "Configuration:"
+echo "  EVM RPC URL:        $EVM_RPC_URL"
+echo "  EVM chain ID:       $EVM_CHAIN_ID"
+echo "  Bridge chain ID:    ${BRIDGE_CHAIN_ID:-(will be read from /shared/)}"
+echo "  Relay owner:        ${RELAY_OWNER:-(will be read from /shared/)}"
+echo "  Faucet URL:         $FAUCET_URL"
+echo "  Shared dir:         $SHARED_DIR"
+if [[ -z "$COMPOSE_FILE" ]]; then
+echo "  Linera wallet:      $LINERA_WALLET_PATH"
+echo "  Linera keystore:    $LINERA_KEYSTORE_PATH"
+echo "  Linera storage:     $LINERA_STORAGE_PATH"
+fi
+echo ""
 
 # ── 1. Deploy or read LightClient ──
 if [[ -n "$COMPOSE_FILE" && -z "$LIGHT_CLIENT_ADDR" ]]; then
@@ -301,9 +337,9 @@ echo "  LightClient: $LIGHT_CLIENT_ADDR"
 
 # ── 2. Read bridge chain ID (Docker mode only) ──
 if [[ -n "$COMPOSE_FILE" && -z "$BRIDGE_CHAIN_ID" ]]; then
-    echo "Waiting for relay to claim bridge chain..."
+    echo "Waiting for bridge chain ID..."
     for i in $(seq 1 30); do
-        BRIDGE_CHAIN_ID=$(dc_exec linera-relay cat /shared/bridge-chain-id 2>/dev/null | tr -d '[:space:]' || true)
+        BRIDGE_CHAIN_ID=$(dc_exec foundry-tools cat /shared/bridge-chain-id 2>/dev/null | tr -d '[:space:]')
         BRIDGE_CHAIN_ID=$(normalize_hex "$BRIDGE_CHAIN_ID")
         if echo "$BRIDGE_CHAIN_ID" | grep -qE '^[a-f0-9]{64}$'; then
             break
@@ -313,7 +349,7 @@ if [[ -n "$COMPOSE_FILE" && -z "$BRIDGE_CHAIN_ID" ]]; then
         sleep 2
     done
     if [[ -z "$BRIDGE_CHAIN_ID" ]]; then
-        die "Relay did not write bridge chain ID within timeout"
+        die "Bridge chain ID not found within timeout"
     fi
 else
     BRIDGE_CHAIN_ID=$(normalize_hex "$BRIDGE_CHAIN_ID")
@@ -355,14 +391,14 @@ TOKEN_ADDR_HEX=$(echo "$TOKEN_ADDRESS" | sed 's/^0x//')
 echo "Reading relay owner..."
 if [[ -n "$COMPOSE_FILE" ]]; then
     for i in $(seq 1 30); do
-        RELAY_OWNER=$(dc_exec linera-relay cat /shared/relay-owner 2>/dev/null | tr -d '[:space:]' || true)
+        RELAY_OWNER=$(dc_exec foundry-tools cat /shared/relay-owner 2>/dev/null | tr -d '[:space:]')
         if [[ -n "$RELAY_OWNER" ]]; then
             break
         fi
         echo "  Waiting for relay owner... ($i/30)"
         sleep 2
     done
-    [[ -z "$RELAY_OWNER" ]] && die "Relay did not write owner within timeout"
+    [[ -z "$RELAY_OWNER" ]] && die "Relay owner not found within timeout"
 else
     [[ -z "$RELAY_OWNER" ]] && die "--relay-owner is required in direct mode"
 fi
@@ -370,8 +406,8 @@ echo "  Relay owner (minter): $RELAY_OWNER"
 
 # ── 4. Publish and create wrapped-fungible app ──
 echo "Syncing chain state..."
-linera_exec sync 2>&1 || true
-linera_exec process-inbox 2>&1 || true
+linera_exec sync 2>&1
+linera_exec process-inbox 2>&1
 echo "Publishing and creating wrapped-fungible app..."
 WRAPPED_PARAMS=$(
     TICKER="$TICKER_SYMBOL" \
@@ -392,15 +428,16 @@ params = {
 }
 print(json.dumps(params))
 ")
-WRAPPED_APP_OUTPUT=$(linera_exec publish-and-create \
-    "$WASM_DIR/wrapped_fungible_contract.wasm" \
-    "$WASM_DIR/wrapped_fungible_service.wasm" \
-    --json-parameters "$WRAPPED_PARAMS" \
-    --json-argument '{"accounts":{}}' 2>&1) || {
-    echo "ERROR: publish-and-create wrapped-fungible failed:" >&2
-    echo "$WRAPPED_APP_OUTPUT" >&2
-    exit 1
-}
+for attempt in 1 2 3; do
+    WRAPPED_APP_OUTPUT=$(linera_exec publish-and-create \
+        "$WASM_DIR/wrapped_fungible_contract.wasm" \
+        "$WASM_DIR/wrapped_fungible_service.wasm" \
+        --json-parameters "$WRAPPED_PARAMS" \
+        --json-argument '{"accounts":{}}' 2>&1) && break
+    echo "  Attempt $attempt failed, retrying..." >&2
+    sleep 2
+done
+[[ -z "$WRAPPED_APP_OUTPUT" ]] && { echo "ERROR: publish-and-create wrapped-fungible failed after retries" >&2; exit 1; }
 # The application ID is the last 64-hex-char token on its own line.
 WRAPPED_APP_ID=$(echo "$WRAPPED_APP_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -1)
 validate_hex64 "Wrapped-fungible app ID" "$WRAPPED_APP_ID"
@@ -429,7 +466,6 @@ BRIDGE_OUTPUT=$(evm_exec \
     --constructor-args \
     "$LIGHT_CLIENT_ADDR" \
     "$CHAIN_BYTES32" \
-    0 \
     "$APP_ID_BYTES32" \
     "$TOKEN_ADDRESS")
 BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
@@ -446,14 +482,15 @@ echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 
 # ── 6. Publish and create evm-bridge app ──
 echo "Syncing chain state before evm-bridge deploy..."
-linera_exec sync 2>&1 || true
-linera_exec process-inbox 2>&1 || true
+linera_exec sync 2>&1
+linera_exec process-inbox 2>&1
 echo "Publishing and creating evm-bridge app..."
 BRIDGE_PARAMS=$(
     CHAIN_ID="$EVM_CHAIN_ID" \
     BRIDGE_HEX="$BRIDGE_ADDR_HEX" \
     APP_ID="$WRAPPED_APP_ID" \
     TOKEN_HEX="$TOKEN_ADDR_HEX" \
+    EVM_RPC_URL="$EVM_RPC_URL" \
     python3 -c "
 import json, os
 def hex_to_array(h):
@@ -463,23 +500,25 @@ params = {
     'bridge_contract_address': hex_to_array(os.environ['BRIDGE_HEX']),
     'fungible_app_id': os.environ['APP_ID'],
     'token_address': hex_to_array(os.environ['TOKEN_HEX']),
+    'rpc_endpoint': os.environ.get('EVM_RPC_URL', ''),
 }
 print(json.dumps(params))
 ")
 
-BRIDGE_APP_OUTPUT=$(linera_exec publish-and-create \
-    "$WASM_DIR/evm_bridge_contract.wasm" \
-    "$WASM_DIR/evm_bridge_service.wasm" \
-    --json-parameters "$BRIDGE_PARAMS" \
-    --json-argument 'null' \
-    --required-application-ids "$WRAPPED_APP_ID" 2>&1) || {
-    echo "ERROR: publish-and-create evm-bridge failed:" >&2
-    echo "$BRIDGE_APP_OUTPUT" >&2
-    exit 1
-}
+for attempt in 1 2 3; do
+    BRIDGE_APP_OUTPUT=$(linera_exec publish-and-create \
+        "$WASM_DIR/evm_bridge_contract.wasm" \
+        "$WASM_DIR/evm_bridge_service.wasm" \
+        --json-parameters "$BRIDGE_PARAMS" \
+        --json-argument 'null' \
+        --required-application-ids "$WRAPPED_APP_ID" 2>&1) && break
+    echo "  Attempt $attempt failed, retrying..." >&2
+    sleep 2
+done
+[[ -z "$BRIDGE_APP_OUTPUT" ]] && { echo "ERROR: publish-and-create evm-bridge failed after retries" >&2; exit 1; }
 BRIDGE_APP_ID=$(echo "$BRIDGE_APP_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -1)
-validate_hex64 "EVM-bridge app ID" "$BRIDGE_APP_ID"
-echo "  EVM-bridge app: $BRIDGE_APP_ID"
+validate_hex64 "Linera bridge app ID" "$BRIDGE_APP_ID"
+echo "  Linera bridge app: $BRIDGE_APP_ID"
 
 # Write bridge app ID to shared dir for relay.
 if [[ -n "$COMPOSE_FILE" ]]; then
@@ -514,16 +553,47 @@ LINERA_BRIDGE_CHAIN_ID=$BRIDGE_CHAIN_ID
 LINERA_EVM_CHAIN_ID=$EVM_CHAIN_ID
 EOF
 
+# Write setup-complete marker so the relay knows it's safe to start.
+if [[ -n "$COMPOSE_FILE" ]]; then
+    dc_exec --user root foundry-tools sh -c "echo 'done' > /shared/setup-complete"
+fi
+
 echo ""
 echo "=== Setup Complete ==="
 echo ""
-echo "Environment written to: $OUTPUT_FILE"
-echo "Shared state dir:       $SHARED_DIR"
+echo "Addresses & IDs:"
+echo "  LightClient (EVM):          $LIGHT_CLIENT_ADDR"
+echo "  FungibleBridge (EVM):       $BRIDGE_ADDRESS"
+echo "  MockERC20 (EVM):            $TOKEN_ADDRESS"
+echo "  evm-bridge (Linera):        $BRIDGE_APP_ID"
+echo "  wrapped-fungible (Linera):  $WRAPPED_APP_ID"
+echo "  Bridge chain ID:            $BRIDGE_CHAIN_ID"
+echo "  Relay owner:                $RELAY_OWNER"
+echo "  EVM chain ID:               $EVM_CHAIN_ID"
 echo ""
-echo "The relay should already be running (it provides --bridge-chain-id and"
-echo "--relay-owner that this script requires). It will pick up the app IDs"
-echo "from the shared dir automatically."
+echo "Environment written to:       $OUTPUT_FILE"
+echo "Shared state dir:             $SHARED_DIR"
 echo ""
-echo "Start the frontend:"
-echo "  cd examples/bridge-demo"
-echo "  pnpm install && pnpm dev"
+echo "Next steps:"
+if [[ -n "$COMPOSE_FILE" ]]; then
+echo "  1. The relay is running via docker-compose (linera-relay service)."
+else
+echo "  1. Start the relay:"
+echo "     linera-bridge serve \\"
+echo "       --rpc-url $EVM_RPC_URL \\"
+echo "       --faucet-url $FAUCET_URL \\"
+echo "       --wallet $LINERA_WALLET_PATH \\"
+echo "       --keystore $LINERA_KEYSTORE_PATH \\"
+echo "       --storage $LINERA_STORAGE_PATH \\"
+echo "       --linera-bridge-chain-id $BRIDGE_CHAIN_ID \\"
+echo "       --linera-bridge-chain-owner $RELAY_OWNER \\"
+echo "       --evm-bridge-address $BRIDGE_ADDRESS \\"
+echo "       --linera-bridge-address $BRIDGE_APP_ID \\"
+echo "       --linera-fungible-address $WRAPPED_APP_ID \\"
+echo "       --evm-private-key 0x... \\"
+echo "       --monitor-scan-interval 30 \\"
+echo "       --max-retries 10"
+fi
+echo "  2. Start the frontend:"
+echo "     cd examples/bridge-demo"
+echo "     pnpm install && pnpm dev"

@@ -1,26 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    iter::IntoIterator,
-    sync::{Arc, RwLock},
-};
-
-use futures::{stream, Stream};
 use linera_base::{
     data_types::{ChainDescription, ChainOrigin},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::ChainId,
 };
-use linera_client::config::GenesisConfig;
 use linera_core::wallet;
-use linera_persistent as persistent;
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct Data {
-    pub chains: wallet::Memory,
-    default: Arc<RwLock<Option<ChainId>>>,
-    genesis_config: GenesisConfig,
-}
+pub use linera_core::wallet::PersistentWallet as Wallet;
 
 struct ChainDetails {
     is_default: bool,
@@ -31,16 +17,16 @@ struct ChainDetails {
 }
 
 impl ChainDetails {
-    fn new(chain_id: ChainId, wallet: &Data) -> Self {
-        let Some(user_chain) = wallet.chains.get(chain_id) else {
+    fn new(chain_id: ChainId, wallet: &Wallet) -> Self {
+        let Some(user_chain) = wallet.get(chain_id) else {
             panic!("Chain {} not found.", chain_id);
         };
         ChainDetails {
-            is_default: Some(chain_id) == *wallet.default.read().unwrap(),
-            is_admin: chain_id == wallet.genesis_config.admin_chain_id(),
+            is_default: Some(chain_id) == wallet.default_chain(),
+            is_admin: chain_id == wallet.genesis_config().admin_chain_id(),
             chain_id,
             origin: wallet
-                .genesis_config
+                .genesis_config()
                 .chains
                 .iter()
                 .find(|description| description.id() == chain_id)
@@ -254,7 +240,7 @@ impl Wallet {
 
         let mut chains = chain_ids
             .into_iter()
-            .map(|chain_id| ChainDetails::new(chain_id, &self.0))
+            .map(|chain_id| ChainDetails::new(chain_id, self))
             .collect::<Vec<_>>();
         // Print first the default, then the admin chain, then other root chains, and finally the
         // child chains.

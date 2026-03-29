@@ -2550,7 +2550,9 @@ dependencies = [
  "fungible",
  "hex",
  "linera-bridge",
+ "linera-ethereum",
  "linera-sdk",
+ "log",
  "serde",
  "tokio",
  "wrapped-fungible",
@@ -3858,6 +3860,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-trie",
  "anyhow",
+ "serde",
 ]
 
 [[package]]
