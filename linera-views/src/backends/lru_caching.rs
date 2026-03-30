@@ -149,7 +149,7 @@ where
 
 impl<K> ReadableKeyValueStore for LruCachingStore<K>
 where
-    K: ReadableKeyValueStore + Clone,
+    K: ReadableKeyValueStore,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
@@ -298,11 +298,8 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
-        let store = self.store.clone();
-        let cache_opt = self.cache.clone();
-
         async_stream::stream! {
-            if let Some(cache) = cache_opt {
+            if let Some(cache) = &self.cache {
                 let mut is_cached = Vec::new();
                 let mut uncached_keys = Vec::new();
 
@@ -318,7 +315,7 @@ where
                     }
                 }
 
-                let mut uncached_stream = Box::pin(store.read_multi_values_bytes_iter(uncached_keys));
+                let mut uncached_stream = Box::pin(self.store.read_multi_values_bytes_iter(uncached_keys));
 
                 for (i, key) in keys.iter().enumerate() {
                     let value = if is_cached[i] {
@@ -332,7 +329,7 @@ where
                             value
                         } else {
                             // The key has been evicted. Should be rare.
-                            store.read_value_bytes(key).await?
+                            self.store.read_value_bytes(key).await?
                         }
                     } else {
                         uncached_stream.next().await
@@ -350,7 +347,7 @@ where
                     yield Ok(value);
                 }
             } else {
-                let mut stream = Box::pin(store.read_multi_values_bytes_iter(keys));
+                let mut stream = Box::pin(self.store.read_multi_values_bytes_iter(keys));
                 while let Some(item) = stream.next().await {
                     yield item;
                 }
