@@ -595,7 +595,7 @@ where
             // Extract the predecessor height for this recipient from the first
             // block's `previous_message_blocks`. This lets the recipient detect
             // gaps even before it consumes the missing message.
-            let previous_height = heights.first().and_then(|first_height| {
+            let mut previous_height = heights.first().and_then(|first_height| {
                 let block = height_to_blocks.get(first_height)?;
                 let (_, prev_height) =
                     block.inner().body.previous_message_blocks.get(&recipient)?;
@@ -603,6 +603,7 @@ where
             });
             let mut bundles = Vec::new();
             let mut bundles_size: usize = 0;
+            let mut last_height_in_batch = None;
             for height in heights {
                 let hashed_block = height_to_blocks
                     .get(&height)
@@ -625,15 +626,18 @@ where
                         previous_height,
                     });
                     bundles_size = 0;
+                    previous_height = last_height_in_batch;
                 }
                 bundles.extend(new_bundles);
                 bundles_size += new_size;
+                last_height_in_batch = Some(height);
             }
             if !bundles.is_empty() {
                 cross_chain_requests.push(CrossChainRequest::UpdateRecipient {
                     sender,
                     recipient,
                     bundles,
+                    previous_height,
                 });
             }
         }
