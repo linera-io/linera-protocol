@@ -1,24 +1,6 @@
 package linera:app;
 
 interface base-runtime-api {
-    record key-interval-query {
-        start: list<u8>,
-        start-inclusive: bool,
-        end: option<list<u8>>,
-        end-inclusive: bool,
-        limit: option<u32>,
-    }
-
-    record key-list-query-result {
-        keys: list<list<u8>>,
-        is-finished: bool,
-    }
-
-    record key-value-list-query-result {
-        key-values: list<tuple<list<u8>, list<u8>>>,
-        is-finished: bool,
-    }
-
     get-chain-id: func() -> chain-id;
     get-block-height: func() -> block-height;
     get-application-id: func() -> application-id;
@@ -149,6 +131,24 @@ interface base-runtime-api {
         status: u16,
         headers: list<http-header>,
         body: list<u8>,
+    }
+
+    record key-interval-query {
+        start: list<u8>,
+        start-inclusive: bool,
+        end: option<list<u8>>,
+        end-inclusive: bool,
+        limit: option<u32>,
+    }
+
+    record key-list-query-result {
+        keys: list<list<u8>>,
+        is-finished: bool,
+    }
+
+    record key-value-list-query-result {
+        key-values: list<tuple<list<u8>, list<u8>>>,
+        is-finished: bool,
     }
 
     enum log-level {
