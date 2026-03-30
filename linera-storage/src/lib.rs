@@ -5,9 +5,10 @@
 
 mod db_storage;
 
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
+use futures::stream::Stream;
 use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
@@ -177,6 +178,18 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         hashes: &[CryptoHash],
     ) -> Result<Vec<Option<Arc<ConfirmedBlockCertificate>>>, ViewError>;
 
+    /// Returns a stream of optional certificates for the requested hashes.
+    fn read_certificates_iter(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Pin<
+        Box<
+            dyn Stream<Item = Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError>>
+                + Send
+                + '_,
+        >,
+    >;
+
     /// Reads raw certificate bytes by hashes.
     ///
     /// Returns a vector where each element corresponds to the input hash.
@@ -221,6 +234,24 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         event_ids: &[EventId],
     ) -> Result<Vec<Option<BlockHeight>>, ViewError>;
+
+    /// Returns a stream of certificate hashes for the requested chain and heights.
+    /// Yields `Ok(Option<CryptoHash>)` for each height.
+    fn read_certificate_hashes_by_heights_iter(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Pin<Box<dyn Stream<Item = Result<Option<CryptoHash>, ViewError>> + Send + '_>>;
+
+    /// Returns a stream of certificates for the requested chain and heights,
+    /// skipping heights with no certificate.
+    fn read_certificates_by_heights_iter(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Pin<
+        Box<dyn Stream<Item = Result<Arc<ConfirmedBlockCertificate>, ViewError>> + Send + '_>,
+    >;
 
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;

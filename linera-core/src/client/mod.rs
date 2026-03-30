@@ -41,7 +41,10 @@ use linera_chain::{
 };
 use linera_execution::committee::Committee;
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
-use rand::seq::SliceRandom;
+use rand::{
+    distributions::{Distribution, WeightedIndex},
+    seq::SliceRandom,
+};
 use received_log::ReceivedLogs;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -562,20 +565,22 @@ impl<Env: Environment> Client<Env> {
             .local_node
             .get_preprocessed_block_hashes(chain_id, next_height, end)
             .await?;
-        let certificates = self.storage_client().read_certificates(&hashes).await?;
-        let certificates = match ResultReadCertificates::new(certificates, hashes) {
-            ResultReadCertificates::Certificates(certificates) => certificates,
-            ResultReadCertificates::InvalidHashes(hashes) => {
-                return Err(chain_client::Error::ReadCertificatesError(hashes))
-            }
-        };
-        for certificate in certificates {
-            if let Some(until) = until_block_time {
-                if certificate.value().block().header.timestamp >= until {
-                    break;
+        let mut cert_stream = self.storage_client().read_certificates_iter(hashes);
+        while let Some(result) = cert_stream.next().await {
+            match result? {
+                Some(certificate) => {
+                    if let Some(until) = until_block_time {
+                        if certificate.value().block().header.timestamp >= until {
+                            break;
+                        }
+                    }
+                    last_info = self.handle_certificate(certificate).await?.info;
+                }
+                None => {
+                    // Certificate not found in local storage — skip, will be
+                    // downloaded from the remote node below.
                 }
             }
-            last_info = self.handle_certificate(certificate).await?.info;
         }
         Ok(last_info)
     }
