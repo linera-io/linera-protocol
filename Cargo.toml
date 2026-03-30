@@ -344,7 +344,7 @@ counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
-fungible = { path = "./examples/fungible", version = "0.1.0" }
+fungible = { path = "./examples/fungible" }
 hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }
 meta-counter = { path = "./linera-sdk/tests/fixtures/meta-counter" }
@@ -354,7 +354,7 @@ publish-read-data-blob = { path = "./linera-sdk/tests/fixtures/publish-read-data
 social = { path = "./examples/social" }
 task-processor = { path = "./examples/task-processor" }
 time-expiry = { path = "./examples/time-expiry" }
-wrapped-fungible = { path = "./examples/wrapped-fungible", version = "0.1.0" }
+wrapped-fungible = { path = "./examples/wrapped-fungible" }
 
 [workspace.dependencies.aws-config]
 default-features = false

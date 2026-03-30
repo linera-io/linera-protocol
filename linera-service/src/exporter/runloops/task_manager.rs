@@ -14,10 +14,9 @@ use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_service::config::{Destination, DestinationId, DestinationKind};
 use linera_storage::Storage;
 
-use crate::{
-    runloops::{evm_chain_exporter::EvmChainExporter, logging_exporter::LoggingExporter},
-    storage::ExporterStorage,
-};
+#[cfg(feature = "linera-bridge")]
+use crate::runloops::evm_chain_exporter::EvmChainExporter;
+use crate::{runloops::logging_exporter::LoggingExporter, storage::ExporterStorage};
 
 /// This type manages tasks like spawning different exporters on the different
 /// threads, discarding the committees and joining every thread properly at the
@@ -242,6 +241,7 @@ where
                 })
             }
 
+            #[cfg(feature = "linera-bridge")]
             DestinationKind::EvmChain => {
                 let destination = self
                     .destination_configs
@@ -257,6 +257,11 @@ where
                     }
                     result
                 })
+            }
+
+            #[cfg(not(feature = "linera-bridge"))]
+            DestinationKind::EvmChain => {
+                panic!("EvmChain destination requires the `linera-bridge` dependency")
             }
         }
     }
