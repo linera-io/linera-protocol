@@ -180,6 +180,11 @@ where
         self
     }
 
+    fn with_cross_chain_message_chunk_limit(mut self, limit: usize) -> Self {
+        self.worker = self.worker.with_cross_chain_message_chunk_limit(limit);
+        self
+    }
+
     fn admin_public_key(&self) -> AccountPublicKey {
         self.admin_keypair.public()
     }
@@ -4753,6 +4758,269 @@ where
             "previous_message_blocks should be corrected after re-execution"
         );
     }
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_cross_chain_message_chunking<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    // Use a very small chunk limit so that even small transfers cause chunking.
+    let mut env = TestEnvironment::new(storage_builder.build().await?, true, false)
+        .await
+        .with_cross_chain_message_chunk_limit(1);
+
+    let chain_1_desc = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await;
+    let chain_2_desc = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await;
+    let chain_2 = chain_2_desc.id();
+
+    // Create three transfer certificates from chain_1 to chain_2.
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(95),
+            vec![],
+        )
+        .await;
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Amount::from_tokens(92),
+            vec![&cert_0],
+        )
+        .await;
+    let cert_2 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(2),
+            Vec::new(),
+            Amount::from_tokens(90),
+            vec![&cert_1],
+        )
+        .await;
+
+    // Process all three blocks on chain_1.
+    env.worker()
+        .process_confirmed_block(cert_0.clone(), None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1.clone(), None)
+        .await?;
+    let (_, actions, _) = env
+        .worker()
+        .process_confirmed_block(cert_2.clone(), None)
+        .await?;
+
+    // With chunk_limit=1, each block's bundles should be in a separate UpdateRecipient.
+    let update_requests: Vec<_> = actions
+        .cross_chain_requests
+        .iter()
+        .filter(|r| matches!(r, CrossChainRequest::UpdateRecipient { .. }))
+        .collect();
+    assert!(
+        update_requests.len() >= 2,
+        "Expected at least 2 UpdateRecipient requests with chunk_limit=1, got {}",
+        update_requests.len()
+    );
+
+    // Verify previous_height is correct for each chunk:
+    // - First chunk: previous_height from previous_message_blocks (None for the first message ever)
+    // - Subsequent chunks: previous_height = last height in the previous chunk
+    let mut last_height = None;
+    for request in &update_requests {
+        if let CrossChainRequest::UpdateRecipient {
+            previous_height,
+            bundles,
+            ..
+        } = request
+        {
+            assert_eq!(
+                *previous_height, last_height,
+                "previous_height should point to the last height of the previous chunk"
+            );
+            last_height = bundles.last().map(|(_, bundle)| bundle.height);
+        }
+    }
+
+    Ok(())
+}
+
+/// Tests that gap detection works correctly with chunked cross-chain messages.
+///
+/// With chunk_limit=1, each block produces a separate UpdateRecipient. If we skip
+/// delivering one chunk, the next chunk's `previous_height` should trigger gap
+/// detection and RevertConfirm recovery.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_chunked_cross_chain_gap_detection<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(storage_builder.build().await?, true, false)
+        .await
+        .with_cross_chain_message_chunk_limit(1);
+    env.worker = env.worker.with_allow_revert_confirm(true);
+
+    let chain_1_desc = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2_desc = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await;
+    let chain_2 = chain_2_desc.id();
+
+    // Create three transfer certificates from chain_1 to chain_2.
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(95),
+            vec![],
+        )
+        .await;
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Amount::from_tokens(92),
+            vec![&cert_0],
+        )
+        .await;
+    let cert_2 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(2),
+            Vec::new(),
+            Amount::from_tokens(90),
+            vec![&cert_1],
+        )
+        .await;
+
+    // Process all three blocks on chain_1.
+    env.worker()
+        .process_confirmed_block(cert_0.clone(), None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1.clone(), None)
+        .await?;
+    let (_, actions, _) = env
+        .worker()
+        .process_confirmed_block(cert_2.clone(), None)
+        .await?;
+
+    // Collect the UpdateRecipient chunks for chain_2.
+    let update_requests: Vec<_> = actions
+        .cross_chain_requests
+        .into_iter()
+        .filter(|r| matches!(r, CrossChainRequest::UpdateRecipient { .. }))
+        .collect();
+    assert!(
+        update_requests.len() >= 3,
+        "Expected at least 3 UpdateRecipient chunks, got {}",
+        update_requests.len()
+    );
+
+    // Deliver the first chunk normally.
+    let first_actions = env
+        .worker()
+        .handle_cross_chain_request(update_requests[0].clone())
+        .await?;
+    // Confirm delivery so sender clears its outbox for height 0.
+    for request in first_actions.cross_chain_requests {
+        env.worker().handle_cross_chain_request(request).await?;
+    }
+
+    // Skip the second chunk (height 1) — simulate it being lost.
+    // Deliver the third chunk (height 2) directly. Its previous_height
+    // should be Some(height 1), which the receiver hasn't seen.
+    let third_actions = env
+        .worker()
+        .handle_cross_chain_request(update_requests[2].clone())
+        .await?;
+
+    // The third chunk should trigger gap detection → RevertConfirm.
+    assert!(
+        third_actions
+            .cross_chain_requests
+            .iter()
+            .any(|r| matches!(r, CrossChainRequest::RevertConfirm { .. })),
+        "Expected RevertConfirm due to gap, but got: {:?}",
+        third_actions.cross_chain_requests,
+    );
+
+    // chain_2 should still only have received height 0 (the skipped height blocked further
+    // delivery).
+    {
+        let chain = env.worker().chain_state_view(chain_2).await?;
+        let inbox = chain
+            .inboxes
+            .try_load_entry(&chain_1)
+            .await?
+            .expect("chain_2 should have an inbox for chain_1");
+        assert_eq!(
+            inbox.next_block_height_to_receive()?,
+            BlockHeight::from(1),
+            "Only height 0 should have been received before gap detection"
+        );
+    }
+
+    // Now deliver the skipped second chunk (height 1) and the third chunk again.
+    // This simulates normal recovery where the missing chunk is retransmitted.
+    let second_actions = env
+        .worker()
+        .handle_cross_chain_request(update_requests[1].clone())
+        .await?;
+    for request in second_actions.cross_chain_requests {
+        env.worker().handle_cross_chain_request(request).await?;
+    }
+    let third_actions = env
+        .worker()
+        .handle_cross_chain_request(update_requests[2].clone())
+        .await?;
+    for request in third_actions.cross_chain_requests {
+        env.worker().handle_cross_chain_request(request).await?;
+    }
+
+    // Now chain_2 should have received all three heights.
+    let chain = env.worker().chain_state_view(chain_2).await?;
+    let inbox = chain
+        .inboxes
+        .try_load_entry(&chain_1)
+        .await?
+        .expect("chain_2 should have an inbox for chain_1");
+    assert_eq!(
+        inbox.next_block_height_to_receive()?,
+        BlockHeight::from(3),
+        "All three heights should have been received after delivering missing chunk"
+    );
 
     Ok(())
 }
