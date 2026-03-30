@@ -1349,6 +1349,7 @@ where
 
         // 2. Clear the chain state entirely and save.
         self.chain.clear();
+        self.knows_chain_is_active = false;
         self.save().await?;
         warn!(
             "Cleared chain state for {chain_id} up to height {tip_height}; \

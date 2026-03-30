@@ -4615,3 +4615,144 @@ where
 
     Ok(())
 }
+
+/// Tests the reset-on-incorrect-outcome recovery mechanism.
+///
+/// Corrupts a chain's `previous_message_blocks` in storage so that re-executing the
+/// next block produces a different `BlockExecutionOutcome`. First verifies that the
+/// corruption causes `IncorrectOutcome` without the recovery flag, then enables the
+/// flag and verifies that the chain is reset and re-executed successfully.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_reset_on_incorrect_outcome<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let storage = storage_builder.build().await?;
+    let mut env = TestEnvironment::new(storage.clone(), true, false).await;
+    let chain_desc = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await;
+    let chain_id = chain_desc.id();
+    let target_chain = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await;
+    let target_id = target_chain.id();
+
+    // Step 1: Create and fully process block 0 (transfer from chain to target).
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_desc.clone(),
+            sender_key_pair.public(),
+            target_id,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(95),
+            vec![],
+        )
+        .await;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_0.clone(), &())
+        .await?;
+
+    // Verify block 0 was processed.
+    {
+        let chain = env.worker().chain_state_view(chain_id).await?;
+        assert_eq!(
+            chain.tip_state.get().next_block_height,
+            BlockHeight::from(1)
+        );
+    }
+
+    // Step 2: Corrupt `previous_message_blocks` in storage. This directly affects
+    // the BlockExecutionOutcome (it's a field in the outcome struct), so the next
+    // block's computed outcome will differ from the certificate's.
+    {
+        let mut chain = storage.load_chain(chain_id).await?;
+        // Remove the entry for target_id. Block 1's locally computed outcome will
+        // then have no previous_message_blocks entry for target_id, while the
+        // certificate's outcome has one pointing to height 0.
+        chain.previous_message_blocks.remove(&target_id)?;
+        chain.save().await?;
+    }
+
+    // Step 3: Create block 1 certificate.
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_desc.clone(),
+            sender_key_pair.public(),
+            target_id,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Amount::from_tokens(92),
+            vec![&cert_0],
+        )
+        .await;
+
+    // Step 4: Verify that WITHOUT recovery, processing fails with IncorrectOutcome.
+    {
+        let worker_no_recovery = WorkerState::new(
+            "No-recovery worker".to_string(),
+            Some(env.worker().chain_worker_config.key_pair().unwrap().copy()),
+            storage.clone(),
+            super::DEFAULT_BLOCK_CACHE_SIZE,
+            super::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+        )
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true)
+        .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+
+        assert_matches!(
+            worker_no_recovery
+                .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+                .await,
+            Err(WorkerError::IncorrectOutcome { .. })
+        );
+    }
+
+    // Step 5: Now create a worker WITH recovery enabled and process the same block.
+    let worker_with_recovery = WorkerState::new(
+        "Recovery worker".to_string(),
+        Some(env.worker().chain_worker_config.key_pair().unwrap().copy()),
+        storage.clone(),
+        super::DEFAULT_BLOCK_CACHE_SIZE,
+        super::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+    )
+    .with_allow_inactive_chains(true)
+    .with_allow_messages_from_deprecated_epochs(true)
+    .with_reset_on_incorrect_outcome(true)
+    .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+
+    worker_with_recovery
+        .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+        .await?;
+
+    // Step 6: Verify recovery — chain should be at height 2 with correct state.
+    {
+        let chain = worker_with_recovery.chain_state_view(chain_id).await?;
+        assert_eq!(
+            chain.tip_state.get().next_block_height,
+            BlockHeight::from(2),
+            "Chain should have processed both blocks after recovery"
+        );
+        // Balance should be correct: 100 - 5 - 3 = 92.
+        assert_eq!(
+            *chain.execution_state.system.balance.get(),
+            Amount::from_tokens(92),
+            "Balance should be correct after re-execution"
+        );
+        // previous_message_blocks should be fixed (pointing to height 1, not 999).
+        let prev = chain.previous_message_blocks.get(&target_id).await?;
+        assert_eq!(
+            prev,
+            Some(BlockHeight::from(1)),
+            "previous_message_blocks should be corrected after re-execution"
+        );
+    }
+
+    Ok(())
+}
