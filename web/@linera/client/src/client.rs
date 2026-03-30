@@ -125,8 +125,32 @@ impl Client {
         make_chain(&self.inner, chain, options).await
     }
 
+    /// Cleanly shut down the client without starting the chain listener.
+    ///
+    /// # Errors
+    ///
+    /// If the context is being referenced by any other objects (chains,
+    /// applications…). Free these with `.free()` before disposing of this
+    /// object.
+    #[wasm_bindgen(js_name = asyncDispose)]
+    pub async fn async_dispose(self) -> Result<()> {
+        match self.inner {
+            ClientContextInner::Idb(context) => {
+                Arc::into_inner(context).ok_or(Error::new(
+                    "Client disposed while being referenced elsewhere",
+                ))?;
+            }
+            ClientContextInner::Mem(context) => {
+                Arc::into_inner(context).ok_or(Error::new(
+                    "Client disposed while being referenced elsewhere",
+                ))?;
+            }
+        }
+        Ok(())
+    }
+
     /// Starts the chain listener for background synchronization, consuming this
-    /// `Client` and returning a [`Client`].
+    /// `Client` and returning a [`RunningClient`].
     ///
     /// # Errors
     /// If the chain listener fails to start.
