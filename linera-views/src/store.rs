@@ -346,17 +346,6 @@ pub mod inactive_store {
             panic!("attempt to read from an inactive store!")
         }
 
-        #[allow(unreachable_code)]
-        fn read_multi_values_bytes_iter(
-            &self,
-            _keys: Vec<Vec<u8>>,
-        ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
-            async_stream::stream! {
-                panic!("attempt to iterate over an inactive store!");
-                yield Ok(None);
-            }
-        }
-
         async fn find_keys_by_prefix(
             &self,
             _key_prefix: &[u8],

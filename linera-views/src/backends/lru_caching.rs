@@ -335,10 +335,8 @@ where
                             store.read_value_bytes(key).await?
                         }
                     } else {
-                        match uncached_stream.next().await {
-                            Some(result) => result?,
-                            None => None,
-                        }
+                        uncached_stream.next().await
+                            .expect("read_multi_values_bytes_iter stream ended before yielding all values")?
                     };
 
                     #[cfg(with_metrics)]
