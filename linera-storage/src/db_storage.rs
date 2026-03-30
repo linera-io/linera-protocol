@@ -919,8 +919,7 @@ where
     fn read_certificates_iter(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> StorageStream<'_, Result<Option<ConfirmedBlockCertificate>, ViewError>>
-    {
+    ) -> StorageStream<'_, Result<Option<ConfirmedBlockCertificate>, ViewError>> {
         Box::pin(async_stream::stream! {
             let block_keys = get_block_keys();
             for hash in &hashes {
