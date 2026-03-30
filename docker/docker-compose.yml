@@ -117,6 +117,10 @@ services:
       - "0"
       - --storage-replication-factor
       - "1"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
     volumes:
       - .:/config
     labels:
@@ -146,6 +150,10 @@ services:
       - "1"
       - --storage-replication-factor
       - "1"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
     volumes:
       - .:/config
     labels:
@@ -175,6 +183,10 @@ services:
       - "2"
       - --storage-replication-factor
       - "1"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
     volumes:
       - .:/config
     labels:
@@ -204,6 +216,10 @@ services:
       - "3"
       - --storage-replication-factor
       - "1"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
     volumes:
       - .:/config
     labels:
