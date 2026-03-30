@@ -536,11 +536,19 @@ fn update_recipient_direct(
     certificate: &ConfirmedBlockCertificate,
 ) -> CrossChainRequest {
     let sender = certificate.inner().block().header.chain_id;
+    let previous_height = certificate
+        .inner()
+        .block()
+        .body
+        .previous_message_blocks
+        .get(&recipient)
+        .map(|(_, h)| *h);
     let bundles = certificate.message_bundles_for(recipient).collect();
     CrossChainRequest::UpdateRecipient {
         sender,
         recipient,
         bundles,
+        previous_height,
     }
 }
 
@@ -4441,6 +4449,310 @@ where
         bundles[1].origin, chain_1,
         "Non-priority chain bundle should be second"
     );
+
+    Ok(())
+}
+
+/// Tests the RevertConfirm recovery mechanism.
+///
+/// Simulates the scenario where the sender's outbox was drained (via a spurious
+/// confirmation) but the recipient still has anticipated messages in `removed_bundles`
+/// that were never delivered. The RevertConfirm mechanism should detect the gap,
+/// request the sender to re-add the missing heights to its outbox, and resend the
+/// bundles so the inbox can reconcile.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_revert_confirm_recovery<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(storage_builder.build().await?, true, false).await;
+    env.worker = env.worker.with_allow_revert_confirm(true);
+    let chain_1_desc = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2_desc = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await;
+    let chain_2 = chain_2_desc.id();
+
+    // Step 1: Create two transfer certificates from chain_1 to chain_2.
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(95),
+            vec![],
+        )
+        .await;
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Amount::from_tokens(92),
+            vec![&cert_0],
+        )
+        .await;
+
+    // Step 2: Process both certs on chain_1 (adds heights 0, 1 to outbox for chain_2).
+    env.worker()
+        .process_confirmed_block(cert_0.clone(), None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1.clone(), None)
+        .await?;
+
+    // Step 3: Deliver height 0 to chain_2 and confirm it on chain_1.
+    // (Normal flow for height 0 only.)
+    let actions = env
+        .worker()
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &cert_0))
+        .await?;
+    // The actions should contain a ConfirmUpdatedRecipient.
+    for request in actions.cross_chain_requests {
+        env.worker().handle_cross_chain_request(request).await?;
+    }
+
+    // Step 4: Send a spurious ConfirmUpdatedRecipient that claims chain_2 already
+    // received up to height 1. This drains height 1 from chain_1's outbox even
+    // though chain_2 never received it.
+    env.worker()
+        .handle_cross_chain_request(CrossChainRequest::ConfirmUpdatedRecipient {
+            sender: chain_1,
+            recipient: chain_2,
+            latest_height: BlockHeight::from(1),
+        })
+        .await?;
+
+    // Verify chain_1's outbox for chain_2 is now empty.
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        let outbox = chain.outboxes.try_load_entry(&chain_2).await?;
+        assert!(
+            outbox.is_none() || outbox.unwrap().queue.count() == 0,
+            "Outbox should be drained by the spurious confirm"
+        );
+    }
+
+    // Step 5: Create cert_2 from chain_1 (height 2), process it on chain_1, and
+    // deliver it to chain_2. The UpdateRecipient carries previous_height=Some(1)
+    // (cert_2's predecessor for chain_2 is cert_1 at height 1). Since chain_2's
+    // next_height_to_receive is only 1 (it received height 0 but not 1), the
+    // proactive gap detection fires immediately — no need for chain_2 to have
+    // consumed the missing message first.
+    let cert_2 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(2),
+            Vec::new(),
+            Amount::from_tokens(90),
+            vec![&cert_1],
+        )
+        .await;
+    // Process cert_2 on chain_1 so the block is in confirmed_log.
+    env.worker()
+        .process_confirmed_block(cert_2.clone(), None)
+        .await?;
+
+    // Now manually deliver height 2's cross-chain update to chain_2.
+    let actions = env
+        .worker()
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &cert_2))
+        .await?;
+    // Should contain a RevertConfirm (not a ConfirmUpdatedRecipient).
+    assert!(
+        actions
+            .cross_chain_requests
+            .iter()
+            .any(|r| matches!(r, CrossChainRequest::RevertConfirm { .. })),
+        "Expected RevertConfirm but got: {:?}",
+        actions.cross_chain_requests,
+    );
+    // Now process the full chain of requests (RevertConfirm → resend → confirm).
+    let mut requests = std::collections::VecDeque::from(actions.cross_chain_requests);
+    let mut iterations = 0;
+    while let Some(request) = requests.pop_front() {
+        iterations += 1;
+        assert!(iterations < 20, "Too many iterations in cross-chain loop");
+        let actions = env.worker().handle_cross_chain_request(request).await?;
+        requests.extend(actions.cross_chain_requests);
+    }
+
+    // Step 7: Verify recovery — chain_2 received all three heights.
+    {
+        let chain = env.worker().chain_state_view(chain_2).await?;
+        let inbox = chain
+            .inboxes
+            .try_load_entry(&chain_1)
+            .await?
+            .expect("chain_2 should have an inbox for chain_1");
+        assert_eq!(
+            inbox.removed_bundles.count(),
+            0,
+            "removed_bundles should be empty"
+        );
+        // Heights 0, 1, 2 should all be in added_bundles (delivered but not yet
+        // consumed by a block on chain_2).
+        assert_eq!(
+            inbox.added_bundles.count(),
+            3,
+            "all three heights should have been delivered"
+        );
+    }
+
+    Ok(())
+}
+
+/// Tests the reset-on-incorrect-outcome recovery mechanism.
+///
+/// Corrupts a chain's `previous_message_blocks` in storage so that re-executing the
+/// next block produces a different `BlockExecutionOutcome`. First verifies that the
+/// corruption causes `IncorrectOutcome` without the recovery flag, then enables the
+/// flag and verifies that the chain is reset and re-executed successfully.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_reset_on_incorrect_outcome<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let storage = storage_builder.build().await?;
+    let mut env = TestEnvironment::new(storage.clone(), true, false).await;
+    let chain_desc = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await;
+    let chain_id = chain_desc.id();
+    let target_chain = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await;
+    let target_id = target_chain.id();
+
+    // Step 1: Create and fully process block 0 (transfer from chain to target).
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_desc.clone(),
+            sender_key_pair.public(),
+            target_id,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(95),
+            vec![],
+        )
+        .await;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_0.clone(), &())
+        .await?;
+
+    // Verify block 0 was processed.
+    {
+        let chain = env.worker().chain_state_view(chain_id).await?;
+        assert_eq!(
+            chain.tip_state.get().next_block_height,
+            BlockHeight::from(1)
+        );
+    }
+
+    // Step 2: Corrupt `previous_message_blocks` in storage. This directly affects
+    // the BlockExecutionOutcome (it's a field in the outcome struct), so the next
+    // block's computed outcome will differ from the certificate's.
+    {
+        let mut chain = storage.load_chain(chain_id).await?;
+        // Remove the entry for target_id. Block 1's locally computed outcome will
+        // then have no previous_message_blocks entry for target_id, while the
+        // certificate's outcome has one pointing to height 0.
+        chain.previous_message_blocks.remove(&target_id)?;
+        chain.save().await?;
+    }
+
+    // Step 3: Create block 1 certificate.
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_desc.clone(),
+            sender_key_pair.public(),
+            target_id,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Amount::from_tokens(92),
+            vec![&cert_0],
+        )
+        .await;
+
+    // Step 4: Verify that WITHOUT recovery, processing fails with IncorrectOutcome.
+    {
+        let worker_no_recovery = WorkerState::new(
+            "No-recovery worker".to_string(),
+            Some(env.worker().chain_worker_config.key_pair().unwrap().copy()),
+            storage.clone(),
+            super::DEFAULT_BLOCK_CACHE_SIZE,
+            super::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+        )
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true)
+        .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+
+        assert_matches!(
+            worker_no_recovery
+                .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+                .await,
+            Err(WorkerError::IncorrectOutcome { .. })
+        );
+    }
+
+    // Step 5: Now create a worker WITH recovery enabled and process the same block.
+    let worker_with_recovery = WorkerState::new(
+        "Recovery worker".to_string(),
+        Some(env.worker().chain_worker_config.key_pair().unwrap().copy()),
+        storage.clone(),
+        super::DEFAULT_BLOCK_CACHE_SIZE,
+        super::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+    )
+    .with_allow_inactive_chains(true)
+    .with_allow_messages_from_deprecated_epochs(true)
+    .with_reset_on_incorrect_outcome(Some(0))
+    .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+
+    worker_with_recovery
+        .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+        .await?;
+
+    // Step 6: Verify recovery — chain should be at height 2 with correct state.
+    {
+        let chain = worker_with_recovery.chain_state_view(chain_id).await?;
+        assert_eq!(
+            chain.tip_state.get().next_block_height,
+            BlockHeight::from(2),
+            "Chain should have processed both blocks after recovery"
+        );
+        // Balance should be correct: 100 - 5 - 3 = 92.
+        assert_eq!(
+            *chain.execution_state.system.balance.get(),
+            Amount::from_tokens(92),
+            "Balance should be correct after re-execution"
+        );
+        // previous_message_blocks should be fixed (pointing to height 1, not 999).
+        let prev = chain.previous_message_blocks.get(&target_id).await?;
+        assert_eq!(
+            prev,
+            Some(BlockHeight::from(1)),
+            "previous_message_blocks should be corrected after re-execution"
+        );
+    }
 
     Ok(())
 }

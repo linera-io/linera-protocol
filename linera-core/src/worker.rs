@@ -46,7 +46,8 @@ pub(crate) use crate::chain_worker::{
 };
 use crate::{
     chain_worker::{
-        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
+        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest,
+        CrossChainUpdateResult, DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -363,13 +364,10 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
-    #[error("confirmed_log entry at height {height} for chain {chain_id:8} not found")]
-    ConfirmedLogEntryNotFound {
-        height: BlockHeight,
-        chain_id: ChainId,
-    },
-    #[error("preprocessed_blocks entry at height {height} for chain {chain_id:8} not found")]
-    PreprocessedBlocksEntryNotFound {
+    #[error(
+        "confirmed_log/preprocessed_blocks entry at height {height} for chain {chain_id} not found"
+    )]
+    ConfirmedBlockHashNotFound {
         height: BlockHeight,
         chain_id: ChainId,
     },
@@ -426,8 +424,7 @@ impl WorkerError {
             WorkerError::BcsError(_)
             | WorkerError::InvalidCrossChainRequest
             | WorkerError::ViewError(_)
-            | WorkerError::ConfirmedLogEntryNotFound { .. }
-            | WorkerError::PreprocessedBlocksEntryNotFound { .. }
+            | WorkerError::ConfirmedBlockHashNotFound { .. }
             | WorkerError::MissingNetworkDescription
             | WorkerError::ChainActorSendError { .. }
             | WorkerError::ChainActorRecvError { .. }
@@ -592,6 +589,19 @@ where
     #[instrument(level = "trace", skip(self, value))]
     pub fn with_long_lived_services(mut self, value: bool) -> Self {
         self.chain_worker_config.long_lived_services = value;
+        self
+    }
+
+    #[instrument(level = "trace", skip(self, value))]
+    pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
+        self.chain_worker_config.allow_revert_confirm = value;
+        self
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_reset_on_incorrect_outcome(mut self, minutes: Option<u64>) -> Self {
+        self.chain_worker_config.reset_on_incorrect_outcome =
+            minutes.map(|m| Duration::from_secs(m * 60));
         self
     }
 
@@ -919,11 +929,13 @@ where
         origin: ChainId,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+        previous_height: Option<BlockHeight>,
+    ) -> Result<CrossChainUpdateResult, WorkerError> {
         self.query_chain_worker(recipient, move |callback| {
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
                 bundles,
+                previous_height,
                 callback,
             }
         })
@@ -1291,26 +1303,41 @@ where
                 sender,
                 recipient,
                 bundles,
+                previous_height,
             } => {
                 let mut actions = NetworkActions::default();
                 let origin = sender;
-                let Some(height) = self
-                    .process_cross_chain_update(origin, recipient, bundles)
+                match self
+                    .process_cross_chain_update(origin, recipient, bundles, previous_height)
                     .await?
-                else {
-                    return Ok(actions);
-                };
-                actions.notifications.push(Notification {
-                    chain_id: recipient,
-                    reason: Reason::NewIncomingBundle { origin, height },
-                });
-                actions
-                    .cross_chain_requests
-                    .push(CrossChainRequest::ConfirmUpdatedRecipient {
-                        sender,
-                        recipient,
-                        latest_height: height,
-                    });
+                {
+                    CrossChainUpdateResult::NothingToDo => {}
+                    CrossChainUpdateResult::Updated(height) => {
+                        actions.notifications.push(Notification {
+                            chain_id: recipient,
+                            reason: Reason::NewIncomingBundle { origin, height },
+                        });
+                        actions.cross_chain_requests.push(
+                            CrossChainRequest::ConfirmUpdatedRecipient {
+                                sender,
+                                recipient,
+                                latest_height: height,
+                            },
+                        );
+                    }
+                    CrossChainUpdateResult::GapDetected {
+                        origin,
+                        missing_height,
+                    } => {
+                        actions
+                            .cross_chain_requests
+                            .push(CrossChainRequest::RevertConfirm {
+                                sender: origin,
+                                recipient,
+                                missing_height,
+                            });
+                    }
+                }
                 Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
@@ -1327,6 +1354,20 @@ where
                 })
                 .await?;
                 Ok(NetworkActions::default())
+            }
+            CrossChainRequest::RevertConfirm {
+                sender,
+                recipient,
+                missing_height,
+            } => {
+                self.query_chain_worker(sender, move |callback| {
+                    ChainWorkerRequest::HandleRevertConfirm {
+                        recipient,
+                        missing_height,
+                        callback,
+                    }
+                })
+                .await
             }
         }
     }

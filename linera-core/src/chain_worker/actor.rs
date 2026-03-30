@@ -33,7 +33,11 @@ use linera_views::context::{Context, InactiveContext};
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, Instrument as _};
 
-use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
+use super::{
+    config::ChainWorkerConfig,
+    state::{ChainWorkerState, CrossChainUpdateResult},
+    DeliveryNotifier,
+};
 use crate::{
     chain_worker::BlockOutcome,
     client::ListeningMode,
@@ -171,8 +175,9 @@ where
     ProcessCrossChainUpdate {
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
+        previous_height: Option<BlockHeight>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
+        callback: oneshot::Sender<Result<CrossChainUpdateResult, WorkerError>>,
     },
 
     /// Handle cross-chain request to confirm that the recipient was updated.
@@ -181,6 +186,14 @@ where
         latest_height: BlockHeight,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(), WorkerError>>,
+    },
+
+    /// Handle a `RevertConfirm` request to re-add outbox entries and resend bundles.
+    HandleRevertConfirm {
+        recipient: ChainId,
+        missing_height: BlockHeight,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<NetworkActions, WorkerError>>,
     },
 
     /// Handle a [`ChainInfoQuery`].

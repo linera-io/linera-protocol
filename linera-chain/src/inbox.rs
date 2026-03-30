@@ -123,6 +123,14 @@ pub(crate) enum InboxError {
         messages from the same origin"
     )]
     UnskippableBundle { bundle: MessageBundle },
+    #[error(
+        "Inbox gap: expected bundle at height {expected_height} \
+        but received height {actual_height}"
+    )]
+    GapDetected {
+        expected_height: BlockHeight,
+        actual_height: BlockHeight,
+    },
 }
 
 impl From<&MessageBundle> for Cursor {
@@ -174,6 +182,15 @@ impl From<(ChainId, ChainId, InboxError)> for ChainError {
                 chain_id,
                 origin,
                 bundle: Box::new(bundle),
+            },
+            InboxError::GapDetected {
+                expected_height,
+                actual_height,
+            } => ChainError::InboxGapDetected {
+                chain_id,
+                origin,
+                expected_height,
+                actual_height,
             },
         }
     }
@@ -282,7 +299,8 @@ where
         // Find if the bundle was removed ahead of time.
         let newly_added = match self.removed_bundles.front().await? {
             Some(previous_bundle) => {
-                if Cursor::from(&previous_bundle) == cursor {
+                let front_cursor = Cursor::from(&previous_bundle);
+                if front_cursor == cursor {
                     // We already executed this bundle by anticipation. Remove it from
                     // the queue.
                     ensure!(
@@ -297,11 +315,18 @@ where
                     metrics::REMOVED_BUNDLES
                         .with_label_values(&[])
                         .observe(self.removed_bundles.count() as f64);
+                } else if cursor > front_cursor {
+                    // The incoming bundle is ahead of the earliest anticipated
+                    // removal — the bundles in between were never delivered.
+                    return Err(InboxError::GapDetected {
+                        expected_height: previous_bundle.height,
+                        actual_height: bundle.height,
+                    });
                 } else {
                     // The receiver has already executed a later bundle from the same
                     // sender ahead of time so we should skip this one.
                     ensure!(
-                        cursor < Cursor::from(&previous_bundle) && bundle.is_skippable(),
+                        bundle.is_skippable(),
                         InboxError::UnexpectedBundle {
                             previous_bundle,
                             bundle,
