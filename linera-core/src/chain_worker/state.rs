@@ -1037,14 +1037,23 @@ where
             };
         // We should always agree on the messages and state hash.
         if outcome != verified_outcome {
-            if self.config.reset_on_incorrect_outcome {
+            if let Some(min_duration) = self.config.reset_on_incorrect_outcome {
+                let block_zero_time = *self.chain.block_zero_executed_at.get();
+                let elapsed = local_time.duration_since(block_zero_time);
+                if elapsed >= min_duration {
+                    warn!(
+                        "IncorrectOutcome for block {height} on chain {chain_id}; \
+                        resetting chain state and re-executing"
+                    );
+                    return self
+                        .reset_and_reexecute_chain(certificate, notify_when_messages_are_delivered)
+                        .await;
+                }
                 warn!(
                     "IncorrectOutcome for block {height} on chain {chain_id}; \
-                    resetting chain state and re-executing"
+                    not resetting because only {elapsed:?} elapsed since last \
+                    block 0 execution (minimum: {min_duration:?})"
                 );
-                return self
-                    .reset_and_reexecute_chain(certificate, notify_when_messages_are_delivered)
-                    .await;
             }
             return Err(WorkerError::IncorrectOutcome {
                 submitted: Box::new(outcome),

@@ -4724,7 +4724,7 @@ where
     )
     .with_allow_inactive_chains(true)
     .with_allow_messages_from_deprecated_epochs(true)
-    .with_reset_on_incorrect_outcome(true)
+    .with_reset_on_incorrect_outcome(Some(0))
     .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
 
     worker_with_recovery
