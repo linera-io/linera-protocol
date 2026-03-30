@@ -10,6 +10,10 @@ use std::{
     sync::{self, Arc},
 };
 
+/// Maximum estimated serialized size of bundles in a single `UpdateRecipient` message.
+/// Set to 70% of 16 MiB to leave room for message framing overhead.
+const CROSS_CHAIN_CHUNK_LIMIT: usize = 16 * 1024 * 1024 * 7 / 10;
+
 use futures::future::Either;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -585,6 +589,7 @@ where
             }
         }
 
+        let sender = self.chain.chain_id();
         let mut cross_chain_requests = Vec::new();
         for (recipient, heights) in heights_by_recipient {
             // Extract the predecessor height for this recipient from the first
@@ -597,23 +602,40 @@ where
                 Some(*prev_height)
             });
             let mut bundles = Vec::new();
+            let mut bundles_size: usize = 0;
             for height in heights {
                 let hashed_block = height_to_blocks
                     .get(&height)
                     .ok_or_else(|| ChainError::InternalError("missing block".to_string()))?;
-                bundles.extend(
-                    hashed_block
-                        .inner()
-                        .message_bundles_for(recipient, hashed_block.hash()),
-                );
+                let new_bundles: Vec<_> = hashed_block
+                    .inner()
+                    .message_bundles_for(recipient, hashed_block.hash())
+                    .collect();
+                let new_size: usize = new_bundles
+                    .iter()
+                    .map(|(_epoch, bundle)| bundle.estimated_size())
+                    .sum();
+                // If adding this block's bundles would exceed the gRPC fill limit,
+                // flush the current batch first.
+                if !bundles.is_empty() && bundles_size + new_size > CROSS_CHAIN_CHUNK_LIMIT {
+                    cross_chain_requests.push(CrossChainRequest::UpdateRecipient {
+                        sender,
+                        recipient,
+                        bundles: std::mem::take(&mut bundles),
+                        previous_height,
+                    });
+                    bundles_size = 0;
+                }
+                bundles.extend(new_bundles);
+                bundles_size += new_size;
             }
-            let request = CrossChainRequest::UpdateRecipient {
-                sender: self.chain.chain_id(),
-                recipient,
-                bundles,
-                previous_height,
-            };
-            cross_chain_requests.push(request);
+            if !bundles.is_empty() {
+                cross_chain_requests.push(CrossChainRequest::UpdateRecipient {
+                    sender,
+                    recipient,
+                    bundles,
+                });
+            }
         }
         Ok(cross_chain_requests)
     }
