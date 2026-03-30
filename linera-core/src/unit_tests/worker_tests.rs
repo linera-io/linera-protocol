@@ -4545,67 +4545,12 @@ where
         );
     }
 
-    // Step 5: Simulate chain_2 anticipating the message from height 1. Have chain_2
-    // process a confirmed block that consumes both height-0 and height-1 bundles.
-    // Height 0 was already delivered (present in added_bundles), but height 1 was
-    // not (goes to removed_bundles as anticipated).
-    let bundle_h0 = cert_0
-        .message_bundles_for(chain_2)
-        .map(|(_, b)| b)
-        .next()
-        .expect("cert_0 should have a bundle for chain_2");
-    let bundle_h1 = cert_1
-        .message_bundles_for(chain_2)
-        .map(|(_, b)| b)
-        .next()
-        .expect("cert_1 should have a bundle for chain_2");
-    let chain_2_cert = env
-        .make_simple_transfer_certificate(
-            chain_2_desc.clone(),
-            AccountPublicKey::test_key(2),
-            chain_1,
-            Amount::from_tokens(1),
-            vec![
-                IncomingBundle {
-                    origin: chain_1,
-                    bundle: bundle_h0,
-                    action: MessageAction::Accept,
-                },
-                IncomingBundle {
-                    origin: chain_1,
-                    bundle: bundle_h1,
-                    action: MessageAction::Accept,
-                },
-            ],
-            // chain_2 received 5 tokens (h0) + 3 tokens (h1) - 1 sent = 8, plus initial 1.
-            Amount::from_tokens(8),
-            vec![],
-        )
-        .await;
-    env.worker()
-        .process_confirmed_block(chain_2_cert.clone(), None)
-        .await?;
-
-    // Verify chain_2 has height 1 in removed_bundles (anticipated but not delivered).
-    {
-        let chain = env.worker().chain_state_view(chain_2).await?;
-        let inbox = chain
-            .inboxes
-            .try_load_entry(&chain_1)
-            .await?
-            .expect("chain_2 should have an inbox for chain_1");
-        assert!(
-            inbox.removed_bundles.count() > 0,
-            "chain_2 should have anticipated removal for height 1"
-        );
-    }
-
-    // Step 6: Create cert_2 from chain_1 (height 2), process it on chain_1, and
-    // deliver it to chain_2. The cross-chain update will try to deliver height 2
-    // to chain_2, but chain_2's inbox has removed_bundles=[height 1]. This triggers:
-    // 1. GapDetected → RevertConfirm sent to chain_1
-    // 2. chain_1 re-adds height 1 to outbox and resends
-    // 3. chain_2 receives height 1 (reconciles removed_bundles), then height 2
+    // Step 5: Create cert_2 from chain_1 (height 2), process it on chain_1, and
+    // deliver it to chain_2. The UpdateRecipient carries previous_height=Some(1)
+    // (cert_2's predecessor for chain_2 is cert_1 at height 1). Since chain_2's
+    // next_height_to_receive is only 1 (it received height 0 but not 1), the
+    // proactive gap detection fires immediately — no need for chain_2 to have
+    // consumed the missing message first.
     let cert_2 = env
         .make_simple_transfer_certificate(
             chain_1_desc.clone(),
@@ -4646,7 +4591,7 @@ where
         requests.extend(actions.cross_chain_requests);
     }
 
-    // Step 7: Verify recovery — chain_2's inbox should have no removed_bundles.
+    // Step 7: Verify recovery — chain_2 received all three heights.
     {
         let chain = env.worker().chain_state_view(chain_2).await?;
         let inbox = chain
@@ -4657,7 +4602,14 @@ where
         assert_eq!(
             inbox.removed_bundles.count(),
             0,
-            "removed_bundles should be empty after recovery"
+            "removed_bundles should be empty"
+        );
+        // Heights 0, 1, 2 should all be in added_bundles (delivered but not yet
+        // consumed by a block on chain_2).
+        assert_eq!(
+            inbox.added_bundles.count(),
+            3,
+            "all three heights should have been delivered"
         );
     }
 
