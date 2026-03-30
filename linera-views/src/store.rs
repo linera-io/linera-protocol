@@ -3,7 +3,7 @@
 
 //! This provides the trait definitions for the stores.
 
-use std::{fmt::Debug, future::Future};
+use std::{fmt::Debug, future::Future, pin::Pin};
 
 use futures::stream::Stream;
 use serde::{de::DeserializeOwned, Serialize};
@@ -15,6 +15,15 @@ use crate::{
     common::from_bytes_option,
     ViewError,
 };
+
+/// A boxed stream for reading multiple values from a key-value store.
+#[cfg(not(web))]
+pub type ReadValueStream<'a, E> =
+    Pin<Box<dyn Stream<Item = Result<Option<Vec<u8>>, E>> + Send + 'a>>;
+
+/// A boxed stream for reading multiple values from a key-value store.
+#[cfg(web)]
+pub type ReadValueStream<'a, E> = Pin<Box<dyn Stream<Item = Result<Option<Vec<u8>>, E>> + 'a>>;
 
 /// The error type for the key-value stores.
 pub trait KeyValueStoreError:
@@ -74,22 +83,22 @@ pub trait ReadableKeyValueStore: WithError {
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
-    /// Returns a stream for reading multiple values using the provided `keys`.
+    /// Returns a boxed stream for reading multiple values using the provided `keys`.
     /// The stream yields `Result<Option<Vec<u8>>, Self::Error>` where:
     /// - `Ok(None)` when a key doesn't exist
     /// - `Ok(Some(value))` when a key exists with a value
     /// - `Err(e)` on error
+    ///
     /// The default implementation fetches all values at once and yields them one by one.
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
-        async_stream::stream! {
+    /// Returns a boxed stream to avoid deeply nested monomorphized types that cause
+    /// stack overflows when multiple store wrapper layers are composed.
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
+        Box::pin(async_stream::stream! {
             let values = self.read_multi_values_bytes(&keys).await?;
             for value in values {
                 yield Ok(value);
             }
-        }
+        })
     }
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.

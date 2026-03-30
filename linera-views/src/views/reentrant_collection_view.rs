@@ -1010,7 +1010,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         }
 
         // Third, create the iter from the "keys"
-        let store_iter = Box::pin(self.context.store().read_multi_values_bytes_iter(keys));
+        let store_iter = self.context.store().read_multi_values_bytes_iter(keys);
 
         // Create the iterator struct with context
         Ok(ByteReentrantCollectionViewTryLoadAllEntries {

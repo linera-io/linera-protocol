@@ -6066,7 +6066,6 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "async-stream",
  "async-trait",
  "base64ct",
  "bcs",

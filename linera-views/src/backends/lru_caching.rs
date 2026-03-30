@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use futures::stream::{Stream, StreamExt};
+use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 
 #[cfg(with_testing)]
@@ -15,7 +15,9 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadValueStream, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -294,11 +296,8 @@ where
         Ok(result)
     }
 
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
-        async_stream::stream! {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
+        Box::pin(async_stream::stream! {
             if let Some(cache) = &self.cache {
                 let mut is_cached = Vec::new();
                 let mut uncached_keys = Vec::new();
@@ -315,7 +314,7 @@ where
                     }
                 }
 
-                let mut uncached_stream = Box::pin(self.store.read_multi_values_bytes_iter(uncached_keys));
+                let mut uncached_stream = self.store.read_multi_values_bytes_iter(uncached_keys);
 
                 for (i, key) in keys.iter().enumerate() {
                     let value = if is_cached[i] {
@@ -347,12 +346,12 @@ where
                     yield Ok(value);
                 }
             } else {
-                let mut stream = Box::pin(self.store.read_multi_values_bytes_iter(keys));
+                let mut stream = self.store.read_multi_values_bytes_iter(keys);
                 while let Some(item) = stream.next().await {
                     yield item;
                 }
             }
-        }
+        })
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

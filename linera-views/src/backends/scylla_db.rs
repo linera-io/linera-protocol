@@ -14,7 +14,7 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use futures::{future::join_all, stream::Stream, StreamExt as _};
+use futures::{future::join_all, StreamExt as _};
 use linera_base::{ensure, util::future::FutureSyncExt as _};
 use scylla::{
     client::{
@@ -47,8 +47,8 @@ use crate::{
     journaling::{JournalingError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadValueStream,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -658,17 +658,14 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         Ok(results.into_iter().flatten().collect())
     }
 
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
         let chunks = keys
             .chunks(MAX_MULTI_KEYS)
             .map(|chunk| chunk.to_vec())
             .collect::<Vec<_>>();
         let store = self.clone();
 
-        async_stream::stream! {
+        Box::pin(async_stream::stream! {
             for chunk in chunks {
                 let values = {
                     let store_ref = store.store.deref();
@@ -681,7 +678,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
                     yield Ok(value);
                 }
             }
-        }
+        })
     }
 
     async fn find_keys_by_prefix(

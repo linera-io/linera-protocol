@@ -10,7 +10,7 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use futures::{future::join_all, stream::Stream};
+use futures::future::join_all;
 use linera_base::{ensure, util::future::FutureSyncExt as _};
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredDatabase;
@@ -19,7 +19,9 @@ use linera_views::store::TestKeyValueDatabase;
 use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingDatabase,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadValueStream, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
@@ -211,13 +213,10 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         }
     }
 
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
         let store = self.clone();
 
-        async_stream::stream! {
+        Box::pin(async_stream::stream! {
             let mut current_position = 0;
             while current_position < keys.len() {
                 // Calculate the end position for this batch
@@ -231,7 +230,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                     yield Ok(value);
                 }
             }
-        }
+        })
     }
 
     async fn find_keys_by_prefix(

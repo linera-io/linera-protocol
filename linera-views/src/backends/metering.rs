@@ -9,7 +9,6 @@ use std::{
 };
 
 use convert_case::{Case, Casing};
-use futures::stream::Stream;
 use linera_base::prometheus_util::{
     exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
     MeasureLatency as _,
@@ -20,7 +19,9 @@ use prometheus::{exponential_buckets, HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadValueStream, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 
 #[derive(Clone)]
@@ -417,10 +418,7 @@ where
         self.store.read_multi_values_bytes(keys).await
     }
 
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
         // Record metrics for the iterator creation
         self.counter
             .read_multi_values_num_entries

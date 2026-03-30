@@ -1312,7 +1312,7 @@ where
             let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
             let store = self.database.open_shared(&index_root_key)?;
             let height_keys: Vec<Vec<u8>> = heights.iter().map(|h| to_height_key(*h)).collect();
-            let mut stream = Box::pin(store.read_multi_values_bytes_iter(height_keys));
+            let mut stream = store.read_multi_values_bytes_iter(height_keys);
             while let Some(result) = stream.next().await {
                 let opt = result?;
                 let hash = opt

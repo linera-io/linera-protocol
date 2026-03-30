@@ -19,7 +19,6 @@
 //! time the data in a block are written, the journal header is updated in the same
 //! transaction to mark the block as processed.
 
-use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use thiserror::Error;
@@ -27,8 +26,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
-        DirectKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError, WritableKeyValueStore,
+        DirectKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadValueStream,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
 };
@@ -193,10 +192,7 @@ where
         Ok(self.store.read_multi_values_bytes(keys).await?)
     }
 
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
         self.store.read_multi_values_bytes_iter(keys)
     }
 
