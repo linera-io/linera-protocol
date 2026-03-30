@@ -157,8 +157,8 @@ impl Client {
     #[wasm_bindgen]
     pub async fn start(self) -> Result<RunningClient> {
         let cancellation_token = CancellationToken::new();
-
         let chain_listener_config = self.chain_listener_config;
+
         let chain_listener_handle = match (self.storage, &self.inner) {
             (Storage::Idb(storage), ClientContextInner::Idb(client)) => {
                 let handle = start_listener(
@@ -416,7 +416,7 @@ async fn start_listener<C: linera_client::chain_listener::ClientContext + 'stati
         Result<<C::Environment as linera_core::Environment>::Storage, Rc<linera_client::Error>>,
     >,
 > {
-    tracing::debug!("Client: starting chain listener...");
+    tracing::debug!("starting chain listener...");
     let chain_listener = ChainListener::new(
         config,
         context,
@@ -427,7 +427,6 @@ async fn start_listener<C: linera_client::chain_listener::ClientContext + 'stati
     )
     .run()
     .await?;
-    tracing::debug!("Client: chain listener started");
 
     let (run_chain_listener, chain_listener_handle) = async move {
         let result = chain_listener.await.map_err(|error| {
