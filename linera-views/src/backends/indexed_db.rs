@@ -215,7 +215,7 @@ impl ReadableKeyValueStore for IndexedDbStore {
         let range = interval_to_range(&self.start_key, &key_interval);
         let prefix_len = self.start_key.len() as u32;
         let key_values = self
-            .with_object_store(|object_store| async move {
+            .with_object_store(move |object_store| async move {
                 let mut key_values = vec![];
                 let mut cursor = object_store.cursor().range(range)?.open().await?;
 
@@ -239,9 +239,9 @@ impl ReadableKeyValueStore for IndexedDbStore {
                     cursor.advance(1).await?;
                 }
 
-                Ok(key_values)
+                Ok::<_, IndexedDbStoreError>(key_values)
             })
-            .await?;
+            .await??;
         let is_finished = key_interval
             .limit
             .is_none_or(|limit| key_values.len() < limit);
