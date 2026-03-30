@@ -47,16 +47,10 @@ impl Clone for ChainClientInner {
     }
 }
 
-/// Deferred chain listener state, kept until `start()` is called.
-enum DeferredListener {
-    Idb {
-        storage: IdbStorage,
-        config: ChainListenerConfig,
-    },
-    Mem {
-        storage: MemStorage,
-        config: ChainListenerConfig,
-    },
+/// Storage backend, dispatching between IndexedDB and in-memory.
+pub(crate) enum Storage {
+    Idb(IdbStorage),
+    Mem(MemStorage),
 }
 
 #[derive(Default, serde::Deserialize, tsify::Tsify)]
@@ -84,7 +78,8 @@ pub enum StorageKind {
 #[wasm_bindgen]
 pub struct Client {
     inner: ClientContextInner,
-    deferred_listener: DeferredListener,
+    storage: Storage,
+    chain_listener_config: ChainListenerConfig,
 }
 
 #[wasm_bindgen]
@@ -139,12 +134,24 @@ impl Client {
     pub async fn start(self) -> Result<RunningClient> {
         let cancellation_token = CancellationToken::new();
 
-        let chain_listener_result = match (self.deferred_listener, &self.inner) {
-            (DeferredListener::Idb { storage, config }, ClientContextInner::Idb(client)) => {
-                start_listener(config, client.clone(), storage, cancellation_token.clone()).await?
+        let chain_listener_result = match (&self.storage, &self.inner) {
+            (Storage::Idb(storage), ClientContextInner::Idb(client)) => {
+                start_listener(
+                    self.chain_listener_config,
+                    client.clone(),
+                    storage.clone(),
+                    cancellation_token.clone(),
+                )
+                .await?
             }
-            (DeferredListener::Mem { storage, config }, ClientContextInner::Mem(client)) => {
-                start_listener(config, client.clone(), storage, cancellation_token.clone()).await?
+            (Storage::Mem(storage), ClientContextInner::Mem(client)) => {
+                start_listener(
+                    self.chain_listener_config,
+                    client.clone(),
+                    storage.clone(),
+                    cancellation_token.clone(),
+                )
+                .await?
             }
             _ => unreachable!("mismatched storage and client context"),
         };
@@ -205,10 +212,8 @@ impl Client {
 
         Ok(Client {
             inner: ClientContextInner::Idb(client),
-            deferred_listener: DeferredListener::Idb {
-                storage,
-                config: chain_listener_config,
-            },
+            storage: Storage::Idb(storage),
+            chain_listener_config,
         })
     }
 
@@ -249,10 +254,8 @@ impl Client {
 
         Ok(Client {
             inner: ClientContextInner::Mem(client),
-            deferred_listener: DeferredListener::Mem {
-                storage,
-                config: chain_listener_config,
-            },
+            storage: Storage::Mem(storage),
+            chain_listener_config,
         })
     }
 }
