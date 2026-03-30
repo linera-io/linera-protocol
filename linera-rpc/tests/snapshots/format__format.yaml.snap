@@ -1360,13 +1360,15 @@ SystemOperation:
         NEWTYPE:
           TYPENAME: Epoch
     13:
-      UpdateStreams:
-        NEWTYPE:
-          SEQ:
-            TUPLE:
-              - TYPENAME: ChainId
-              - TYPENAME: StreamId
-              - U32
+      UpdateStream:
+        STRUCT:
+          - application_id:
+              TYPENAME: ApplicationId
+          - chain_id:
+              TYPENAME: ChainId
+          - stream_id:
+              TYPENAME: StreamId
+          - next_index: U32
 TimeDelta:
   NEWTYPESTRUCT: U64
 Timeout:

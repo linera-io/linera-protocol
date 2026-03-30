@@ -2679,8 +2679,8 @@ library BridgeTypes {
         Epoch process_new_epoch;
         // choice=12 corresponds to ProcessRemovedEpoch
         Epoch process_removed_epoch;
-        // choice=13 corresponds to UpdateStreams
-        tuple_ChainId_StreamId_uint32[] update_streams;
+        // choice=13 corresponds to UpdateStream
+        SystemOperation_UpdateStream update_stream;
     }
 
     function SystemOperation_case_transfer(SystemOperation_Transfer memory transfer_)
@@ -2699,8 +2699,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(0), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(0), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_claim(SystemOperation_Claim memory claim)
@@ -2719,8 +2719,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(1), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(1), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_open_chain(OpenChainConfig memory open_chain)
@@ -2739,8 +2739,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(2), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(2), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_close_chain()
@@ -2760,8 +2760,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(3), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(3), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_change_ownership(SystemOperation_ChangeOwnership memory change_ownership)
@@ -2780,8 +2780,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(4), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(4), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_change_application_permissions(ApplicationPermissions memory change_application_permissions)
@@ -2800,8 +2800,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(5), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(5), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_publish_module(SystemOperation_PublishModule memory publish_module)
@@ -2820,8 +2820,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(6), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(6), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_publish_data_blob(SystemOperation_PublishDataBlob memory publish_data_blob)
@@ -2840,8 +2840,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(7), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(7), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_verify_blob(SystemOperation_VerifyBlob memory verify_blob)
@@ -2860,8 +2860,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(8), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(8), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_create_application(SystemOperation_CreateApplication memory create_application)
@@ -2880,8 +2880,8 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(9), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(9), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_admin(AdminOperation memory admin)
@@ -2900,8 +2900,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(10), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(10), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_process_new_epoch(Epoch memory process_new_epoch)
@@ -2920,8 +2920,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_removed_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(11), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(11), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function SystemOperation_case_process_removed_epoch(Epoch memory process_removed_epoch)
@@ -2940,11 +2940,11 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
-        return SystemOperation(uint8(12), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(uint8(12), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
-    function SystemOperation_case_update_streams(tuple_ChainId_StreamId_uint32[] memory update_streams)
+    function SystemOperation_case_update_stream(SystemOperation_UpdateStream memory update_stream)
         internal
         pure
         returns (SystemOperation memory)
@@ -2961,7 +2961,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         Epoch memory process_removed_epoch;
-        return SystemOperation(uint8(13), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams);
+        return SystemOperation(uint8(13), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
     }
 
     function bcs_serialize_SystemOperation(SystemOperation memory input)
@@ -3006,7 +3006,7 @@ library BridgeTypes {
             return abi.encodePacked(input.choice, bcs_serialize_Epoch(input.process_removed_epoch));
         }
         if (input.choice == 13) {
-            return abi.encodePacked(input.choice, bcs_serialize_seq_tuple_ChainId_StreamId_uint32(input.update_streams));
+            return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_UpdateStream(input.update_stream));
         }
         return abi.encodePacked(input.choice);
     }
@@ -3067,12 +3067,12 @@ library BridgeTypes {
         if (choice == 12) {
             (new_pos, process_removed_epoch) = bcs_deserialize_offset_Epoch(new_pos, input);
         }
-        tuple_ChainId_StreamId_uint32[] memory update_streams;
+        SystemOperation_UpdateStream memory update_stream;
         if (choice == 13) {
-            (new_pos, update_streams) = bcs_deserialize_offset_seq_tuple_ChainId_StreamId_uint32(new_pos, input);
+            (new_pos, update_stream) = bcs_deserialize_offset_SystemOperation_UpdateStream(new_pos, input);
         }
         require(choice < 14);
-        return (new_pos, SystemOperation(choice, transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_streams));
+        return (new_pos, SystemOperation(choice, transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream));
     }
 
     function bcs_deserialize_SystemOperation(bytes memory input)
@@ -3345,6 +3345,53 @@ library BridgeTypes {
         uint256 new_pos;
         SystemOperation_Transfer memory value;
         (new_pos, value) = bcs_deserialize_offset_SystemOperation_Transfer(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct SystemOperation_UpdateStream {
+        ApplicationId application_id;
+        ChainId chain_id;
+        StreamId stream_id;
+        uint32 next_index;
+    }
+
+    function bcs_serialize_SystemOperation_UpdateStream(SystemOperation_UpdateStream memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_ApplicationId(input.application_id);
+        result = abi.encodePacked(result, bcs_serialize_ChainId(input.chain_id));
+        result = abi.encodePacked(result, bcs_serialize_StreamId(input.stream_id));
+        return abi.encodePacked(result, bcs_serialize_uint32(input.next_index));
+    }
+
+    function bcs_deserialize_offset_SystemOperation_UpdateStream(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, SystemOperation_UpdateStream memory)
+    {
+        uint256 new_pos;
+        ApplicationId memory application_id;
+        (new_pos, application_id) = bcs_deserialize_offset_ApplicationId(pos, input);
+        ChainId memory chain_id;
+        (new_pos, chain_id) = bcs_deserialize_offset_ChainId(new_pos, input);
+        StreamId memory stream_id;
+        (new_pos, stream_id) = bcs_deserialize_offset_StreamId(new_pos, input);
+        uint32 next_index;
+        (new_pos, next_index) = bcs_deserialize_offset_uint32(new_pos, input);
+        return (new_pos, SystemOperation_UpdateStream(application_id, chain_id, stream_id, next_index));
+    }
+
+    function bcs_deserialize_SystemOperation_UpdateStream(bytes memory input)
+        internal
+        pure
+        returns (SystemOperation_UpdateStream memory)
+    {
+        uint256 new_pos;
+        SystemOperation_UpdateStream memory value;
+        (new_pos, value) = bcs_deserialize_offset_SystemOperation_UpdateStream(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -4923,49 +4970,6 @@ library BridgeTypes {
         return value;
     }
 
-    function bcs_serialize_seq_tuple_ChainId_StreamId_uint32(tuple_ChainId_StreamId_uint32[] memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
-        for (uint256 i=0; i<len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_tuple_ChainId_StreamId_uint32(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_tuple_ChainId_StreamId_uint32(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, tuple_ChainId_StreamId_uint32[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
-        tuple_ChainId_StreamId_uint32[] memory result;
-        result = new tuple_ChainId_StreamId_uint32[](len);
-        tuple_ChainId_StreamId_uint32 memory value;
-        for (uint256 i=0; i<len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_tuple_ChainId_StreamId_uint32(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_tuple_ChainId_StreamId_uint32(bytes memory input)
-        internal
-        pure
-        returns (tuple_ChainId_StreamId_uint32[] memory)
-    {
-        uint256 new_pos;
-        tuple_ChainId_StreamId_uint32[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_tuple_ChainId_StreamId_uint32(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     function bcs_serialize_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(tuple_Secp256k1PublicKey_Secp256k1Signature[] memory input)
         internal
         pure
@@ -5105,49 +5109,6 @@ library BridgeTypes {
         uint256 new_pos;
         tuple_AccountOwner_uint64 memory value;
         (new_pos, value) = bcs_deserialize_offset_tuple_AccountOwner_uint64(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct tuple_ChainId_StreamId_uint32 {
-        ChainId entry0;
-        StreamId entry1;
-        uint32 entry2;
-    }
-
-    function bcs_serialize_tuple_ChainId_StreamId_uint32(tuple_ChainId_StreamId_uint32 memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_ChainId(input.entry0);
-        result = abi.encodePacked(result, bcs_serialize_StreamId(input.entry1));
-        return abi.encodePacked(result, bcs_serialize_uint32(input.entry2));
-    }
-
-    function bcs_deserialize_offset_tuple_ChainId_StreamId_uint32(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, tuple_ChainId_StreamId_uint32 memory)
-    {
-        uint256 new_pos;
-        ChainId memory entry0;
-        (new_pos, entry0) = bcs_deserialize_offset_ChainId(pos, input);
-        StreamId memory entry1;
-        (new_pos, entry1) = bcs_deserialize_offset_StreamId(new_pos, input);
-        uint32 entry2;
-        (new_pos, entry2) = bcs_deserialize_offset_uint32(new_pos, input);
-        return (new_pos, tuple_ChainId_StreamId_uint32(entry0, entry1, entry2));
-    }
-
-    function bcs_deserialize_tuple_ChainId_StreamId_uint32(bytes memory input)
-        internal
-        pure
-        returns (tuple_ChainId_StreamId_uint32 memory)
-    {
-        uint256 new_pos;
-        tuple_ChainId_StreamId_uint32 memory value;
-        (new_pos, value) = bcs_deserialize_offset_tuple_ChainId_StreamId_uint32(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

@@ -525,18 +525,13 @@ impl<Env: Environment> ChainClient<Env> {
             .collect())
     }
 
-    /// Returns an `UpdateStreams` operation that updates this client's chain about new events
-    /// in any of the streams its applications are subscribing to. Returns `None` if there are no
-    /// new events.
     #[instrument(level = "trace")]
-    async fn collect_stream_updates(&self) -> Result<Option<Operation>, Error> {
-        // Load all our subscriptions.
+    async fn collect_stream_updates(&self) -> Result<Vec<Operation>, Error> {
         let subscription_map = self
             .client
             .local_node
             .get_event_subscriptions(self.chain_id)
             .await?;
-        // Collect the indices of all new events.
         let futures = subscription_map
             .into_iter()
             .filter(|((chain_id, _), _)| {
@@ -560,26 +555,34 @@ impl<Env: Environment> ChainClient<Env> {
                         .local_node
                         .get_next_expected_event(chain_id, stream_id.clone())
                         .await?;
-                    if let Some(next_index) = next_expected_index
-                        .filter(|next_index| *next_index > subscriptions.next_index)
-                    {
-                        Ok(Some((chain_id, stream_id, next_index)))
-                    } else {
-                        Ok::<_, Error>(None)
-                    }
+                    let Some(next_index) = next_expected_index
+                        .filter(|next_index| *next_index > subscriptions.min_next_index)
+                    else {
+                        return Ok::<_, Error>(Vec::new());
+                    };
+                    Ok(subscriptions
+                        .applications
+                        .into_iter()
+                        .filter(|(_, app_index)| *app_index < next_index)
+                        .map(|(application_id, _)| {
+                            SystemOperation::UpdateStream {
+                                application_id,
+                                chain_id,
+                                stream_id: stream_id.clone(),
+                                next_index,
+                            }
+                            .into()
+                        })
+                        .collect::<Vec<Operation>>())
                 }
             });
-        let updates = futures::stream::iter(futures)
+        Ok(futures::stream::iter(futures)
             .buffer_unordered(self.options.max_joined_tasks)
             .try_collect::<Vec<_>>()
             .await?
             .into_iter()
             .flatten()
-            .collect::<Vec<_>>();
-        if updates.is_empty() {
-            return Ok(None);
-        }
-        Ok(Some(SystemOperation::UpdateStreams(updates).into()))
+            .collect::<Vec<_>>())
     }
 
     #[instrument(level = "trace")]
