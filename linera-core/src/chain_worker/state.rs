@@ -1247,6 +1247,8 @@ where
                 _ => break,
             }
         }
+        // Include the missing height itself (the loop stops before pushing it).
+        heights_to_readd.push(missing_height);
 
         // 2. Re-add the heights to the outbox.
         let mut outbox = self.chain.outboxes.try_load_entry_mut(&recipient).await?;

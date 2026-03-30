@@ -4444,3 +4444,214 @@ where
 
     Ok(())
 }
+
+/// Tests the RevertConfirm recovery mechanism.
+///
+/// Simulates the scenario where the sender's outbox was drained (via a spurious
+/// confirmation) but the recipient still has anticipated messages in `removed_bundles`
+/// that were never delivered. The RevertConfirm mechanism should detect the gap,
+/// request the sender to re-add the missing heights to its outbox, and resend the
+/// bundles so the inbox can reconcile.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_revert_confirm_recovery<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(storage_builder.build().await?, true, false).await;
+    env.worker = env.worker.with_allow_revert_confirm(true);
+    let chain_1_desc = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2_desc = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await;
+    let chain_2 = chain_2_desc.id();
+
+    // Step 1: Create two transfer certificates from chain_1 to chain_2.
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(95),
+            vec![],
+        )
+        .await;
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Amount::from_tokens(92),
+            vec![&cert_0],
+        )
+        .await;
+
+    // Step 2: Process both certs on chain_1 (adds heights 0, 1 to outbox for chain_2).
+    env.worker()
+        .process_confirmed_block(cert_0.clone(), None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1.clone(), None)
+        .await?;
+
+    // Step 3: Deliver height 0 to chain_2 and confirm it on chain_1.
+    // (Normal flow for height 0 only.)
+    let actions = env
+        .worker()
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &cert_0))
+        .await?;
+    // The actions should contain a ConfirmUpdatedRecipient.
+    for request in actions.cross_chain_requests {
+        env.worker().handle_cross_chain_request(request).await?;
+    }
+
+    // Step 4: Send a spurious ConfirmUpdatedRecipient that claims chain_2 already
+    // received up to height 1. This drains height 1 from chain_1's outbox even
+    // though chain_2 never received it.
+    env.worker()
+        .handle_cross_chain_request(CrossChainRequest::ConfirmUpdatedRecipient {
+            sender: chain_1,
+            recipient: chain_2,
+            latest_height: BlockHeight::from(1),
+        })
+        .await?;
+
+    // Verify chain_1's outbox for chain_2 is now empty.
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        let outbox = chain.outboxes.try_load_entry(&chain_2).await?;
+        assert!(
+            outbox.is_none() || outbox.unwrap().queue.count() == 0,
+            "Outbox should be drained by the spurious confirm"
+        );
+    }
+
+    // Step 5: Simulate chain_2 anticipating the message from height 1. Have chain_2
+    // process a confirmed block that consumes both height-0 and height-1 bundles.
+    // Height 0 was already delivered (present in added_bundles), but height 1 was
+    // not (goes to removed_bundles as anticipated).
+    let bundle_h0 = cert_0
+        .message_bundles_for(chain_2)
+        .map(|(_, b)| b)
+        .next()
+        .expect("cert_0 should have a bundle for chain_2");
+    let bundle_h1 = cert_1
+        .message_bundles_for(chain_2)
+        .map(|(_, b)| b)
+        .next()
+        .expect("cert_1 should have a bundle for chain_2");
+    let chain_2_cert = env
+        .make_simple_transfer_certificate(
+            chain_2_desc.clone(),
+            AccountPublicKey::test_key(2),
+            chain_1,
+            Amount::from_tokens(1),
+            vec![
+                IncomingBundle {
+                    origin: chain_1,
+                    bundle: bundle_h0,
+                    action: MessageAction::Accept,
+                },
+                IncomingBundle {
+                    origin: chain_1,
+                    bundle: bundle_h1,
+                    action: MessageAction::Accept,
+                },
+            ],
+            // chain_2 received 5 tokens (h0) + 3 tokens (h1) - 1 sent = 8, plus initial 1.
+            Amount::from_tokens(8),
+            vec![],
+        )
+        .await;
+    env.worker()
+        .process_confirmed_block(chain_2_cert.clone(), None)
+        .await?;
+
+    // Verify chain_2 has height 1 in removed_bundles (anticipated but not delivered).
+    {
+        let chain = env.worker().chain_state_view(chain_2).await?;
+        let inbox = chain
+            .inboxes
+            .try_load_entry(&chain_1)
+            .await?
+            .expect("chain_2 should have an inbox for chain_1");
+        assert!(
+            inbox.removed_bundles.count() > 0,
+            "chain_2 should have anticipated removal for height 1"
+        );
+    }
+
+    // Step 6: Create cert_2 from chain_1 (height 2), process it on chain_1, and
+    // deliver it to chain_2. The cross-chain update will try to deliver height 2
+    // to chain_2, but chain_2's inbox has removed_bundles=[height 1]. This triggers:
+    // 1. GapDetected → RevertConfirm sent to chain_1
+    // 2. chain_1 re-adds height 1 to outbox and resends
+    // 3. chain_2 receives height 1 (reconciles removed_bundles), then height 2
+    let cert_2 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(2),
+            Vec::new(),
+            Amount::from_tokens(90),
+            vec![&cert_1],
+        )
+        .await;
+    // Process cert_2 on chain_1 so the block is in confirmed_log.
+    env.worker()
+        .process_confirmed_block(cert_2.clone(), None)
+        .await?;
+
+    // Now manually deliver height 2's cross-chain update to chain_2.
+    let actions = env
+        .worker()
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &cert_2))
+        .await?;
+    // Should contain a RevertConfirm (not a ConfirmUpdatedRecipient).
+    assert!(
+        actions
+            .cross_chain_requests
+            .iter()
+            .any(|r| matches!(r, CrossChainRequest::RevertConfirm { .. })),
+        "Expected RevertConfirm but got: {:?}",
+        actions.cross_chain_requests,
+    );
+    // Now process the full chain of requests (RevertConfirm → resend → confirm).
+    let mut requests = std::collections::VecDeque::from(actions.cross_chain_requests);
+    let mut iterations = 0;
+    while let Some(request) = requests.pop_front() {
+        iterations += 1;
+        assert!(iterations < 20, "Too many iterations in cross-chain loop");
+        let actions = env.worker().handle_cross_chain_request(request).await?;
+        requests.extend(actions.cross_chain_requests);
+    }
+
+    // Step 7: Verify recovery — chain_2's inbox should have no removed_bundles.
+    {
+        let chain = env.worker().chain_state_view(chain_2).await?;
+        let inbox = chain
+            .inboxes
+            .try_load_entry(&chain_1)
+            .await?
+            .expect("chain_2 should have an inbox for chain_1");
+        assert_eq!(
+            inbox.removed_bundles.count(),
+            0,
+            "removed_bundles should be empty after recovery"
+        );
+    }
+
+    Ok(())
+}
