@@ -149,6 +149,7 @@ pub(super) struct ExporterBuilder<F> {
     shutdown_signal: F,
     /// Full destination configs keyed by ID, needed for destinations that
     /// require more than just the address string (e.g. EvmChain).
+    #[cfg_attr(not(feature = "linera-bridge"), allow(dead_code))]
     destination_configs: HashMap<DestinationId, Destination>,
     health: Arc<AtomicBool>,
 }
