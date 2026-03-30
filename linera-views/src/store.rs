@@ -71,10 +71,18 @@ pub trait ReadableKeyValueStore: WithError {
     /// - `Ok(None)` when a key doesn't exist
     /// - `Ok(Some(value))` when a key exists with a value
     /// - `Err(e)` on error
+    /// The default implementation fetches all values at once and yields them one by one.
     fn read_multi_values_bytes_iter(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>>;
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        async_stream::stream! {
+            let values = self.read_multi_values_bytes(&keys).await?;
+            for value in values {
+                yield Ok(value);
+            }
+        }
+    }
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
