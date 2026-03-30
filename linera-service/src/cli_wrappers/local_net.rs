@@ -507,7 +507,7 @@ impl LocalNet {
     }
 
     fn block_exporter_port(&self, validator: usize, exporter_id: usize) -> usize {
-        test_offset_port() + 3000 + validator * self.num_shards + exporter_id + 1
+        test_offset_port() + 5000 + validator * self.num_shards + exporter_id + 1
     }
 
     pub fn proxy_public_port(&self, validator: usize, proxy_id: usize) -> usize {
@@ -519,7 +519,7 @@ impl LocalNet {
     }
 
     fn block_exporter_metrics_port(&self, validator: usize, exporter_id: usize) -> usize {
-        test_offset_port() + 4000 + validator * self.num_shards + exporter_id + 1
+        test_offset_port() + 6000 + validator * self.num_shards + exporter_id + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
