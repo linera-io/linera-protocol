@@ -291,7 +291,12 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
     /// Runs the chain listener.
     #[instrument(skip(self))]
-    pub async fn run(mut self) -> Result<impl Future<Output = Result<(), Error>>, Error> {
+    pub async fn run(
+        mut self,
+    ) -> Result<
+        impl Future<Output = Result<<C::Environment as Environment>::Storage, Error>>,
+        Error,
+    > {
         let chain_ids = {
             let guard = self.context.lock().await;
             let admin_chain_id = guard.admin_chain_id();
@@ -340,7 +345,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 }
             }
             future::join_all(self.listening.into_values().map(|client| client.stop())).await;
-            Ok(())
+            Ok(self.storage)
         })
     }
 

@@ -24,7 +24,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
 pub mod client;
-pub use client::Client;
+pub use client::{Client, RunningClient};
 pub mod chain;
 pub use chain::Chain;
 pub mod error;

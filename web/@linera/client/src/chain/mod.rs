@@ -13,7 +13,7 @@ use web_sys::{js_sys, wasm_bindgen};
 
 use crate::{
     client::{ChainClientInner, ClientContextInner},
-    Client, JsResult,
+    JsResult,
 };
 
 pub mod application;
@@ -21,7 +21,7 @@ pub use application::Application;
 
 #[wasm_bindgen]
 pub struct Chain {
-    pub(crate) client: Client,
+    pub(crate) inner: ClientContextInner,
     pub(crate) chain_client: ChainClientInner,
 }
 
@@ -54,7 +54,7 @@ macro_rules! with_chain_client {
 /// Helper macro to dispatch on both `ClientContextInner` and `ChainClientInner`.
 macro_rules! with_client_and_chain {
     ($self:expr, |$context:ident, $chain_client:ident| $body:expr) => {
-        match (&$self.client.inner, &$self.chain_client) {
+        match (&$self.inner, &$self.chain_client) {
             (ClientContextInner::Idb($context), ChainClientInner::Idb($chain_client)) => $body,
             (ClientContextInner::Mem($context), ChainClientInner::Mem($chain_client)) => $body,
             _ => unreachable!("mismatched client and chain storage backends"),
@@ -215,7 +215,7 @@ impl Chain {
     pub async fn application(&self, id: &str) -> JsResult<Application> {
         web_sys::console::debug_1(&format!("connecting to Linera application {id}").into());
         Ok(Application {
-            client: self.client.clone(),
+            inner: self.inner.clone(),
             chain_client: self.chain_client.clone(),
             id: id.parse()?,
         })

@@ -1,14 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{rc::Rc, sync::Arc};
+use std::{future::Future, pin::Pin, rc::Rc, sync::Arc};
 
 use futures::{
-    future::{self, FutureExt as _},
+    future::{Either, FutureExt as _, RemoteHandle},
     lock::Mutex as AsyncMutex,
 };
 use linera_base::identifiers::{AccountOwner, ChainId};
-use linera_client::chain_listener::{ChainListener, ClientContext as _};
+use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _};
 use tokio_util::sync::CancellationToken;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
@@ -16,7 +16,7 @@ use web_sys::wasm_bindgen;
 use crate::{
     chain::Chain,
     signer::Signer,
-    storage::{self, IdbEnvironment, MemEnvironment},
+    storage::{self, IdbEnvironment, IdbStorage, MemEnvironment, MemStorage},
     wallet::Wallet,
     Error, Result,
 };
@@ -47,22 +47,16 @@ impl Clone for ChainClientInner {
     }
 }
 
-/// The full client API, exposed to the wallet implementation. Calls
-/// to this API can be trusted to have originated from the user's
-/// request.
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct Client {
-    pub(crate) inner: ClientContextInner,
-    cancellation_token: CancellationToken,
-    chain_listener_result:
-        future::Shared<future::RemoteHandle<Result<(), Rc<linera_client::Error>>>>,
+/// Storage backend, dispatching between IndexedDB and in-memory.
+pub(crate) enum Storage {
+    Idb(IdbStorage),
+    Mem(MemStorage),
 }
 
 #[derive(Default, serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 #[serde(default)]
-/// Options for `Client.chain`.
+/// Options for `Client.chain` / `Client.chain`.
 pub struct ChainOptions {
     /// The owner to use for operations on this chain.
     owner: Option<AccountOwner>,
@@ -77,9 +71,24 @@ pub enum StorageKind {
     Memory,
 }
 
+/// A client that has been created but whose chain listener has not yet started.
+///
+/// Use `chain()` to perform pre-start operations (e.g. `addOwner`), then call
+/// `start()` to begin background synchronization and obtain a [`Client`].
+#[wasm_bindgen]
+pub struct Client {
+    inner: ClientContextInner,
+    storage: Storage,
+    chain_listener_config: ChainListenerConfig,
+}
+
 #[wasm_bindgen]
 impl Client {
-    /// Creates a new client and connects to the network.
+    /// Creates a new client without starting the chain listener.
+    ///
+    /// After creating the client, you can perform operations like `addOwner`
+    /// via `chain()`. Call `start()` to begin background chain synchronization
+    /// and obtain a [`Client`].
     ///
     /// `storage_kind` selects the storage backend: `StorageKind.IndexedDb` for
     /// persistent browser storage, or `StorageKind.Memory` for ephemeral in-memory
@@ -101,8 +110,8 @@ impl Client {
         wallet.lock().await?;
 
         match storage_kind {
-            StorageKind::IndexedDb => Self::new_idb(wallet, signer, options).await,
-            StorageKind::Memory => Self::new_mem(wallet, signer, options).await,
+            StorageKind::IndexedDb => Self::create_idb(wallet, signer, options).await,
+            StorageKind::Memory => Self::create_mem(wallet, signer, options).await,
         }
     }
 
@@ -113,49 +122,18 @@ impl Client {
     /// If the wallet could not be read or chain synchronization fails.
     #[wasm_bindgen]
     pub async fn chain(&self, chain: ChainId, options: Option<ChainOptions>) -> Result<Chain> {
-        let options = options.unwrap_or_default();
-        let chain_client = match &self.inner {
-            ClientContextInner::Idb(context) => {
-                let mut chain_client = context.lock().await.make_chain_client(chain).await?;
-                if let Some(owner) = options.owner {
-                    chain_client.set_preferred_owner(owner);
-                }
-                ChainClientInner::Idb(chain_client)
-            }
-            ClientContextInner::Mem(context) => {
-                let mut chain_client = context.lock().await.make_chain_client(chain).await?;
-                if let Some(owner) = options.owner {
-                    chain_client.set_preferred_owner(owner);
-                }
-                ChainClientInner::Mem(chain_client)
-            }
-        };
-
-        Ok(Chain {
-            chain_client,
-            client: self.clone(),
-        })
+        make_chain(&self.inner, chain, options).await
     }
 
-    /// Cleanly shut down the client, completing when it is destroyed and all
-    /// resources it owns are released.
+    /// Cleanly shut down the client without starting the chain listener.
     ///
     /// # Errors
     ///
     /// If the context is being referenced by any other objects (chains,
     /// applications…). Free these with `.free()` before disposing of this
     /// object.
-    ///
-    /// Propagates any errors that occurred during background execution of the
-    /// client.
     #[wasm_bindgen(js_name = asyncDispose)]
     pub async fn async_dispose(self) -> Result<()> {
-        self.cancellation_token.cancel();
-
-        if let Err(Some(e)) = self.chain_listener_result.await.map_err(Rc::into_inner) {
-            return Err(e.into());
-        }
-
         match self.inner {
             ClientContextInner::Idb(context) => {
                 Arc::into_inner(context).ok_or(Error::new(
@@ -168,13 +146,54 @@ impl Client {
                 ))?;
             }
         }
-
         Ok(())
+    }
+
+    /// Starts the chain listener for background synchronization, consuming this
+    /// `Client` and returning a [`RunningClient`].
+    ///
+    /// # Errors
+    /// If the chain listener fails to start.
+    #[wasm_bindgen]
+    pub async fn start(self) -> Result<RunningClient> {
+        let cancellation_token = CancellationToken::new();
+        let chain_listener_config = self.chain_listener_config;
+
+        let chain_listener_handle = match (self.storage, &self.inner) {
+            (Storage::Idb(storage), ClientContextInner::Idb(client)) => {
+                let handle = start_listener(
+                    chain_listener_config.clone(),
+                    client.clone(),
+                    storage,
+                    cancellation_token.clone(),
+                )
+                .await?;
+                Either::Left(async move { handle.await.map(Storage::Idb) })
+            }
+            (Storage::Mem(storage), ClientContextInner::Mem(client)) => {
+                let handle = start_listener(
+                    chain_listener_config.clone(),
+                    client.clone(),
+                    storage,
+                    cancellation_token.clone(),
+                )
+                .await?;
+                Either::Right(async move { handle.await.map(Storage::Mem) })
+            }
+            _ => unreachable!("mismatched storage and client context"),
+        };
+
+        Ok(RunningClient {
+            inner: self.inner,
+            cancellation_token,
+            chain_listener_handle: Box::pin(chain_listener_handle),
+            chain_listener_config,
+        })
     }
 }
 
 impl Client {
-    async fn new_idb(
+    async fn create_idb(
         wallet: Wallet,
         signer: Signer,
         options: linera_client::Options,
@@ -200,6 +219,7 @@ impl Client {
 
         let default = wallet.default;
         let genesis_config = wallet.genesis_config.clone();
+        let chain_listener_config = options.chain_listener_config.clone();
 
         tracing::debug!("creating ClientContext...");
         let client = linera_client::ClientContext::new(
@@ -217,41 +237,15 @@ impl Client {
         // The `Arc` here is useless, but it is required by the `ChainListener` API.
         #[expect(clippy::arc_with_non_send_sync)]
         let client = Arc::new(AsyncMutex::new(client));
-        let client_clone = client.clone();
-        let cancellation_token = CancellationToken::new();
 
-        tracing::debug!("starting chain listener...");
-        let chain_listener = ChainListener::new(
-            options.chain_listener_config,
-            client_clone,
-            storage,
-            cancellation_token.clone(),
-            tokio::sync::mpsc::unbounded_channel().1,
-            true, // Enable background sync
-        )
-        .run()
-        .await?;
-
-        let (run_chain_listener, chain_listener_result) = async move {
-            let result = chain_listener.await.map_err(|error| {
-                tracing::error!("ChainListener error: {error:?}");
-                Rc::new(error)
-            });
-            tracing::debug!("chain listener completed");
-            result
-        }
-        .remote_handle();
-
-        wasm_bindgen_futures::spawn_local(run_chain_listener);
-
-        Ok(Self {
+        Ok(Client {
             inner: ClientContextInner::Idb(client),
-            cancellation_token,
-            chain_listener_result: chain_listener_result.shared(),
+            storage: Storage::Idb(storage),
+            chain_listener_config,
         })
     }
 
-    async fn new_mem(
+    async fn create_mem(
         wallet: Wallet,
         signer: Signer,
         options: linera_client::Options,
@@ -267,6 +261,7 @@ impl Client {
 
         let default = wallet.default;
         let genesis_config = wallet.genesis_config.clone();
+        let chain_listener_config = options.chain_listener_config.clone();
 
         tracing::debug!("creating ClientContext...");
         let client = linera_client::ClientContext::new(
@@ -284,37 +279,166 @@ impl Client {
         // The `Arc` here is useless, but it is required by the `ChainListener` API.
         #[expect(clippy::arc_with_non_send_sync)]
         let client = Arc::new(AsyncMutex::new(client));
-        let client_clone = client.clone();
-        let cancellation_token = CancellationToken::new();
 
-        tracing::debug!("starting chain listener...");
-        let chain_listener = ChainListener::new(
-            options.chain_listener_config,
-            client_clone,
-            storage,
-            cancellation_token.clone(),
-            tokio::sync::mpsc::unbounded_channel().1,
-            true, // Enable background sync
-        )
-        .run()
-        .await?;
-
-        let (run_chain_listener, chain_listener_result) = async move {
-            let result = chain_listener.await.map_err(|error| {
-                tracing::error!("ChainListener error: {error:?}");
-                Rc::new(error)
-            });
-            tracing::debug!("chain listener completed");
-            result
-        }
-        .remote_handle();
-
-        wasm_bindgen_futures::spawn_local(run_chain_listener);
-
-        Ok(Self {
+        Ok(Client {
             inner: ClientContextInner::Mem(client),
-            cancellation_token,
-            chain_listener_result: chain_listener_result.shared(),
+            storage: Storage::Mem(storage),
+            chain_listener_config,
         })
     }
+}
+
+/// The full client API, exposed to the wallet implementation. Calls
+/// to this API can be trusted to have originated from the user's
+/// request.
+///
+/// Obtained by calling [`Client::start()`].
+#[wasm_bindgen]
+pub struct RunningClient {
+    pub(crate) inner: ClientContextInner,
+    cancellation_token: CancellationToken,
+    chain_listener_handle: Pin<Box<dyn Future<Output = Result<Storage, Rc<linera_client::Error>>>>>,
+    chain_listener_config: ChainListenerConfig,
+}
+
+#[wasm_bindgen]
+impl RunningClient {
+    /// Connect to a chain on the Linera network.
+    ///
+    /// # Errors
+    ///
+    /// If the wallet could not be read or chain synchronization fails.
+    #[wasm_bindgen]
+    pub async fn chain(&self, chain: ChainId, options: Option<ChainOptions>) -> Result<Chain> {
+        make_chain(&self.inner, chain, options).await
+    }
+
+    /// Stops the chain listener and returns a [`Client`] that can be reconfigured
+    /// and restarted.
+    ///
+    /// # Errors
+    /// Propagates any errors that occurred during background execution of the
+    /// chain listener.
+    #[wasm_bindgen]
+    pub async fn stop(self) -> Result<Client> {
+        self.cancellation_token.cancel();
+
+        let storage = self
+            .chain_listener_handle
+            .await
+            .map_err(|e| match Rc::into_inner(e) {
+                Some(e) => Error::from(e),
+                None => Error::new("chain listener error (details unavailable)"),
+            })?;
+
+        Ok(Client {
+            inner: self.inner,
+            storage,
+            chain_listener_config: self.chain_listener_config,
+        })
+    }
+
+    /// Cleanly shut down the client, completing when it is destroyed and all
+    /// resources it owns are released.
+    ///
+    /// # Errors
+    ///
+    /// If the context is being referenced by any other objects (chains,
+    /// applications…). Free these with `.free()` before disposing of this
+    /// object.
+    ///
+    /// Propagates any errors that occurred during background execution of the
+    /// client.
+    #[wasm_bindgen(js_name = asyncDispose)]
+    pub async fn async_dispose(self) -> Result<()> {
+        self.cancellation_token.cancel();
+
+        if let Err(e) = self.chain_listener_handle.await {
+            if let Some(e) = Rc::into_inner(e) {
+                return Err(e.into());
+            }
+        }
+
+        match self.inner {
+            ClientContextInner::Idb(context) => {
+                Arc::into_inner(context).ok_or(Error::new(
+                    "Client disposed while being referenced elsewhere",
+                ))?;
+            }
+            ClientContextInner::Mem(context) => {
+                Arc::into_inner(context).ok_or(Error::new(
+                    "Client disposed while being referenced elsewhere",
+                ))?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Shared implementation for creating a [`Chain`] from a [`ClientContextInner`].
+async fn make_chain(
+    inner: &ClientContextInner,
+    chain: ChainId,
+    options: Option<ChainOptions>,
+) -> Result<Chain> {
+    let options = options.unwrap_or_default();
+    let chain_client = match inner {
+        ClientContextInner::Idb(context) => {
+            let mut chain_client = context.lock().await.make_chain_client(chain).await?;
+            if let Some(owner) = options.owner {
+                chain_client.set_preferred_owner(owner);
+            }
+            ChainClientInner::Idb(chain_client)
+        }
+        ClientContextInner::Mem(context) => {
+            let mut chain_client = context.lock().await.make_chain_client(chain).await?;
+            if let Some(owner) = options.owner {
+                chain_client.set_preferred_owner(owner);
+            }
+            ChainClientInner::Mem(chain_client)
+        }
+    };
+
+    Ok(Chain {
+        inner: inner.clone(),
+        chain_client,
+    })
+}
+
+async fn start_listener<C: linera_client::chain_listener::ClientContext + 'static>(
+    config: ChainListenerConfig,
+    context: Arc<AsyncMutex<C>>,
+    storage: <C::Environment as linera_core::Environment>::Storage,
+    cancellation_token: CancellationToken,
+) -> Result<
+    RemoteHandle<
+        Result<<C::Environment as linera_core::Environment>::Storage, Rc<linera_client::Error>>,
+    >,
+> {
+    tracing::debug!("starting chain listener...");
+    let chain_listener = ChainListener::new(
+        config,
+        context,
+        storage,
+        cancellation_token,
+        tokio::sync::mpsc::unbounded_channel().1,
+        true, // Enable background sync
+    )
+    .run()
+    .await?;
+
+    let (run_chain_listener, chain_listener_handle) = async move {
+        let result = chain_listener.await.map_err(|error| {
+            tracing::error!("ChainListener error: {error:?}");
+            Rc::new(error)
+        });
+        tracing::debug!("chain listener completed");
+        result
+    }
+    .remote_handle();
+
+    wasm_bindgen_futures::spawn_local(run_chain_listener);
+
+    Ok(chain_listener_handle)
 }

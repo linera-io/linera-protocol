@@ -7,12 +7,12 @@ use web_sys::wasm_bindgen;
 
 use crate::{
     client::{ChainClientInner, ClientContextInner},
-    Client, JsResult,
+    JsResult,
 };
 
 #[wasm_bindgen]
 pub struct Application {
-    pub(crate) client: Client,
+    pub(crate) inner: ClientContextInner,
     pub(crate) chain_client: ChainClientInner,
     pub(crate) id: ApplicationId,
 }
@@ -55,7 +55,7 @@ impl Application {
             bytes: query.as_bytes().to_vec(),
         };
 
-        match (&self.client.inner, &self.chain_client) {
+        match (&self.inner, &self.chain_client) {
             (ClientContextInner::Idb(context), ChainClientInner::Idb(chain_client)) => {
                 let chain_client = chain_client.clone();
                 let (
