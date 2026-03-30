@@ -223,11 +223,13 @@ where
         async_stream::stream! {
             for key in keys {
                 // Get the next value from the first segments stream
-                let value_result = first_segments_stream.next().await
-                    .expect("keys and first_segments should have same length");
-
-                let value = value_result
-                    .map_err(ValueSplittingError::InnerStoreError)?;
+                let value = match first_segments_stream.next().await {
+                    Some(result) => result.map_err(ValueSplittingError::InnerStoreError)?,
+                    None => {
+                        yield Err(ValueSplittingError::MissingSegment);
+                        return;
+                    }
+                };
 
                 let Some(value) = value else {
                     yield Ok(None);
