@@ -115,7 +115,16 @@ where
             LoadInfo::NotLoaded { short_key } => {
                 self.current_loaded_values.clear();
                 for _ in 0..W::NUM_INIT_KEYS {
-                    let value = self.store_iter.next().await.transpose()?.unwrap();
+                    let value = self
+                        .store_iter
+                        .next()
+                        .await
+                        .transpose()?
+                        .ok_or_else(|| {
+                            ViewError::MissingEntries(
+                                "store stream ended before all values were read".to_string(),
+                            )
+                        })?;
                     self.current_loaded_values.push(value);
                 }
                 let key = self
