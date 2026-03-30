@@ -1,10 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{rc::Rc, sync::Arc};
+use std::{future::Future, pin::Pin, rc::Rc, sync::Arc};
 
 use futures::{
-    future::{self, FutureExt as _},
+    future::{Either, FutureExt as _, RemoteHandle},
     lock::Mutex as AsyncMutex,
 };
 use linera_base::identifiers::{AccountOwner, ChainId};
@@ -134,24 +134,27 @@ impl Client {
     pub async fn start(self) -> Result<RunningClient> {
         let cancellation_token = CancellationToken::new();
 
-        let chain_listener_handle = match (&self.storage, &self.inner) {
+        let chain_listener_config = self.chain_listener_config;
+        let chain_listener_handle = match (self.storage, &self.inner) {
             (Storage::Idb(storage), ClientContextInner::Idb(client)) => {
-                start_listener(
-                    self.chain_listener_config,
+                let handle = start_listener(
+                    chain_listener_config.clone(),
                     client.clone(),
-                    storage.clone(),
+                    storage,
                     cancellation_token.clone(),
                 )
-                .await?
+                .await?;
+                Either::Left(async move { handle.await.map(Storage::Idb) })
             }
             (Storage::Mem(storage), ClientContextInner::Mem(client)) => {
-                start_listener(
-                    self.chain_listener_config,
+                let handle = start_listener(
+                    chain_listener_config.clone(),
                     client.clone(),
-                    storage.clone(),
+                    storage,
                     cancellation_token.clone(),
                 )
-                .await?
+                .await?;
+                Either::Right(async move { handle.await.map(Storage::Mem) })
             }
             _ => unreachable!("mismatched storage and client context"),
         };
@@ -159,7 +162,8 @@ impl Client {
         Ok(RunningClient {
             inner: self.inner,
             cancellation_token,
-            chain_listener_handle,
+            chain_listener_handle: Box::pin(chain_listener_handle),
+            chain_listener_config,
         })
     }
 }
@@ -269,8 +273,8 @@ impl Client {
 pub struct RunningClient {
     pub(crate) inner: ClientContextInner,
     cancellation_token: CancellationToken,
-    chain_listener_handle:
-        future::Shared<future::RemoteHandle<Result<(), Rc<linera_client::Error>>>>,
+    chain_listener_handle: Pin<Box<dyn Future<Output = Result<Storage, Rc<linera_client::Error>>>>>,
+    chain_listener_config: ChainListenerConfig,
 }
 
 #[wasm_bindgen]
@@ -283,6 +287,31 @@ impl RunningClient {
     #[wasm_bindgen]
     pub async fn chain(&self, chain: ChainId, options: Option<ChainOptions>) -> Result<Chain> {
         make_chain(&self.inner, chain, options).await
+    }
+
+    /// Stops the chain listener and returns a [`Client`] that can be reconfigured
+    /// and restarted.
+    ///
+    /// # Errors
+    /// Propagates any errors that occurred during background execution of the
+    /// chain listener.
+    #[wasm_bindgen]
+    pub async fn stop(self) -> Result<Client> {
+        self.cancellation_token.cancel();
+
+        let storage = self
+            .chain_listener_handle
+            .await
+            .map_err(|e| match Rc::into_inner(e) {
+                Some(e) => Error::from(e),
+                None => Error::new("chain listener error (details unavailable)"),
+            })?;
+
+        Ok(Client {
+            inner: self.inner,
+            storage,
+            chain_listener_config: self.chain_listener_config,
+        })
     }
 
     /// Cleanly shut down the client, completing when it is destroyed and all
@@ -300,8 +329,10 @@ impl RunningClient {
     pub async fn async_dispose(self) -> Result<()> {
         self.cancellation_token.cancel();
 
-        if let Err(Some(e)) = self.chain_listener_handle.await.map_err(Rc::into_inner) {
-            return Err(e.into());
+        if let Err(e) = self.chain_listener_handle.await {
+            if let Some(e) = Rc::into_inner(e) {
+                return Err(e.into());
+            }
         }
 
         match self.inner {
@@ -356,7 +387,11 @@ async fn start_listener<C: linera_client::chain_listener::ClientContext + 'stati
     context: Arc<AsyncMutex<C>>,
     storage: <C::Environment as linera_core::Environment>::Storage,
     cancellation_token: CancellationToken,
-) -> Result<future::Shared<future::RemoteHandle<Result<(), Rc<linera_client::Error>>>>> {
+) -> Result<
+    RemoteHandle<
+        Result<<C::Environment as linera_core::Environment>::Storage, Rc<linera_client::Error>>,
+    >,
+> {
     tracing::debug!("Client: starting chain listener...");
     let chain_listener = ChainListener::new(
         config,
@@ -382,5 +417,5 @@ async fn start_listener<C: linera_client::chain_listener::ClientContext + 'stati
 
     wasm_bindgen_futures::spawn_local(run_chain_listener);
 
-    Ok(chain_listener_handle.shared())
+    Ok(chain_listener_handle)
 }
