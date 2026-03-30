@@ -63,6 +63,7 @@ struct ServerContext {
     chain_info_max_received_log_entries: usize,
     block_cache_size: usize,
     execution_state_cache_size: usize,
+    allow_revert_confirm: bool,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -92,6 +93,7 @@ impl ServerContext {
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
+        .with_allow_revert_confirm(self.allow_revert_confirm)
         .with_block_time_grace_period(self.block_time_grace_period)
         .with_chain_worker_ttl(self.chain_worker_ttl)
         .with_chain_info_max_received_log_entries(self.chain_info_max_received_log_entries);
@@ -445,6 +447,11 @@ enum ServerCommand {
         )]
         chain_info_max_received_log_entries: usize,
 
+        /// Enable the RevertConfirm recovery mechanism for inbox gaps caused by
+        /// lost persisted state.
+        #[arg(long, default_value_t = false)]
+        allow_revert_confirm: bool,
+
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
         otlp_exporter_endpoint: Option<String>,
@@ -576,6 +583,7 @@ async fn run(options: ServerOptions) {
             wasm_runtime,
             chain_worker_ttl,
             chain_info_max_received_log_entries,
+            allow_revert_confirm,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -593,6 +601,7 @@ async fn run(options: ServerOptions) {
                 chain_info_max_received_log_entries,
                 block_cache_size: common_storage_options.block_cache_size,
                 execution_state_cache_size: common_storage_options.execution_state_cache_size,
+                allow_revert_confirm,
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };
