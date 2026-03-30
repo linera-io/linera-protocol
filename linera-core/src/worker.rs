@@ -649,6 +649,13 @@ where
         self
     }
 
+    /// Returns an instance with the specified cross-chain message chunk limit.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_cross_chain_message_chunk_limit(mut self, limit: usize) -> Self {
+        self.chain_worker_config.cross_chain_message_chunk_limit = limit;
+        self
+    }
+
     /// Returns an instance with the specified maximum size for received_log entries.
     ///
     /// Sizes below `CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES` should be avoided.

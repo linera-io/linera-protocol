@@ -10,10 +10,6 @@ use std::{
     sync::{self, Arc},
 };
 
-/// Maximum estimated serialized size of bundles in a single `UpdateRecipient` message.
-/// Must match `linera_rpc::grpc::GRPC_CHUNKED_MESSAGE_FILL_LIMIT`.
-const CROSS_CHAIN_CHUNK_LIMIT: usize = 16 * 1024 * 1024 * 7 / 10;
-
 use futures::future::Either;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -618,7 +614,9 @@ where
                     .sum();
                 // If adding this block's bundles would exceed the gRPC fill limit,
                 // flush the current batch first.
-                if !bundles.is_empty() && bundles_size + new_size > CROSS_CHAIN_CHUNK_LIMIT {
+                if !bundles.is_empty()
+                    && bundles_size + new_size > self.config.cross_chain_message_chunk_limit
+                {
                     cross_chain_requests.push(CrossChainRequest::UpdateRecipient {
                         sender,
                         recipient,
