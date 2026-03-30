@@ -226,9 +226,13 @@ where
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
                 bundles,
+                previous_height,
                 callback,
             } => callback
-                .send(self.process_cross_chain_update(origin, bundles).await)
+                .send(
+                    self.process_cross_chain_update(origin, bundles, previous_height)
+                        .await,
+                )
                 .is_ok(),
             ChainWorkerRequest::ConfirmUpdatedRecipient {
                 recipient,
@@ -583,6 +587,15 @@ where
 
         let mut cross_chain_requests = Vec::new();
         for (recipient, heights) in heights_by_recipient {
+            // Extract the predecessor height for this recipient from the first
+            // block's `previous_message_blocks`. This lets the recipient detect
+            // gaps even before it consumes the missing message.
+            let previous_height = heights.first().and_then(|first_height| {
+                let block = height_to_blocks.get(first_height)?;
+                let (_, prev_height) =
+                    block.inner().body.previous_message_blocks.get(&recipient)?;
+                Some(*prev_height)
+            });
             let mut bundles = Vec::new();
             for height in heights {
                 let hashed_block = height_to_blocks
@@ -598,6 +611,7 @@ where
                 sender: self.chain.chain_id(),
                 recipient,
                 bundles,
+                previous_height,
             };
             cross_chain_requests.push(request);
         }
@@ -1099,6 +1113,7 @@ where
         &mut self,
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
+        previous_height: Option<BlockHeight>,
     ) -> Result<CrossChainUpdateResult, WorkerError> {
         // Only process certificates with relevant heights and epochs.
         let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
@@ -1107,6 +1122,24 @@ where
             Some(bundle) => Some(bundle.height),
             None => None,
         };
+
+        // Proactive gap detection: if the sender declares a predecessor height that
+        // we haven't received yet, the inbox has a gap.
+        if let Some(prev) = previous_height {
+            if prev >= next_height_to_receive && self.config.allow_revert_confirm {
+                let recipient = self.chain_id();
+                warn!(
+                    "Inbox gap detected for {recipient} from {origin}: \
+                    sender declares previous height {prev} but we only have up to \
+                    {next_height_to_receive}; requesting resend",
+                );
+                return Ok(CrossChainUpdateResult::GapDetected {
+                    origin,
+                    missing_height: prev,
+                });
+            }
+        }
+
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(

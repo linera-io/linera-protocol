@@ -536,11 +536,19 @@ fn update_recipient_direct(
     certificate: &ConfirmedBlockCertificate,
 ) -> CrossChainRequest {
     let sender = certificate.inner().block().header.chain_id;
+    let previous_height = certificate
+        .inner()
+        .block()
+        .body
+        .previous_message_blocks
+        .get(&recipient)
+        .map(|(_, h)| *h);
     let bundles = certificate.message_bundles_for(recipient).collect();
     CrossChainRequest::UpdateRecipient {
         sender,
         recipient,
         bundles,
+        previous_height,
     }
 }
 

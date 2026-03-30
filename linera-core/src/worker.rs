@@ -922,11 +922,13 @@ where
         origin: ChainId,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
+        previous_height: Option<BlockHeight>,
     ) -> Result<CrossChainUpdateResult, WorkerError> {
         self.query_chain_worker(recipient, move |callback| {
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
                 bundles,
+                previous_height,
                 callback,
             }
         })
@@ -1294,11 +1296,12 @@ where
                 sender,
                 recipient,
                 bundles,
+                previous_height,
             } => {
                 let mut actions = NetworkActions::default();
                 let origin = sender;
                 match self
-                    .process_cross_chain_update(origin, recipient, bundles)
+                    .process_cross_chain_update(origin, recipient, bundles, previous_height)
                     .await?
                 {
                     CrossChainUpdateResult::NothingToDo => {}

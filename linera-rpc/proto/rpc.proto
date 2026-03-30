@@ -201,6 +201,9 @@ message UpdateRecipient {
   ChainId sender = 1;
   ChainId recipient = 2;
   bytes bundles = 3;
+  // The height of the sender's previous block that sent messages to this recipient
+  // (before the first bundle). Absent if this is the first message ever.
+  optional BlockHeight previous_height = 4;
 }
 
 // Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.

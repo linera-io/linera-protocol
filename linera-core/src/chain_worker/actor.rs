@@ -175,6 +175,7 @@ where
     ProcessCrossChainUpdate {
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
+        previous_height: Option<BlockHeight>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<CrossChainUpdateResult, WorkerError>>,
     },
