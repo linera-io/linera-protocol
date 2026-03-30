@@ -142,7 +142,7 @@ impl linera_core::Wallet for Wallet {
     async fn modify(
         &self,
         id: ChainId,
-        f: impl FnMut(&mut wallet::Chain) + Send,
+        f: impl Fn(&mut wallet::Chain) + Send,
     ) -> Result<Option<()>, Self::Error> {
         self.mutate(id, f).transpose()
     }
@@ -281,7 +281,7 @@ impl Wallet {
     pub fn mutate<R>(
         &self,
         chain_id: ChainId,
-        mutate: impl FnMut(&mut wallet::Chain) -> R,
+        mutate: impl Fn(&mut wallet::Chain) -> R,
     ) -> Option<Result<R, persistent::file::Error>> {
         self.0
             .chains
