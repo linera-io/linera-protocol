@@ -2978,16 +2978,13 @@ impl<Env: Environment> ChainClient<Env> {
             .map(BlockHeight)
             .collect();
 
-        let certificates = self
+        let mut cert_stream = self
             .client
             .storage_client()
-            .read_certificates_by_heights(self.chain_id, &heights)
-            .await?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+            .read_certificates_by_heights_iter(self.chain_id, heights);
 
-        for certificate in certificates {
+        while let Some(result) = cert_stream.next().await {
+            let certificate = result?;
             match remote_node
                 .handle_confirmed_certificate(
                     certificate.clone(),

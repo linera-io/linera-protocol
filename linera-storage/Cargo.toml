@@ -35,6 +35,7 @@ web = [
 ]
 
 [dependencies]
+async-stream.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true

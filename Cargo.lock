@@ -6185,6 +6185,7 @@ name = "linera-storage"
 version = "0.16.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "bcs",
  "cfg-if",
