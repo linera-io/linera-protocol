@@ -716,7 +716,7 @@ async fn test_verify_block_hash_anvil() {
         .add_block(|block| {
             block.with_operation(
                 bridge_app_id,
-                BridgeOperation::VerifyBlockHash {
+                &BridgeOperation::VerifyBlockHash {
                     block_hash: block_hash.0,
                 },
             );
@@ -741,7 +741,7 @@ async fn test_verify_block_hash_not_found() {
         .try_add_block(|block| {
             block.with_operation(
                 bridge_app_id,
-                BridgeOperation::VerifyBlockHash {
+                &BridgeOperation::VerifyBlockHash {
                     block_hash: fake_hash,
                 },
             );

@@ -161,6 +161,7 @@ struct RunOptions {
     pub enable_memory_profiling: bool,
 }
 
+#[allow(unused_variables)]
 async fn start_health_server(
     address: std::net::SocketAddr,
     shutdown_signal: CancellationToken,
