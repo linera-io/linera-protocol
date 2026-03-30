@@ -303,6 +303,17 @@ impl TryFrom<api::CrossChainRequest> for CrossChainRequest {
                     .ok_or(GrpcProtoConversionError::MissingField)?
                     .into(),
             },
+            Inner::RevertConfirm(api::RevertConfirm {
+                sender,
+                recipient,
+                missing_height,
+            }) => CrossChainRequest::RevertConfirm {
+                sender: try_proto_convert(sender)?,
+                recipient: try_proto_convert(recipient)?,
+                missing_height: missing_height
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .into(),
+            },
         };
         Ok(ccr)
     }
@@ -332,6 +343,15 @@ impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
                 latest_height: Some(latest_height.into()),
+            }),
+            CrossChainRequest::RevertConfirm {
+                sender,
+                recipient,
+                missing_height,
+            } => Inner::RevertConfirm(api::RevertConfirm {
+                sender: Some(sender.into()),
+                recipient: Some(recipient.into()),
+                missing_height: Some(missing_height.into()),
             }),
         };
         Ok(Self { inner: Some(inner) })

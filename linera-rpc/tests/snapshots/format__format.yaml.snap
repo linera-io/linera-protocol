@@ -488,6 +488,15 @@ CrossChainRequest:
               TYPENAME: ChainId
           - latest_height:
               TYPENAME: BlockHeight
+    2:
+      RevertConfirm:
+        STRUCT:
+          - sender:
+              TYPENAME: ChainId
+          - recipient:
+              TYPENAME: ChainId
+          - missing_height:
+              TYPENAME: BlockHeight
 CryptoHash:
   NEWTYPESTRUCT:
     TUPLEARRAY:

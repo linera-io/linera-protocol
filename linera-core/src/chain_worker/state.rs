@@ -96,6 +96,21 @@ where
     knows_chain_is_active: bool,
 }
 
+/// The result of processing a cross-chain update.
+pub(crate) enum CrossChainUpdateResult {
+    /// The update was applied and the chain was saved up to the given height.
+    Updated(BlockHeight),
+    /// All bundles were already received; nothing to do.
+    NothingToDo,
+    /// A gap was detected: the inbox expected a bundle at `missing_height` from `origin`
+    /// but received a bundle at a higher height. If `allow_revert_confirm` is enabled,
+    /// a `RevertConfirm` request should be sent.
+    GapDetected {
+        origin: ChainId,
+        missing_height: BlockHeight,
+    },
+}
+
 /// Whether the block was processed or skipped. Used for metrics.
 pub enum BlockOutcome {
     Processed,
@@ -224,6 +239,13 @@ where
                     self.confirm_updated_recipient(recipient, latest_height)
                         .await,
                 )
+                .is_ok(),
+            ChainWorkerRequest::HandleRevertConfirm {
+                recipient,
+                missing_height,
+                callback,
+            } => callback
+                .send(self.handle_revert_confirm(recipient, missing_height).await)
                 .is_ok(),
             ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
                 .send(self.handle_chain_info_query(query).await)
@@ -1077,7 +1099,7 @@ where
         &mut self,
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+    ) -> Result<CrossChainUpdateResult, WorkerError> {
         // Only process certificates with relevant heights and epochs.
         let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
         let next_height_to_receive = inbox.next_block_height_to_receive()?;
@@ -1095,7 +1117,7 @@ where
             bundles,
         )?;
         let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
-            return Ok(None);
+            return Ok(CrossChainUpdateResult::NothingToDo);
         };
         // Process the received messages in certificates.
         let local_time = self.storage.clock().current_time();
@@ -1104,7 +1126,8 @@ where
             let add_to_received_log = previous_height != Some(bundle.height);
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
-            self.chain
+            match self
+                .chain
                 .receive_message_bundle_with_inbox(
                     &mut inbox,
                     &origin,
@@ -1112,7 +1135,25 @@ where
                     local_time,
                     add_to_received_log,
                 )
-                .await?;
+                .await
+            {
+                Ok(()) => {}
+                Err(ChainError::InboxGapDetected {
+                    expected_height, ..
+                }) if self.config.allow_revert_confirm => {
+                    // Don't save — leave the inbox unchanged so the resend can
+                    // reconcile properly.
+                    warn!(
+                        "Inbox gap detected for {recipient:.8} from {origin:}: \
+                        missing height {expected_height}; requesting resend",
+                    );
+                    return Ok(CrossChainUpdateResult::GapDetected {
+                        origin,
+                        missing_height: expected_height,
+                    });
+                }
+                Err(e) => return Err(e.into()),
+            }
         }
         inbox.observe_size_metric();
         drop(inbox);
@@ -1124,11 +1165,11 @@ where
                 "Refusing to deliver messages to {recipient:?} from {origin:?} \
                 at height {last_updated_height} because the recipient is still inactive",
             );
-            return Ok(None);
+            return Ok(CrossChainUpdateResult::NothingToDo);
         }
         // Save the chain.
         self.save().await?;
-        Ok(Some(last_updated_height))
+        Ok(CrossChainUpdateResult::Updated(last_updated_height))
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
@@ -1157,6 +1198,93 @@ where
         }
 
         Ok(())
+    }
+
+    /// Handles a `RevertConfirm` request: walks backward through
+    /// `previous_message_blocks` to find all block heights that sent messages to
+    /// `recipient` starting from the latest down to `missing_height`, re-adds them
+    /// to the outbox, and creates cross-chain update actions to resend the bundles.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id(),
+        recipient = %recipient,
+        missing_height = %missing_height,
+    ))]
+    pub(super) async fn handle_revert_confirm(
+        &mut self,
+        recipient: ChainId,
+        missing_height: BlockHeight,
+    ) -> Result<NetworkActions, WorkerError> {
+        // 1. Walk backward through previous_message_blocks to collect all heights
+        //    that sent messages to this recipient, from the latest down to missing_height.
+        let Some(latest_height) = self.chain.previous_message_blocks.get(&recipient).await? else {
+            warn!("RevertConfirm: no record of sending to {recipient:.8}");
+            return Ok(NetworkActions::default());
+        };
+
+        let mut heights_to_readd = Vec::new();
+        let mut current_height = latest_height;
+        loop {
+            heights_to_readd.push(current_height);
+            if current_height <= missing_height {
+                break;
+            }
+            // Load the block at current_height to find the previous message block
+            let index = usize::try_from(current_height)?;
+            let Some(hash) = self.chain.confirmed_log.get(index).await? else {
+                warn!("RevertConfirm: missing confirmed_log entry at height {current_height}");
+                break;
+            };
+            let Some(block) = self.storage.read_confirmed_block(hash).await? else {
+                warn!("RevertConfirm: missing block for hash {hash}");
+                break;
+            };
+            match block.block().body.previous_message_blocks.get(&recipient) {
+                Some((_, prev_height)) if *prev_height >= missing_height => {
+                    current_height = *prev_height;
+                }
+                _ => break,
+            }
+        }
+
+        heights_to_readd.sort();
+        heights_to_readd.dedup();
+
+        // 2. Re-add the heights to the outbox.
+        let mut outbox = self.chain.outboxes.try_load_entry_mut(&recipient).await?;
+        let new_heights = outbox.revert(&heights_to_readd).await?;
+        drop(outbox);
+
+        if new_heights.is_empty() {
+            debug!("RevertConfirm: all heights already in outbox for {recipient:.8}");
+            return Ok(NetworkActions::default());
+        }
+
+        // 3. Update outbox_counters (+1 per new height for this one recipient).
+        for h in &new_heights {
+            *self.chain.outbox_counters.get_mut().entry(*h).or_default() += 1;
+        }
+        self.chain.nonempty_outboxes.get_mut().insert(recipient);
+
+        // 4. Create cross-chain requests using existing infrastructure.
+        let mut heights_by_recipient = BTreeMap::new();
+        heights_by_recipient.insert(recipient, heights_to_readd);
+        let cross_chain_requests = self
+            .create_cross_chain_requests(heights_by_recipient)
+            .await?;
+
+        // 5. Save chain state.
+        self.save().await?;
+
+        warn!(
+            "RevertConfirm: re-added {} heights to outbox for {recipient:.8}, \
+            starting from height {missing_height}",
+            new_heights.len(),
+        );
+
+        Ok(NetworkActions {
+            cross_chain_requests,
+            notifications: vec![],
+        })
     }
 
     #[instrument(skip_all, fields(

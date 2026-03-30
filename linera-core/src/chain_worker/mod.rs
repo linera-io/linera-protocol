@@ -17,5 +17,5 @@ pub(crate) use self::{
         EventSubscriptionsResult,
     },
     config::ChainWorkerConfig,
-    state::BlockOutcome,
+    state::{BlockOutcome, CrossChainUpdateResult},
 };

@@ -256,6 +256,15 @@ pub enum CrossChainRequest {
         recipient: ChainId,
         latest_height: BlockHeight,
     },
+    /// Request the sender to revert a previous confirmation and resend bundles
+    /// starting from the given height. This is used to recover from state
+    /// inconsistencies where the recipient lost persisted state after a
+    /// confirmation was sent.
+    RevertConfirm {
+        sender: ChainId,
+        recipient: ChainId,
+        missing_height: BlockHeight,
+    },
 }
 
 impl CrossChainRequest {
@@ -265,6 +274,7 @@ impl CrossChainRequest {
         match self {
             UpdateRecipient { recipient, .. } => *recipient,
             ConfirmUpdatedRecipient { sender, .. } => *sender,
+            RevertConfirm { sender, .. } => *sender,
         }
     }
 

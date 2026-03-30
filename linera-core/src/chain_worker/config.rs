@@ -35,6 +35,8 @@ pub struct ChainWorkerConfig {
     pub priority_bundle_origins: HashSet<ChainId>,
     /// Chain IDs whose incoming bundles should be ignored.
     pub ignored_bundle_origins: HashSet<ChainId>,
+    /// Whether to attempt recovery via `RevertConfirm` when an inbox gap is detected.
+    pub allow_revert_confirm: bool,
 }
 
 impl ChainWorkerConfig {
@@ -63,6 +65,7 @@ impl Default for ChainWorkerConfig {
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
             priority_bundle_origins: HashSet::new(),
             ignored_bundle_origins: HashSet::new(),
+            allow_revert_confirm: false,
         }
     }
 }

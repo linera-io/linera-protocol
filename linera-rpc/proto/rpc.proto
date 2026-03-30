@@ -191,6 +191,7 @@ message CrossChainRequest {
   oneof inner {
     UpdateRecipient update_recipient = 1;
     ConfirmUpdatedRecipient confirm_updated_recipient = 2;
+    RevertConfirm revert_confirm = 3;
   }
 }
 
@@ -207,6 +208,13 @@ message ConfirmUpdatedRecipient {
   ChainId sender = 1;
   ChainId recipient = 2;
   BlockHeight latest_height = 3;
+}
+
+// Request the sender to revert a previous confirmation and resend bundles.
+message RevertConfirm {
+  ChainId sender = 1;
+  ChainId recipient = 2;
+  BlockHeight missing_height = 3;
 }
 
 // Request information on a chain.

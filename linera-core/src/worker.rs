@@ -46,7 +46,8 @@ pub(crate) use crate::chain_worker::{
 };
 use crate::{
     chain_worker::{
-        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
+        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest,
+        CrossChainUpdateResult, DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -595,6 +596,12 @@ where
         self
     }
 
+    #[instrument(level = "trace", skip(self, value))]
+    pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
+        self.chain_worker_config.allow_revert_confirm = value;
+        self
+    }
+
     /// Returns an instance with the specified block time grace period.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
@@ -919,7 +926,7 @@ where
         origin: ChainId,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+    ) -> Result<CrossChainUpdateResult, WorkerError> {
         self.query_chain_worker(recipient, move |callback| {
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
@@ -1294,23 +1301,37 @@ where
             } => {
                 let mut actions = NetworkActions::default();
                 let origin = sender;
-                let Some(height) = self
+                match self
                     .process_cross_chain_update(origin, recipient, bundles)
                     .await?
-                else {
-                    return Ok(actions);
-                };
-                actions.notifications.push(Notification {
-                    chain_id: recipient,
-                    reason: Reason::NewIncomingBundle { origin, height },
-                });
-                actions
-                    .cross_chain_requests
-                    .push(CrossChainRequest::ConfirmUpdatedRecipient {
-                        sender,
-                        recipient,
-                        latest_height: height,
-                    });
+                {
+                    CrossChainUpdateResult::NothingToDo => {}
+                    CrossChainUpdateResult::Updated(height) => {
+                        actions.notifications.push(Notification {
+                            chain_id: recipient,
+                            reason: Reason::NewIncomingBundle { origin, height },
+                        });
+                        actions.cross_chain_requests.push(
+                            CrossChainRequest::ConfirmUpdatedRecipient {
+                                sender,
+                                recipient,
+                                latest_height: height,
+                            },
+                        );
+                    }
+                    CrossChainUpdateResult::GapDetected {
+                        origin,
+                        missing_height,
+                    } => {
+                        actions
+                            .cross_chain_requests
+                            .push(CrossChainRequest::RevertConfirm {
+                                sender: origin,
+                                recipient,
+                                missing_height,
+                            });
+                    }
+                }
                 Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
@@ -1327,6 +1348,20 @@ where
                 })
                 .await?;
                 Ok(NetworkActions::default())
+            }
+            CrossChainRequest::RevertConfirm {
+                sender,
+                recipient,
+                missing_height,
+            } => {
+                self.query_chain_worker(sender, move |callback| {
+                    ChainWorkerRequest::HandleRevertConfirm {
+                        recipient,
+                        missing_height,
+                        callback,
+                    }
+                })
+                .await
             }
         }
     }
