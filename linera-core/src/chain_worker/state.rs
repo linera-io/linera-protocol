@@ -1126,17 +1126,26 @@ where
         // Proactive gap detection: if the sender declares a predecessor height that
         // we haven't received yet, the inbox has a gap.
         if let Some(prev) = previous_height {
-            if prev >= next_height_to_receive && self.config.allow_revert_confirm {
+            if prev >= next_height_to_receive {
                 let recipient = self.chain_id();
-                warn!(
-                    "Inbox gap detected for {recipient} from {origin}: \
-                    sender declares previous height {prev} but we only have up to \
-                    {next_height_to_receive}; requesting resend",
-                );
-                return Ok(CrossChainUpdateResult::GapDetected {
+                if self.config.allow_revert_confirm {
+                    warn!(
+                        "Inbox gap detected for {recipient} from {origin}: \
+                        sender declares previous height {prev} but we only have up to \
+                        {next_height_to_receive}; requesting resend",
+                    );
+                    return Ok(CrossChainUpdateResult::GapDetected {
+                        origin,
+                        missing_height: prev,
+                    });
+                }
+                return Err(ChainError::InboxGapDetected {
+                    chain_id: recipient,
                     origin,
-                    missing_height: prev,
-                });
+                    expected_height: prev,
+                    actual_height: bundles.first().map(|(_, b)| b.height).unwrap_or_default(),
+                }
+                .into());
             }
         }
 
