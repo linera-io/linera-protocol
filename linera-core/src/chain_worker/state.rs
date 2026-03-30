@@ -328,7 +328,10 @@ where
 
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         if !missing_indices.is_empty() {
-            let mut remaining = missing_indices.into_iter().zip(missing_blob_ids).collect::<Vec<_>>();
+            let mut remaining = missing_indices
+                .into_iter()
+                .zip(missing_blob_ids)
+                .collect::<Vec<_>>();
             let mut iter = self
                 .chain
                 .pending_proposed_blobs
