@@ -4,12 +4,11 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Debug,
-    pin::Pin,
     sync::Arc,
 };
 
 use async_trait::async_trait;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::StreamExt;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -43,7 +42,7 @@ use {
     std::cmp::Reverse,
 };
 
-use crate::{ChainRuntimeContext, Clock, Storage};
+use crate::{ChainRuntimeContext, Clock, Storage, StorageStream};
 
 #[cfg(with_metrics)]
 pub mod metrics {
@@ -920,7 +919,7 @@ where
     fn read_certificates_iter(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> Pin<Box<dyn Stream<Item = Result<Option<ConfirmedBlockCertificate>, ViewError>> + Send + '_>>
+    ) -> StorageStream<'_, Result<Option<ConfirmedBlockCertificate>, ViewError>>
     {
         Box::pin(async_stream::stream! {
             let block_keys = get_block_keys();
@@ -1103,7 +1102,7 @@ where
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Pin<Box<dyn Stream<Item = Result<Option<CryptoHash>, ViewError>> + Send + '_>> {
+    ) -> StorageStream<'_, Result<Option<CryptoHash>, ViewError>> {
         Box::pin(async_stream::stream! {
             let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
             let store = self.database.open_shared(&index_root_key)?;
@@ -1123,7 +1122,7 @@ where
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Pin<Box<dyn Stream<Item = Result<ConfirmedBlockCertificate, ViewError>> + Send + '_>> {
+    ) -> StorageStream<'_, Result<ConfirmedBlockCertificate, ViewError>> {
         Box::pin(async_stream::stream! {
             let mut hash_stream = self.read_certificate_hashes_by_heights_iter(chain_id, heights);
             let block_keys = get_block_keys();

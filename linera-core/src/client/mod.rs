@@ -34,7 +34,7 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::committee::Committee;
-use linera_storage::Storage as _;
+use linera_storage::{Storage as _};
 use rand::{
     distributions::{Distribution, WeightedIndex},
     seq::SliceRandom,
