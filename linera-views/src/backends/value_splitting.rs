@@ -95,7 +95,7 @@ where
 
 impl<S> ReadableKeyValueStore for ValueSplittingStore<S>
 where
-    S: ReadableKeyValueStore + Clone,
+    S: ReadableKeyValueStore,
     S::Error: 'static,
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE - 4;
@@ -224,7 +224,6 @@ where
             })
             .collect::<Vec<_>>();
 
-        let store = self.store.clone();
         let mut first_segments_stream = Box::pin(self.store.read_multi_values_bytes_iter(big_keys));
 
         async_stream::stream! {
@@ -258,7 +257,7 @@ where
                     .map(|i| ValueSplittingStore::<S>::get_segment_key(&key, i))
                     .collect::<Result<Vec<_>,_>>()?;
 
-                let segments = store.read_multi_values_bytes(&segment_keys).await
+                let segments = self.store.read_multi_values_bytes(&segment_keys).await
                     .map_err(ValueSplittingError::InnerStoreError)?;
 
                 for segment in segments {
