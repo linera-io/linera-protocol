@@ -1036,13 +1036,21 @@ where
                 verified
             };
         // We should always agree on the messages and state hash.
-        ensure!(
-            outcome == verified_outcome,
-            WorkerError::IncorrectOutcome {
+        if outcome != verified_outcome {
+            if self.config.reset_on_incorrect_outcome {
+                warn!(
+                    "IncorrectOutcome for block {height} on chain {chain_id}; \
+                    resetting chain state and re-executing"
+                );
+                return self
+                    .reset_and_reexecute_chain(certificate, notify_when_messages_are_delivered)
+                    .await;
+            }
+            return Err(WorkerError::IncorrectOutcome {
                 submitted: Box::new(outcome),
                 computed: Box::new(verified_outcome),
-            }
-        );
+            });
+        }
 
         // Update the rest of the chain state.
         let event_streams = chain
@@ -1321,6 +1329,79 @@ where
         );
 
         Ok(actions)
+    }
+
+    /// Resets the chain state completely and re-executes all confirmed blocks from storage.
+    /// Sends `RevertConfirm` to all known senders so they resend cross-chain messages.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id(),
+    ))]
+    async fn reset_and_reexecute_chain(
+        &mut self,
+        failed_certificate: ConfirmedBlockCertificate,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+        let chain_id = self.chain_id();
+        let tip_height = self.chain.tip_state.get().next_block_height;
+
+        // 1. Collect all sender chain IDs before clearing.
+        let sender_ids = self.chain.inboxes.indices().await?;
+
+        // 2. Clear the chain state entirely and save.
+        self.chain.clear();
+        self.save().await?;
+        warn!(
+            "Cleared chain state for {chain_id} up to height {tip_height}; \
+            re-executing all blocks"
+        );
+
+        // 3. Re-load certificates one at a time from storage and re-process them.
+        //    Certificates are stored separately (by chain + height) so they
+        //    survive the chain state clear.
+        for height_u64 in 0..tip_height.0 {
+            let height = BlockHeight(height_u64);
+            let cert = self
+                .storage
+                .read_certificates_by_heights(chain_id, &[height])
+                .await?
+                .into_iter()
+                .next()
+                .flatten()
+                .ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound { height, chain_id })?;
+            Box::pin(self.process_confirmed_block(cert, None)).await?;
+        }
+
+        // 4. Now process the original certificate that triggered the error.
+        let result = Box::pin(
+            self.process_confirmed_block(failed_certificate, notify_when_messages_are_delivered),
+        )
+        .await?;
+
+        // 5. Send RevertConfirm to all senders so they resend messages we may
+        //    have lost during the reset.
+        let (info, mut actions, outcome) = result;
+        for sender_id in sender_ids {
+            actions
+                .cross_chain_requests
+                .push(CrossChainRequest::RevertConfirm {
+                    sender: sender_id,
+                    recipient: chain_id,
+                    missing_height: BlockHeight::ZERO,
+                });
+        }
+
+        warn!(
+            "Chain {chain_id} reset and re-executed up to height {}; \
+            sent RevertConfirm to {} senders",
+            self.chain.tip_state.get().next_block_height,
+            actions
+                .cross_chain_requests
+                .iter()
+                .filter(|r| matches!(r, CrossChainRequest::RevertConfirm { .. }))
+                .count(),
+        );
+
+        Ok((info, actions, outcome))
     }
 
     #[instrument(skip_all, fields(

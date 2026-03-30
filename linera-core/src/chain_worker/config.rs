@@ -37,6 +37,9 @@ pub struct ChainWorkerConfig {
     pub ignored_bundle_origins: HashSet<ChainId>,
     /// Whether to attempt recovery via `RevertConfirm` when an inbox gap is detected.
     pub allow_revert_confirm: bool,
+    /// Whether to reset the chain state and re-execute all blocks when an
+    /// `IncorrectOutcome` error is encountered.
+    pub reset_on_incorrect_outcome: bool,
 }
 
 impl ChainWorkerConfig {
@@ -66,6 +69,7 @@ impl Default for ChainWorkerConfig {
             priority_bundle_origins: HashSet::new(),
             ignored_bundle_origins: HashSet::new(),
             allow_revert_confirm: false,
+            reset_on_incorrect_outcome: false,
         }
     }
 }

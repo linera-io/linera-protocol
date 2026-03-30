@@ -598,6 +598,12 @@ where
         self
     }
 
+    #[instrument(level = "trace", skip(self, value))]
+    pub fn with_reset_on_incorrect_outcome(mut self, value: bool) -> Self {
+        self.chain_worker_config.reset_on_incorrect_outcome = value;
+        self
+    }
+
     /// Returns an instance with the specified block time grace period.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
