@@ -8,6 +8,7 @@ use std::{
     sync::{Arc, LazyLock, Mutex, RwLock},
 };
 
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -126,6 +127,7 @@ impl WithError for MemoryStore {
     type Error = MemoryStoreError;
 }
 
+/// Iterator for reading multiple values from MemoryStore.
 impl ReadableKeyValueStore for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
@@ -177,6 +179,25 @@ impl ReadableKeyValueStore for MemoryStore {
             result.push(map.get(key).cloned());
         }
         Ok(result)
+    }
+
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        let map = self
+            .map
+            .read()
+            .expect("MemoryStore lock should not be poisoned");
+        let values = keys
+            .iter()
+            .map(|key| map.get(key).cloned())
+            .collect::<Vec<_>>();
+        async_stream::stream! {
+            for value in values {
+                yield Ok(value);
+            }
+        }
     }
 
     async fn find_keys_by_prefix(
