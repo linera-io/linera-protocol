@@ -364,13 +364,10 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
-    #[error("confirmed_log entry at height {height} for chain {chain_id:8} not found")]
-    ConfirmedLogEntryNotFound {
-        height: BlockHeight,
-        chain_id: ChainId,
-    },
-    #[error("preprocessed_blocks entry at height {height} for chain {chain_id:8} not found")]
-    PreprocessedBlocksEntryNotFound {
+    #[error(
+        "confirmed_log/preprocessed_blocks entry at height {height} for chain {chain_id} not found"
+    )]
+    ConfirmedBlockHashNotFound {
         height: BlockHeight,
         chain_id: ChainId,
     },
@@ -427,8 +424,7 @@ impl WorkerError {
             WorkerError::BcsError(_)
             | WorkerError::InvalidCrossChainRequest
             | WorkerError::ViewError(_)
-            | WorkerError::ConfirmedLogEntryNotFound { .. }
-            | WorkerError::PreprocessedBlocksEntryNotFound { .. }
+            | WorkerError::ConfirmedBlockHashNotFound { .. }
             | WorkerError::MissingNetworkDescription
             | WorkerError::ChainActorSendError { .. }
             | WorkerError::ChainActorRecvError { .. }

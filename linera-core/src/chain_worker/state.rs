@@ -530,7 +530,7 @@ where
             .into_iter()
             .zip(&heights)
             .map(|(maybe_hash, height)| {
-                maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
+                maybe_hash.ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound {
                     height: *height,
                     chain_id: self.chain_id(),
                 })
@@ -542,7 +542,7 @@ where
                     .preprocessed_blocks
                     .get(height)
                     .await?
-                    .ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound {
+                    .ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound {
                         height: *height,
                         chain_id: self.chain_id(),
                     })?,
@@ -824,7 +824,7 @@ where
                 .storage
                 .read_confirmed_block(hash)
                 .await?
-                .ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound { height, chain_id })?;
+                .ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound { height, chain_id })?;
             self.chain.preprocess_block(&block).await?;
         }
         Ok(())
@@ -1144,7 +1144,7 @@ where
                     // Don't save — leave the inbox unchanged so the resend can
                     // reconcile properly.
                     warn!(
-                        "Inbox gap detected for {recipient:.8} from {origin:}: \
+                        "Inbox gap detected for {recipient} from {origin}: \
                         missing height {expected_height}; requesting resend",
                     );
                     return Ok(CrossChainUpdateResult::GapDetected {
@@ -1162,7 +1162,7 @@ where
             // now. Accordingly, do not send a confirmation, so that the
             // cross-chain update is retried later.
             warn!(
-                "Refusing to deliver messages to {recipient:?} from {origin:?} \
+                "Refusing to deliver messages to {recipient} from {origin} \
                 at height {last_updated_height} because the recipient is still inactive",
             );
             return Ok(CrossChainUpdateResult::NothingToDo);
@@ -1217,27 +1217,29 @@ where
         // 1. Walk backward through previous_message_blocks to collect all heights
         //    that sent messages to this recipient, from the latest down to missing_height.
         let Some(latest_height) = self.chain.previous_message_blocks.get(&recipient).await? else {
-            warn!("RevertConfirm: no record of sending to {recipient:.8}");
+            warn!("RevertConfirm: no record of sending to {recipient}");
             return Ok(NetworkActions::default());
         };
 
         let mut heights_to_readd = Vec::new();
         let mut current_height = latest_height;
-        loop {
+        while current_height > missing_height {
             heights_to_readd.push(current_height);
-            if current_height <= missing_height {
-                break;
-            }
             // Load the block at current_height to find the previous message block
-            let index = usize::try_from(current_height)?;
-            let Some(hash) = self.chain.confirmed_log.get(index).await? else {
-                warn!("RevertConfirm: missing confirmed_log entry at height {current_height}");
-                break;
+            let hash = match &*self.chain.block_hashes([current_height]).await? {
+                [hash] => *hash,
+                _ => {
+                    return Err(WorkerError::ConfirmedBlockHashNotFound {
+                        height: current_height,
+                        chain_id: recipient,
+                    })
+                }
             };
-            let Some(block) = self.storage.read_confirmed_block(hash).await? else {
-                warn!("RevertConfirm: missing block for hash {hash}");
-                break;
-            };
+            let block = self
+                .storage
+                .read_confirmed_block(hash)
+                .await?
+                .ok_or_else(|| WorkerError::MissingCertificateValue)?;
             match block.block().body.previous_message_blocks.get(&recipient) {
                 Some((_, prev_height)) if *prev_height >= missing_height => {
                     current_height = *prev_height;
@@ -1246,16 +1248,13 @@ where
             }
         }
 
-        heights_to_readd.sort();
-        heights_to_readd.dedup();
-
         // 2. Re-add the heights to the outbox.
         let mut outbox = self.chain.outboxes.try_load_entry_mut(&recipient).await?;
         let new_heights = outbox.revert(&heights_to_readd).await?;
         drop(outbox);
 
         if new_heights.is_empty() {
-            debug!("RevertConfirm: all heights already in outbox for {recipient:.8}");
+            debug!("RevertConfirm: all heights already in outbox for {recipient}");
             return Ok(NetworkActions::default());
         }
 
@@ -1266,25 +1265,18 @@ where
         self.chain.nonempty_outboxes.get_mut().insert(recipient);
 
         // 4. Create cross-chain requests using existing infrastructure.
-        let mut heights_by_recipient = BTreeMap::new();
-        heights_by_recipient.insert(recipient, heights_to_readd);
-        let cross_chain_requests = self
-            .create_cross_chain_requests(heights_by_recipient)
-            .await?;
+        let actions = self.create_network_actions(None).await?;
 
         // 5. Save chain state.
         self.save().await?;
 
         warn!(
-            "RevertConfirm: re-added {} heights to outbox for {recipient:.8}, \
+            "RevertConfirm: re-added {} heights to outbox for {recipient}, \
             starting from height {missing_height}",
             new_heights.len(),
         );
 
-        Ok(NetworkActions {
-            cross_chain_requests,
-            notifications: vec![],
-        })
+        Ok(actions)
     }
 
     #[instrument(skip_all, fields(

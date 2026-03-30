@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use allocative::Allocative;
 use linera_base::data_types::{ArithmeticError, BlockHeight};
 #[cfg(with_testing)]
@@ -86,23 +88,19 @@ where
         &mut self,
         heights_to_add: &[BlockHeight],
     ) -> Result<Vec<BlockHeight>, ViewError> {
-        let existing: Vec<BlockHeight> = self.queue.elements().await?;
-        let mut all_heights: std::collections::BTreeSet<BlockHeight> =
-            existing.iter().copied().collect();
-        let new_heights: Vec<BlockHeight> = heights_to_add
+        let existing = self.queue.elements().await?;
+        let mut all_heights = existing.iter().copied().collect::<BTreeSet<_>>();
+        let new_heights = heights_to_add
             .iter()
             .filter(|h| !all_heights.contains(h))
             .copied()
-            .collect();
+            .collect::<Vec<_>>();
         if new_heights.is_empty() {
             return Ok(Vec::new());
         }
         all_heights.extend(new_heights.iter().copied());
-        self.queue.clear();
-        let min_height = *all_heights.iter().next().expect("all_heights is non-empty");
-        self.next_height_to_schedule.set(min_height);
+        self.clear();
         for h in &all_heights {
-            // schedule_message checks next_height_to_schedule, which we just reset
             self.schedule_message(*h).map_err(ViewError::from)?;
         }
         Ok(new_heights)
