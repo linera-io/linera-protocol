@@ -5,7 +5,7 @@
 
 use std::{convert::Infallible, future::Future, ops::Bound, rc::Rc};
 
-use futures::{future, stream::Stream};
+use futures::future;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use web_sys::{js_sys, wasm_bindgen::JsValue};
@@ -148,19 +148,6 @@ impl ReadableKeyValueStore for IndexedDbStore {
                 .map(|key| async move { self.read_value_bytes(key).await }),
         )
         .await
-    }
-
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
-        let store = self.clone();
-        async_stream::stream! {
-            let vals = store.read_multi_values_bytes(&keys).await?;
-            for value in vals {
-                yield Ok(value);
-            }
-        }
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>> {
