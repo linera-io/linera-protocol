@@ -1378,24 +1378,14 @@ where
         start: BlockHeight,
         end: BlockHeight,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        // Build the list of keys
-        let mut heights = Vec::new();
+        let mut hashes = Vec::new();
         let mut height = start;
         while height < end {
-            heights.push(height);
-            height = height.try_add_one()?;
-        }
-
-        // Build the multi_get_iter
-        let mut iter = self.chain.preprocessed_blocks.multi_get_iter(&heights)?;
-
-        // Write a while loop
-        let mut hashes = Vec::new();
-        while let Some(hash_opt) = iter.next().await? {
-            match hash_opt {
+            match self.chain.preprocessed_blocks.get(&height).await? {
                 Some(hash) => hashes.push(hash),
                 None => break,
             }
+            height = height.try_add_one()?;
         }
         Ok(hashes)
     }

@@ -40,7 +40,7 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::committee::Committee;
-use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
+use linera_storage::{Clock as _, Storage as _};
 use rand::{
     distributions::{Distribution, WeightedIndex},
     seq::SliceRandom,

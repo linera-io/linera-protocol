@@ -49,6 +49,14 @@ pub use crate::db_storage::{TestClock, DEFAULT_STORAGE_CACHE_CONFIG};
 /// The default namespace to be used when none is specified
 pub const DEFAULT_NAMESPACE: &str = "default";
 
+/// A boxed stream that is `Send` on native and not on web.
+#[cfg(not(web))]
+pub type StorageStream<'a, T> = Pin<Box<dyn Stream<Item = T> + Send + 'a>>;
+
+/// A boxed stream that is `Send` on native and not on web.
+#[cfg(web)]
+pub type StorageStream<'a, T> = Pin<Box<dyn Stream<Item = T> + 'a>>;
+
 /// Communicate with a persistent storage using the "views" abstraction.
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
@@ -182,13 +190,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     fn read_certificates_iter(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> Pin<
-        Box<
-            dyn Stream<Item = Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError>>
-                + Send
-                + '_,
-        >,
-    >;
+    ) -> StorageStream<'_, Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError>>;
 
     /// Reads raw certificate bytes by hashes.
     ///
@@ -241,7 +243,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Pin<Box<dyn Stream<Item = Result<Option<CryptoHash>, ViewError>> + Send + '_>>;
+    ) -> StorageStream<'_, Result<Option<CryptoHash>, ViewError>>;
 
     /// Returns a stream of certificates for the requested chain and heights,
     /// skipping heights with no certificate.
@@ -249,9 +251,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Pin<
-        Box<dyn Stream<Item = Result<Arc<ConfirmedBlockCertificate>, ViewError>> + Send + '_>,
-    >;
+    ) -> StorageStream<'_, Result<Arc<ConfirmedBlockCertificate>, ViewError>>;
 
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;
