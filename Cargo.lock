@@ -6064,7 +6064,6 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "linera-base",
- "linera-bridge",
  "linera-chain",
  "linera-client",
  "linera-core",

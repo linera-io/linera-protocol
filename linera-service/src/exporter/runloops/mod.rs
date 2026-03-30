@@ -24,8 +24,6 @@ use crate::{
 };
 
 mod block_processor;
-#[cfg(feature = "linera-bridge")]
-pub(crate) mod evm_chain_exporter;
 mod indexer;
 mod logging_exporter;
 mod task_manager;
