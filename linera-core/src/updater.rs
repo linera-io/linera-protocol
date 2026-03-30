@@ -260,7 +260,7 @@ where
     }
 
     #[instrument(
-        level = "trace", skip_all, err(level = Level::DEBUG),
+        level = "warn", skip_all, err(level = Level::DEBUG),
         fields(chain_id = %certificate.block().header.chain_id)
     )]
     async fn send_confirmed_certificate(

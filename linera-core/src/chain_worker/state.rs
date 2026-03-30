@@ -11,7 +11,7 @@ use std::{
 };
 
 /// Maximum estimated serialized size of bundles in a single `UpdateRecipient` message.
-/// Set to 70% of 16 MiB to leave room for message framing overhead.
+/// Must match `linera_rpc::grpc::GRPC_CHUNKED_MESSAGE_FILL_LIMIT`.
 const CROSS_CHAIN_CHUNK_LIMIT: usize = 16 * 1024 * 1024 * 7 / 10;
 
 use futures::future::Either;
