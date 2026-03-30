@@ -1424,18 +1424,6 @@ where
         .await
     }
 
-    /// Gets the next expected event index for a stream.
-    pub async fn get_next_expected_event(
-        &self,
-        chain_id: ChainId,
-        stream_id: StreamId,
-    ) -> Result<Option<u32>, WorkerError> {
-        self.chain_read(chain_id, |guard| async move {
-            guard.get_next_expected_event(stream_id).await
-        })
-        .await
-    }
-
     /// Gets received certificate trackers.
     pub async fn get_received_certificate_trackers(
         &self,

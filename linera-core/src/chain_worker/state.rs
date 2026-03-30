@@ -1127,14 +1127,6 @@ where
             .await?)
     }
 
-    /// Gets the next expected event index for a stream.
-    pub(crate) async fn get_next_expected_event(
-        &self,
-        stream_id: StreamId,
-    ) -> Result<Option<u32>, WorkerError> {
-        Ok(self.chain.next_expected_events.get(&stream_id).await?)
-    }
-
     /// Gets received certificate trackers.
     pub(crate) async fn get_received_certificate_trackers(
         &self,
