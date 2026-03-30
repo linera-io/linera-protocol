@@ -32,7 +32,7 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use aws_smithy_types::error::operation::BuildError;
-use futures::{future::join_all, stream::Stream};
+use futures::future::join_all;
 use linera_base::{ensure, util::future::FutureSyncExt as _};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -47,8 +47,8 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadValueStream,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -874,10 +874,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         Ok(results.into_iter().flatten().collect())
     }
 
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
         // Split keys into batches
         let chunks = keys
             .chunks(MAX_BATCH_GET_ITEM_SIZE)
@@ -885,7 +882,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
             .collect::<Vec<_>>();
         let store = self.clone();
 
-        async_stream::stream! {
+        Box::pin(async_stream::stream! {
             for chunk in chunks {
                 let values = store.read_batch_values_bytes(&chunk).await?;
 
@@ -893,7 +890,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
                     yield Ok(value);
                 }
             }
-        }
+        })
     }
 
     async fn find_keys_by_prefix(

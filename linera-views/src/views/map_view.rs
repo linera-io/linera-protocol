@@ -82,31 +82,8 @@ enum SlotState<V> {
 }
 
 /// Type alias for the stream used in multi-get operations.
-#[cfg(web)]
-type MultiGetStream<'a, C> = std::pin::Pin<
-    Box<
-        dyn futures::stream::Stream<
-                Item = Result<
-                    Option<Vec<u8>>,
-                    <<C as Context>::Store as crate::store::WithError>::Error,
-                >,
-            > + 'a,
-    >,
->;
-
-#[cfg(not(web))]
-type MultiGetStream<'a, C> = std::pin::Pin<
-    Box<
-        dyn futures::stream::Stream<
-                Item = Result<
-                    Option<Vec<u8>>,
-                    <<C as Context>::Store as crate::store::WithError>::Error,
-                >,
-            > + Send
-            + Sync
-            + 'a,
-    >,
->;
+type MultiGetStream<'a, C> =
+    crate::store::ReadValueStream<'a, <<C as Context>::Store as crate::store::WithError>::Error>;
 
 /// Iterator for multi-get operations on map views.
 pub struct MapViewMultiGet<V, I> {
@@ -489,11 +466,10 @@ where
             }
         }
 
-        let store_iter = Box::pin(
-            self.context
-                .store()
-                .read_multi_values_bytes_iter(vector_query),
-        );
+        let store_iter = self
+            .context
+            .store()
+            .read_multi_values_bytes_iter(vector_query);
 
         MapViewMultiGet {
             cached_iter: cached.into_iter(),

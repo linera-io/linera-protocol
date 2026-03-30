@@ -3,14 +3,14 @@
 
 //! Adds support for large values to a given store by splitting them between several keys.
 
-use futures::stream::{Stream, StreamExt};
+use futures::stream::StreamExt;
 use linera_base::ensure;
 use thiserror::Error;
 
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadValueStream, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -203,10 +203,7 @@ where
         Ok(big_values)
     }
 
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
         // Create big_keys (keys with [0,0,0,0] suffix) for the first segments
         let big_keys = keys
             .iter()
@@ -217,9 +214,9 @@ where
             })
             .collect::<Vec<_>>();
 
-        let mut first_segments_stream = Box::pin(self.store.read_multi_values_bytes_iter(big_keys));
+        let mut first_segments_stream = self.store.read_multi_values_bytes_iter(big_keys);
 
-        async_stream::stream! {
+        Box::pin(async_stream::stream! {
             for key in keys {
                 // Get the next value from the first segments stream
                 let value = match first_segments_stream.next().await {
@@ -267,7 +264,7 @@ where
 
                 yield Ok(Some(big_value));
             }
-        }
+        })
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
@@ -523,10 +520,7 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         self.inner.read_multi_values_bytes(keys).await
     }
 
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
         self.inner.read_multi_values_bytes_iter(keys)
     }
 

@@ -13,7 +13,6 @@ use std::{
     },
 };
 
-use futures::stream::Stream;
 use linera_base::ensure;
 use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle, SliceTransform};
 use serde::{Deserialize, Serialize};
@@ -30,7 +29,7 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadValueStream, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
@@ -498,14 +497,11 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             .await
     }
 
-    fn read_multi_values_bytes_iter(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
         let executor = self.executor.clone();
         let spawn_mode = self.spawn_mode;
 
-        async_stream::stream! {
+        Box::pin(async_stream::stream! {
             let mut current_position = 0;
             while current_position < keys.len() {
                 // Calculate the end position for this batch
@@ -528,7 +524,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
                     yield Ok(value);
                 }
             }
-        }
+        })
     }
 
     async fn find_keys_by_prefix(
