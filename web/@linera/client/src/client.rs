@@ -134,7 +134,7 @@ impl Client {
     pub async fn start(self) -> Result<RunningClient> {
         let cancellation_token = CancellationToken::new();
 
-        let chain_listener_result = match (&self.storage, &self.inner) {
+        let chain_listener_handle = match (&self.storage, &self.inner) {
             (Storage::Idb(storage), ClientContextInner::Idb(client)) => {
                 start_listener(
                     self.chain_listener_config,
@@ -159,7 +159,7 @@ impl Client {
         Ok(RunningClient {
             inner: self.inner,
             cancellation_token,
-            chain_listener_result,
+            chain_listener_handle,
         })
     }
 }
@@ -269,7 +269,7 @@ impl Client {
 pub struct RunningClient {
     pub(crate) inner: ClientContextInner,
     cancellation_token: CancellationToken,
-    chain_listener_result:
+    chain_listener_handle:
         future::Shared<future::RemoteHandle<Result<(), Rc<linera_client::Error>>>>,
 }
 
@@ -300,7 +300,7 @@ impl RunningClient {
     pub async fn async_dispose(self) -> Result<()> {
         self.cancellation_token.cancel();
 
-        if let Err(Some(e)) = self.chain_listener_result.await.map_err(Rc::into_inner) {
+        if let Err(Some(e)) = self.chain_listener_handle.await.map_err(Rc::into_inner) {
             return Err(e.into());
         }
 
@@ -370,7 +370,7 @@ async fn start_listener<C: linera_client::chain_listener::ClientContext + 'stati
     .await?;
     tracing::debug!("Client: chain listener started");
 
-    let (run_chain_listener, chain_listener_result) = async move {
+    let (run_chain_listener, chain_listener_handle) = async move {
         let result = chain_listener.await.map_err(|error| {
             tracing::error!("ChainListener error: {error:?}");
             Rc::new(error)
@@ -382,5 +382,5 @@ async fn start_listener<C: linera_client::chain_listener::ClientContext + 'stati
 
     wasm_bindgen_futures::spawn_local(run_chain_listener);
 
-    Ok(chain_listener_result.shared())
+    Ok(chain_listener_handle.shared())
 }
