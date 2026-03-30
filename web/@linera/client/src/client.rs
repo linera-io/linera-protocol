@@ -62,7 +62,7 @@ enum DeferredListener {
 #[derive(Default, serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 #[serde(default)]
-/// Options for `Client.chain` / `PreClient.chain`.
+/// Options for `Client.chain` / `Client.chain`.
 pub struct ChainOptions {
     /// The owner to use for operations on this chain.
     owner: Option<AccountOwner>,
@@ -82,13 +82,13 @@ pub enum StorageKind {
 /// Use `chain()` to perform pre-start operations (e.g. `addOwner`), then call
 /// `start()` to begin background synchronization and obtain a [`Client`].
 #[wasm_bindgen]
-pub struct PreClient {
+pub struct Client {
     inner: ClientContextInner,
     deferred_listener: DeferredListener,
 }
 
 #[wasm_bindgen]
-impl PreClient {
+impl Client {
     /// Creates a new client without starting the chain listener.
     ///
     /// After creating the client, you can perform operations like `addOwner`
@@ -108,7 +108,7 @@ impl PreClient {
         signer: Signer,
         storage_kind: StorageKind,
         options: Option<linera_client::Options>,
-    ) -> Result<PreClient> {
+    ) -> Result<Client> {
         let options = options.unwrap_or_default();
 
         tracing::debug!("acquiring wallet lock...");
@@ -131,12 +131,12 @@ impl PreClient {
     }
 
     /// Starts the chain listener for background synchronization, consuming this
-    /// `PreClient` and returning a [`Client`].
+    /// `Client` and returning a [`Client`].
     ///
     /// # Errors
     /// If the chain listener fails to start.
     #[wasm_bindgen]
-    pub async fn start(self) -> Result<Client> {
+    pub async fn start(self) -> Result<RunningClient> {
         let cancellation_token = CancellationToken::new();
 
         let chain_listener_result = match (self.deferred_listener, &self.inner) {
@@ -149,7 +149,7 @@ impl PreClient {
             _ => unreachable!("mismatched storage and client context"),
         };
 
-        Ok(Client {
+        Ok(RunningClient {
             inner: self.inner,
             cancellation_token,
             chain_listener_result,
@@ -157,12 +157,12 @@ impl PreClient {
     }
 }
 
-impl PreClient {
+impl Client {
     async fn create_idb(
         wallet: Wallet,
         signer: Signer,
         options: linera_client::Options,
-    ) -> Result<PreClient> {
+    ) -> Result<Client> {
         tracing::debug!("opening IndexedDB storage...");
         let mut storage = linera_base::time::timer::timeout(
             std::time::Duration::from_secs(10),
@@ -203,7 +203,7 @@ impl PreClient {
         #[expect(clippy::arc_with_non_send_sync)]
         let client = Arc::new(AsyncMutex::new(client));
 
-        Ok(PreClient {
+        Ok(Client {
             inner: ClientContextInner::Idb(client),
             deferred_listener: DeferredListener::Idb {
                 storage,
@@ -216,7 +216,7 @@ impl PreClient {
         wallet: Wallet,
         signer: Signer,
         options: linera_client::Options,
-    ) -> Result<PreClient> {
+    ) -> Result<Client> {
         tracing::debug!("opening in-memory storage...");
         let mut storage = storage::get_mem_storage(&wallet.name()).await?;
 
@@ -247,7 +247,7 @@ impl PreClient {
         #[expect(clippy::arc_with_non_send_sync)]
         let client = Arc::new(AsyncMutex::new(client));
 
-        Ok(PreClient {
+        Ok(Client {
             inner: ClientContextInner::Mem(client),
             deferred_listener: DeferredListener::Mem {
                 storage,
@@ -261,9 +261,9 @@ impl PreClient {
 /// to this API can be trusted to have originated from the user's
 /// request.
 ///
-/// Obtained by calling [`PreClient::start()`].
+/// Obtained by calling [`Client::start()`].
 #[wasm_bindgen]
-pub struct Client {
+pub struct RunningClient {
     pub(crate) inner: ClientContextInner,
     cancellation_token: CancellationToken,
     chain_listener_result:
@@ -271,7 +271,7 @@ pub struct Client {
 }
 
 #[wasm_bindgen]
-impl Client {
+impl RunningClient {
     /// Connect to a chain on the Linera network.
     ///
     /// # Errors
