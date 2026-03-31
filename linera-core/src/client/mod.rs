@@ -562,7 +562,8 @@ impl<Env: Environment> Client<Env> {
                 }
             }
             Ok::<_, chain_client::Error>(info)
-        }).await?;
+        })
+        .await?;
         // Now download the rest in batches from the remote node.
         while next_height < stop {
             // TODO(#2045): Analyze network errors instead of using a fixed batch size.

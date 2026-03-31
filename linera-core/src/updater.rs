@@ -776,7 +776,8 @@ where
                     .await?;
             }
             Ok::<_, chain_client::Error>(())
-        }).await?;
+        })
+        .await?;
 
         Ok(info)
     }
@@ -958,7 +959,8 @@ where
                                 .await?;
                         }
                         Ok::<_, chain_client::Error>(())
-                    }).await?;
+                    })
+                    .await?;
 
                     Ok::<_, chain_client::Error>(())
                 }
