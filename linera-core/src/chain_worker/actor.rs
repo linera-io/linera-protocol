@@ -185,7 +185,7 @@ where
         recipient: ChainId,
         latest_height: BlockHeight,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(), WorkerError>>,
+        callback: oneshot::Sender<Result<NetworkActions, WorkerError>>,
     },
 
     /// Handle a `RevertConfirm` request to re-add outbox entries and resend bundles.

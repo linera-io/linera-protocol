@@ -932,6 +932,16 @@ where
         self
     }
 
+    pub fn with_cross_chain_message_chunk_limit(self, limit: usize) -> Self {
+        let validator_clients = self.node_provider.0.lock().unwrap();
+        for validator in validator_clients.iter() {
+            let mut inner = validator.client.try_lock().expect("no contention at setup");
+            inner.state.set_cross_chain_message_chunk_limit(limit);
+        }
+        drop(validator_clients);
+        self
+    }
+
     pub fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
         let mut faulty_validators = vec![];
         let mut validator_clients = self.node_provider.0.lock().unwrap();
