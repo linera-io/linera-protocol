@@ -328,7 +328,7 @@ where
                             value
                         } else {
                             // The key has been evicted. Should be rare.
-                            Box::pin(self.store.read_value_bytes(key)).await?
+                            self.store.read_value_bytes(key).await?
                         }
                     } else {
                         uncached_stream.next().await
