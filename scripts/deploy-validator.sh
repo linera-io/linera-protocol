@@ -1064,6 +1064,7 @@ main() {
 # Generated: $(date -Iseconds)
 # This file is the source of truth for Docker Compose configuration
 # It persists all settings across container restarts
+# Uncomment and modify any variable below to override defaults.
 
 # Deployment metadata
 DEPLOYMENT_HOST=${host}
@@ -1074,7 +1075,7 @@ DEPLOYMENT_COMMIT=${git_commit}
 DEPLOYMENT_CUSTOM_TAG=${custom_tag:-N/A}
 DEPLOYMENT_DATE=$(date -Iseconds)
 
-# Domain and SSL configuration (used by docker-compose.yml)
+# Domain and SSL configuration
 DOMAIN=${host}
 ACME_EMAIL=${ACME_EMAIL}
 
@@ -1086,17 +1087,95 @@ GENESIS_PATH_PREFIX=${genesis_path_prefix}
 # Validator configuration
 VALIDATOR_PUBLIC_KEY=${public_key}
 
-# Docker image
+# Docker images
 LINERA_IMAGE=${LINERA_IMAGE}
+#SCYLLA_IMAGE=scylladb/scylla:6.2.3
+#CADDY_IMAGE=caddy:2.10.2-alpine
+#WATCHTOWER_IMAGE=nickfedor/watchtower:1.15.0
 
 # ScyllaDB configuration
 NUM_SHARDS=${num_shards}
 ${xfs_path:+XFS_PATH=${xfs_path}}
 ${xfs_path:+CACHE_SIZE=${cache_size}}
 
-# Network configuration
+# Network ports
+#WEB_HTTP_PORT=80
+#WEB_HTTPS_PORT=443
+#PROXY_PORT=19100
+#SCYLLA_PORT=9042
 FAUCET_PORT=8080
 LINERA_STORAGE_SERVICE_PORT=1235
+
+# Storage
+#STORAGE_REPLICATION_FACTOR=1
+
+# ScyllaDB tuning
+#SCYLLA_DEVELOPER_MODE=0
+#SCYLLA_OVERPROVISIONED=1
+#SCYLLA_HEALTHCHECK_INTERVAL=10s
+#SCYLLA_HEALTHCHECK_TIMEOUT=10s
+#SCYLLA_HEALTHCHECK_RETRIES=20
+#SCYLLA_HEALTHCHECK_START_PERIOD=60s
+
+# Watchtower auto-update interval (seconds)
+#WATCHTOWER_INTERVAL=30
+
+# Observability - Prometheus metrics push (OTLP format)
+#PROMETHEUS_OTLP_URL=https://your-prometheus-endpoint/otlp
+#PROMETHEUS_OTLP_USER=
+#PROMETHEUS_OTLP_PASS=
+
+# Observability - Loki logs push
+#LOKI_PUSH_URL=https://your-loki-endpoint/loki/api/v1/push
+#LOKI_PUSH_USER=
+#LOKI_PUSH_PASS=
+
+# Observability - Tempo traces push
+#TEMPO_OTLP_URL=https://your-tempo-endpoint/tempo/otlp
+#TEMPO_OTLP_USER=
+#TEMPO_OTLP_PASS=
+
+# Resource limits (adjust based on host machine specs)
+# Defaults are tuned for an 8-core / 32GB RAM machine.
+
+# Web (Caddy reverse proxy)
+#LIMIT_CPUS_WEB=1.00
+#LIMIT_MEM_WEB=1536M
+
+# ScyllaDB
+# WARNING: LIMIT_CPUS_SCYLLA also controls ScyllaDB's shard count (--smp).
+# This value can only INCREASE after first start. Reducing it requires a full
+# data wipe (delete the linera-scylla-data volume and re-sync from genesis).
+#LIMIT_CPUS_SCYLLA=2.00
+#LIMIT_MEM_SCYLLA=10G
+
+# Linera proxy
+#LIMIT_CPUS_PROXY=1.00
+#LIMIT_MEM_PROXY=512M
+
+# Linera shards (per-shard limits for fine-grained tuning)
+# Each shard can be configured independently. Useful when some shards handle
+# more chains than others due to hash distribution.
+#LIMIT_CPUS_SHARD_0=1.50
+#LIMIT_MEM_SHARD_0=2560M
+#LIMIT_CPUS_SHARD_1=1.50
+#LIMIT_MEM_SHARD_1=2560M
+#LIMIT_CPUS_SHARD_2=1.50
+#LIMIT_MEM_SHARD_2=2560M
+#LIMIT_CPUS_SHARD_3=1.50
+#LIMIT_MEM_SHARD_3=2560M
+
+# Observability stack
+#LIMIT_CPUS_ALLOY=0.50
+#LIMIT_MEM_ALLOY=512M
+#LIMIT_CPUS_PROMETHEUS=0.50
+#LIMIT_MEM_PROMETHEUS=512M
+#LIMIT_CPUS_GRAFANA=0.50
+#LIMIT_MEM_GRAFANA=512M
+
+# Watchtower
+#LIMIT_CPUS_WATCHTOWER=0.25
+#LIMIT_MEM_WATCHTOWER=256M
 EOF
 	log INFO "Environment variables saved to ${env_file} for persistence across restarts"
 }
