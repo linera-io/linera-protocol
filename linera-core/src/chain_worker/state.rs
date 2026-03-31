@@ -1052,13 +1052,36 @@ where
             );
         }
         let chain = &mut self.chain;
-        chain
+        match chain
             .remove_bundles_from_inboxes(
                 block.header.timestamp,
                 false,
                 block.body.incoming_bundles(),
             )
-            .await?;
+            .await
+        {
+            Ok(()) => {}
+            Err(ChainError::InboxGapDetected {
+                origin,
+                expected_height,
+                ..
+            }) if self.config.allow_revert_confirm => {
+                warn!(
+                    "Inbox gap detected for {chain_id} from {origin}: \
+                    missing height {expected_height}; requesting resend",
+                );
+                let mut actions = NetworkActions::default();
+                actions
+                    .cross_chain_requests
+                    .push(CrossChainRequest::RevertConfirm {
+                        sender: origin,
+                        recipient: chain_id,
+                        missing_height: expected_height,
+                    });
+                return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
+            }
+            Err(e) => return Err(e.into()),
+        }
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
         let verified_outcome =

@@ -252,11 +252,16 @@ where
         // Reconcile the bundle with the next added bundle, or mark it as removed.
         let already_known = match self.added_bundles.front().await? {
             Some(previous_bundle) => {
-                // Rationale: If the two cursors are equal, then the bundles should match.
-                // Otherwise, at this point we know that `self.next_cursor_to_add >
-                // Cursor::from(&previous_bundle) > cursor`. Notably, `bundle` will never be
-                // added in the future. Therefore, we should fail instead of adding
-                // it to `self.removed_bundles`.
+                let previous_cursor = Cursor::from(&previous_bundle);
+                if previous_cursor > cursor {
+                    // The sender delivered bundles starting at a later position
+                    // but never delivered the one at `cursor` — this is a gap.
+                    return Err(InboxError::GapDetected {
+                        expected_height: bundle.height,
+                        actual_height: previous_bundle.height,
+                    });
+                }
+                // The two cursors are equal, so the bundles should match.
                 ensure!(
                     bundle == &previous_bundle,
                     InboxError::UnexpectedBundle {
