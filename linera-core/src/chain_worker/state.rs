@@ -888,7 +888,7 @@ where
                 .storage
                 .read_confirmed_block(hash)
                 .await?
-                .ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound { height, chain_id })?;
+                .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             self.chain.preprocess_block(&block).await?;
         }
         Ok(())
@@ -1345,7 +1345,7 @@ where
                 _ => {
                     return Err(WorkerError::ConfirmedBlockHashNotFound {
                         height: current_height,
-                        chain_id: recipient,
+                        chain_id: self.chain_id(),
                     })
                 }
             };
@@ -1353,7 +1353,10 @@ where
                 .storage
                 .read_confirmed_block(hash)
                 .await?
-                .ok_or_else(|| WorkerError::MissingCertificateValue)?;
+                .ok_or_else(|| WorkerError::LocalBlockNotFound {
+                    height: current_height,
+                    chain_id: self.chain_id(),
+                })?;
             match block.block().body.previous_message_blocks.get(&recipient) {
                 Some((_, prev_height)) if *prev_height >= missing_height => {
                     current_height = *prev_height;
@@ -1434,7 +1437,7 @@ where
                 .into_iter()
                 .next()
                 .flatten()
-                .ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound { height, chain_id })?;
+                .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
 
