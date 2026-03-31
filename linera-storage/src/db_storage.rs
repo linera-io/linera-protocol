@@ -1122,7 +1122,7 @@ where
             for hash in &hashes {
                 let root_key = RootKey::BlockHash(*hash).bytes();
                 let store = self.database.open_shared(&root_key)?;
-                let values = Box::pin(store.read_multi_values_bytes(&block_keys)).await?;
+                let values = store.read_multi_values_bytes(&block_keys).await?;
                 let result = match (values[0].as_ref(), values[1].as_ref()) {
                     (Some(lite_cert_bytes), Some(confirmed_block_bytes)) => {
                         self.deserialize_and_cache_certificate(lite_cert_bytes, confirmed_block_bytes)
@@ -1337,7 +1337,7 @@ where
                 };
                 let root_key = RootKey::BlockHash(hash).bytes();
                 let store = self.database.open_shared(&root_key)?;
-                let values = Box::pin(store.read_multi_values_bytes(&block_keys)).await?;
+                let values = store.read_multi_values_bytes(&block_keys).await?;
                 match (values[0].as_ref(), values[1].as_ref()) {
                     (Some(lite_cert_bytes), Some(confirmed_block_bytes)) => {
                         if let Some(arc) = self
