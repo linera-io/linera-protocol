@@ -358,6 +358,11 @@ pub enum WorkerError {
     },
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
+    #[error("Block at height {height} on chain {chain_id} not found in local storage")]
+    LocalBlockNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
     #[error("The hash certificate doesn't match its value.")]
     InvalidLiteCertificate,
     #[error("Fast blocks cannot query oracles")]
@@ -425,6 +430,7 @@ impl WorkerError {
             | WorkerError::InvalidCrossChainRequest
             | WorkerError::ViewError(_)
             | WorkerError::ConfirmedBlockHashNotFound { .. }
+            | WorkerError::LocalBlockNotFound { .. }
             | WorkerError::MissingNetworkDescription
             | WorkerError::ChainActorSendError { .. }
             | WorkerError::ChainActorRecvError { .. }

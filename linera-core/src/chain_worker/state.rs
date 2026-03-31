@@ -888,7 +888,7 @@ where
                 .storage
                 .read_confirmed_block(hash)
                 .await?
-                .ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound { height, chain_id })?;
+                .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             self.chain.preprocess_block(&block).await?;
         }
         Ok(())
@@ -1345,7 +1345,7 @@ where
                 _ => {
                     return Err(WorkerError::ConfirmedBlockHashNotFound {
                         height: current_height,
-                        chain_id: recipient,
+                        chain_id: self.chain_id(),
                     })
                 }
             };
@@ -1353,7 +1353,10 @@ where
                 .storage
                 .read_confirmed_block(hash)
                 .await?
-                .ok_or_else(|| WorkerError::MissingCertificateValue)?;
+                .ok_or_else(|| WorkerError::LocalBlockNotFound {
+                    height: current_height,
+                    chain_id: self.chain_id(),
+                })?;
             match block.block().body.previous_message_blocks.get(&recipient) {
                 Some((_, prev_height)) if *prev_height >= missing_height => {
                     current_height = *prev_height;
@@ -1410,8 +1413,9 @@ where
         let chain_id = self.chain_id();
         let tip_height = self.chain.tip_state.get().next_block_height;
 
-        // 1. Collect all sender chain IDs before clearing.
+        // 1. Collect all sender chain IDs and block hashes before clearing.
         let sender_ids = self.chain.inboxes.indices().await?;
+        let hashes = self.chain.confirmed_log.read(..).await?;
 
         // 2. Clear the chain state entirely and save.
         self.chain.clear();
@@ -1422,19 +1426,14 @@ where
             re-executing all blocks"
         );
 
-        // 3. Re-load certificates one at a time from storage and re-process them.
-        //    Certificates are stored separately (by chain + height) so they
-        //    survive the chain state clear.
-        for height_u64 in 0..tip_height.0 {
-            let height = BlockHeight(height_u64);
+        // 3. Re-load certificates one at a time by hash and re-process them.
+        for (index, hash) in hashes.into_iter().enumerate() {
+            let height = BlockHeight(index as u64);
             let cert = self
                 .storage
-                .read_certificates_by_heights(chain_id, &[height])
+                .read_certificate(hash)
                 .await?
-                .into_iter()
-                .next()
-                .flatten()
-                .ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound { height, chain_id })?;
+                .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
 
