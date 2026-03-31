@@ -565,23 +565,28 @@ impl<Env: Environment> Client<Env> {
             .local_node
             .get_preprocessed_block_hashes(chain_id, next_height, end)
             .await?;
-        let mut cert_stream = self.storage_client().read_certificates_iter(hashes);
-        while let Some(result) = cert_stream.next().await {
-            match result? {
-                Some(certificate) => {
-                    if let Some(until) = until_block_time {
-                        if certificate.value().block().header.timestamp >= until {
-                            break;
+        last_info = Box::pin(async {
+            let mut cert_stream = self.storage_client().read_certificates_iter(hashes);
+            let mut info = last_info;
+            while let Some(result) = cert_stream.next().await {
+                match result? {
+                    Some(certificate) => {
+                        if let Some(until) = until_block_time {
+                            if certificate.value().block().header.timestamp >= until {
+                                break;
+                            }
                         }
+                        info = self.handle_certificate(certificate).await?.info;
                     }
-                    last_info = self.handle_certificate(certificate).await?.info;
-                }
-                None => {
-                    // Certificate not found in local storage — skip, will be
-                    // downloaded from the remote node below.
+                    None => {
+                        // Certificate not found in local storage — skip, will be
+                        // downloaded from the remote node below.
+                    }
                 }
             }
-        }
+            Ok::<_, chain_client::Error>(info)
+        })
+        .await?;
         Ok(last_info)
     }
 

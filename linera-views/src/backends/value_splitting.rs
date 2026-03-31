@@ -254,7 +254,7 @@ where
                     .map(|i| ValueSplittingStore::<S>::get_segment_key(&key, i))
                     .collect::<Result<Vec<_>,_>>()?;
 
-                let segments = self.store.read_multi_values_bytes(&segment_keys).await
+                let segments = Box::pin(self.store.read_multi_values_bytes(&segment_keys)).await
                     .map_err(ValueSplittingError::InnerStoreError)?;
 
                 for segment in segments {

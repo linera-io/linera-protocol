@@ -884,7 +884,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
 
         Box::pin(async_stream::stream! {
             for chunk in chunks {
-                let values = store.read_batch_values_bytes(&chunk).await?;
+                let values = Box::pin(store.read_batch_values_bytes(&chunk)).await?;
 
                 for value in values {
                     yield Ok(value);
