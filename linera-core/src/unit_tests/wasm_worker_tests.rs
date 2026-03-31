@@ -23,8 +23,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle, OperationResult,
-        OutgoingMessageExt,
+        BundleExecutionPolicy, BundleFailurePolicy, IncomingBundle, MessageAction, MessageBundle,
+        OperationResult, OutgoingMessageExt,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
 };
@@ -452,7 +452,10 @@ where
             proposed_block.clone(),
             None,
             vec![],
-            BundleExecutionPolicy::AutoRetry { max_failures: 3 },
+            BundleExecutionPolicy {
+                on_failure: BundleFailurePolicy::AutoRetry { max_failures: 3 },
+                time_budget: None,
+            },
         )
         .await?;
 
@@ -478,7 +481,7 @@ where
             modified_block.clone(),
             None,
             vec![],
-            BundleExecutionPolicy::Abort,
+            BundleExecutionPolicy::committed(),
         )
         .await?;
 

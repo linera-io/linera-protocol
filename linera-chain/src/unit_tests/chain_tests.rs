@@ -71,7 +71,7 @@ impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
             None,
             published_blobs,
             None,
-            BundleExecutionPolicy::Abort,
+            BundleExecutionPolicy::committed(),
         )
         .await
     }
