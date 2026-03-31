@@ -12,7 +12,6 @@
 #
 # Options:
 #   --local-build       - Build Docker image locally instead of using registry image
-#   --remote-image      - Explicitly use remote Docker image from registry (deprecated, now default)
 #   --skip-genesis      - Skip downloading genesis configuration
 #   --force-genesis     - Force re-download of genesis configuration
 #   --custom-tag TAG    - Use custom image tag (for testing, no _release suffix)
@@ -122,7 +121,6 @@ ARGUMENTS:
 
 OPTIONS:
     --local-build       Build Docker image locally instead of using registry image
-    --remote-image      Explicitly use remote Docker image from registry (deprecated, now default)
     --skip-genesis      Skip downloading genesis configuration
     --force-genesis     Force re-download of genesis configuration even if it exists
     --custom-tag TAG    Use custom image tag (for testing, no _release suffix)
@@ -258,25 +256,20 @@ verify_dependencies() {
 	log DEBUG "All required dependencies verified successfully"
 }
 
-# Get Git branch information
+# Get Git branch information (sets GIT_BRANCH, GIT_BRANCH_FORMATTED, GIT_COMMIT)
 get_git_info() {
-	local branch_name
-	local git_commit
-
-	if ! branch_name=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null); then
+	if ! GIT_BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null); then
 		log WARNING "Unable to detect Git branch, using 'unknown'"
-		branch_name="unknown"
+		GIT_BRANCH="unknown"
 	fi
 
-	if ! git_commit=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null); then
+	if ! GIT_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null); then
 		log WARNING "Unable to detect Git commit, using 'unknown'"
-		git_commit="unknown"
+		GIT_COMMIT="unknown"
 	fi
 
 	# Replace underscores with dashes in branch name (for URL compatibility)
-	local formatted_branch="${branch_name//_/-}"
-
-	echo "$branch_name|$formatted_branch|$git_commit"
+	GIT_BRANCH_FORMATTED="${GIT_BRANCH//_/-}"
 }
 
 # Build Docker image locally
@@ -496,12 +489,31 @@ download_genesis_config() {
 	return 0
 }
 
-# Generate validator keys
+# Generate validator keys (idempotent — skips if server.json already exists)
 generate_validator_keys() {
 	local image="$1"
 	local config_file="validator-config.toml"
+	local server_json="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/server.json"
 
-	# Log to stderr so it doesn't get captured in the output
+	if [ -f "${server_json}" ]; then
+		log INFO "Validator keys already exist (${server_json}), skipping generation" >&2
+		log INFO "To regenerate, remove ${server_json} and re-run" >&2
+		# Extract public key from existing server.json
+		local public_key
+		public_key=$(docker run --rm \
+			-v "${REPO_ROOT}/${DOCKER_COMPOSE_DIR}:/config" \
+			-w /config \
+			"${image}" \
+			/linera-server generate --validators "${config_file}" 2>/dev/null) || true
+		if [ -z "${public_key}" ]; then
+			log WARNING "Could not extract public key from existing config" >&2
+			echo "EXISTING_KEY_SEE_SERVER_JSON"
+		else
+			echo "${public_key}"
+		fi
+		return 0
+	fi
+
 	log INFO "Generating validator keys..." >&2
 
 	if [[ "${DRY_RUN:-0}" == "1" ]]; then
@@ -547,29 +559,6 @@ start_services() {
 
 	log INFO "Docker Compose services started successfully"
 	return 0
-}
-
-# Stop Docker Compose services
-stop_services() {
-	local compose_dir="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}"
-
-	log INFO "Stopping Docker Compose services..."
-
-	cd "${compose_dir}"
-	docker compose down || true
-}
-
-# Cleanup function
-cleanup() {
-	local exit_code=$?
-
-	if [ ${exit_code} -ne 0 ]; then
-		log WARNING "Script exited with error code: ${exit_code}"
-		log WARNING "You may need to clean up partial deployments"
-		log WARNING "To stop services: cd ${DOCKER_COMPOSE_DIR} && docker compose down"
-	fi
-
-	exit ${exit_code}
 }
 
 # Validate host format
@@ -671,15 +660,13 @@ validate_xfs_partition() {
 	fi
 
 	# Check write permissions
-	local test_file="${xfs_path}/.scylla_write_test_$$"
-	if ! touch "${test_file}" 2>/dev/null; then
+	if [ ! -w "${xfs_path}" ]; then
 		log WARNING "Cannot write to ${xfs_path}"
 		log INFO "Docker may need write permissions to this path"
-		log INFO "You may need to run: sudo chown -R $(id -u):$(id -g) ${xfs_path}"
+		log INFO "You may need to run: sudo chown -R 999:999 ${xfs_path}"
 		log INFO "Continuing with standard Docker volumes instead"
 		return 0
 	fi
-	rm -f "${test_file}"
 
 	log INFO "Path configuration summary:"
 	log INFO "  Path: ${xfs_path}"
@@ -727,13 +714,6 @@ services:
     volumes:
       # Override default volume with XFS bind mount
       - ${scylla_data_dir}:/var/lib/scylla
-    # Additional ScyllaDB optimizations for XFS
-    environment:
-      SCYLLA_AUTO_CONF: 1
-      # Enable direct I/O on XFS
-      SCYLLA_DIRECT_IO_MODE: "true"
-      # Set appropriate cache size (adjust based on available RAM)
-      SCYLLA_CACHE_SIZE: "${cache_size}"
 EOF
 
 	log INFO "Docker Compose override generated at: ${compose_override}"
@@ -751,7 +731,6 @@ main() {
 	local host=""
 	local email=""
 	local use_local_build=0
-	local use_remote_image=0
 	local skip_genesis=0
 	local force_genesis=0
 	local dry_run=0
@@ -768,11 +747,6 @@ main() {
 			;;
 		--local-build)
 			use_local_build=1
-			shift
-			;;
-		--remote-image)
-			# Deprecated option, remote is now default
-			use_remote_image=1
 			shift
 			;;
 		--skip-genesis)
@@ -877,9 +851,6 @@ main() {
 		exit 1
 	fi
 
-	# Set up error handling
-	trap cleanup EXIT
-
 	# Change to repository root
 	cd "${REPO_ROOT}"
 
@@ -919,8 +890,11 @@ main() {
 		log INFO "For maximum I/O performance in production, consider using XFS (optional)"
 	fi
 
-	# Get Git information
-	IFS='|' read -r branch_name formatted_branch git_commit <<<"$(get_git_info)"
+	# Get Git information (sets GIT_BRANCH, GIT_BRANCH_FORMATTED, GIT_COMMIT)
+	get_git_info
+	local branch_name="${GIT_BRANCH}"
+	local formatted_branch="${GIT_BRANCH_FORMATTED}"
+	local git_commit="${GIT_COMMIT}"
 
 	log INFO "Git branch: ${branch_name} (formatted: ${formatted_branch})"
 	log INFO "Git commit: ${git_commit}"
@@ -989,6 +963,15 @@ main() {
 	log INFO "  - Path prefix: ${genesis_path_prefix}"
 	log INFO "  - Full URL: ${genesis_url}"
 
+	# Download genesis configuration first (non-destructive, safe to fail early)
+	if ! download_genesis_config "${genesis_url}" "${skip_genesis}" "${force_genesis}"; then
+		log ERROR "Failed to handle genesis configuration"
+		if [[ "${skip_genesis}" != "1" ]]; then
+			log ERROR "You can retry with --skip-genesis to continue without genesis"
+		fi
+		exit 1
+	fi
+
 	# Generate validator configuration
 	if ! generate_validator_config "${host}" "${port}" "${metrics_port}" "${num_shards}"; then
 		log ERROR "Failed to generate validator configuration"
@@ -1003,16 +986,7 @@ main() {
 		fi
 	fi
 
-	# Download genesis configuration
-	if ! download_genesis_config "${genesis_url}" "${skip_genesis}" "${force_genesis}"; then
-		log ERROR "Failed to handle genesis configuration"
-		if [[ "${skip_genesis}" != "1" ]]; then
-			log ERROR "You can retry with --skip-genesis to continue without genesis"
-		fi
-		exit 1
-	fi
-
-	# Generate validator keys
+	# Generate validator keys (idempotent — skips if server.json exists)
 	local public_key
 	if ! public_key=$(generate_validator_keys "${LINERA_IMAGE}"); then
 		log ERROR "Failed to generate validator keys" >&2
@@ -1057,16 +1031,34 @@ main() {
 	log INFO "  Restart services:"
 	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose restart"
 
-	# Create .env file for Docker Compose (this is the source of truth)
+	# Create .env from the production template, then set deployment-specific values
 	local env_file="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/.env"
-	cat >"${env_file}" <<EOF
-# Validator Deployment Configuration
-# Generated: $(date -Iseconds)
-# This file is the source of truth for Docker Compose configuration
-# It persists all settings across container restarts
-# Uncomment and modify any variable below to override defaults.
+	local template_file="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/.env.production.template"
 
-# Deployment metadata
+	if [[ ! -f "${template_file}" ]]; then
+		log ERROR "Template not found: ${template_file}"
+		exit 1
+	fi
+
+	cp "${template_file}" "${env_file}"
+
+	# Set deployment-specific values (uncomment and replace template placeholders)
+	sed -i \
+		-e "s|^DOMAIN=.*|DOMAIN=${host}|" \
+		-e "s|^ACME_EMAIL=.*|ACME_EMAIL=${ACME_EMAIL}|" \
+		-e "s|^GENESIS_URL=.*|GENESIS_URL=${genesis_url}|" \
+		-e "s|^GENESIS_BUCKET=.*|GENESIS_BUCKET=${genesis_bucket}|" \
+		-e "s|^GENESIS_PATH_PREFIX=.*|GENESIS_PATH_PREFIX=${genesis_path_prefix}|" \
+		-e "s|^VALIDATOR_KEY=.*|VALIDATOR_KEY=${public_key}|" \
+		-e "s|^VALIDATOR_NAME=.*|VALIDATOR_NAME=${host}|" \
+		-e "s|^HOSTNAME=.*|HOSTNAME=${host}|" \
+		-e "s|^#LINERA_IMAGE=.*|LINERA_IMAGE=${LINERA_IMAGE}|" \
+		"${env_file}"
+
+	# Append deployment metadata (not in template — tracking info only)
+	cat >>"${env_file}" <<EOF
+
+# Deployment metadata (generated by deploy-validator.sh)
 DEPLOYMENT_HOST=${host}
 DEPLOYMENT_EMAIL=${ACME_EMAIL}
 DEPLOYMENT_PUBLIC_KEY=${public_key}
@@ -1074,110 +1066,12 @@ DEPLOYMENT_BRANCH=${branch_name}
 DEPLOYMENT_COMMIT=${git_commit}
 DEPLOYMENT_CUSTOM_TAG=${custom_tag:-N/A}
 DEPLOYMENT_DATE=$(date -Iseconds)
-
-# Domain and SSL configuration
-DOMAIN=${host}
-ACME_EMAIL=${ACME_EMAIL}
-
-# Genesis configuration (critical for validator operation)
-GENESIS_URL=${genesis_url}
-GENESIS_BUCKET=${genesis_bucket}
-GENESIS_PATH_PREFIX=${genesis_path_prefix}
-
-# Validator configuration
-VALIDATOR_PUBLIC_KEY=${public_key}
-
-# Docker images
-LINERA_IMAGE=${LINERA_IMAGE}
-#SCYLLA_IMAGE=scylladb/scylla:6.2.3
-#CADDY_IMAGE=caddy:2.10.2-alpine
-#WATCHTOWER_IMAGE=nickfedor/watchtower:1.15.0
-
-# ScyllaDB configuration
 NUM_SHARDS=${num_shards}
 ${xfs_path:+XFS_PATH=${xfs_path}}
 ${xfs_path:+CACHE_SIZE=${cache_size}}
-
-# Network ports
-#WEB_HTTP_PORT=80
-#WEB_HTTPS_PORT=443
-#PROXY_PORT=19100
-#SCYLLA_PORT=9042
-FAUCET_PORT=8080
-LINERA_STORAGE_SERVICE_PORT=1235
-
-# Storage
-#STORAGE_REPLICATION_FACTOR=1
-
-# ScyllaDB tuning
-#SCYLLA_DEVELOPER_MODE=0
-#SCYLLA_OVERPROVISIONED=1
-#SCYLLA_HEALTHCHECK_INTERVAL=10s
-#SCYLLA_HEALTHCHECK_TIMEOUT=10s
-#SCYLLA_HEALTHCHECK_RETRIES=20
-#SCYLLA_HEALTHCHECK_START_PERIOD=60s
-
-# Watchtower auto-update interval (seconds)
-#WATCHTOWER_INTERVAL=30
-
-# Observability - Prometheus metrics push (OTLP format)
-#PROMETHEUS_OTLP_URL=https://your-prometheus-endpoint/otlp
-#PROMETHEUS_OTLP_USER=
-#PROMETHEUS_OTLP_PASS=
-
-# Observability - Loki logs push
-#LOKI_PUSH_URL=https://your-loki-endpoint/loki/api/v1/push
-#LOKI_PUSH_USER=
-#LOKI_PUSH_PASS=
-
-# Observability - Tempo traces push
-#TEMPO_OTLP_URL=https://your-tempo-endpoint/tempo/otlp
-#TEMPO_OTLP_USER=
-#TEMPO_OTLP_PASS=
-
-# Resource limits (adjust based on host machine specs)
-# Defaults are tuned for an 8-core / 32GB RAM machine.
-
-# Web (Caddy reverse proxy)
-#LIMIT_CPUS_WEB=1.00
-#LIMIT_MEM_WEB=1536M
-
-# ScyllaDB
-# WARNING: LIMIT_CPUS_SCYLLA also controls ScyllaDB's shard count (--smp).
-# This value can only INCREASE after first start. Reducing it requires a full
-# data wipe (delete the linera-scylla-data volume and re-sync from genesis).
-#LIMIT_CPUS_SCYLLA=2.00
-#LIMIT_MEM_SCYLLA=10G
-
-# Linera proxy
-#LIMIT_CPUS_PROXY=1.00
-#LIMIT_MEM_PROXY=512M
-
-# Linera shards (per-shard limits for fine-grained tuning)
-# Each shard can be configured independently. Useful when some shards handle
-# more chains than others due to hash distribution.
-#LIMIT_CPUS_SHARD_0=1.50
-#LIMIT_MEM_SHARD_0=2560M
-#LIMIT_CPUS_SHARD_1=1.50
-#LIMIT_MEM_SHARD_1=2560M
-#LIMIT_CPUS_SHARD_2=1.50
-#LIMIT_MEM_SHARD_2=2560M
-#LIMIT_CPUS_SHARD_3=1.50
-#LIMIT_MEM_SHARD_3=2560M
-
-# Observability stack
-#LIMIT_CPUS_ALLOY=0.50
-#LIMIT_MEM_ALLOY=512M
-#LIMIT_CPUS_PROMETHEUS=0.50
-#LIMIT_MEM_PROMETHEUS=512M
-#LIMIT_CPUS_GRAFANA=0.50
-#LIMIT_MEM_GRAFANA=512M
-
-# Watchtower
-#LIMIT_CPUS_WATCHTOWER=0.25
-#LIMIT_MEM_WATCHTOWER=256M
 EOF
-	log INFO "Environment variables saved to ${env_file} for persistence across restarts"
+
+	log INFO "Environment variables saved to ${env_file} (from template + deploy values)"
 }
 
 # Run main function with all arguments
