@@ -1415,8 +1415,7 @@ where
 
         // 1. Collect all sender chain IDs and block hashes before clearing.
         let sender_ids = self.chain.inboxes.indices().await?;
-        let num_blocks = self.chain.confirmed_log.count();
-        let hashes = self.chain.confirmed_log.read(0..num_blocks).await?;
+        let hashes = self.chain.confirmed_log.read(..).await?;
 
         // 2. Clear the chain state entirely and save.
         self.chain.clear();
