@@ -466,11 +466,10 @@ where
         Ok(maybe_blobs)
     }
 
-    /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
+    /// Creates cross-chain requests for a single recipient from its outbox.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
-    /// Creates cross-chain requests for a single recipient from its outbox.
     async fn create_cross_chain_actions_for_recipient(
         &self,
         recipient: ChainId,
@@ -493,6 +492,7 @@ where
         })
     }
 
+    /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
     async fn create_network_actions(
         &self,
         old_round: Option<Round>,
