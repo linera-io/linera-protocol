@@ -90,7 +90,8 @@ where
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Block>>,
-    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache:
+        Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -131,8 +132,8 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Block>>,
-        execution_state_cache: Arc<
-            UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>,
+        execution_state_cache: Option<
+            Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
         chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
@@ -1084,30 +1085,33 @@ where
         }
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome =
-            if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
-                chain.execution_state = execution_state
-                    .with_context(|ctx| {
-                        chain
-                            .execution_state
-                            .context()
-                            .clone_with_base_key(ctx.base_key().bytes.clone())
-                    })
-                    .await;
-                outcome.clone()
-            } else {
-                let (_, verified, _resource_tracker) = chain
-                    .execute_block(
-                        proposed_block,
-                        local_time,
-                        None,
-                        &published_blobs,
-                        oracle_responses,
-                        BundleExecutionPolicy::committed(),
-                    )
-                    .await?;
-                verified
-            };
+        let verified_outcome = if let Some(mut execution_state) = self
+            .execution_state_cache
+            .as_ref()
+            .and_then(|cache| cache.remove(&block_hash))
+        {
+            chain.execution_state = execution_state
+                .with_context(|ctx| {
+                    chain
+                        .execution_state
+                        .context()
+                        .clone_with_base_key(ctx.base_key().bytes.clone())
+                })
+                .await;
+            outcome.clone()
+        } else {
+            let (_, verified, _resource_tracker) = chain
+                .execute_block(
+                    proposed_block,
+                    local_time,
+                    None,
+                    &published_blobs,
+                    oracle_responses,
+                    BundleExecutionPolicy::committed(),
+                )
+                .await?;
+            verified
+        };
         // We should always agree on the messages and state hash.
         if outcome != verified_outcome {
             if let Some(min_duration) = self.config.reset_on_incorrect_outcome {
@@ -1800,7 +1804,11 @@ where
         let next_block_height = self.chain.tip_state.get().next_block_height;
         let local_time = self.storage.clock().current_time();
         if let Some(requested_block) = block_hash {
-            if let Some(mut state) = self.execution_state_cache.remove(&requested_block) {
+            if let Some(mut state) = self
+                .execution_state_cache
+                .as_ref()
+                .and_then(|cache| cache.remove(&requested_block))
+            {
                 // We try to use a cached execution state for the requested block.
                 // We want to pretend that this block is committed, so we set the next block height.
                 let next_block_height = next_block_height
@@ -1822,7 +1830,9 @@ where
                     .query_application(context, query, self.service_runtime_endpoint.as_mut())
                     .await
                     .with_execution_context(ChainExecutionContext::Query)?;
-                self.execution_state_cache.insert(&requested_block, state);
+                if let Some(cache) = &self.execution_state_cache {
+                    cache.insert(&requested_block, state);
+                }
                 Ok((outcome, next_block_height))
             } else {
                 tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
@@ -2198,15 +2208,17 @@ where
         .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
-        self.execution_state_cache.insert(
-            &block_hash,
-            Box::pin(
-                self.chain
-                    .execution_state
-                    .with_context(|ctx| InactiveContext(ctx.base_key().clone())),
-            )
-            .await,
-        );
+        if let Some(cache) = &self.execution_state_cache {
+            cache.insert(
+                &block_hash,
+                Box::pin(
+                    self.chain
+                        .execution_state
+                        .with_context(|ctx| InactiveContext(ctx.base_key().clone())),
+                )
+                .await,
+            );
+        }
         Ok((executed_block, resource_tracker))
     }
 
