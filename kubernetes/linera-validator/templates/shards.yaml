@@ -118,6 +118,8 @@ spec:
                 --event-cache-size {{ .Values.storageCacheSizes.eventCacheSize | int }} \
                 --block-cache-size {{ .Values.blockCacheSize | int }} \
                 --execution-state-cache-size {{ .Values.executionStateCacheSize | int }} \
+                --allow-revert-confirm \
+                --reset-on-incorrect-outcome-mins 60 \
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
