@@ -1037,40 +1037,6 @@ where
             };
         // We should always agree on the messages and state hash.
         if outcome != verified_outcome {
-            // Log detailed diff of outgoing messages to help diagnose non-determinism.
-            for (tx_idx, (submitted_msgs, computed_msgs)) in outcome
-                .messages
-                .iter()
-                .zip(verified_outcome.messages.iter())
-                .enumerate()
-            {
-                for (msg_idx, (submitted, computed)) in
-                    submitted_msgs.iter().zip(computed_msgs.iter()).enumerate()
-                {
-                    if submitted != computed {
-                        let submitted_bytes = bcs::to_bytes(submitted).unwrap_or_default();
-                        let computed_bytes = bcs::to_bytes(computed).unwrap_or_default();
-                        warn!(
-                            "IncorrectOutcome for block {height} on chain {chain_id}: \
-                            message [{tx_idx}][{msg_idx}] differs \
-                            (submitted {} bytes, computed {} bytes).\n\
-                            Submitted: {:02x?}\n\
-                            Computed:  {:02x?}",
-                            submitted_bytes.len(),
-                            computed_bytes.len(),
-                            submitted_bytes,
-                            computed_bytes,
-                        );
-                    }
-                }
-            }
-            if outcome.state_hash != verified_outcome.state_hash {
-                warn!(
-                    "IncorrectOutcome for block {height} on chain {chain_id}: \
-                    state_hash differs. Submitted: {}, Computed: {}",
-                    outcome.state_hash, verified_outcome.state_hash,
-                );
-            }
             if let Some(min_duration) = self.config.reset_on_incorrect_outcome {
                 let block_zero_time = *self.chain.block_zero_executed_at.get();
                 let elapsed = local_time.duration_since(block_zero_time);
