@@ -1357,15 +1357,16 @@ where
                 recipient,
                 latest_height,
             } => {
-                self.query_chain_worker(sender, move |callback| {
-                    ChainWorkerRequest::ConfirmUpdatedRecipient {
-                        recipient,
-                        latest_height,
-                        callback,
-                    }
-                })
-                .await?;
-                Ok(NetworkActions::default())
+                let actions = self
+                    .query_chain_worker(sender, move |callback| {
+                        ChainWorkerRequest::ConfirmUpdatedRecipient {
+                            recipient,
+                            latest_height,
+                            callback,
+                        }
+                    })
+                    .await?;
+                Ok(actions)
             }
             CrossChainRequest::RevertConfirm {
                 sender,

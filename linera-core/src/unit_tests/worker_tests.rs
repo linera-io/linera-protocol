@@ -4829,36 +4829,55 @@ where
         .process_confirmed_block(cert_2.clone(), None)
         .await?;
 
-    // With chunk_limit=1, each block's bundles should be in a separate UpdateRecipient.
-    let update_requests: Vec<_> = actions
+    // With chunk_limit=1, only the first chunk (height 0) should be returned.
+    // The remaining heights stay in the outbox for delivery after confirmation.
+    let initial_updates: Vec<_> = actions
         .cross_chain_requests
         .iter()
         .filter(|r| matches!(r, CrossChainRequest::UpdateRecipient { .. }))
         .collect();
-    assert!(
-        update_requests.len() >= 2,
-        "Expected at least 2 UpdateRecipient requests with chunk_limit=1, got {}",
-        update_requests.len()
+    assert_eq!(
+        initial_updates.len(),
+        1,
+        "Only one UpdateRecipient chunk should be returned initially"
     );
 
-    // Verify previous_height is correct for each chunk:
-    // - First chunk: previous_height from previous_message_blocks (None for the first message ever)
-    // - Subsequent chunks: previous_height = last height in the previous chunk
-    let mut last_height = None;
-    for request in &update_requests {
-        if let CrossChainRequest::UpdateRecipient {
-            previous_height,
-            bundles,
-            ..
-        } = request
-        {
-            assert_eq!(
-                *previous_height, last_height,
-                "previous_height should point to the last height of the previous chunk"
-            );
-            last_height = bundles.last().map(|(_, bundle)| bundle.height);
-        }
+    // Deliver all chunks by processing the cross-chain request loop:
+    // UpdateRecipient → ConfirmUpdatedRecipient → next UpdateRecipient → ...
+    let mut requests = std::collections::VecDeque::from(actions.cross_chain_requests);
+    let mut chunks_delivered = 0;
+    let mut iterations = 0;
+    while let Some(request) = requests.pop_front() {
+        iterations += 1;
+        assert!(iterations < 30, "Too many iterations in cross-chain loop");
+        let actions = env.worker().handle_cross_chain_request(request).await?;
+        chunks_delivered += actions
+            .cross_chain_requests
+            .iter()
+            .filter(|r| matches!(r, CrossChainRequest::UpdateRecipient { .. }))
+            .count();
+        requests.extend(actions.cross_chain_requests);
     }
+
+    // Confirmations should have triggered 2 additional chunks (heights 1 and 2).
+    assert_eq!(
+        chunks_delivered, 2,
+        "Expected 2 additional chunks from confirmations, got {}",
+        chunks_delivered
+    );
+
+    // Verify chain_2 received all three heights.
+    let chain = env.worker().chain_state_view(chain_2).await?;
+    let inbox = chain
+        .inboxes
+        .try_load_entry(&chain_1_desc.id())
+        .await?
+        .expect("chain_2 should have an inbox for chain_1");
+    assert_eq!(
+        inbox.next_block_height_to_receive()?,
+        BlockHeight::from(3),
+        "All three heights should have been received"
+    );
 
     Ok(())
 }
@@ -4931,85 +4950,37 @@ where
     env.worker()
         .process_confirmed_block(cert_1.clone(), None)
         .await?;
-    let (_, actions, _) = env
-        .worker()
+    env.worker()
         .process_confirmed_block(cert_2.clone(), None)
         .await?;
 
-    // Collect the UpdateRecipient chunks for chain_2.
-    let update_requests: Vec<_> = actions
-        .cross_chain_requests
-        .into_iter()
-        .filter(|r| matches!(r, CrossChainRequest::UpdateRecipient { .. }))
-        .collect();
-    assert!(
-        update_requests.len() >= 3,
-        "Expected at least 3 UpdateRecipient chunks, got {}",
-        update_requests.len()
-    );
-
-    // Deliver the first chunk normally.
-    let first_actions = env
+    // Deliver height 0 to chain_2 and confirm it.
+    let actions = env
         .worker()
-        .handle_cross_chain_request(update_requests[0].clone())
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &cert_0))
         .await?;
-    // Confirm delivery so sender clears its outbox for height 0.
-    for request in first_actions.cross_chain_requests {
+    for request in actions.cross_chain_requests {
         env.worker().handle_cross_chain_request(request).await?;
     }
 
-    // Skip the second chunk (height 1) — simulate it being lost.
-    // Deliver the third chunk (height 2) directly. Its previous_height
-    // should be Some(height 1), which the receiver hasn't seen.
-    let third_actions = env
+    // chain_2 has received height 0 (next_height_to_receive = 1).
+    // Now skip height 1 and deliver height 2 directly.
+    // Its previous_height = Some(1), which chain_2 hasn't seen → gap detection.
+    let actions = env
         .worker()
-        .handle_cross_chain_request(update_requests[2].clone())
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &cert_2))
         .await?;
 
-    // The third chunk should trigger gap detection → RevertConfirm.
     assert!(
-        third_actions
+        actions
             .cross_chain_requests
             .iter()
             .any(|r| matches!(r, CrossChainRequest::RevertConfirm { .. })),
         "Expected RevertConfirm due to gap, but got: {:?}",
-        third_actions.cross_chain_requests,
+        actions.cross_chain_requests,
     );
 
-    // chain_2 should still only have received height 0 (the skipped height blocked further
-    // delivery).
-    {
-        let chain = env.worker().chain_state_view(chain_2).await?;
-        let inbox = chain
-            .inboxes
-            .try_load_entry(&chain_1)
-            .await?
-            .expect("chain_2 should have an inbox for chain_1");
-        assert_eq!(
-            inbox.next_block_height_to_receive()?,
-            BlockHeight::from(1),
-            "Only height 0 should have been received before gap detection"
-        );
-    }
-
-    // Now deliver the skipped second chunk (height 1) and the third chunk again.
-    // This simulates normal recovery where the missing chunk is retransmitted.
-    let second_actions = env
-        .worker()
-        .handle_cross_chain_request(update_requests[1].clone())
-        .await?;
-    for request in second_actions.cross_chain_requests {
-        env.worker().handle_cross_chain_request(request).await?;
-    }
-    let third_actions = env
-        .worker()
-        .handle_cross_chain_request(update_requests[2].clone())
-        .await?;
-    for request in third_actions.cross_chain_requests {
-        env.worker().handle_cross_chain_request(request).await?;
-    }
-
-    // Now chain_2 should have received all three heights.
+    // chain_2 should still only have received height 0.
     let chain = env.worker().chain_state_view(chain_2).await?;
     let inbox = chain
         .inboxes
@@ -5018,8 +4989,8 @@ where
         .expect("chain_2 should have an inbox for chain_1");
     assert_eq!(
         inbox.next_block_height_to_receive()?,
-        BlockHeight::from(3),
-        "All three heights should have been received after delivering missing chunk"
+        BlockHeight::from(1),
+        "Only height 0 should have been received before gap detection"
     );
 
     Ok(())

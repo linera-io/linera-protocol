@@ -470,6 +470,29 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
+    /// Creates cross-chain requests for a single recipient from its outbox.
+    async fn create_cross_chain_actions_for_recipient(
+        &self,
+        recipient: ChainId,
+    ) -> Result<NetworkActions, WorkerError> {
+        let outbox = self.chain.outboxes.try_load_entry(&recipient).await?;
+        let Some(outbox) = outbox else {
+            return Ok(NetworkActions::default());
+        };
+        let heights = outbox.queue.elements().await?;
+        if heights.is_empty() {
+            return Ok(NetworkActions::default());
+        }
+        let heights_by_recipient = BTreeMap::from([(recipient, heights)]);
+        let cross_chain_requests = self
+            .create_cross_chain_requests(heights_by_recipient)
+            .await?;
+        Ok(NetworkActions {
+            cross_chain_requests,
+            notifications: Vec::new(),
+        })
+    }
+
     async fn create_network_actions(
         &self,
         old_round: Option<Round>,
@@ -591,44 +614,47 @@ where
             // Extract the predecessor height for this recipient from the first
             // block's `previous_message_blocks`. This lets the recipient detect
             // gaps even before it consumes the missing message.
-            let mut previous_height = heights.first().and_then(|first_height| {
+            let previous_height = heights.first().and_then(|first_height| {
                 let block = height_to_blocks.get(first_height)?;
                 let (_, prev_height) =
                     block.inner().body.previous_message_blocks.get(&recipient)?;
                 Some(*prev_height)
             });
             let mut bundles = Vec::new();
-            let mut bundles_size: usize = 0;
-            let mut last_height_in_batch = None;
+            let mut bundles_size = 0;
             for height in heights {
                 let hashed_block = height_to_blocks
                     .get(&height)
                     .ok_or_else(|| ChainError::InternalError("missing block".to_string()))?;
-                let new_bundles: Vec<_> = hashed_block
+                let new_bundles = hashed_block
                     .inner()
                     .message_bundles_for(recipient, hashed_block.hash())
-                    .collect();
-                let new_size: usize = new_bundles
+                    .collect::<Vec<_>>();
+                let new_size = new_bundles
                     .iter()
                     .map(|(_epoch, bundle)| bundle.estimated_size())
-                    .sum();
-                // If adding this block's bundles would exceed the gRPC fill limit,
-                // flush the current batch first.
-                if !bundles.is_empty()
-                    && bundles_size + new_size > self.config.cross_chain_message_chunk_limit
-                {
-                    cross_chain_requests.push(CrossChainRequest::UpdateRecipient {
-                        sender,
-                        recipient,
-                        bundles: std::mem::take(&mut bundles),
-                        previous_height,
-                    });
-                    bundles_size = 0;
-                    previous_height = last_height_in_batch;
+                    .sum::<usize>();
+                // If adding this block's bundles would exceed the chunk limit,
+                // stop here. Always include at least one block's bundles.
+                if bundles_size + new_size > self.config.cross_chain_message_chunk_limit {
+                    if bundles.is_empty() {
+                        warn!(
+                            "Single block at height {height} produces an UpdateRecipient \
+                            of ~{new_size} bytes, exceeding the chunk limit of {}",
+                            self.config.cross_chain_message_chunk_limit
+                        );
+                    } else {
+                        debug!(
+                            "Stopping cross-chain batch for {recipient} at height {height}: \
+                            adding ~{new_size} bytes would exceed chunk limit of {} \
+                            (current batch ~{bundles_size} bytes)",
+                            self.config.cross_chain_message_chunk_limit
+                        );
+                        break;
+                    }
                 }
                 bundles.extend(new_bundles);
                 bundles_size += new_size;
-                last_height_in_batch = Some(height);
             }
             if !bundles.is_empty() {
                 cross_chain_requests.push(CrossChainRequest::UpdateRecipient {
@@ -1265,7 +1291,7 @@ where
         &mut self,
         recipient: ChainId,
         latest_height: BlockHeight,
-    ) -> Result<(), WorkerError> {
+    ) -> Result<NetworkActions, WorkerError> {
         let fully_delivered = self
             .chain
             .mark_messages_as_received(&recipient, latest_height)
@@ -1274,13 +1300,18 @@ where
                 .all_messages_to_tracked_chains_delivered_up_to(latest_height)
                 .await?;
 
+        // Send the next chunk of cross-chain messages for this recipient, if any.
+        let actions = self
+            .create_cross_chain_actions_for_recipient(recipient)
+            .await?;
+
         self.save().await?;
 
         if fully_delivered {
             self.delivery_notifier.notify(latest_height);
         }
 
-        Ok(())
+        Ok(actions)
     }
 
     /// Handles a `RevertConfirm` request: walks backward through
@@ -1349,8 +1380,10 @@ where
         }
         self.chain.nonempty_outboxes.get_mut().insert(recipient);
 
-        // 4. Create cross-chain requests using existing infrastructure.
-        let actions = self.create_network_actions(None).await?;
+        // 4. Create cross-chain requests for this recipient.
+        let actions = self
+            .create_cross_chain_actions_for_recipient(recipient)
+            .await?;
 
         // 5. Save chain state.
         self.save().await?;
