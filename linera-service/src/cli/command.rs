@@ -354,6 +354,12 @@ pub enum ClientCommand {
         /// The chain to synchronize with validators. If omitted, synchronizes the
         /// default chain of the wallet.
         chain_id: Option<ChainId>,
+
+        /// Stop synchronizing at this block height (exclusive). For instance,
+        /// `--next-height 0` downloads zero blocks, `--next-height 10` downloads
+        /// blocks 0 through 9.
+        #[arg(long)]
+        next_height: Option<BlockHeight>,
     },
 
     /// Process all pending incoming messages from the inbox of the given chain by creating as many

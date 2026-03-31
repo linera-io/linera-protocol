@@ -444,7 +444,10 @@ impl Runnable for Job {
                 println!("{}", balance);
             }
 
-            Sync { chain_id } => {
+            Sync {
+                chain_id,
+                next_height,
+            } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -452,7 +455,11 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
-                chain_client.synchronize_from_validators().await?;
+                if let Some(next_height) = next_height {
+                    chain_client.synchronize_up_to(next_height).await?;
+                } else {
+                    chain_client.synchronize_from_validators().await?;
+                }
                 context.update_wallet_from_client(&chain_client).await?;
                 let time_total = time_start.elapsed();
                 info!(
