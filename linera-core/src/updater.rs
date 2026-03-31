@@ -768,12 +768,15 @@ where
         }
 
         // Send any additional missing certificates in order
-        let storage = self.client.local_node.storage_client();
-        let mut stream = storage.read_certificates_by_heights_iter(chain_id, heights);
-        while let Some(certificate) = stream.next().await {
-            self.send_confirmed_certificate(certificate?, delivery)
-                .await?;
-        }
+        Box::pin(async {
+            let storage = self.client.local_node.storage_client();
+            let mut stream = storage.read_certificates_by_heights_iter(chain_id, heights);
+            while let Some(certificate) = stream.next().await {
+                self.send_confirmed_certificate(certificate?, delivery)
+                    .await?;
+            }
+            Ok::<_, chain_client::Error>(())
+        }).await?;
 
         Ok(info)
     }
@@ -943,16 +946,19 @@ where
                 async move {
                     // Get all block hashes for this chain at the specified heights in one call
                     let heights_vec: Vec<_> = heights.into_iter().collect();
-                    let storage = updater.client.local_node.storage_client();
-                    let mut stream =
-                        storage.read_certificates_by_heights_iter(chain_id, heights_vec);
+                    Box::pin(async {
+                        let storage = updater.client.local_node.storage_client();
+                        let mut stream =
+                            storage.read_certificates_by_heights_iter(chain_id, heights_vec);
 
-                    // Send each certificate
-                    while let Some(certificate) = stream.next().await {
-                        updater
-                            .send_confirmed_certificate(certificate?, delivery)
-                            .await?;
-                    }
+                        // Send each certificate
+                        while let Some(certificate) = stream.next().await {
+                            updater
+                                .send_confirmed_certificate(certificate?, delivery)
+                                .await?;
+                        }
+                        Ok::<_, chain_client::Error>(())
+                    }).await?;
 
                     Ok::<_, chain_client::Error>(())
                 }
