@@ -6,7 +6,7 @@
 use std::{
     ffi::OsString,
     fmt::Display,
-    ops::Bound::{Excluded, Included, Unbounded},
+    ops::Bound::{self, Excluded, Included, Unbounded},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -202,33 +202,34 @@ impl RocksDbStoreExecutor {
         iter
     }
 
-    fn find_keys_in_interval_internal(
+    #[expect(clippy::type_complexity)]
+    fn get_full_interval(
         &self,
-        key_interval: KeyInterval,
-    ) -> Result<(Vec<Vec<u8>>, bool), RocksDbStoreInternalError> {
-        let start = match key_interval.start {
+        key_interval: &KeyInterval,
+    ) -> Result<(Bound<Vec<u8>>, Bound<Vec<u8>>), RocksDbStoreInternalError> {
+        let start = match &key_interval.start {
             KeyIntervalStart::Included(key) => {
-                check_key_size(&key)?;
+                check_key_size(key)?;
                 let mut full_key = self.start_key.clone();
                 full_key.extend(key);
                 Included(full_key)
             }
             KeyIntervalStart::Excluded(key) => {
-                check_key_size(&key)?;
+                check_key_size(key)?;
                 let mut full_key = self.start_key.clone();
                 full_key.extend(key);
                 Excluded(full_key)
             }
         };
-        let end = match key_interval.end {
+        let end = match &key_interval.end {
             Included(key) => {
-                check_key_size(&key)?;
+                check_key_size(key)?;
                 let mut full_key = self.start_key.clone();
                 full_key.extend(key);
                 Included(full_key)
             }
             Excluded(key) => {
-                check_key_size(&key)?;
+                check_key_size(key)?;
                 let mut full_key = self.start_key.clone();
                 full_key.extend(key);
                 Excluded(full_key)
@@ -242,6 +243,14 @@ impl RocksDbStoreExecutor {
                 }
             }
         };
+        Ok((start, end))
+    }
+
+    fn find_keys_in_interval_internal(
+        &self,
+        key_interval: &KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), RocksDbStoreInternalError> {
+        let (start, end) = self.get_full_interval(key_interval)?;
         let len = self.start_key.len();
         let mut iter = self.get_interval_iterator(&start, &end);
         let mut keys = Vec::new();
@@ -259,44 +268,9 @@ impl RocksDbStoreExecutor {
     #[expect(clippy::type_complexity)]
     fn find_key_values_in_interval_internal(
         &self,
-        key_interval: KeyInterval,
+        key_interval: &KeyInterval,
     ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), RocksDbStoreInternalError> {
-        let start = match key_interval.start {
-            KeyIntervalStart::Included(key) => {
-                check_key_size(&key)?;
-                let mut full_key = self.start_key.clone();
-                full_key.extend(key);
-                Included(full_key)
-            }
-            KeyIntervalStart::Excluded(key) => {
-                check_key_size(&key)?;
-                let mut full_key = self.start_key.clone();
-                full_key.extend(key);
-                Excluded(full_key)
-            }
-        };
-        let end = match key_interval.end {
-            Included(key) => {
-                check_key_size(&key)?;
-                let mut full_key = self.start_key.clone();
-                full_key.extend(key);
-                Included(full_key)
-            }
-            Excluded(key) => {
-                check_key_size(&key)?;
-                let mut full_key = self.start_key.clone();
-                full_key.extend(key);
-                Excluded(full_key)
-            }
-            Unbounded => {
-                let full_key = self.start_key.clone();
-                if let Some(next_prefix) = get_upper_bound_option(&full_key) {
-                    Excluded(next_prefix)
-                } else {
-                    Unbounded
-                }
-            }
-        };
+        let (start, end) = self.get_full_interval(key_interval)?;
         let len = self.start_key.len();
         let mut iter = self.get_interval_iterator(&start, &end);
         let mut key_values = Vec::new();
@@ -593,7 +567,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let executor = self.executor.clone();
         self.spawn_mode
             .spawn(
-                move |x| executor.find_keys_in_interval_internal(x),
+                move |x| executor.find_keys_in_interval_internal(&x),
                 key_interval,
             )
             .await
@@ -606,7 +580,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let executor = self.executor.clone();
         self.spawn_mode
             .spawn(
-                move |x| executor.find_key_values_in_interval_internal(x),
+                move |x| executor.find_key_values_in_interval_internal(&x),
                 key_interval,
             )
             .await
