@@ -3255,7 +3255,8 @@ impl<Env: Environment> ChainClient<Env> {
                 }
             }
             Ok::<_, Error>(())
-        }).await?;
+        })
+        .await?;
 
         Ok(())
     }
