@@ -176,6 +176,9 @@ impl RocksDbStoreExecutor {
         let mut read_opts = rocksdb::ReadOptions::default();
         // Enable async I/O for better concurrency
         read_opts.set_async_io(true);
+        // Use total order seek to avoid prefix bloom filter mismatches
+        // when the seek key prefix differs from stored key prefixes.
+        read_opts.set_total_order_seek(true);
 
         let upper_bound = match end {
             Included(bound) => get_upper_bound_option(bound),

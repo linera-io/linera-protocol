@@ -153,8 +153,9 @@ pub trait ReadableKeyValueStore: WithError {
     ) -> impl Future<Output = Result<Vec<Vec<u8>>, Self::Error>> {
         async move {
             let prefix_len = key_prefix.len();
+            let key_interval = KeyInterval::for_prefix(key_prefix);
             let (keys, _) = self
-                .find_keys_in_interval(KeyInterval::for_prefix(key_prefix))
+                .find_keys_in_interval(key_interval)
                 .await?;
             Ok(keys
                 .into_iter()
@@ -170,8 +171,9 @@ pub trait ReadableKeyValueStore: WithError {
     ) -> impl Future<Output = Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error>> {
         async move {
             let prefix_len = key_prefix.len();
+            let key_interval = KeyInterval::for_prefix(key_prefix);
             let (key_values, _) = self
-                .find_key_values_in_interval(KeyInterval::for_prefix(key_prefix))
+                .find_key_values_in_interval(key_interval)
                 .await?;
             Ok(key_values
                 .into_iter()
