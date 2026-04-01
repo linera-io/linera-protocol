@@ -78,6 +78,7 @@ jobs:
       run: cargo bench -p linera-views --bench gungraun_views --no-run
     - name: Download baseline artifact
       id: download-baseline
+      continue-on-error: true
       run: |
         BASE_REF="${{ github.event.pull_request.base.ref || 'main' }}"
         MERGE_BASE=$(git merge-base HEAD "origin/$BASE_REF")
