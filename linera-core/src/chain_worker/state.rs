@@ -593,14 +593,8 @@ where
             let mut bundles_size = 0;
             for height in heights {
                 let Some(hashed_block) = height_to_blocks.get(&height) else {
-                    if height == BlockHeight::ZERO {
-                        tracing::warn!("ignoring spurious block-0 entry in outbox");
-                        continue;
-                    }
-                    return Err(WorkerError::ConfirmedBlockHashNotFound {
-                        height,
-                        chain_id: sender,
-                    });
+                    tracing::warn!(%height, "ignoring spurious block entry in outbox");
+                    continue;
                 };
                 let new_bundles = hashed_block
                     .inner()
