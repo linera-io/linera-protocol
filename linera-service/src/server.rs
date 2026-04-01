@@ -8,21 +8,11 @@
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-// jemalloc configuration for memory profiling with jemalloc_pprof
-// prof:true,prof_active:true - Enable profiling from start
-// lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
-
-// Linux/other platforms: use unprefixed malloc (with unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", not(target_os = "macos")))]
-#[allow(non_upper_case_globals)]
+/// Configure jemalloc profiling infrastructure at startup with sampling disabled.
+/// Profiling is activated at runtime only when `--enable-memory-profiling` is passed.
+#[cfg(feature = "jemalloc")]
 #[export_name = "malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
-
-// macOS: use prefixed malloc (without unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", target_os = "macos"))]
-#[allow(non_upper_case_globals)]
-#[export_name = "_rjem_malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+pub static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 use std::{
     borrow::Cow,
@@ -76,6 +66,8 @@ struct ServerContext {
     block_cache_size: usize,
     execution_state_cache_size: usize,
     chain_info_max_received_log_entries: usize,
+    #[cfg(with_metrics)]
+    enable_memory_profiling: bool,
 }
 
 impl ServerContext {
@@ -110,12 +102,14 @@ impl ServerContext {
         (state, shard_id, shard.clone())
     }
 
+    #[cfg_attr(not(with_metrics), allow(unused_variables))]
     fn spawn_simple<S>(
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         protocol: simple::TransportProtocol,
         shutdown_signal: &CancellationToken,
+        enable_memory_profiling: bool,
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -138,6 +132,7 @@ impl ServerContext {
                 monitoring_server::start_metrics(
                     (listen_address.clone(), port),
                     shutdown_signal.clone(),
+                    monitoring_server::MemoryProfiling::from(enable_memory_profiling),
                 );
             }
 
@@ -166,11 +161,13 @@ impl ServerContext {
         join_set
     }
 
+    #[cfg_attr(not(with_metrics), allow(unused_variables))]
     fn spawn_grpc<S>(
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         shutdown_signal: &CancellationToken,
+        enable_memory_profiling: bool,
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -184,6 +181,7 @@ impl ServerContext {
                 monitoring_server::start_metrics(
                     (listen_address.to_string(), port),
                     shutdown_signal.clone(),
+                    monitoring_server::MemoryProfiling::from(enable_memory_profiling),
                 );
             }
 
@@ -233,6 +231,17 @@ impl Runnable for ServerContext {
 
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
+        // Activate memory profiling once before per-shard start_metrics calls.
+        #[cfg(with_metrics)]
+        let enable_memory_profiling = {
+            let memory_profiling =
+                monitoring_server::MemoryProfiling::try_activate(self.enable_memory_profiling)
+                    .await;
+            memory_profiling == monitoring_server::MemoryProfiling::Enabled
+        };
+        #[cfg(not(with_metrics))]
+        let enable_memory_profiling = false;
+
         // Run the server
         let states = match self.shard {
             Some(shard) => {
@@ -249,13 +258,20 @@ impl Runnable for ServerContext {
         };
 
         let mut join_set = match self.server_config.internal_network.protocol {
-            NetworkProtocol::Simple(protocol) => {
-                self.spawn_simple(&listen_address, states, protocol, &shutdown_notifier)
-            }
+            NetworkProtocol::Simple(protocol) => self.spawn_simple(
+                &listen_address,
+                states,
+                protocol,
+                &shutdown_notifier,
+                enable_memory_profiling,
+            ),
             NetworkProtocol::Grpc(tls_config) => match tls_config {
-                TlsConfig::ClearText => {
-                    self.spawn_grpc(&listen_address, states, &shutdown_notifier)
-                }
+                TlsConfig::ClearText => self.spawn_grpc(
+                    &listen_address,
+                    states,
+                    &shutdown_notifier,
+                    enable_memory_profiling,
+                ),
                 TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
             },
         };
@@ -296,6 +312,25 @@ struct ServerOptions {
         default_value = "10000"
     )]
     execution_state_cache_size: usize,
+
+    /// Enable jemalloc memory profiling endpoints on the metrics server.
+    #[cfg(feature = "jemalloc")]
+    #[arg(long, env = "LINERA_ENABLE_MEMORY_PROFILING")]
+    enable_memory_profiling: bool,
+}
+
+impl ServerOptions {
+    #[cfg(with_metrics)]
+    fn enable_memory_profiling(&self) -> bool {
+        #[cfg(feature = "jemalloc")]
+        {
+            self.enable_memory_profiling
+        }
+        #[cfg(not(feature = "jemalloc"))]
+        {
+            false
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -534,6 +569,8 @@ async fn run(options: ServerOptions) {
         otlp_exporter_endpoint_for(&options.command),
     );
 
+    #[cfg(with_metrics)]
+    let enable_memory_profiling = options.enable_memory_profiling();
     match options.command {
         ServerCommand::Run {
             server_config_path,
@@ -563,6 +600,8 @@ async fn run(options: ServerOptions) {
                 block_cache_size: options.block_cache_size,
                 execution_state_cache_size: options.execution_state_cache_size,
                 chain_info_max_received_log_entries,
+                #[cfg(with_metrics)]
+                enable_memory_profiling,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config

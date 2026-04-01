@@ -135,12 +135,14 @@ Client implementation and command-line tool for the Linera blockchain
   Default value: `4000`
 * `--max-pending-message-bundles <MAX_PENDING_MESSAGE_BUNDLES>` — The maximum number of incoming message bundles to include in a block proposal
 
-  Default value: `10`
+  Default value: `300`
 * `--max-block-limit-errors <MAX_BLOCK_LIMIT_ERRORS>` — Maximum number of message bundles to discard from a block proposal due to block limit errors before discarding all remaining bundles.
 
    Discarded bundles can be retried in the next block.
 
   Default value: `3`
+* `--staging-bundles-time-budget-ms <STAGING_BUNDLES_TIME_BUDGET>` — Time budget for staging message bundles in milliseconds. When set, limits bundle execution by wall-clock time, in addition to the count limit from `max_pending_message_bundles`
+* `--prioritize-bundles-from <PRIORITIZE_BUNDLES_FROM>` — Comma-separated list of chain IDs whose incoming bundles should be processed first
 * `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory. Use 0 to disable expiry
 
   Default value: `30000`
@@ -174,6 +176,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages from. By default, messages from all chains are accepted. To reject messages from all chains, specify an empty string
 * `--reject-message-bundles-without-application-ids <REJECT_MESSAGE_BUNDLES_WITHOUT_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles with at least one message from one of these applications will be accepted
 * `--reject-message-bundles-with-other-application-ids <REJECT_MESSAGE_BUNDLES_WITH_OTHER_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles where all messages are from one of these applications will be accepted
+* `--process-events-from-application-ids <PROCESS_EVENTS_FROM_APPLICATION_IDS>` — A set of application IDs. If specified, only events coming from streams created by applications from this set will be processed
 * `--timings` — Enable timing reports during operations
 * `--timing-interval <TIMING_INTERVAL>` — Interval in seconds between timing reports (defaults to 5)
 
@@ -224,9 +227,6 @@ Client implementation and command-line tool for the Linera blockchain
 * `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
 * `--keystore <KEYSTORE_PATH>` — Sets the file storing the keystore state
 * `-w`, `--with-wallet <WITH_WALLET>` — Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{X}` and `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
-* `--chrome-trace-exporter` — Enable OpenTelemetry Chrome JSON exporter for trace data analysis
-* `--chrome-trace-file <CHROME_TRACE_FILE>` — Output file path for Chrome trace JSON format. Can be visualized in chrome://tracing or Perfetto UI
-* `--otlp-exporter-endpoint <OTLP_EXPORTER_ENDPOINT>` — OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature)
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 * `--storage-max-concurrent-queries <STORAGE_MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
 * `--storage-max-stream-queries <STORAGE_MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database
@@ -263,6 +263,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--with-application-logs` — Output log messages from contract execution
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
 * `--tokio-blocking-threads <TOKIO_BLOCKING_THREADS>` — The number of Tokio blocking threads to use
+* `--chrome-trace-exporter` — Enable OpenTelemetry Chrome JSON exporter for trace data analysis
+* `--chrome-trace-file <CHROME_TRACE_FILE>` — Output file path for Chrome trace JSON format. Can be visualized in chrome://tracing or Perfetto UI
+* `--otlp-exporter-endpoint <OTLP_EXPORTER_ENDPOINT>` — OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature)
 * `--block-cache-size <BLOCK_CACHE_SIZE>` — Size of the block cache (default: 5000)
 
   Default value: `5000`

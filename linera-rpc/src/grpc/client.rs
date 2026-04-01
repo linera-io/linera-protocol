@@ -18,7 +18,7 @@ use linera_base::{
     data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
     identifiers::{BlobId, ChainId, EventId},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use linera_chain::{
     data_types::{self},
@@ -27,6 +27,22 @@ use linera_chain::{
         LiteCertificate, Timeout, ValidatedBlock,
     },
 };
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::register_int_counter_vec;
+    use prometheus::IntCounterVec;
+
+    pub static VALIDATOR_SUBSCRIPTION_ERRORS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "validator_subscription_errors",
+            "Number of notification subscription stream errors per validator",
+            &["address"],
+        )
+    });
+}
+
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -34,7 +50,7 @@ use linera_core::{
 };
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, instrument, trace, warn, Level};
+use tracing::{debug, instrument, trace, Level};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
@@ -43,8 +59,8 @@ use super::{
 #[cfg(feature = "opentelemetry")]
 use crate::propagation::{get_context_with_traffic_type, inject_context};
 use crate::{
-    full_jitter_delay, grpc::api::RawCertificate, HandleConfirmedCertificateRequest,
-    HandleLiteCertRequest, HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
+    grpc::api::RawCertificate, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
+    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
 #[derive(Clone)]
@@ -54,6 +70,10 @@ pub struct GrpcClient {
     retry_delay: Duration,
     max_retries: u32,
     max_backoff: Duration,
+    /// Shared across all `GrpcClient` instances created by the same `GrpcNodeProvider`.
+    /// Tracks when each validator address last had a subscription failure, so that
+    /// other chains don't independently retry the same dead validator.
+    subscription_cooldowns: papaya::HashMap<String, Instant>,
 }
 
 impl GrpcClient {
@@ -63,6 +83,7 @@ impl GrpcClient {
         retry_delay: Duration,
         max_retries: u32,
         max_backoff: Duration,
+        subscription_cooldowns: papaya::HashMap<String, Instant>,
     ) -> Self {
         let client = ValidatorNodeClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
@@ -73,6 +94,7 @@ impl GrpcClient {
             retry_delay,
             max_retries,
             max_backoff,
+            subscription_cooldowns,
         }
     }
 
@@ -97,6 +119,15 @@ impl GrpcClient {
                 // internal errors. This happens when the server restarts and the
                 // connection is forcibly closed.
                 trace!("gRPC connection reset: {status:?}; retrying");
+                true
+            }
+            Code::Internal if status.message().contains("502 Bad Gateway") => {
+                // When a proxy/ingress returns HTTP 502 (e.g. during rolling restarts),
+                // tonic's frame decoder fails on the non-gRPC response body before the
+                // HTTP-to-gRPC status mapping can run, producing Code::Internal instead
+                // of Code::Unavailable. Per the gRPC spec, HTTP 502 maps to UNAVAILABLE
+                // which is retryable. This works around tonic#2365.
+                trace!("gRPC proxy error (502): {status:?}; retrying");
                 true
             }
             Code::NotFound => false, // This code is used if e.g. the validator is missing blobs.
@@ -140,7 +171,11 @@ impl GrpcClient {
             inject_context(&get_context_with_traffic_type(), request.metadata_mut());
             match f(self.client.clone(), request).await {
                 Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
-                    let delay = full_jitter_delay(self.retry_delay, retry_count, self.max_backoff);
+                    let delay = crate::jittered_backoff_delay(
+                        self.retry_delay,
+                        retry_count,
+                        self.max_backoff,
+                    );
                     retry_count += 1;
                     linera_base::time::timer::sleep(delay).await;
                     continue;
@@ -299,6 +334,25 @@ impl ValidatorNode for GrpcClient {
         let retry_delay = self.retry_delay;
         let max_retries = self.max_retries;
         let max_backoff = self.max_backoff;
+        let address = self.address.clone();
+        let subscription_cooldowns = self.subscription_cooldowns.clone();
+
+        // Fast-fail if another subscription to this address recently failed.
+        // Prevents N chains from independently retrying the same dead validator.
+        {
+            let pinned = subscription_cooldowns.pin();
+            if let Some(&last_failure) = pinned.get(&address) {
+                if last_failure.elapsed() < max_backoff {
+                    return Err(NodeError::SubscriptionFailed {
+                        status: format!(
+                            "validator {} on cooldown after recent subscription failure",
+                            address
+                        ),
+                    });
+                }
+            }
+        }
+
         // Use shared atomic counter so unfold can reset it on successful reconnection.
         let retry_count = Arc::new(AtomicU32::new(0));
         let subscription_request = SubscriptionRequest {
@@ -311,8 +365,13 @@ impl ValidatorNode for GrpcClient {
             client
                 .subscribe(subscription_request.clone())
                 .await
-                .map_err(|status| NodeError::SubscriptionFailed {
-                    status: status.to_string(),
+                .map_err(|status| {
+                    subscription_cooldowns
+                        .pin()
+                        .insert(address.clone(), Instant::now());
+                    NodeError::SubscriptionFailed {
+                        status: status.to_string(),
+                    }
                 })?
                 .into_inner(),
         );
@@ -320,11 +379,15 @@ impl ValidatorNode for GrpcClient {
         // A stream of `Result<grpc::Notification, tonic::Status>` that keeps calling
         // `client.subscribe(request)` endlessly and without delay.
         let retry_count_for_unfold = retry_count.clone();
+        let cooldowns_for_unfold = subscription_cooldowns.clone();
+        let address_for_unfold = address.clone();
         let endlessly_retrying_notification_stream = stream::unfold((), move |()| {
             let mut client = client.clone();
             let subscription_request = subscription_request.clone();
             let mut stream = stream.take();
             let retry_count = retry_count_for_unfold.clone();
+            let cooldowns = cooldowns_for_unfold.clone();
+            let cooldown_address = address_for_unfold.clone();
             async move {
                 let stream = if let Some(stream) = stream.take() {
                     future::Either::Right(stream)
@@ -334,6 +397,7 @@ impl ValidatorNode for GrpcClient {
                         Ok(response) => {
                             // Reset retry count on successful reconnection.
                             retry_count.store(0, Ordering::Relaxed);
+                            cooldowns.pin().remove(&cooldown_address);
                             trace!("Successfully reconnected subscription stream");
                             future::Either::Right(response.into_inner())
                         }
@@ -345,6 +409,10 @@ impl ValidatorNode for GrpcClient {
         .flatten();
 
         let span = tracing::info_span!("notification stream");
+        #[cfg(with_metrics)]
+        let address_for_metrics = self.address.clone();
+        let cooldowns_for_take_while = subscription_cooldowns;
+        let address_for_take_while = self.address.clone();
         // The stream of `Notification`s that inserts increasing delays after retriable errors, and
         // terminates after unexpected or fatal errors.
         let notification_stream = endlessly_retrying_notification_stream
@@ -360,25 +428,34 @@ impl ValidatorNode for GrpcClient {
                     return future::Either::Left(future::ready(true));
                 };
 
+                #[cfg(with_metrics)]
+                metrics::VALIDATOR_SUBSCRIPTION_ERRORS
+                    .with_label_values(&[&address_for_metrics])
+                    .inc();
+
                 let current_retry_count = retry_count.load(Ordering::Relaxed);
                 if !span.in_scope(|| Self::is_retryable(status))
                     || current_retry_count >= max_retries
                 {
+                    cooldowns_for_take_while
+                        .pin()
+                        .insert(address_for_take_while.clone(), Instant::now());
                     return future::Either::Left(future::ready(false));
                 }
-                let delay = full_jitter_delay(retry_delay, current_retry_count, max_backoff);
+                let delay =
+                    crate::jittered_backoff_delay(retry_delay, current_retry_count, max_backoff);
                 retry_count.fetch_add(1, Ordering::Relaxed);
                 future::Either::Right(async move {
                     linera_base::time::timer::sleep(delay).await;
                     true
                 })
             })
-            .filter_map(|result| {
+            .filter_map(move |result| {
                 future::ready(match result {
                     Ok(notification @ Some(_)) => notification,
                     Ok(None) => None,
                     Err(err) => {
-                        warn!("{}", err);
+                        debug!(%address, "{}", err);
                         None
                     }
                 })

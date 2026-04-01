@@ -16,6 +16,7 @@ use linera_base::{
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
     ownership::ChainOwnership,
+    time::{Duration, Instant},
 };
 use linera_execution::{
     committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
@@ -37,8 +38,8 @@ use crate::{
     block::{Block, ConfirmedBlock},
     block_tracker::BlockExecutionTracker,
     data_types::{
-        BlockExecutionOutcome, BundleExecutionPolicy, ChainAndHeight, IncomingBundle,
-        MessageAction, MessageBundle, ProposedBlock, Transaction,
+        BlockExecutionOutcome, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight,
+        IncomingBundle, MessageAction, MessageBundle, ProposedBlock, Transaction,
     },
     inbox::{InboxError, InboxStateView},
     manager::ChainManager,
@@ -59,8 +60,7 @@ pub(crate) mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
-        register_int_counter_vec,
+        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
     use linera_execution::ResourceTracker;
     use prometheus::{HistogramVec, IntCounterVec};
@@ -145,9 +145,9 @@ pub(crate) mod metrics {
     pub static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "state_hash_computation_latency",
-            "Time to recompute the state hash",
+            "Time to recompute the state hash, in microseconds",
             &[],
-            exponential_bucket_latencies(2000.0),
+            exponential_bucket_interval(1.0, 2_000_000.0),
         )
     });
 
@@ -668,7 +668,7 @@ where
     ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
-        if !matches!(exec_policy, BundleExecutionPolicy::Abort) {
+        if !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort) {
             assert!(
                 replaying_oracle_responses.is_none(),
                 "Cannot use AutoRetry policy when replaying oracle responses"
@@ -714,17 +714,31 @@ where
         )?;
 
         // Extract max_failures from exec_policy.
-        let max_failures = match exec_policy {
-            BundleExecutionPolicy::Abort => 0,
-            BundleExecutionPolicy::AutoRetry { max_failures } => max_failures,
+        let max_failures = match exec_policy.on_failure {
+            BundleFailurePolicy::Abort => 0,
+            BundleFailurePolicy::AutoRetry { max_failures } => max_failures,
         };
-        let auto_retry = !matches!(exec_policy, BundleExecutionPolicy::Abort);
+        let auto_retry = !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort);
         let mut failure_count = 0u32;
+
+        let time_budget = exec_policy.time_budget;
+        let mut cumulative_bundle_time = Duration::ZERO;
 
         let mut i = 0;
         while i < block.transactions.len() {
             let transaction = &mut block.transactions[i];
             let is_bundle = matches!(transaction, Transaction::ReceiveMessages(_));
+
+            // If we have a time budget and it's been exceeded, discard remaining bundles.
+            if is_bundle && time_budget.is_some_and(|budget| cumulative_bundle_time >= budget) {
+                info!(
+                    ?cumulative_bundle_time,
+                    ?time_budget,
+                    "Time budget for bundle staging exceeded, discarding remaining bundles"
+                );
+                Self::discard_remaining_bundles(block, i, None);
+                continue;
+            }
 
             // Checkpoint before bundle transactions if using auto-retry.
             let checkpoint = if auto_retry && is_bundle {
@@ -736,9 +750,19 @@ where
                 None
             };
 
+            let bundle_start = if is_bundle && time_budget.is_some() {
+                Some(Instant::now())
+            } else {
+                None
+            };
+
             let result = block_execution_tracker
                 .execute_transaction(&*transaction, round, chain)
                 .await;
+
+            if let Some(start) = bundle_start {
+                cumulative_bundle_time += start.elapsed();
+            }
 
             // If the transaction executed successfully, we move on to the next one.
             // On transient errors (e.g. missing blobs) we fail, so it can be retried after
@@ -858,7 +882,7 @@ where
 
         let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency_us();
             chain.crypto_hash_mut().await?
         };
 

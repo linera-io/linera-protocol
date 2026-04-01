@@ -52,7 +52,7 @@ pub struct Options {
     pub recv_timeout: Duration,
 
     /// The maximum number of incoming message bundles to include in a block proposal.
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "300")]
     pub max_pending_message_bundles: usize,
 
     /// Maximum number of message bundles to discard from a block proposal due to block limit
@@ -61,6 +61,16 @@ pub struct Options {
     /// Discarded bundles can be retried in the next block.
     #[arg(long, default_value = "3")]
     pub max_block_limit_errors: u32,
+
+    /// Time budget for staging message bundles in milliseconds. When set, limits bundle
+    /// execution by wall-clock time, in addition to the count limit from
+    /// `max_pending_message_bundles`.
+    #[arg(long = "staging-bundles-time-budget-ms", value_parser = util::parse_millis)]
+    pub staging_bundles_time_budget: Option<Duration>,
+
+    /// Comma-separated list of chain IDs whose incoming bundles should be processed first.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub prioritize_bundles_from: Option<HashSet<ChainId>>,
 
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     /// Use 0 to disable expiry.
@@ -135,6 +145,11 @@ pub struct Options {
     /// these applications will be accepted.
     #[arg(long, value_parser = util::parse_app_set)]
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+
+    /// A set of application IDs. If specified, only events coming from streams created by
+    /// applications from this set will be processed.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
 
     /// Enable timing reports during operations
     #[cfg(not(web))]
@@ -271,12 +286,14 @@ impl Options {
             self.reject_message_bundles_without_application_ids.clone(),
             self.reject_message_bundles_with_other_application_ids
                 .clone(),
+            self.process_events_from_application_ids.clone(),
         );
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
         chain_client::Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
+            staging_bundles_time_budget: self.staging_bundles_time_budget,
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,

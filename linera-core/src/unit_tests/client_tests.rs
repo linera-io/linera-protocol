@@ -2744,7 +2744,7 @@ where
     );
 
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None, None);
     receiver.synchronize_from_validators().await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2756,7 +2756,7 @@ where
     );
 
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender.synchronize_from_validators().await?;
@@ -2792,6 +2792,7 @@ where
         Some([sender.chain_id()].into_iter().collect()),
         None,
         None,
+        None,
     );
     receiver.synchronize_from_validators().await?;
     let certs = receiver.process_inbox().await?.0;
@@ -2802,7 +2803,7 @@ where
 
     // Even if we change the policy, there's no longer a message to receive.
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 0);
 
@@ -3170,7 +3171,13 @@ where
             None,
             BlockHeight::ZERO,
             chain_client::Options {
-                message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None),
+                message_policy: MessagePolicy::new(
+                    BlanketMessagePolicy::Reject,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
                 ..chain_client::Options::test_default()
             },
             false,

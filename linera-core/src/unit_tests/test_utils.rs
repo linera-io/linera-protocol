@@ -1096,6 +1096,7 @@ where
             format!("Client node for {:.8}", chain_id),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
+            HashSet::new(),
             options,
             5_000,
             10_000,

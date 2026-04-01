@@ -5,5 +5,5 @@
 
 pub mod monitoring_server;
 
-#[cfg(feature = "memory-profiling")]
+#[cfg(feature = "jemalloc")]
 pub mod memory_profiler;

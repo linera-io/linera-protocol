@@ -35,8 +35,8 @@ use linera_base::{
 use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
-        BlockProposal, BundleExecutionPolicy, ChainAndHeight, IncomingBundle, ProposedBlock,
-        Transaction,
+        BlockProposal, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight, IncomingBundle,
+        ProposedBlock, Transaction,
     },
     manager::LockingBlock,
     types::{
@@ -88,6 +88,9 @@ pub struct Options {
     ///
     /// Discarded bundles can be retried in the next block.
     pub max_block_limit_errors: u32,
+    /// Time budget for staging message bundles. When set, limits bundle execution by
+    /// wall-clock time, in addition to the count limit from `max_pending_message_bundles`.
+    pub staging_bundles_time_budget: Option<Duration>,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
@@ -123,6 +126,7 @@ impl Options {
         Options {
             max_pending_message_bundles: 10,
             max_block_limit_errors: 3,
+            staging_bundles_time_budget: None,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
@@ -132,6 +136,18 @@ impl Options {
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
+        }
+    }
+}
+
+impl Options {
+    /// Builds the [`BundleExecutionPolicy`] based on the client options.
+    pub fn bundle_execution_policy(&self) -> BundleExecutionPolicy {
+        BundleExecutionPolicy {
+            on_failure: BundleFailurePolicy::AutoRetry {
+                max_failures: self.max_block_limit_errors,
+            },
+            time_budget: self.staging_bundles_time_budget,
         }
     }
 }
@@ -545,6 +561,13 @@ impl<Env: Environment> ChainClient<Env> {
                     .restrict_chain_ids_to
                     .as_ref()
                     .is_none_or(|chain_set| chain_set.contains(chain_id))
+            })
+            .filter(|((_, stream_id), _)| {
+                self.options
+                    .message_policy
+                    .process_events_from_application_ids
+                    .as_ref()
+                    .is_none_or(|app_set| app_set.contains(&stream_id.application_id))
             })
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
@@ -1422,9 +1445,7 @@ impl<Env: Environment> ChainClient<Env> {
                 proposed_block,
                 round,
                 blobs.clone(),
-                BundleExecutionPolicy::AutoRetry {
-                    max_failures: self.options.max_block_limit_errors,
-                },
+                self.options.bundle_execution_policy(),
             )
             .await?;
         let (proposed_block, _) = block.clone().into_proposal();
@@ -1600,9 +1621,7 @@ impl<Env: Environment> ChainClient<Env> {
                 block,
                 None,
                 Vec::new(),
-                BundleExecutionPolicy::AutoRetry {
-                    max_failures: self.options.max_block_limit_errors,
-                },
+                self.options.bundle_execution_policy(),
             )
             .await
         {
@@ -1800,7 +1819,7 @@ impl<Env: Environment> ChainClient<Env> {
                             proposed_block,
                             None,
                             blobs.clone(),
-                            BundleExecutionPolicy::Abort,
+                            BundleExecutionPolicy::committed(),
                         )
                         .await?
                         .0;
@@ -1819,7 +1838,7 @@ impl<Env: Environment> ChainClient<Env> {
                     proposed_block,
                     round,
                     blobs.clone(),
-                    BundleExecutionPolicy::Abort,
+                    BundleExecutionPolicy::committed(),
                 )
                 .await?;
             debug!("Proposing the local pending block.");
@@ -2921,6 +2940,7 @@ impl<Env: Environment> ChainClient<Env> {
             .flatten();
             let (stream, abort) = stream::abortable(stream);
             let mut stream = Box::pin(stream);
+            let abort_on_exit = abort.clone();
             let this = self.clone();
             let local_node = local_node.clone();
             let remote_node = RemoteNode { public_key, node };
@@ -2943,6 +2963,12 @@ impl<Env: Environment> ChainClient<Env> {
                         );
                     }
                 }
+                warn!(
+                    chain_id = %this.chain_id,
+                    address = remote_node.address(),
+                    "Validator notification stream ended; will reconnect on next update"
+                );
+                abort_on_exit.abort();
             });
             entry.insert(abort);
         }

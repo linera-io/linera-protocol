@@ -23,14 +23,14 @@ use crate::simple::SimpleClient;
 
 #[derive(Clone)]
 pub enum Client {
-    Grpc(GrpcClient),
+    Grpc(Box<GrpcClient>),
     #[cfg(with_simple_network)]
     Simple(SimpleClient),
 }
 
 impl From<GrpcClient> for Client {
     fn from(client: GrpcClient) -> Self {
-        Self::Grpc(client)
+        Self::Grpc(Box::new(client))
     }
 }
 
