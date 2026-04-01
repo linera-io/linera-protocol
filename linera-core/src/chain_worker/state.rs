@@ -594,7 +594,7 @@ where
             for height in heights {
                 let Some(hashed_block) = height_to_blocks.get(&height) else {
                     tracing::warn!(%height, "ignoring spurious block entry in outbox");
-                    continue;
+                    break;
                 };
                 let new_bundles = hashed_block
                     .inner()
