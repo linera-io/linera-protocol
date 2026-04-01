@@ -984,6 +984,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         if let Err(error) = result {
             error!(
+                chain_id = %self.chain_id,
                 %error,
                 "Failed to synchronize received_logs from at least a quorum of validators",
             );
@@ -1164,6 +1165,7 @@ impl<Env: Environment> ChainClient<Env> {
                             .await
                         {
                             error!(
+                                %chain_id,
                                 ?blob_ids,
                                 %error,
                                 "Error while attempting to download blobs during retrying outgoing \
@@ -2810,7 +2812,7 @@ impl<Env: Environment> ChainClient<Env> {
                         .await?
                         <= height
                     {
-                        error!("NewBlock: Fail to synchronize new block after notification");
+                        error!(%chain_id, "NewBlock: Fail to synchronize new block after notification");
                     }
                 }
             }
@@ -2927,7 +2929,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await
         {
             Ok(handler) => process_notifications.push(handler),
-            Err(error) => error!("Failed to update committee: {error}"),
+            Err(error) => error!(chain_id = %self.chain_id, "Failed to update committee: {error}"),
         };
 
         let this = self.clone();
@@ -2954,7 +2956,7 @@ impl<Env: Environment> ChainClient<Env> {
                         .await
                         {
                             Ok(handler) => process_notifications.push(handler),
-                            Err(error) => error!("Failed to update committee: {error}"),
+                            Err(error) => error!(chain_id = %this.chain_id, "Failed to update committee: {error}"),
                         }
                     }
                 }

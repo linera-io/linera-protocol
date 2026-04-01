@@ -395,7 +395,7 @@ where
             .handle_requests(request_sender, request_receiver)
             .await
         {
-            tracing::error!("Chain actor error: {err}");
+            tracing::error!(%chain_id, "Chain actor error: {err}");
         }
         #[cfg(with_metrics)]
         metrics::CHAIN_WORKER_ACTORS_ACTIVE.dec();

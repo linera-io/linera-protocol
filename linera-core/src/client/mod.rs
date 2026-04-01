@@ -1064,7 +1064,10 @@ impl<Env: Environment> Client<Env> {
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
-                    warn!("Failed to process network hashed certificate value");
+                    warn!(
+                        chain_id = %certificate.block().header.chain_id,
+                        "Failed to process network hashed certificate value",
+                    );
                     return Err(err.into());
                 }
             }
@@ -1100,7 +1103,10 @@ impl<Env: Environment> Client<Env> {
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
-                    warn!("Failed to process network hashed certificate value");
+                    warn!(
+                        chain_id = %certificate.block().header.chain_id,
+                        "Failed to process network hashed certificate value",
+                    );
                     return Err(err.into());
                 }
             }

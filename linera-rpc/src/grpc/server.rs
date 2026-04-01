@@ -561,7 +561,8 @@ where
         let notification_sender = self.notification_sender.clone();
 
         for request in actions.cross_chain_requests {
-            let shard_id = self.network.get_shard_id(request.target_chain_id());
+            let target_chain_id = request.target_chain_id();
+            let shard_id = self.network.get_shard_id(target_chain_id);
             trace!(
                 source_shard_id = self.shard_id,
                 target_shard_id = shard_id,
@@ -569,7 +570,7 @@ where
             );
 
             if let Err(error) = cross_chain_sender.try_send((request, shard_id)) {
-                error!(%error, "dropping cross-chain request");
+                error!(%error, %target_chain_id, "dropping cross-chain request");
                 #[cfg(with_metrics)]
                 if error.is_full() {
                     metrics::CROSS_CHAIN_MESSAGE_CHANNEL_FULL
