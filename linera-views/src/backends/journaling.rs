@@ -151,10 +151,10 @@ enum KeyTag {
     Entry,
 }
 
-fn get_journaling_key<E>(tag: u8, pos: u32) -> Result<Vec<u8>, JournalingError<E>> {
+fn get_journaling_key(tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
     let mut key = vec![JOURNAL_TAG];
     key.extend([tag]);
-    bcs::serialize_into(&mut key, &pos).map_err(JournalingError::BcsError)?;
+    bcs::serialize_into(&mut key, &pos)?;
     Ok(key)
 }
 
@@ -408,7 +408,7 @@ where
             batch.add_delete(block_key);
             header.block_count -= 1;
             if header.block_count > 0 {
-                let value = bcs::to_bytes(&header).map_err(JournalingError::BcsError)?;
+                let value = bcs::to_bytes(&header)?;
                 batch.add_insert(header_key.clone(), value);
             } else {
                 batch.add_delete(header_key.clone());
@@ -470,8 +470,7 @@ where
     ) -> Result<JournalHeader, JournalingError<S::Error>> {
         let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let key_len = header_key.len();
-        let header_value_len =
-            bcs::serialized_size(&JournalHeader::default()).map_err(JournalingError::BcsError)?;
+        let header_value_len = bcs::serialized_size(&JournalHeader::default())?;
         let journal_len_upper_bound = key_len + header_value_len;
         // Each block in a transaction comes with a key.
         let max_transaction_size = S::MAX_BATCH_TOTAL_SIZE;
@@ -486,17 +485,13 @@ where
         let mut block_count = 0;
         let mut transaction_batch = S::Batch::default();
         let mut transaction_size = 0;
-        while iter
-            .write_next_value(&mut block_batch, &mut block_size)
-            .map_err(JournalingError::BcsError)?
-        {
+        while iter.write_next_value(&mut block_batch, &mut block_size)? {
             let (block_flush, transaction_flush) = {
                 if iter.is_empty() || transaction_batch.len() == S::MAX_BATCH_SIZE - 1 {
                     (true, true)
                 } else {
                     let next_block_size = iter
-                        .next_batch_size(&block_batch, block_size)
-                        .map_err(JournalingError::BcsError)?
+                        .next_batch_size(&block_batch, block_size)?
                         .expect("iter is not empty");
                     let next_transaction_size = transaction_size + next_block_size + key_len;
                     let transaction_flush = next_transaction_size > max_transaction_size;
@@ -508,7 +503,7 @@ where
             };
             if block_flush {
                 block_size += block_batch.overhead_size();
-                let value = bcs::to_bytes(&block_batch).map_err(JournalingError::BcsError)?;
+                let value = bcs::to_bytes(&block_batch)?;
                 block_batch = S::Batch::default();
                 assert_eq!(value.len(), block_size);
                 let key = get_journaling_key(KeyTag::Entry as u8, block_count)?;
@@ -525,7 +520,7 @@ where
         }
         let header = JournalHeader { block_count };
         if block_count > 0 {
-            let value = bcs::to_bytes(&header).map_err(JournalingError::BcsError)?;
+            let value = bcs::to_bytes(&header)?;
             let mut batch = S::Batch::default();
             batch.add_insert(header_key, value);
             self.store.write_batch(batch).await?;
