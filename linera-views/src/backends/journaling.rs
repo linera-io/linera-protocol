@@ -27,7 +27,9 @@ use thiserror::Error;
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{register_histogram, register_int_counter};
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, register_histogram, register_int_counter,
+    };
     use prometheus::{Histogram, IntCounter};
 
     /// Number of write_batch calls that used the fast path (single atomic batch).
@@ -67,7 +69,7 @@ mod metrics {
         register_histogram(
             "journal_batch_len",
             "Number of operations in write_batch calls",
-            None,
+            exponential_bucket_interval(1.0, 10000.0),
         )
     });
 }
