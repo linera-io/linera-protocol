@@ -120,6 +120,9 @@ pub enum BlockOutcome {
     Skipped,
 }
 
+/// Returned when a chain worker needs to be unloaded.
+pub struct PoisonedWorkerError;
+
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + 'static,
@@ -169,7 +172,7 @@ where
     pub async fn handle_request(
         &mut self,
         request: ChainWorkerRequest<StorageClient::Context>,
-    ) -> Result<(), ()> {
+    ) -> Result<(), PoisonedWorkerError> {
         tracing::trace!("Handling chain worker request: {request:?}");
         assert!(
             !self.poisoned,
@@ -338,7 +341,7 @@ where
         if self.poisoned {
             // The view is in an inconsistent state due to a journal resolution failure.
             // Don't rollback — the worker will be dropped and reloaded.
-            return Err(());
+            return Err(PoisonedWorkerError);
         }
         // Roll back any unsaved changes to the chain state: If there was an error while trying
         // to handle the request, the chain state might contain unsaved and potentially invalid
@@ -2256,8 +2259,9 @@ where
         if let Err(e) = self.chain.save().await {
             if e.must_reload_view() {
                 tracing::error!(
+                    error = ?e,
                     chain_id = %self.chain_id(),
-                    "Journal resolution failed; marking worker as poisoned: {e}"
+                    "Journal resolution failed; marking worker as poisoned"
                 );
                 self.poisoned = true;
             }
