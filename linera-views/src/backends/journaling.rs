@@ -23,6 +23,55 @@ use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use thiserror::Error;
 
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{register_int_counter, register_histogram};
+    use prometheus::{Histogram, IntCounter};
+
+    /// Number of write_batch calls that used the fast path (single atomic batch).
+    pub static JOURNAL_FASTPATH_COUNT: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "journal_fastpath_count",
+            "Number of write_batch calls using the fast path",
+        )
+    });
+
+    /// Number of write_batch calls that required journaling.
+    pub static JOURNAL_SLOWPATH_COUNT: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "journal_slowpath_count",
+            "Number of write_batch calls requiring journaling",
+        )
+    });
+
+    /// Number of journal resolution failures.
+    pub static JOURNAL_RESOLUTION_FAILURES: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "journal_resolution_failures",
+            "Number of journal resolution failures (potential data inconsistency)",
+        )
+    });
+
+    /// Number of pending journals found during clear_journal (on chain reload).
+    pub static JOURNAL_PENDING_ON_LOAD: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "journal_pending_on_load",
+            "Number of pending journals found during chain reload",
+        )
+    });
+
+    /// Histogram of batch sizes (number of operations) for write_batch calls.
+    pub static JOURNAL_BATCH_LEN: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "journal_batch_len",
+            "Number of operations in write_batch calls",
+            None,
+        )
+    });
+}
+
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
@@ -225,12 +274,16 @@ where
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         let batch = S::Batch::from_batch(self, batch).await?;
+        #[cfg(with_metrics)]
+        metrics::JOURNAL_BATCH_LEN.observe(batch.len() as f64);
         if Self::is_fastpath_feasible(&batch) {
             tracing::trace!(
                 batch_len = batch.len(),
                 batch_bytes = batch.num_bytes(),
                 "write_batch: using fast path"
             );
+            #[cfg(with_metrics)]
+            metrics::JOURNAL_FASTPATH_COUNT.inc();
             self.store.write_batch(batch).await
         } else {
             tracing::warn!(
@@ -240,6 +293,8 @@ where
                 max_batch_total_size = S::MAX_BATCH_TOTAL_SIZE,
                 "write_batch: batch exceeds fast path limits, using journal"
             );
+            #[cfg(with_metrics)]
+            metrics::JOURNAL_SLOWPATH_COUNT.inc();
             if !self.has_exclusive_access {
                 return Err(JournalConsistencyError::JournalRequiresExclusiveAccess.into());
             }
@@ -256,6 +311,8 @@ where
                         storage may be in an inconsistent state until \
                         the journal is cleared on next reload"
                     );
+                    #[cfg(with_metrics)]
+                    metrics::JOURNAL_RESOLUTION_FAILURES.inc();
                     Err(e)
                 }
             }
@@ -270,6 +327,8 @@ where
                 block_count = header.block_count,
                 "clear_journal: found pending journal, resolving"
             );
+            #[cfg(with_metrics)]
+            metrics::JOURNAL_PENDING_ON_LOAD.inc();
             self.coherently_resolve_journal(header).await?;
         }
         Ok(())
