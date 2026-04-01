@@ -131,6 +131,10 @@ impl<E: KeyValueStoreError> From<bcs::Error> for JournalingError<E> {
 
 impl<E: KeyValueStoreError + 'static> KeyValueStoreError for JournalingError<E> {
     const BACKEND: &'static str = "journaling";
+
+    fn must_reload_view(&self) -> bool {
+        matches!(self, JournalingError::ResolutionFailed(_))
+    }
 }
 
 /// The tag used for the journal stuff.

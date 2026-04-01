@@ -992,7 +992,7 @@ impl KeyValueStoreError for DynamoDbStoreInternalError {
 
 #[cfg(with_testing)]
 impl TestKeyValueDatabase for JournalingKeyValueDatabase<DynamoDbDatabaseInternal> {
-    async fn new_test_config() -> Result<DynamoDbStoreInternalConfig, DynamoDbStoreInternalError> {
+    async fn new_test_config() -> Result<DynamoDbStoreInternalConfig, Self::Error> {
         Ok(DynamoDbStoreInternalConfig {
             use_dynamodb_local: true,
             max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),

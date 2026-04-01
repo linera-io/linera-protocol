@@ -443,8 +443,8 @@ impl WorkerError {
 
     /// Returns `true` if this error was caused by a journal resolution failure,
     /// which may leave storage in an inconsistent state requiring a view reload.
-    pub fn is_journal_resolution_failure(&self) -> bool {
-        matches!(self, WorkerError::ViewError(e) if e.is_journal_resolution_failure())
+    pub fn must_reload_view(&self) -> bool {
+        matches!(self, WorkerError::ViewError(e) if e.must_reload_view())
     }
 }
 

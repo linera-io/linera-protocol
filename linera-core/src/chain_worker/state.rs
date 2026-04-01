@@ -2257,7 +2257,7 @@ where
     async fn save(&mut self) -> Result<(), WorkerError> {
         self.clear_shared_chain_view().await;
         if let Err(e) = self.chain.save().await {
-            if e.is_journal_resolution_failure() {
+            if e.must_reload_view() {
                 tracing::error!(
                     chain_id = %self.chain_id(),
                     "Journal resolution failed; marking worker as poisoned: {e}"
