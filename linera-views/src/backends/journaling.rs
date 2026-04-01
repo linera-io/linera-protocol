@@ -109,10 +109,6 @@ pub enum JournalingError<E> {
     #[error(transparent)]
     BcsError(bcs::Error),
 
-    /// The journal block could not be retrieved.
-    #[error("The journal block could not be retrieved, it could be missing or corrupted.")]
-    FailureToRetrieveJournalBlock,
-
     /// Refusing to use the journal without exclusive access.
     #[error("Refusing to use the journal without exclusive database access to the root object.")]
     JournalRequiresExclusiveAccess,
@@ -120,7 +116,23 @@ pub enum JournalingError<E> {
     /// Journal resolution failed; storage may be in an inconsistent state.
     /// The view must be reloaded to complete the pending journal.
     #[error("Journal resolution failed: {0}")]
-    ResolutionFailed(Box<dyn std::error::Error + Send + Sync>),
+    JournalResolutionFailed(JournalingResolutionError<E>),
+}
+
+/// Error type for the journaling key-value store layer.
+#[derive(Error, Debug)]
+pub enum JournalingResolutionError<E> {
+    /// Error from the inner store.
+    #[error(transparent)]
+    Inner(#[from] E),
+
+    /// BCS serialization error.
+    #[error(transparent)]
+    BcsError(bcs::Error),
+
+    /// The journal block could not be retrieved.
+    #[error("The journal block could not be retrieved, it could be missing or corrupted.")]
+    FailureToRetrieveJournalBlock,
 }
 
 impl<E: KeyValueStoreError> From<bcs::Error> for JournalingError<E> {
@@ -133,7 +145,13 @@ impl<E: KeyValueStoreError + 'static> KeyValueStoreError for JournalingError<E> 
     const BACKEND: &'static str = "journaling";
 
     fn must_reload_view(&self) -> bool {
-        matches!(self, JournalingError::ResolutionFailed(_))
+        matches!(self, JournalingError::JournalResolutionFailed(_))
+    }
+}
+
+impl<E: KeyValueStoreError> From<bcs::Error> for JournalingResolutionError<E> {
+    fn from(error: bcs::Error) -> Self {
+        JournalingResolutionError::BcsError(error)
     }
 }
 
@@ -343,7 +361,7 @@ where
                     );
                     #[cfg(with_metrics)]
                     metrics::JOURNAL_RESOLUTION_FAILURES.inc();
-                    Err(JournalingError::ResolutionFailed(Box::new(e)))
+                    Err(JournalingError::JournalResolutionFailed(e))
                 }
             }
         }
@@ -359,9 +377,22 @@ where
             );
             #[cfg(with_metrics)]
             metrics::JOURNAL_PENDING_ON_LOAD.inc();
-            self.coherently_resolve_journal(header).await?;
+            match self.coherently_resolve_journal(header).await {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    tracing::error!(
+                        "write_batch: FAILED to resolve journal — \
+                        storage may be in an inconsistent state until \
+                        the journal is cleared on next reload"
+                    );
+                    #[cfg(with_metrics)]
+                    metrics::JOURNAL_RESOLUTION_FAILURES.inc();
+                    Err(JournalingError::JournalResolutionFailed(e))
+                }
+            }
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 
@@ -393,7 +424,7 @@ where
     async fn coherently_resolve_journal(
         &self,
         mut header: JournalHeader,
-    ) -> Result<(), JournalingError<S::Error>> {
+    ) -> Result<(), JournalingResolutionError<S::Error>> {
         let total_blocks = header.block_count;
         let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         while header.block_count > 0 {
@@ -403,7 +434,7 @@ where
                 .store
                 .read_value::<S::Batch>(&block_key)
                 .await?
-                .ok_or(JournalingError::FailureToRetrieveJournalBlock)?;
+                .ok_or(JournalingResolutionError::FailureToRetrieveJournalBlock)?;
             // Execute the block and delete it from the journal atomically.
             batch.add_delete(block_key);
             header.block_count -= 1;
