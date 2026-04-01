@@ -19,7 +19,6 @@ use linera_base::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
     },
     ensure,
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
 use linera_cache::{UniqueValueCache, ValueCache};
@@ -544,41 +543,10 @@ where
     ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
         let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
-        let next_block_height = self.chain.tip_state.get().next_block_height;
-        let log_heights = heights
-            .range(..next_block_height)
-            .copied()
-            .map(usize::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut hashes = self
-            .chain
-            .confirmed_log
-            .multi_get(log_heights)
-            .await?
-            .into_iter()
-            .zip(&heights)
-            .map(|(maybe_hash, height)| {
-                maybe_hash.ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound {
-                    height: *height,
-                    chain_id: self.chain_id(),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        for height in heights.range(next_block_height..) {
-            hashes.push(
-                self.chain
-                    .preprocessed_blocks
-                    .get(height)
-                    .await?
-                    .ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound {
-                        height: *height,
-                        chain_id: self.chain_id(),
-                    })?,
-            );
-        }
+        let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
 
         let mut uncached_hashes = Vec::new();
-        let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
+        let mut height_to_blocks = HashMap::new();
 
         for hash in hashes {
             if let Some(hashed_block) = self.block_values.get_hashed(&hash) {
@@ -624,9 +592,14 @@ where
             let mut bundles = Vec::new();
             let mut bundles_size = 0;
             for height in heights {
-                let hashed_block = height_to_blocks
-                    .get(&height)
-                    .ok_or_else(|| ChainError::InternalError("missing block".to_string()))?;
+                let Some(hashed_block) = height_to_blocks.get(&height) else {
+                    tracing::warn!(
+                        %height,
+                        %recipient,
+                        "spurious entry in outbox; skipping this and higher sender blocks"
+                    );
+                    break;
+                };
                 let new_bundles = hashed_block
                     .inner()
                     .message_bundles_for(recipient, hashed_block.hash())
@@ -1362,10 +1335,13 @@ where
             return Ok(NetworkActions::default());
         };
 
-        let mut heights_to_readd = Vec::new();
+        let mut heights_to_re_add = Vec::new();
         let mut current_height = latest_height;
         while current_height >= missing_height {
-            heights_to_readd.push(current_height);
+            // We arrived at current_height via previous_message_blocks links, starting from the
+            // chain state and following the links downwards. So these blocks should all be in
+            // confirmed_log or preprocessed_blocks already.
+            heights_to_re_add.push(current_height);
             // Load the block at current_height to find the previous message block
             let hash = match &*self.chain.block_hashes([current_height]).await? {
                 [hash] => *hash,
@@ -1393,9 +1369,13 @@ where
         }
 
         // 2. Re-add the heights to the outbox.
-        let mut outbox = self.chain.outboxes.try_load_entry_mut(&recipient).await?;
-        let new_heights = outbox.revert(&heights_to_readd).await?;
-        drop(outbox);
+        let new_heights = self
+            .chain
+            .outboxes
+            .try_load_entry_mut(&recipient)
+            .await?
+            .revert(&heights_to_re_add)
+            .await?;
 
         if new_heights.is_empty() {
             debug!("RevertConfirm: all heights already in outbox for {recipient}");
@@ -1403,8 +1383,9 @@ where
         }
 
         // 3. Update outbox_counters (+1 per new height for this one recipient).
-        for h in &new_heights {
-            *self.chain.outbox_counters.get_mut().entry(*h).or_default() += 1;
+        let new_heights_len = new_heights.len();
+        for h in new_heights {
+            *self.chain.outbox_counters.get_mut().entry(h).or_default() += 1;
         }
         self.chain.nonempty_outboxes.get_mut().insert(recipient);
 
@@ -1417,9 +1398,8 @@ where
         self.save().await?;
 
         warn!(
-            "RevertConfirm: re-added {} heights to outbox for {recipient}, \
-            starting from height {missing_height}",
-            new_heights.len(),
+            "RevertConfirm: re-added {new_heights_len} heights to outbox for {recipient}, \
+            starting from height {missing_height}"
         );
 
         Ok(actions)
@@ -1441,6 +1421,7 @@ where
         // 1. Collect all sender chain IDs and block hashes before clearing.
         let sender_ids = self.chain.inboxes.indices().await?;
         let hashes = self.chain.confirmed_log.read(..).await?;
+        let preprocessed = self.chain.preprocessed_blocks.index_values().await?;
 
         // 2. Clear the chain state entirely and save.
         self.chain.clear();
@@ -1454,6 +1435,14 @@ where
         // 3. Re-load certificates one at a time by hash and re-process them.
         for (index, hash) in hashes.into_iter().enumerate() {
             let height = BlockHeight(index as u64);
+            let cert = self
+                .storage
+                .read_certificate(hash)
+                .await?
+                .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
+            Box::pin(self.process_confirmed_block(cert, None)).await?;
+        }
+        for (height, hash) in preprocessed {
             let cert = self
                 .storage
                 .read_certificate(hash)
