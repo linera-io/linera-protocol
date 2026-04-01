@@ -593,7 +593,11 @@ where
             let mut bundles_size = 0;
             for height in heights {
                 let Some(hashed_block) = height_to_blocks.get(&height) else {
-                    tracing::warn!(%height, "ignoring spurious block entry in outbox");
+                    tracing::warn!(
+                        %height,
+                        %recipient,
+                        "spurious entry in outbox; skipping this and higher sender blocks"
+                    );
                     break;
                 };
                 let new_bundles = hashed_block
