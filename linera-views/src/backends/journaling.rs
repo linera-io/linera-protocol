@@ -54,7 +54,7 @@ mod metrics {
         )
     });
 
-    /// Number of pending journals found during clear_journal (on chain reload).
+    /// Number of pending journals found during `clear_journal` (on chain reload).
     pub static JOURNAL_PENDING_ON_LOAD: LazyLock<IntCounter> = LazyLock::new(|| {
         register_int_counter(
             "journal_pending_on_load",
