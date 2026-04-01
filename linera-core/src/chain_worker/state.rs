@@ -950,6 +950,7 @@ where
                 )
                 .await?;
         }
+        inbox.observe_size_metric();
         drop(inbox);
         if !self.config.allow_inactive_chains && !self.chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
