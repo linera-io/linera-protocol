@@ -170,14 +170,11 @@ where
         &mut self,
         request: ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<(), ()> {
-        if self.poisoned {
-            tracing::error!(
-                chain_id = %self.chain_id(),
-                "Refusing request on poisoned chain worker; must reload"
-            );
-            return Err(());
-        }
         tracing::trace!("Handling chain worker request: {request:?}");
+        assert!(
+            !self.poisoned,
+            "handle_request should not be called on a poisoned chain worker"
+        );
         // TODO(#2237): Spawn concurrent tasks for read-only operations
         let responded = match request {
             #[cfg(with_testing)]
