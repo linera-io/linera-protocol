@@ -2940,6 +2940,7 @@ impl<Env: Environment> ChainClient<Env> {
             .flatten();
             let (stream, abort) = stream::abortable(stream);
             let mut stream = Box::pin(stream);
+            let abort_on_exit = abort.clone();
             let this = self.clone();
             let local_node = local_node.clone();
             let remote_node = RemoteNode { public_key, node };
@@ -2962,6 +2963,12 @@ impl<Env: Environment> ChainClient<Env> {
                         );
                     }
                 }
+                warn!(
+                    chain_id = %this.chain_id,
+                    address = remote_node.address(),
+                    "Validator notification stream ended; will reconnect on next update"
+                );
+                abort_on_exit.abort();
             });
             entry.insert(abort);
         }

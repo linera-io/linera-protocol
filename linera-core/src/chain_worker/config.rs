@@ -3,9 +3,9 @@
 
 //! Configuration parameters for the chain worker.
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
-use linera_base::{crypto::ValidatorSecretKey, time::Duration};
+use linera_base::{crypto::ValidatorSecretKey, identifiers::ChainId, time::Duration};
 
 use crate::CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES;
 
@@ -38,6 +38,8 @@ pub struct ChainWorkerConfig {
     pub block_cache_size: usize,
     /// Maximum number of entries in the execution state cache.
     pub execution_state_cache_size: usize,
+    /// Chain IDs whose incoming bundles should be processed first.
+    pub priority_bundle_origins: HashSet<ChainId>,
 }
 
 impl ChainWorkerConfig {
@@ -67,6 +69,7 @@ impl Default for ChainWorkerConfig {
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
             block_cache_size: 5000,
             execution_state_cache_size: 10_000,
+            priority_bundle_origins: HashSet::new(),
         }
     }
 }
