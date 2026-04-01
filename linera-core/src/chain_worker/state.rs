@@ -1334,6 +1334,9 @@ where
         let mut heights_to_re_add = Vec::new();
         let mut current_height = latest_height;
         while current_height >= missing_height {
+            // We arrived at current_height via previous_message_blocks links, starting from the
+            // chain state and following the links downwards. So these blocks should all be in
+            // confirmed_log or preprocessed_blocks already.
             heights_to_re_add.push(current_height);
             // Load the block at current_height to find the previous message block
             let hash = match &*self.chain.block_hashes([current_height]).await? {
