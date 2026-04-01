@@ -480,8 +480,32 @@ impl<Env: Environment> Client<Env> {
             return Ok(info);
         }
         info = self
-            .download_certificates_using_all(&validators, chain_id, target_next_block_height)
+            .load_local_certificates(chain_id, target_next_block_height)
             .await?;
+        let mut next_height = info.next_block_height;
+        // Download remaining batches using all validators with staggered fallback.
+        while next_height < target_next_block_height {
+            let limit = u64::from(target_next_block_height)
+                .checked_sub(u64::from(next_height))
+                .ok_or(ArithmeticError::Overflow)?
+                .min(self.options.certificate_download_batch_size);
+            let certificates = self
+                .requests_scheduler
+                .download_certificates_from_validators(
+                    &validators,
+                    chain_id,
+                    next_height,
+                    limit,
+                    self.options.certificate_batch_download_timeout,
+                )
+                .await?;
+            let Some(new_info) = self.process_certificates(&validators, certificates).await? else {
+                break;
+            };
+            assert!(new_info.next_block_height > next_height);
+            next_height = new_info.next_block_height;
+            info = new_info;
+        }
         ensure!(
             target_next_block_height <= info.next_block_height,
             chain_client::Error::CannotDownloadCertificates {
@@ -545,44 +569,6 @@ impl<Env: Environment> Client<Env> {
                 .process_certificates(slice::from_ref(remote_node), certificates)
                 .await?
             else {
-                break;
-            };
-            assert!(info.next_block_height > next_height);
-            next_height = info.next_block_height;
-            last_info = info;
-        }
-        Ok(last_info)
-    }
-
-    /// Downloads and processes certificates up to `stop`, using all validators with
-    /// staggered concurrent requests for each batch. First loads locally available
-    /// certificates from storage, then downloads the rest.
-    #[instrument(level = "trace", skip_all)]
-    async fn download_certificates_using_all(
-        &self,
-        validators: &[RemoteNode<Env::ValidatorNode>],
-        chain_id: ChainId,
-        stop: BlockHeight,
-    ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        let mut last_info = self.load_local_certificates(chain_id, stop).await?;
-        let mut next_height = last_info.next_block_height;
-        // Download remaining batches using all validators with staggered fallback.
-        while next_height < stop {
-            let limit = u64::from(stop)
-                .checked_sub(u64::from(next_height))
-                .ok_or(ArithmeticError::Overflow)?
-                .min(self.options.certificate_download_batch_size);
-            let certificates = self
-                .requests_scheduler
-                .download_certificates_from_validators(
-                    validators,
-                    chain_id,
-                    next_height,
-                    limit,
-                    self.options.certificate_batch_download_timeout,
-                )
-                .await?;
-            let Some(info) = self.process_certificates(validators, certificates).await? else {
                 break;
             };
             assert!(info.next_block_height > next_height);
