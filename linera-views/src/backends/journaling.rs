@@ -226,13 +226,39 @@ where
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         let batch = S::Batch::from_batch(self, batch).await?;
         if Self::is_fastpath_feasible(&batch) {
+            tracing::trace!(
+                batch_len = batch.len(),
+                batch_bytes = batch.num_bytes(),
+                "write_batch: using fast path"
+            );
             self.store.write_batch(batch).await
         } else {
+            tracing::warn!(
+                batch_len = batch.len(),
+                batch_bytes = batch.num_bytes(),
+                max_batch_size = S::MAX_BATCH_SIZE,
+                max_batch_total_size = S::MAX_BATCH_TOTAL_SIZE,
+                "write_batch: batch exceeds fast path limits, using journal"
+            );
             if !self.has_exclusive_access {
                 return Err(JournalConsistencyError::JournalRequiresExclusiveAccess.into());
             }
             let header = self.write_journal(batch).await?;
-            self.coherently_resolve_journal(header).await
+            tracing::info!(
+                block_count = header.block_count,
+                "write_batch: journal written, resolving"
+            );
+            match self.coherently_resolve_journal(header).await {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    tracing::error!(
+                        "write_batch: FAILED to resolve journal — \
+                        storage may be in an inconsistent state until \
+                        the journal is cleared on next reload"
+                    );
+                    Err(e)
+                }
+            }
         }
     }
 
@@ -240,6 +266,10 @@ where
         let key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
+            tracing::warn!(
+                block_count = header.block_count,
+                "clear_journal: found pending journal, resolving"
+            );
             self.coherently_resolve_journal(header).await?;
         }
         Ok(())
@@ -272,6 +302,7 @@ where
     /// (4) `block_key` and `header_key` don't exceed `S::MAX_KEY_SIZE` and `bcs_header`
     /// doesn't exceed `S::MAX_VALUE_SIZE`.
     async fn coherently_resolve_journal(&self, mut header: JournalHeader) -> Result<(), S::Error> {
+        let total_blocks = header.block_count;
         let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         while header.block_count > 0 {
             let block_key = get_journaling_key(KeyTag::Entry as u8, header.block_count - 1)?;
@@ -290,8 +321,14 @@ where
             } else {
                 batch.add_delete(header_key.clone());
             }
+            tracing::debug!(
+                remaining_blocks = header.block_count,
+                total_blocks,
+                "resolving journal block"
+            );
             self.store.write_batch(batch).await?;
         }
+        tracing::info!(total_blocks, "journal fully resolved");
         Ok(())
     }
 
