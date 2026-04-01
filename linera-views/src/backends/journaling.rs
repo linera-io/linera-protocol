@@ -107,6 +107,9 @@ pub enum JournalConsistencyError {
 
     #[error("Refusing to use the journal without exclusive database access to the root object.")]
     JournalRequiresExclusiveAccess,
+
+    #[error("Journal resolution failed; storage may be in an inconsistent state: {0}")]
+    ResolutionFailed(Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// The tag used for the journal stuff.
@@ -315,7 +318,7 @@ where
                     );
                     #[cfg(with_metrics)]
                     metrics::JOURNAL_RESOLUTION_FAILURES.inc();
-                    Err(e)
+                    Err(JournalConsistencyError::ResolutionFailed(Box::new(e)).into())
                 }
             }
         }

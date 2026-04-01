@@ -57,3 +57,27 @@ pub enum ViewError {
     #[error("post load values error")]
     PostLoadValuesError,
 }
+
+impl ViewError {
+    /// Returns `true` if this error was caused by a journal resolution failure,
+    /// which may leave storage in an inconsistent state requiring a view reload.
+    pub fn is_journal_resolution_failure(&self) -> bool {
+        let ViewError::StoreError { error, .. } = self else {
+            return false;
+        };
+        // Walk the error chain looking for a JournalConsistencyError::ResolutionFailed.
+        let mut source: Option<&(dyn std::error::Error)> = Some(error.as_ref());
+        while let Some(err) = source {
+            if let Some(journal_err) =
+                err.downcast_ref::<crate::journaling::JournalConsistencyError>()
+            {
+                return matches!(
+                    journal_err,
+                    crate::journaling::JournalConsistencyError::ResolutionFailed(_)
+                );
+            }
+            source = err.source();
+        }
+        false
+    }
+}
