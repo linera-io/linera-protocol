@@ -1368,9 +1368,13 @@ where
         }
 
         // 2. Re-add the heights to the outbox.
-        let mut outbox = self.chain.outboxes.try_load_entry_mut(&recipient).await?;
-        let new_heights = outbox.revert(&heights_to_readd).await?;
-        drop(outbox);
+        let new_heights = self
+            .chain
+            .outboxes
+            .try_load_entry_mut(&recipient)
+            .await?
+            .revert(&heights_to_readd)
+            .await?;
 
         if new_heights.is_empty() {
             debug!("RevertConfirm: all heights already in outbox for {recipient}");
@@ -1378,8 +1382,9 @@ where
         }
 
         // 3. Update outbox_counters (+1 per new height for this one recipient).
-        for h in &new_heights {
-            *self.chain.outbox_counters.get_mut().entry(*h).or_default() += 1;
+        let new_heights_len = new_heights.len();
+        for h in new_heights {
+            *self.chain.outbox_counters.get_mut().entry(h).or_default() += 1;
         }
         self.chain.nonempty_outboxes.get_mut().insert(recipient);
 
@@ -1392,9 +1397,8 @@ where
         self.save().await?;
 
         warn!(
-            "RevertConfirm: re-added {} heights to outbox for {recipient}, \
-            starting from height {missing_height}",
-            new_heights.len(),
+            "RevertConfirm: re-added {new_heights_len} heights to outbox for {recipient}, \
+            starting from height {missing_height}"
         );
 
         Ok(actions)
