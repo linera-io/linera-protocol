@@ -1337,10 +1337,10 @@ where
             return Ok(NetworkActions::default());
         };
 
-        let mut heights_to_readd = Vec::new();
+        let mut heights_to_re_add = Vec::new();
         let mut current_height = latest_height;
         while current_height >= missing_height {
-            heights_to_readd.push(current_height);
+            heights_to_re_add.push(current_height);
             // Load the block at current_height to find the previous message block
             let hash = match &*self.chain.block_hashes([current_height]).await? {
                 [hash] => *hash,
@@ -1373,7 +1373,7 @@ where
             .outboxes
             .try_load_entry_mut(&recipient)
             .await?
-            .revert(&heights_to_readd)
+            .revert(&heights_to_re_add)
             .await?;
 
         if new_heights.is_empty() {
