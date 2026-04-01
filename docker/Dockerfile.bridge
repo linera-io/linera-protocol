@@ -51,18 +51,7 @@ ARG rustflags
 
 COPY --from=planner /app/recipe.json recipe.json
 
-# linera-version's build.rs uses include!() for type definitions and hashes
-# files from other crates at build-script runtime.  These must exist before
-# `cargo chef cook` because cook triggers the build script.
-COPY linera-version/src/serde_pretty linera-version/src/serde_pretty
-COPY linera-version/src/version_info linera-version/src/version_info
-COPY linera-version/api-hashes.json linera-version/api-hashes.json
-COPY linera-rpc/tests/snapshots linera-rpc/tests/snapshots
-COPY linera-service-graphql-client/gql linera-service-graphql-client/gql
-COPY linera-sdk/wit linera-sdk/wit
-
-# Examples workspace stubs for dev-dep resolution during cook.
-COPY --from=planner /examples-stubs examples
+COPY . .
 
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
