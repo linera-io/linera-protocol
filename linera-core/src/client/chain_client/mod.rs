@@ -2996,45 +2996,46 @@ impl<Env: Environment> ChainClient<Env> {
             .map(BlockHeight)
             .collect();
 
-        let certificates = self
-            .client
-            .storage_client()
-            .read_certificates_by_heights(self.chain_id, &heights)
-            .await?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+        Box::pin(async {
+            let mut cert_stream = self
+                .client
+                .storage_client()
+                .read_certificates_by_heights_iter(self.chain_id, heights);
 
-        for certificate in certificates {
-            match remote_node
-                .handle_confirmed_certificate(
-                    certificate.clone(),
-                    CrossChainMessageDelivery::NonBlocking,
-                )
-                .await
-            {
-                Ok(_) => (),
-                Err(NodeError::BlobsNotFound(missing_blob_ids)) => {
-                    // Upload the missing blobs we have and retry.
-                    let missing_blobs: Vec<_> = self
-                        .client
-                        .storage_client()
-                        .read_blobs(&missing_blob_ids)
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .collect();
-                    remote_node.upload_blobs(missing_blobs).await?;
-                    remote_node
-                        .handle_confirmed_certificate(
-                            certificate,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
+            while let Some(result) = cert_stream.next().await {
+                let certificate = result?;
+                match remote_node
+                    .handle_confirmed_certificate(
+                        certificate.clone(),
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await
+                {
+                    Ok(_) => (),
+                    Err(NodeError::BlobsNotFound(missing_blob_ids)) => {
+                        // Upload the missing blobs we have and retry.
+                        let missing_blobs: Vec<_> = self
+                            .client
+                            .storage_client()
+                            .read_blobs(&missing_blob_ids)
+                            .await?
+                            .into_iter()
+                            .flatten()
+                            .collect();
+                        remote_node.upload_blobs(missing_blobs).await?;
+                        remote_node
+                            .handle_confirmed_certificate(
+                                certificate,
+                                CrossChainMessageDelivery::NonBlocking,
+                            )
+                            .await?;
+                    }
+                    Err(err) => return Err(err.into()),
                 }
-                Err(err) => return Err(err.into()),
             }
-        }
+            Ok::<_, Error>(())
+        })
+        .await?;
 
         Ok(())
     }

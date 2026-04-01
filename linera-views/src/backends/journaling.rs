@@ -26,7 +26,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
-        DirectKeyValueStore, KeyValueDatabase, ReadableKeyValueStore, WithError,
+        DirectKeyValueStore, KeyValueDatabase, ReadValueStream, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
@@ -144,6 +144,10 @@ where
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         self.store.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
+        self.store.read_multi_values_bytes_iter(keys)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

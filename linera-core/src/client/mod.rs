@@ -34,7 +34,7 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::committee::Committee;
-use linera_storage::{ResultReadCertificates, Storage as _};
+use linera_storage::Storage as _;
 use rand::{
     distributions::{Distribution, WeightedIndex},
     seq::SliceRandom,
@@ -547,16 +547,23 @@ impl<Env: Environment> Client<Env> {
             .local_node
             .get_preprocessed_block_hashes(chain_id, next_height, stop)
             .await?;
-        let certificates = self.storage_client().read_certificates(&hashes).await?;
-        let certificates = match ResultReadCertificates::new(certificates, hashes) {
-            ResultReadCertificates::Certificates(certificates) => certificates,
-            ResultReadCertificates::InvalidHashes(hashes) => {
-                return Err(chain_client::Error::ReadCertificatesError(hashes))
+        last_info = Box::pin(async {
+            let mut cert_stream = self.storage_client().read_certificates_iter(hashes);
+            let mut info = last_info;
+            while let Some(result) = cert_stream.next().await {
+                match result? {
+                    Some(certificate) => {
+                        info = Some(self.handle_certificate(certificate).await?.info);
+                    }
+                    None => {
+                        // Certificate not found in local storage — skip, will be
+                        // downloaded from the remote node below.
+                    }
+                }
             }
-        };
-        for certificate in certificates {
-            last_info = Some(self.handle_certificate(certificate).await?.info);
-        }
+            Ok::<_, chain_client::Error>(info)
+        })
+        .await?;
         // Now download the rest in batches from the remote node.
         while next_height < stop {
             // TODO(#2045): Analyze network errors instead of using a fixed batch size.

@@ -47,8 +47,8 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadValueStream,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -670,6 +670,29 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             .into_iter()
             .collect::<Result<_, _>>()?;
         Ok(results.into_iter().flatten().collect())
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
+        let chunks = keys
+            .chunks(MAX_MULTI_KEYS)
+            .map(|chunk| chunk.to_vec())
+            .collect::<Vec<_>>();
+        let store = self.clone();
+
+        Box::pin(async_stream::stream! {
+            for chunk in chunks {
+                let values = {
+                    let store_ref = store.store.deref();
+                    let root_key = store.root_key.clone();
+                    let _guard = store.acquire().await;
+                    Box::pin(store_ref.read_multi_values_internal(&root_key, chunk)).await?
+                };
+
+                for value in values {
+                    yield Ok(value);
+                }
+            }
+        })
     }
 
     async fn find_keys_by_prefix(

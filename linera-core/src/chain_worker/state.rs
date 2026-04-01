@@ -293,17 +293,28 @@ where
 
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         if !missing_indices.is_empty() {
-            let all_entries_pending_blobs = self
+            let mut remaining = missing_indices
+                .into_iter()
+                .zip(missing_blob_ids)
+                .collect::<Vec<_>>();
+            let mut iter = self
                 .chain
                 .pending_proposed_blobs
-                .try_load_all_entries()
+                .try_load_all_entries_iter()
                 .await?;
-            for (index, blob_id) in missing_indices.into_iter().zip(missing_blob_ids) {
-                for (_, pending_blobs) in &all_entries_pending_blobs {
-                    if let Some(blob) = pending_blobs.get(&blob_id).await? {
-                        maybe_blobs[index].1 = Some(blob);
-                        break;
+            while let Some((_, pending_blobs)) = iter.next().await? {
+                let mut i = 0;
+                while i < remaining.len() {
+                    let (index, blob_id) = &remaining[i];
+                    if let Some(blob) = pending_blobs.get(blob_id).await? {
+                        maybe_blobs[*index].1 = Some(blob);
+                        remaining.swap_remove(i);
+                    } else {
+                        i += 1;
                     }
+                }
+                if remaining.is_empty() {
+                    break;
                 }
             }
         }

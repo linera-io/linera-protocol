@@ -2392,6 +2392,7 @@ dependencies = [
 name = "linera-storage"
 version = "0.16.0"
 dependencies = [
+ "async-stream",
  "async-trait",
  "bcs",
  "cfg-if",
@@ -2414,6 +2415,7 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-lock",
+ "async-stream",
  "bcs",
  "cfg_aliases",
  "clap",
@@ -2460,6 +2462,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-lock",
+ "async-stream",
  "bcs",
  "cfg_aliases",
  "convert_case",

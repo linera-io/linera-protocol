@@ -5,6 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 
 #[cfg(with_testing)]
@@ -14,7 +15,9 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadValueStream, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -291,6 +294,64 @@ where
             }
         }
         Ok(result)
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
+        Box::pin(async_stream::stream! {
+            if let Some(cache) = &self.cache {
+                let mut is_cached = Vec::new();
+                let mut uncached_keys = Vec::new();
+
+                {
+                    let cache = cache.lock().unwrap();
+                    for key in &keys {
+                        if cache.test_key_presence(key) {
+                            is_cached.push(true);
+                        } else {
+                            is_cached.push(false);
+                            uncached_keys.push(key.clone());
+                        }
+                    }
+                }
+
+                let mut uncached_stream = self.store.read_multi_values_bytes_iter(uncached_keys);
+
+                for (i, key) in keys.iter().enumerate() {
+                    let value = if is_cached[i] {
+                        let cached_value = {
+                            let mut cache = cache.lock().unwrap();
+                            cache.query_read_value(key)
+                        };
+                        if let Some(value) = cached_value {
+                            #[cfg(with_metrics)]
+                            metrics::READ_VALUE_CACHE_HIT_COUNT.with_label_values(&[]).inc();
+                            value
+                        } else {
+                            // The key has been evicted. Should be rare.
+                            self.store.read_value_bytes(key).await?
+                        }
+                    } else {
+                        uncached_stream.next().await
+                            .expect("read_multi_values_bytes_iter stream ended before yielding all values")?
+                    };
+
+                    #[cfg(with_metrics)]
+                    metrics::READ_VALUE_CACHE_MISS_COUNT.with_label_values(&[]).inc();
+
+                    {
+                        let mut cache = cache.lock().unwrap();
+                        cache.insert_read_value(key, &value);
+                    }
+
+                    yield Ok(value);
+                }
+            } else {
+                let mut stream = self.store.read_multi_values_bytes_iter(keys);
+                while let Some(item) = stream.next().await {
+                    yield item;
+                }
+            }
+        })
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
