@@ -49,6 +49,40 @@ use crate::{
     proof::gen::HttpDepositProofClient,
 };
 
+/// Queries both chain balances and updates the prometheus metrics.
+pub(crate) async fn update_balance_metrics<
+    P: alloy::providers::Provider,
+    E: linera_core::environment::Environment,
+>(
+    evm_client: &evm::EvmClient<P>,
+    linera_client: &linera::LineraClient<E>,
+) {
+    update_evm_balance_metric(evm_client).await;
+    update_linera_balance_metric(linera_client).await;
+}
+
+pub(crate) async fn update_evm_balance_metric<P: alloy::providers::Provider>(
+    evm_client: &evm::EvmClient<P>,
+) {
+    match evm_client.get_relayer_balance().await {
+        Ok(balance) => {
+            // U256::to::<u128> panics if >u128::MAX, but ETH supply fits in u128.
+            let wei: u128 = balance.to();
+            metrics::set_relayer_evm_balance(wei as f64);
+        }
+        Err(e) => tracing::warn!("Failed to query EVM relayer balance: {e:#}"),
+    }
+}
+
+pub(crate) async fn update_linera_balance_metric<E: linera_core::environment::Environment>(
+    linera_client: &linera::LineraClient<E>,
+) {
+    match linera_client.chain_balance().await {
+        Ok(balance) => metrics::set_relayer_linera_balance(u128::from(balance) as f64),
+        Err(e) => tracing::warn!("Failed to query Linera chain balance: {e:#}"),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
@@ -284,13 +318,14 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .context("invalid --evm-bridge-address")?;
     let evm_signer: PrivateKeySigner =
         evm_private_key.parse().context("invalid EVM private key")?;
+    let relayer_addr = evm_signer.address();
     let evm_wallet = EthereumWallet::from(evm_signer);
     let provider = ProviderBuilder::new()
         .wallet(evm_wallet)
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    let evm_client = Arc::new(evm::EvmClient::new(provider, bridge_addr));
+    let evm_client = Arc::new(evm::EvmClient::new(provider, bridge_addr, relayer_addr));
 
     let bridge_app_id: ApplicationId = linera_bridge_address
         .parse()
@@ -391,6 +426,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             .await
             .context("HTTP server error")
     });
+
+    update_balance_metrics(&evm_client, &linera_client).await;
 
     tracing::info!(
         %bridge_addr,
@@ -513,6 +550,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             Ok(())
                         }.await;
                         let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                        update_balance_metrics(&evm_client, &linera_client).await;
                     }
                     linera::ChainOperation::Burn { owner, amount, response } => {
                         let result = async {
@@ -544,6 +582,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             }
                         }.await;
                         let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                        update_balance_metrics(&evm_client, &linera_client).await;
                     }
                 }
             }

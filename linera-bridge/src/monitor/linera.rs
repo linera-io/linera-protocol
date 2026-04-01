@@ -16,6 +16,7 @@ use tokio::sync::RwLock;
 
 use super::{MonitorState, PendingBurn};
 use crate::relay::{
+    self,
     evm::EvmClient,
     linera::{find_address20_credits, LineraClient},
 };
@@ -171,6 +172,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
                 .await
                 .complete_burn(credit_height, burn_index)
                 .await;
+            relay::update_balance_metrics(evm_client, linera_client).await;
         }
     }
 
