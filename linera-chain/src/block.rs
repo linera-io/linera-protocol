@@ -443,8 +443,7 @@ impl Block {
 
     /// Returns the bundles of messages sent via the given medium to the specified
     /// recipient. Messages originating from different transactions of the original block
-    /// are kept in separate bundles. If the medium is a channel, does not verify that the
-    /// recipient is actually subscribed to that channel.
+    /// are kept in separate bundles.
     pub fn message_bundles_for(
         &self,
         recipient: ChainId,

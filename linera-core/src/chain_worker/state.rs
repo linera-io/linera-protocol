@@ -544,41 +544,10 @@ where
     ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
         let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
-        let next_block_height = self.chain.tip_state.get().next_block_height;
-        let log_heights = heights
-            .range(..next_block_height)
-            .copied()
-            .map(usize::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut hashes = self
-            .chain
-            .confirmed_log
-            .multi_get(log_heights)
-            .await?
-            .into_iter()
-            .zip(&heights)
-            .map(|(maybe_hash, height)| {
-                maybe_hash.ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound {
-                    height: *height,
-                    chain_id: self.chain_id(),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        for height in heights.range(next_block_height..) {
-            hashes.push(
-                self.chain
-                    .preprocessed_blocks
-                    .get(height)
-                    .await?
-                    .ok_or_else(|| WorkerError::ConfirmedBlockHashNotFound {
-                        height: *height,
-                        chain_id: self.chain_id(),
-                    })?,
-            );
-        }
+        let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
 
         let mut uncached_hashes = Vec::new();
-        let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
+        let mut height_to_blocks = HashMap::new();
 
         for hash in hashes {
             if let Some(hashed_block) = self.block_values.get_hashed(&hash) {
@@ -624,9 +593,16 @@ where
             let mut bundles = Vec::new();
             let mut bundles_size = 0;
             for height in heights {
-                let hashed_block = height_to_blocks
-                    .get(&height)
-                    .ok_or_else(|| ChainError::InternalError("missing block".to_string()))?;
+                let Some(hashed_block) = height_to_blocks.get(&height) else {
+                    if height == BlockHeight::ZERO {
+                        tracing::warn!("ignoring spurious block-0 entry in outbox");
+                        continue;
+                    }
+                    return Err(WorkerError::ConfirmedBlockHashNotFound {
+                        height,
+                        chain_id: sender,
+                    });
+                };
                 let new_bundles = hashed_block
                     .inner()
                     .message_bundles_for(recipient, hashed_block.hash())
