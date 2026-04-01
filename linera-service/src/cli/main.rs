@@ -79,6 +79,7 @@ use linera_service::{
     storage::{Runnable, RunnableWithStore},
     task_processor::TaskProcessor,
     util,
+    wallet::WalletExt as _,
 };
 use linera_storage::{DbStorage, Storage};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};

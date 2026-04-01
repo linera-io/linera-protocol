@@ -95,7 +95,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id = builder.admin_chain_id();
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
 
     let tmp_dir = tempfile::tempdir()?;
     let mut config_dir = tmp_dir.keep();
