@@ -471,11 +471,15 @@ This command is deprecated. Use `linera sync && linera query-balance` instead.
 
 Synchronize the local state of the chain with a quorum validators
 
-**Usage:** `linera sync [CHAIN_ID]`
+**Usage:** `linera sync [OPTIONS] [CHAIN_ID]`
 
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — The chain to synchronize with validators. If omitted, synchronizes the default chain of the wallet
+
+###### **Options:**
+
+* `--next-height <NEXT_HEIGHT>` — Stop synchronizing at this block height (exclusive). For instance, `--next-height 0` downloads zero blocks, `--next-height 10` downloads blocks 0 through 9
 
 
 
