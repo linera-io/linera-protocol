@@ -77,8 +77,8 @@ mod metrics {
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
-        DirectKeyValueStore, KeyValueDatabase, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        DirectKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
 };
@@ -98,18 +98,39 @@ pub struct JournalingKeyValueStore<S> {
     has_exclusive_access: bool,
 }
 
-/// Data type indicating that the database is not consistent
+/// Error type for the journaling key-value store layer.
 #[derive(Error, Debug)]
-#[allow(missing_docs)]
-pub enum JournalConsistencyError {
+pub enum JournalingError<E> {
+    /// Error from the inner store.
+    #[error(transparent)]
+    Inner(#[from] E),
+
+    /// BCS serialization error.
+    #[error(transparent)]
+    BcsError(bcs::Error),
+
+    /// The journal block could not be retrieved.
     #[error("The journal block could not be retrieved, it could be missing or corrupted.")]
     FailureToRetrieveJournalBlock,
 
+    /// Refusing to use the journal without exclusive access.
     #[error("Refusing to use the journal without exclusive database access to the root object.")]
     JournalRequiresExclusiveAccess,
 
-    #[error("Journal resolution failed; storage may be in an inconsistent state: {0}")]
+    /// Journal resolution failed; storage may be in an inconsistent state.
+    /// The view must be reloaded to complete the pending journal.
+    #[error("Journal resolution failed: {0}")]
     ResolutionFailed(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl<E: KeyValueStoreError> From<bcs::Error> for JournalingError<E> {
+    fn from(error: bcs::Error) -> Self {
+        JournalingError::BcsError(error)
+    }
+}
+
+impl<E: KeyValueStoreError + 'static> KeyValueStoreError for JournalingError<E> {
+    const BACKEND: &'static str = "journaling";
 }
 
 /// The tag used for the journal stuff.
@@ -126,10 +147,10 @@ enum KeyTag {
     Entry,
 }
 
-fn get_journaling_key(tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
+fn get_journaling_key<E>(tag: u8, pos: u32) -> Result<Vec<u8>, JournalingError<E>> {
     let mut key = vec![JOURNAL_TAG];
     key.extend([tag]);
-    bcs::serialize_into(&mut key, &pos)?;
+    bcs::serialize_into(&mut key, &pos).map_err(JournalingError::BcsError)?;
     Ok(key)
 }
 
@@ -153,68 +174,69 @@ where
 impl<D> WithError for JournalingKeyValueDatabase<D>
 where
     D: WithError,
+    D::Error: 'static,
 {
-    type Error = D::Error;
+    type Error = JournalingError<D::Error>;
 }
 
 impl<S> WithError for JournalingKeyValueStore<S>
 where
     S: WithError,
+    S::Error: 'static,
 {
-    type Error = S::Error;
+    type Error = JournalingError<S::Error>;
 }
 
 impl<S> ReadableKeyValueStore for JournalingKeyValueStore<S>
 where
     S: ReadableKeyValueStore,
-    S::Error: From<JournalConsistencyError>,
+    S::Error: 'static,
 {
-    /// The size constant do not change
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
 
-    /// The read stuff does not change
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
     }
 
     fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
-        self.store.root_key()
+        Ok(self.store.root_key()?)
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.store.read_value_bytes(key).await
+        Ok(self.store.read_value_bytes(key).await?)
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        self.store.contains_key(key).await
+        Ok(self.store.contains_key(key).await?)
     }
 
     async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
-        self.store.contains_keys(keys).await
+        Ok(self.store.contains_keys(keys).await?)
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        self.store.read_multi_values_bytes(keys).await
+        Ok(self.store.read_multi_values_bytes(keys).await?)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        self.store.find_keys_by_prefix(key_prefix).await
+        Ok(self.store.find_keys_by_prefix(key_prefix).await?)
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-        self.store.find_key_values_by_prefix(key_prefix).await
+        Ok(self.store.find_key_values_by_prefix(key_prefix).await?)
     }
 }
 
 impl<D> KeyValueDatabase for JournalingKeyValueDatabase<D>
 where
     D: KeyValueDatabase,
+    D::Error: 'static,
 {
     type Config = D::Config;
     type Store = JournalingKeyValueStore<D::Store>;
@@ -245,36 +267,35 @@ where
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
-        D::list_all(config).await
+        Ok(D::list_all(config).await?)
     }
 
     async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error> {
-        self.database.list_root_keys().await
+        Ok(self.database.list_root_keys().await?)
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
-        D::delete_all(config).await
+        Ok(D::delete_all(config).await?)
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
-        D::exists(config, namespace).await
+        Ok(D::exists(config, namespace).await?)
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        D::create(config, namespace).await
+        Ok(D::create(config, namespace).await?)
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        D::delete(config, namespace).await
+        Ok(D::delete(config, namespace).await?)
     }
 }
 
 impl<S> WritableKeyValueStore for JournalingKeyValueStore<S>
 where
     S: DirectKeyValueStore,
-    S::Error: From<JournalConsistencyError>,
+    S::Error: 'static,
 {
-    /// The size constant do not change
     const MAX_VALUE_SIZE: usize = S::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
@@ -289,7 +310,7 @@ where
             );
             #[cfg(with_metrics)]
             metrics::JOURNAL_FASTPATH_COUNT.inc();
-            self.store.write_batch(batch).await
+            Ok(self.store.write_batch(batch).await?)
         } else {
             tracing::warn!(
                 batch_len = batch.len(),
@@ -301,7 +322,7 @@ where
             #[cfg(with_metrics)]
             metrics::JOURNAL_SLOWPATH_COUNT.inc();
             if !self.has_exclusive_access {
-                return Err(JournalConsistencyError::JournalRequiresExclusiveAccess.into());
+                return Err(JournalingError::JournalRequiresExclusiveAccess);
             }
             let header = self.write_journal(batch).await?;
             tracing::info!(
@@ -318,7 +339,7 @@ where
                     );
                     #[cfg(with_metrics)]
                     metrics::JOURNAL_RESOLUTION_FAILURES.inc();
-                    Err(JournalConsistencyError::ResolutionFailed(Box::new(e)).into())
+                    Err(JournalingError::ResolutionFailed(Box::new(e)))
                 }
             }
         }
@@ -343,7 +364,7 @@ where
 impl<S> JournalingKeyValueStore<S>
 where
     S: DirectKeyValueStore,
-    S::Error: From<JournalConsistencyError>,
+    S::Error: 'static,
 {
     /// Resolves the pending operations that were previously stored in the database
     /// journal.
@@ -365,7 +386,10 @@ where
     ///
     /// (4) `block_key` and `header_key` don't exceed `S::MAX_KEY_SIZE` and `bcs_header`
     /// doesn't exceed `S::MAX_VALUE_SIZE`.
-    async fn coherently_resolve_journal(&self, mut header: JournalHeader) -> Result<(), S::Error> {
+    async fn coherently_resolve_journal(
+        &self,
+        mut header: JournalHeader,
+    ) -> Result<(), JournalingError<S::Error>> {
         let total_blocks = header.block_count;
         let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         while header.block_count > 0 {
@@ -375,12 +399,12 @@ where
                 .store
                 .read_value::<S::Batch>(&block_key)
                 .await?
-                .ok_or(JournalConsistencyError::FailureToRetrieveJournalBlock)?;
+                .ok_or(JournalingError::FailureToRetrieveJournalBlock)?;
             // Execute the block and delete it from the journal atomically.
             batch.add_delete(block_key);
             header.block_count -= 1;
             if header.block_count > 0 {
-                let value = bcs::to_bytes(&header)?;
+                let value = bcs::to_bytes(&header).map_err(JournalingError::BcsError)?;
                 batch.add_insert(header_key.clone(), value);
             } else {
                 batch.add_delete(header_key.clone());
@@ -436,10 +460,14 @@ where
     /// * Similarly, a transaction must contain at least one block so it is desirable that
     ///   the maximum size of a block insertion `1 + sizeof(block_key) + S::MAX_VALUE_SIZE`
     ///   plus M bytes of overhead doesn't exceed the threshold of condition (2).
-    async fn write_journal(&self, batch: S::Batch) -> Result<JournalHeader, S::Error> {
+    async fn write_journal(
+        &self,
+        batch: S::Batch,
+    ) -> Result<JournalHeader, JournalingError<S::Error>> {
         let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let key_len = header_key.len();
-        let header_value_len = bcs::serialized_size(&JournalHeader::default())?;
+        let header_value_len =
+            bcs::serialized_size(&JournalHeader::default()).map_err(JournalingError::BcsError)?;
         let journal_len_upper_bound = key_len + header_value_len;
         // Each block in a transaction comes with a key.
         let max_transaction_size = S::MAX_BATCH_TOTAL_SIZE;
@@ -454,13 +482,17 @@ where
         let mut block_count = 0;
         let mut transaction_batch = S::Batch::default();
         let mut transaction_size = 0;
-        while iter.write_next_value(&mut block_batch, &mut block_size)? {
+        while iter
+            .write_next_value(&mut block_batch, &mut block_size)
+            .map_err(JournalingError::BcsError)?
+        {
             let (block_flush, transaction_flush) = {
                 if iter.is_empty() || transaction_batch.len() == S::MAX_BATCH_SIZE - 1 {
                     (true, true)
                 } else {
                     let next_block_size = iter
-                        .next_batch_size(&block_batch, block_size)?
+                        .next_batch_size(&block_batch, block_size)
+                        .map_err(JournalingError::BcsError)?
                         .expect("iter is not empty");
                     let next_transaction_size = transaction_size + next_block_size + key_len;
                     let transaction_flush = next_transaction_size > max_transaction_size;
@@ -472,7 +504,7 @@ where
             };
             if block_flush {
                 block_size += block_batch.overhead_size();
-                let value = bcs::to_bytes(&block_batch)?;
+                let value = bcs::to_bytes(&block_batch).map_err(JournalingError::BcsError)?;
                 block_batch = S::Batch::default();
                 assert_eq!(value.len(), block_size);
                 let key = get_journaling_key(KeyTag::Entry as u8, block_count)?;
@@ -489,7 +521,7 @@ where
         }
         let header = JournalHeader { block_count };
         if block_count > 0 {
-            let value = bcs::to_bytes(&header)?;
+            let value = bcs::to_bytes(&header).map_err(JournalingError::BcsError)?;
             let mut batch = S::Batch::default();
             batch.add_insert(header_key, value);
             self.store.write_batch(batch).await?;

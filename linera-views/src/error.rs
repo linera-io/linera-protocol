@@ -65,16 +65,11 @@ impl ViewError {
         let ViewError::StoreError { error, .. } = self else {
             return false;
         };
-        // Walk the error chain looking for a JournalConsistencyError::ResolutionFailed.
+        // Walk the error chain looking for a JournalingError::ResolutionFailed.
         let mut source: Option<&(dyn std::error::Error)> = Some(error.as_ref());
         while let Some(err) = source {
-            if let Some(journal_err) =
-                err.downcast_ref::<crate::journaling::JournalConsistencyError>()
-            {
-                return matches!(
-                    journal_err,
-                    crate::journaling::JournalConsistencyError::ResolutionFailed(_)
-                );
+            if err.to_string().starts_with("Journal resolution failed:") {
+                return true;
             }
             source = err.source();
         }

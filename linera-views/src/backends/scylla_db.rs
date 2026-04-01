@@ -44,7 +44,7 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::UnorderedBatch,
     common::{get_uleb128_size, get_upper_bound_option},
-    journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
+    journaling::JournalingKeyValueDatabase,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
         DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
@@ -578,10 +578,6 @@ pub enum ScyllaDbStoreInternalError {
     /// Namespace contains forbidden characters
     #[error("Namespace contains forbidden characters")]
     InvalidNamespace,
-
-    /// The journal is not coherent
-    #[error(transparent)]
-    JournalConsistencyError(#[from] JournalConsistencyError),
 
     /// The batch is too long to be written
     #[error("The batch is too long to be written")]

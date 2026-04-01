@@ -43,7 +43,7 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::SimpleUnorderedBatch,
     common::get_uleb128_size,
-    journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
+    journaling::JournalingKeyValueDatabase,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
         DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
@@ -896,10 +896,6 @@ pub enum DynamoDbStoreInternalError {
     /// Key prefixes have to be of non-zero length.
     #[error("The key_prefix must be of strictly positive length")]
     ZeroLengthKeyPrefix,
-
-    /// The journal is not coherent
-    #[error(transparent)]
-    JournalConsistencyError(#[from] JournalConsistencyError),
 
     /// The length of the value should be at most 400 KB.
     #[error("The DynamoDB value should be less than 400 KB")]
