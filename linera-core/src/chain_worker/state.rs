@@ -1414,6 +1414,7 @@ where
         // 1. Collect all sender chain IDs and block hashes before clearing.
         let sender_ids = self.chain.inboxes.indices().await?;
         let hashes = self.chain.confirmed_log.read(..).await?;
+        let preprocessed = self.chain.preprocessed_blocks.index_values().await?;
 
         // 2. Clear the chain state entirely and save.
         self.chain.clear();
@@ -1427,6 +1428,14 @@ where
         // 3. Re-load certificates one at a time by hash and re-process them.
         for (index, hash) in hashes.into_iter().enumerate() {
             let height = BlockHeight(index as u64);
+            let cert = self
+                .storage
+                .read_certificate(hash)
+                .await?
+                .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
+            Box::pin(self.process_confirmed_block(cert, None)).await?;
+        }
+        for (height, hash) in preprocessed {
             let cert = self
                 .storage
                 .read_certificate(hash)
