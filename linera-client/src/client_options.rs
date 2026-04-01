@@ -112,6 +112,25 @@ pub struct Options {
     )]
     pub max_backoff: Duration,
 
+    /// Initial probe interval (ms) for the notification circuit breaker. When a validator's
+    /// notification stream exhausts retries, the circuit breaker waits this long before
+    /// probing again. Doubles on each failed probe.
+    #[arg(
+        long = "notification-circuit-breaker-initial-probe-interval-ms",
+        default_value = "300000",
+        value_parser = util::parse_millis
+    )]
+    pub notification_circuit_breaker_initial_probe_interval: Duration,
+
+    /// Maximum probe interval (ms) for the notification circuit breaker. The probe interval
+    /// doubles on each failure but is capped at this value.
+    #[arg(
+        long = "notification-circuit-breaker-max-probe-interval-ms",
+        default_value = "3600000",
+        value_parser = util::parse_millis
+    )]
+    pub notification_circuit_breaker_max_probe_interval: Duration,
+
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
     #[arg(long)]
@@ -303,6 +322,10 @@ impl Options {
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
+            notification_circuit_breaker_initial_probe_interval: self
+                .notification_circuit_breaker_initial_probe_interval,
+            notification_circuit_breaker_max_probe_interval: self
+                .notification_circuit_breaker_max_probe_interval,
         }
     }
 
