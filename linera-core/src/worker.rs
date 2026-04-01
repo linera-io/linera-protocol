@@ -411,7 +411,6 @@ impl WorkerError {
             | WorkerError::InvalidEpoch { .. }
             | WorkerError::EventsNotFound(_)
             | WorkerError::InvalidBlockChaining
-            | WorkerError::IncorrectOutcome { .. }
             | WorkerError::InvalidTimestamp { .. }
             | WorkerError::MissingCertificateValue
             | WorkerError::InvalidLiteCertificate
@@ -428,7 +427,8 @@ impl WorkerError {
             | WorkerError::PreprocessedBlocksEntryNotFound { .. }
             | WorkerError::MissingNetworkDescription
             | WorkerError::Thread(_)
-            | WorkerError::ReadCertificatesError(_) => true,
+            | WorkerError::ReadCertificatesError(_)
+            | WorkerError::IncorrectOutcome { .. } => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
     }
