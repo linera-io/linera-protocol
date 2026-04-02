@@ -1055,14 +1055,13 @@ where
             .await
         {
             Ok(()) => {}
-            Err(ChainError::InboxGapDetected {
-                origin,
-                expected_height,
-                ..
-            }) if self.config.allow_revert_confirm => {
+            Err(ChainError::InboxGapDetected { origin, .. })
+                if self.config.allow_revert_confirm =>
+            {
+                let retransmit_from = self.get_inbox_next_height(origin).await?;
                 warn!(
                     "Inbox gap detected for {chain_id} from {origin}: \
-                    missing height {expected_height}; requesting resend",
+                    requesting resend from {retransmit_from}",
                 );
                 let mut actions = NetworkActions::default();
                 actions
@@ -1070,7 +1069,7 @@ where
                     .push(CrossChainRequest::RevertConfirm {
                         sender: origin,
                         recipient: chain_id,
-                        retransmit_from: expected_height,
+                        retransmit_from,
                     });
                 return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
             }
