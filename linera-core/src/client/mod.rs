@@ -673,7 +673,7 @@ impl<Env: Environment> Client<Env> {
         }
 
         for (chain_id, required_streams) in required_by_chain {
-            let stream_ids: BTreeSet<_> = required_streams.keys().cloned().collect();
+            let stream_ids = required_streams.keys().cloned().collect::<BTreeSet<_>>();
             let stream_ids_ref = &stream_ids;
             let required_ref = &required_streams;
             let result = communicate_concurrently(
