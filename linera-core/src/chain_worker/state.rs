@@ -1339,8 +1339,8 @@ where
     /// to the outbox, and creates cross-chain update actions to resend the bundles.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
-        recipient = %recipient,
-        retransmit_from = %retransmit_from,
+        %recipient,
+        %retransmit_from,
     ))]
     pub(super) async fn handle_revert_confirm(
         &mut self,
