@@ -676,7 +676,7 @@ impl<Env: Environment> Client<Env> {
             let stream_ids = required_streams.keys().cloned().collect::<BTreeSet<_>>();
             let stream_ids_ref = &stream_ids;
             let required_ref = &required_streams;
-            let result = communicate_concurrently(
+            communicate_concurrently(
                 &validators,
                 move |remote_node| {
                     Box::pin(async move {
@@ -700,20 +700,10 @@ impl<Env: Environment> Client<Env> {
                         }
                     })
                 },
-                |errors| {
-                    errors
-                        .into_iter()
-                        .map(|(validator, _error)| validator)
-                        .collect::<BTreeSet<_>>()
-                },
+                |_| chain_client::Error::from(NodeError::EventsNotFound(event_ids.to_vec())),
                 timeout,
             )
-            .await;
-
-            if result.is_err() {
-                // All validators failed; no point retrying.
-                return Err(NodeError::EventsNotFound(event_ids.to_vec()).into());
-            }
+            .await?;
         }
         Ok(())
     }
