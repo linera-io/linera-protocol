@@ -83,6 +83,12 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
+    /// Returns the chain's current balance.
+    pub async fn chain_balance(&self) -> Result<Amount> {
+        let info = self.chain_info().await?;
+        Ok(info.chain_balance)
+    }
+
     pub async fn read_confirmed_block(
         &self,
         hash: CryptoHash,

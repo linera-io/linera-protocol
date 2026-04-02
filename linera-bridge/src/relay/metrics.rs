@@ -6,7 +6,7 @@
 use std::sync::LazyLock;
 
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
-use prometheus::{IntCounter, IntGauge, Opts, TextEncoder};
+use prometheus::{Gauge, IntCounter, IntGauge, Opts, TextEncoder};
 use tower_http::cors::CorsLayer;
 
 static DEPOSITS_DETECTED: LazyLock<IntCounter> = LazyLock::new(|| {
@@ -78,6 +78,24 @@ static LAST_SCANNED_LINERA_HEIGHT: LazyLock<IntGauge> = LazyLock::new(|| {
     prometheus::register_int_gauge!(opts).unwrap()
 });
 
+static RELAYER_EVM_BALANCE_WEI: LazyLock<Gauge> = LazyLock::new(|| {
+    let opts = Opts::new(
+        "bridge_evm_balance_wei",
+        "Relayer EVM account balance in wei",
+    )
+    .namespace("linera");
+    prometheus::register_gauge!(opts).unwrap()
+});
+
+static RELAYER_LINERA_BALANCE_ATTO: LazyLock<Gauge> = LazyLock::new(|| {
+    let opts = Opts::new(
+        "bridge_linera_balance_atto",
+        "Relayer Linera chain balance in attos",
+    )
+    .namespace("linera");
+    prometheus::register_gauge!(opts).unwrap()
+});
+
 pub(crate) fn deposit_detected() {
     DEPOSITS_DETECTED.inc();
     DEPOSITS_PENDING.inc();
@@ -114,6 +132,14 @@ pub(crate) fn set_last_scanned_evm_block(block: u64) {
 
 pub(crate) fn set_last_scanned_linera_height(height: u64) {
     LAST_SCANNED_LINERA_HEIGHT.set(height as i64);
+}
+
+pub(crate) fn set_relayer_evm_balance(balance_wei: f64) {
+    RELAYER_EVM_BALANCE_WEI.set(balance_wei);
+}
+
+pub(crate) fn set_relayer_linera_balance(balance_atto: f64) {
+    RELAYER_LINERA_BALANCE_ATTO.set(balance_atto);
 }
 
 pub(crate) fn build_router() -> Router {
