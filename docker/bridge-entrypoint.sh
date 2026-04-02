@@ -16,7 +16,7 @@ set -- linera-bridge serve \
     --linera-bridge-address="${LINERA_BRIDGE_APP:?LINERA_BRIDGE_APP is required}" \
     --linera-fungible-address="${LINERA_FUNGIBLE_APP:?LINERA_FUNGIBLE_APP is required}" \
     --evm-private-key="${EVM_PRIVATE_KEY:?EVM_PRIVATE_KEY is required}" \
-    --port="${PORT:-3001}" \
+    --port="${PORT:-5001}" \
     --monitor-scan-interval="${MONITOR_SCAN_INTERVAL:-30}" \
     --monitor-start-block="${MONITOR_START_BLOCK:-0}" \
     --max-retries="${MAX_RETRIES:-10}" \
