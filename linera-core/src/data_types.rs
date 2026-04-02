@@ -267,7 +267,7 @@ pub enum CrossChainRequest {
     RevertConfirm {
         sender: ChainId,
         recipient: ChainId,
-        missing_height: BlockHeight,
+        retransmit_from: BlockHeight,
     },
 }
 

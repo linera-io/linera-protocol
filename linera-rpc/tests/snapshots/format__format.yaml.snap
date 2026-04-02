@@ -498,7 +498,7 @@ CrossChainRequest:
               TYPENAME: ChainId
           - recipient:
               TYPENAME: ChainId
-          - missing_height:
+          - retransmit_from:
               TYPENAME: BlockHeight
 CryptoHash:
   NEWTYPESTRUCT:

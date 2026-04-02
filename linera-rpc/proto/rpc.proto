@@ -217,7 +217,7 @@ message ConfirmUpdatedRecipient {
 message RevertConfirm {
   ChainId sender = 1;
   ChainId recipient = 2;
-  BlockHeight missing_height = 3;
+  BlockHeight retransmit_from = 3;
 }
 
 // Request information on a chain.

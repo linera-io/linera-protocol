@@ -104,12 +104,12 @@ pub(crate) enum CrossChainUpdateResult {
     Updated(BlockHeight),
     /// All bundles were already received; nothing to do.
     NothingToDo,
-    /// A gap was detected: the inbox expected a bundle at `missing_height` from `origin`
-    /// but received a bundle at a higher height. If `allow_revert_confirm` is enabled,
-    /// a `RevertConfirm` request should be sent.
+    /// A gap was detected in the inbox for messages from `origin`. If
+    /// `allow_revert_confirm` is enabled, a `RevertConfirm` request should be sent
+    /// to retransmit bundles starting from `retransmit_from`.
     GapDetected {
         origin: ChainId,
-        missing_height: BlockHeight,
+        retransmit_from: BlockHeight,
     },
 }
 
@@ -260,10 +260,10 @@ where
                 .is_ok(),
             ChainWorkerRequest::HandleRevertConfirm {
                 recipient,
-                missing_height,
+                retransmit_from,
                 callback,
             } => callback
-                .send(self.handle_revert_confirm(recipient, missing_height).await)
+                .send(self.handle_revert_confirm(recipient, retransmit_from).await)
                 .is_ok(),
             ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
                 .send(self.handle_chain_info_query(query).await)
@@ -1070,7 +1070,7 @@ where
                     .push(CrossChainRequest::RevertConfirm {
                         sender: origin,
                         recipient: chain_id,
-                        missing_height: expected_height,
+                        retransmit_from: expected_height,
                     });
                 return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
             }
@@ -1223,7 +1223,7 @@ where
                     );
                     return Ok(CrossChainUpdateResult::GapDetected {
                         origin,
-                        missing_height: next_height_to_receive,
+                        retransmit_from: next_height_to_receive,
                     });
                 }
                 return Err(ChainError::InboxGapDetected {
@@ -1267,18 +1267,20 @@ where
                 .await
             {
                 Ok(()) => {}
-                Err(ChainError::InboxGapDetected {
-                    expected_height, ..
-                }) if self.config.allow_revert_confirm => {
+                Err(ChainError::InboxGapDetected { .. })
+                    if self.config.allow_revert_confirm =>
+                {
                     // Don't save — leave the inbox unchanged so the resend can
-                    // reconcile properly.
+                    // reconcile properly. Request from next_height_to_receive
+                    // rather than the specific gap height, so that all pending
+                    // removed_bundles entries can also be reconciled.
                     warn!(
                         "Inbox gap detected for {recipient} from {origin}: \
-                        missing height {expected_height}; requesting resend",
+                        requesting resend from {next_height_to_receive}",
                     );
                     return Ok(CrossChainUpdateResult::GapDetected {
                         origin,
-                        missing_height: expected_height,
+                        retransmit_from: next_height_to_receive,
                     });
                 }
                 Err(e) => return Err(e.into()),
@@ -1336,20 +1338,20 @@ where
 
     /// Handles a `RevertConfirm` request: walks backward through
     /// `previous_message_blocks` to find all block heights that sent messages to
-    /// `recipient` starting from the latest down to `missing_height`, re-adds them
+    /// `recipient` starting from the latest down to `retransmit_from`, re-adds them
     /// to the outbox, and creates cross-chain update actions to resend the bundles.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         recipient = %recipient,
-        missing_height = %missing_height,
+        retransmit_from = %retransmit_from,
     ))]
     pub(super) async fn handle_revert_confirm(
         &mut self,
         recipient: ChainId,
-        missing_height: BlockHeight,
+        retransmit_from: BlockHeight,
     ) -> Result<NetworkActions, WorkerError> {
         // 1. Walk backward through previous_message_blocks to collect all heights
-        //    that sent messages to this recipient, from the latest down to missing_height.
+        //    that sent messages to this recipient, from the latest down to retransmit_from.
         let Some(latest_height) = self.chain.previous_message_blocks.get(&recipient).await? else {
             warn!("RevertConfirm: no record of sending to {recipient}");
             return Ok(NetworkActions::default());
@@ -1357,7 +1359,7 @@ where
 
         let mut heights_to_re_add = Vec::new();
         let mut current_height = latest_height;
-        while current_height >= missing_height {
+        while current_height >= retransmit_from {
             // We arrived at current_height via previous_message_blocks links, starting from the
             // chain state and following the links downwards. So these blocks should all be in
             // confirmed_log or preprocessed_blocks already.
@@ -1381,7 +1383,7 @@ where
                     chain_id: self.chain_id(),
                 })?;
             match block.block().body.previous_message_blocks.get(&recipient) {
-                Some((_, prev_height)) if *prev_height >= missing_height => {
+                Some((_, prev_height)) if *prev_height >= retransmit_from => {
                     current_height = *prev_height;
                 }
                 _ => break,
@@ -1419,7 +1421,7 @@ where
 
         warn!(
             "RevertConfirm: re-added {new_heights_len} heights to outbox for {recipient}, \
-            starting from height {missing_height}"
+            starting from height {retransmit_from}"
         );
 
         Ok(actions)
@@ -1486,7 +1488,7 @@ where
                 .push(CrossChainRequest::RevertConfirm {
                     sender: sender_id,
                     recipient: chain_id,
-                    missing_height: BlockHeight::ZERO,
+                    retransmit_from: BlockHeight::ZERO,
                 });
         }
 
