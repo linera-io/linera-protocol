@@ -1,0 +1,6 @@
+[profile.default]
+src = "."
+via_ir = true
+optimizer = true
+optimizer_runs = 1
+evm_version = "shanghai"

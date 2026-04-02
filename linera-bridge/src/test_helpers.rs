@@ -481,6 +481,10 @@ fn write_compilation_json(path: &Path, file_name: &str) {
   }},
   "settings": {{
     "viaIR": true,
+    "optimizer": {{
+      "enabled": true,
+      "runs": 1
+    }},
     "outputSelection": {{
       "*": {{
         "*": ["evm.bytecode"]
