@@ -65,7 +65,8 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, DeliveryNotifier,
+        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult,
+        DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -386,6 +387,18 @@ pub enum WorkerError {
         height: BlockHeight,
         chain_id: ChainId,
     },
+    #[error(
+        "confirmed_log/preprocessed_blocks entry at height {height} for chain {chain_id} not found"
+    )]
+    ConfirmedBlockHashNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
+    #[error("Block at height {height} on chain {chain_id} not found in local storage")]
+    LocalBlockNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
     #[error("Blob was not required by any pending block")]
@@ -426,6 +439,8 @@ impl WorkerError {
             | WorkerError::ViewError(_)
             | WorkerError::ConfirmedLogEntryNotFound { .. }
             | WorkerError::PreprocessedBlocksEntryNotFound { .. }
+            | WorkerError::ConfirmedBlockHashNotFound { .. }
+            | WorkerError::LocalBlockNotFound { .. }
             | WorkerError::MissingNetworkDescription
             | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_)
@@ -565,6 +580,19 @@ where
     #[instrument(level = "trace", skip(self, origins))]
     pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
         self.chain_worker_config.priority_bundle_origins = origins;
+        self
+    }
+
+    #[instrument(level = "trace", skip(self, value))]
+    pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
+        self.chain_worker_config.allow_revert_confirm = value;
+        self
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_reset_on_incorrect_outcome(mut self, minutes: Option<u64>) -> Self {
+        self.chain_worker_config.reset_on_incorrect_outcome =
+            minutes.map(|m| Duration::from_secs(m * 60));
         self
     }
 
@@ -994,9 +1022,12 @@ where
         origin: ChainId,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+        previous_height: Option<BlockHeight>,
+    ) -> Result<CrossChainUpdateResult, WorkerError> {
         self.chain_write(recipient, |mut guard| async move {
-            guard.process_cross_chain_update(origin, bundles).await
+            guard
+                .process_cross_chain_update(origin, bundles, previous_height)
+                .await
         })
         .await
     }
@@ -1266,26 +1297,41 @@ where
                 sender,
                 recipient,
                 bundles,
+                previous_height,
             } => {
                 let mut actions = NetworkActions::default();
                 let origin = sender;
-                let Some(height) = self
-                    .process_cross_chain_update(origin, recipient, bundles)
+                match self
+                    .process_cross_chain_update(origin, recipient, bundles, previous_height)
                     .await?
-                else {
-                    return Ok(actions);
-                };
-                actions.notifications.push(Notification {
-                    chain_id: recipient,
-                    reason: Reason::NewIncomingBundle { origin, height },
-                });
-                actions
-                    .cross_chain_requests
-                    .push(CrossChainRequest::ConfirmUpdatedRecipient {
-                        sender,
-                        recipient,
-                        latest_height: height,
-                    });
+                {
+                    CrossChainUpdateResult::NothingToDo => {}
+                    CrossChainUpdateResult::Updated(height) => {
+                        actions.notifications.push(Notification {
+                            chain_id: recipient,
+                            reason: Reason::NewIncomingBundle { origin, height },
+                        });
+                        actions.cross_chain_requests.push(
+                            CrossChainRequest::ConfirmUpdatedRecipient {
+                                sender,
+                                recipient,
+                                latest_height: height,
+                            },
+                        );
+                    }
+                    CrossChainUpdateResult::GapDetected {
+                        origin,
+                        retransmit_from,
+                    } => {
+                        actions
+                            .cross_chain_requests
+                            .push(CrossChainRequest::RevertConfirm {
+                                sender: origin,
+                                recipient,
+                                retransmit_from,
+                            });
+                    }
+                }
                 Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
@@ -1300,6 +1346,18 @@ where
                 })
                 .await?;
                 Ok(NetworkActions::default())
+            }
+            CrossChainRequest::RevertConfirm {
+                sender,
+                recipient,
+                retransmit_from,
+            } => {
+                self.chain_write(sender, |mut guard| async move {
+                    guard
+                        .handle_revert_confirm(recipient, retransmit_from)
+                        .await
+                })
+                .await
             }
         }
     }

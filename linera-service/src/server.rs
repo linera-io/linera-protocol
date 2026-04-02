@@ -66,6 +66,8 @@ struct ServerContext {
     block_cache_size: usize,
     execution_state_cache_size: usize,
     chain_info_max_received_log_entries: usize,
+    allow_revert_confirm: bool,
+    reset_on_incorrect_outcome_mins: Option<u64>,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -96,6 +98,10 @@ impl ServerContext {
             chain_info_max_received_log_entries: self.chain_info_max_received_log_entries,
             block_cache_size: self.block_cache_size,
             execution_state_cache_size: self.execution_state_cache_size,
+            allow_revert_confirm: self.allow_revert_confirm,
+            reset_on_incorrect_outcome: self
+                .reset_on_incorrect_outcome_mins
+                .map(|m| Duration::from_secs(m * 60)),
             ..ChainWorkerConfig::default()
         };
         let state = WorkerState::new(storage, config, None);
@@ -452,6 +458,18 @@ enum ServerCommand {
         )]
         chain_info_max_received_log_entries: usize,
 
+        /// Enable the RevertConfirm recovery mechanism for inbox gaps caused by
+        /// lost persisted state.
+        #[arg(long, default_value_t = false)]
+        allow_revert_confirm: bool,
+
+        /// On IncorrectOutcome errors, reset the chain state and re-execute all
+        /// blocks from scratch. Sends RevertConfirm to all known senders. The
+        /// value is the minimum number of minutes since the last reset before
+        /// another reset is allowed (to prevent loops).
+        #[arg(long)]
+        reset_on_incorrect_outcome_mins: Option<u64>,
+
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
         otlp_exporter_endpoint: Option<String>,
@@ -583,6 +601,8 @@ async fn run(options: ServerOptions) {
             wasm_runtime,
             chain_worker_ttl,
             chain_info_max_received_log_entries,
+            allow_revert_confirm,
+            reset_on_incorrect_outcome_mins,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -600,6 +620,8 @@ async fn run(options: ServerOptions) {
                 block_cache_size: options.block_cache_size,
                 execution_state_cache_size: options.execution_state_cache_size,
                 chain_info_max_received_log_entries,
+                allow_revert_confirm,
+                reset_on_incorrect_outcome_mins,
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };

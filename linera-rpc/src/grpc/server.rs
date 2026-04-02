@@ -1055,7 +1055,8 @@ impl GrpcProxyable for CrossChainRequest {
 
         match self.inner.as_ref()? {
             Inner::UpdateRecipient(api::UpdateRecipient { recipient, .. })
-            | Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient { recipient, .. }) => {
+            | Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient { recipient, .. })
+            | Inner::RevertConfirm(api::RevertConfirm { recipient, .. }) => {
                 recipient.clone()?.try_into().ok()
             }
         }
