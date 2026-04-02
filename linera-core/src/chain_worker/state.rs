@@ -38,7 +38,7 @@ use linera_execution::{
     Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ResourceTracker, ServiceRuntimeEndpoint,
 };
-use linera_storage::{Clock as _, ResultReadConfirmedBlocks, Storage};
+use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::{Context, InactiveContext},
     views::{ClonableView, ReplaceContext as _, RootView as _, View as _},
@@ -603,15 +603,10 @@ where
         let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
 
         let blocks = self.read_confirmed_blocks(hashes.clone()).await?;
-        let blocks = match ResultReadConfirmedBlocks::new(blocks, hashes) {
-            ResultReadConfirmedBlocks::Blocks(blocks) => blocks,
-            ResultReadConfirmedBlocks::InvalidHashes(hashes) => {
-                return Err(WorkerError::ReadCertificatesError(hashes))
-            }
-        };
 
         let mut height_to_blocks = HashMap::new();
-        for block in blocks {
+        for (block, hash) in blocks.into_iter().zip(hashes) {
+            let block = block.ok_or_else(|| WorkerError::ReadCertificatesError(vec![hash]))?;
             let hashed_block = block.into_inner();
             height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
         }
