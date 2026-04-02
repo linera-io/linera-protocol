@@ -14,9 +14,9 @@ use std::{
 };
 
 use linera_base::ensure;
-use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle, SliceTransform};
+use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle, SliceTransform, WriteBufferManager};
 use serde::{Deserialize, Serialize};
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -53,6 +53,18 @@ const MAX_KEY_SIZE: usize = 8 * 1024 * 1024 - 400;
 
 const WRITE_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
 const MAX_WRITE_BUFFER_NUMBER: i32 = 6;
+
+fn get_available_memory(sys: &System) -> usize {
+    sys.cgroup_limits()
+        .map_or_else(|| sys.total_memory() as usize, |c| c.total_memory as usize)
+}
+
+fn get_available_cpus() -> i32 {
+    std::thread::available_parallelism()
+        .map(|p| p.get() as i32)
+        .unwrap_or(1)
+}
+
 const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KiB
 
 /// The RocksDB client that we use.
@@ -343,15 +355,15 @@ impl RocksDbStoreInternal {
             std::fs::create_dir(path_buf.clone())?;
         }
         let sys = System::new_with_specifics(
-            RefreshKind::nothing()
-                .with_cpu(CpuRefreshKind::everything())
-                .with_memory(MemoryRefreshKind::nothing().with_ram()),
+            RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram()),
         );
-        let num_cpus = sys.cpus().len() as i32;
-        let total_ram = sys.total_memory() as usize;
+        let num_cpus = get_available_cpus();
+        let total_ram = get_available_memory(&sys);
+
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         options.create_missing_column_families(true);
+
         // Flush in-memory buffer to disk more often
         options.set_write_buffer_size(WRITE_BUFFER_SIZE);
         options.set_max_write_buffer_number(MAX_WRITE_BUFFER_NUMBER);
@@ -382,6 +394,12 @@ impl RocksDbStoreInternal {
             total_ram / 4,
             HYPER_CLOCK_CACHE_BLOCK_SIZE,
         ));
+
+        // Cap total memtable memory to prevent unbounded growth when multiple column
+        // families are used or many memtables accumulate before flushing.
+        let write_buffer_manager =
+            WriteBufferManager::new_write_buffer_manager(total_ram / 4, true);
+        options.set_write_buffer_manager(&write_buffer_manager);
 
         // Configure bloom filters for prefix iteration optimization
         block_options.set_bloom_filter(10.0, false);
