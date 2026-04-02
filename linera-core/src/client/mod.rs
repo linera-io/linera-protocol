@@ -696,11 +696,12 @@ impl<Env: Environment> Client<Env> {
                         }) {
                             Ok::<(), chain_client::Error>(())
                         } else {
-                            Err(NodeError::EventsNotFound(event_ids.to_vec()).into())
+                            // Placeholder error. Replaced in the closure below.
+                            Err(chain_client::Error::InternalError("missing events"))
                         }
                     })
                 },
-                |_| chain_client::Error::from(NodeError::EventsNotFound(event_ids.to_vec())),
+                |_| NodeError::EventsNotFound(event_ids.to_vec()),
                 timeout,
             )
             .await?;
