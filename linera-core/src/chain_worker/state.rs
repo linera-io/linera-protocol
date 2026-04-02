@@ -563,21 +563,22 @@ where
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<Option<ConfirmedBlock>>, WorkerError> {
         let mut blocks = Vec::with_capacity(hashes.len());
-        let mut uncached: Vec<(usize, CryptoHash)> = Vec::new();
+        let mut uncached_indices = Vec::new();
+        let mut uncached_hashes = Vec::new();
 
         for (i, hash) in hashes.iter().enumerate() {
             if let Some(hashed_block) = self.block_values.get_hashed(hash) {
                 blocks.push(Some(ConfirmedBlock::from_hashed(hashed_block)));
             } else {
                 blocks.push(None);
-                uncached.push((i, *hash));
+                uncached_indices.push(i);
+                uncached_hashes.push(*hash);
             }
         }
 
-        if !uncached.is_empty() {
-            let uncached_hashes = uncached.iter().map(|(_, hash)| *hash);
+        if !uncached_hashes.is_empty() {
             let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
-            for ((i, _), maybe_block) in uncached.into_iter().zip(from_storage) {
+            for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
                 if let Some(block) = &maybe_block {
                     self.block_values
                         .insert_hashed(Cow::Borrowed(block.inner()));
@@ -899,8 +900,8 @@ where
         let hashes = index_values.iter().map(|(_, hash)| *hash).collect();
         let blocks = self.read_confirmed_blocks(hashes).await?;
         for ((height, _), maybe_block) in index_values.into_iter().zip(blocks) {
-            let block = maybe_block
-                .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
+            let block =
+                maybe_block.ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             self.chain.preprocess_block(&block).await?;
         }
         Ok(())
