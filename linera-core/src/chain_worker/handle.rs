@@ -82,6 +82,11 @@ impl<S: Storage + Clone + 'static> DerefMut for RollbackGuard<S> {
 
 impl<S: Storage + Clone + 'static> Drop for RollbackGuard<S> {
     fn drop(&mut self) {
+        if self.0.is_poisoned() {
+            // The view is in an inconsistent state due to a journal resolution failure.
+            // Don't rollback — the worker will be evicted and reloaded.
+            return;
+        }
         self.0.rollback();
     }
 }

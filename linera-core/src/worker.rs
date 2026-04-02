@@ -758,6 +758,11 @@ where
         let state = self.get_or_create_chain_worker(chain_id).await?;
         Box::pin(wrap_future(async move {
             let guard = handle::read_lock(&state).await;
+            if guard.is_poisoned() {
+                self.chain_workers.pin().remove(&chain_id);
+                drop(guard);
+                return Err(WorkerError::WorkerPoisoned { chain_id });
+            }
             f(guard).await
         }))
         .await
@@ -777,9 +782,8 @@ where
         Box::pin(wrap_future(async move {
             let guard = handle::write_lock(&state).await;
             if guard.is_poisoned() {
-                // Drop the guard so the lock is released, then evict the worker.
-                drop(guard);
                 self.chain_workers.pin().remove(&chain_id);
+                drop(guard);
                 return Err(WorkerError::WorkerPoisoned { chain_id });
             }
             let result = f(guard).await;
@@ -788,8 +792,8 @@ where
                 // so the next request reloads from storage.
                 let guard = state.read().await;
                 if guard.is_poisoned() {
-                    drop(guard);
                     self.chain_workers.pin().remove(&chain_id);
+                    drop(guard);
                 }
             }
             result
