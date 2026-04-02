@@ -1122,6 +1122,23 @@ where
         Ok(self.chain.next_expected_events.get(&stream_id).await?)
     }
 
+    /// Gets the `next_expected_events` indices for the given streams.
+    pub(crate) async fn get_next_expected_events(
+        &self,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, u32>, WorkerError> {
+        let values = self
+            .chain
+            .next_expected_events
+            .multi_get(&stream_ids)
+            .await?;
+        Ok(stream_ids
+            .into_iter()
+            .zip(values)
+            .filter_map(|(id, val)| Some((id, val?)))
+            .collect())
+    }
+
     /// Gets received certificate trackers.
     pub(crate) async fn get_received_certificate_trackers(
         &self,

@@ -1380,7 +1380,7 @@ impl<Env: Environment> Client<Env> {
     /// `local_next_block_height` (blocks below that are already executed locally).
     async fn download_event_bearing_blocks(
         &self,
-        sender_chain_id: ChainId,
+        publisher_chain_id: ChainId,
         initial_blocks: BTreeSet<(BlockHeight, CryptoHash)>,
         local_next_block_height: BlockHeight,
         subscribed_streams: &BTreeSet<StreamId>,
@@ -1393,19 +1393,13 @@ impl<Env: Environment> Client<Env> {
 
         let mut certificates = BTreeMap::new();
         let mut blocks_to_fetch = initial_blocks;
-        let next_expected_events = subscribed_streams
-            .iter()
-            .zip(
-                self.local_node
-                    .chain_state_view(sender_chain_id)
-                    .await?
-                    .next_expected_events
-                    .multi_get(subscribed_streams)
-                    .await?
-                    .into_iter()
-                    .map(|maybe_index| maybe_index.unwrap_or_default()),
+        let next_expected_events = self
+            .local_node
+            .next_expected_events(
+                publisher_chain_id,
+                subscribed_streams.iter().cloned().collect(),
             )
-            .collect::<BTreeMap<_, _>>();
+            .await?;
 
         while let Some((current_height, current_hash)) = blocks_to_fetch.pop_last() {
             if current_height < local_next_block_height {
@@ -1422,9 +1416,15 @@ impl<Env: Environment> Client<Env> {
             } else {
                 let downloaded = self
                     .requests_scheduler
-                    .download_certificates(remote_node, sender_chain_id, current_height, 1)
+                    .download_certificates(remote_node, publisher_chain_id, current_height, 1)
                     .await?;
                 let Some(certificate) = downloaded.into_iter().next() else {
+                    tracing::debug!(
+                        validator = remote_node.address(),
+                        %publisher_chain_id,
+                        height = %current_height,
+                        "failed to download event publisher block"
+                    );
                     continue;
                 };
 
