@@ -332,6 +332,12 @@ where
             } => callback
                 .send(self.get_previous_event_blocks(stream_ids).await)
                 .is_ok(),
+            ChainWorkerRequest::GetNextExpectedEvents {
+                stream_ids,
+                callback,
+            } => callback
+                .send(self.get_next_expected_events(stream_ids).await)
+                .is_ok(),
         };
 
         if !responded {
@@ -1629,6 +1635,23 @@ where
             }
         }
         Ok(result)
+    }
+
+    /// Gets the `next_expected_events` indices for the given streams.
+    async fn get_next_expected_events(
+        &self,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, u32>, WorkerError> {
+        let values = self
+            .chain
+            .next_expected_events
+            .multi_get(&stream_ids)
+            .await?;
+        Ok(stream_ids
+            .into_iter()
+            .zip(values)
+            .filter_map(|(id, val)| Some((id, val?)))
+            .collect())
     }
 
     /// Gets event subscriptions.

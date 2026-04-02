@@ -305,6 +305,13 @@ where
         callback:
             oneshot::Sender<Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError>>,
     },
+
+    /// Get `next_expected_events` indices for the given streams.
+    GetNextExpectedEvents {
+        stream_ids: Vec<StreamId>,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<BTreeMap<StreamId, u32>, WorkerError>>,
+    },
 }
 
 /// The actor worker type.

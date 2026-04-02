@@ -1573,6 +1573,21 @@ where
         .await
     }
 
+    /// Gets the `next_expected_events` indices for the given streams.
+    pub async fn next_expected_events(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, u32>, WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::GetNextExpectedEvents {
+                stream_ids,
+                callback,
+            }
+        })
+        .await
+    }
+
     /// Gets the previous event blocks for specific streams.
     pub async fn previous_event_blocks(
         &self,
