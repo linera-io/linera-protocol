@@ -414,30 +414,6 @@ impl ResultReadCertificates {
     }
 }
 
-/// The result of processing the obtained read confirmed blocks.
-pub enum ResultReadConfirmedBlocks {
-    Blocks(Vec<ConfirmedBlock>),
-    InvalidHashes(Vec<CryptoHash>),
-}
-
-impl ResultReadConfirmedBlocks {
-    /// Creating the processed read confirmed blocks.
-    pub fn new(blocks: Vec<Option<ConfirmedBlock>>, hashes: Vec<CryptoHash>) -> Self {
-        let (blocks, invalid_hashes) = blocks
-            .into_iter()
-            .zip(hashes)
-            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(block, hash)| match block {
-                Some(block) => itertools::Either::Left(block),
-                None => itertools::Either::Right(hash),
-            });
-        if invalid_hashes.is_empty() {
-            Self::Blocks(blocks)
-        } else {
-            Self::InvalidHashes(invalid_hashes)
-        }
-    }
-}
-
 /// An implementation of `ExecutionRuntimeContext` suitable for the core protocol.
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
