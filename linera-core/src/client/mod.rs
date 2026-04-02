@@ -676,7 +676,7 @@ impl<Env: Environment> Client<Env> {
             let stream_ids = required_streams.keys().cloned().collect::<BTreeSet<_>>();
             let stream_ids_ref = &stream_ids;
             let required_ref = &required_streams;
-            communicate_concurrently(
+            let result = communicate_concurrently(
                 &validators,
                 move |remote_node| {
                     Box::pin(async move {
@@ -696,15 +696,33 @@ impl<Env: Environment> Client<Env> {
                         }) {
                             Ok::<(), chain_client::Error>(())
                         } else {
-                            // Placeholder error. Replaced in the closure below.
+                            // Placeholder error. Replaced below.
                             Err(chain_client::Error::InternalError("missing events"))
                         }
                     })
                 },
-                |_| NodeError::EventsNotFound(event_ids.to_vec()),
+                |_| chain_client::Error::InternalError("missing events"),
                 timeout,
             )
-            .await?;
+            .await;
+
+            if result.is_err() {
+                let next_expected = self
+                    .local_node
+                    .next_expected_events(chain_id, stream_ids.into_iter().collect())
+                    .await?;
+                let missing = event_ids
+                    .iter()
+                    .filter(|id| {
+                        id.chain_id == chain_id
+                            && !next_expected
+                                .get(&id.stream_id)
+                                .is_some_and(|index| *index > id.index)
+                    })
+                    .cloned()
+                    .collect();
+                return Err(NodeError::EventsNotFound(missing).into());
+            }
         }
         Ok(())
     }
