@@ -1424,6 +1424,18 @@ where
         .await
     }
 
+    /// Gets the `next_expected_events` indices for the given streams.
+    pub async fn next_expected_events(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, u32>, WorkerError> {
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_next_expected_events(stream_ids).await
+        })
+        .await
+    }
+
     /// Gets received certificate trackers.
     pub async fn get_received_certificate_trackers(
         &self,
