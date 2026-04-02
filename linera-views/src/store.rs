@@ -154,9 +154,7 @@ pub trait ReadableKeyValueStore: WithError {
         async move {
             let prefix_len = key_prefix.len();
             let key_interval = KeyInterval::for_prefix(key_prefix);
-            let (keys, _) = self
-                .find_keys_in_interval(key_interval)
-                .await?;
+            let (keys, _) = self.find_keys_in_interval(key_interval).await?;
             Ok(keys
                 .into_iter()
                 .map(|key| key[prefix_len..].to_vec())
@@ -172,9 +170,7 @@ pub trait ReadableKeyValueStore: WithError {
         async move {
             let prefix_len = key_prefix.len();
             let key_interval = KeyInterval::for_prefix(key_prefix);
-            let (key_values, _) = self
-                .find_key_values_in_interval(key_interval)
-                .await?;
+            let (key_values, _) = self.find_key_values_in_interval(key_interval).await?;
             Ok(key_values
                 .into_iter()
                 .map(|(key, value)| (key[prefix_len..].to_vec(), value))

@@ -49,6 +49,19 @@ use crate::{
 // The maximum key size is set to 1M rather arbitrarily.
 const MAX_KEY_SIZE: usize = 1000000;
 
+/// Computes the exclusive upper bound for a prefix scan.
+/// Returns `None` if the prefix is all 0xFF bytes (no upper bound exists).
+fn upper_bound_of_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
+    for i in (0..prefix.len()).rev() {
+        if prefix[i] < u8::MAX {
+            let mut upper_bound = prefix[0..=i].to_vec();
+            upper_bound[i] += 1;
+            return Some(upper_bound);
+        }
+    }
+    None
+}
+
 // The shared store client.
 // * Interior mutability is required for the client because
 // accessing requires mutability while the KeyValueStore
@@ -227,7 +240,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 Some(full_key)
             }
         };
-        let end = match &key_interval.end {
+        let (end, end_inclusive) = match &key_interval.end {
             Included(key) | Excluded(key) => {
                 ensure!(
                     key.len() <= MAX_KEY_SIZE,
@@ -235,15 +248,15 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 );
                 let mut full_key = self.start_key.clone();
                 full_key.extend(key);
-                Some(full_key)
+                (Some(full_key), matches!(&key_interval.end, Included(_)))
             }
-            Unbounded => None,
+            Unbounded => (upper_bound_of_prefix(&self.start_key), false),
         };
         let query = RequestFindKeysInInterval {
             start,
             start_inclusive: matches!(&key_interval.start, KeyIntervalStart::Included(_)),
             end,
-            end_inclusive: matches!(&key_interval.end, Included(_)),
+            end_inclusive,
             limit: key_interval
                 .limit
                 .and_then(|limit| u32::try_from(limit).ok()),
@@ -263,10 +276,19 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             num_chunks,
             is_finished,
         } = response;
+        let prefix_len = self.start_key.len();
         if num_chunks == 0 {
+            let keys = keys
+                .into_iter()
+                .map(|key| key[prefix_len..].to_vec())
+                .collect();
             Ok((keys, is_finished))
         } else {
-            let keys = self.read_entries(message_index, num_chunks).await?;
+            let keys: Vec<Vec<u8>> = self.read_entries(message_index, num_chunks).await?;
+            let keys = keys
+                .into_iter()
+                .map(|key| key[prefix_len..].to_vec())
+                .collect();
             Ok((keys, is_finished))
         }
     }
@@ -286,7 +308,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 Some(full_key)
             }
         };
-        let end = match &key_interval.end {
+        let (end, end_inclusive) = match &key_interval.end {
             Included(key) | Excluded(key) => {
                 ensure!(
                     key.len() <= MAX_KEY_SIZE,
@@ -294,15 +316,15 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 );
                 let mut full_key = self.start_key.clone();
                 full_key.extend(key);
-                Some(full_key)
+                (Some(full_key), matches!(&key_interval.end, Included(_)))
             }
-            Unbounded => None,
+            Unbounded => (upper_bound_of_prefix(&self.start_key), false),
         };
         let query = RequestFindKeyValuesInInterval {
             start,
             start_inclusive: matches!(&key_interval.start, KeyIntervalStart::Included(_)),
             end,
-            end_inclusive: matches!(&key_interval.end, Included(_)),
+            end_inclusive,
             limit: key_interval
                 .limit
                 .and_then(|limit| u32::try_from(limit).ok()),
@@ -322,14 +344,20 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             num_chunks,
             is_finished,
         } = response;
+        let prefix_len = self.start_key.len();
         if num_chunks == 0 {
             let key_values = key_values
                 .into_iter()
-                .map(|x| (x.key, x.value))
+                .map(|x| (x.key[prefix_len..].to_vec(), x.value))
                 .collect::<Vec<_>>();
             Ok((key_values, is_finished))
         } else {
-            let key_values = self.read_entries(message_index, num_chunks).await?;
+            let key_values: Vec<(Vec<u8>, Vec<u8>)> =
+                self.read_entries(message_index, num_chunks).await?;
+            let key_values = key_values
+                .into_iter()
+                .map(|(key, value)| (key[prefix_len..].to_vec(), value))
+                .collect();
             Ok((key_values, is_finished))
         }
     }
