@@ -647,14 +647,6 @@ impl Block {
         let to_id = |event: &Event| event.id(self.header.chain_id);
         self.body.events.iter().flatten().map(to_id)
     }
-
-    pub fn iter_created_blobs(&self) -> impl Iterator<Item = (BlobId, Blob)> + '_ {
-        self.body
-            .blobs
-            .iter()
-            .flatten()
-            .map(|blob| (blob.id(), blob.clone()))
-    }
 }
 
 impl BcsHashable<'_> for Block {}
