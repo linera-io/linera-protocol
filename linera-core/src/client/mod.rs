@@ -676,7 +676,30 @@ impl<Env: Environment> Client<Env> {
                 move |remote_node| {
                     Box::pin(async move {
                         self.sync_events_from_node(chain_id, stream_ids_ref, &remote_node)
-                            .await
+                            .await?;
+                        let next_expected_events = stream_ids_ref
+                            .iter()
+                            .zip(
+                                self.local_node
+                                    .chain_state_view(chain_id)
+                                    .await?
+                                    .next_expected_events
+                                    .multi_get(stream_ids_ref)
+                                    .await?
+                                    .into_iter()
+                                    .map(|maybe_index| maybe_index.unwrap_or_default()),
+                            )
+                            .collect::<BTreeMap<_, _>>();
+                        if event_ids.iter().all(|event_id| {
+                            event_id.chain_id != chain_id
+                                || next_expected_events
+                                    .get(&event_id.stream_id)
+                                    .is_some_and(|index| *index > event_id.index)
+                        }) {
+                            Ok::<(), chain_client::Error>(())
+                        } else {
+                            Err(NodeError::EventsNotFound(event_ids.to_vec()).into())
+                        }
                     })
                 },
                 |errors| {
