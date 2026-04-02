@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 
-use futures::{Future, StreamExt as _, TryStreamExt as _};
+#[cfg(not(web))]
+use futures::StreamExt as _;
+use futures::{Future, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ChainDescription, Epoch, Timestamp},
@@ -377,14 +379,17 @@ impl<Env: Environment> ClientContext<Env> {
 
     pub async fn first_non_admin_chain(&self) -> Result<ChainId, Error> {
         let admin_chain_id = self.admin_chain_id();
-        std::pin::pin!(self
+        let chain_ids = self
             .wallet()
             .chain_ids()
-            .try_filter(|chain_id| futures::future::ready(*chain_id != admin_chain_id)))
-        .next()
-        .await
-        .expect("No non-admin chain specified in wallet with no non-admin chain")
-        .map_err(Error::wallet)
+            .try_filter(|chain_id| futures::future::ready(*chain_id != admin_chain_id))
+            .try_collect::<Vec<ChainId>>()
+            .await
+            .map_err(Error::wallet)?;
+        Ok(chain_ids
+            .into_iter()
+            .min()
+            .expect("No non-admin chain specified in wallet with no non-admin chain"))
     }
 
     // TODO(#5084) this should match the `NodeProvider` from the `Environment`
