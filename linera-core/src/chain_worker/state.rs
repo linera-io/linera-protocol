@@ -1527,7 +1527,6 @@ where
             .collect())
     }
 
-
     /// Gets the stream event count for a stream, including preprocessed blocks.
     pub(crate) async fn get_stream_event_count(
         &self,

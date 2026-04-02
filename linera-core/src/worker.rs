@@ -592,7 +592,6 @@ where
         self.chain_worker_config.cross_chain_message_chunk_limit = limit;
     }
 
-
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.chain_worker_config.nickname
@@ -1372,9 +1371,7 @@ where
                 missing_height,
             } => {
                 self.chain_write(sender, |mut guard| async move {
-                    guard
-                        .handle_revert_confirm(recipient, missing_height)
-                        .await
+                    guard.handle_revert_confirm(recipient, missing_height).await
                 })
                 .await
             }
