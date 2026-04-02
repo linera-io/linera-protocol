@@ -191,7 +191,7 @@ where
     /// Handle a `RevertConfirm` request to re-add outbox entries and resend bundles.
     HandleRevertConfirm {
         recipient: ChainId,
-        missing_height: BlockHeight,
+        retransmit_from: BlockHeight,
         #[debug(skip)]
         callback: oneshot::Sender<Result<NetworkActions, WorkerError>>,
     },
