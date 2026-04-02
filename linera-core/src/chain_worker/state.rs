@@ -1642,7 +1642,11 @@ where
         &self,
         stream_ids: Vec<StreamId>,
     ) -> Result<BTreeMap<StreamId, u32>, WorkerError> {
-        let values = self.chain.next_expected_events.multi_get(&stream_ids).await?;
+        let values = self
+            .chain
+            .next_expected_events
+            .multi_get(&stream_ids)
+            .await?;
         Ok(stream_ids
             .into_iter()
             .zip(values)
