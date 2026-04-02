@@ -677,22 +677,16 @@ impl<Env: Environment> Client<Env> {
                     Box::pin(async move {
                         self.sync_events_from_node(chain_id, stream_ids_ref, &remote_node)
                             .await?;
-                        let next_expected_events = stream_ids_ref
-                            .iter()
-                            .zip(
-                                self.local_node
-                                    .chain_state_view(chain_id)
-                                    .await?
-                                    .next_expected_events
-                                    .multi_get(stream_ids_ref)
-                                    .await?
-                                    .into_iter()
-                                    .map(|maybe_index| maybe_index.unwrap_or_default()),
+                        let next_expected = self
+                            .local_node
+                            .next_expected_events(
+                                chain_id,
+                                stream_ids_ref.iter().cloned().collect(),
                             )
-                            .collect::<BTreeMap<_, _>>();
+                            .await?;
                         if event_ids.iter().all(|event_id| {
                             event_id.chain_id != chain_id
-                                || next_expected_events
+                                || next_expected
                                     .get(&event_id.stream_id)
                                     .is_some_and(|index| *index > event_id.index)
                         }) {
@@ -1402,19 +1396,13 @@ impl<Env: Environment> Client<Env> {
 
         let mut certificates = BTreeMap::new();
         let mut blocks_to_fetch = initial_blocks;
-        let next_expected_events = subscribed_streams
-            .iter()
-            .zip(
-                self.local_node
-                    .chain_state_view(publisher_chain_id)
-                    .await?
-                    .next_expected_events
-                    .multi_get(subscribed_streams)
-                    .await?
-                    .into_iter()
-                    .map(|maybe_index| maybe_index.unwrap_or_default()),
+        let next_expected_events = self
+            .local_node
+            .next_expected_events(
+                publisher_chain_id,
+                subscribed_streams.iter().cloned().collect(),
             )
-            .collect::<BTreeMap<_, _>>();
+            .await?;
 
         while let Some((current_height, current_hash)) = blocks_to_fetch.pop_last() {
             if current_height < local_next_block_height {
