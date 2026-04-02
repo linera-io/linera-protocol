@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering;
+
 use allocative::Allocative;
 use async_graphql::SimpleObject;
 use linera_base::{
@@ -305,38 +307,42 @@ where
         let newly_added = match self.removed_bundles.front().await? {
             Some(previous_bundle) => {
                 let front_cursor = Cursor::from(&previous_bundle);
-                if front_cursor == cursor {
-                    // We already executed this bundle by anticipation. Remove it from
-                    // the queue.
-                    ensure!(
-                        bundle == previous_bundle,
-                        InboxError::UnexpectedBundle {
-                            previous_bundle,
-                            bundle,
-                        }
-                    );
-                    self.removed_bundles.delete_front();
-                    #[cfg(with_metrics)]
-                    metrics::REMOVED_BUNDLES
-                        .with_label_values(&[])
-                        .observe(self.removed_bundles.count() as f64);
-                } else if cursor > front_cursor {
-                    // The incoming bundle is ahead of the earliest anticipated
-                    // removal — the bundles in between were never delivered.
-                    return Err(InboxError::GapDetected {
-                        expected_height: previous_bundle.height,
-                        actual_height: bundle.height,
-                    });
-                } else {
-                    // The receiver has already executed a later bundle from the same
-                    // sender ahead of time so we should skip this one.
-                    ensure!(
-                        bundle.is_skippable(),
-                        InboxError::UnexpectedBundle {
-                            previous_bundle,
-                            bundle,
-                        }
-                    );
+                match front_cursor.cmp(&cursor) {
+                    Ordering::Equal => {
+                        // We already executed this bundle by anticipation. Remove it from
+                        // the queue.
+                        ensure!(
+                            bundle == previous_bundle,
+                            InboxError::UnexpectedBundle {
+                                previous_bundle,
+                                bundle,
+                            }
+                        );
+                        self.removed_bundles.delete_front();
+                        #[cfg(with_metrics)]
+                        metrics::REMOVED_BUNDLES
+                            .with_label_values(&[])
+                            .observe(self.removed_bundles.count() as f64);
+                    }
+                    Ordering::Less => {
+                        // The incoming bundle is ahead of the earliest anticipated
+                        // removal — the bundles in between were never delivered.
+                        return Err(InboxError::GapDetected {
+                            expected_height: previous_bundle.height,
+                            actual_height: bundle.height,
+                        });
+                    }
+                    Ordering::Greater => {
+                        // The receiver has already executed a later bundle from the same
+                        // sender ahead of time so we should skip this one.
+                        ensure!(
+                            bundle.is_skippable(),
+                            InboxError::UnexpectedBundle {
+                                previous_bundle,
+                                bundle,
+                            }
+                        );
+                    }
                 }
                 false
             }
