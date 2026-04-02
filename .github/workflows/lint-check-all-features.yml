@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2, 3]
+        partition: [1, 2, 3, 4, 5, 6]
 
     steps:
     - uses: actions/checkout@v4
@@ -47,9 +47,9 @@ jobs:
       uses: arduino/setup-protoc@v3
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Run cargo hack check (partition ${{ matrix.partition }}/3)
+    - name: Run cargo hack check (partition ${{ matrix.partition }}/6)
       run: |
-        cargo hack check --each-feature --workspace --all-targets --partition ${{ matrix.partition }}/3
+        cargo hack check --each-feature --workspace --all-targets --partition ${{ matrix.partition }}/6
 
   lint-check-all-features:
     needs: check-all-features-partition
