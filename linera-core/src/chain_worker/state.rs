@@ -28,7 +28,10 @@ use linera_chain::{
         OriginalProposal, ProposalContent, ProposedBlock,
     },
     manager,
-    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{
+        Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
+        ValidatedBlockCertificate,
+    },
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
@@ -553,6 +556,39 @@ where
         })
     }
 
+    /// Returns confirmed blocks by hash, checking the cache first and batch-loading the rest
+    /// from storage. The order of the returned blocks matches the order of the input hashes.
+    async fn read_confirmed_blocks(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<Option<ConfirmedBlock>>, WorkerError> {
+        let mut blocks = Vec::with_capacity(hashes.len());
+        let mut uncached: Vec<(usize, CryptoHash)> = Vec::new();
+
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(hashed_block) = self.block_values.get_hashed(hash) {
+                blocks.push(Some(ConfirmedBlock::from_hashed(hashed_block)));
+            } else {
+                blocks.push(None);
+                uncached.push((i, *hash));
+            }
+        }
+
+        if !uncached.is_empty() {
+            let uncached_hashes = uncached.iter().map(|(_, hash)| *hash);
+            let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
+            for ((i, _), maybe_block) in uncached.into_iter().zip(from_storage) {
+                if let Some(block) = &maybe_block {
+                    self.block_values
+                        .insert_hashed(Cow::Borrowed(block.inner()));
+                }
+                blocks[i] = maybe_block;
+            }
+        }
+
+        Ok(blocks)
+    }
+
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         num_recipients = %heights_by_recipient.len()
@@ -565,36 +601,18 @@ where
         let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
         let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
 
-        let mut uncached_hashes = Vec::new();
+        let blocks = self.read_confirmed_blocks(hashes.clone()).await?;
+        let blocks = match ResultReadConfirmedBlocks::new(blocks, hashes) {
+            ResultReadConfirmedBlocks::Blocks(blocks) => blocks,
+            ResultReadConfirmedBlocks::InvalidHashes(hashes) => {
+                return Err(WorkerError::ReadCertificatesError(hashes))
+            }
+        };
+
         let mut height_to_blocks = HashMap::new();
-
-        for hash in hashes {
-            if let Some(hashed_block) = self.block_values.get_hashed(&hash) {
-                height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
-            } else {
-                uncached_hashes.push(hash);
-            }
-        }
-
-        if !uncached_hashes.is_empty() {
-            let blocks = self
-                .storage
-                .read_confirmed_blocks(uncached_hashes.clone())
-                .await?;
-            let blocks = match ResultReadConfirmedBlocks::new(blocks, uncached_hashes) {
-                ResultReadConfirmedBlocks::Blocks(blocks) => blocks,
-                ResultReadConfirmedBlocks::InvalidHashes(hashes) => {
-                    return Err(WorkerError::ReadCertificatesError(hashes))
-                }
-            };
-
-            for block in blocks {
-                let hashed_block = block.into_inner();
-                let height = hashed_block.inner().header.height;
-                self.block_values
-                    .insert_hashed(Cow::Owned(hashed_block.clone()));
-                height_to_blocks.insert(height, hashed_block);
-            }
+        for block in blocks {
+            let hashed_block = block.into_inner();
+            height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
         }
 
         let sender = self.chain.chain_id();
@@ -877,11 +895,11 @@ where
             self.chain.next_expected_events.insert(&stream_id, index)?;
         }
         let chain_id = self.chain_id();
-        for (height, hash) in self.chain.preprocessed_blocks.index_values().await? {
-            let block = self
-                .storage
-                .read_confirmed_block(hash)
-                .await?
+        let index_values = self.chain.preprocessed_blocks.index_values().await?;
+        let hashes = index_values.iter().map(|(_, hash)| *hash).collect();
+        let blocks = self.read_confirmed_blocks(hashes).await?;
+        for ((height, _), maybe_block) in index_values.into_iter().zip(blocks) {
+            let block = maybe_block
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             self.chain.preprocess_block(&block).await?;
         }
@@ -1373,9 +1391,10 @@ where
                 }
             };
             let block = self
-                .storage
-                .read_confirmed_block(hash)
+                .read_confirmed_blocks(vec![hash])
                 .await?
+                .pop()
+                .flatten()
                 .ok_or_else(|| WorkerError::LocalBlockNotFound {
                     height: current_height,
                     chain_id: self.chain_id(),
