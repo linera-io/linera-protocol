@@ -21,7 +21,7 @@ use linera_base::{
     ownership::ChainOwnership,
     time::Instant,
 };
-use linera_views::{batch::Batch, context::Context, views::View};
+use linera_views::{batch::Batch, context::Context, store::KeyInterval, views::View};
 use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
 use tracing::{info_span, instrument, Instrument as _};
@@ -32,9 +32,10 @@ use crate::{
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
-    ExecutionStateView, JsVec, Message, MessageContext, MessageKind, ModuleId, Operation,
-    OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
-    ResourceController, SystemMessage, TransactionTracker, UserContractCode, UserServiceCode,
+    ExecutionStateView, IntervalKeyValues, IntervalKeys, JsVec, Message, MessageContext,
+    MessageKind, ModuleId, Operation, OperationContext, OutgoingMessage, ProcessStreamsContext,
+    QueryContext, QueryOutcome, ResourceController, SystemMessage, TransactionTracker,
+    UserContractCode, UserServiceCode,
 };
 
 /// Actor for handling requests to the execution state.
@@ -392,6 +393,32 @@ where
                 let result = match view {
                     Some(view) => view.find_key_values_by_prefix(&key_prefix).await?,
                     None => Vec::new(),
+                };
+                callback.respond(result);
+            }
+
+            FindKeysInInterval {
+                id,
+                key_interval,
+                callback,
+            } => {
+                let view = self.state.users.try_load_entry(&id).await?;
+                let result = match view {
+                    Some(view) => view.find_keys_in_interval(key_interval).await?,
+                    None => (Vec::new(), true),
+                };
+                callback.respond(result);
+            }
+
+            FindKeyValuesInInterval {
+                id,
+                key_interval,
+                callback,
+            } => {
+                let view = self.state.users.try_load_entry(&id).await?;
+                let result = match view {
+                    Some(view) => view.find_key_values_in_interval(key_interval).await?,
+                    None => (Vec::new(), true),
                 };
                 callback.respond(result);
             }
@@ -1380,6 +1407,20 @@ pub enum ExecutionRequest {
         key_prefix: Vec<u8>,
         #[debug(skip)]
         callback: Sender<Vec<(Vec<u8>, Vec<u8>)>>,
+    },
+
+    FindKeysInInterval {
+        id: ApplicationId,
+        key_interval: KeyInterval,
+        #[debug(skip)]
+        callback: Sender<IntervalKeys>,
+    },
+
+    FindKeyValuesInInterval {
+        id: ApplicationId,
+        key_interval: KeyInterval,
+        #[debug(skip)]
+        callback: Sender<IntervalKeyValues>,
     },
 
     WriteBatch {

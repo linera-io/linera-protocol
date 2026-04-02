@@ -6,6 +6,7 @@
 use std::{
     ffi::OsString,
     fmt::Display,
+    ops::Bound::{self, Excluded, Included, Unbounded},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -29,8 +30,8 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        KeyInterval, KeyIntervalStart, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -166,63 +167,128 @@ impl RocksDbStoreExecutor {
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
-    fn get_find_prefix_iterator(
+    fn get_interval_iterator(
         &self,
-        prefix: &[u8],
+        start: &std::ops::Bound<Vec<u8>>,
+        end: &std::ops::Bound<Vec<u8>>,
     ) -> rocksdb::DBRawIteratorWithThreadMode<'_, DB> {
         // Configure ReadOptions optimized for SSDs and iterator performance
         let mut read_opts = rocksdb::ReadOptions::default();
         // Enable async I/O for better concurrency
         read_opts.set_async_io(true);
+        // Use total order seek to avoid prefix bloom filter mismatches
+        // when the seek key prefix differs from stored key prefixes.
+        read_opts.set_total_order_seek(true);
 
-        // Set precise upper bound to minimize key traversal
-        let upper_bound = get_upper_bound_option(prefix);
+        let upper_bound = match end {
+            Included(bound) => get_upper_bound_option(bound),
+            Excluded(bound) => Some(bound.clone()),
+            Unbounded => None,
+        };
         if let Some(upper_bound) = upper_bound {
             read_opts.set_iterate_upper_bound(upper_bound);
         }
 
         let mut iter = self.db.raw_iterator_opt(read_opts);
-        iter.seek(prefix);
+        match start {
+            Included(bound) | Excluded(bound) => iter.seek(bound),
+            Unbounded => iter.seek_to_first(),
+        }
+        if let Excluded(bound) = start {
+            if iter.key().is_some_and(|key| key == bound.as_slice()) {
+                iter.next();
+            }
+        }
         iter
     }
 
-    fn find_keys_by_prefix_internal(
+    #[expect(clippy::type_complexity)]
+    fn get_full_interval(
         &self,
-        key_prefix: Vec<u8>,
-    ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
-        check_key_size(&key_prefix)?;
+        key_interval: &KeyInterval,
+    ) -> Result<(Bound<Vec<u8>>, Bound<Vec<u8>>), RocksDbStoreInternalError> {
+        let start = match &key_interval.start {
+            KeyIntervalStart::Included(key) => {
+                check_key_size(key)?;
+                let mut full_key = self.start_key.clone();
+                full_key.extend(key);
+                Included(full_key)
+            }
+            KeyIntervalStart::Excluded(key) => {
+                check_key_size(key)?;
+                let mut full_key = self.start_key.clone();
+                full_key.extend(key);
+                Excluded(full_key)
+            }
+        };
+        let end = match &key_interval.end {
+            Included(key) => {
+                check_key_size(key)?;
+                let mut full_key = self.start_key.clone();
+                full_key.extend(key);
+                Included(full_key)
+            }
+            Excluded(key) => {
+                check_key_size(key)?;
+                let mut full_key = self.start_key.clone();
+                full_key.extend(key);
+                Excluded(full_key)
+            }
+            Unbounded => {
+                let full_key = self.start_key.clone();
+                if let Some(next_prefix) = get_upper_bound_option(&full_key) {
+                    Excluded(next_prefix)
+                } else {
+                    Unbounded
+                }
+            }
+        };
+        Ok((start, end))
+    }
 
-        let mut prefix = self.start_key.clone();
-        prefix.extend(key_prefix);
-        let len = prefix.len();
-
-        let mut iter = self.get_find_prefix_iterator(&prefix);
+    fn find_keys_in_interval_internal(
+        &self,
+        key_interval: &KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), RocksDbStoreInternalError> {
+        let (start, end) = self.get_full_interval(key_interval)?;
+        let len = self.start_key.len();
+        let mut iter = self.get_interval_iterator(&start, &end);
         let mut keys = Vec::new();
         while let Some(key) = iter.key() {
             keys.push(key[len..].to_vec());
+            if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
+                break;
+            }
             iter.next();
         }
-        Ok(keys)
+        let is_finished = key_interval.limit.is_none_or(|limit| keys.len() < limit);
+        Ok((keys, is_finished))
     }
 
     #[expect(clippy::type_complexity)]
-    fn find_key_values_by_prefix_internal(
+    fn find_key_values_in_interval_internal(
         &self,
-        key_prefix: Vec<u8>,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
-        check_key_size(&key_prefix)?;
-        let mut prefix = self.start_key.clone();
-        prefix.extend(key_prefix);
-        let len = prefix.len();
-
-        let mut iter = self.get_find_prefix_iterator(&prefix);
+        key_interval: &KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), RocksDbStoreInternalError> {
+        let (start, end) = self.get_full_interval(key_interval)?;
+        let len = self.start_key.len();
+        let mut iter = self.get_interval_iterator(&start, &end);
         let mut key_values = Vec::new();
         while let Some((key, value)) = iter.item() {
             let key_value = (key[len..].to_vec(), value.to_vec());
             key_values.push(key_value);
+            if key_interval
+                .limit
+                .is_some_and(|limit| key_values.len() >= limit)
+            {
+                break;
+            }
             iter.next();
         }
-        Ok(key_values)
+        let is_finished = key_interval
+            .limit
+            .is_none_or(|limit| key_values.len() < limit);
+        Ok((key_values, is_finished))
     }
 
     fn write_batch_internal(
@@ -494,30 +560,28 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             .await
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), RocksDbStoreInternalError> {
         let executor = self.executor.clone();
-        let key_prefix = key_prefix.to_vec();
         self.spawn_mode
             .spawn(
-                move |x| executor.find_keys_by_prefix_internal(x),
-                key_prefix,
+                move |x| executor.find_keys_in_interval_internal(&x),
+                key_interval,
             )
             .await
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), RocksDbStoreInternalError> {
         let executor = self.executor.clone();
-        let key_prefix = key_prefix.to_vec();
         self.spawn_mode
             .spawn(
-                move |x| executor.find_key_values_by_prefix_internal(x),
-                key_prefix,
+                move |x| executor.find_key_values_in_interval_internal(&x),
+                key_interval,
             )
             .await
     }
