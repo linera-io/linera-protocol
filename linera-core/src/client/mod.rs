@@ -715,9 +715,9 @@ impl<Env: Environment> Client<Env> {
                     .iter()
                     .filter(|id| {
                         id.chain_id == chain_id
-                            && !next_expected
+                            && next_expected
                                 .get(&id.stream_id)
-                                .is_some_and(|index| *index > id.index)
+                                .is_none_or(|index| *index <= id.index)
                     })
                     .cloned()
                     .collect();
