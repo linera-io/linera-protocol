@@ -33,7 +33,11 @@ use linera_views::context::{Context, InactiveContext};
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, Instrument as _};
 
-use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
+use super::{
+    config::ChainWorkerConfig,
+    state::{ChainWorkerState, CrossChainUpdateResult},
+    DeliveryNotifier,
+};
 use crate::{
     chain_worker::BlockOutcome,
     client::ListeningMode,
@@ -171,8 +175,9 @@ where
     ProcessCrossChainUpdate {
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
+        previous_height: Option<BlockHeight>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
+        callback: oneshot::Sender<Result<CrossChainUpdateResult, WorkerError>>,
     },
 
     /// Handle cross-chain request to confirm that the recipient was updated.
@@ -180,7 +185,15 @@ where
         recipient: ChainId,
         latest_height: BlockHeight,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(), WorkerError>>,
+        callback: oneshot::Sender<Result<NetworkActions, WorkerError>>,
+    },
+
+    /// Handle a `RevertConfirm` request to re-add outbox entries and resend bundles.
+    HandleRevertConfirm {
+        recipient: ChainId,
+        missing_height: BlockHeight,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<NetworkActions, WorkerError>>,
     },
 
     /// Handle a [`ChainInfoQuery`].
@@ -292,6 +305,13 @@ where
         callback:
             oneshot::Sender<Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError>>,
     },
+
+    /// Get `next_expected_events` indices for the given streams.
+    GetNextExpectedEvents {
+        stream_ids: Vec<StreamId>,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<BTreeMap<StreamId, u32>, WorkerError>>,
+    },
 }
 
 /// The actor worker type.
@@ -303,7 +323,8 @@ where
     config: ChainWorkerConfig,
     storage: StorageClient,
     block_values: Arc<ValueCache<CryptoHash, Block>>,
-    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache:
+        Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     is_tracked: bool,
@@ -356,8 +377,8 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Block>>,
-        execution_state_cache: Arc<
-            UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>,
+        execution_state_cache: Option<
+            Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
         chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
@@ -504,28 +525,36 @@ where
             #[cfg(with_metrics)]
             metrics::CHAIN_WORKER_STATES_LOADED.inc();
 
-            Box::pin(worker.handle_request(request))
+            if Box::pin(worker.handle_request(request))
                 .instrument(span)
-                .await;
+                .await
+                .is_ok()
+            {
+                loop {
+                    let ttl_timeout = self.ttl_timeout();
 
-            loop {
-                let ttl_timeout = self.ttl_timeout();
+                    futures::select! {
+                        () = self.storage.clock().sleep_until(ttl_timeout).fuse() => {
+                            break;
+                        }
+                        maybe_request = incoming_requests.recv().fuse() => {
+                            let Some((request, span, queued_at)) = maybe_request else {
+                                break; // Request sender was dropped.
+                            };
+                            let Some((request, span, _)) =
+                                self.preprocess_request(request, span, queued_at, &request_sender)
+                            else {
+                                continue;
+                            };
 
-                futures::select! {
-                    () = self.storage.clock().sleep_until(ttl_timeout).fuse() => {
-                        break;
-                    }
-                    maybe_request = incoming_requests.recv().fuse() => {
-                        let Some((request, span, queued_at)) = maybe_request else {
-                            break; // Request sender was dropped.
-                        };
-                        let Some((request, span, _)) =
-                            self.preprocess_request(request, span, queued_at, &request_sender)
-                        else {
-                            continue;
-                        };
-
-                        Box::pin(worker.handle_request(request)).instrument(span).await;
+                            if Box::pin(worker.handle_request(request))
+                                .instrument(span)
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
                     }
                 }
             }

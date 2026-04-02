@@ -191,6 +191,7 @@ message CrossChainRequest {
   oneof inner {
     UpdateRecipient update_recipient = 1;
     ConfirmUpdatedRecipient confirm_updated_recipient = 2;
+    RevertConfirm revert_confirm = 3;
   }
 }
 
@@ -200,6 +201,9 @@ message UpdateRecipient {
   ChainId sender = 1;
   ChainId recipient = 2;
   bytes bundles = 3;
+  // The height of the sender's previous block that sent messages to this recipient
+  // (before the first bundle). Absent if this is the first message ever.
+  optional BlockHeight previous_height = 4;
 }
 
 // Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
@@ -207,6 +211,13 @@ message ConfirmUpdatedRecipient {
   ChainId sender = 1;
   ChainId recipient = 2;
   BlockHeight latest_height = 3;
+}
+
+// Request the sender to revert a previous confirmation and resend bundles.
+message RevertConfirm {
+  ChainId sender = 1;
+  ChainId recipient = 2;
+  BlockHeight missing_height = 3;
 }
 
 // Request information on a chain.

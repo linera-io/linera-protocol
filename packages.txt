@@ -22,6 +22,6 @@ linera-rpc
 linera-client
 linera-faucet-client
 linera-faucet-server
-linera-bridge
+# linera-bridge — excluded because it depends on unpublished example crates (fungible, wrapped-fungible)
 linera-service
 linera-service-graphql-client

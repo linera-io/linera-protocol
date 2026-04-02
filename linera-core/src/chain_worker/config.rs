@@ -42,6 +42,16 @@ pub struct ChainWorkerConfig {
     pub priority_bundle_origins: HashSet<ChainId>,
     /// Chain IDs whose incoming bundles should be ignored.
     pub ignored_bundle_origins: HashSet<ChainId>,
+    /// Maximum estimated serialized size of bundles in a single `UpdateRecipient`
+    /// cross-chain message. When exceeded, the bundles are split into multiple requests.
+    /// Defaults to `usize::MAX` (no chunking).
+    pub cross_chain_message_chunk_limit: usize,
+    /// Whether to attempt recovery via `RevertConfirm` when an inbox gap is detected.
+    pub allow_revert_confirm: bool,
+    /// If set, reset the chain state and re-execute all blocks when an
+    /// `IncorrectOutcome` error is encountered — but only if the given duration has
+    /// elapsed since block 0 was last executed (to prevent reset loops).
+    pub reset_on_incorrect_outcome: Option<Duration>,
 }
 
 impl ChainWorkerConfig {
@@ -73,6 +83,9 @@ impl Default for ChainWorkerConfig {
             execution_state_cache_size: crate::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             priority_bundle_origins: HashSet::new(),
             ignored_bundle_origins: HashSet::new(),
+            cross_chain_message_chunk_limit: usize::MAX,
+            allow_revert_confirm: false,
+            reset_on_incorrect_outcome: None,
         }
     }
 }

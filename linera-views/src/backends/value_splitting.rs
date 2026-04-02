@@ -6,6 +6,22 @@
 use linera_base::ensure;
 use thiserror::Error;
 
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::register_int_counter;
+    use prometheus::IntCounter;
+
+    /// Number of values that were split across multiple keys.
+    pub static VALUE_SPLIT_COUNT: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "value_split_count",
+            "Number of values split across multiple keys due to size limits",
+        )
+    });
+}
+
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
@@ -67,6 +83,13 @@ impl<E: KeyValueStoreError> From<bcs::Error> for ValueSplittingError<E> {
 
 impl<E: KeyValueStoreError + 'static> KeyValueStoreError for ValueSplittingError<E> {
     const BACKEND: &'static str = "value splitting";
+
+    fn must_reload_view(&self) -> bool {
+        match self {
+            ValueSplittingError::InnerStoreError(e) => e.must_reload_view(),
+            _ => false,
+        }
+    }
 }
 
 impl<S> WithError for ValueSplittingDatabase<S>
@@ -269,6 +292,13 @@ where
                     let value_ext = if value.len() <= K::MAX_VALUE_SIZE - 4 {
                         Self::get_initial_count_first_chunk(count, &value)?
                     } else {
+                        tracing::warn!(
+                            value_len = value.len(),
+                            max_value_size = K::MAX_VALUE_SIZE,
+                            "Splitting large value across multiple keys"
+                        );
+                        #[cfg(with_metrics)]
+                        metrics::VALUE_SPLIT_COUNT.inc();
                         let remainder = value.split_off(K::MAX_VALUE_SIZE - 4);
                         for value_chunk in remainder.chunks(K::MAX_VALUE_SIZE) {
                             let big_key_segment = Self::get_segment_key(&key, count)?;

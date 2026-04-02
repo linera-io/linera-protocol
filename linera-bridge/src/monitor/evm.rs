@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 use super::{MonitorState, PendingDeposit};
 use crate::{
     proof::{parse_deposit_event, DepositKey, ReceiptLog},
-    relay::{evm::EvmClient, linera::LineraClient},
+    relay::{self, evm::EvmClient, linera::LineraClient},
 };
 
 /// Background task that polls EVM for `DepositInitiated` events and checks
@@ -112,6 +112,7 @@ pub(crate) async fn retry_pending_deposits<E: linera_core::environment::Environm
                 match linera_client.process_deposit(proof).await {
                     Ok(()) => {
                         tracing::info!(%tx_hash, "Deposit processed successfully");
+                        relay::update_linera_balance_metric(linera_client).await;
                     }
                     Err(e) => {
                         tracing::warn!(%tx_hash, "Deposit processing failed: {e}");

@@ -128,7 +128,7 @@ async fn test_inbox_remove_then_add_skippable() {
     // NOT OK to forget about previous consumed bundles while backfilling.
     assert_matches!(
         view.add_bundle(make_bundle(hash, 1, 0, [2])).await,
-        Err(InboxError::UnexpectedBundle { .. })
+        Err(InboxError::GapDetected { .. })
     );
     // OK to backfill the two consumed bundles, with one skippable bundle in the middle.
     assert!(!view.add_bundle(make_bundle(hash, 0, 1, [1])).await.unwrap());
@@ -272,7 +272,7 @@ async fn test_inbox_remove_then_add_unskippable() {
     assert_matches!(
         view.add_bundle(make_unskippable_bundle(hash, 1, 1, [3]))
             .await,
-        Err(InboxError::UnexpectedBundle { .. })
+        Err(InboxError::GapDetected { .. })
     );
     // OK to add the two bundles.
     assert!(!view
@@ -337,4 +337,57 @@ async fn test_inbox_add_then_remove_mixed() {
     // Inbox is empty again.
     assert_eq!(view.added_bundles.count(), 0);
     assert_eq!(view.removed_bundles.count(), 0);
+}
+
+#[tokio::test]
+async fn test_inbox_gap_detected() {
+    let hash = CryptoHash::test_hash("1");
+    let mut view = InboxStateView::new().await;
+    // Remove bundles at heights 0 and 2 by anticipation.
+    assert!(!view
+        .remove_bundle(&make_bundle(hash, 0, 0, [0]))
+        .await
+        .unwrap());
+    assert!(!view
+        .remove_bundle(&make_bundle(hash, 2, 0, [2]))
+        .await
+        .unwrap());
+    // Adding height 0 reconciles with removed_bundles front.
+    assert!(!view.add_bundle(make_bundle(hash, 0, 0, [0])).await.unwrap());
+    // Adding height 2 directly (skipping height 1, which was never removed) is fine.
+    assert!(!view.add_bundle(make_bundle(hash, 2, 0, [2])).await.unwrap());
+    assert_eq!(view.removed_bundles.count(), 0);
+
+    // Now test the gap case: remove height 5, then try to add height 7 — gap detected.
+    assert!(!view
+        .remove_bundle(&make_bundle(hash, 5, 0, [5]))
+        .await
+        .unwrap());
+    assert_matches!(
+        view.add_bundle(make_bundle(hash, 7, 0, [7])).await,
+        Err(InboxError::GapDetected {
+            expected_height,
+            actual_height,
+        }) if expected_height == BlockHeight::from(5) && actual_height == BlockHeight::from(7)
+    );
+    // removed_bundles still has height 5 (inbox unchanged after gap error).
+    assert_eq!(view.removed_bundles.count(), 1);
+}
+
+#[tokio::test]
+async fn test_inbox_remove_gap_detected() {
+    let hash = CryptoHash::test_hash("1");
+    let mut view = InboxStateView::new().await;
+    // Sender delivers bundles at heights 0 and 2 (skipping height 1).
+    assert!(view.add_bundle(make_bundle(hash, 0, 0, [0])).await.unwrap());
+    assert!(view.add_bundle(make_bundle(hash, 2, 0, [2])).await.unwrap());
+    // Receiver tries to consume height 1, but the front of added_bundles is at height 2.
+    // This is a gap: the sender never delivered height 1.
+    assert_matches!(
+        view.remove_bundle(&make_bundle(hash, 1, 0, [1])).await,
+        Err(InboxError::GapDetected {
+            expected_height,
+            actual_height,
+        }) if expected_height == BlockHeight::from(1) && actual_height == BlockHeight::from(2)
+    );
 }

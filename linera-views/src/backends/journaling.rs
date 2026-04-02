@@ -23,11 +23,62 @@ use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use thiserror::Error;
 
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, register_histogram, register_int_counter,
+    };
+    use prometheus::{Histogram, IntCounter};
+
+    /// Number of write_batch calls that used the fast path (single atomic batch).
+    pub static JOURNAL_FASTPATH_COUNT: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "journal_fastpath_count",
+            "Number of write_batch calls using the fast path",
+        )
+    });
+
+    /// Number of write_batch calls that required journaling.
+    pub static JOURNAL_SLOWPATH_COUNT: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "journal_slowpath_count",
+            "Number of write_batch calls requiring journaling",
+        )
+    });
+
+    /// Number of journal resolution failures.
+    pub static JOURNAL_RESOLUTION_FAILURES: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "journal_resolution_failures",
+            "Number of journal resolution failures (potential data inconsistency)",
+        )
+    });
+
+    /// Number of pending journals found during `clear_journal` (on chain reload).
+    pub static JOURNAL_PENDING_ON_LOAD: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "journal_pending_on_load",
+            "Number of pending journals found during chain reload",
+        )
+    });
+
+    /// Histogram of batch sizes (number of operations) for write_batch calls.
+    pub static JOURNAL_BATCH_LEN: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "journal_batch_len",
+            "Number of operations in write_batch calls",
+            exponential_bucket_interval(1.0, 10000.0),
+        )
+    });
+}
+
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
-        DirectKeyValueStore, KeyValueDatabase, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        DirectKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
 };
@@ -47,15 +98,61 @@ pub struct JournalingKeyValueStore<S> {
     has_exclusive_access: bool,
 }
 
-/// Data type indicating that the database is not consistent
+/// Error type for the journaling key-value store layer.
 #[derive(Error, Debug)]
-#[allow(missing_docs)]
-pub enum JournalConsistencyError {
-    #[error("The journal block could not be retrieved, it could be missing or corrupted.")]
-    FailureToRetrieveJournalBlock,
+pub enum JournalingError<E> {
+    /// Error from the inner store.
+    #[error(transparent)]
+    Inner(#[from] E),
 
+    /// BCS serialization error.
+    #[error(transparent)]
+    BcsError(bcs::Error),
+
+    /// Refusing to use the journal without exclusive access.
     #[error("Refusing to use the journal without exclusive database access to the root object.")]
     JournalRequiresExclusiveAccess,
+
+    /// Journal resolution failed; storage may be in an inconsistent state.
+    /// The view must be reloaded to complete the pending journal.
+    #[error("Journal resolution failed: {0}")]
+    JournalResolutionFailed(JournalingResolutionError<E>),
+}
+
+/// Error type for the journaling key-value store layer.
+#[derive(Error, Debug)]
+pub enum JournalingResolutionError<E> {
+    /// Error from the inner store.
+    #[error(transparent)]
+    Inner(#[from] E),
+
+    /// BCS serialization error.
+    #[error(transparent)]
+    BcsError(bcs::Error),
+
+    /// The journal block could not be retrieved.
+    #[error("The journal block could not be retrieved, it could be missing or corrupted.")]
+    FailureToRetrieveJournalBlock,
+}
+
+impl<E: KeyValueStoreError> From<bcs::Error> for JournalingError<E> {
+    fn from(error: bcs::Error) -> Self {
+        JournalingError::BcsError(error)
+    }
+}
+
+impl<E: KeyValueStoreError + 'static> KeyValueStoreError for JournalingError<E> {
+    const BACKEND: &'static str = "journaling";
+
+    fn must_reload_view(&self) -> bool {
+        matches!(self, JournalingError::JournalResolutionFailed(_))
+    }
+}
+
+impl<E: KeyValueStoreError> From<bcs::Error> for JournalingResolutionError<E> {
+    fn from(error: bcs::Error) -> Self {
+        JournalingResolutionError::BcsError(error)
+    }
 }
 
 /// The tag used for the journal stuff.
@@ -99,68 +196,69 @@ where
 impl<D> WithError for JournalingKeyValueDatabase<D>
 where
     D: WithError,
+    D::Error: 'static,
 {
-    type Error = D::Error;
+    type Error = JournalingError<D::Error>;
 }
 
 impl<S> WithError for JournalingKeyValueStore<S>
 where
     S: WithError,
+    S::Error: 'static,
 {
-    type Error = S::Error;
+    type Error = JournalingError<S::Error>;
 }
 
 impl<S> ReadableKeyValueStore for JournalingKeyValueStore<S>
 where
     S: ReadableKeyValueStore,
-    S::Error: From<JournalConsistencyError>,
+    S::Error: 'static,
 {
-    /// The size constant do not change
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
 
-    /// The read stuff does not change
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
     }
 
     fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
-        self.store.root_key()
+        Ok(self.store.root_key()?)
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.store.read_value_bytes(key).await
+        Ok(self.store.read_value_bytes(key).await?)
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        self.store.contains_key(key).await
+        Ok(self.store.contains_key(key).await?)
     }
 
     async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
-        self.store.contains_keys(keys).await
+        Ok(self.store.contains_keys(keys).await?)
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        self.store.read_multi_values_bytes(keys).await
+        Ok(self.store.read_multi_values_bytes(keys).await?)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        self.store.find_keys_by_prefix(key_prefix).await
+        Ok(self.store.find_keys_by_prefix(key_prefix).await?)
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-        self.store.find_key_values_by_prefix(key_prefix).await
+        Ok(self.store.find_key_values_by_prefix(key_prefix).await?)
     }
 }
 
 impl<D> KeyValueDatabase for JournalingKeyValueDatabase<D>
 where
     D: KeyValueDatabase,
+    D::Error: 'static,
 {
     type Config = D::Config;
     type Store = JournalingKeyValueStore<D::Store>;
@@ -191,48 +289,81 @@ where
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
-        D::list_all(config).await
+        Ok(D::list_all(config).await?)
     }
 
     async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error> {
-        self.database.list_root_keys().await
+        Ok(self.database.list_root_keys().await?)
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
-        D::delete_all(config).await
+        Ok(D::delete_all(config).await?)
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
-        D::exists(config, namespace).await
+        Ok(D::exists(config, namespace).await?)
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        D::create(config, namespace).await
+        Ok(D::create(config, namespace).await?)
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        D::delete(config, namespace).await
+        Ok(D::delete(config, namespace).await?)
     }
 }
 
 impl<S> WritableKeyValueStore for JournalingKeyValueStore<S>
 where
     S: DirectKeyValueStore,
-    S::Error: From<JournalConsistencyError>,
+    S::Error: 'static,
 {
-    /// The size constant do not change
     const MAX_VALUE_SIZE: usize = S::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         let batch = S::Batch::from_batch(self, batch).await?;
+        #[cfg(with_metrics)]
+        metrics::JOURNAL_BATCH_LEN.observe(batch.len() as f64);
         if Self::is_fastpath_feasible(&batch) {
-            self.store.write_batch(batch).await
+            tracing::trace!(
+                batch_len = batch.len(),
+                batch_bytes = batch.num_bytes(),
+                "write_batch: using fast path"
+            );
+            #[cfg(with_metrics)]
+            metrics::JOURNAL_FASTPATH_COUNT.inc();
+            Ok(self.store.write_batch(batch).await?)
         } else {
+            tracing::warn!(
+                batch_len = batch.len(),
+                batch_bytes = batch.num_bytes(),
+                max_batch_size = S::MAX_BATCH_SIZE,
+                max_batch_total_size = S::MAX_BATCH_TOTAL_SIZE,
+                "write_batch: batch exceeds fast path limits, using journal"
+            );
+            #[cfg(with_metrics)]
+            metrics::JOURNAL_SLOWPATH_COUNT.inc();
             if !self.has_exclusive_access {
-                return Err(JournalConsistencyError::JournalRequiresExclusiveAccess.into());
+                return Err(JournalingError::JournalRequiresExclusiveAccess);
             }
             let header = self.write_journal(batch).await?;
-            self.coherently_resolve_journal(header).await
+            tracing::info!(
+                block_count = header.block_count,
+                "write_batch: journal written, resolving"
+            );
+            match self.coherently_resolve_journal(header).await {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    tracing::error!(
+                        "write_batch: FAILED to resolve journal — \
+                        storage may be in an inconsistent state until \
+                        the journal is cleared on next reload"
+                    );
+                    #[cfg(with_metrics)]
+                    metrics::JOURNAL_RESOLUTION_FAILURES.inc();
+                    Err(JournalingError::JournalResolutionFailed(e))
+                }
+            }
         }
     }
 
@@ -240,16 +371,35 @@ where
         let key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
-            self.coherently_resolve_journal(header).await?;
+            tracing::warn!(
+                block_count = header.block_count,
+                "clear_journal: found pending journal, resolving"
+            );
+            #[cfg(with_metrics)]
+            metrics::JOURNAL_PENDING_ON_LOAD.inc();
+            match self.coherently_resolve_journal(header).await {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    tracing::error!(
+                        "write_batch: FAILED to resolve journal — \
+                        storage may be in an inconsistent state until \
+                        the journal is cleared on next reload"
+                    );
+                    #[cfg(with_metrics)]
+                    metrics::JOURNAL_RESOLUTION_FAILURES.inc();
+                    Err(JournalingError::JournalResolutionFailed(e))
+                }
+            }
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 
 impl<S> JournalingKeyValueStore<S>
 where
     S: DirectKeyValueStore,
-    S::Error: From<JournalConsistencyError>,
+    S::Error: 'static,
 {
     /// Resolves the pending operations that were previously stored in the database
     /// journal.
@@ -271,7 +421,11 @@ where
     ///
     /// (4) `block_key` and `header_key` don't exceed `S::MAX_KEY_SIZE` and `bcs_header`
     /// doesn't exceed `S::MAX_VALUE_SIZE`.
-    async fn coherently_resolve_journal(&self, mut header: JournalHeader) -> Result<(), S::Error> {
+    async fn coherently_resolve_journal(
+        &self,
+        mut header: JournalHeader,
+    ) -> Result<(), JournalingResolutionError<S::Error>> {
+        let total_blocks = header.block_count;
         let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         while header.block_count > 0 {
             let block_key = get_journaling_key(KeyTag::Entry as u8, header.block_count - 1)?;
@@ -280,7 +434,7 @@ where
                 .store
                 .read_value::<S::Batch>(&block_key)
                 .await?
-                .ok_or(JournalConsistencyError::FailureToRetrieveJournalBlock)?;
+                .ok_or(JournalingResolutionError::FailureToRetrieveJournalBlock)?;
             // Execute the block and delete it from the journal atomically.
             batch.add_delete(block_key);
             header.block_count -= 1;
@@ -290,8 +444,14 @@ where
             } else {
                 batch.add_delete(header_key.clone());
             }
+            tracing::debug!(
+                remaining_blocks = header.block_count,
+                total_blocks,
+                "resolving journal block"
+            );
             self.store.write_batch(batch).await?;
         }
+        tracing::info!(total_blocks, "journal fully resolved");
         Ok(())
     }
 
@@ -335,7 +495,10 @@ where
     /// * Similarly, a transaction must contain at least one block so it is desirable that
     ///   the maximum size of a block insertion `1 + sizeof(block_key) + S::MAX_VALUE_SIZE`
     ///   plus M bytes of overhead doesn't exceed the threshold of condition (2).
-    async fn write_journal(&self, batch: S::Batch) -> Result<JournalHeader, S::Error> {
+    async fn write_journal(
+        &self,
+        batch: S::Batch,
+    ) -> Result<JournalHeader, JournalingError<S::Error>> {
         let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let key_len = header_key.len();
         let header_value_len = bcs::serialized_size(&JournalHeader::default())?;

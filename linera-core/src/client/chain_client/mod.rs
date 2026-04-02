@@ -1792,6 +1792,34 @@ impl<Env: Environment> ChainClient<Env> {
     /// If the chain is in follow-only mode, this only downloads blocks for this chain without
     /// fetching manager values or sender/publisher chains.
     #[instrument(level = "trace")]
+    /// Synchronizes the chain state up to (but not including) the given block height.
+    pub async fn synchronize_up_to(
+        &self,
+        next_height: BlockHeight,
+    ) -> Result<Box<ChainInfo>, Error> {
+        let (_, committee) = self.client.admin_committee().await?;
+        let validators = self.client.make_nodes(&committee)?;
+        Box::pin(self.client.fetch_chain_info(self.chain_id, &validators)).await?;
+        communicate_with_quorum(
+            &validators,
+            &committee,
+            |_: &()| (),
+            |remote_node| async move {
+                self.client
+                    .download_certificates_from(&remote_node, self.chain_id, next_height)
+                    .await?;
+                Ok(())
+            },
+            self.client.options.quorum_grace_period,
+        )
+        .await?;
+        self.client
+            .local_node
+            .chain_info(self.chain_id)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, Error> {
         if self.preferred_owner.is_none() {
             return self.client.synchronize_chain_state(self.chain_id).await;

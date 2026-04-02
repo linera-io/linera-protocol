@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use allocative::Allocative;
 use linera_base::data_types::{ArithmeticError, BlockHeight};
 #[cfg(with_testing)]
@@ -77,6 +79,31 @@ where
         self.next_height_to_schedule.set(height.try_add_one()?);
         self.queue.push_back(height);
         Ok(true)
+    }
+
+    /// Re-adds heights to the outbox queue by merging them with existing entries.
+    /// Used by the `RevertConfirm` mechanism to undo a previous confirmation.
+    /// Returns the heights that were newly added.
+    pub async fn revert(
+        &mut self,
+        heights_to_add: &[BlockHeight],
+    ) -> Result<Vec<BlockHeight>, ViewError> {
+        let existing = self.queue.elements().await?;
+        let mut all_heights = existing.iter().copied().collect::<BTreeSet<_>>();
+        let new_heights = heights_to_add
+            .iter()
+            .filter(|h| !all_heights.contains(h))
+            .copied()
+            .collect::<Vec<_>>();
+        if new_heights.is_empty() {
+            return Ok(Vec::new());
+        }
+        all_heights.extend(new_heights.iter().copied());
+        self.clear();
+        for h in &all_heights {
+            self.schedule_message(*h).map_err(ViewError::from)?;
+        }
+        Ok(new_heights)
     }
 
     /// Marks all messages as received up to the given height.

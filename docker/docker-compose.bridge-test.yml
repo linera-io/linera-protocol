@@ -69,7 +69,7 @@ services:
       - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
       - "13001:13001"
       - "9090:9090"
-      - "${RELAY_PORT:-3001}:${RELAY_PORT:-3001}"
+      - "${RELAY_METRICS_PORT:-5001}:${RELAY_METRICS_PORT:-5001}"
     command:
       - sh
       - -c
@@ -326,6 +326,8 @@ services:
     image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
     network_mode: "service:linera-network"
     entrypoint: ["sh", "-c"]
+    ports:
+      - "${EXPORTER_METRICS_PORT:-3001}:3001"
     command:
       - |
         rm -f /shared/setup-complete
@@ -348,7 +350,7 @@ services:
         exec bridge-entrypoint.sh serve
     environment:
       - RUST_LOG=linera=info,linera_bridge=debug
-      - PORT=${RELAY_PORT:-3001}
+      - PORT=${RELAY_METRICS_PORT:-5001}
       - MONITOR_SCAN_INTERVAL=${MONITOR_SCAN_INTERVAL:-5}
       - MONITOR_START_BLOCK=${MONITOR_START_BLOCK:-0}
       - MAX_RETRIES=${MAX_RETRIES:-10}

@@ -137,6 +137,16 @@ pub enum ChainError {
     CertificateValidatorReuse,
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
+    #[error(
+        "Inbox gap on chain {chain_id} from origin {origin}: \
+        expected height {expected_height}, got {actual_height}"
+    )]
+    InboxGapDetected {
+        chain_id: ChainId,
+        origin: ChainId,
+        expected_height: BlockHeight,
+        actual_height: BlockHeight,
+    },
     #[error("Internal error {0}")]
     InternalError(String),
     #[error("Block proposal has size {0} which is too large")]
@@ -197,6 +207,7 @@ impl ChainError {
             | ChainError::MissingCrossChainUpdate { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }
+            | ChainError::InboxGapDetected { .. }
             | ChainError::InternalError(_)
             | ChainError::BcsError(_) => true,
             ChainError::ExecutionError(execution_error, _) => execution_error.is_local(),
