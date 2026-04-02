@@ -1436,51 +1436,6 @@ where
         Ok(blobs)
     }
 
-    /// Gets event subscriptions.
-    pub(crate) async fn get_event_subscriptions(
-        &self,
-    ) -> Result<EventSubscriptionsResult, WorkerError> {
-        Ok(self
-            .chain
-            .execution_state
-            .system
-            .event_subscriptions
-            .index_values()
-            .await?)
-    }
-
-    /// Gets received certificate trackers.
-    pub(crate) async fn get_received_certificate_trackers(
-        &self,
-    ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
-        Ok(self.chain.received_certificate_trackers.get().clone())
-    }
-
-    /// Gets tip state and outbox info for next_outbox_heights calculation.
-    pub(crate) async fn get_tip_state_and_outbox_info(
-        &self,
-        receiver_id: ChainId,
-    ) -> Result<(BlockHeight, Option<BlockHeight>), WorkerError> {
-        let next_block_height = self.chain.tip_state.get().next_block_height;
-        let next_height_to_schedule = self
-            .chain
-            .outboxes
-            .try_load_entry(&receiver_id)
-            .await?
-            .map(|outbox| *outbox.next_height_to_schedule.get());
-        Ok((next_block_height, next_height_to_schedule))
-    }
-
-    /// Gets the next height to preprocess.
-    pub(crate) async fn get_next_height_to_preprocess(&self) -> Result<BlockHeight, WorkerError> {
-        Ok(self.chain.next_height_to_preprocess().await?)
-    }
-
-    /// Gets the chain manager's seed for leader election.
-    pub(crate) async fn get_manager_seed(&self) -> Result<u64, WorkerError> {
-        Ok(*self.chain.manager.seed.get())
-    }
-
     /// Gets the previous event blocks for specific streams.
     pub(crate) async fn get_previous_event_blocks(
         &self,
@@ -1527,6 +1482,19 @@ where
             .collect())
     }
 
+    /// Gets event subscriptions.
+    pub(crate) async fn get_event_subscriptions(
+        &self,
+    ) -> Result<EventSubscriptionsResult, WorkerError> {
+        Ok(self
+            .chain
+            .execution_state
+            .system
+            .event_subscriptions
+            .index_values()
+            .await?)
+    }
+
     /// Gets the stream event count for a stream, including preprocessed blocks.
     pub(crate) async fn get_stream_event_count(
         &self,
@@ -1546,6 +1514,38 @@ where
             .stream_event_counts
             .get(&stream_id)
             .await?)
+    }
+
+    /// Gets received certificate trackers.
+    pub(crate) async fn get_received_certificate_trackers(
+        &self,
+    ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
+        Ok(self.chain.received_certificate_trackers.get().clone())
+    }
+
+    /// Gets tip state and outbox info for next_outbox_heights calculation.
+    pub(crate) async fn get_tip_state_and_outbox_info(
+        &self,
+        receiver_id: ChainId,
+    ) -> Result<(BlockHeight, Option<BlockHeight>), WorkerError> {
+        let next_block_height = self.chain.tip_state.get().next_block_height;
+        let next_height_to_schedule = self
+            .chain
+            .outboxes
+            .try_load_entry(&receiver_id)
+            .await?
+            .map(|outbox| *outbox.next_height_to_schedule.get());
+        Ok((next_block_height, next_height_to_schedule))
+    }
+
+    /// Gets the next height to preprocess.
+    pub(crate) async fn get_next_height_to_preprocess(&self) -> Result<BlockHeight, WorkerError> {
+        Ok(self.chain.next_height_to_preprocess().await?)
+    }
+
+    /// Gets the chain manager's seed for leader election.
+    pub(crate) async fn get_manager_seed(&self) -> Result<u64, WorkerError> {
+        Ok(*self.chain.manager.seed.get())
     }
 
     /// Attempts to vote for a leader timeout, if possible.
