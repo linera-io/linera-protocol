@@ -12,6 +12,40 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "sum by (instance, validator) (resets(linera_proxy_request_count{validator=~\"$validator\"}[$__rate_interval])) > 0",
+        "hide": false,
+        "iconColor": "rgba(255, 152, 48, 1)",
+        "limit": 100,
+        "name": "proxy_restart",
+        "showIn": 0,
+        "tagKeys": "instance,validator",
+        "tags": [],
+        "titleFormat": "proxy restart",
+        "type": "tags"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "sum by (instance, validator) (resets(linera_server_request_count{validator=~\"$validator\"}[$__rate_interval])) > 0",
+        "hide": false,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "limit": 100,
+        "name": "shard_restart",
+        "showIn": 0,
+        "tagKeys": "instance,validator",
+        "tags": [],
+        "titleFormat": "shard restart",
+        "type": "tags"
       }
     ]
   },
