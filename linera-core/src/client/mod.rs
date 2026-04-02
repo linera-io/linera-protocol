@@ -661,16 +661,21 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         let validators = self.validator_nodes().await?;
         let timeout = self.options.certificate_batch_download_timeout;
-        let mut stream_ids = BTreeMap::<_, BTreeSet<_>>::new();
+        // Group by chain, keeping only the max required index per stream.
+        let mut required_by_chain = BTreeMap::<_, BTreeMap<StreamId, u32>>::new();
         for event_id in event_ids {
-            stream_ids
+            required_by_chain
                 .entry(event_id.chain_id)
                 .or_default()
-                .insert(event_id.stream_id.clone());
+                .entry(event_id.stream_id.clone())
+                .and_modify(|max| *max = (*max).max(event_id.index))
+                .or_insert(event_id.index);
         }
 
-        for (chain_id, stream_ids) in stream_ids {
+        for (chain_id, required_streams) in required_by_chain {
+            let stream_ids: BTreeSet<_> = required_streams.keys().cloned().collect();
             let stream_ids_ref = &stream_ids;
+            let required_ref = &required_streams;
             let result = communicate_concurrently(
                 &validators,
                 move |remote_node| {
@@ -684,11 +689,10 @@ impl<Env: Environment> Client<Env> {
                                 stream_ids_ref.iter().cloned().collect(),
                             )
                             .await?;
-                        if event_ids.iter().all(|event_id| {
-                            event_id.chain_id != chain_id
-                                || next_expected
-                                    .get(&event_id.stream_id)
-                                    .is_some_and(|index| *index > event_id.index)
+                        if required_ref.iter().all(|(stream_id, &max_index)| {
+                            next_expected
+                                .get(stream_id)
+                                .is_some_and(|index| *index > max_index)
                         }) {
                             Ok::<(), chain_client::Error>(())
                         } else {
