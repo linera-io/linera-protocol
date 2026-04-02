@@ -1267,9 +1267,7 @@ where
                 .await
             {
                 Ok(()) => {}
-                Err(ChainError::InboxGapDetected { .. })
-                    if self.config.allow_revert_confirm =>
-                {
+                Err(ChainError::InboxGapDetected { .. }) if self.config.allow_revert_confirm => {
                     // Don't save — leave the inbox unchanged so the resend can
                     // reconcile properly. Request from next_height_to_receive
                     // rather than the specific gap height, so that all pending
