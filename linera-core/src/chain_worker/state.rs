@@ -1223,7 +1223,7 @@ where
                     );
                     return Ok(CrossChainUpdateResult::GapDetected {
                         origin,
-                        missing_height: prev,
+                        missing_height: next_height_to_receive,
                     });
                 }
                 return Err(ChainError::InboxGapDetected {
