@@ -94,6 +94,8 @@ where
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
+    /// Set to `true` if a journal resolution failure has left storage potentially inconsistent.
+    poisoned: bool,
 }
 
 /// The result of processing a cross-chain update.
@@ -117,6 +119,9 @@ pub enum BlockOutcome {
     Preprocessed,
     Skipped,
 }
+
+/// Returned when a chain worker needs to be unloaded.
+pub struct PoisonedWorkerError;
 
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
@@ -152,6 +157,7 @@ where
             chain_modes,
             delivery_notifier,
             knows_chain_is_active: false,
+            poisoned: false,
         })
     }
 
@@ -161,9 +167,17 @@ where
     }
 
     /// Handles a request and applies it to the chain state.
+    /// Returns `Err(())` if the worker is poisoned and must be reloaded.
     #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
-    pub async fn handle_request(&mut self, request: ChainWorkerRequest<StorageClient::Context>) {
+    pub async fn handle_request(
+        &mut self,
+        request: ChainWorkerRequest<StorageClient::Context>,
+    ) -> Result<(), PoisonedWorkerError> {
         tracing::trace!("Handling chain worker request: {request:?}");
+        assert!(
+            !self.poisoned,
+            "handle_request should not be called on a poisoned chain worker"
+        );
         // TODO(#2237): Spawn concurrent tasks for read-only operations
         let responded = match request {
             #[cfg(with_testing)]
@@ -324,10 +338,16 @@ where
             debug!("Callback for `ChainWorkerActor` was dropped before a response was sent");
         }
 
+        if self.poisoned {
+            // The view is in an inconsistent state due to a journal resolution failure.
+            // Don't rollback — the worker will be dropped and reloaded.
+            return Err(PoisonedWorkerError);
+        }
         // Roll back any unsaved changes to the chain state: If there was an error while trying
         // to handle the request, the chain state might contain unsaved and potentially invalid
         // changes. The next request needs to be applied to the chain state as it is in storage.
         self.chain.rollback();
+        Ok(())
     }
 
     /// Returns a read-only view of the [`ChainStateView`].
@@ -2230,12 +2250,23 @@ where
     /// Stores the chain state in persistent storage.
     ///
     /// Waits until the [`ChainStateView`] is no longer shared before persisting the changes.
+    /// If the save fails, the worker is marked as poisoned and must be reloaded.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
         self.clear_shared_chain_view().await;
-        self.chain.save().await?;
+        if let Err(e) = self.chain.save().await {
+            if e.must_reload_view() {
+                tracing::error!(
+                    error = ?e,
+                    chain_id = %self.chain_id(),
+                    "Journal resolution failed; marking worker as poisoned"
+                );
+                self.poisoned = true;
+            }
+            return Err(e.into());
+        }
         Ok(())
     }
 }

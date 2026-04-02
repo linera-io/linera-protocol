@@ -518,28 +518,36 @@ where
             #[cfg(with_metrics)]
             metrics::CHAIN_WORKER_STATES_LOADED.inc();
 
-            Box::pin(worker.handle_request(request))
+            if Box::pin(worker.handle_request(request))
                 .instrument(span)
-                .await;
+                .await
+                .is_ok()
+            {
+                loop {
+                    let ttl_timeout = self.ttl_timeout();
 
-            loop {
-                let ttl_timeout = self.ttl_timeout();
+                    futures::select! {
+                        () = self.storage.clock().sleep_until(ttl_timeout).fuse() => {
+                            break;
+                        }
+                        maybe_request = incoming_requests.recv().fuse() => {
+                            let Some((request, span, queued_at)) = maybe_request else {
+                                break; // Request sender was dropped.
+                            };
+                            let Some((request, span, _)) =
+                                self.preprocess_request(request, span, queued_at, &request_sender)
+                            else {
+                                continue;
+                            };
 
-                futures::select! {
-                    () = self.storage.clock().sleep_until(ttl_timeout).fuse() => {
-                        break;
-                    }
-                    maybe_request = incoming_requests.recv().fuse() => {
-                        let Some((request, span, queued_at)) = maybe_request else {
-                            break; // Request sender was dropped.
-                        };
-                        let Some((request, span, _)) =
-                            self.preprocess_request(request, span, queued_at, &request_sender)
-                        else {
-                            continue;
-                        };
-
-                        Box::pin(worker.handle_request(request)).instrument(span).await;
+                            if Box::pin(worker.handle_request(request))
+                                .instrument(span)
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
                     }
                 }
             }

@@ -440,6 +440,12 @@ impl WorkerError {
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
     }
+
+    /// Returns `true` if this error was caused by a journal resolution failure,
+    /// which may leave storage in an inconsistent state requiring a view reload.
+    pub fn must_reload_view(&self) -> bool {
+        matches!(self, WorkerError::ViewError(e) if e.must_reload_view())
+    }
 }
 
 impl From<ChainError> for WorkerError {

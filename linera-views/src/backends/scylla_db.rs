@@ -44,7 +44,7 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::UnorderedBatch,
     common::{get_uleb128_size, get_upper_bound_option},
-    journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
+    journaling::{JournalingError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
         DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
@@ -579,10 +579,6 @@ pub enum ScyllaDbStoreInternalError {
     #[error("Namespace contains forbidden characters")]
     InvalidNamespace,
 
-    /// The journal is not coherent
-    #[error(transparent)]
-    JournalConsistencyError(#[from] JournalConsistencyError),
-
     /// The batch is too long to be written
     #[error("The batch is too long to be written")]
     BatchTooLong,
@@ -983,7 +979,8 @@ impl ScyllaDbDatabaseInternal {
 
 #[cfg(with_testing)]
 impl TestKeyValueDatabase for JournalingKeyValueDatabase<ScyllaDbDatabaseInternal> {
-    async fn new_test_config() -> Result<ScyllaDbStoreInternalConfig, ScyllaDbStoreInternalError> {
+    async fn new_test_config(
+    ) -> Result<ScyllaDbStoreInternalConfig, JournalingError<ScyllaDbStoreInternalError>> {
         // TODO(#4114): Read the port from an environment variable.
         let uri = "localhost:9042".to_string();
         Ok(ScyllaDbStoreInternalConfig {
@@ -1017,4 +1014,4 @@ pub type ScyllaDbDatabase = LruCachingDatabase<
 pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
 
 /// The combined error type for the `ScyllaDbDatabase`.
-pub type ScyllaDbStoreError = ValueSplittingError<ScyllaDbStoreInternalError>;
+pub type ScyllaDbStoreError = ValueSplittingError<JournalingError<ScyllaDbStoreInternalError>>;
