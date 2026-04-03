@@ -1,6 +1,5 @@
 ---
 source: linera-bridge/tests/format_wrapped_fungible.rs
-assertion_line: 23
 expression: registry
 ---
 Account:
@@ -26,6 +25,14 @@ AccountOwner:
             SIZE: 20
 Amount:
   NEWTYPESTRUCT: U128
+BurnEvent:
+  STRUCT:
+    - target:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 20
+    - amount:
+        TYPENAME: Amount
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
@@ -106,12 +113,5 @@ WrappedFungibleOperation:
         STRUCT:
           - target_account:
               TYPENAME: Account
-          - amount:
-              TYPENAME: Amount
-    7:
-      Burn:
-        STRUCT:
-          - owner:
-              TYPENAME: AccountOwner
           - amount:
               TYPENAME: Amount
