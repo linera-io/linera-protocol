@@ -201,6 +201,7 @@ impl ValidatorQueryResults {
             }
             Err(err) => println!("Error getting chain info: {err}"),
         }
+        println!();
     }
 }
 

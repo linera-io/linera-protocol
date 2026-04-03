@@ -632,7 +632,6 @@ impl List {
         // Print local node results first (everything)
         println!("Local Node:");
         local_results.print(None, None, None, None);
-        println!();
 
         // Print validator results (only differences from local node)
         for (name, address, votes, results) in &validator_results {
