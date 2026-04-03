@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Linera-side monitoring: scans for Credit-to-Address20 messages (burns),
-//! checks EVM for completion via ERC-20 Transfer events, and retries
-//! unforwarded burns.
+//! Linera-side monitoring: scans for BurnEvent stream events (auto-burns),
+//! forwards certificates to EVM, checks EVM for completion via ERC-20
+//! Transfer events, and retries unforwarded burns.
 
 use std::{
     sync::Arc,
@@ -11,18 +11,17 @@ use std::{
 };
 
 use alloy::{primitives::Address, providers::Provider};
-use linera_base::{data_types::Amount, identifiers::AccountOwner};
 use tokio::sync::RwLock;
 
 use super::{MonitorState, PendingBurn};
 use crate::relay::{
     self,
     evm::EvmClient,
-    linera::{find_address20_credits, LineraClient},
+    linera::{find_burn_events, LineraClient},
 };
 
-/// Background task that scans Linera block history for Credit messages
-/// to Address20 owners and checks EVM for completion.
+/// Background task that scans Linera block history for BurnEvent stream
+/// events and checks EVM for completion.
 pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     evm_client: Arc<EvmClient<impl Provider + 'static>>,
@@ -69,7 +68,8 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
     }
 }
 
-/// Receives pending burns, submits Burn via LineraClient, forwards cert via EvmClient.
+/// Receives pending burns, reads the certificate containing the auto-burn,
+/// and forwards it to EVM.
 pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment + 'static>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
@@ -79,23 +79,6 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
     while let Some(pending) = pending_rx.recv().await {
         let credit_height = pending.linera_height;
         let burn_index = pending.burn_index;
-        let owner: AccountOwner = match pending.evm_recipient.parse() {
-            Ok(o) => o,
-            Err(_) => {
-                tracing::warn!(
-                    evm_recipient = %pending.evm_recipient,
-                    "Invalid recipient, skipping burn"
-                );
-                continue;
-            }
-        };
-        let amount: Amount = match pending.amount.parse() {
-            Ok(a) => a,
-            Err(_) => {
-                tracing::warn!(amount = %pending.amount, "Invalid amount, skipping burn");
-                continue;
-            }
-        };
         {
             let mut state = monitor.write().await;
             if let Some(b) = state.burns.get_mut(&(credit_height, burn_index)) {
@@ -113,13 +96,33 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             }
         }
 
-        tracing::info!(credit_height, burn_index, %owner, %amount, "Processing burn...");
+        tracing::info!(credit_height, burn_index, "Processing burn...");
 
-        // Step 1: Submit Burn on Linera via the main loop channel.
-        let cert = match linera_client.burn(owner, amount).await {
+        // Read the certificate at the burn's block height (already contains the auto-burn).
+        let cert = match async {
+            linera_client.sync().await?;
+            let info = linera_client.chain_info().await?;
+            let mut hash = info.block_hash;
+            loop {
+                let Some(h) = hash else {
+                    anyhow::bail!("Block at height {} not found", credit_height);
+                };
+                let c = linera_client.read_certificate(h).await?;
+                if c.block().header.height.0 == credit_height {
+                    break Ok(c);
+                }
+                hash = c.block().header.previous_block_hash;
+            }
+        }
+        .await
+        {
             Ok(cert) => cert,
             Err(e) => {
-                tracing::warn!(credit_height, burn_index, "Burn submission failed: {e:#}");
+                tracing::warn!(
+                    credit_height,
+                    burn_index,
+                    "Failed to read certificate: {e:#}"
+                );
                 monitor
                     .write()
                     .await
@@ -144,7 +147,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             }
         }
 
-        // Step 2: Forward cert to EVM directly (no chain conflict).
+        // Forward cert to EVM.
         let completed = match evm_client.forward_cert(&cert).await {
             Ok(()) => {
                 tracing::info!(credit_height, burn_index, "Burn forwarded to EVM");
@@ -211,9 +214,10 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     let mut new_burns = Vec::new();
     for block in &blocks {
         let height = block.block().header.height.0;
-        let credits = find_address20_credits(&block.block().body.transactions, fungible_app_id);
-        for (burn_index, (owner, amount)) in credits.into_iter().enumerate() {
-            new_burns.push((height, burn_index, format!("{owner}"), amount.to_string()));
+        let burn_events = find_burn_events(&block.block().body.events, fungible_app_id);
+        for (burn_index, burn_event) in burn_events.into_iter().enumerate() {
+            let recipient = format!("0x{}", hex::encode(burn_event.target));
+            new_burns.push((height, burn_index, recipient, burn_event.amount.to_string()));
         }
     }
 
