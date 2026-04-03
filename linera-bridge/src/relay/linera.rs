@@ -6,7 +6,7 @@
 use anyhow::Result;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::Amount,
+    data_types::{Amount, Event},
     identifiers::{AccountOwner, ApplicationId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -24,11 +24,6 @@ pub(crate) enum ChainOperation {
     ProcessDeposit {
         proof: crate::proof::gen::DepositProof,
         response: oneshot::Sender<Result<(), String>>,
-    },
-    Burn {
-        owner: AccountOwner,
-        amount: Amount,
-        response: oneshot::Sender<Result<ConfirmedBlockCertificate, String>>,
     },
 }
 
@@ -131,26 +126,6 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    pub async fn burn(
-        &self,
-        owner: AccountOwner,
-        amount: Amount,
-    ) -> Result<ConfirmedBlockCertificate> {
-        let (resp_tx, resp_rx) = oneshot::channel();
-        self.op_tx
-            .send(ChainOperation::Burn {
-                owner,
-                amount,
-                response: resp_tx,
-            })
-            .await
-            .map_err(|_| anyhow::anyhow!("Chain operation channel closed"))?;
-        resp_rx
-            .await
-            .map_err(|_| anyhow::anyhow!("Response channel closed"))?
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
     pub async fn process_inbox(&self) -> Result<Vec<ConfirmedBlockCertificate>> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.op_tx
@@ -199,15 +174,6 @@ pub(crate) fn find_address20_credits(
         }
     }
     credits
-}
-
-/// BCS-serialize a Burn operation.
-pub(crate) fn serialize_burn_operation(owner: &AccountOwner, amount: &Amount) -> Vec<u8> {
-    bcs::to_bytes(&wrapped_fungible::WrappedFungibleOperation::Burn {
-        owner: *owner,
-        amount: *amount,
-    })
-    .expect("failed to BCS-serialize Burn operation")
 }
 
 fn try_parse_credit_to_address20(bytes: &[u8]) -> Option<(AccountOwner, Amount)> {
