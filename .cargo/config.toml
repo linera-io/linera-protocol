@@ -8,3 +8,8 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld", "-C", "force-frame-pointers=yes"]
 [build]
 # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
 rustdocflags = ["-Arustdoc::redundant_explicit_links"]
+
+[env]
+# Prevent stack overflows in tests with deep async call stacks (e.g. wasmer wasm tests).
+# The default 2 MiB is not enough when DbStorage caches increase async future sizes.
+RUST_MIN_STACK = "8388608"

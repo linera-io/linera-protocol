@@ -25,6 +25,7 @@ metrics = [
     "linera-base/metrics",
     "linera-chain/metrics",
     "linera-execution/metrics",
+    "linera-cache/metrics",
     "linera-views/metrics",
 ]
 web = [
@@ -41,6 +42,7 @@ cfg-if.workspace = true
 futures.workspace = true
 itertools.workspace = true
 linera-base.workspace = true
+linera-cache.workspace = true
 linera-chain.workspace = true
 linera-execution.workspace = true
 linera-views.workspace = true
