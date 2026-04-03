@@ -57,7 +57,10 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{Notification, ProcessableCertificate, WorkerState},
+    worker::{
+        Notification, ProcessableCertificate, WorkerState, DEFAULT_BLOCK_CACHE_SIZE,
+        DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+    },
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -1098,8 +1101,8 @@ where
             Some(Duration::from_secs(1)),
             HashSet::new(),
             options,
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &crate::client::RequestsSchedulerConfig::default(),
         ));
         Ok(client.create_chain_client(
