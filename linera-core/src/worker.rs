@@ -1344,14 +1344,14 @@ where
                     }
                     CrossChainUpdateResult::GapDetected {
                         origin,
-                        missing_height,
+                        retransmit_from,
                     } => {
                         actions
                             .cross_chain_requests
                             .push(CrossChainRequest::RevertConfirm {
                                 sender: origin,
                                 recipient,
-                                missing_height,
+                                retransmit_from,
                             });
                     }
                 }
@@ -1372,10 +1372,12 @@ where
             CrossChainRequest::RevertConfirm {
                 sender,
                 recipient,
-                missing_height,
+                retransmit_from,
             } => {
                 self.chain_write(sender, |mut guard| async move {
-                    guard.handle_revert_confirm(recipient, missing_height).await
+                    guard
+                        .handle_revert_confirm(recipient, retransmit_from)
+                        .await
                 })
                 .await
             }

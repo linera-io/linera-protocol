@@ -28,14 +28,17 @@ use linera_chain::{
         OriginalProposal, ProposalContent, ProposedBlock,
     },
     manager,
-    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{
+        Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
+        ValidatedBlockCertificate,
+    },
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
     system::EventSubscriptions, Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query,
     QueryContext, QueryOutcome, ResourceTracker, ServiceRuntimeEndpoint,
 };
-use linera_storage::{Clock as _, ResultReadConfirmedBlocks, Storage};
+use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::{Context, InactiveContext},
     views::{ReplaceContext as _, RootView as _, View as _},
@@ -116,12 +119,12 @@ pub(crate) enum CrossChainUpdateResult {
     Updated(BlockHeight),
     /// All bundles were already received; nothing to do.
     NothingToDo,
-    /// A gap was detected: the inbox expected a bundle at `missing_height` from `origin`
-    /// but received a bundle at a higher height. If `allow_revert_confirm` is enabled,
-    /// a `RevertConfirm` request should be sent.
+    /// A gap was detected in the inbox for messages from `origin`. If
+    /// `allow_revert_confirm` is enabled, a `RevertConfirm` request should be sent
+    /// to retransmit bundles starting from `retransmit_from`.
     GapDetected {
         origin: ChainId,
-        missing_height: BlockHeight,
+        retransmit_from: BlockHeight,
     },
 }
 
@@ -381,6 +384,40 @@ where
         })
     }
 
+    /// Returns confirmed blocks by hash, checking the cache first and batch-loading the rest
+    /// from storage. The order of the returned blocks matches the order of the input hashes.
+    async fn read_confirmed_blocks(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<Option<ConfirmedBlock>>, WorkerError> {
+        let mut blocks = Vec::with_capacity(hashes.len());
+        let mut uncached_indices = Vec::new();
+        let mut uncached_hashes = Vec::new();
+
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(hashed_block) = self.block_values.get_hashed(hash) {
+                blocks.push(Some(ConfirmedBlock::from_hashed(hashed_block)));
+            } else {
+                blocks.push(None);
+                uncached_indices.push(i);
+                uncached_hashes.push(*hash);
+            }
+        }
+
+        if !uncached_hashes.is_empty() {
+            let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
+            for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
+                if let Some(block) = &maybe_block {
+                    self.block_values
+                        .insert_hashed(Cow::Borrowed(block.inner()));
+                }
+                blocks[i] = maybe_block;
+            }
+        }
+
+        Ok(blocks)
+    }
+
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         num_recipients = %heights_by_recipient.len()
@@ -393,36 +430,13 @@ where
         let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
         let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
 
-        let mut uncached_hashes = Vec::new();
+        let blocks = self.read_confirmed_blocks(hashes.clone()).await?;
+
         let mut height_to_blocks = HashMap::new();
-
-        for hash in hashes {
-            if let Some(hashed_block) = self.block_values.get_hashed(&hash) {
-                height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
-            } else {
-                uncached_hashes.push(hash);
-            }
-        }
-
-        if !uncached_hashes.is_empty() {
-            let blocks = self
-                .storage
-                .read_confirmed_blocks(uncached_hashes.clone())
-                .await?;
-            let blocks = match ResultReadConfirmedBlocks::new(blocks, uncached_hashes) {
-                ResultReadConfirmedBlocks::Blocks(blocks) => blocks,
-                ResultReadConfirmedBlocks::InvalidHashes(hashes) => {
-                    return Err(WorkerError::ReadCertificatesError(hashes))
-                }
-            };
-
-            for block in blocks {
-                let hashed_block = block.into_inner();
-                let height = hashed_block.inner().header.height;
-                self.block_values
-                    .insert_hashed(Cow::Owned(hashed_block.clone()));
-                height_to_blocks.insert(height, hashed_block);
-            }
+        for (block, hash) in blocks.into_iter().zip(hashes) {
+            let block = block.ok_or_else(|| WorkerError::ReadCertificatesError(vec![hash]))?;
+            let hashed_block = block.into_inner();
+            height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
         }
 
         let sender = self.chain.chain_id();
@@ -705,12 +719,12 @@ where
             self.chain.next_expected_events.insert(&stream_id, index)?;
         }
         let chain_id = self.chain_id();
-        for (height, hash) in self.chain.preprocessed_blocks.index_values().await? {
-            let block = self
-                .storage
-                .read_confirmed_block(hash)
-                .await?
-                .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
+        let index_values = self.chain.preprocessed_blocks.index_values().await?;
+        let hashes = index_values.iter().map(|(_, hash)| *hash).collect();
+        let blocks = self.read_confirmed_blocks(hashes).await?;
+        for ((height, _), maybe_block) in index_values.into_iter().zip(blocks) {
+            let block =
+                maybe_block.ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             self.chain.preprocess_block(&block).await?;
         }
         Ok(())
@@ -883,14 +897,13 @@ where
             .await
         {
             Ok(()) => {}
-            Err(ChainError::InboxGapDetected {
-                origin,
-                expected_height,
-                ..
-            }) if self.config.allow_revert_confirm => {
+            Err(ChainError::InboxGapDetected { origin, .. })
+                if self.config.allow_revert_confirm =>
+            {
+                let retransmit_from = self.get_inbox_next_height(origin).await?;
                 warn!(
                     "Inbox gap detected for {chain_id} from {origin}: \
-                    missing height {expected_height}; requesting resend",
+                    requesting resend from {retransmit_from}",
                 );
                 let mut actions = NetworkActions::default();
                 actions
@@ -898,7 +911,7 @@ where
                     .push(CrossChainRequest::RevertConfirm {
                         sender: origin,
                         recipient: chain_id,
-                        missing_height: expected_height,
+                        retransmit_from,
                     });
                 return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
             }
@@ -1051,7 +1064,7 @@ where
                     );
                     return Ok(CrossChainUpdateResult::GapDetected {
                         origin,
-                        missing_height: prev,
+                        retransmit_from: next_height_to_receive,
                     });
                 }
                 return Err(ChainError::InboxGapDetected {
@@ -1095,18 +1108,18 @@ where
                 .await
             {
                 Ok(()) => {}
-                Err(ChainError::InboxGapDetected {
-                    expected_height, ..
-                }) if self.config.allow_revert_confirm => {
+                Err(ChainError::InboxGapDetected { .. }) if self.config.allow_revert_confirm => {
                     // Don't save — leave the inbox unchanged so the resend can
-                    // reconcile properly.
+                    // reconcile properly. Request from next_height_to_receive
+                    // rather than the specific gap height, so that all pending
+                    // removed_bundles entries can also be reconciled.
                     warn!(
                         "Inbox gap detected for {recipient} from {origin}: \
-                        missing height {expected_height}; requesting resend",
+                        requesting resend from {next_height_to_receive}",
                     );
                     return Ok(CrossChainUpdateResult::GapDetected {
                         origin,
-                        missing_height: expected_height,
+                        retransmit_from: next_height_to_receive,
                     });
                 }
                 Err(e) => return Err(e.into()),
@@ -1164,20 +1177,20 @@ where
 
     /// Handles a `RevertConfirm` request: walks backward through
     /// `previous_message_blocks` to find all block heights that sent messages to
-    /// `recipient` starting from the latest down to `missing_height`, re-adds them
+    /// `recipient` starting from the latest down to `retransmit_from`, re-adds them
     /// to the outbox, and creates cross-chain update actions to resend the bundles.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
-        recipient = %recipient,
-        missing_height = %missing_height,
+        %recipient,
+        %retransmit_from,
     ))]
     pub(crate) async fn handle_revert_confirm(
         &mut self,
         recipient: ChainId,
-        missing_height: BlockHeight,
+        retransmit_from: BlockHeight,
     ) -> Result<NetworkActions, WorkerError> {
         // 1. Walk backward through previous_message_blocks to collect all heights
-        //    that sent messages to this recipient, from the latest down to missing_height.
+        //    that sent messages to this recipient, from the latest down to retransmit_from.
         let Some(latest_height) = self.chain.previous_message_blocks.get(&recipient).await? else {
             warn!("RevertConfirm: no record of sending to {recipient}");
             return Ok(NetworkActions::default());
@@ -1185,7 +1198,7 @@ where
 
         let mut heights_to_re_add = Vec::new();
         let mut current_height = latest_height;
-        while current_height >= missing_height {
+        while current_height >= retransmit_from {
             // We arrived at current_height via previous_message_blocks links, starting from the
             // chain state and following the links downwards. So these blocks should all be in
             // confirmed_log or preprocessed_blocks already.
@@ -1201,15 +1214,16 @@ where
                 }
             };
             let block = self
-                .storage
-                .read_confirmed_block(hash)
+                .read_confirmed_blocks(vec![hash])
                 .await?
+                .pop()
+                .flatten()
                 .ok_or_else(|| WorkerError::LocalBlockNotFound {
                     height: current_height,
                     chain_id: self.chain_id(),
                 })?;
             match block.block().body.previous_message_blocks.get(&recipient) {
-                Some((_, prev_height)) if *prev_height >= missing_height => {
+                Some((_, prev_height)) if *prev_height >= retransmit_from => {
                     current_height = *prev_height;
                 }
                 _ => break,
@@ -1247,7 +1261,7 @@ where
 
         warn!(
             "RevertConfirm: re-added {new_heights_len} heights to outbox for {recipient}, \
-            starting from height {missing_height}"
+            starting from height {retransmit_from}"
         );
 
         Ok(actions)
@@ -1314,7 +1328,7 @@ where
                 .push(CrossChainRequest::RevertConfirm {
                     sender: sender_id,
                     recipient: chain_id,
-                    missing_height: BlockHeight::ZERO,
+                    retransmit_from: BlockHeight::ZERO,
                 });
         }
 
