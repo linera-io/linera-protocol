@@ -29,6 +29,17 @@ pub struct WrappedParameters {
     pub evm_source_chain_id: u64,
 }
 
+/// Event emitted when tokens are auto-burned on the bridge chain.
+/// The relayer observes these on the "burns" stream and forwards
+/// to EVM to release the corresponding ERC-20 tokens.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BurnEvent {
+    /// The Ethereum address to receive the unlocked ERC-20 tokens
+    pub target: [u8; 20],
+    /// Amount of tokens burned
+    pub amount: Amount,
+}
+
 /// Operations for the wrapped fungible token application.
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
 pub enum WrappedFungibleOperation {
@@ -84,13 +95,6 @@ pub enum WrappedFungibleOperation {
         /// Account to receive the minted tokens
         target_account: Account,
         /// Amount of tokens to mint
-        amount: Amount,
-    },
-    /// Burns tokens from an account. Only the authorized minter can call this.
-    Burn {
-        /// Account owner whose tokens to burn
-        owner: AccountOwner,
-        /// Amount of tokens to burn
         amount: Amount,
     },
 }

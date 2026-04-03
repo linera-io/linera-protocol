@@ -5,12 +5,13 @@
 
 use fungible::{state::FungibleTokenState, FungibleResponse, InitialState};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, WithContractAbi},
+    linera_base_types::{AccountOwner, Amount, StreamName, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
 use wrapped_fungible::{
-    Account, Message, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
+    Account, BurnEvent, Message, WrappedFungibleOperation, WrappedFungibleTokenAbi,
+    WrappedParameters,
 };
 
 pub struct WrappedFungibleTokenContract {
@@ -28,7 +29,7 @@ impl Contract for WrappedFungibleTokenContract {
     type Message = Message;
     type Parameters = WrappedParameters;
     type InstantiationArgument = InitialState;
-    type EventValue = ();
+    type EventValue = BurnEvent;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = FungibleTokenState::load(runtime.root_view_storage_context())
@@ -117,10 +118,6 @@ impl Contract for WrappedFungibleTokenContract {
                 target_account,
                 amount,
             } => self.execute_mint(target_account, amount).await,
-
-            WrappedFungibleOperation::Burn { owner, amount } => {
-                self.execute_burn(owner, amount).await
-            }
         }
     }
 
@@ -135,8 +132,21 @@ impl Contract for WrappedFungibleTokenContract {
                     .runtime
                     .message_is_bouncing()
                     .expect("Delivery status is available when executing a message");
-                let receiver = if is_bouncing { source } else { target };
-                self.state.credit(receiver, amount).await;
+                let on_mint_chain =
+                    self.runtime.chain_id() == self.runtime.application_parameters().mint_chain_id;
+                if is_bouncing {
+                    self.state.credit(source, amount).await;
+                } else if let (true, AccountOwner::Address20(addr)) = (on_mint_chain, target) {
+                    self.runtime.emit(
+                        StreamName::from("burns"),
+                        &BurnEvent {
+                            target: addr,
+                            amount,
+                        },
+                    );
+                } else {
+                    self.state.credit(target, amount).await;
+                }
             }
             Message::Withdraw {
                 owner,
@@ -197,13 +207,6 @@ impl WrappedFungibleTokenContract {
                 .with_tracking()
                 .send_to(target_account.chain_id);
         }
-        FungibleResponse::Ok
-    }
-
-    /// Burns tokens from an account.
-    async fn execute_burn(&mut self, owner: AccountOwner, amount: Amount) -> FungibleResponse {
-        self.require_minter();
-        self.state.debit(owner, amount).await;
         FungibleResponse::Ok
     }
 
