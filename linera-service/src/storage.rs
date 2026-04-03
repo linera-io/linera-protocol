@@ -7,6 +7,7 @@ use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use linera_client::config::GenesisConfig;
 use linera_execution::WasmRuntime;
+pub use linera_storage::StorageCacheSizes;
 use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
@@ -86,12 +87,38 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub blob_cache_size: usize,
 
+    /// The maximal number of entries in the confirmed block cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub confirmed_block_cache_size: usize,
+
+    /// The maximal number of entries in the lite certificate cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub lite_certificate_cache_size: usize,
+
+    /// The maximal number of entries in the raw certificate cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub certificate_raw_cache_size: usize,
+
+    /// The maximal number of entries in the event cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub event_cache_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
 }
 
 impl CommonStorageOptions {
+    pub fn storage_cache_sizes(&self) -> StorageCacheSizes {
+        StorageCacheSizes {
+            blob_cache_size: self.blob_cache_size,
+            confirmed_block_cache_size: self.confirmed_block_cache_size,
+            lite_certificate_cache_size: self.lite_certificate_cache_size,
+            certificate_raw_cache_size: self.certificate_raw_cache_size,
+            event_cache_size: self.event_cache_size,
+        }
+    }
+
     pub fn storage_cache_config(&self) -> StorageCacheConfig {
         StorageCacheConfig {
             max_cache_size: self.storage_max_cache_size,
@@ -637,7 +664,7 @@ pub trait RunnableWithStore {
         self,
         config: D::Config,
         namespace: String,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -650,7 +677,7 @@ impl StoreConfig {
         self,
         wasm_runtime: Option<WasmRuntime>,
         allow_application_logs: bool,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
     where
@@ -666,7 +693,7 @@ impl StoreConfig {
                     &config,
                     &namespace,
                     wasm_runtime,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?
                 .with_allow_application_logs(allow_application_logs);
@@ -681,7 +708,7 @@ impl StoreConfig {
                     &config,
                     &namespace,
                     wasm_runtime,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?
                 .with_allow_application_logs(allow_application_logs);
@@ -693,7 +720,7 @@ impl StoreConfig {
                     &config,
                     &namespace,
                     wasm_runtime,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?
                 .with_allow_application_logs(allow_application_logs);
@@ -705,7 +732,7 @@ impl StoreConfig {
                     &config,
                     &namespace,
                     wasm_runtime,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?
                 .with_allow_application_logs(allow_application_logs);
@@ -717,7 +744,7 @@ impl StoreConfig {
                     &config,
                     &namespace,
                     wasm_runtime,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?
                 .with_allow_application_logs(allow_application_logs);
@@ -725,14 +752,13 @@ impl StoreConfig {
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StoreConfig::DualRocksDbScyllaDb { config, namespace } => {
-                let storage = DbStorage::<
-                    DualDatabase<RocksDbDatabase, ScyllaDbDatabase, ChainStatesFirstAssignment>,
-                    _,
-                >::connect(
-                    &config, &namespace, wasm_runtime, blob_cache_size
-                )
-                .await?
-                .with_allow_application_logs(allow_application_logs);
+                let storage =
+                    DbStorage::<
+                        DualDatabase<RocksDbDatabase, ScyllaDbDatabase, ChainStatesFirstAssignment>,
+                        _,
+                    >::connect(&config, &namespace, wasm_runtime, cache_sizes)
+                    .await?
+                    .with_allow_application_logs(allow_application_logs);
                 Ok(job.run(storage).await)
             }
         }
@@ -741,7 +767,7 @@ impl StoreConfig {
     #[allow(unused_variables)]
     pub async fn run_with_store<Job>(
         self,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
     where
@@ -753,26 +779,26 @@ impl StoreConfig {
             }
             #[cfg(feature = "storage-service")]
             StoreConfig::StorageService { config, namespace } => Ok(job
-                .run::<StorageServiceDatabase>(config, namespace, blob_cache_size)
+                .run::<StorageServiceDatabase>(config, namespace, cache_sizes)
                 .await?),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb { config, namespace } => Ok(job
-                .run::<RocksDbDatabase>(config, namespace, blob_cache_size)
+                .run::<RocksDbDatabase>(config, namespace, cache_sizes)
                 .await?),
             #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb { config, namespace } => Ok(job
-                .run::<DynamoDbDatabase>(config, namespace, blob_cache_size)
+                .run::<DynamoDbDatabase>(config, namespace, cache_sizes)
                 .await?),
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb { config, namespace } => Ok(job
-                .run::<ScyllaDbDatabase>(config, namespace, blob_cache_size)
+                .run::<ScyllaDbDatabase>(config, namespace, cache_sizes)
                 .await?),
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StoreConfig::DualRocksDbScyllaDb { config, namespace } => Ok(job
                 .run::<DualDatabase<RocksDbDatabase, ScyllaDbDatabase, ChainStatesFirstAssignment>>(
                     config,
                     namespace,
-                    blob_cache_size,
+                    cache_sizes,
                 )
                 .await?),
         }
@@ -780,10 +806,10 @@ impl StoreConfig {
 
     pub async fn initialize(
         self,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
         config: &GenesisConfig,
     ) -> Result<(), anyhow::Error> {
-        self.run_with_store(blob_cache_size, InitializeStorageJob(config))
+        self.run_with_store(cache_sizes, InitializeStorageJob(config))
             .await
     }
 }
@@ -798,7 +824,7 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
         self,
         config: D::Config,
         namespace: String,
-        blob_cache_size: usize,
+        cache_sizes: StorageCacheSizes,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -806,7 +832,7 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
         D::Error: Send + Sync,
     {
         let mut storage =
-            DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None, blob_cache_size)
+            DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None, cache_sizes)
                 .await?;
         self.0.initialize_storage(&mut storage).await?;
         Ok(())
