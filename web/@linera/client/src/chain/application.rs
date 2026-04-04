@@ -6,11 +6,11 @@ use linera_core::client::ChainClient;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use crate::{Client, Environment, JsResult};
+use crate::{client::ClientContext, Environment, JsResult};
 
 #[wasm_bindgen]
 pub struct Application {
-    pub(crate) client: Client,
+    pub(crate) client_context: ClientContext,
     pub(crate) chain_client: ChainClient<Environment>,
     pub(crate) id: ApplicationId,
 }
@@ -70,7 +70,6 @@ impl Application {
 
         if !operations.is_empty() {
             let _hash = self
-                .client
                 .client_context
                 .lock()
                 .await
