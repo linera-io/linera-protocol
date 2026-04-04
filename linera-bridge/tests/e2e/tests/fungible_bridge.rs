@@ -328,24 +328,9 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         chain_a_cert_bytes.push(bcs::to_bytes(c)?);
     }
 
-    // ── 12. Burn tokens on chain A as minter ──
-    tracing::info!("Burning tokens on chain A...");
-    let burn_bytes = bcs::to_bytes(&WrappedFungibleOperation::Burn {
-        owner: receiver,
-        amount: Amount::from_tokens(100),
-    })?;
-    let burn_op = Operation::User {
-        application_id: app_id,
-        bytes: burn_bytes,
-    };
-    let burn_cert = cc_a
-        .execute_operations(vec![burn_op], vec![])
-        .await?
-        .expect("burn committed");
-    tracing::info!("Burn certificate obtained");
-    chain_a_cert_bytes.push(bcs::to_bytes(&burn_cert)?);
-
-    // ── 13. Submit all chain A blocks to FungibleBridge sequentially ──
+    // ── 12. Submit all chain A blocks to FungibleBridge sequentially ──
+    // The inbox processing in step 11 auto-burned the tokens and emitted a
+    // BurnEvent, so no explicit Burn operation is needed.
     tracing::info!(count = chain_a_cert_bytes.len(), "Submitting all chain A blocks to bridge");
 
     let rpc_url = "http://localhost:8545".parse()?;
