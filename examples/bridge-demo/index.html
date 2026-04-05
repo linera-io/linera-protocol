@@ -665,7 +665,7 @@
         lineraOwner = signer.address();
         lineraChain = await faucet.claimChain(wallet, lineraOwner);
 
-        const client = await new linera.Client(wallet, signer);
+        const client = await (await new linera.Client(wallet, signer)).start();
         const chain = await client.chain(lineraChain, { owner: lineraOwner });
         wrappedApp = await chain.application(APP_ID);
         console.log('[bridge-demo] Linera initialized', { lineraChain, lineraOwner, APP_ID, BRIDGE_APP_ID });

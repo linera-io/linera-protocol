@@ -64,7 +64,7 @@
      const chainId = await faucet.claimChain(wallet, owner);
      document.getElementById('owner').innerText = owner;
      document.getElementById('chain-id').innerText = chainId;
-     const client = await new linera.Client(wallet, signer);
+     const client = await (await new linera.Client(wallet, signer)).start();
      let chain = await client.chain(chainId);
      const counter = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
      const logs = document.getElementById('logs');

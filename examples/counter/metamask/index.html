@@ -75,11 +75,16 @@
      const autosigner = linera.signer.PrivateKey.createRandom();
      wallet.setOwner(chainId, autosigner.address());
 
-     const client = await new linera.Client(wallet, new linera.signer.Composite(autosigner, signer));
-     const chain = await client.chain(chainId, { owner });
+     const deferredClient = await new linera.Client(wallet, new linera.signer.Composite(autosigner, signer));
 
-     // For autosigning: we then add the in-memory signer as an owner of the chain to allow it to sign transactions.
-     await chain.addOwner(autosigner.address());
+     // For autosigning: add the in-memory signer as an owner before starting the chain listener,
+     // so the user only needs to sign once.
+     const deferredChain = await deferredClient.chain(chainId, { owner });
+     await deferredChain.addOwner(autosigner.address());
+     deferredChain.free();
+
+     const client = await deferredClient.start();
+     const chain = await client.chain(chainId, { owner });
 
      // Connect to the counter application on the chain.
      const counter = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
