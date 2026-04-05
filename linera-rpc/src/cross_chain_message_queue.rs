@@ -202,6 +202,9 @@ impl QueueId {
             } => (*sender, *recipient, true),
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender, recipient, ..
+            }
+            | CrossChainRequest::RevertConfirm {
+                sender, recipient, ..
             } => (*sender, *recipient, false),
         };
         QueueId {
