@@ -1292,7 +1292,7 @@ where
             .with_graceful_shutdown(cancellation_token.cancelled_owned())
             .into_future();
         futures::select! {
-            result = Box::pin(chain_listener).fuse() => result?,
+            result = Box::pin(chain_listener).fuse() => { result?; },
             _ = Box::pin(batch_processor_task).fuse() => {},
             result = Box::pin(server).fuse() => result?,
         };

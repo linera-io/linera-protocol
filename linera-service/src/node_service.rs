@@ -1402,7 +1402,7 @@ where
             .with_graceful_shutdown(cancellation_token.cancelled_owned())
             .into_future();
         futures::select! {
-            result = chain_listener => result?,
+            result = chain_listener => { result?; },
             result = Box::pin(server).fuse() => result?,
         };
 
