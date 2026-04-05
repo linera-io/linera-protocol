@@ -192,7 +192,14 @@ impl WrappedFungibleTokenContract {
     }
 
     /// Mints tokens to a target account (local or remote).
+    /// Can only be called by the authorized bridge application.
     async fn execute_mint(&mut self, target_account: Account, amount: Amount) -> FungibleResponse {
+        let params: WrappedParameters = self.runtime.application_parameters();
+        let caller = self.runtime.authenticated_caller_id();
+        assert!(
+            caller == Some(params.bridge_app_id),
+            "unauthorized: minting is only allowed via the bridge application"
+        );
         let signer = self.require_minter();
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;

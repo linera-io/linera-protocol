@@ -64,21 +64,33 @@ impl TestBridge {
         let mut chain = validator.new_chain().await;
         let chain_owner = AccountOwner::from(chain.public_key());
 
+        let token_address = [0xA0; 20];
+        let source_chain_id = 8453u64;
+
+        // 1. Deploy bridge first
+        let bridge_params = BridgeParameters {
+            source_chain_id,
+            bridge_contract_address: [0xBB; 20],
+            token_address,
+            rpc_endpoint: String::new(),
+        };
+        let bridge_app_id = chain
+            .create_application(bridge_module_id, bridge_params, (), vec![])
+            .await;
+
+        // 2. Deploy wrapped-fungible with the bridge's app ID
         let fungible_module_id = chain
             .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
                 "../wrapped-fungible",
             )
             .await;
-
-        let token_address = [0xA0; 20];
-        let source_chain_id = 8453u64;
-
         let wrapped_params = WrappedParameters {
             ticker_symbol: "wUSDC".to_string(),
             minter: chain_owner,
             mint_chain_id: chain.id(),
             evm_token_address: token_address,
             evm_source_chain_id: source_chain_id,
+            bridge_app_id: bridge_app_id.forget_abi(),
         };
         let fungible_app_id = chain
             .create_application(
@@ -568,38 +580,14 @@ async fn test_instantiation_fails_with_unreachable_endpoint() {
     let (validator, bridge_module_id) =
         TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
     let mut chain = validator.new_chain().await;
-    let chain_owner = AccountOwner::from(chain.public_key());
-
-    let fungible_module_id = chain
-        .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
-            "../wrapped-fungible",
-        )
-        .await;
 
     let token_address = [0xA0; 20];
     let source_chain_id = 8453u64;
-
-    let wrapped_params = WrappedParameters {
-        ticker_symbol: "wUSDC".to_string(),
-        minter: chain_owner,
-        mint_chain_id: chain.id(),
-        evm_token_address: token_address,
-        evm_source_chain_id: source_chain_id,
-    };
-    let fungible_app_id = chain
-        .create_application(
-            fungible_module_id,
-            wrapped_params,
-            InitialStateBuilder::default().build(),
-            vec![],
-        )
-        .await;
 
     // Non-empty endpoint that is unreachable → instantiation should fail
     let bridge_params = BridgeParameters {
         source_chain_id,
         bridge_contract_address: [0xBB; 20],
-        fungible_app_id: fungible_app_id.forget_abi(),
         token_address,
         rpc_endpoint: "http://localhost:8545".to_string(),
     };
@@ -658,22 +646,34 @@ async fn setup_bridge_with_anvil(
     let mut chain = validator.new_chain().await;
     let chain_owner = AccountOwner::from(chain.public_key());
 
+    let token_address = [0xA0; 20];
+    // Anvil's default chain ID is 31337.
+    let source_chain_id = 31337u64;
+
+    // 1. Deploy bridge first
+    let bridge_params = BridgeParameters {
+        source_chain_id,
+        bridge_contract_address: [0xBB; 20],
+        token_address,
+        rpc_endpoint: anvil_endpoint.to_string(),
+    };
+    let bridge_app_id = chain
+        .create_application(bridge_module_id, bridge_params, (), vec![])
+        .await;
+
+    // 2. Deploy wrapped-fungible with bridge's app ID
     let fungible_module_id = chain
         .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
             "../wrapped-fungible",
         )
         .await;
-
-    let token_address = [0xA0; 20];
-    // Anvil's default chain ID is 31337.
-    let source_chain_id = 31337u64;
-
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wUSDC".to_string(),
         minter: chain_owner,
         mint_chain_id: chain.id(),
         evm_token_address: token_address,
         evm_source_chain_id: source_chain_id,
+        bridge_app_id: bridge_app_id.forget_abi(),
     };
     let fungible_app_id = chain
         .create_application(

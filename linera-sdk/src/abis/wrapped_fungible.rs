@@ -7,7 +7,7 @@ use async_graphql::{Request, Response};
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::Amount,
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,8 @@ pub struct WrappedParameters {
     pub evm_token_address: [u8; 20],
     /// The EVM chain ID of the source chain (e.g. 8453 for Base)
     pub evm_source_chain_id: u64,
+    /// The application ID of the EVM bridge contract that is authorized to mint tokens
+    pub bridge_app_id: ApplicationId,
 }
 
 /// Event emitted when tokens are auto-burned on the bridge chain.

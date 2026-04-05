@@ -7,7 +7,7 @@
 
 use fungible::{InitialState, InitialStateBuilder};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ChainId},
+    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, CryptoHash, TestString},
     test::TestValidator,
 };
 use wrapped_fungible::{
@@ -37,55 +37,25 @@ async fn query_account(
     )
 }
 
-fn test_params(minter: AccountOwner, mint_chain_id: ChainId) -> WrappedParameters {
+fn dummy_bridge_app_id() -> ApplicationId {
+    ApplicationId::new(CryptoHash::new(&TestString::new("dummy_bridge")))
+}
+
+fn test_params(
+    minter: AccountOwner,
+    mint_chain_id: ChainId,
+    bridge_app_id: ApplicationId,
+) -> WrappedParameters {
     WrappedParameters {
         ticker_symbol: "wUSDC".to_string(),
         minter,
         mint_chain_id,
         evm_token_address: [0xA0; 20],
         evm_source_chain_id: 8453,
+        bridge_app_id,
     }
 }
 
-#[tokio::test]
-async fn test_mint_from_authorized_minter() {
-    let (validator, module_id) = TestValidator::with_current_module::<
-        WrappedFungibleTokenAbi,
-        WrappedParameters,
-        InitialState,
-    >()
-    .await;
-    let mut minter_chain = validator.new_chain().await;
-    let minter_account = AccountOwner::from(minter_chain.public_key());
-
-    let params = test_params(minter_account, minter_chain.id());
-    let initial_state = InitialStateBuilder::default().build();
-    let application_id = minter_chain
-        .create_application(module_id, params, initial_state, vec![])
-        .await;
-
-    let mint_amount = Amount::from_tokens(1000);
-
-    minter_chain
-        .add_block(|block| {
-            block.with_operation(
-                application_id,
-                WrappedFungibleOperation::Mint {
-                    target_account: Account {
-                        chain_id: minter_chain.id(),
-                        owner: minter_account,
-                    },
-                    amount: mint_amount,
-                },
-            );
-        })
-        .await;
-
-    assert_eq!(
-        query_account(application_id, &minter_chain, minter_account).await,
-        Some(mint_amount),
-    );
-}
 
 #[tokio::test]
 async fn test_mint_from_unauthorized_signer() {
@@ -100,7 +70,7 @@ async fn test_mint_from_unauthorized_signer() {
 
     // Minter is a different account
     let other_minter = AccountOwner::Address20([0xBB; 20]);
-    let params = test_params(other_minter, chain.id());
+    let params = test_params(other_minter, chain.id(), dummy_bridge_app_id());
     let initial_state = InitialStateBuilder::default().build();
     let application_id = chain
         .create_application(module_id, params, initial_state, vec![])
@@ -136,7 +106,7 @@ async fn test_wrapped_fungible_standard_transfer() {
     let owner = AccountOwner::from(chain.public_key());
     let recipient = AccountOwner::Address20([0xCC; 20]);
 
-    let params = test_params(owner, chain.id());
+    let params = test_params(owner, chain.id(), dummy_bridge_app_id());
     let initial_state = InitialStateBuilder::default()
         .with_account(owner, Amount::from_tokens(1000))
         .build();
@@ -184,27 +154,13 @@ async fn test_credit_to_address20_on_non_bridge_chain_does_not_burn() {
     let evm_address = AccountOwner::Address20([0xAA; 20]);
 
     // Bridge chain is minter_chain; other_chain is NOT the bridge chain.
-    let params = test_params(minter_account, minter_chain.id());
-    let initial_state = InitialStateBuilder::default().build();
+    let mint_amount = Amount::from_tokens(500);
+    let params = test_params(minter_account, minter_chain.id(), dummy_bridge_app_id());
+    let initial_state = InitialStateBuilder::default()
+        .with_account(minter_account, mint_amount)
+        .build();
     let application_id = minter_chain
         .create_application(module_id, params, initial_state, vec![])
-        .await;
-
-    // Mint tokens to the minter.
-    let mint_amount = Amount::from_tokens(500);
-    minter_chain
-        .add_block(|block| {
-            block.with_operation(
-                application_id,
-                WrappedFungibleOperation::Mint {
-                    target_account: Account {
-                        chain_id: minter_chain.id(),
-                        owner: minter_account,
-                    },
-                    amount: mint_amount,
-                },
-            );
-        })
         .await;
 
     // Transfer cross-chain to an Address20 on other_chain (NOT the bridge chain).
@@ -255,7 +211,7 @@ async fn test_credit_to_address20_on_bridge_chain_auto_burns() {
 
     // Bridge chain is bridge_chain (the mint chain).
     let minter = AccountOwner::from(bridge_chain.public_key());
-    let params = test_params(minter, bridge_chain.id());
+    let params = test_params(minter, bridge_chain.id(), dummy_bridge_app_id());
     let initial_state = InitialStateBuilder::default()
         .with_account(sender_account, Amount::from_tokens(500))
         .build();
@@ -316,7 +272,7 @@ async fn test_credit_to_non_address20_on_bridge_chain_credits_normally() {
     let recipient = AccountOwner::from(bridge_chain.public_key());
 
     let minter = AccountOwner::from(bridge_chain.public_key());
-    let params = test_params(minter, bridge_chain.id());
+    let params = test_params(minter, bridge_chain.id(), dummy_bridge_app_id());
     let initial_state = InitialStateBuilder::default()
         .with_account(sender_account, Amount::from_tokens(500))
         .build();
@@ -370,7 +326,7 @@ async fn test_mint_on_wrong_chain() {
     let minter_account = AccountOwner::from(minter_chain.public_key());
 
     // Designate other_chain as the mint chain, but deploy on minter_chain
-    let params = test_params(minter_account, other_chain.id());
+    let params = test_params(minter_account, other_chain.id(), dummy_bridge_app_id());
     let initial_state = InitialStateBuilder::default().build();
     let application_id = minter_chain
         .create_application(module_id, params, initial_state, vec![])
@@ -392,4 +348,42 @@ async fn test_mint_on_wrong_chain() {
         })
         .await;
     assert!(result.is_err(), "mint on wrong chain should fail");
+}
+
+#[tokio::test]
+async fn test_direct_mint_without_bridge_is_rejected() {
+    let (validator, module_id) = TestValidator::with_current_module::<
+        WrappedFungibleTokenAbi,
+        WrappedParameters,
+        InitialState,
+    >()
+    .await;
+    let mut minter_chain = validator.new_chain().await;
+    let minter_account = AccountOwner::from(minter_chain.public_key());
+
+    let params = test_params(minter_account, minter_chain.id(), dummy_bridge_app_id());
+    let initial_state = InitialStateBuilder::default().build();
+    let application_id = minter_chain
+        .create_application(module_id, params, initial_state, vec![])
+        .await;
+
+    // Minter directly calls Mint (not via FungibleBridge) — should be rejected
+    let result = minter_chain
+        .try_add_block(|block| {
+            block.with_operation(
+                application_id,
+                WrappedFungibleOperation::Mint {
+                    target_account: Account {
+                        chain_id: minter_chain.id(),
+                        owner: minter_account,
+                    },
+                    amount: Amount::from_tokens(1000),
+                },
+            );
+        })
+        .await;
+    assert!(
+        result.is_err(),
+        "direct mint without going through FungibleBridge should be rejected"
+    );
 }

@@ -145,6 +145,11 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         mint_chain_id: chain_a,
         evm_token_address: [0u8; 20],
         evm_source_chain_id: 31337,
+        // This test doesn't deploy the evm-bridge Linera app (only the Solidity side),
+        // so bridge_app_id is unused. Mint is never called in this test.
+        bridge_app_id: linera_base::identifiers::ApplicationId::new(
+            linera_base::crypto::CryptoHash::new(&linera_base::crypto::TestString::new("dummy")),
+        ),
     };
     let init_state = InitialState {
         accounts: BTreeMap::from([(owner_a, Amount::from_tokens(1000))]),
