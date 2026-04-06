@@ -99,12 +99,18 @@ pub fn event_name_from_expanded(event_name_expanded: &str) -> String {
     event_name_expanded.replace(" indexed", "").to_string()
 }
 
-fn parse_uint<T>(entry: B256, parser: impl FnOnce(&BigUint) -> Option<T>) -> Result<T, EthereumServiceError> {
+fn parse_uint<T>(
+    entry: B256,
+    parser: impl FnOnce(&BigUint) -> Option<T>,
+) -> Result<T, EthereumServiceError> {
     let entry = BigUint::from_bytes_be(&entry.0);
     parser(&entry).ok_or(EthereumServiceError::EthereumParsingError)
 }
 
-fn parse_int<T>(entry: B256, parser: impl FnOnce(&BigInt) -> Option<T>) -> Result<T, EthereumServiceError> {
+fn parse_int<T>(
+    entry: B256,
+    parser: impl FnOnce(&BigInt) -> Option<T>,
+) -> Result<T, EthereumServiceError> {
     let entry = BigInt::from_signed_bytes_be(&entry.0);
     parser(&entry).ok_or(EthereumServiceError::EthereumParsingError)
 }
@@ -191,7 +197,10 @@ pub fn parse_log(
     let ethereum_types = if inner_types.is_empty() {
         Vec::new()
     } else {
-        inner_types.split(',').map(str::to_string).collect::<Vec<_>>()
+        inner_types
+            .split(',')
+            .map(str::to_string)
+            .collect::<Vec<_>>()
     };
     let mut values = Vec::new();
     let mut topic_index = 0;
