@@ -609,14 +609,6 @@ impl Block {
         (proposed_block, outcome)
     }
 
-    pub fn iter_created_blobs(&self) -> impl Iterator<Item = (BlobId, Blob)> + '_ {
-        self.body
-            .blobs
-            .iter()
-            .flatten()
-            .map(|blob| (blob.id(), blob.clone()))
-    }
-
     /// Returns the IDs of all events in this block.
     pub fn event_ids(&self) -> impl Iterator<Item = EventId> + '_ {
         let to_id = |event: &Event| event.id(self.header.chain_id);
