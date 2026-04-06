@@ -113,15 +113,19 @@ Blocks can be submitted in any order; sequential height enforcement is not requi
 
 ### FungibleBridge (concrete Microchain)
 
-A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When a fungible `Credit` message targeting an Ethereum address (`Address20`) is received, the contract transfers tokens from its own balance to the recipient.
+A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When the wrapped-fungible application emits a `BurnEvent` (tokens auto-burned on the bridge chain), the contract releases the corresponding ERC-20 tokens to the target Ethereum address.
 
-#### `constructor(address _lightClient, bytes32 _chainId, bytes32 _applicationId, address _token)`
+#### `constructor(address _lightClient, bytes32 _chainId, address _token)`
 
-Binds to a specific `LightClient`, chain, Linera application ID, and ERC-20 token contract. Only messages targeting this `applicationId` are processed; all others are silently skipped.
+Binds to a specific `LightClient`, chain, and ERC-20 token contract.
+
+#### `registerFungibleApplicationId(bytes32 _fungibleApplicationId)`
+
+Registers the wrapped-fungible application ID. Can only be called once. Only events from this application are processed; all others are silently skipped.
 
 #### `_onBlock(BridgeTypes.Block)`
 
-Scans the block's `ReceiveMessages` transactions for `Message::User` entries matching `applicationId`. For each match, the opaque `bytes` payload is deserialized as a `WrappedFungibleTypes.Message`. Only `Credit` messages with an `Address20` target (Ethereum address) trigger an ERC-20 `transfer` from the bridge's balance to the target.
+Scans the block's `events` for entries on the `"burns"` stream matching `fungibleApplicationId`. For each match, the event value is deserialized as a `WrappedFungibleTypes.BurnEvent`. The `target` (Ethereum address) receives an ERC-20 `transfer` from the bridge's balance.
 
 ## Rust API
 
@@ -194,10 +198,9 @@ Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the So
 - Microchain block tracking with chain ID enforcement
 - Microchain rejection of wrong chain ID and non-sequential heights
 - Microchain rejection of duplicate block submissions
-- FungibleBridge ERC-20 transfer on Credit message
-- FungibleBridge accumulated transfers across blocks
-- FungibleBridge skips non-EVM targets (Address32)
-- FungibleBridge ignores messages for other application IDs
+- FungibleBridge ERC-20 release on BurnEvent
+- FungibleBridge accumulated releases across blocks
+- FungibleBridge ignores events for other application IDs
 
 ### Prerequisites
 
