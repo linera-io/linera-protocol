@@ -162,6 +162,9 @@ where
         from_block: u64,
         to_block: u64,
     ) -> Result<Vec<EthereumEvent>, Self::Error> {
+        if to_block <= from_block {
+            return Ok(Vec::new());
+        }
         let contract_address = contract_address.parse::<Address>()?;
         let event_name = event_name_from_expanded(event_name_expanded);
         let filter = Filter::new()

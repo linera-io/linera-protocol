@@ -121,6 +121,23 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
 
 #[cfg(feature = "ethereum")]
 #[tokio::test]
+async fn test_read_events_empty_range_returns_empty() -> anyhow::Result<()> {
+    let anvil_test = get_anvil().await?;
+    let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint.clone());
+    let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
+    let contract_address = simple_token.contract_address.clone();
+
+    let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
+    let events = ethereum_client_simp
+        .read_events(&contract_address, event_name_expanded, 0, 0)
+        .await?;
+
+    assert!(events.is_empty());
+    Ok(())
+}
+
+#[cfg(feature = "ethereum")]
+#[tokio::test]
 async fn test_simple_token_queries() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
