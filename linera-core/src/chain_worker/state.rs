@@ -439,7 +439,7 @@ where
     async fn get_required_blobs(
         &self,
         required_blob_ids: impl IntoIterator<Item = BlobId>,
-        created_blobs: &BTreeMap<BlobId, Blob>,
+        created_blobs: BTreeMap<BlobId, Blob>,
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
         let maybe_blobs = self
             .maybe_get_required_blobs(required_blob_ids, Some(created_blobs))
@@ -462,13 +462,16 @@ where
     async fn maybe_get_required_blobs(
         &self,
         blob_ids: impl IntoIterator<Item = BlobId>,
-        created_blobs: Option<&BTreeMap<BlobId, Blob>>,
+        mut created_blobs: Option<BTreeMap<BlobId, Blob>>,
     ) -> Result<BTreeMap<BlobId, Option<Blob>>, WorkerError> {
         let mut maybe_blobs = BTreeMap::from_iter(blob_ids.into_iter().zip(iter::repeat(None)));
 
         for (blob_id, maybe_blob) in &mut maybe_blobs {
-            if let Some(blob) = created_blobs.and_then(|blob_map| blob_map.get(blob_id)) {
-                *maybe_blob = Some(blob.clone());
+            if let Some(blob) = created_blobs
+                .as_mut()
+                .and_then(|blob_map| blob_map.remove(blob_id))
+            {
+                *maybe_blob = Some(blob);
             } else if let Some(blob) = self.chain.manager.pending_blob(blob_id).await? {
                 *maybe_blob = Some(blob);
             } else if let Some(blob) = self.chain.pending_validated_blobs.get(blob_id).await? {
@@ -851,7 +854,7 @@ where
             .insert_hashed(Cow::Borrowed(certificate.inner().inner()));
         let required_blob_ids = block.required_blob_ids();
         let maybe_blobs = self
-            .maybe_get_required_blobs(required_blob_ids, Some(&block.created_blobs()))
+            .maybe_get_required_blobs(required_blob_ids, Some(block.created_blobs()))
             .await?;
         let missing_blob_ids = missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {
@@ -969,9 +972,8 @@ where
         // we can take note of it, so that if any are missing, we will accept them when the client
         // sends them.
         let required_blob_ids = block.required_blob_ids();
-        let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
         let blobs_result = self
-            .get_required_blobs(required_blob_ids.iter().copied(), &created_blobs)
+            .get_required_blobs(required_blob_ids.iter().copied(), block.created_blobs())
             .await
             .map(|blobs| blobs.into_values().collect::<Vec<_>>());
 
@@ -2093,9 +2095,8 @@ where
         chain.rollback();
 
         // Create the vote and store it in the chain state.
-        let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
         let blobs = self
-            .get_required_blobs(proposal.expected_blob_ids(), &created_blobs)
+            .get_required_blobs(proposal.expected_blob_ids(), block.created_blobs())
             .await?;
         let key_pair = self.config.key_pair();
         let manager = &mut self.chain.manager;
