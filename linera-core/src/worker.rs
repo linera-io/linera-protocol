@@ -451,6 +451,12 @@ impl WorkerError {
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
     }
+
+    /// Returns `true` if this error was caused by a journal resolution failure,
+    /// which may leave storage in an inconsistent state requiring a view reload.
+    pub fn must_reload_view(&self) -> bool {
+        matches!(self, WorkerError::ViewError(e) if e.must_reload_view())
+    }
 }
 
 impl From<ChainError> for WorkerError {
@@ -771,9 +777,20 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
+        let chain_workers = self.chain_workers.clone();
         Box::pin(wrap_future(async move {
             let guard = handle::write_lock(&state).await;
-            f(guard).await
+            let result = f(guard).await;
+            if let Err(ref e) = result {
+                if e.must_reload_view() {
+                    tracing::error!(
+                        %chain_id,
+                        "Journal resolution failed; evicting worker so it is reloaded"
+                    );
+                    chain_workers.pin().remove(&chain_id);
+                }
+            }
+            result
         }))
         .await
     }

@@ -413,4 +413,12 @@ where
     E2: KeyValueStoreError,
 {
     const BACKEND: &'static str = "dual_store";
+
+    fn must_reload_view(&self) -> bool {
+        match self {
+            DualStoreError::First(e) => e.must_reload_view(),
+            DualStoreError::Second(e) => e.must_reload_view(),
+            _ => false,
+        }
+    }
 }
