@@ -813,6 +813,12 @@ pub enum ClientCommand {
         /// Example: `--subscription-ttl-secs CounterValue=30`
         #[arg(long = "subscription-ttl-secs", value_parser = parse_subscription_ttl)]
         subscription_ttls: Vec<(String, u64)>,
+
+        /// Start in paused mode: do not synchronize chains from the network.
+        /// The service will serve queries from local state only, without downloading
+        /// new blocks or processing incoming messages.
+        #[arg(long)]
+        pause: bool,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.

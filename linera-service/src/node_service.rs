@@ -1224,6 +1224,8 @@ where
     query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
     cancellation_token: CancellationToken,
     enable_memory_profiling: bool,
+    /// If true, do not start the chain listener; serve queries from local state only.
+    pause: bool,
 }
 
 impl<C> Clone for NodeService<C>
@@ -1243,6 +1245,7 @@ where
             query_subscriptions: self.query_subscriptions.clone(),
             cancellation_token: self.cancellation_token.clone(),
             enable_memory_profiling: self.enable_memory_profiling,
+            pause: self.pause,
         }
     }
 }
@@ -1268,6 +1271,7 @@ where
         query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
         cancellation_token: CancellationToken,
         enable_memory_profiling: bool,
+        pause: bool,
     ) -> Self {
         let query_cache = query_cache_size.map(|size| Arc::new(QueryResponseCache::new(size)));
         Self {
@@ -1282,6 +1286,7 @@ where
             query_subscriptions,
             cancellation_token,
             enable_memory_profiling,
+            pause,
         }
     }
 
@@ -1383,28 +1388,33 @@ where
             });
         }
 
-        let storage = self.context.lock().await.storage().clone();
-
-        let chain_listener = ChainListener::new(
-            self.config,
-            self.context,
-            storage,
-            cancellation_token.clone(),
-            command_receiver,
-            true,
-        )
-        .run()
-        .await?;
-        let mut chain_listener = Box::pin(chain_listener).fuse();
         let tcp_listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
         let server = axum::serve(tcp_listener, app)
-            .with_graceful_shutdown(cancellation_token.cancelled_owned())
+            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned())
             .into_future();
-        futures::select! {
-            result = chain_listener => result?,
-            result = Box::pin(server).fuse() => result?,
-        };
+
+        if self.pause {
+            info!("Running in paused mode: chain synchronization is disabled");
+            server.await?;
+        } else {
+            let storage = self.context.lock().await.storage().clone();
+            let chain_listener = ChainListener::new(
+                self.config,
+                self.context,
+                storage,
+                cancellation_token.clone(),
+                command_receiver,
+                true,
+            )
+            .run()
+            .await?;
+            let mut chain_listener = Box::pin(chain_listener).fuse();
+            futures::select! {
+                result = chain_listener => result?,
+                result = Box::pin(server).fuse() => result?,
+            };
+        }
 
         Ok(())
     }
