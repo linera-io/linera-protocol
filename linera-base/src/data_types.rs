@@ -292,6 +292,21 @@ impl Display for Timestamp {
     }
 }
 
+impl FromStr for Timestamp {
+    type Err = chrono::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let naive = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+            .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S"))?;
+        let micros = naive
+            .and_utc()
+            .timestamp_micros()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        Ok(Timestamp(micros))
+    }
+}
+
 /// Resources that an application may spend during the execution of transaction or an
 /// application call.
 #[derive(
