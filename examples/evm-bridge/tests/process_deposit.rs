@@ -101,15 +101,16 @@ impl TestBridge {
             )
             .await;
 
-        let bridge_params = BridgeParameters {
-            source_chain_id,
-            bridge_contract_address: [0xBB; 20],
-            fungible_app_id: fungible_app_id.forget_abi(),
-            token_address,
-            rpc_endpoint: String::new(),
-        };
-        let bridge_app_id = chain
-            .create_application(bridge_module_id, bridge_params, (), vec![])
+        // 3. Register the fungible app in the bridge
+        chain
+            .add_block(|block| {
+                block.with_operation(
+                    bridge_app_id,
+                    BridgeOperation::RegisterFungibleApp {
+                        app_id: fungible_app_id.forget_abi(),
+                    },
+                );
+            })
             .await;
 
         let chain_id_bytes: [u8; 32] = chain.id().0.into();
@@ -684,15 +685,16 @@ async fn setup_bridge_with_anvil(
         )
         .await;
 
-    let bridge_params = BridgeParameters {
-        source_chain_id,
-        bridge_contract_address: [0xBB; 20],
-        fungible_app_id: fungible_app_id.forget_abi(),
-        token_address,
-        rpc_endpoint: anvil_endpoint.to_string(),
-    };
-    let bridge_app_id = chain
-        .create_application(bridge_module_id, bridge_params, (), vec![])
+    // 3. Register fungible app in bridge
+    chain
+        .add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::RegisterFungibleApp {
+                    app_id: fungible_app_id.forget_abi(),
+                },
+            );
+        })
         .await;
 
     (chain, chain_owner, bridge_app_id, fungible_app_id)
@@ -751,5 +753,31 @@ async fn test_verify_block_hash_not_found() {
     assert!(
         result.is_err(),
         "VerifyBlockHash with non-existent hash should fail"
+    );
+}
+
+#[tokio::test]
+async fn test_register_fungible_app_cannot_be_called_twice() {
+    let tb = TestBridge::setup().await;
+
+    // The bridge already has a registered fungible app from setup.
+    // Attempting to register again should fail.
+    let dummy_app_id = ApplicationId::new(linera_sdk::linera_base_types::CryptoHash::new(
+        &linera_sdk::linera_base_types::TestString::new("other_app"),
+    ));
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::RegisterFungibleApp {
+                    app_id: dummy_app_id,
+                },
+            );
+        })
+        .await;
+    assert!(
+        result.is_err(),
+        "registering fungible app a second time should be rejected"
     );
 }

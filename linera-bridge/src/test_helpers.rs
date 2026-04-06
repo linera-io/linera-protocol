@@ -140,7 +140,6 @@ pub fn deploy_fungible_bridge(
     deployer: Address,
     light_client: Address,
     chain_id: CryptoHash,
-    application_id: CryptoHash,
     token: Address,
 ) -> Address {
     let bytecode = compile_contract(
@@ -148,16 +147,31 @@ pub fn deploy_fungible_bridge(
         "FungibleBridge.sol",
         "FungibleBridge",
     );
-    let constructor_args = (
-        light_client,
-        <[u8; 32]>::from(*chain_id.as_bytes()),
-        <[u8; 32]>::from(*application_id.as_bytes()),
-        token,
-    )
-        .abi_encode_params();
+    let constructor_args =
+        (light_client, <[u8; 32]>::from(*chain_id.as_bytes()), token).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
+}
+
+pub fn register_fungible_application_id(
+    db: &mut CacheDB<EmptyDB>,
+    caller: Address,
+    bridge: Address,
+    application_id: CryptoHash,
+) {
+    use alloy_sol_types::sol;
+    sol! {
+        function registerFungibleApplicationId(bytes32 _applicationId) external;
+    }
+    call_contract(
+        db,
+        caller,
+        bridge,
+        registerFungibleApplicationIdCall {
+            _applicationId: <[u8; 32]>::from(*application_id.as_bytes()).into(),
+        },
+    );
 }
 
 const MOCK_ERC20_SOL: &str = r#"

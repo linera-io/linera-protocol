@@ -466,11 +466,20 @@ BRIDGE_OUTPUT=$(evm_exec \
     --constructor-args \
     "$LIGHT_CLIENT_ADDR" \
     "$CHAIN_BYTES32" \
-    "$APP_ID_BYTES32" \
     "$TOKEN_ADDRESS")
 BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
 wait_for_tx "$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
 validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
+
+# Register the wrapped-fungible application ID in the FungibleBridge.
+echo "  Registering applicationId in FungibleBridge..."
+REGISTER_OUTPUT=$(evm_exec \
+    cast send --rpc-url "$EVM_RPC_URL" \
+    --private-key "$EVM_PRIVATE_KEY" \
+    "$BRIDGE_ADDRESS" \
+    'registerFungibleApplicationId(bytes32)' \
+    "$APP_ID_BYTES32")
+wait_for_tx "$(echo "$REGISTER_OUTPUT" | parse_tx_hash)"
 BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
 echo "  FungibleBridge: $BRIDGE_ADDRESS"
 

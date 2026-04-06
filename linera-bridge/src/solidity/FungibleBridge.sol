@@ -29,20 +29,32 @@ contract FungibleBridge is Microchain {
         uint256 nonce
     );
 
-    bytes32 public immutable applicationId;
+    // WrappedFungible application ID on Linera,
+    // used to identify Burn events in the block stream.
+    // Set once via registerFungibleApplicationId after deployment.
+    bytes32 public fungibleApplicationId;
+    // The ERC-20 token being bridged.
     IERC20 public immutable token;
+    // The deployer, authorized to register the application ID.
+    address public immutable deployer;
     uint256 public depositNonce;
 
     constructor(
         address _lightClient,
         bytes32 _chainId,
-        bytes32 _applicationId,
         address _token
     )
         Microchain(_lightClient, _chainId)
     {
-        applicationId = _applicationId;
         token = IERC20(_token);
+        deployer = msg.sender;
+    }
+
+    /// Registers the wrapped-fungible application ID. Can only be called once, by the deployer.
+    function registerFungibleApplicationId(bytes32 _fungibleApplicationId) external {
+        require(msg.sender == deployer, "only deployer can register");
+        require(fungibleApplicationId == bytes32(0), "application ID already registered");
+        fungibleApplicationId = _fungibleApplicationId;
     }
 
     /// Locks ERC-20 tokens in the bridge and emits a DepositInitiated event.
@@ -56,7 +68,7 @@ contract FungibleBridge is Microchain {
         uint256 amount
     ) external {
         require(amount > 0, "amount=0");
-        require(target_application_id == applicationId, "target application mismatch");
+        require(target_application_id == fungibleApplicationId, "target application mismatch");
 
         uint256 before = token.balanceOf(address(this));
         _safeTransferFrom(msg.sender, address(this), amount);
@@ -88,7 +100,7 @@ contract FungibleBridge is Microchain {
 
                 // choice==1 is User application
                 if (evt.stream_id.application_id.choice != 1) continue;
-                if (evt.stream_id.application_id.user.application_description_hash.value != applicationId) continue;
+                if (evt.stream_id.application_id.user.application_description_hash.value != fungibleApplicationId) continue;
 
                 // Check stream name is "burns"
                 if (keccak256(evt.stream_id.stream_name.value) != burnsHash) continue;

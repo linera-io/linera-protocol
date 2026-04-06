@@ -56,7 +56,6 @@ fn test_params(
     }
 }
 
-
 #[tokio::test]
 async fn test_mint_from_unauthorized_signer() {
     let (validator, module_id) = TestValidator::with_current_module::<

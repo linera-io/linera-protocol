@@ -23,12 +23,18 @@ sol! {
 /// Must match `evm_bridge::BridgeOperation` variant-for-variant for BCS compatibility.
 #[derive(serde::Serialize)]
 pub(crate) enum BridgeOperation {
+    RegisterFungibleApp {
+        app_id: linera_base::identifiers::ApplicationId,
+    },
     ProcessDeposit {
         block_header_rlp: Vec<u8>,
         receipt_rlp: Vec<u8>,
         proof_nodes: Vec<Vec<u8>>,
         tx_index: u64,
         log_index: u64,
+    },
+    VerifyBlockHash {
+        block_hash: [u8; 32],
     },
 }
 

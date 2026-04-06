@@ -93,8 +93,8 @@ mod tests {
 
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-            let bridge =
-                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id, token);
+            let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token);
+            register_fungible_application_id(&mut db, deployer, bridge, app_id);
 
             // Fund the bridge with the full token supply
             call_contract(
@@ -285,8 +285,8 @@ mod tests {
 
         let chain_id = CryptoHash::new(&TestString::new("test_chain"));
         let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-        let bridge =
-            deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, app_id, token);
+        let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token);
+        register_fungible_application_id(&mut db, deployer, bridge, app_id);
 
         // Give depositor tokens (instead of funding the bridge)
         call_contract(
