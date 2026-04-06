@@ -53,7 +53,7 @@ impl Wallet for PersistentWallet {
     async fn modify(
         &self,
         id: ChainId,
-        f: impl FnMut(&mut Chain) + Send,
+        f: impl Fn(&mut Chain) + Send,
     ) -> Result<Option<()>, Self::Error> {
         self.mutate(id, f).transpose()
     }
@@ -163,7 +163,7 @@ impl PersistentWallet {
     pub fn mutate<R>(
         &self,
         chain_id: ChainId,
-        mutate: impl FnMut(&mut Chain) -> R,
+        mutate: impl Fn(&mut Chain) -> R,
     ) -> Option<Result<R, persistent::file::Error>> {
         self.0
             .chains
