@@ -206,3 +206,46 @@ Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the So
 
 - `solc` (Solidity compiler) must be on `$PATH`
 - Run tests: `cargo test -p linera-bridge`
+
+## Security analysis
+
+### Can tokens be minted on Linera without a corresponding EVM deposit?
+
+**No.** The `wrapped-fungible` contract's `Mint` operation requires that the caller is the registered `evm-bridge` application (`authenticated_caller_id` must match `bridge_app_id` in parameters). Direct `Mint` operations — even from the bridge chain owner — are rejected. The `evm-bridge` app only calls `Mint` after verifying an MPT inclusion proof for a `DepositInitiated` event on EVM, and replay protection (`processed_deposits`) prevents double-minting from the same deposit.
+
+### Can tokens be unlocked on EVM without burning on Linera?
+
+**No.** `FungibleBridge._onBlock()` only processes `BurnEvent` events embedded in Linera block certificates. Certificates require a quorum of validator signatures (verified by `LightClient`). A `BurnEvent` can only appear in a block if the wrapped-fungible contract emitted it during execution. The `Microchain` contract rejects duplicate block submissions, preventing replay.
+
+### What if the bridge chain owner's key leaks?
+
+**Limited impact.** The owner cannot:
+- Mint tokens directly (requires `evm-bridge` as caller, not the owner)
+- Register a different fungible app in the `evm-bridge` (set-once, already locked after deployment)
+- Forge BurnEvents (events are part of validated block execution, not proposer-controlled)
+
+The owner can:
+- Submit `ProcessDeposit` operations with valid proofs (but these correspond to real EVM deposits — not harmful)
+- Censor transactions on the bridge chain (delay processing, but not steal funds)
+- Propose blocks, but block content is validated by validators before signing
+
+### What if a quorum of Linera validators is compromised?
+
+**Full compromise.** A colluding quorum (2/3+ by weight) can forge certificates containing arbitrary `BurnEvent` data, which `FungibleBridge` would accept. This is a fundamental trust assumption of the BFT protocol — the bridge's security is bounded by the validator set's integrity. This risk is shared with all Linera applications, not specific to the bridge.
+
+### Registration front-running
+
+Both registration functions are set-once and access-controlled:
+- **Linera side** (`RegisterFungibleApp`): requires an authenticated signer (chain owner)
+- **EVM side** (`registerFungibleApplicationId`): restricted to the contract deployer
+
+An attacker cannot front-run registration on either side without the owner's key (Linera) or the deployer's key (EVM).
+
+### Trust assumptions summary
+
+| Component | Trusted to | Not trusted to |
+|-----------|-----------|----------------|
+| Bridge chain owner | Propose blocks, not censor indefinitely | Mint, burn, or steal tokens |
+| Linera validators (quorum) | Finalize valid blocks only | N/A — if compromised, all bets are off |
+| Relayer | Forward certificates and proofs | Cannot forge — only relays signed data |
+| EVM contract deployer | Register correct application ID once | N/A after registration is locked |
