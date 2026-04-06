@@ -791,7 +791,7 @@
               }
             ]
           },
-          "unit": "ms"
+          "unit": "\u00b5s"
         },
         "overrides": [
           {
