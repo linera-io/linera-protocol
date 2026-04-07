@@ -1075,9 +1075,7 @@ where
                 block.body.incoming_bundles(),
             )
             .await?;
-        let oracle_responses = Some(block.body.oracle_responses.clone());
-        let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome = if let Some(mut execution_state) = self
+        let confirmed_block = if let Some(mut execution_state) = self
             .execution_state_cache
             .as_ref()
             .and_then(|cache| cache.remove(&block_hash))
@@ -1090,9 +1088,11 @@ where
                         .clone_with_base_key(ctx.base_key().bytes.clone())
                 })
                 .await;
-            outcome.clone()
+            certificate.into_value()
         } else {
-            let (_, verified, _resource_tracker) = chain
+            let oracle_responses = Some(block.body.oracle_responses.clone());
+            let (proposed_block, outcome) = block.clone().into_proposal();
+            let (proposed_block, verified, _resource_tracker) = chain
                 .execute_block(
                     proposed_block,
                     local_time,
@@ -1102,41 +1102,44 @@ where
                     BundleExecutionPolicy::committed(),
                 )
                 .await?;
-            verified
-        };
-        // We should always agree on the messages and state hash.
-        if outcome != verified_outcome {
-            if let Some(min_duration) = self.config.reset_on_incorrect_outcome {
-                let block_zero_time = *self.chain.block_zero_executed_at.get();
-                let elapsed = local_time.duration_since(block_zero_time);
-                if elapsed >= min_duration {
+            // We should always agree on the messages and state hash.
+            if outcome != verified {
+                if let Some(min_duration) = self.config.reset_on_incorrect_outcome {
+                    let block_zero_time = *self.chain.block_zero_executed_at.get();
+                    let elapsed = local_time.duration_since(block_zero_time);
+                    if elapsed >= min_duration {
+                        warn!(
+                            "IncorrectOutcome for block {height} on chain {chain_id}; \
+                            resetting chain state and re-executing"
+                        );
+                        return self
+                            .reset_and_reexecute_chain(
+                                certificate,
+                                notify_when_messages_are_delivered,
+                            )
+                            .await;
+                    }
                     warn!(
                         "IncorrectOutcome for block {height} on chain {chain_id}; \
-                        resetting chain state and re-executing"
+                        not resetting because only {elapsed:?} elapsed since last \
+                        block 0 execution (minimum: {min_duration:?})"
                     );
-                    return self
-                        .reset_and_reexecute_chain(certificate, notify_when_messages_are_delivered)
-                        .await;
                 }
-                warn!(
-                    "IncorrectOutcome for block {height} on chain {chain_id}; \
-                    not resetting because only {elapsed:?} elapsed since last \
-                    block 0 execution (minimum: {min_duration:?})"
-                );
+                return Err(WorkerError::IncorrectOutcome {
+                    submitted: Box::new(outcome),
+                    computed: Box::new(verified),
+                });
             }
-            return Err(WorkerError::IncorrectOutcome {
-                submitted: Box::new(outcome),
-                computed: Box::new(verified_outcome),
-            });
-        }
+            ConfirmedBlock::new(Block::new(proposed_block, verified))
+        };
 
         // Update the rest of the chain state.
         let event_streams = chain
-            .apply_confirmed_block(certificate.value(), local_time)
+            .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
-        let hash = certificate.hash();
+        let hash = confirmed_block.inner().hash();
         actions.notifications.push(Notification {
             chain_id,
             reason: Reason::NewBlock {
@@ -1159,7 +1162,7 @@ where
         self.save().await?;
 
         self.block_values
-            .insert_hashed(Cow::Owned(certificate.into_inner().into_inner()));
+            .insert_hashed(Cow::Owned(confirmed_block.into_inner()));
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
