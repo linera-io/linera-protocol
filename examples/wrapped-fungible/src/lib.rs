@@ -3,5 +3,5 @@
 
 //! ABI and types for a wrapped (bridged) fungible token with Mint/Burn support.
 
-pub use linera_sdk::abis::wrapped_fungible::*;
 pub use fungible::Message;
+pub use linera_sdk::abis::wrapped_fungible::*;
