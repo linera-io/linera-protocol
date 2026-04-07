@@ -113,7 +113,7 @@ jobs:
         cargo run --bin linera -- wallet init
         cargo run --bin linera -- wallet request-chain
         echo LINERA_COUNTER_APPLICATION_ID=$(cargo run --bin linera -- project publish-and-create examples/counter --json-argument 0) >> "$GITHUB_ENV"
-        echo LINERA_FUNGIBLE_APPLICATION_ID=$(cargo run --bin linera -- project publish-and-create examples/native-fungible --json-parameters '{ "ticker_symbol": "NAT" }' --json-argument '{ "accounts": {} }')) >> "$GITHUB_ENV"
+        echo LINERA_FUNGIBLE_APPLICATION_ID=$(cargo run --bin linera -- project publish-and-create examples/native-fungible --json-parameters '{ "ticker_symbol": "NAT" }' --json-argument '{ "accounts": {} }') >> "$GITHUB_ENV"
 
     - name: Switch to nightly Rust toolchain
       run: |
