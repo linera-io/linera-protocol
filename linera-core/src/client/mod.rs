@@ -517,17 +517,17 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Loads and processes certificates from local storage for the given chain, from the
-    /// current local height up to `stop`. Returns the chain info after processing.
+    /// current local height up to `end`. Returns the chain info after processing.
     async fn load_local_certificates(
         &self,
         chain_id: ChainId,
-        stop: BlockHeight,
+        end: BlockHeight,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        let mut info = self.local_node.chain_info(chain_id).await?;
-        let next_height = info.next_block_height;
+        let mut last_info = self.local_node.chain_info(chain_id).await?;
+        let next_height = last_info.next_block_height;
         let hashes = self
             .local_node
-            .get_preprocessed_block_hashes(chain_id, next_height, stop)
+            .get_preprocessed_block_hashes(chain_id, next_height, end)
             .await?;
         let certificates = self.storage_client().read_certificates(&hashes).await?;
         let certificates = match ResultReadCertificates::new(certificates, hashes) {
@@ -537,9 +537,9 @@ impl<Env: Environment> Client<Env> {
             }
         };
         for certificate in certificates {
-            info = self.handle_certificate(certificate).await?.info;
+            last_info = self.handle_certificate(certificate).await?.info;
         }
-        Ok(info)
+        Ok(last_info)
     }
 
     /// Downloads and processes all certificates up to (excluding) the specified height from the
