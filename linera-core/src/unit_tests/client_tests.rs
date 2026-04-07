@@ -3601,3 +3601,63 @@ where
 
     Ok(())
 }
+
+/// Tests that cross-chain message chunking works end-to-end: the sender splits large
+/// `UpdateRecipient` messages and the receiver processes all chunks correctly.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_cross_chain_message_chunking_end_to_end<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    // Use a tiny chunk limit so every transfer goes into its own UpdateRecipient.
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer)
+        .await?
+        .with_cross_chain_message_chunk_limit(1);
+
+    let sender = builder.add_root_chain(1, Amount::from_tokens(100)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    // Send three transfers from sender to receiver.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(5),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Receiver synchronizes and processes the inbox. With chunk_limit=1, the
+    // cross-chain messages were split into multiple UpdateRecipient requests.
+    // This verifies the previous_height values are correct so the receiver
+    // accepts all chunks without gap detection errors.
+    receiver.synchronize_from_validators().await?;
+    receiver.process_inbox().await?;
+
+    // Verify the receiver got all three transfers.
+    assert_eq!(
+        receiver.local_balance().await?,
+        Amount::from_tokens(10),
+        "Receiver should have received all three transfers"
+    );
+
+    Ok(())
+}

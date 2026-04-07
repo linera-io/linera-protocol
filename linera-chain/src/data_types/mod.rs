@@ -589,6 +589,18 @@ impl LiteVote {
 }
 
 impl MessageBundle {
+    /// Returns a rough estimate of the serialized size in bytes, for chunking.
+    pub fn estimated_size(&self) -> usize {
+        // Fixed overhead: height (8) + timestamp (8) + hash (32) + tx_index (4) + vec len (8)
+        let overhead = 60;
+        let messages_size: usize = self
+            .messages
+            .iter()
+            .map(PostedMessage::estimated_size)
+            .sum();
+        overhead + messages_size
+    }
+
     pub fn is_skippable(&self) -> bool {
         self.messages.iter().all(PostedMessage::is_skippable)
     }
@@ -599,6 +611,17 @@ impl MessageBundle {
 }
 
 impl PostedMessage {
+    /// Returns a rough estimate of the serialized size in bytes.
+    pub fn estimated_size(&self) -> usize {
+        // Fixed: signer option (33) + grant (16) + refund option (34) + kind (1) + index (4) + enum tag (8)
+        let overhead = 96;
+        let message_size = match &self.message {
+            Message::System(_) => 256, // conservative estimate for system messages
+            Message::User { bytes, .. } => 64 + bytes.len(),
+        };
+        overhead + message_size
+    }
+
     pub fn is_skippable(&self) -> bool {
         match self.kind {
             MessageKind::Protected | MessageKind::Tracked => false,
