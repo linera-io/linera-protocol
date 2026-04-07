@@ -543,7 +543,8 @@ pub struct WorkerState<StorageClient: Storage> {
     /// Configuration options for chain workers.
     chain_worker_config: ChainWorkerConfig,
     block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache:
+        Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
     chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -709,7 +710,8 @@ where
             storage,
             chain_worker_config,
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(UniqueValueCache::new(execution_state_cache_size)),
+            execution_state_cache: (execution_state_cache_size > 0)
+                .then(|| Arc::new(UniqueValueCache::new(execution_state_cache_size))),
             chain_modes,
             delivery_notifiers: Arc::default(),
             chain_workers,
