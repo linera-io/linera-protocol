@@ -2682,13 +2682,13 @@ impl<Env: Environment> ChainClient<Env> {
         local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) -> Result<(), Error> {
-        let listening_mode = self.listening_mode();
+        let listening_mode = self.client.chain_mode(notification.chain_id);
         let relevant = listening_mode
             .as_ref()
             .is_some_and(|mode| mode.is_relevant(&notification.reason));
         if !relevant {
             debug!(
-                chain_id = %self.chain_id,
+                chain_id = %notification.chain_id,
                 reason = ?notification.reason,
                 ?listening_mode,
                 "Ignoring notification due to listening mode"
