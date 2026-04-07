@@ -12905,7 +12905,6 @@ dependencies = [
  "fungible",
  "hex",
  "linera-sdk",
- "serde",
 ]
 
 [[package]]

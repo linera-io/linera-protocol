@@ -1,16 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! ABI and types for a wrapped (bridged) fungible token with Mint/Burn support.
+//! An ABI for applications that implement a wrapped (bridged) fungible token with Mint/Burn.
 
-pub use fungible::Message;
-<<<<<<< HEAD
-pub use linera_sdk::abis::fungible::{FungibleResponse, InitialState, InitialStateBuilder};
-use linera_sdk::{
-    graphql::GraphQLMutationRoot,
-    linera_base_types::{Account, AccountOwner, Amount, ChainId, ContractAbi, ServiceAbi},
+use async_graphql::{Request, Response};
+use linera_base::{
+    abi::{ContractAbi, ServiceAbi},
+    data_types::Amount,
+    identifiers::{AccountOwner, ChainId},
 };
+use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
+
+pub use super::fungible::{Account, FungibleResponse, InitialState, InitialStateBuilder};
 
 /// Parameters for a wrapped fungible token backed by an EVM bridge.
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -28,7 +30,7 @@ pub struct WrappedParameters {
 }
 
 /// Operations for the wrapped fungible token application.
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+#[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
 pub enum WrappedFungibleOperation {
     /// Requests an account balance.
     Balance {
@@ -105,6 +107,3 @@ impl ServiceAbi for WrappedFungibleTokenAbi {
     type Query = Request;
     type QueryResponse = Response;
 }
-=======
-pub use linera_sdk::abis::wrapped_fungible::*;
->>>>>>> 47867eb524 (Move WrappedFungible ABI to linera-sdk (#5913))
