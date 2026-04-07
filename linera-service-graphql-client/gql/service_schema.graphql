@@ -413,6 +413,12 @@ type ChainStateExtendedView {
 	compatibility with pre-existing database entries).
 	"""
 	nonemptyInboxes: [ChainId!]
+	"""
+	The local wall-clock time when block 0 was last executed. Used to prevent
+	reset-on-incorrect-outcome from looping: if not enough time has elapsed since
+	the last reset, the error is returned instead.
+	"""
+	blockZeroExecutedAt: Timestamp!
 }
 
 """

@@ -43,7 +43,7 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::SimpleUnorderedBatch,
     common::get_uleb128_size,
-    journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
+    journaling::JournalingKeyValueDatabase,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
         DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
@@ -897,10 +897,6 @@ pub enum DynamoDbStoreInternalError {
     #[error("The key_prefix must be of strictly positive length")]
     ZeroLengthKeyPrefix,
 
-    /// The journal is not coherent
-    #[error(transparent)]
-    JournalConsistencyError(#[from] JournalConsistencyError),
-
     /// The length of the value should be at most 400 KB.
     #[error("The DynamoDB value should be less than 400 KB")]
     ValueLengthTooLarge,
@@ -996,7 +992,7 @@ impl KeyValueStoreError for DynamoDbStoreInternalError {
 
 #[cfg(with_testing)]
 impl TestKeyValueDatabase for JournalingKeyValueDatabase<DynamoDbDatabaseInternal> {
-    async fn new_test_config() -> Result<DynamoDbStoreInternalConfig, DynamoDbStoreInternalError> {
+    async fn new_test_config() -> Result<DynamoDbStoreInternalConfig, Self::Error> {
         Ok(DynamoDbStoreInternalConfig {
             use_dynamodb_local: true,
             max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),

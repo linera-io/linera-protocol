@@ -123,6 +123,7 @@ mod metrics {
 }
 
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
+pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 
 #[derive(Debug, Clone, Copy)]
@@ -266,6 +267,7 @@ impl<Env: Environment> Client<Env> {
         chain_worker_ttl: Duration,
         sender_chain_worker_ttl: Duration,
         priority_bundle_origins: HashSet<ChainId>,
+        ignored_bundle_origins: HashSet<ChainId>,
         options: chain_client::Options,
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
         block_cache_size: usize,
@@ -284,7 +286,8 @@ impl<Env: Environment> Client<Env> {
         .with_allow_messages_from_deprecated_epochs(true)
         .with_chain_worker_ttl(chain_worker_ttl)
         .with_sender_chain_worker_ttl(sender_chain_worker_ttl)
-        .with_priority_bundle_origins(priority_bundle_origins);
+        .with_priority_bundle_origins(priority_bundle_origins)
+        .with_ignored_bundle_origins(ignored_bundle_origins);
         let local_node = LocalNodeClient::new(state);
         let requests_scheduler = RequestsScheduler::new(vec![], requests_scheduler_config);
 
@@ -329,6 +332,10 @@ impl<Env: Environment> Client<Env> {
 
     pub fn validator_node_provider(&self) -> &Env::Network {
         self.environment.network()
+    }
+
+    pub(crate) fn options(&self) -> &chain_client::Options {
+        &self.options
     }
 
     /// Handles any pending local cross-chain requests, notifying subscribers.
@@ -603,37 +610,67 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         let validators = self.validator_nodes().await?;
         let timeout = self.options.certificate_batch_download_timeout;
-        let mut stream_ids = BTreeMap::<_, BTreeSet<_>>::new();
+        // Group by chain, keeping only the max required index per stream.
+        let mut required_by_chain = BTreeMap::<_, BTreeMap<StreamId, u32>>::new();
         for event_id in event_ids {
-            stream_ids
+            required_by_chain
                 .entry(event_id.chain_id)
                 .or_default()
-                .insert(event_id.stream_id.clone());
+                .entry(event_id.stream_id.clone())
+                .and_modify(|max| *max = (*max).max(event_id.index))
+                .or_insert(event_id.index);
         }
 
-        for (chain_id, stream_ids) in stream_ids {
+        for (chain_id, required_streams) in required_by_chain {
+            let stream_ids = required_streams.keys().cloned().collect::<BTreeSet<_>>();
             let stream_ids_ref = &stream_ids;
+            let required_ref = &required_streams;
             let result = communicate_concurrently(
                 &validators,
                 move |remote_node| {
                     Box::pin(async move {
                         self.sync_events_from_node(chain_id, stream_ids_ref, &remote_node)
-                            .await
+                            .await?;
+                        let next_expected = self
+                            .local_node
+                            .next_expected_events(
+                                chain_id,
+                                stream_ids_ref.iter().cloned().collect(),
+                            )
+                            .await?;
+                        if required_ref.iter().all(|(stream_id, &max_index)| {
+                            next_expected
+                                .get(stream_id)
+                                .is_some_and(|index| *index > max_index)
+                        }) {
+                            Ok::<(), chain_client::Error>(())
+                        } else {
+                            // Placeholder error. Replaced below.
+                            Err(chain_client::Error::InternalError("missing events"))
+                        }
                     })
                 },
-                |errors| {
-                    errors
-                        .into_iter()
-                        .map(|(validator, _error)| validator)
-                        .collect::<BTreeSet<_>>()
-                },
+                |_| chain_client::Error::InternalError("missing events"),
                 timeout,
             )
             .await;
 
             if result.is_err() {
-                // All validators failed; no point retrying.
-                return Err(NodeError::EventsNotFound(event_ids.to_vec()).into());
+                let next_expected = self
+                    .local_node
+                    .next_expected_events(chain_id, stream_ids.into_iter().collect())
+                    .await?;
+                let missing = event_ids
+                    .iter()
+                    .filter(|id| {
+                        id.chain_id == chain_id
+                            && next_expected
+                                .get(&id.stream_id)
+                                .is_none_or(|index| *index <= id.index)
+                    })
+                    .cloned()
+                    .collect();
+                return Err(NodeError::EventsNotFound(missing).into());
             }
         }
         Ok(())
@@ -1305,7 +1342,7 @@ impl<Env: Environment> Client<Env> {
     /// reach blocks that are already executed locally or whose events we already track.
     async fn download_event_bearing_blocks(
         &self,
-        sender_chain_id: ChainId,
+        publisher_chain_id: ChainId,
         initial_blocks: BTreeSet<(BlockHeight, CryptoHash)>,
         local_next_block_height: BlockHeight,
         subscribed_streams: &BTreeSet<StreamId>,
@@ -1318,19 +1355,13 @@ impl<Env: Environment> Client<Env> {
 
         let mut certificates = BTreeMap::new();
         let mut blocks_to_fetch = initial_blocks;
-        let next_expected_events = subscribed_streams
-            .iter()
-            .zip(
-                self.local_node
-                    .chain_state_view(sender_chain_id)
-                    .await?
-                    .next_expected_events
-                    .multi_get(subscribed_streams)
-                    .await?
-                    .into_iter()
-                    .map(|maybe_index| maybe_index.unwrap_or_default()),
+        let next_expected_events = self
+            .local_node
+            .next_expected_events(
+                publisher_chain_id,
+                subscribed_streams.iter().cloned().collect(),
             )
-            .collect::<BTreeMap<_, _>>();
+            .await?;
 
         while let Some((current_height, current_hash)) = blocks_to_fetch.pop_last() {
             if current_height < local_next_block_height {
@@ -1347,9 +1378,15 @@ impl<Env: Environment> Client<Env> {
             } else {
                 let downloaded = self
                     .requests_scheduler
-                    .download_certificates(remote_node, sender_chain_id, current_height, 1)
+                    .download_certificates(remote_node, publisher_chain_id, current_height, 1)
                     .await?;
                 let Some(certificate) = downloaded.into_iter().next() else {
+                    tracing::debug!(
+                        validator = remote_node.address(),
+                        %publisher_chain_id,
+                        height = %current_height,
+                        "failed to download event publisher block"
+                    );
                     continue;
                 };
 

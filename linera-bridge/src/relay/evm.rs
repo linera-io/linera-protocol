@@ -4,7 +4,7 @@
 //! Centralized EVM client for all bridge EVM interactions.
 
 use alloy::{
-    primitives::{Address, B256},
+    primitives::{Address, B256, U256},
     providers::Provider,
     rpc::types::{Filter, Log},
     sol,
@@ -39,14 +39,16 @@ const MAX_LOG_BLOCK_RANGE: u64 = 10_000;
 pub struct EvmClient<P> {
     provider: P,
     bridge_addr: Address,
+    relayer_addr: Address,
     deposit_event_sig: B256,
 }
 
 impl<P: Provider> EvmClient<P> {
-    pub fn new(provider: P, bridge_addr: Address) -> Self {
+    pub fn new(provider: P, bridge_addr: Address, relayer_addr: Address) -> Self {
         Self {
             provider,
             bridge_addr,
+            relayer_addr,
             deposit_event_sig: deposit_event_signature(),
         }
     }
@@ -57,6 +59,11 @@ impl<P: Provider> EvmClient<P> {
 
     pub async fn get_block_number(&self) -> Result<u64> {
         Ok(self.provider.get_block_number().await?)
+    }
+
+    /// Returns the relayer's ETH balance in wei.
+    pub async fn get_relayer_balance(&self) -> Result<U256> {
+        Ok(self.provider.get_balance(self.relayer_addr).await?)
     }
 
     /// Queries `DepositInitiated` events in chunked ranges.

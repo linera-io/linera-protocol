@@ -11,6 +11,8 @@
 //! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
 //!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
 
+use linera_base::crypto::Signer as _;
+
 pub mod evm;
 pub mod linera;
 pub(crate) mod metrics;
@@ -47,14 +49,49 @@ use crate::{
     proof::gen::HttpDepositProofClient,
 };
 
+/// Queries both chain balances and updates the prometheus metrics.
+pub(crate) async fn update_balance_metrics<
+    P: alloy::providers::Provider,
+    E: linera_core::environment::Environment,
+>(
+    evm_client: &evm::EvmClient<P>,
+    linera_client: &linera::LineraClient<E>,
+) {
+    update_evm_balance_metric(evm_client).await;
+    update_linera_balance_metric(linera_client).await;
+}
+
+pub(crate) async fn update_evm_balance_metric<P: alloy::providers::Provider>(
+    evm_client: &evm::EvmClient<P>,
+) {
+    match evm_client.get_relayer_balance().await {
+        Ok(balance) => {
+            // U256::to::<u128> panics if >u128::MAX, but ETH supply fits in u128.
+            let wei: u128 = balance.to();
+            metrics::set_relayer_evm_balance(wei as f64);
+        }
+        Err(e) => tracing::warn!("Failed to query EVM relayer balance: {e:#}"),
+    }
+}
+
+pub(crate) async fn update_linera_balance_metric<E: linera_core::environment::Environment>(
+    linera_client: &linera::LineraClient<E>,
+) {
+    match linera_client.chain_balance().await {
+        Ok(balance) => metrics::set_relayer_linera_balance(u128::from(balance) as f64),
+        Err(e) => tracing::warn!("Failed to query Linera chain balance: {e:#}"),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
-    faucet_url: &str,
+    faucet_url: Option<&str>,
     wallet_path: Option<&Path>,
     keystore_path: Option<&Path>,
     storage_config: Option<&str>,
     chain_id_arg: Option<ChainId>,
+    chain_owner_arg: Option<AccountOwner>,
     evm_bridge_address: &str,
     linera_bridge_address: &str,
     linera_fungible_address: &str,
@@ -64,8 +101,9 @@ pub async fn run(
     monitor_scan_interval: u64,
     monitor_start_block: u64,
     max_retries: u32,
+    sqlite_path: Option<&Path>,
 ) -> Result<()> {
-    tracing_subscriber::fmt::init();
+    linera_base::tracing::init("linera-bridge");
 
     // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
     rustls::crypto::ring::default_provider()
@@ -95,10 +133,10 @@ pub async fn run(
     );
 
     // ── Common init ──
-    tracing::info!("Connecting to Linera faucet at {faucet_url}...");
-    let faucet = Faucet::new(faucet_url.to_string());
-    let genesis_config = faucet.genesis_config().await?;
-    tracing::info!("Genesis config received");
+    let faucet = faucet_url.map(|url| {
+        tracing::info!("Using Linera faucet at {url}");
+        Faucet::new(url.to_string())
+    });
 
     let mut signer: InMemorySigner =
         linera_persistent::File::<InMemorySigner>::read(&keystore_path)
@@ -112,16 +150,21 @@ pub async fn run(
     let mut storage = create_rocksdb_storage(Path::new(db_path), cache_sizes).await?;
 
     // ── Wallet: load existing or create fresh ──
-    let wallet_exists = wallet_path.exists();
-
-    // Always initialize storage — this is a no-op if already initialized.
-    genesis_config.initialize_storage(&mut storage).await?;
-
-    let wallet = if wallet_exists {
+    let wallet = if wallet_path.exists() {
         tracing::info!("Loading existing wallet from {}", wallet_path.display());
-        PersistentWallet::read(&wallet_path).context("failed to read wallet")?
+        let wallet = PersistentWallet::read(&wallet_path).context("failed to read wallet")?;
+        wallet
+            .genesis_config()
+            .initialize_storage(&mut storage)
+            .await?;
+        wallet
     } else {
+        let faucet = faucet
+            .as_ref()
+            .context("--faucet-url is required when no wallet exists")?;
         tracing::info!("Creating new wallet at {}", wallet_path.display());
+        let genesis_config = faucet.genesis_config().await?;
+        genesis_config.initialize_storage(&mut storage).await?;
         PersistentWallet::create(&wallet_path, genesis_config).context("failed to create wallet")?
     };
 
@@ -141,30 +184,33 @@ pub async fn run(
 
     // ── Sync admin chain (always) ──
     tracing::info!(%admin_chain_id, "Syncing admin chain from validators...");
-    let committee = faucet.current_committee().await?;
-    tracing::info!(
-        validators = committee.validators().iter().count(),
-        "Fetched current committee, downloading chain state..."
-    );
     let admin_client = ctx.make_chain_client(admin_chain_id).await?;
-    admin_client
-        .synchronize_chain_state_from_committee(committee)
-        .await?;
+    admin_client.synchronize_from_validators().await?;
     tracing::info!("Admin chain synced");
 
     // ── Resolve bridge chain ──
     let (chain_id, _owner) = if let Some(cid) = chain_id_arg {
-        // Register in wallet if not already there.
-        if ctx.wallet().get(cid).is_none() {
-            let key_owner = signer.keys().first().context("keystore has no keys")?.0;
-            ctx.update_wallet_for_new_chain(
-                cid,
-                Some(key_owner),
-                linera_base::data_types::Timestamp::default(),
-                linera_base::data_types::Epoch::ZERO,
-            )
-            .await?;
-        }
+        let owner = chain_owner_arg.context(
+            "--linera-bridge-chain-owner is required when --linera-bridge-chain-id is provided",
+        )?;
+
+        // Verify the keystore has the signing key for this owner.
+        anyhow::ensure!(
+            signer
+                .contains_key(&owner)
+                .await
+                .context("failed to query keystore")?,
+            "keystore does not contain a key for owner {owner}"
+        );
+
+        // Register the chain with the specified owner.
+        ctx.update_wallet_for_new_chain(
+            cid,
+            Some(owner),
+            linera_base::data_types::Timestamp::default(),
+            linera_base::data_types::Epoch::ZERO,
+        )
+        .await?;
 
         // Register for notifications so the listener can connect to validators.
         ctx.client
@@ -174,17 +220,13 @@ pub async fn run(
         let chain_client = ctx.make_chain_client(cid).await?;
         chain_client.synchronize_from_validators().await?;
 
-        // Verify our keystore contains an owner key for this chain.
-        let ownership = chain_client.query_chain_ownership().await?;
-        let our_keys: Vec<AccountOwner> = signer.keys().into_iter().map(|(o, _)| o).collect();
-        let owner = our_keys
-            .into_iter()
-            .find(|o| ownership.super_owners.contains(o) || ownership.owners.contains_key(o))
-            .context("keystore has no key that is an owner of the specified --chain-id")?;
         tracing::info!(%cid, %owner, "Using pre-existing chain");
         (cid, owner)
     } else {
         // Claim from faucet.
+        let faucet = faucet
+            .as_ref()
+            .context("--faucet-url is required when --linera-bridge-chain-id is not provided")?;
         tracing::info!("Claiming bridge chain from faucet...");
         let owner = AccountOwner::from(signer.generate_new());
         let chain_desc = faucet.claim(&owner).await?;
@@ -216,6 +258,8 @@ pub async fn run(
         monitor_scan_interval,
         monitor_start_block,
         max_retries,
+        sqlite_path,
+        Path::new(db_path),
     ))
     .await
 }
@@ -265,6 +309,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     monitor_scan_interval: u64,
     monitor_start_block: u64,
     max_retries: u32,
+    sqlite_path_override: Option<&Path>,
+    storage_dir: &Path,
 ) -> Result<()> {
     // ── Set up centralized clients ──
     let bridge_addr: Address = evm_bridge_address
@@ -272,13 +318,14 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .context("invalid --evm-bridge-address")?;
     let evm_signer: PrivateKeySigner =
         evm_private_key.parse().context("invalid EVM private key")?;
+    let relayer_addr = evm_signer.address();
     let evm_wallet = EthereumWallet::from(evm_signer);
     let provider = ProviderBuilder::new()
         .wallet(evm_wallet)
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    let evm_client = Arc::new(evm::EvmClient::new(provider, bridge_addr));
+    let evm_client = Arc::new(evm::EvmClient::new(provider, bridge_addr, relayer_addr));
 
     let bridge_app_id: ApplicationId = linera_bridge_address
         .parse()
@@ -301,7 +348,26 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let chain_listener_handle = tokio::spawn(listener);
 
     // ── Monitor state + scan/retry ──
-    let monitor = Arc::new(RwLock::new(MonitorState::new(monitor_start_block)));
+    let mut monitor_state = MonitorState::new(monitor_start_block);
+    let default_sqlite_path = storage_dir
+        .parent()
+        .unwrap_or(storage_dir)
+        .join("bridge_relay.sqlite3");
+    let sqlite_path = match sqlite_path_override {
+        Some(p) => p,
+        None => &default_sqlite_path,
+    };
+    let db = monitor::db::BridgeDb::open(sqlite_path)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to open SQLite database at {}",
+                sqlite_path.display()
+            )
+        })?;
+    tracing::info!(path = %sqlite_path.display(), "Opened bridge relay SQLite database");
+    monitor_state.set_db(db);
+    let monitor = Arc::new(RwLock::new(monitor_state));
     let scan_interval = Duration::from_secs(monitor_scan_interval);
     let (pending_deposit_tx, pending_deposit_rx) =
         tokio::sync::mpsc::channel::<monitor::PendingDeposit>(64);
@@ -360,6 +426,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             .await
             .context("HTTP server error")
     });
+
+    update_balance_metrics(&evm_client, &linera_client).await;
 
     tracing::info!(
         %bridge_addr,
@@ -482,6 +550,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             Ok(())
                         }.await;
                         let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                        update_balance_metrics(&evm_client, &linera_client).await;
                     }
                     linera::ChainOperation::Burn { owner, amount, response } => {
                         let result = async {
@@ -513,6 +582,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             }
                         }.await;
                         let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                        update_balance_metrics(&evm_client, &linera_client).await;
                     }
                 }
             }

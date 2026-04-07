@@ -141,6 +141,7 @@ Client implementation and command-line tool for the Linera blockchain
   Default value: `10`
 * `--staging-bundles-time-budget-ms <STAGING_BUNDLES_TIME_BUDGET>` — Time budget for staging message bundles in milliseconds. When set, limits bundle execution by wall-clock time, in addition to the count limit from `max_pending_message_bundles`
 * `--prioritize-bundles-from <PRIORITIZE_BUNDLES_FROM>` — Comma-separated list of chain IDs whose incoming bundles should be processed first
+* `--ignore-bundles-from <IGNORE_BUNDLES_FROM>` — Comma-separated list of chain IDs whose incoming bundles should be ignored
 * `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory
 
   Default value: `30000`
@@ -195,6 +196,9 @@ Client implementation and command-line tool for the Linera blockchain
 
   Default value: `1000`
 * `--certificate-download-batch-size <CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of certificates that we download at a time from one validator when synchronizing one of our chains
+
+  Default value: `500`
+* `--certificate-upload-batch-size <CERTIFICATE_UPLOAD_BATCH_SIZE>` — Maximum number of certificates read from local storage and uploaded to a validator at a time when synchronizing a chain
 
   Default value: `500`
 * `--sender-certificate-download-batch-size <SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of sender certificates we try to download and receive in one go when syncing sender chains
@@ -490,11 +494,15 @@ This command is deprecated. Use `linera sync && linera query-balance` instead.
 
 Synchronize the local state of the chain with a quorum validators
 
-**Usage:** `linera sync [CHAIN_ID]`
+**Usage:** `linera sync [OPTIONS] [CHAIN_ID]`
 
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — The chain to synchronize with validators. If omitted, synchronizes the default chain of the wallet
+
+###### **Options:**
+
+* `--next-height <NEXT_HEIGHT>` — Stop synchronizing at this block height (exclusive). For instance, `--next-height 0` downloads zero blocks, `--next-height 10` downloads blocks 0 through 9
 
 
 

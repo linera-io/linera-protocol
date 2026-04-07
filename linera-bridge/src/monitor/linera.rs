@@ -16,6 +16,7 @@ use tokio::sync::RwLock;
 
 use super::{MonitorState, PendingBurn};
 use crate::relay::{
+    self,
     evm::EvmClient,
     linera::{find_address20_credits, LineraClient},
 };
@@ -108,7 +109,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
                 }
                 b.last_retry_at = Some(Instant::now());
             } else {
-                state.track_burn(pending);
+                state.track_burn(pending).await;
             }
         }
 
@@ -127,31 +128,51 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             }
         };
 
+        // Persist raw BCS cert bytes so burns can be replayed without the relayer.
+        let cert_bytes =
+            bcs::to_bytes(&cert).expect("failed to BCS-serialize ConfirmedBlockCertificate");
+        if let Some(db) = monitor.read().await.db() {
+            if let Err(e) = db
+                .store_burn_raw(credit_height, burn_index, &cert_bytes)
+                .await
+            {
+                tracing::warn!(
+                    credit_height,
+                    burn_index,
+                    "Failed to store burn raw bytes: {e:#}"
+                );
+            }
+        }
+
         // Step 2: Forward cert to EVM directly (no chain conflict).
-        match evm_client.forward_cert(&cert).await {
+        let completed = match evm_client.forward_cert(&cert).await {
             Ok(()) => {
                 tracing::info!(credit_height, burn_index, "Burn forwarded to EVM");
-                monitor
-                    .write()
-                    .await
-                    .complete_burn(credit_height, burn_index);
+                true
             }
             Err(e) => {
                 let msg = format!("{e:#}");
                 if msg.contains("already verified") {
                     tracing::trace!(credit_height, burn_index, "Block already verified on EVM");
-                    monitor
-                        .write()
-                        .await
-                        .complete_burn(credit_height, burn_index);
+                    true
                 } else {
                     tracing::warn!(credit_height, burn_index, "EVM forwarding failed: {e:#}");
                     monitor
                         .write()
                         .await
                         .mark_burn_retried(credit_height, burn_index);
+                    false
                 }
             }
+        };
+
+        if completed {
+            monitor
+                .write()
+                .await
+                .complete_burn(credit_height, burn_index)
+                .await;
+            relay::update_balance_metrics(evm_client, linera_client).await;
         }
     }
 
@@ -235,7 +256,11 @@ async fn check_burn_completion(
     for (height, burn_index, recipient) in pending {
         let logs = evm_client.get_transfer_logs(recipient).await?;
         if !logs.is_empty() {
-            monitor.write().await.complete_burn(height, burn_index);
+            monitor
+                .write()
+                .await
+                .complete_burn(height, burn_index)
+                .await;
         }
     }
 

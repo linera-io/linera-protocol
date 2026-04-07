@@ -46,7 +46,8 @@ pub(crate) use crate::chain_worker::{
 };
 use crate::{
     chain_worker::{
-        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
+        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest,
+        CrossChainUpdateResult, DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -357,19 +358,21 @@ pub enum WorkerError {
     },
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
+    #[error("Block at height {height} on chain {chain_id} not found in local storage")]
+    LocalBlockNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
     #[error("The hash certificate doesn't match its value.")]
     InvalidLiteCertificate,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
-    #[error("confirmed_log entry at height {height} for chain {chain_id:8} not found")]
-    ConfirmedLogEntryNotFound {
-        height: BlockHeight,
-        chain_id: ChainId,
-    },
-    #[error("preprocessed_blocks entry at height {height} for chain {chain_id:8} not found")]
-    PreprocessedBlocksEntryNotFound {
+    #[error(
+        "confirmed_log/preprocessed_blocks entry at height {height} for chain {chain_id} not found"
+    )]
+    ConfirmedBlockHashNotFound {
         height: BlockHeight,
         chain_id: ChainId,
     },
@@ -413,7 +416,6 @@ impl WorkerError {
             | WorkerError::InvalidEpoch { .. }
             | WorkerError::EventsNotFound(_)
             | WorkerError::InvalidBlockChaining
-            | WorkerError::IncorrectOutcome { .. }
             | WorkerError::InvalidTimestamp { .. }
             | WorkerError::MissingCertificateValue
             | WorkerError::InvalidLiteCertificate
@@ -427,15 +429,22 @@ impl WorkerError {
             WorkerError::BcsError(_)
             | WorkerError::InvalidCrossChainRequest
             | WorkerError::ViewError(_)
-            | WorkerError::ConfirmedLogEntryNotFound { .. }
-            | WorkerError::PreprocessedBlocksEntryNotFound { .. }
+            | WorkerError::ConfirmedBlockHashNotFound { .. }
+            | WorkerError::LocalBlockNotFound { .. }
             | WorkerError::MissingNetworkDescription
             | WorkerError::ChainActorSendError { .. }
             | WorkerError::ChainActorRecvError { .. }
             | WorkerError::Thread(_)
-            | WorkerError::ReadCertificatesError(_) => true,
+            | WorkerError::ReadCertificatesError(_)
+            | WorkerError::IncorrectOutcome { .. } => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
+    }
+
+    /// Returns `true` if this error was caused by a journal resolution failure,
+    /// which may leave storage in an inconsistent state requiring a view reload.
+    pub fn must_reload_view(&self) -> bool {
+        matches!(self, WorkerError::ViewError(e) if e.must_reload_view())
     }
 }
 
@@ -490,7 +499,8 @@ where
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
     block_cache: Arc<ValueCache<CryptoHash, Block>>,
-    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache:
+        Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
     chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -547,7 +557,8 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(UniqueValueCache::new(execution_state_cache_size)),
+            execution_state_cache: (execution_state_cache_size > 0)
+                .then(|| Arc::new(UniqueValueCache::new(execution_state_cache_size))),
             chain_modes: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -568,7 +579,8 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(UniqueValueCache::new(execution_state_cache_size)),
+            execution_state_cache: (execution_state_cache_size > 0)
+                .then(|| Arc::new(UniqueValueCache::new(execution_state_cache_size))),
             chain_modes: Some(chain_modes),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -592,6 +604,19 @@ where
     #[instrument(level = "trace", skip(self, value))]
     pub fn with_long_lived_services(mut self, value: bool) -> Self {
         self.chain_worker_config.long_lived_services = value;
+        self
+    }
+
+    #[instrument(level = "trace", skip(self, value))]
+    pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
+        self.chain_worker_config.allow_revert_confirm = value;
+        self
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_reset_on_incorrect_outcome(mut self, minutes: Option<u64>) -> Self {
+        self.chain_worker_config.reset_on_incorrect_outcome =
+            minutes.map(|m| Duration::from_secs(m * 60));
         self
     }
 
@@ -629,6 +654,26 @@ where
     pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
         self.chain_worker_config.priority_bundle_origins = origins;
         self
+    }
+
+    /// Returns an instance with the specified set of chain IDs whose incoming bundles
+    /// should be ignored.
+    #[instrument(level = "trace", skip(self, origins))]
+    pub fn with_ignored_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
+        self.chain_worker_config.ignored_bundle_origins = origins;
+        self
+    }
+
+    /// Returns an instance with the specified cross-chain message chunk limit.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_cross_chain_message_chunk_limit(mut self, limit: usize) -> Self {
+        self.chain_worker_config.cross_chain_message_chunk_limit = limit;
+        self
+    }
+
+    /// Sets the cross-chain message chunk limit.
+    pub fn set_cross_chain_message_chunk_limit(&mut self, limit: usize) {
+        self.chain_worker_config.cross_chain_message_chunk_limit = limit;
     }
 
     /// Returns an instance with the specified maximum size for received_log entries.
@@ -911,11 +956,13 @@ where
         origin: ChainId,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+        previous_height: Option<BlockHeight>,
+    ) -> Result<CrossChainUpdateResult, WorkerError> {
         self.query_chain_worker(recipient, move |callback| {
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
                 bundles,
+                previous_height,
                 callback,
             }
         })
@@ -1283,26 +1330,41 @@ where
                 sender,
                 recipient,
                 bundles,
+                previous_height,
             } => {
                 let mut actions = NetworkActions::default();
                 let origin = sender;
-                let Some(height) = self
-                    .process_cross_chain_update(origin, recipient, bundles)
+                match self
+                    .process_cross_chain_update(origin, recipient, bundles, previous_height)
                     .await?
-                else {
-                    return Ok(actions);
-                };
-                actions.notifications.push(Notification {
-                    chain_id: recipient,
-                    reason: Reason::NewIncomingBundle { origin, height },
-                });
-                actions
-                    .cross_chain_requests
-                    .push(CrossChainRequest::ConfirmUpdatedRecipient {
-                        sender,
-                        recipient,
-                        latest_height: height,
-                    });
+                {
+                    CrossChainUpdateResult::NothingToDo => {}
+                    CrossChainUpdateResult::Updated(height) => {
+                        actions.notifications.push(Notification {
+                            chain_id: recipient,
+                            reason: Reason::NewIncomingBundle { origin, height },
+                        });
+                        actions.cross_chain_requests.push(
+                            CrossChainRequest::ConfirmUpdatedRecipient {
+                                sender,
+                                recipient,
+                                latest_height: height,
+                            },
+                        );
+                    }
+                    CrossChainUpdateResult::GapDetected {
+                        origin,
+                        retransmit_from,
+                    } => {
+                        actions
+                            .cross_chain_requests
+                            .push(CrossChainRequest::RevertConfirm {
+                                sender: origin,
+                                recipient,
+                                retransmit_from,
+                            });
+                    }
+                }
                 Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
@@ -1310,15 +1372,30 @@ where
                 recipient,
                 latest_height,
             } => {
+                let actions = self
+                    .query_chain_worker(sender, move |callback| {
+                        ChainWorkerRequest::ConfirmUpdatedRecipient {
+                            recipient,
+                            latest_height,
+                            callback,
+                        }
+                    })
+                    .await?;
+                Ok(actions)
+            }
+            CrossChainRequest::RevertConfirm {
+                sender,
+                recipient,
+                retransmit_from,
+            } => {
                 self.query_chain_worker(sender, move |callback| {
-                    ChainWorkerRequest::ConfirmUpdatedRecipient {
+                    ChainWorkerRequest::HandleRevertConfirm {
                         recipient,
-                        latest_height,
+                        retransmit_from,
                         callback,
                     }
                 })
-                .await?;
-                Ok(NetworkActions::default())
+                .await
             }
         }
     }
@@ -1492,6 +1569,21 @@ where
     pub async fn get_manager_seed(&self, chain_id: ChainId) -> Result<u64, WorkerError> {
         self.query_chain_worker(chain_id, |callback| ChainWorkerRequest::GetManagerSeed {
             callback,
+        })
+        .await
+    }
+
+    /// Gets the `next_expected_events` indices for the given streams.
+    pub async fn next_expected_events(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, u32>, WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::GetNextExpectedEvents {
+                stream_ids,
+                callback,
+            }
         })
         .await
     }

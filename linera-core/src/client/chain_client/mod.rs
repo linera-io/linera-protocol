@@ -109,6 +109,9 @@ pub struct Options {
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
+    /// Maximum number of certificates read from local storage and uploaded to a validator
+    /// at a time when synchronizing a chain.
+    pub certificate_upload_batch_size: u64,
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     pub sender_certificate_download_batch_size: usize,
@@ -135,7 +138,8 @@ struct CircuitBreakerState {
 impl Options {
     pub fn test_default() -> Self {
         use super::{
-            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
+            DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
@@ -150,6 +154,7 @@ impl Options {
             blob_download_timeout: Duration::from_secs(1),
             certificate_batch_download_timeout: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            certificate_upload_batch_size: DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
@@ -1790,6 +1795,34 @@ impl<Env: Environment> ChainClient<Env> {
     /// If the chain is in follow-only mode, this only downloads blocks for this chain without
     /// fetching manager values or sender/publisher chains.
     #[instrument(level = "trace")]
+    /// Synchronizes the chain state up to (but not including) the given block height.
+    pub async fn synchronize_up_to(
+        &self,
+        next_height: BlockHeight,
+    ) -> Result<Box<ChainInfo>, Error> {
+        let (_, committee) = self.client.admin_committee().await?;
+        let validators = self.client.make_nodes(&committee)?;
+        Box::pin(self.client.fetch_chain_info(self.chain_id, &validators)).await?;
+        communicate_with_quorum(
+            &validators,
+            &committee,
+            |_: &()| (),
+            |remote_node| async move {
+                self.client
+                    .download_certificates_from(&remote_node, self.chain_id, next_height)
+                    .await?;
+                Ok(())
+            },
+            self.client.options.quorum_grace_period,
+        )
+        .await?;
+        self.client
+            .local_node
+            .chain_info(self.chain_id)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, Error> {
         if self.preferred_owner.is_none() {
             return self.client.synchronize_chain_state(self.chain_id).await;

@@ -479,6 +479,9 @@ CrossChainRequest:
                 TUPLE:
                   - TYPENAME: Epoch
                   - TYPENAME: MessageBundle
+          - previous_height:
+              OPTION:
+                TYPENAME: BlockHeight
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
@@ -487,6 +490,15 @@ CrossChainRequest:
           - recipient:
               TYPENAME: ChainId
           - latest_height:
+              TYPENAME: BlockHeight
+    2:
+      RevertConfirm:
+        STRUCT:
+          - sender:
+              TYPENAME: ChainId
+          - recipient:
+              TYPENAME: ChainId
+          - retransmit_from:
               TYPENAME: BlockHeight
 CryptoHash:
   NEWTYPESTRUCT:

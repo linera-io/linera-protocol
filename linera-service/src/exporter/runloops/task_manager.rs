@@ -14,10 +14,7 @@ use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_service::config::{Destination, DestinationId, DestinationKind};
 use linera_storage::Storage;
 
-use crate::{
-    runloops::{evm_chain_exporter::EvmChainExporter, logging_exporter::LoggingExporter},
-    storage::ExporterStorage,
-};
+use crate::{runloops::logging_exporter::LoggingExporter, storage::ExporterStorage};
 
 /// This type manages tasks like spawning different exporters on the different
 /// threads, discarding the committees and joining every thread properly at the
@@ -148,9 +145,6 @@ pub(super) struct ExporterBuilder<F> {
     work_queue_size: usize,
     node_provider: Arc<GrpcNodeProvider>,
     shutdown_signal: F,
-    /// Full destination configs keyed by ID, needed for destinations that
-    /// require more than just the address string (e.g. EvmChain).
-    destination_configs: HashMap<DestinationId, Destination>,
     health: Arc<AtomicBool>,
 }
 
@@ -163,19 +157,17 @@ where
         options: NodeOptions,
         work_queue_size: usize,
         shutdown_signal: F,
-        destinations: &[Destination],
+        _destinations: &[Destination],
         health: Arc<AtomicBool>,
     ) -> Self {
         let node_provider = GrpcNodeProvider::new(options);
         let arced_node_provider = Arc::new(node_provider);
-        let destination_configs = destinations.iter().map(|d| (d.id(), d.clone())).collect();
 
         Self {
             options,
             shutdown_signal,
             work_queue_size,
             node_provider: arced_node_provider,
-            destination_configs,
             health,
         }
     }
@@ -242,21 +234,11 @@ where
                 })
             }
 
+            // TODO: The EvmChain exporter was removed because linera-bridge
+            // can't be published to crates.io (it depends on unpublished example
+            // crates). Move it to its own crate or into linera-bridge to re-enable.
             DestinationKind::EvmChain => {
-                let destination = self
-                    .destination_configs
-                    .get(&id)
-                    .expect("EvmChain destination config must exist");
-                let exporter_task = EvmChainExporter::new(id, destination.clone());
-                tokio::task::spawn(async move {
-                    let result = exporter_task
-                        .run_with_shutdown(shutdown_signal, storage)
-                        .await;
-                    if result.is_err() {
-                        health.store(false, Ordering::Release);
-                    }
-                    result
-                })
+                unimplemented!("EvmChain exporter is not yet available in this build")
             }
         }
     }

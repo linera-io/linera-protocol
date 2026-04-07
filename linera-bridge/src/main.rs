@@ -54,9 +54,9 @@ struct ServeOptions {
     #[arg(long)]
     rpc_url: String,
 
-    /// URL of the Linera faucet
+    /// URL of the Linera faucet (required when wallet doesn't exist or chain ID not provided)
     #[arg(long)]
-    faucet_url: String,
+    faucet_url: Option<String>,
 
     /// Path to the wallet state file.
     #[arg(long = "wallet", env = "LINERA_WALLET")]
@@ -73,6 +73,10 @@ struct ServeOptions {
     /// Linera bridge chain ID. If omitted, claims a new chain from faucet.
     #[arg(long)]
     linera_bridge_chain_id: Option<linera_base::identifiers::ChainId>,
+
+    /// Owner to use for the bridge chain. Required when --linera-bridge-chain-id is provided.
+    #[arg(long, requires = "linera_bridge_chain_id")]
+    linera_bridge_chain_owner: Option<linera_base::identifiers::AccountOwner>,
 
     /// Address of the FungibleBridge contract on EVM.
     #[arg(long)]
@@ -125,6 +129,11 @@ struct ServeOptions {
     /// Maximum number of retry attempts for pending deposits and burns.
     #[arg(long, default_value = "10")]
     max_retries: u32,
+
+    /// Path to the SQLite database for persistent request storage.
+    /// Defaults to `bridge_relay.sqlite3` next to the RocksDB storage directory.
+    #[arg(long)]
+    sqlite_path: Option<std::path::PathBuf>,
 }
 
 fn main() -> Result<()> {
@@ -145,11 +154,12 @@ impl ServeOptions {
     async fn run(&self) -> Result<()> {
         Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
-            &self.faucet_url,
+            self.faucet_url.as_deref(),
             self.wallet.as_deref(),
             self.keystore.as_deref(),
             self.storage.as_deref(),
             self.linera_bridge_chain_id,
+            self.linera_bridge_chain_owner,
             &self.evm_bridge_address,
             &self.linera_bridge_address,
             &self.linera_fungible_address,
@@ -165,6 +175,7 @@ impl ServeOptions {
             self.monitor_scan_interval,
             self.monitor_start_block,
             self.max_retries,
+            self.sqlite_path.as_deref(),
         ))
         .await
     }

@@ -378,6 +378,19 @@ where
         Ok(self.node.state.get_event_subscriptions(chain_id).await?)
     }
 
+    /// Gets the `next_expected_events` indices for the given streams.
+    pub async fn next_expected_events(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, u32>, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .next_expected_events(chain_id, stream_ids)
+            .await?)
+    }
+
     /// Gets the stream event count for a stream.
     pub async fn get_stream_event_count(
         &self,

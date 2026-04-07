@@ -105,7 +105,7 @@ pub(crate) mod metrics {
             "wasm_fuel_used_per_block",
             "Wasm fuel used per block",
             &[],
-            exponential_bucket_interval(10.0, 1_000_000.0),
+            exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
 
@@ -114,7 +114,7 @@ pub(crate) mod metrics {
             "evm_fuel_used_per_block",
             "EVM fuel used per block",
             &[],
-            exponential_bucket_interval(10.0, 1_000_000.0),
+            exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
 
@@ -277,6 +277,11 @@ where
     /// inboxes. `None` means the set hasn't been computed yet for this chain (backwards
     /// compatibility with pre-existing database entries).
     pub nonempty_inboxes: RegisterView<C, Option<BTreeSet<ChainId>>>,
+
+    /// The local wall-clock time when block 0 was last executed. Used to prevent
+    /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
+    /// the last reset, the error is returned instead.
+    pub block_zero_executed_at: RegisterView<C, Timestamp>,
 }
 
 /// Block-chaining state.
@@ -565,6 +570,15 @@ where
             .await
             .map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
+                InboxError::GapDetected {
+                    expected_height,
+                    actual_height,
+                } => ChainError::InboxGapDetected {
+                    chain_id,
+                    origin: *origin,
+                    expected_height,
+                    actual_height,
+                },
                 error => ChainError::InternalError(format!(
                     "while processing messages in certified block: {error}"
                 )),
@@ -1110,6 +1124,9 @@ where
     ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
+        if block.header.height == BlockHeight::ZERO {
+            self.block_zero_executed_at.set(local_time);
+        }
         self.execution_state_hash.set(Some(block.header.state_hash));
         let recipients = self.process_outgoing_messages(block).await?;
 

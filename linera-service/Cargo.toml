@@ -94,7 +94,6 @@ http.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
-linera-bridge.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
 linera-core = { workspace = true, features = ["fs"] }

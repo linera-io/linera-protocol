@@ -443,8 +443,7 @@ impl Block {
 
     /// Returns the bundles of messages sent via the given medium to the specified
     /// recipient. Messages originating from different transactions of the original block
-    /// are kept in separate bundles. If the medium is a channel, does not verify that the
-    /// recipient is actually subscribed to that channel.
+    /// are kept in separate bundles.
     pub fn message_bundles_for(
         &self,
         recipient: ChainId,
@@ -608,14 +607,6 @@ impl Block {
             operation_results: self.body.operation_results,
         };
         (proposed_block, outcome)
-    }
-
-    pub fn iter_created_blobs(&self) -> impl Iterator<Item = (BlobId, Blob)> + '_ {
-        self.body
-            .blobs
-            .iter()
-            .flatten()
-            .map(|blob| (blob.id(), blob.clone()))
     }
 
     /// Returns the IDs of all events in this block.
