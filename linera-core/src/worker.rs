@@ -761,19 +761,20 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        if state.read().await.is_poisoned() {
-            self.evict_poisoned_worker(chain_id);
-            return Err(WorkerError::ViewError(ViewError::StoreError {
-                backend: "journaling",
-                error: "Worker is poisoned due to a journal resolution failure".into(),
-                must_reload_view: true,
-            }));
-        }
-        Box::pin(wrap_future(async move {
+        let result = Box::pin(wrap_future(async move {
             let guard = handle::read_lock(&state).await;
+            if guard.is_poisoned() {
+                return Err(Self::poisoned_worker_error());
+            }
             f(guard).await
         }))
-        .await
+        .await;
+        if let Err(e) = &result {
+            if e.must_reload_view() {
+                self.evict_poisoned_worker(chain_id);
+            }
+        }
+        result
     }
 
     /// Acquires a write lock on the chain worker and executes the given closure.
@@ -789,6 +790,9 @@ where
         let state = self.get_or_create_chain_worker(chain_id).await?;
         let result = Box::pin(wrap_future(async move {
             let guard = handle::write_lock(&state).await;
+            if guard.is_poisoned() {
+                return Err(Self::poisoned_worker_error());
+            }
             f(guard).await
         }))
         .await;
@@ -798,6 +802,14 @@ where
             }
         }
         result
+    }
+
+    fn poisoned_worker_error() -> WorkerError {
+        WorkerError::ViewError(ViewError::StoreError {
+            backend: "journaling",
+            error: "Worker is poisoned due to a journal resolution failure".into(),
+            must_reload_view: true,
+        })
     }
 
     /// Evicts a poisoned chain worker from the cache so it gets reloaded on the next request.
