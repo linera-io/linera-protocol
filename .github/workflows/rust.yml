@@ -113,7 +113,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: linera-io-self-hosted-ci
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
     - uses: actions/checkout@v4
@@ -125,19 +125,19 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /home/runner/.solc
-        key: solc-v0.8.25
+        key: solc-v0.8.33
         restore-keys: solc-
     - name: Get Solc
       if: ${{ steps.cache-solc.outputs.cache-hit != 'true' }}
       uses: ./.github/actions/get-solc
       with:
-        version: v0.8.25
+        version: v0.8.33
     - name: Add Solc to PATH
       run: echo "/home/runner/.solc" >> $GITHUB_PATH
     - name: List the content of the Solc cache
-      run: ls /home/runner/.solc/v0.8.25/solc-static-linux
+      run: ls /home/runner/.solc/v0.8.33/solc-static-linux
     - name: Create a Solc symbolic link
-      run: ln -sf /home/runner/.solc/v0.8.25/solc-static-linux /home/runner/.solc/solc
+      run: ln -sf /home/runner/.solc/v0.8.33/solc-static-linux /home/runner/.solc/solc
     - name: Check if Solc is in PATH
       id: check-solc
       run: |
@@ -311,19 +311,19 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /home/runner/.solc
-        key: solc-v0.8.25
+        key: solc-v0.8.33
         restore-keys: solc-
     - name: Get Solc
       if: ${{ steps.cache-solc.outputs.cache-hit != 'true' }}
       uses: ./.github/actions/get-solc
       with:
-        version: v0.8.25
+        version: v0.8.33
     - name: Add Solc to PATH
       run: echo "/home/runner/.solc" >> $GITHUB_PATH
     - name: List the content of the Solc cache
-      run: ls /home/runner/.solc/v0.8.25/solc-static-linux
+      run: ls /home/runner/.solc/v0.8.33/solc-static-linux
     - name: Create a Solc symbolic link
-      run: ln -sf /home/runner/.solc/v0.8.25/solc-static-linux /home/runner/.solc/solc
+      run: ln -sf /home/runner/.solc/v0.8.33/solc-static-linux /home/runner/.solc/solc
     - name: Check if Solc is in PATH
       run: which solc || echo "Solc not found in PATH"
     - name: Install Protoc

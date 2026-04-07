@@ -321,8 +321,8 @@ import sys, json; print(json.load(sys.stdin)['epoch'])
     echo "  Deploying LightClient (epoch=$LC_EPOCH)..."
     LC_OUTPUT=$(evm_exec \
         forge create "LightClient.sol:LightClient" \
-        --root "$CONTRACTS_DIR" --via-ir --optimize --optimizer-runs 1 \
-        "${FORGE_USE_SOLC[@]}" --evm-version shanghai \
+        --root "$CONTRACTS_DIR" --config-path "$SCRIPT_DIR/foundry.toml" \
+        "${FORGE_USE_SOLC[@]}" \
         --out /tmp/forge-out --cache-path /tmp/forge-cache \
         --rpc-url "$EVM_RPC_URL" \
         --private-key "$EVM_PRIVATE_KEY" \
@@ -371,8 +371,8 @@ if [[ -z "$TOKEN_ADDRESS" ]]; then
     echo "Deploying MockERC20..."
     ERC20_OUTPUT=$(evm_exec \
         forge create "$CONTRACTS_DIR/MockERC20.sol:MockERC20" \
-        --root "$CONTRACTS_DIR" --via-ir --optimize --optimizer-runs 1 \
-        "${FORGE_USE_SOLC[@]}" --evm-version shanghai \
+        --root "$CONTRACTS_DIR" --config-path "$SCRIPT_DIR/foundry.toml" \
+        "${FORGE_USE_SOLC[@]}" \
         --out /tmp/forge-out --cache-path /tmp/forge-cache \
         --rpc-url "$EVM_RPC_URL" \
         --private-key "$EVM_PRIVATE_KEY" \
@@ -456,9 +456,8 @@ CHAIN_BYTES32="0x${BRIDGE_CHAIN_ID}"
 
 BRIDGE_OUTPUT=$(evm_exec \
     forge create "$CONTRACTS_DIR/FungibleBridge.sol:FungibleBridge" \
-    --root "$CONTRACTS_DIR" --via-ir --optimize --optimizer-runs 1 \
+    --root "$CONTRACTS_DIR" --config-path "$SCRIPT_DIR/foundry.toml" \
     "${FORGE_USE_SOLC[@]}" --ignored-error-codes 6321 \
-    --evm-version shanghai \
     --out /tmp/forge-out --cache-path /tmp/forge-cache \
     --rpc-url "$EVM_RPC_URL" \
     --private-key "$EVM_PRIVATE_KEY" \
