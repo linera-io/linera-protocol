@@ -8,6 +8,11 @@ use std::{
     time::Duration,
 };
 
+/// Treats a zero `Duration` as `None` (disabled).
+pub fn non_zero_duration(d: Duration) -> Option<Duration> {
+    (d > Duration::ZERO).then_some(d)
+}
+
 use anyhow::{bail, Context as _, Result};
 use async_graphql::http::GraphiQLSource;
 use axum::response::{self, IntoResponse};

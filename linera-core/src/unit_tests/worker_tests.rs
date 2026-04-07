@@ -73,6 +73,7 @@ use crate::{
         Reason::{self, NewBlock, NewIncomingBundle},
         WorkerError, WorkerState,
     },
+    ChainWorkerConfig,
 };
 
 /// The test worker accepts blocks with a timestamp this far in the future.
@@ -143,17 +144,16 @@ where
             .await
             .expect("writing a network description should not fail");
 
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            Some(validator_keypair.secret_key),
-            storage,
-            super::DEFAULT_BLOCK_CACHE_SIZE,
-            super::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-        )
-        .with_allow_inactive_chains(is_client)
-        .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_long_lived_services(has_long_lived_services)
-        .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+        let config = ChainWorkerConfig {
+            nickname: "Single validator node".to_string(),
+            allow_inactive_chains: is_client,
+            allow_messages_from_deprecated_epochs: is_client,
+            long_lived_services: has_long_lived_services,
+            block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+            ..ChainWorkerConfig::default()
+        }
+        .with_key_pair(Some(validator_keypair.secret_key));
+        let worker = WorkerState::new(storage, config, None);
         Self {
             committee,
             worker,
@@ -181,7 +181,7 @@ where
     }
 
     fn with_cross_chain_message_chunk_limit(mut self, limit: usize) -> Self {
-        self.worker = self.worker.with_cross_chain_message_chunk_limit(limit);
+        self.worker.set_cross_chain_message_chunk_limit(limit);
         self
     }
 
@@ -4476,7 +4476,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(storage_builder.build().await?, true, false).await;
-    env.worker = env.worker.with_allow_revert_confirm(true);
+    env.worker.chain_worker_config.allow_revert_confirm = true;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
         .await;
@@ -4701,15 +4701,19 @@ where
     // Step 4: Verify that WITHOUT recovery, processing fails with IncorrectOutcome.
     {
         let worker_no_recovery = WorkerState::new(
-            "No-recovery worker".to_string(),
-            Some(env.worker().chain_worker_config.key_pair().unwrap().copy()),
             storage.clone(),
-            super::DEFAULT_BLOCK_CACHE_SIZE,
-            super::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-        )
-        .with_allow_inactive_chains(true)
-        .with_allow_messages_from_deprecated_epochs(true)
-        .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+            ChainWorkerConfig {
+                nickname: "No-recovery worker".to_string(),
+                allow_inactive_chains: true,
+                allow_messages_from_deprecated_epochs: true,
+                block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+                ..ChainWorkerConfig::default()
+            }
+            .with_key_pair(Some(
+                env.worker().chain_worker_config.key_pair().unwrap().copy(),
+            )),
+            None,
+        );
 
         assert_matches!(
             worker_no_recovery
@@ -4721,16 +4725,20 @@ where
 
     // Step 5: Now create a worker WITH recovery enabled and process the same block.
     let worker_with_recovery = WorkerState::new(
-        "Recovery worker".to_string(),
-        Some(env.worker().chain_worker_config.key_pair().unwrap().copy()),
         storage.clone(),
-        super::DEFAULT_BLOCK_CACHE_SIZE,
-        super::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-    )
-    .with_allow_inactive_chains(true)
-    .with_allow_messages_from_deprecated_epochs(true)
-    .with_reset_on_incorrect_outcome(Some(0))
-    .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+        ChainWorkerConfig {
+            nickname: "Recovery worker".to_string(),
+            allow_inactive_chains: true,
+            allow_messages_from_deprecated_epochs: true,
+            reset_on_incorrect_outcome: Some(Duration::from_secs(0)),
+            block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+            ..ChainWorkerConfig::default()
+        }
+        .with_key_pair(Some(
+            env.worker().chain_worker_config.key_pair().unwrap().copy(),
+        )),
+        None,
+    );
 
     worker_with_recovery
         .fully_handle_certificate_with_notifications(cert_1.clone(), &())
@@ -4897,7 +4905,7 @@ where
     let mut env = TestEnvironment::new(storage_builder.build().await?, true, false)
         .await
         .with_cross_chain_message_chunk_limit(1);
-    env.worker = env.worker.with_allow_revert_confirm(true);
+    env.worker.chain_worker_config.allow_revert_confirm = true;
 
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))

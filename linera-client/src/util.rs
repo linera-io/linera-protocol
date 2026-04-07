@@ -13,6 +13,11 @@ use linera_base::{
 use linera_core::{data_types::RoundTimeout, node::NotificationStream, worker::Reason};
 use tokio_stream::StreamExt as _;
 
+/// Treats a zero `Duration` as `None` (disabled).
+pub fn non_zero_duration(d: Duration) -> Option<Duration> {
+    (d > Duration::ZERO).then_some(d)
+}
+
 pub fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> anyhow::Result<T> {
     Ok(serde_json::from_str(s.trim())?)
 }
