@@ -8033,7 +8033,6 @@ dependencies = [
  "fungible",
  "hex",
  "linera-sdk",
- "serde",
  "tokio",
 ]
 

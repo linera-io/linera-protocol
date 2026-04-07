@@ -3,14 +3,14 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use fungible::{state::FungibleTokenState, FungibleResponse, InitialState, Message};
+use fungible::{state::FungibleTokenState, FungibleResponse, InitialState};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
 use wrapped_fungible::{
-    Account, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
+    Account, Message, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
 };
 
 pub struct WrappedFungibleTokenContract {
