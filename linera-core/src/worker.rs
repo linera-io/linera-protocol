@@ -783,18 +783,16 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        let poisoned_state = state.clone();
+        let state_ref = &state;
         let result = Box::pin(wrap_future(async move {
-            let guard = handle::read_lock(&state).await;
-            if guard.is_poisoned() {
-                return Err(WorkerError::PoisonedWorker);
-            }
+            let guard = handle::read_lock(state_ref).await;
+            guard.check_not_poisoned()?;
             f(guard).await
         }))
         .await;
-        if let Err(e) = &result {
-            if e.must_reload_view() {
-                self.evict_poisoned_worker(chain_id, &poisoned_state);
+        if let Err(error) = &result {
+            if error.must_reload_view() {
+                self.evict_poisoned_worker(chain_id, &state);
             }
         }
         result
@@ -811,18 +809,16 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        let poisoned_state = state.clone();
+        let state_ref = &state;
         let result = Box::pin(wrap_future(async move {
-            let guard = handle::write_lock(&state).await;
-            if guard.is_poisoned() {
-                return Err(WorkerError::PoisonedWorker);
-            }
+            let guard = handle::write_lock(state_ref).await;
+            guard.check_not_poisoned()?;
             f(guard).await
         }))
         .await;
-        if let Err(e) = &result {
-            if e.must_reload_view() {
-                self.evict_poisoned_worker(chain_id, &poisoned_state);
+        if let Err(error) = &result {
+            if error.must_reload_view() {
+                self.evict_poisoned_worker(chain_id, &state);
             }
         }
         result
@@ -831,11 +827,7 @@ where
     /// Evicts a poisoned chain worker from the cache, but only if the entry still
     /// points to the same instance. This avoids removing a fresh replacement that
     /// another task may have already loaded.
-    fn evict_poisoned_worker(
-        &self,
-        chain_id: ChainId,
-        poisoned: &ChainWorkerArc<StorageClient>,
-    ) {
+    fn evict_poisoned_worker(&self, chain_id: ChainId, poisoned: &ChainWorkerArc<StorageClient>) {
         tracing::warn!(%chain_id, "Evicting poisoned chain worker from cache");
         let pin = self.chain_workers.pin();
         let weak_poisoned = Arc::downgrade(poisoned);
