@@ -1264,6 +1264,7 @@ impl Runnable for Job {
                 query_cache_size,
                 allowed_subscriptions,
                 subscription_ttls,
+                pause,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1362,6 +1363,7 @@ impl Runnable for Job {
                     query_subscriptions,
                     cancellation_token.clone(),
                     options.enable_memory_profiling(),
+                    pause,
                 );
                 service.run(cancellation_token, command_receiver).await?;
             }

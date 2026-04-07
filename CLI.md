@@ -781,6 +781,7 @@ Run a GraphQL service to explore and extend the chains of the wallet
 * `--query-cache-size <QUERY_CACHE_SIZE>` — Enable the application query response cache with the given per-chain capacity. Each entry stores a serialized GraphQL response keyed by (application_id, request_bytes). Incompatible with `--long-lived-services`
 * `--allow-subscription <ALLOWED_SUBSCRIPTIONS>` — Allow a named GraphQL subscription query. The operation name is extracted from the query string. Repeatable. Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
 * `--subscription-ttl-secs <SUBSCRIPTION_TTLS>` — Set a minimum TTL (in seconds) for a subscription query's cached result. When set, invalidations that arrive before the TTL expires are deferred until the remaining time elapses. Format: `Name=Secs`. Repeatable. Example: `--subscription-ttl-secs CounterValue=30`
+* `--pause` — Start in paused mode: do not synchronize chains from the network. The service will serve queries from local state only, without downloading new blocks or processing incoming messages
 
 
 
