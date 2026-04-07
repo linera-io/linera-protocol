@@ -99,6 +99,14 @@ pub enum WrappedFungibleOperation {
         /// Amount of tokens to mint
         amount: Amount,
     },
+    /// Burns tokens from an account. Rejected by the contract — burning happens
+    /// automatically when tokens are transferred to an Address20 on the bridge chain.
+    Burn {
+        /// Account owner whose tokens to burn
+        owner: AccountOwner,
+        /// Amount of tokens to burn
+        amount: Amount,
+    },
 }
 
 /// ABI for the wrapped fungible token application.

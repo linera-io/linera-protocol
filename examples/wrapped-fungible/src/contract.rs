@@ -118,6 +118,10 @@ impl Contract for WrappedFungibleTokenContract {
                 target_account,
                 amount,
             } => self.execute_mint(target_account, amount).await,
+
+            WrappedFungibleOperation::Burn { .. } => {
+                panic!("Operation::Burn is not supported; burning happens automatically on cross-chain transfer to an Address20 on the bridge chain");
+            }
         }
     }
 

@@ -115,3 +115,10 @@ WrappedFungibleOperation:
               TYPENAME: Account
           - amount:
               TYPENAME: Amount
+    7:
+      Burn:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount:
+              TYPENAME: Amount
