@@ -104,6 +104,7 @@ const wallet = await faucet.createWallet();
 const owner = signer.address();
 const chainId = await faucet.claimChain(wallet, owner);
 const client = await new linera.Client(wallet, signer);
+await client.start();
 document.querySelector("#chain-id").innerText = chainId;
 document.querySelector("#owner").innerText = owner;
 
