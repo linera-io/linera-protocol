@@ -451,6 +451,12 @@ impl WorkerError {
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
     }
+
+    /// Returns `true` if this error was caused by a journal resolution failure,
+    /// which may leave storage in an inconsistent state requiring a view reload.
+    pub fn must_reload_view(&self) -> bool {
+        matches!(self, WorkerError::ViewError(e) if e.must_reload_view())
+    }
 }
 
 impl From<ChainError> for WorkerError {
@@ -755,6 +761,14 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
+        if state.read().await.is_poisoned() {
+            self.evict_poisoned_worker(chain_id);
+            return Err(WorkerError::ViewError(ViewError::StoreError {
+                backend: "journaling",
+                error: "Worker is poisoned due to a journal resolution failure".into(),
+                must_reload_view: true,
+            }));
+        }
         Box::pin(wrap_future(async move {
             let guard = handle::read_lock(&state).await;
             f(guard).await
@@ -773,11 +787,24 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        Box::pin(wrap_future(async move {
+        let result = Box::pin(wrap_future(async move {
             let guard = handle::write_lock(&state).await;
             f(guard).await
         }))
-        .await
+        .await;
+        if let Err(e) = &result {
+            if e.must_reload_view() {
+                self.evict_poisoned_worker(chain_id);
+            }
+        }
+        result
+    }
+
+    /// Evicts a poisoned chain worker from the cache so it gets reloaded on the next request.
+    fn evict_poisoned_worker(&self, chain_id: ChainId) {
+        tracing::warn!(%chain_id, "Evicting poisoned chain worker from cache");
+        let pin = self.chain_workers.pin();
+        pin.remove(&chain_id);
     }
 
     /// Gets or creates a chain worker for the given chain.
