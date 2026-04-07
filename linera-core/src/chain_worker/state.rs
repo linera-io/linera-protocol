@@ -377,6 +377,40 @@ where
         })
     }
 
+    /// Returns confirmed blocks by hash, checking the cache first and batch-loading the rest
+    /// from storage. The order of the returned blocks matches the order of the input hashes.
+    async fn read_confirmed_blocks(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<Option<ConfirmedBlock>>, WorkerError> {
+        let mut blocks = Vec::with_capacity(hashes.len());
+        let mut uncached_indices = Vec::new();
+        let mut uncached_hashes = Vec::new();
+
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(hashed_block) = self.block_values.get(hash) {
+                blocks.push(Some(ConfirmedBlock::from_hashed(hashed_block)));
+            } else {
+                blocks.push(None);
+                uncached_indices.push(i);
+                uncached_hashes.push(*hash);
+            }
+        }
+
+        if !uncached_hashes.is_empty() {
+            let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
+            for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
+                if let Some(block) = &maybe_block {
+                    self.block_values
+                        .insert_hashed(Cow::Borrowed(block.inner()));
+                }
+                blocks[i] = maybe_block;
+            }
+        }
+
+        Ok(blocks)
+    }
+
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         num_recipients = %heights_by_recipient.len()
@@ -1165,9 +1199,10 @@ where
                 }
             };
             let block = self
-                .storage
-                .read_confirmed_block(hash)
+                .read_confirmed_blocks(vec![hash])
                 .await?
+                .pop()
+                .flatten()
                 .ok_or_else(|| WorkerError::LocalBlockNotFound {
                     height: current_height,
                     chain_id: self.chain_id(),
