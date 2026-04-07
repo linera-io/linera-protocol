@@ -570,15 +570,6 @@ where
             .await
             .map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
-                InboxError::GapDetected {
-                    expected_height,
-                    actual_height,
-                } => ChainError::InboxGapDetected {
-                    chain_id,
-                    origin: *origin,
-                    expected_height,
-                    actual_height,
-                },
                 error => ChainError::InternalError(format!(
                     "while processing messages in certified block: {error}"
                 )),

@@ -1068,35 +1068,13 @@ where
             );
         }
         let chain = &mut self.chain;
-        match chain
+        chain
             .remove_bundles_from_inboxes(
                 block.header.timestamp,
                 false,
                 block.body.incoming_bundles(),
             )
-            .await
-        {
-            Ok(()) => {}
-            Err(ChainError::InboxGapDetected { origin, .. })
-                if self.config.allow_revert_confirm =>
-            {
-                let retransmit_from = self.get_inbox_next_height(origin).await?;
-                warn!(
-                    "Inbox gap detected for {chain_id} from {origin}: \
-                    requesting resend from {retransmit_from}",
-                );
-                let mut actions = NetworkActions::default();
-                actions
-                    .cross_chain_requests
-                    .push(CrossChainRequest::RevertConfirm {
-                        sender: origin,
-                        recipient: chain_id,
-                        retransmit_from,
-                    });
-                return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
-            }
-            Err(e) => return Err(e.into()),
-        }
+            .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
         let verified_outcome = if let Some(mut execution_state) = self
@@ -1276,8 +1254,7 @@ where
             let add_to_received_log = previous_height != Some(bundle.height);
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
-            match self
-                .chain
+            self.chain
                 .receive_message_bundle_with_inbox(
                     &mut inbox,
                     &origin,
@@ -1285,25 +1262,7 @@ where
                     local_time,
                     add_to_received_log,
                 )
-                .await
-            {
-                Ok(()) => {}
-                Err(ChainError::InboxGapDetected { .. }) if self.config.allow_revert_confirm => {
-                    // Don't save — leave the inbox unchanged so the resend can
-                    // reconcile properly. Request from next_height_to_receive
-                    // rather than the specific gap height, so that all pending
-                    // removed_bundles entries can also be reconciled.
-                    warn!(
-                        "Inbox gap detected for {recipient} from {origin}: \
-                        requesting resend from {next_height_to_receive}",
-                    );
-                    return Ok(CrossChainUpdateResult::GapDetected {
-                        origin,
-                        retransmit_from: next_height_to_receive,
-                    });
-                }
-                Err(e) => return Err(e.into()),
-            }
+                .await?;
         }
         inbox.observe_size_metric();
         drop(inbox);
