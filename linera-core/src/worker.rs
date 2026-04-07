@@ -586,6 +586,18 @@ where
         self
     }
 
+    /// Returns an instance with the specified cross-chain message chunk limit.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_cross_chain_message_chunk_limit(mut self, limit: usize) -> Self {
+        self.chain_worker_config.cross_chain_message_chunk_limit = limit;
+        self
+    }
+
+    /// Sets the cross-chain message chunk limit.
+    pub fn set_cross_chain_message_chunk_limit(&mut self, limit: usize) {
+        self.chain_worker_config.cross_chain_message_chunk_limit = limit;
+    }
+
     #[instrument(level = "trace", skip(self, value))]
     pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
         self.chain_worker_config.allow_revert_confirm = value;
@@ -1342,13 +1354,14 @@ where
                 recipient,
                 latest_height,
             } => {
-                self.chain_write(sender, |mut guard| async move {
-                    guard
-                        .confirm_updated_recipient(recipient, latest_height)
-                        .await
-                })
-                .await?;
-                Ok(NetworkActions::default())
+                let actions = self
+                    .chain_write(sender, |mut guard| async move {
+                        guard
+                            .confirm_updated_recipient(recipient, latest_height)
+                            .await
+                    })
+                    .await?;
+                Ok(actions)
             }
             CrossChainRequest::RevertConfirm {
                 sender,
