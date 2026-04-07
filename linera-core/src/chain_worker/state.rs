@@ -110,6 +110,8 @@ where
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
+    /// Set to `true` if a journal resolution failure has left storage potentially inconsistent.
+    poisoned: bool,
 }
 
 /// Whether the block was processed or skipped. Used for metrics.
@@ -170,6 +172,7 @@ where
             chain_modes,
             delivery_notifier,
             knows_chain_is_active: false,
+            poisoned: false,
         })
     }
 
@@ -189,8 +192,16 @@ where
     }
 
     /// Rolls back any uncommitted changes to the chain state.
+    /// Does nothing if the worker is poisoned (the view is in an inconsistent state).
     pub(crate) fn rollback(&mut self) {
-        self.chain.rollback();
+        if !self.poisoned {
+            self.chain.rollback();
+        }
+    }
+
+    /// Returns `true` if the worker is poisoned due to a journal resolution failure.
+    pub(crate) fn is_poisoned(&self) -> bool {
+        self.poisoned
     }
 
     /// Updates the last-access timestamp to the current time.
@@ -2130,11 +2141,23 @@ where
     }
 
     /// Stores the chain state in persistent storage.
+    ///
+    /// If the save fails, the worker is marked as poisoned and must be reloaded.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
-        self.chain.save().await?;
+        if let Err(e) = self.chain.save().await {
+            if e.must_reload_view() {
+                tracing::error!(
+                    error = ?e,
+                    chain_id = %self.chain_id(),
+                    "Journal resolution failed; marking worker as poisoned"
+                );
+                self.poisoned = true;
+            }
+            return Err(e.into());
+        }
         Ok(())
     }
 }
