@@ -105,7 +105,8 @@ where
     /// the `RwLock`.
     last_access: Arc<AtomicTimestamp>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache:
+        Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -146,8 +147,8 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>,
+        execution_state_cache: Option<
+            Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
         chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
@@ -870,8 +871,10 @@ where
             }
             Err(e) => return Err(e.into()),
         }
-        let confirmed_block = if let Some(mut execution_state) =
-            self.execution_state_cache.remove(&block_hash)
+        let confirmed_block = if let Some(mut execution_state) = self
+            .execution_state_cache
+            .as_ref()
+            .and_then(|cache| cache.remove(&block_hash))
         {
             chain.execution_state = execution_state
                 .with_context(|ctx| {
@@ -1628,8 +1631,12 @@ where
         let local_time = self.storage.clock().current_time();
         // Try to use a cached execution state for the requested block.
         // We want to pretend that this block is committed, so we set the next block height.
-        let cached_state =
-            block_hash.and_then(|h| self.execution_state_cache.remove(&h).map(|s| (h, s)));
+        let cached_state = block_hash.and_then(|h| {
+            self.execution_state_cache
+                .as_ref()
+                .and_then(|cache| cache.remove(&h))
+                .map(|s| (h, s))
+        });
         if let Some((requested_block, mut state)) = cached_state {
             let next_block_height = next_block_height
                 .try_add_one()
@@ -1650,7 +1657,9 @@ where
                 .query_application(context, query, self.service_runtime_endpoint.as_mut())
                 .await
                 .with_execution_context(ChainExecutionContext::Query)?;
-            self.execution_state_cache.insert(&requested_block, state);
+            if let Some(cache) = &self.execution_state_cache {
+                cache.insert(&requested_block, state);
+            }
             Ok((outcome, next_block_height))
         } else {
             if block_hash.is_some() {
@@ -2033,15 +2042,17 @@ where
         .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
-        self.execution_state_cache.insert(
-            &block_hash,
-            Box::pin(
-                self.chain
-                    .execution_state
-                    .with_context(|ctx| InactiveContext(ctx.base_key().clone())),
-            )
-            .await,
-        );
+        if let Some(cache) = &self.execution_state_cache {
+            cache.insert(
+                &block_hash,
+                Box::pin(
+                    self.chain
+                        .execution_state
+                        .with_context(|ctx| InactiveContext(ctx.base_key().clone())),
+                )
+                .await,
+            );
+        }
         Ok((executed_block, resource_tracker))
     }
 
