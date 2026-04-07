@@ -251,11 +251,11 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing::info!("Creating wrapped-fungible application...");
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wTEST".to_string(),
-        minter: owner,
-        mint_chain_id: chain_id,
+        minter: Some(owner),
+        mint_chain_id: Some(chain_id),
         evm_token_address: erc20_addr.0 .0,
         evm_source_chain_id: 31337,
-        bridge_app_id,
+        bridge_app_id: Some(bridge_app_id),
     };
     let wrapped_init = InitialState {
         accounts: BTreeMap::new(),

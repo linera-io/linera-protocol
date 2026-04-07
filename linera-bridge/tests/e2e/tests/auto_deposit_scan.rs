@@ -264,11 +264,11 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             wf_module_id,
             serde_json::to_vec(&WrappedParameters {
                 ticker_symbol: "wTEST".to_string(),
-                minter: owner_a,
-                mint_chain_id: chain_a,
+                minter: Some(owner_a),
+                mint_chain_id: Some(chain_a),
                 evm_token_address: erc20_addr.0 .0,
                 evm_source_chain_id: 31337,
-                bridge_app_id,
+                bridge_app_id: Some(bridge_app_id),
             })?,
             serde_json::to_vec(&InitialState {
                 accounts: BTreeMap::new(),

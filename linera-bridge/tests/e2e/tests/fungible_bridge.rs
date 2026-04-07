@@ -140,13 +140,13 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     tracing::info!("Creating wrapped-fungible application...");
     let params = WrappedParameters {
         ticker_symbol: "TEST".to_string(),
-        minter: owner_a,
-        mint_chain_id: chain_a,
+        minter: Some(owner_a),
+        mint_chain_id: Some(chain_a),
         evm_token_address: [0u8; 20],
         evm_source_chain_id: 31337,
         // This test doesn't deploy the evm-bridge Linera app (only the Solidity side),
         // so bridge_app_id is unused. Mint is never called in this test.
-        bridge_app_id: bcs::from_bytes(&[0xDD; 32]).unwrap(),
+        bridge_app_id: None,
     };
     let init_state = InitialState {
         accounts: BTreeMap::from([(owner_a, Amount::from_tokens(1000))]),

@@ -19,16 +19,16 @@ pub use super::fungible::{Account, FungibleResponse, InitialState, InitialStateB
 pub struct WrappedParameters {
     /// Ticker symbol (e.g. "USDC")
     pub ticker_symbol: String,
-    /// The account owner authorized to mint and burn tokens
-    pub minter: AccountOwner,
-    /// The Linera chain where minting and burning are allowed
-    pub mint_chain_id: ChainId,
+    /// If set, only this account owner can sign mint operations
+    pub minter: Option<AccountOwner>,
+    /// If set, minting and auto-burning are restricted to this chain
+    pub mint_chain_id: Option<ChainId>,
     /// The ERC-20 token address on the source EVM chain
     pub evm_token_address: [u8; 20],
     /// The EVM chain ID of the source chain (e.g. 8453 for Base)
     pub evm_source_chain_id: u64,
-    /// The application ID of the EVM bridge contract that is authorized to mint tokens
-    pub bridge_app_id: ApplicationId,
+    /// If set, only this application can call Mint (via cross-app call)
+    pub bridge_app_id: Option<ApplicationId>,
 }
 
 /// Event emitted when tokens are auto-burned on the bridge chain.

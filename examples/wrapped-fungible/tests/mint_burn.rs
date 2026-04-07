@@ -48,11 +48,11 @@ fn test_params(
 ) -> WrappedParameters {
     WrappedParameters {
         ticker_symbol: "wUSDC".to_string(),
-        minter,
-        mint_chain_id,
+        minter: Some(minter),
+        mint_chain_id: Some(mint_chain_id),
         evm_token_address: [0xA0; 20],
         evm_source_chain_id: 8453,
-        bridge_app_id,
+        bridge_app_id: Some(bridge_app_id),
     }
 }
 
