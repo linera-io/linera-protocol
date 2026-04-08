@@ -1201,8 +1201,13 @@ where
                     previous_height,
                     result_tx,
                 } => {
-                    if need_rollback || result_tx.is_closed() {
-                        let _ = result_tx.send(Ok(CrossChainUpdateResult::NothingToDo));
+                    if need_rollback {
+                        if result_tx
+                            .send(Ok(CrossChainUpdateResult::NothingToDo))
+                            .is_err()
+                        {
+                            tracing::debug!("cannot send cross-chain result; receiver dropped");
+                        }
                         continue;
                     }
                     let result = self
@@ -1222,8 +1227,10 @@ where
                     latest_height,
                     result_tx,
                 } => {
-                    if need_rollback || result_tx.is_closed() {
-                        let _ = result_tx.send(Ok(NetworkActions::default()));
+                    if need_rollback {
+                        if result_tx.send(Ok(NetworkActions::default())).is_err() {
+                            tracing::debug!("cannot send cross-chain result; receiver dropped");
+                        }
                         continue;
                     }
                     match self
