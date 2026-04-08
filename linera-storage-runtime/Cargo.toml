@@ -24,10 +24,14 @@ storage-service = ["linera-storage-service"]
 anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
+fs-err.workspace = true
+linera-core.workspace = true
+linera-execution.workspace = true
 linera-storage = { workspace = true }
 linera-storage-service = { workspace = true, optional = true }
 linera-views.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 

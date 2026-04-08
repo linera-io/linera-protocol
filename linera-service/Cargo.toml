@@ -40,9 +40,9 @@ wasmtime = [
     "linera-execution/wasmtime",
     "linera-storage/wasmtime",
 ]
-rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
-dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
-scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
+rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb", "linera-storage-runtime/rocksdb"]
+dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb", "linera-storage-runtime/dynamodb"]
+scylladb = ["linera-views/scylladb", "linera-core/scylladb", "linera-storage-runtime/scylladb"]
 kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
 remote-net = []
 metrics = [
@@ -58,7 +58,7 @@ jemalloc = [
     "linera-metrics/jemalloc",
 ]
 opentelemetry = ["linera-base/opentelemetry", "linera-rpc/opentelemetry"]
-storage-service = ["linera-storage-service"]
+storage-service = ["linera-storage-service", "linera-storage-runtime/storage-service"]
 
 [dependencies]
 alloy-primitives.workspace = true
@@ -109,6 +109,7 @@ linera-rpc = { workspace = true, features = [
 ] }
 linera-sdk = { workspace = true }
 linera-storage.workspace = true
+linera-storage-runtime.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
