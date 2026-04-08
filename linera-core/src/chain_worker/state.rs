@@ -116,7 +116,7 @@ where
 
 /// The result of processing a cross-chain update.
 pub(crate) enum CrossChainUpdateResult {
-    /// The update was applied and the chain was saved up to the given height.
+    /// The update was applied up to the given height. The caller must save.
     Updated(BlockHeight),
     /// All bundles were already received; nothing to do.
     NothingToDo,

@@ -542,19 +542,20 @@ pub(crate) enum BatchRequest {
     },
 }
 
-/// A future that processes cross-chain batches.
+/// The inner future type for cross-chain batch processing.
 ///
-/// All tasks waiting for cross-chain operations on the same chain share a
-/// single `BatchFuture`. Polling any clone drives the underlying processing
-/// loop. The loop drains the request queue, acquires the write lock, processes
-/// all requests in one batch, and repeats until the queue is empty.
+/// Wrapped in `Shared<BatchFuture>` so that all tasks waiting for
+/// cross-chain operations on the same chain can cooperatively poll a
+/// single driver. The driver loops: drain the request channel, acquire the
+/// write lock, process all requests in one batch, repeat.
 type BatchFuture = pin::Pin<Box<dyn Future<Output = ()> + Send>>;
 
 #[derive(Clone)]
 struct DriverState {
     /// Send half of the channel whose receiver lives inside the driver future.
     sender: mpsc::UnboundedSender<BatchRequest>,
-    /// The shared future to clone and poll.
+    /// Weak handle to the shared driver future. Upgraded to `Shared<BatchFuture>`
+    /// by callers who need to poll it.
     future: WeakShared<BatchFuture>,
 }
 
