@@ -19,13 +19,13 @@
           "uid": "prometheus"
         },
         "enable": true,
-        "expr": "sum by (instance, validator) (resets(linera_server_request_count[$__rate_interval])) > 0",
+        "expr": "label_replace(max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"}) != max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"} offset 5m), \"validator\", \"$1.testnet-conway.linera.net\", \"cluster\", \"gke-testnet-conway-(validator-\\\\d+)\")",
         "hide": false,
         "iconColor": "rgba(255, 96, 96, 1)",
         "limit": 100,
         "name": "shard_restart",
         "showIn": 0,
-        "tagKeys": "instance,validator",
+        "tagKeys": "validator,pod",
         "tags": [],
         "titleFormat": "shard restart",
         "type": "tags"
