@@ -5436,6 +5436,7 @@ dependencies = [
  "linera-faucet-client",
  "linera-persistent",
  "linera-storage",
+ "linera-storage-runtime",
  "linera-views",
  "op-alloy-network",
  "prometheus",

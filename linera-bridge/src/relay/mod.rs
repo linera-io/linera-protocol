@@ -35,13 +35,8 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_persistent::Persist;
 use linera_storage::DbStorage;
-use linera_views::{
-    backends::{
-        lru_caching::LruCachingConfig,
-        rocks_db::{PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreInternalConfig},
-    },
-    lru_prefix_cache::StorageCacheConfig,
-};
+use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
+use linera_views::backends::rocks_db::RocksDbDatabase;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::{
@@ -97,7 +92,7 @@ pub async fn run(
     linera_fungible_address: &str,
     evm_private_key: &str,
     port: u16,
-    cache_sizes: linera_storage::StorageCacheSizes,
+    common_storage_options: &CommonStorageOptions,
     monitor_scan_interval: u64,
     monitor_start_block: u64,
     max_retries: u32,
@@ -143,11 +138,25 @@ pub async fn run(
             .context("failed to read keystore")?
             .into_value();
 
-    // Parse storage path: expect "rocksdb:/path/to/db"
-    let db_path = storage_path
-        .strip_prefix("rocksdb:")
-        .context("storage config must start with 'rocksdb:'")?;
-    let mut storage = create_rocksdb_storage(Path::new(db_path), cache_sizes).await?;
+    // Parse storage config and create storage.
+    let mut storage_config: StorageConfig = storage_path.parse()?;
+    storage_config.namespace = "bridge_relay".to_string();
+    let store_config = storage_config.add_common_storage_options(common_storage_options)?;
+    let cache_sizes = common_storage_options.storage_cache_sizes();
+    let (mut storage, db_path) = match store_config {
+        StoreConfig::RocksDb { config, namespace } => {
+            let path = config.inner_config.path_with_guard.path_buf.clone();
+            let storage = DbStorage::<RocksDbDatabase, _>::maybe_create_and_connect(
+                &config,
+                &namespace,
+                Some(WasmRuntime::default()),
+                cache_sizes,
+            )
+            .await?;
+            (storage, path)
+        }
+        _ => anyhow::bail!("only rocksdb storage is supported by the bridge relay"),
+    };
 
     // ── Wallet: load existing or create fresh ──
     let wallet = if wallet_path.exists() {
@@ -177,8 +186,8 @@ pub async fn run(
         &Default::default(),
         None,
         genesis_config,
-        linera_core::worker::DEFAULT_BLOCK_CACHE_SIZE,
-        linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+        common_storage_options.block_cache_size,
+        common_storage_options.execution_state_cache_size,
     )
     .await?;
 
@@ -259,42 +268,9 @@ pub async fn run(
         monitor_start_block,
         max_retries,
         sqlite_path,
-        Path::new(db_path),
+        &db_path,
     ))
     .await
-}
-
-type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
-
-async fn create_rocksdb_storage(
-    path: &Path,
-    cache_sizes: linera_storage::StorageCacheSizes,
-) -> Result<RocksDbStorage> {
-    let config = LruCachingConfig {
-        inner_config: RocksDbStoreInternalConfig {
-            path_with_guard: PathWithGuard::new(path.to_path_buf()),
-            spawn_mode: RocksDbSpawnMode::get_spawn_mode_from_runtime(),
-            max_stream_queries: 10,
-        },
-        storage_cache_config: StorageCacheConfig {
-            max_cache_size: 10_000_000,
-            max_value_entry_size: 1_000_000,
-            max_find_keys_entry_size: 10_000_000,
-            max_find_key_values_entry_size: 10_000_000,
-            max_cache_entries: 1000,
-            max_cache_value_size: 10_000_000,
-            max_cache_find_keys_size: 10_000_000,
-            max_cache_find_key_values_size: 10_000_000,
-        },
-    };
-    let storage = DbStorage::<RocksDbDatabase, _>::maybe_create_and_connect(
-        &config,
-        "bridge_relay",
-        Some(WasmRuntime::default()),
-        cache_sizes,
-    )
-    .await?;
-    Ok(storage)
 }
 
 #[allow(clippy::too_many_arguments)]
