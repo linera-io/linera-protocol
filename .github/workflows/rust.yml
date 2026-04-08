@@ -242,7 +242,7 @@ jobs:
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown --locked
     - name: Build linera-exporter binary for integration tests
       run: |
-        cargo build --bin linera-exporter --no-default-features --features rocksdb --locked
+        cargo build --bin linera-exporter --locked
     - name: Run all tests using the default features (except storage-service)
       run: |
         # TODO(#2764): Actually link this to the default features
