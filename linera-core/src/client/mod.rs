@@ -1886,8 +1886,6 @@ where
     G: FnOnce(Vec<(ValidatorPublicKey, E1)>) -> E2,
     R: Future<Output = Result<V, E1>> + 'a,
 {
-    let mut nodes = nodes.to_vec();
-    nodes.shuffle(&mut rand::thread_rng());
     let mut stream = nodes
         .iter()
         .zip(0..)

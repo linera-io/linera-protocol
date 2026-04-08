@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use rand::prelude::SliceRandom as _;
+
 #[cfg(not(web))]
 use futures::stream::BoxStream;
 #[cfg(web)]
@@ -200,10 +202,11 @@ pub trait ValidatorNodeProvider: 'static {
         &self,
         committee: &Committee,
     ) -> Result<impl Iterator<Item = (ValidatorPublicKey, Self::Node)> + '_, NodeError> {
-        let validator_addresses: Vec<_> = committee
+        let mut validator_addresses: Vec<_> = committee
             .validator_addresses()
             .map(|(node, name)| (node, name.to_owned()))
             .collect();
+        validator_addresses.shuffle(&mut rand::thread_rng());
         self.make_nodes_from_list(validator_addresses)
     }
 
