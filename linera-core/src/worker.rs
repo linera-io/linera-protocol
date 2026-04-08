@@ -412,6 +412,8 @@ pub enum WorkerError {
     MissingNetworkDescription,
     #[error("thread error: {0}")]
     Thread(#[from] web_thread_pool::Error),
+    #[error("Chain worker was poisoned by a journal resolution failure")]
+    PoisonedWorker,
 }
 
 impl WorkerError {
@@ -447,15 +449,23 @@ impl WorkerError {
             | WorkerError::MissingNetworkDescription
             | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_)
-            | WorkerError::IncorrectOutcome { .. } => true,
+            | WorkerError::IncorrectOutcome { .. }
+            | WorkerError::PoisonedWorker => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
     }
 
-    /// Returns `true` if this error was caused by a journal resolution failure,
-    /// which may leave storage in an inconsistent state requiring a view reload.
-    pub fn must_reload_view(&self) -> bool {
-        matches!(self, WorkerError::ViewError(e) if e.must_reload_view())
+    /// Returns `true` if this error indicates that the chain worker's in-memory
+    /// state may be inconsistent and must be evicted from the cache.
+    fn must_reload_view(&self) -> bool {
+        matches!(
+            self,
+            WorkerError::PoisonedWorker
+                | WorkerError::ViewError(ViewError::StoreError {
+                    must_reload_view: true,
+                    ..
+                })
+        )
     }
 }
 
@@ -773,17 +783,16 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
+        let state_ref = &state;
         let result = Box::pin(wrap_future(async move {
-            let guard = handle::read_lock(&state).await;
-            if guard.is_poisoned() {
-                return Err(Self::poisoned_worker_error());
-            }
+            let guard = handle::read_lock(state_ref).await;
+            guard.check_not_poisoned()?;
             f(guard).await
         }))
         .await;
-        if let Err(e) = &result {
-            if e.must_reload_view() {
-                self.evict_poisoned_worker(chain_id);
+        if let Err(error) = &result {
+            if error.must_reload_view() {
+                self.evict_poisoned_worker(chain_id, &state);
             }
         }
         result
@@ -800,35 +809,34 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
+        let state_ref = &state;
         let result = Box::pin(wrap_future(async move {
-            let guard = handle::write_lock(&state).await;
-            if guard.is_poisoned() {
-                return Err(Self::poisoned_worker_error());
-            }
+            let guard = handle::write_lock(state_ref).await;
+            guard.check_not_poisoned()?;
             f(guard).await
         }))
         .await;
-        if let Err(e) = &result {
-            if e.must_reload_view() {
-                self.evict_poisoned_worker(chain_id);
+        if let Err(error) = &result {
+            if error.must_reload_view() {
+                self.evict_poisoned_worker(chain_id, &state);
             }
         }
         result
     }
 
-    fn poisoned_worker_error() -> WorkerError {
-        WorkerError::ViewError(ViewError::StoreError {
-            backend: "journaling",
-            error: "Worker is poisoned due to a journal resolution failure".into(),
-            must_reload_view: true,
-        })
-    }
-
-    /// Evicts a poisoned chain worker from the cache so it gets reloaded on the next request.
-    fn evict_poisoned_worker(&self, chain_id: ChainId) {
+    /// Evicts a poisoned chain worker from the cache, but only if the entry still
+    /// points to the same instance. This avoids removing a fresh replacement that
+    /// another task may have already loaded.
+    fn evict_poisoned_worker(&self, chain_id: ChainId, poisoned: &ChainWorkerArc<StorageClient>) {
         tracing::warn!(%chain_id, "Evicting poisoned chain worker from cache");
         let pin = self.chain_workers.pin();
-        pin.remove(&chain_id);
+        let weak_poisoned = Arc::downgrade(poisoned);
+        let _ = pin.remove_if(&chain_id, |_key, future| {
+            future
+                .peek()
+                .and_then(|r| r.clone().ok())
+                .is_some_and(|weak| weak.ptr_eq(&weak_poisoned))
+        });
     }
 
     /// Gets or creates a chain worker for the given chain.

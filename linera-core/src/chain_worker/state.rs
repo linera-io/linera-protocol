@@ -114,13 +114,6 @@ where
     poisoned: bool,
 }
 
-/// Whether the block was processed or skipped. Used for metrics.
-pub enum BlockOutcome {
-    Processed,
-    Preprocessed,
-    Skipped,
-}
-
 /// The result of processing a cross-chain update.
 pub(crate) enum CrossChainUpdateResult {
     /// The update was applied and the chain was saved up to the given height.
@@ -134,6 +127,13 @@ pub(crate) enum CrossChainUpdateResult {
         origin: ChainId,
         retransmit_from: BlockHeight,
     },
+}
+
+/// Whether the block was processed or skipped. Used for metrics.
+pub enum BlockOutcome {
+    Processed,
+    Preprocessed,
+    Skipped,
 }
 
 impl<StorageClient> ChainWorkerState<StorageClient>
@@ -192,16 +192,15 @@ where
     }
 
     /// Rolls back any uncommitted changes to the chain state.
-    /// Does nothing if the worker is poisoned (the view is in an inconsistent state).
     pub(crate) fn rollback(&mut self) {
-        if !self.poisoned {
-            self.chain.rollback();
-        }
+        self.chain.rollback();
     }
 
-    /// Returns `true` if the worker is poisoned due to a journal resolution failure.
-    pub(crate) fn is_poisoned(&self) -> bool {
-        self.poisoned
+    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a journal
+    /// resolution failure.
+    pub(crate) fn check_not_poisoned(&self) -> Result<(), WorkerError> {
+        ensure!(!self.poisoned, WorkerError::PoisonedWorker);
+        Ok(())
     }
 
     /// Updates the last-access timestamp to the current time.
@@ -345,7 +344,6 @@ where
         Ok(maybe_blobs.into_iter().collect())
     }
 
-    /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
     /// Creates cross-chain requests for a single recipient from its outbox.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
@@ -2147,16 +2145,16 @@ where
         chain_id = %self.chain_id()
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
-        if let Err(e) = self.chain.save().await {
-            if e.must_reload_view() {
+        if let Err(error) = self.chain.save().await {
+            if error.must_reload_view() {
                 tracing::error!(
-                    error = ?e,
+                    ?error,
                     chain_id = %self.chain_id(),
                     "Journal resolution failed; marking worker as poisoned"
                 );
                 self.poisoned = true;
             }
-            return Err(e.into());
+            return Err(error.into());
         }
         Ok(())
     }
