@@ -50,9 +50,13 @@ use wrapped_fungible::{Account, InitialState, WrappedFungibleOperation, WrappedP
 struct BridgeParameters {
     source_chain_id: u64,
     bridge_contract_address: [u8; 20],
-    fungible_app_id: ApplicationId,
     token_address: [u8; 20],
     rpc_endpoint: String,
+}
+
+#[derive(Debug, Serialize)]
+enum BridgeOperation {
+    RegisterFungibleApp { app_id: ApplicationId },
 }
 
 sol! {
@@ -164,47 +168,8 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let erc20_addr = parse_deployed_address(&erc20_output)?;
     tracing::info!(%erc20_addr, "MockERC20 deployed");
 
-    // ── Phase 4: Deploy wrapped-fungible app ──
-    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .context("manifest dir has fewer than 3 ancestors")?
-        .to_path_buf();
-    let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
-
-    tracing::info!("Publishing wrapped-fungible module...");
-    let wf_contract = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm"))?;
-    let wf_service = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm"))?;
-    let (wf_module_id, _) = cc_a
-        .publish_module(wf_contract, wf_service, VmRuntime::Wasm)
-        .await?
-        .expect("publish wrapped-fungible module committed");
-    cc_a.synchronize_from_validators().await?;
-    cc_a.process_inbox().await?;
-
-    tracing::info!("Creating wrapped-fungible application...");
-    let (fungible_app_id, _) = cc_a
-        .create_application_untyped(
-            wf_module_id,
-            serde_json::to_vec(&WrappedParameters {
-                ticker_symbol: "wTEST".to_string(),
-                minter: owner_a,
-                mint_chain_id: chain_a,
-                evm_token_address: erc20_addr.0 .0,
-                evm_source_chain_id: 31337,
-            })?,
-            serde_json::to_vec(&InitialState {
-                accounts: BTreeMap::new(),
-            })?,
-            vec![],
-        )
-        .await?
-        .expect("create wrapped-fungible app committed");
-    tracing::info!(%fungible_app_id, "wrapped-fungible app created");
-
-    // ── Phase 5: Deploy FungibleBridge with real applicationId ──
+    // ── Phase 4: Deploy FungibleBridge on EVM (no applicationId needed at construction) ──
     let chain_a_bytes32 = format!("0x{chain_a}");
-    let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     let light_client = light_client_address();
 
     tracing::info!("Deploying FungibleBridge...");
@@ -223,7 +188,6 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
              --constructor-args \
              {light_client} \
              {chain_a_bytes32} \
-             {app_id_bytes32} \
              {erc20_addr}"
         ),
         project_name,
@@ -250,7 +214,14 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     )
     .await;
 
-    // ── Phase 6: Deploy evm-bridge app with bridge address ──
+    // ── Phase 5: Publish and deploy Linera apps ──
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .context("manifest dir has fewer than 3 ancestors")?
+        .to_path_buf();
+    let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
+
     tracing::info!("Publishing evm-bridge module...");
     let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm"))?;
     let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm"))?;
@@ -268,16 +239,77 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             serde_json::to_vec(&BridgeParameters {
                 source_chain_id: 31337,
                 bridge_contract_address: bridge_addr.0 .0,
-                fungible_app_id,
                 token_address: erc20_addr.0 .0,
                 rpc_endpoint: String::new(),
             })?,
             serde_json::to_vec(&())?,
-            vec![fungible_app_id],
+            vec![],
         )
         .await?
         .expect("create evm-bridge app committed");
     tracing::info!(%bridge_app_id, "evm-bridge app created");
+
+    tracing::info!("Publishing wrapped-fungible module...");
+    let wf_contract = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm"))?;
+    let wf_service = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm"))?;
+    let (wf_module_id, _) = cc_a
+        .publish_module(wf_contract, wf_service, VmRuntime::Wasm)
+        .await?
+        .expect("publish wrapped-fungible module committed");
+    cc_a.synchronize_from_validators().await?;
+    cc_a.process_inbox().await?;
+
+    tracing::info!("Creating wrapped-fungible application...");
+    let (fungible_app_id, _) = cc_a
+        .create_application_untyped(
+            wf_module_id,
+            serde_json::to_vec(&WrappedParameters {
+                ticker_symbol: "wTEST".to_string(),
+                minter: Some(owner_a),
+                mint_chain_id: Some(chain_a),
+                evm_token_address: erc20_addr.0 .0,
+                evm_source_chain_id: 31337,
+                bridge_app_id: Some(bridge_app_id),
+            })?,
+            serde_json::to_vec(&InitialState {
+                accounts: BTreeMap::new(),
+            })?,
+            vec![],
+        )
+        .await?
+        .expect("create wrapped-fungible app committed");
+    tracing::info!(%fungible_app_id, "wrapped-fungible app created");
+
+    // ── Phase 6: Register app IDs on both sides ──
+    tracing::info!("Registering fungible app in evm-bridge...");
+    let register_bytes = bcs::to_bytes(&BridgeOperation::RegisterFungibleApp {
+        app_id: fungible_app_id,
+    })?;
+    let register_operation = Operation::User {
+        application_id: bridge_app_id,
+        bytes: register_bytes,
+    };
+    cc_a.execute_operations(vec![register_operation], vec![])
+        .await?
+        .expect("register fungible app committed");
+
+    let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
+    tracing::info!("Registering fungibleApplicationId in FungibleBridge...");
+    exec_ok(
+        &compose,
+        "foundry-tools",
+        &format!(
+            "cast send --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             {bridge_addr} \
+             'registerFungibleApplicationId(bytes32)' \
+             {app_id_bytes32}"
+        ),
+        project_name,
+        &compose_file,
+    )
+    .await;
+    tracing::info!("All app IDs registered");
 
     // ── Phase 7: Start relay ──
     let rpc_url = "http://localhost:8545".parse()?;
@@ -313,11 +345,16 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let mut relay_process = tokio::process::Command::new(&relay_binary)
         .args([
             "serve",
-            "--rpc-url", "http://localhost:8545",
-            "--faucet-url", "http://localhost:8080",
-            "--wallet", wallet_path.to_str().unwrap(),
-            "--keystore", keystore_path.to_str().unwrap(),
-            "--storage", &storage_path,
+            "--rpc-url",
+            "http://localhost:8545",
+            "--faucet-url",
+            "http://localhost:8080",
+            "--wallet",
+            wallet_path.to_str().unwrap(),
+            "--keystore",
+            keystore_path.to_str().unwrap(),
+            "--storage",
+            &storage_path,
             &format!("--linera-bridge-chain-id={chain_a}"),
             &format!("--linera-bridge-chain-owner={owner_a}"),
             &format!("--evm-bridge-address={bridge_addr}"),
@@ -325,8 +362,10 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             &format!("--linera-fungible-address={fungible_app_id}"),
             &format!("--evm-private-key={ANVIL_PRIVATE_KEY}"),
             &format!("--port={relay_port}"),
-            "--monitor-scan-interval", "5",
-            "--max-retries", "5",
+            "--monitor-scan-interval",
+            "5",
+            "--max-retries",
+            "5",
         ])
         .env("RUST_LOG", "linera=info,linera_bridge=debug")
         .kill_on_drop(true)
@@ -339,7 +378,12 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let client = reqwest::Client::new();
     for attempt in 0..30 {
         tokio::time::sleep(Duration::from_secs(2)).await;
-        if client.get(format!("{relay_url}/metrics")).send().await.is_ok() {
+        if client
+            .get(format!("{relay_url}/metrics"))
+            .send()
+            .await
+            .is_ok()
+        {
             tracing::info!(attempt, "Relay is ready");
             break;
         }
@@ -383,7 +427,12 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     tracing::info!("Depositing on EVM targeting chain B...");
     let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
     let deposit_receipt = bridge_contract
-        .deposit(chain_b_b256, app_id_bytes32.parse()?, owner_b_b256, deposit_amount)
+        .deposit(
+            chain_b_b256,
+            app_id_bytes32.parse()?,
+            owner_b_b256,
+            deposit_amount,
+        )
         .send()
         .await?
         .get_receipt()
@@ -407,8 +456,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         cc_b.process_inbox().await?;
 
         // Check on-chain whether the deposit was processed.
-        match linera_bridge_e2e::query_deposit_processed(&cc_a, bridge_app_id, &deposit_key).await
-        {
+        match linera_bridge_e2e::query_deposit_processed(&cc_a, bridge_app_id, &deposit_key).await {
             Ok(true) => {
                 tracing::info!(attempt, "Deposit auto-processed!");
                 break;
@@ -456,8 +504,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
 
     // Wait for relay to burn and forward to EVM.
     tracing::info!("Waiting for ERC-20 balance...");
-    let evm_recipient_addr: alloy::primitives::Address =
-        format!("0x{evm_recipient}").parse()?;
+    let evm_recipient_addr: alloy::primitives::Address = format!("0x{evm_recipient}").parse()?;
     let expected_balance = U256::from(25u128 * 10u128.pow(18));
 
     for attempt in 0..60 {
@@ -468,9 +515,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
 
         if balance >= expected_balance {
             relay_process.kill().await.ok();
-            tracing::info!(
-                "Test passed! Both directions: EVM→Linera deposit + Linera→EVM burn."
-            );
+            tracing::info!("Test passed! Both directions: EVM→Linera deposit + Linera→EVM burn.");
             return Ok(());
         }
     }

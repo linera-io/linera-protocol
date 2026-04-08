@@ -253,11 +253,12 @@ the deposit/withdraw forms.
 
 1. User calls `wrapped-fungible.transfer` targeting the relay's chain with an
    `Address20` owner (their EVM address)
-2. Wrapped tokens are burned and a `Credit` message is sent to the relay chain
-3. Relay forwards the Linera block containing the `Credit` to
+2. On the relay chain, the `Credit` message triggers an auto-burn and emits a
+   `BurnEvent` on the `"burns"` stream
+3. Relay detects the `BurnEvent` and forwards the Linera block to
    `FungibleBridge.addBlock()`
 4. `FungibleBridge` verifies the block via `LightClient`, deserializes the
-   `Credit`, and transfers ERC-20 tokens to the user's EVM address
+   `BurnEvent`, and transfers ERC-20 tokens to the user's EVM address
 
 ## Active scanning and auto-retry
 
@@ -268,10 +269,10 @@ requests and automatically retries them:
   and checks the Linera `evm-bridge` app to see if each deposit has been
   processed. Unprocessed deposits are retried by regenerating the MPT proof
   and resubmitting.
-- **Linera→EVM burns**: the relay scans Linera blocks for Credit messages to
-  EVM addresses and checks EVM for matching ERC-20 `Transfer` events.
-  Unforwarded burns are retried by re-reading the burn execution block from
-  chain storage and re-calling `addBlock`.
+- **Linera→EVM burns**: the relay scans Linera blocks for `BurnEvent` events
+  on the `"burns"` stream and checks EVM for matching ERC-20 `Transfer` events.
+  Unforwarded burns are retried by re-reading the block containing the
+  auto-burn from chain storage and re-calling `addBlock`.
 
 This means the relay self-heals after crashes or transient RPC failures
 without operator intervention. On-chain replay protection (`processed_deposits`

@@ -553,38 +553,6 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                         let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
                         update_balance_metrics(&evm_client, &linera_client).await;
                     }
-                    linera::ChainOperation::Burn { owner, amount, response } => {
-                        let result = async {
-                            let burn_bytes = linera::serialize_burn_operation(&owner, &amount);
-                            let burn_op = Operation::User {
-                                application_id: fungible_app_id,
-                                bytes: burn_bytes,
-                            };
-
-                            tracing::info!("Submitting Burn operation...");
-
-                            chain_client.synchronize_from_validators().await
-                                .context("failed to synchronize")?;
-
-                            let outcome = chain_client
-                                .execute_operations(vec![burn_op], vec![])
-                                .await?;
-                            match outcome {
-                                linera_core::data_types::ClientOutcome::Committed(cert) => {
-                                    tracing::info!(
-                                        height = %cert.block().header.height,
-                                        "Burn operation committed"
-                                    );
-                                    Ok(cert)
-                                }
-                                other => {
-                                    anyhow::bail!("Burn not committed: {other:?}");
-                                }
-                            }
-                        }.await;
-                        let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
-                        update_balance_metrics(&evm_client, &linera_client).await;
-                    }
                 }
             }
         }

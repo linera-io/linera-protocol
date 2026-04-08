@@ -8,18 +8,25 @@ use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
 use linera_bridge::proof;
 use linera_sdk::{
     ethereum::{ContractEthereumClient, EthereumQueries},
+<<<<<<< HEAD
     linera_base_types::{Account, AccountOwner, Amount, ChainId, WithContractAbi},
     views::{linera_views, RootView, SetView, View, ViewStorageContext},
+=======
+    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
+>>>>>>> 070ac118ea (Rearchitect linera bridge minting and burning mechanisms (#5929))
     Contract, ContractRuntime,
 };
 use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi};
 
-/// On-chain state: tracks processed deposits and verified block hashes.
+/// On-chain state: tracks processed deposits, verified block hashes,
+/// and the registered wrapped-fungible application.
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
     pub processed_deposits: SetView<[u8; 32]>,
     pub verified_block_hashes: SetView<[u8; 32]>,
+    pub fungible_app_id: RegisterView<Option<ApplicationId>>,
 }
 
 pub struct EvmBridgeContract {
@@ -64,6 +71,16 @@ impl Contract for EvmBridgeContract {
 
     async fn execute_operation(&mut self, operation: BridgeOperation) {
         match operation {
+            BridgeOperation::RegisterFungibleApp { app_id } => {
+                self.runtime
+                    .authenticated_signer()
+                    .expect("RegisterFungibleApp requires an authenticated signer");
+                assert!(
+                    self.state.fungible_app_id.get().is_none(),
+                    "fungible app is already registered and cannot be changed"
+                );
+                self.state.fungible_app_id.set(Some(app_id));
+            }
             BridgeOperation::ProcessDeposit {
                 block_header_rlp,
                 receipt_rlp,
@@ -232,7 +249,12 @@ impl EvmBridgeContract {
         };
 
         // Forward authenticated signer (chain owner = minter) to the fungible app.
-        let fungible_app_id = params.fungible_app_id.with_abi::<WrappedFungibleTokenAbi>();
+        let fungible_app_id = self
+            .state
+            .fungible_app_id
+            .get()
+            .expect("fungible app not registered — call RegisterFungibleApp first")
+            .with_abi::<WrappedFungibleTokenAbi>();
         self.runtime
             .call_application(true, fungible_app_id, &mint_op);
     }

@@ -38,7 +38,6 @@ relay = [
     "cli",
     "dep:axum",
     "dep:dirs",
-    "dep:fungible",
     "dep:wrapped-fungible",
     "dep:futures",
     "dep:prometheus",
@@ -93,7 +92,10 @@ url = { workspace = true, optional = true }
 
 clap = { workspace = true, optional = true }
 fs-err = { workspace = true, optional = true }
+<<<<<<< HEAD
 fungible = { path = "../examples/fungible", optional = true }
+=======
+>>>>>>> 070ac118ea (Rearchitect linera bridge minting and burning mechanisms (#5929))
 reqwest = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 wrapped-fungible = { path = "../examples/wrapped-fungible", optional = true }
