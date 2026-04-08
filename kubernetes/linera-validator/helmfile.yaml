@@ -120,6 +120,9 @@ releases:
 
             echo "Ensuring scylla-config ConfigMap exists before deploying ScyllaCluster..."
             kubectl "${kube_args[@]}" apply -f templates/scylla-config.yaml
+
+            echo "Ensuring scylla-agent-config Secret exists for Manager backup..."
+            kubectl "${kube_args[@]}" apply -f templates/scylla-agent-gcs-config.yaml
     {{- if and .Values.gcpRun .Values.usingLocalSsd }}
       - events: ["presync"]
         showlogs: true
