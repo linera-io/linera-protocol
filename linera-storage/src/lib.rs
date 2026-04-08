@@ -38,11 +38,11 @@ use linera_views::{context::Context, views::RootView, ViewError};
 
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;
-#[cfg(with_testing)]
-pub use crate::db_storage::TestClock;
 pub use crate::db_storage::{
     ChainStatesFirstAssignment, DbStorage, StorageCacheConfig, StorageCaches, WallClock,
 };
+#[cfg(with_testing)]
+pub use crate::db_storage::{TestClock, DEFAULT_STORAGE_CACHE_CONFIG};
 
 /// The default namespace to be used when none is specified
 pub const DEFAULT_NAMESPACE: &str = "default";
@@ -644,7 +644,7 @@ mod tests {
 
         // Test single blob read
         let read_blob = storage.read_blob(blob_id1).await?;
-        assert_eq!(read_blob, Some(Arc::new(test_blob1.clone())));
+        assert_eq!(read_blob.as_deref(), Some(&test_blob1));
 
         // Test multiple blob read (read_blobs)
         let blob_ids = vec![blob_id1, blob_id2, blob_id3];
@@ -652,9 +652,9 @@ mod tests {
         assert_eq!(read_blobs.len(), 3);
 
         // Verify each blob was read correctly
-        assert_eq!(read_blobs[0], Some(Arc::new(test_blob1.clone())));
-        assert_eq!(read_blobs[1], Some(Arc::new(test_blob2)));
-        assert_eq!(read_blobs[2], Some(Arc::new(test_blob3)));
+        assert_eq!(read_blobs[0].as_deref(), Some(&test_blob1));
+        assert_eq!(read_blobs[1].as_deref(), Some(&test_blob2));
+        assert_eq!(read_blobs[2].as_deref(), Some(&test_blob3));
 
         // Test missing blobs detection
         let missing_blob_id = BlobId::new(CryptoHash::test_hash("missing"), BlobType::Data);

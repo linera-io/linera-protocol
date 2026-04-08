@@ -70,9 +70,9 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "1000")]
     pub confirmed_block_cache_size: usize,
 
-    /// The maximal number of entries in the lite certificate cache.
+    /// The maximal number of entries in the assembled certificate cache.
     #[arg(long, default_value = "1000")]
-    pub lite_certificate_cache_size: usize,
+    pub certificate_cache_size: usize,
 
     /// The maximal number of entries in the raw certificate cache.
     #[arg(long, default_value = "1000")]
