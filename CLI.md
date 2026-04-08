@@ -19,7 +19,6 @@ This document contains the help content for the `linera` command-line program.
 * [`linera sync-balance`↴](#linera-sync-balance)
 * [`linera sync`↴](#linera-sync)
 * [`linera process-inbox`↴](#linera-process-inbox)
-* [`linera query-shard-info`↴](#linera-query-shard-info)
 * [`linera revoke-epochs`↴](#linera-revoke-epochs)
 * [`linera resource-control-policy`↴](#linera-resource-control-policy)
 * [`linera benchmark`↴](#linera-benchmark)
@@ -28,7 +27,6 @@ This document contains the help content for the `linera` command-line program.
 * [`linera create-genesis-config`↴](#linera-create-genesis-config)
 * [`linera watch`↴](#linera-watch)
 * [`linera service`↴](#linera-service)
-* [`linera query-application`↴](#linera-query-application)
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-module`↴](#linera-publish-module)
 * [`linera list-events-from-index`↴](#linera-list-events-from-index)
@@ -39,6 +37,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera keygen`↴](#linera-keygen)
 * [`linera assign`↴](#linera-assign)
 * [`linera retry-pending-block`↴](#linera-retry-pending-block)
+* [`linera execute-operation`↴](#linera-execute-operation)
 * [`linera wallet`↴](#linera-wallet)
 * [`linera wallet show`↴](#linera-wallet-show)
 * [`linera wallet set-default`↴](#linera-wallet-set-default)
@@ -74,7 +73,6 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage list-namespaces`↴](#linera-storage-list-namespaces)
 * [`linera storage list-blob-ids`↴](#linera-storage-list-blob-ids)
 * [`linera storage list-chain-ids`↴](#linera-storage-list-chain-ids)
-* [`linera storage list-event-ids`↴](#linera-storage-list-event-ids)
 * [`linera completion`↴](#linera-completion)
 
 ## `linera`
@@ -99,14 +97,12 @@ Client implementation and command-line tool for the Linera blockchain
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `sync` — Synchronize the local state of the chain with a quorum validators
 * `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
-* `query-shard-info` — Query validators for shard information about a specific chain
 * `revoke-epochs` — Deprecates all committees up to and including the specified one
 * `resource-control-policy` — View or update the resource control policy
 * `benchmark` — Run benchmarks to test network performance
 * `create-genesis-config` — Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 * `watch` — Watch the network for notifications
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
-* `query-application` — Query an application with a read-only GraphQL query
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-module` — Publish module
 * `list-events-from-index` — Print events from a specific chain and stream from a specified index
@@ -117,6 +113,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `keygen` — Create an unassigned key pair
 * `assign` — Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
+* `execute-operation` — Execute a raw user operation on an application
 * `wallet` — Show the contents of the wallet
 * `chain` — Show the information about a chain
 * `project` — Manage Linera projects
@@ -141,12 +138,16 @@ Client implementation and command-line tool for the Linera blockchain
    Discarded bundles can be retried in the next block.
 
   Default value: `3`
+* `--max-new-events-per-block <MAX_NEW_EVENTS_PER_BLOCK>` — The maximum number of new stream events to include in a block proposal
+
+  Default value: `10`
 * `--staging-bundles-time-budget-ms <STAGING_BUNDLES_TIME_BUDGET>` — Time budget for staging message bundles in milliseconds. When set, limits bundle execution by wall-clock time, in addition to the count limit from `max_pending_message_bundles`
 * `--prioritize-bundles-from <PRIORITIZE_BUNDLES_FROM>` — Comma-separated list of chain IDs whose incoming bundles should be processed first
-* `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory. Use 0 to disable expiry
+* `--ignore-bundles-from <IGNORE_BUNDLES_FROM>` — Comma-separated list of chain IDs whose incoming bundles should be ignored
+* `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory
 
   Default value: `30000`
-* `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory. Use 0 to disable expiry
+* `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory
 
   Default value: `1000`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
@@ -271,7 +272,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--confirmed-block-cache-size <CONFIRMED_BLOCK_CACHE_SIZE>` — The maximal number of entries in the confirmed block cache
 
   Default value: `1000`
-* `--lite-certificate-cache-size <LITE_CERTIFICATE_CACHE_SIZE>` — The maximal number of entries in the lite certificate cache
+* `--certificate-cache-size <CERTIFICATE_CACHE_SIZE>` — The maximal number of entries in the confirmed block certificate cache
 
   Default value: `1000`
 * `--certificate-raw-cache-size <CERTIFICATE_RAW_CACHE_SIZE>` — The maximal number of entries in the raw certificate cache
@@ -280,9 +281,12 @@ Client implementation and command-line tool for the Linera blockchain
 * `--event-cache-size <EVENT_CACHE_SIZE>` — The maximal number of entries in the event cache
 
   Default value: `1000`
-* `--cache-cleanup-interval-secs <CACHE_CLEANUP_INTERVAL_SECS>` — Interval in seconds between weak reference cleanup sweeps in value caches
+* `--block-cache-size <BLOCK_CACHE_SIZE>` — The number of entries in the block cache
 
-  Default value: `30`
+  Default value: `5000`
+* `--execution-state-cache-size <EXECUTION_STATE_CACHE_SIZE>` — The number of entries in the execution state cache
+
+  Default value: `10000`
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`
@@ -293,12 +297,6 @@ Client implementation and command-line tool for the Linera blockchain
 * `--chrome-trace-exporter` — Enable OpenTelemetry Chrome JSON exporter for trace data analysis
 * `--chrome-trace-file <CHROME_TRACE_FILE>` — Output file path for Chrome trace JSON format. Can be visualized in chrome://tracing or Perfetto UI
 * `--otlp-exporter-endpoint <OTLP_EXPORTER_ENDPOINT>` — OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature)
-* `--block-cache-size <BLOCK_CACHE_SIZE>` — Size of the block cache (default: 5000)
-
-  Default value: `5000`
-* `--execution-state-cache-size <EXECUTION_STATE_CACHE_SIZE>` — Size of the execution state cache (default: 10000)
-
-  Default value: `10000`
 
 
 
@@ -347,7 +345,6 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
 * `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the option leaves the current set of super owners unchanged
 * `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the option leaves the current set of owners unchanged
-* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the option leaves the current setting unchanged
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
@@ -356,7 +353,8 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the option leaves the current setting unchanged
 * `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the option leaves current permissions unchanged
 * `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the option leaves current mandatory applications unchanged
-* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the option leaves current managing applications unchanged
+* `--close-chain <CLOSE_CHAIN>` — A JSON list of applications allowed to close the chain. Absence of the option leaves the current list unchanged
+* `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — A JSON list of applications allowed to change the application permissions on the current chain using the system API. Absence of the option leaves the current list unchanged
 * `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
 * `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
@@ -390,7 +388,6 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 * `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
 * `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the option leaves the current set of super owners unchanged
 * `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the option leaves the current set of owners unchanged
-* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the option leaves the current setting unchanged
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
@@ -424,7 +421,8 @@ Changes the application permissions configuration
 * `--chain-id <CHAIN_ID>` — The ID of the chain to which the new permissions will be applied
 * `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the option leaves current permissions unchanged
 * `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the option leaves current mandatory applications unchanged
-* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the option leaves current managing applications unchanged
+* `--close-chain <CLOSE_CHAIN>` — A JSON list of applications allowed to close the chain. Absence of the option leaves the current list unchanged
+* `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — A JSON list of applications allowed to change the application permissions on the current chain using the system API. Absence of the option leaves the current list unchanged
 * `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
 * `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
 
@@ -507,7 +505,7 @@ Synchronize the local state of the chain with a quorum validators
 ###### **Options:**
 
 * `--next-height <NEXT_HEIGHT>` — Stop synchronizing at this block height (exclusive). For instance, `--next-height 0` downloads zero blocks, `--next-height 10` downloads blocks 0 through 9
-* `--until-block-time <UNTIL_BLOCK_TIME>` — Stop synchronizing at the first block with a timestamp greater than this value (inclusive). The format is `YYYY-MM-DDTHH:MM:SS` or `YYYY-MM-DD HH:MM:SS` in UTC
+* `--until-block-time <UNTIL_BLOCK_TIME>` — Stop synchronizing at the first block with a timestamp greater than this value. The format is `YYYY-MM-DDTHH:MM:SS` or `YYYY-MM-DD HH:MM:SS` in UTC
 
 
 
@@ -520,18 +518,6 @@ Process all pending incoming messages from the inbox of the given chain by creat
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — The chain to process. If omitted, uses the default chain of the wallet
-
-
-
-## `linera query-shard-info`
-
-Query validators for shard information about a specific chain
-
-**Usage:** `linera query-shard-info <CHAIN_ID>`
-
-###### **Arguments:**
-
-* `<CHAIN_ID>` — The chain to query shard information for
 
 
 
@@ -586,8 +572,14 @@ View or update the resource control policy
 * `--maximum-oracle-response-bytes <MAXIMUM_ORACLE_RESPONSE_BYTES>` — Set the maximum size of oracle responses
 * `--maximum-http-response-bytes <MAXIMUM_HTTP_RESPONSE_BYTES>` — Set the maximum size in bytes of a received HTTP response
 * `--http-request-timeout-ms <HTTP_REQUEST_TIMEOUT_MS>` — Set the maximum amount of time allowed to wait for an HTTP response
-* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
-* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived
+* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to.
+
+   Besides hostnames, the following special flags are recognized:
+
+   - `FLAG_ZERO_HASH.linera.network`: Skip hashing of the execution state (return all zeros instead). - `FLAG_FREE_REJECT.linera.network`: Make bouncing messages free of charge. - `FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE.linera.network`: Require accepted (not rejected) incoming messages to satisfy mandatory application checks. - `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network`: Waive all message- and event-related fees for the given application ID (see also `--free-application-ids`).
+* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived.
+
+   This is a convenience flag that adds `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network` entries to the HTTP request allow list.
 
 
 
@@ -736,8 +728,14 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--maximum-oracle-response-bytes <MAXIMUM_ORACLE_RESPONSE_BYTES>` — Set the maximum size of oracle responses. (This will overwrite value from `--policy-config`)
 * `--maximum-http-response-bytes <MAXIMUM_HTTP_RESPONSE_BYTES>` — Set the maximum size in bytes of a received HTTP response
 * `--http-request-timeout-ms <HTTP_REQUEST_TIMEOUT_MS>` — Set the maximum amount of time allowed to wait for an HTTP response
-* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
-* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived
+* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to.
+
+   Besides hostnames, the following special flags are recognized:
+
+   - `FLAG_ZERO_HASH.linera.network`: Skip hashing of the execution state (return all zeros instead). - `FLAG_FREE_REJECT.linera.network`: Make bouncing messages free of charge. - `FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE.linera.network`: Require accepted (not rejected) incoming messages to satisfy mandatory application checks. - `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network`: Waive all message- and event-related fees for the given application ID (see also `--free-application-ids`).
+* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived.
+
+   This is a convenience flag that adds `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network` entries to the HTTP request allow list.
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--network-name <NETWORK_NAME>` — A unique name to identify this network
 
@@ -786,23 +784,6 @@ Run a GraphQL service to explore and extend the chains of the wallet
 * `--allow-subscription <ALLOWED_SUBSCRIPTIONS>` — Allow a named GraphQL subscription query. The operation name is extracted from the query string. Repeatable. Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
 * `--subscription-ttl-secs <SUBSCRIPTION_TTLS>` — Set a minimum TTL (in seconds) for a subscription query's cached result. When set, invalidations that arrive before the TTL expires are deferred until the remaining time elapses. Format: `Name=Secs`. Repeatable. Example: `--subscription-ttl-secs CounterValue=30`
 * `--pause` — Start in paused mode: do not synchronize chains from the network. The service will serve queries from local state only, without downloading new blocks or processing incoming messages
-
-
-
-## `linera query-application`
-
-Query an application with a read-only GraphQL query
-
-**Usage:** `linera query-application [OPTIONS] --application-id <APPLICATION_ID> <QUERY>`
-
-###### **Arguments:**
-
-* `<QUERY>` — The GraphQL query to send (e.g. "value" for a counter application)
-
-###### **Options:**
-
-* `--chain-id <CHAIN_ID>` — The chain on which the application is running
-* `--application-id <APPLICATION_ID>` — The application to query
 
 
 
@@ -986,6 +967,22 @@ As long as a block is pending most other commands will fail, since it is unsafe 
 
 
 
+## `linera execute-operation`
+
+Execute a raw user operation on an application.
+
+The operation bytes are provided as a hex string (BCS-encoded).
+
+**Usage:** `linera execute-operation [OPTIONS] --application-id <APPLICATION_ID> --operation <OPERATION>`
+
+###### **Options:**
+
+* `--application-id <APPLICATION_ID>` — The application to send the operation to
+* `--operation <OPERATION>` — BCS-encoded operation bytes as a hex string
+* `--chain-id <CHAIN_ID>` — Chain ID to submit the operation on. Defaults to the wallet's default chain
+
+
+
 ## `linera wallet`
 
 Show the contents of the wallet
@@ -1042,9 +1039,7 @@ Initialize a wallet from the genesis configuration
 
 ###### **Options:**
 
-* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration for a Linera deployment. Either this or `--faucet` must be specified.
-
-   Overrides `--faucet` if provided.
+* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration for a Linera deployment. Either this or `--faucet` must be specified
 * `--faucet <FAUCET>` — The address of a faucet
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 
@@ -1260,9 +1255,6 @@ Start a Local Linera Network
 * `--validators <VALIDATORS>` — The number of validators in the local test network
 
   Default value: `1`
-* `--proxies <PROXIES>` — The number of proxies in the local test network
-
-  Default value: `1`
 * `--shards <SHARDS>` — The number of shards per validator in the local test network
 
   Default value: `1`
@@ -1295,9 +1287,10 @@ Start a Local Linera Network
 * `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either `grpc` or `grpcs`
 
   Default value: `grpc`
-* `--with-faucet` — If present, a faucet is started on a dedicated chain with its own wallet
+* `--with-faucet` — If present, a faucet is started using the chain provided by --faucet-chain, or the first non-admin chain if not provided
 
   Default value: `false`
+* `--faucet-chain <FAUCET_CHAIN>` — When using --with-faucet, this specifies the chain on which the faucet will be started. If this is `n`, the `n`-th non-admin chain (lexicographically) in the wallet is selected
 * `--faucet-port <FAUCET_PORT>` — The port on which to run the faucet server
 
   Default value: `8080`
@@ -1316,6 +1309,7 @@ Start a Local Linera Network
 * `--exporter-port <EXPORTER_PORT>` — The port on which to run the block exporter
 
   Default value: `8081`
+* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
 
 
 
@@ -1485,7 +1479,6 @@ Operation on the storage
 * `list-namespaces` — List the namespaces in the database
 * `list-blob-ids` — List the blob IDs in the database
 * `list-chain-ids` — List the chain IDs in the database
-* `list-event-ids` — List the event IDs in the database
 
 
 
@@ -1546,14 +1539,6 @@ List the blob IDs in the database
 List the chain IDs in the database
 
 **Usage:** `linera storage list-chain-ids`
-
-
-
-## `linera storage list-event-ids`
-
-List the event IDs in the database
-
-**Usage:** `linera storage list-event-ids`
 
 
 

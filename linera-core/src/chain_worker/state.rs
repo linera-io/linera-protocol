@@ -18,6 +18,7 @@ use linera_base::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
 use linera_cache::{UniqueValueCache, ValueCache};
@@ -102,7 +103,7 @@ where
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
     last_access: Arc<AtomicTimestamp>,
-    block_values: Arc<ValueCache<CryptoHash, Block>>,
+    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -146,7 +147,7 @@ where
     pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Block>>,
+        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         execution_state_cache: Option<
             Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
@@ -415,14 +416,16 @@ where
     async fn read_confirmed_blocks(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> Result<Vec<Option<ConfirmedBlock>>, WorkerError> {
+    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, WorkerError> {
         let mut blocks = Vec::with_capacity(hashes.len());
         let mut uncached_indices = Vec::new();
         let mut uncached_hashes = Vec::new();
 
         for (i, hash) in hashes.iter().enumerate() {
-            if let Some(hashed_block) = self.block_values.get_hashed(hash) {
-                blocks.push(Some(ConfirmedBlock::from_hashed(hashed_block)));
+            if let Some(hashed_block) = self.block_values.get(hash) {
+                blocks.push(Some(Arc::new(ConfirmedBlock::from_hashed(
+                    Arc::unwrap_or_clone(hashed_block),
+                ))));
             } else {
                 blocks.push(None);
                 uncached_indices.push(i);
@@ -461,7 +464,7 @@ where
         let mut height_to_blocks = HashMap::new();
         for (block, hash) in blocks.into_iter().zip(hashes) {
             let block = block.ok_or_else(|| WorkerError::ReadCertificatesError(vec![hash]))?;
-            let hashed_block = block.into_inner();
+            let hashed_block = Arc::unwrap_or_clone(block).into_inner();
             height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
         }
 

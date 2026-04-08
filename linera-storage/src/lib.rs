@@ -523,4 +523,3 @@ pub trait Clock {
 
     async fn sleep_until(&self, timestamp: Timestamp);
 }
-

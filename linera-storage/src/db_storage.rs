@@ -356,11 +356,22 @@ impl MultiPartitionBatch {
 pub struct StorageCacheConfig {
     pub blob_cache_size: usize,
     pub confirmed_block_cache_size: usize,
-    pub lite_certificate_cache_size: usize,
+    pub certificate_cache_size: usize,
     pub certificate_raw_cache_size: usize,
     pub event_cache_size: usize,
     pub cache_cleanup_interval_secs: u64,
 }
+
+/// Default cache configuration for testing.
+#[cfg(with_testing)]
+pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig {
+    blob_cache_size: 1000,
+    confirmed_block_cache_size: 1000,
+    certificate_cache_size: 1000,
+    certificate_raw_cache_size: 1000,
+    event_cache_size: 1000,
+    cache_cleanup_interval_secs: linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS,
+};
 
 /// Raw certificate bytes: (lite_certificate_bytes, confirmed_block_bytes).
 type RawCertificate = (Vec<u8>, Vec<u8>);
@@ -374,7 +385,7 @@ type RawCertificate = (Vec<u8>, Vec<u8>);
 pub struct StorageCaches {
     pub(crate) blob: Arc<ValueCache<BlobId, Blob>>,
     pub(crate) confirmed_block: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
-    pub(crate) lite_certificate: Arc<ValueCache<CryptoHash, LiteCertificate<'static>>>,
+    pub(crate) certificate: Arc<ValueCache<CryptoHash, ConfirmedBlockCertificate>>,
     pub(crate) certificate_raw: Arc<ValueCache<CryptoHash, RawCertificate>>,
     pub(crate) event: Arc<ValueCache<EventId, Vec<u8>>>,
 }
@@ -386,10 +397,7 @@ impl StorageCaches {
         Self {
             blob: Arc::new(ValueCache::new(sizes.blob_cache_size, interval)),
             confirmed_block: Arc::new(ValueCache::new(sizes.confirmed_block_cache_size, interval)),
-            lite_certificate: Arc::new(ValueCache::new(
-                sizes.lite_certificate_cache_size,
-                interval,
-            )),
+            certificate: Arc::new(ValueCache::new(sizes.certificate_cache_size, interval)),
             certificate_raw: Arc::new(ValueCache::new(sizes.certificate_raw_cache_size, interval)),
             event: Arc::new(ValueCache::new(sizes.event_cache_size, interval)),
         }
@@ -1518,10 +1526,7 @@ where
 
     #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        if self.caches.certificate_raw.contains(&hash)
-            || (self.caches.lite_certificate.contains(&hash)
-                && self.caches.confirmed_block.contains(&hash))
-        {
+        if self.caches.certificate.contains(&hash) || self.caches.certificate_raw.contains(&hash) {
             #[cfg(with_metrics)]
             metrics::CONTAINS_CERTIFICATE_COUNTER
                 .with_label_values(&[metrics::CACHE])
@@ -1543,19 +1548,15 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError> {
-        // Deserialized components cache: combine LiteCertificate + ConfirmedBlock
-        if let Some(lite) = self.caches.lite_certificate.get(&hash) {
-            if let Some(block) = self.caches.confirmed_block.get(&hash) {
-                #[cfg(with_metrics)]
-                metrics::READ_CERTIFICATE_COUNTER
-                    .with_label_values(&[metrics::CACHE])
-                    .inc();
-                let lite = Arc::unwrap_or_clone(lite);
-                let block = Arc::unwrap_or_clone(block);
-                return Ok(lite.with_value(block).map(Arc::new));
-            }
+        // Assembled certificate cache (single Arc, no re-assembly)
+        if let Some(cert) = self.caches.certificate.get(&hash) {
+            #[cfg(with_metrics)]
+            metrics::READ_CERTIFICATE_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(Some(cert));
         }
-        // Raw bytes cache — deserialize + populate component caches
+        // Raw bytes cache — deserialize + populate caches
         if let Some(raw) = self.caches.certificate_raw.get(&hash) {
             #[cfg(with_metrics)]
             metrics::READ_CERTIFICATE_COUNTER
@@ -1909,12 +1910,12 @@ where
         let lite = bcs::from_bytes::<LiteCertificate>(lite_cert_bytes)?;
         let block = bcs::from_bytes::<ConfirmedBlock>(confirmed_block_bytes)?;
         let hash = block.hash();
-        self.caches.lite_certificate.insert(&hash, lite.clone());
         self.caches.confirmed_block.insert(&hash, block.clone());
         let certificate = lite
             .with_value(block)
             .ok_or(ViewError::InconsistentEntries)?;
-        Ok(Some(Arc::new(certificate)))
+        let arc = self.caches.certificate.insert(&hash, certificate);
+        Ok(Some(arc))
     }
 
     #[instrument(skip_all)]
@@ -2077,15 +2078,7 @@ where
         clock: TestClock,
     ) -> Result<Self, ViewError> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        let default_cache_sizes = StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            lite_certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS,
-        };
-        let storage = Self::new(database, wasm_runtime, default_cache_sizes, clock);
+        let storage = Self::new(database, wasm_runtime, DEFAULT_STORAGE_CACHE_CONFIG, clock);
         storage.assert_is_migrated_storage().await?;
         Ok(storage)
     }

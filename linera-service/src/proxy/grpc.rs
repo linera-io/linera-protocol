@@ -494,6 +494,7 @@ where
                 .map_err(Self::view_error_to_status)?
                 .into_iter()
                 .flatten()
+                .map(Arc::unwrap_or_clone)
                 .collect();
 
             let batch_size = certificates.len();

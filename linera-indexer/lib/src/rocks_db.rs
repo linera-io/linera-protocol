@@ -77,9 +77,9 @@ pub struct RocksDbConfig {
     #[arg(long, default_value = "1000")]
     pub confirmed_block_cache_size: usize,
 
-    /// The maximal number of entries in the lite certificate cache.
+    /// The maximal number of entries in the assembled certificate cache.
     #[arg(long, default_value = "1000")]
-    pub lite_certificate_cache_size: usize,
+    pub certificate_cache_size: usize,
 
     /// The maximal number of entries in the raw certificate cache.
     #[arg(long, default_value = "1000")]
@@ -130,10 +130,11 @@ impl RocksDbRunner {
                 StorageCacheConfig {
                     blob_cache_size: config.client.blob_cache_size,
                     confirmed_block_cache_size: config.client.confirmed_block_cache_size,
-                    lite_certificate_cache_size: config.client.lite_certificate_cache_size,
+                    certificate_cache_size: config.client.certificate_cache_size,
                     certificate_raw_cache_size: config.client.certificate_raw_cache_size,
                     event_cache_size: config.client.event_cache_size,
-                    cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
+                    cache_cleanup_interval_secs:
+                        linera_service::storage::DEFAULT_CLEANUP_INTERVAL_SECS,
                 },
                 StorageMigration,
             )

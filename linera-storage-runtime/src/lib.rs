@@ -26,7 +26,7 @@ use linera_views::rocks_db::{
     RocksDbStoreInternalConfig,
 };
 use linera_views::{
-    lru_prefix_cache::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig,
     memory::{MemoryDatabase, MemoryStoreConfig},
     store::{KeyValueDatabase, KeyValueStore},
 };
@@ -95,9 +95,9 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub confirmed_block_cache_size: usize,
 
-    /// The maximal number of entries in the lite certificate cache.
+    /// The maximal number of entries in the confirmed block certificate cache.
     #[arg(long, default_value = "1000", global = true)]
-    pub lite_certificate_cache_size: usize,
+    pub certificate_cache_size: usize,
 
     /// The maximal number of entries in the raw certificate cache.
     #[arg(long, default_value = "1000", global = true)]
@@ -125,15 +125,15 @@ impl CommonStorageOptions {
         StorageCacheSizes {
             blob_cache_size: self.blob_cache_size,
             confirmed_block_cache_size: self.confirmed_block_cache_size,
-            lite_certificate_cache_size: self.lite_certificate_cache_size,
+            certificate_cache_size: self.certificate_cache_size,
             certificate_raw_cache_size: self.certificate_raw_cache_size,
             event_cache_size: self.event_cache_size,
             cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
         }
     }
 
-    pub fn storage_cache_config(&self) -> StorageCacheConfig {
-        StorageCacheConfig {
+    pub fn storage_cache_config(&self) -> ViewsStorageCacheConfig {
+        ViewsStorageCacheConfig {
             max_cache_size: self.storage_max_cache_size,
             max_value_entry_size: self.storage_max_value_entry_size,
             max_find_keys_entry_size: self.storage_max_find_keys_entry_size,

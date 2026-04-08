@@ -204,50 +204,37 @@ where
     }
 }
 
-impl<T: Clone + Send + Sync + 'static> ValueCache<CryptoHash, T> {
-    /// Inserts a [`Hashed`] value into the cache, storing only the inner value.
-    ///
-    /// The hash from the [`Hashed`] wrapper is used as the cache key, avoiding
-    /// redundant storage of the hash in both key and value.
+impl<T: Send + Sync + 'static> ValueCache<CryptoHash, Hashed<T>> {
+    /// Inserts a [`Hashed<T>`] into the cache, returning the canonical `Arc`.
     ///
     /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it
     /// needs to be inserted in the cache.
-    ///
-    /// Returns `true` if a new allocation was created.
-    pub fn insert_hashed(&self, value: Cow<Hashed<T>>) -> bool {
+    pub fn insert_hashed(&self, value: Cow<Hashed<T>>) -> Arc<Hashed<T>>
+    where
+        T: Clone,
+    {
         let hash = (*value).hash();
         // Fast path: already in bounded cache
-        if self.cache.peek(&hash).is_some() {
-            return false;
+        if let Some(arc) = self.cache.peek(&hash) {
+            return arc;
         }
         // Check weak index before cloning from Cow
         let guard = self.weak_index.guard();
         if let Some(weak) = self.weak_index.get(&hash, &guard) {
             if let Some(arc) = weak.upgrade() {
-                self.cache.insert(hash, arc);
-                return false;
+                self.cache.insert(hash, arc.clone());
+                return arc;
             }
         }
         drop(guard);
-        // Cache only the inner value; the hash is already stored as the key.
-        self.dedup_insert(&hash, Arc::new(value.into_owned().into_inner()));
-        true
-    }
-
-    /// Retrieves a value from the cache and reconstructs the [`Hashed`] wrapper.
-    ///
-    /// The hash used as the cache key is combined with the stored value to
-    /// reconstruct the [`Hashed<T>`] without redundant storage.
-    pub fn get_hashed(&self, hash: &CryptoHash) -> Option<Arc<Hashed<T>>> {
-        let arc = self.get(hash)?;
-        Some(Arc::new(Hashed::unchecked_new((*arc).clone(), *hash)))
+        self.dedup_insert(&hash, Arc::new(value.into_owned()))
     }
 
     /// Inserts multiple [`Hashed<T>`]s into the cache.
     #[cfg(with_testing)]
     pub fn insert_all_hashed<'a>(&self, values: impl IntoIterator<Item = Cow<'a, Hashed<T>>>)
     where
-        T: 'a,
+        T: Clone + 'a,
     {
         for value in values {
             self.insert_hashed(value);
@@ -291,7 +278,7 @@ mod tests {
     /// Test cache size for unit tests.
     const TEST_CACHE_SIZE: usize = 10;
 
-    /// A minimal hashable value for testing `ValueCache<CryptoHash, T>`.
+    /// A minimal hashable value for testing `ValueCache<CryptoHash, Hashed<T>>`.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct TestValue(u64);
 
@@ -305,7 +292,7 @@ mod tests {
         iter.into_iter().map(create_test_value).collect()
     }
 
-    fn new_hashed_cache(size: usize) -> ValueCache<CryptoHash, TestValue> {
+    fn new_hashed_cache(size: usize) -> ValueCache<CryptoHash, Hashed<TestValue>> {
         ValueCache::new(size, DEFAULT_CLEANUP_INTERVAL_SECS)
     }
 
@@ -318,7 +305,7 @@ mod tests {
         let cache = new_hashed_cache(TEST_CACHE_SIZE);
         let hash = CryptoHash::test_hash("Missing value");
 
-        assert!(cache.get_hashed(&hash).is_none());
+        assert!(cache.get(&hash).is_none());
         assert!(!cache.contains(&hash));
     }
 
@@ -328,9 +315,9 @@ mod tests {
         let value = create_test_value(0);
         let hash = value.hash();
 
-        assert!(cache.insert_hashed(Cow::Borrowed(&value)));
+        cache.insert_hashed(Cow::Borrowed(&value));
         assert!(cache.contains(&hash));
-        assert_eq!(cache.get_hashed(&hash).as_deref(), Some(&value));
+        assert_eq!(cache.get(&hash).as_deref(), Some(&value));
     }
 
     #[test]
@@ -339,36 +326,37 @@ mod tests {
         let values = create_test_values(0..TEST_CACHE_SIZE as u64);
 
         for value in &values {
-            assert!(cache.insert_hashed(Cow::Borrowed(value)));
+            cache.insert_hashed(Cow::Borrowed(value));
         }
 
         for value in &values {
             assert!(cache.contains(&value.hash()));
-            assert_eq!(cache.get_hashed(&value.hash()).as_deref(), Some(value));
+            assert_eq!(cache.get(&value.hash()).as_deref(), Some(value));
         }
 
         // Batch insert
         let cache2 = new_hashed_cache(TEST_CACHE_SIZE);
         cache2.insert_all_hashed(values.iter().map(Cow::Borrowed));
         for value in &values {
-            assert_eq!(cache2.get_hashed(&value.hash()).as_deref(), Some(value));
+            assert_eq!(cache2.get(&value.hash()).as_deref(), Some(value));
         }
     }
 
     #[test]
-    fn test_reinsertion_returns_false() {
+    fn test_reinsertion_dedup() {
         let cache = new_hashed_cache(TEST_CACHE_SIZE);
         let values = create_test_values(0..TEST_CACHE_SIZE as u64);
 
-        cache.insert_all_hashed(values.iter().map(Cow::Borrowed));
+        // First insert
+        let first_arcs: Vec<_> = values
+            .iter()
+            .map(|v| cache.insert_hashed(Cow::Borrowed(v)))
+            .collect();
 
-        for value in &values {
-            assert!(!cache.insert_hashed(Cow::Borrowed(value)));
-        }
-
-        for value in &values {
-            assert!(cache.contains(&value.hash()));
-            assert_eq!(cache.get_hashed(&value.hash()).as_deref(), Some(value));
+        // Re-inserting should return the same Arc (dedup)
+        for (value, first_arc) in values.iter().zip(&first_arcs) {
+            let second_arc = cache.insert_hashed(Cow::Borrowed(value));
+            assert!(Arc::ptr_eq(&second_arc, first_arc));
         }
     }
 
@@ -398,7 +386,7 @@ mod tests {
         let promoted_hash = promoted.hash();
 
         cache.insert_hashed(Cow::Borrowed(&promoted));
-        cache.get_hashed(&promoted_hash); // mark as hot
+        cache.get(&promoted_hash); // mark as hot
 
         let extras = create_test_values(1..=TEST_CACHE_SIZE as u64 * 2);
         for value in &extras {
@@ -417,8 +405,9 @@ mod tests {
         let promoted = create_test_value(0);
         let promoted_hash = promoted.hash();
 
-        cache.insert_hashed(Cow::Borrowed(&promoted));
-        assert!(!cache.insert_hashed(Cow::Borrowed(&promoted)));
+        let first = cache.insert_hashed(Cow::Borrowed(&promoted));
+        let second = cache.insert_hashed(Cow::Borrowed(&promoted));
+        assert!(Arc::ptr_eq(&first, &second));
 
         let extras = create_test_values(1..=TEST_CACHE_SIZE as u64 * 2);
         for value in &extras {

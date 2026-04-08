@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use linera_client::config::GenesisConfig;
 use linera_storage::DbStorage;
-pub use linera_storage::StorageCacheConfig;
+pub use linera_storage::{StorageCacheConfig, DEFAULT_CLEANUP_INTERVAL_SECS};
 pub use linera_storage_runtime::{
     AssertStorageV1, CommonStorageOptions, InnerStorageConfig, Runnable, RunnableWithStore,
     StorageConfig, StorageMigration, StoreConfig,
