@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: scylla-agent-config
+  namespace: scylla
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    meta.helm.sh/release-name: linera-core
+    meta.helm.sh/release-namespace: default
+type: Opaque
+stringData:
+  scylla-manager-agent.yaml: |
+    gcs: {}
