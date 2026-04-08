@@ -38,7 +38,6 @@ relay = [
     "cli",
     "dep:axum",
     "dep:dirs",
-    "dep:fungible",
     "dep:wrapped-fungible",
     "dep:futures",
     "dep:prometheus",
@@ -92,7 +91,6 @@ url = { workspace = true, optional = true }
 
 clap = { workspace = true, optional = true }
 fs-err = { workspace = true, optional = true }
-fungible = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 wrapped-fungible = { workspace = true, optional = true }

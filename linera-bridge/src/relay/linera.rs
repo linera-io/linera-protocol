@@ -6,8 +6,8 @@
 use anyhow::Result;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::Amount,
-    identifiers::{AccountOwner, ApplicationId},
+    data_types::{Amount, Event},
+    identifiers::{ApplicationId, GenericApplicationId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::client::ChainClient;
@@ -24,11 +24,6 @@ pub(crate) enum ChainOperation {
     ProcessDeposit {
         proof: crate::proof::gen::DepositProof,
         response: oneshot::Sender<Result<(), String>>,
-    },
-    Burn {
-        owner: AccountOwner,
-        amount: Amount,
-        response: oneshot::Sender<Result<ConfirmedBlockCertificate, String>>,
     },
 }
 
@@ -131,26 +126,6 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    pub async fn burn(
-        &self,
-        owner: AccountOwner,
-        amount: Amount,
-    ) -> Result<ConfirmedBlockCertificate> {
-        let (resp_tx, resp_rx) = oneshot::channel();
-        self.op_tx
-            .send(ChainOperation::Burn {
-                owner,
-                amount,
-                response: resp_tx,
-            })
-            .await
-            .map_err(|_| anyhow::anyhow!("Chain operation channel closed"))?;
-        resp_rx
-            .await
-            .map_err(|_| anyhow::anyhow!("Response channel closed"))?
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
     pub async fn process_inbox(&self) -> Result<Vec<ConfirmedBlockCertificate>> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.op_tx
@@ -175,45 +150,24 @@ impl<E: linera_core::environment::Environment> Clone for LineraClient<E> {
     }
 }
 
-/// Find all Credit-to-Address20 messages in a block's transactions for a given app.
-pub(crate) fn find_address20_credits(
-    transactions: &[linera_chain::data_types::Transaction],
+/// Find all BurnEvents in a block's event streams for a given application.
+pub(crate) fn find_burn_events(
+    events: &[Vec<Event>],
     fungible_app_id: ApplicationId,
-) -> Vec<(AccountOwner, Amount)> {
-    let mut credits = Vec::new();
-    for txn in transactions {
-        if let linera_chain::data_types::Transaction::ReceiveMessages(bundle) = txn {
-            for posted in &bundle.bundle.messages {
-                if let linera_execution::Message::User {
-                    application_id,
-                    bytes,
-                } = &posted.message
-                {
-                    if *application_id == fungible_app_id {
-                        if let Some(credit) = try_parse_credit_to_address20(bytes.as_slice()) {
-                            credits.push(credit);
-                        }
-                    }
-                }
+) -> Vec<wrapped_fungible::BurnEvent> {
+    let mut result = Vec::new();
+    for tx_events in events {
+        for event in tx_events {
+            if event.stream_id.application_id != GenericApplicationId::User(fungible_app_id) {
+                continue;
+            }
+            if event.stream_id.stream_name.0 != b"burns" {
+                continue;
+            }
+            if let Ok(burn) = bcs::from_bytes::<wrapped_fungible::BurnEvent>(&event.value) {
+                result.push(burn);
             }
         }
     }
-    credits
-}
-
-/// BCS-serialize a Burn operation.
-pub(crate) fn serialize_burn_operation(owner: &AccountOwner, amount: &Amount) -> Vec<u8> {
-    bcs::to_bytes(&wrapped_fungible::WrappedFungibleOperation::Burn {
-        owner: *owner,
-        amount: *amount,
-    })
-    .expect("failed to BCS-serialize Burn operation")
-}
-
-fn try_parse_credit_to_address20(bytes: &[u8]) -> Option<(AccountOwner, Amount)> {
-    if let Ok(fungible::Message::Credit { target, amount, .. }) = bcs::from_bytes(bytes) {
-        matches!(target, AccountOwner::Address20(_)).then_some((target, amount))
-    } else {
-        None
-    }
+    result
 }

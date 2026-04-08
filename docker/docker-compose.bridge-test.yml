@@ -99,6 +99,7 @@ services:
       start_period: 60s
     volumes:
       - network-data:/data
+      - bridge-shared:/shared
       - ../examples/target/wasm32-unknown-unknown/release:/wasm:ro
     depends_on:
       scylla:
@@ -326,8 +327,6 @@ services:
     image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
     network_mode: "service:linera-network"
     entrypoint: ["sh", "-c"]
-    ports:
-      - "${EXPORTER_METRICS_PORT:-3001}:3001"
     command:
       - |
         rm -f /shared/setup-complete

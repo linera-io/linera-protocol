@@ -4,7 +4,6 @@
 //! End-to-end test: deploy a fungible token on Linera, transfer tokens to an EVM address,
 //! submit the block certificate to FungibleBridge on Anvil, and verify the ERC20 balance.
 
-
 use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
 use alloy::{
@@ -30,11 +29,11 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{environment::wallet::Memory, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
+use linera_storage::{DbStorage, StorageCacheSizes};
+use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use wrapped_fungible::{
     Account, InitialState, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
 };
-use linera_storage::{DbStorage, StorageCacheSizes};
-use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
 sol! {
     #[sol(rpc)]
@@ -141,10 +140,13 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     tracing::info!("Creating wrapped-fungible application...");
     let params = WrappedParameters {
         ticker_symbol: "TEST".to_string(),
-        minter: owner_a,
-        mint_chain_id: chain_a,
+        minter: Some(owner_a),
+        mint_chain_id: Some(chain_a),
         evm_token_address: [0u8; 20],
         evm_source_chain_id: 31337,
+        // This test doesn't deploy the evm-bridge Linera app (only the Solidity side),
+        // so bridge_app_id is unused. Mint is never called in this test.
+        bridge_app_id: None,
     };
     let init_state = InitialState {
         accounts: BTreeMap::from([(owner_a, Amount::from_tokens(1000))]),
@@ -164,7 +166,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     let app_id = app_id.forget_abi();
     tracing::info!(%app_id, "Application created");
     chain_a_cert_bytes.push(bcs::to_bytes(&create_cert)?);
-
 
     // ── 4. Claim chain B (user chain) from faucet and subscribe to notifications ──
     tracing::info!("Claiming chain B from faucet...");
@@ -222,7 +223,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
              --constructor-args \
              {light_client} \
              {chain_a_bytes32} \
-             {app_id_bytes32} \
              {erc20_addr}"
         ),
         project_name,
@@ -231,6 +231,23 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     .await;
     let bridge_addr = parse_deployed_address(&bridge_output)?;
     tracing::info!(%bridge_addr, "FungibleBridge deployed");
+
+    // Register the wrapped-fungible application ID
+    tracing::info!("Registering applicationId in FungibleBridge...");
+    exec_ok(
+        &compose,
+        "foundry-tools",
+        &format!(
+            "cast send --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             {bridge_addr} \
+             'registerFungibleApplicationId(bytes32)' \
+             {app_id_bytes32}"
+        ),
+        project_name,
+        &compose_file,
+    )
+    .await;
 
     // ── 7. Fund FungibleBridge with ERC20 tokens ──
     tracing::info!("Funding FungibleBridge with ERC20 tokens...");
@@ -328,25 +345,13 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         chain_a_cert_bytes.push(bcs::to_bytes(c)?);
     }
 
-    // ── 12. Burn tokens on chain A as minter ──
-    tracing::info!("Burning tokens on chain A...");
-    let burn_bytes = bcs::to_bytes(&WrappedFungibleOperation::Burn {
-        owner: receiver,
-        amount: Amount::from_tokens(100),
-    })?;
-    let burn_op = Operation::User {
-        application_id: app_id,
-        bytes: burn_bytes,
-    };
-    let burn_cert = cc_a
-        .execute_operations(vec![burn_op], vec![])
-        .await?
-        .expect("burn committed");
-    tracing::info!("Burn certificate obtained");
-    chain_a_cert_bytes.push(bcs::to_bytes(&burn_cert)?);
-
-    // ── 13. Submit all chain A blocks to FungibleBridge sequentially ──
-    tracing::info!(count = chain_a_cert_bytes.len(), "Submitting all chain A blocks to bridge");
+    // ── 12. Submit all chain A blocks to FungibleBridge sequentially ──
+    // The inbox processing in step 11 auto-burned the tokens and emitted a
+    // BurnEvent, so no explicit Burn operation is needed.
+    tracing::info!(
+        count = chain_a_cert_bytes.len(),
+        "Submitting all chain A blocks to bridge"
+    );
 
     let rpc_url = "http://localhost:8545".parse()?;
     let evm_signer: PrivateKeySigner = ANVIL_PRIVATE_KEY.parse()?;
