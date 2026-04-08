@@ -6241,7 +6241,6 @@ dependencies = [
  "linera-views",
  "serde",
  "serde_json",
- "tokio",
  "tracing",
 ]
 

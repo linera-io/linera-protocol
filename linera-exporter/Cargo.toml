@@ -74,7 +74,11 @@ cfg_aliases.workspace = true
 tonic-prost-build = { workspace = true, features = ["transport"] }
 
 [dev-dependencies]
-linera-service.workspace = true
+linera-base = { workspace = true, features = ["test"] }
+linera-chain = { workspace = true, features = ["test"] }
+linera-sdk = { workspace = true, features = ["test"] }
+linera-service = { workspace = true, features = ["rocksdb", "storage-service"] }
+linera-storage = { workspace = true, features = ["test"] }
 reqwest.workspace = true
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }

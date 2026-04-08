@@ -218,12 +218,11 @@ mod test {
         time::Duration,
     };
     use linera_chain::{
-        data_types::{BlockExecutionOutcome, IncomingBundle, MessageBundle},
+        data_types::{BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle},
         test::{make_child_block, make_first_block, BlockTestExt},
         types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate},
     };
     use linera_rpc::NodeOptions;
-    use linera_sdk::test::MessageAction;
     use linera_storage::{DbStorage, Storage, TestClock};
     use linera_views::memory::MemoryDatabase;
     use tokio::sync::mpsc::unbounded_channel;

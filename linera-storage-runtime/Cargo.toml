@@ -32,7 +32,6 @@ linera-storage-service = { workspace = true, optional = true }
 linera-views.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
 tracing.workspace = true
 
 [build-dependencies]
