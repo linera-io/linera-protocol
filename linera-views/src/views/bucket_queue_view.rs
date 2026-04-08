@@ -165,11 +165,7 @@ where
                 state: State::Loaded { data: front_data },
             });
             // Middle buckets (NotLoaded, all have exactly N elements).
-            let num_middles = if bucket_store.num_buckets >= 2 {
-                bucket_store.num_buckets - 2
-            } else {
-                0
-            };
+            let num_middles = bucket_store.num_buckets.saturating_sub(2);
             for p in 1..=num_middles {
                 stored_buckets.push_back(Bucket {
                     index: bucket_store.first_index + p,
