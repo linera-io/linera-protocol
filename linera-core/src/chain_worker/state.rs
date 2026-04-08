@@ -1153,28 +1153,21 @@ where
     /// Handles the cross-chain request confirming that the recipient was updated.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
-        recipient = %recipient,
-        latest_height = %latest_height
+        %recipient,
+        %latest_height
     ))]
     pub(crate) async fn confirm_updated_recipient(
         &mut self,
         recipient: ChainId,
         latest_height: BlockHeight,
-    ) -> Result<(bool, NetworkActions), WorkerError> {
-        let fully_delivered = self
+    ) -> Result<bool, WorkerError> {
+        Ok(self
             .chain
             .mark_messages_as_received(&recipient, latest_height)
             .await?
             && self
                 .all_messages_to_tracked_chains_delivered_up_to(latest_height)
-                .await?;
-
-        // Send the next chunk of cross-chain messages for this recipient, if any.
-        let actions = self
-            .create_cross_chain_actions_for_recipient(recipient)
-            .await?;
-
-        Ok((fully_delivered, actions))
+                .await?)
     }
 
     /// Notifies delivery waiters that all messages up to `height` have been delivered.
@@ -1210,14 +1203,22 @@ where
                     let result = self
                         .process_cross_chain_update(origin, bundles, previous_height)
                         .await;
-                    match &result {
-                        Ok(CrossChainUpdateResult::Updated(_)) => need_save = true,
-                        Ok(CrossChainUpdateResult::GapDetected { .. }) | Err(_) => {
-                            need_rollback = true
+                    let update_result = match result {
+                        Ok(update_result) => update_result,
+                        Err(error) => {
+                            need_rollback = true;
+                            if result_tx.send(Err(error)).is_err() {
+                                tracing::debug!("cannot send cross-chain result; receiver dropped");
+                            }
+                            continue;
                         }
-                        _ => {}
+                    };
+                    match &update_result {
+                        CrossChainUpdateResult::Updated(_) => need_save = true,
+                        CrossChainUpdateResult::GapDetected { .. }
+                        | CrossChainUpdateResult::NothingToDo => {}
                     }
-                    update_results.push((result_tx, result));
+                    update_results.push((result_tx, update_result));
                 }
                 BatchRequest::Confirm {
                     recipient,
@@ -1234,7 +1235,7 @@ where
                         .confirm_updated_recipient(recipient, latest_height)
                         .await
                     {
-                        Ok((fully_delivered, actions)) => {
+                        Ok(fully_delivered) => {
                             need_save = true;
                             if fully_delivered {
                                 max_delivered_height = Some(
@@ -1242,57 +1243,54 @@ where
                                         .map_or(latest_height, |h| h.max(latest_height)),
                                 );
                             }
-                            confirm_results.push((result_tx, Ok(actions)));
+                            confirm_results.push((result_tx, recipient));
                         }
-                        Err(e) => {
+                        Err(error) => {
                             need_rollback = true;
-                            confirm_results.push((result_tx, Err(e)));
+                            if result_tx.send(Err(error)).is_err() {
+                                tracing::debug!("cannot send cross-chain result; receiver dropped");
+                            }
                         }
                     }
                 }
             }
         }
-
-        if need_rollback {
-            // Don't save; RollbackGuard undoes all pending changes.
-            // Turn successful results into errors so callers retry.
-            for (_, result) in &mut update_results {
-                if matches!(result, Ok(CrossChainUpdateResult::Updated(_))) {
-                    *result = Err(WorkerError::BatchRolledBack);
-                }
-            }
-            for (_, result) in &mut confirm_results {
-                if result.is_ok() {
-                    *result = Err(WorkerError::BatchRolledBack);
-                }
-            }
-            max_delivered_height = None;
-        } else if need_save {
+        if !need_rollback && need_save {
             if let Err(error) = self.save().await {
                 tracing::error!(%error, "failed to save batch; rolling back");
-                for (_, result) in &mut update_results {
-                    if matches!(result, Ok(CrossChainUpdateResult::Updated(_))) {
-                        *result = Err(WorkerError::BatchRolledBack);
-                    }
-                }
-                for (_, result) in &mut confirm_results {
-                    if result.is_ok() {
-                        *result = Err(WorkerError::BatchRolledBack);
-                    }
-                }
-                max_delivered_height = None;
+                need_rollback = true;
             }
+        }
+        if need_rollback {
+            for (result_tx, _) in update_results {
+                if result_tx.send(Err(WorkerError::BatchRolledBack)).is_err() {
+                    tracing::debug!("cannot send cross-chain result; receiver dropped");
+                }
+            }
+            for (result_tx, _) in confirm_results {
+                if result_tx.send(Err(WorkerError::BatchRolledBack)).is_err() {
+                    tracing::debug!("cannot send cross-chain result; receiver dropped");
+                }
+            }
+            return;
         }
 
         if let Some(height) = max_delivered_height {
             self.notify_delivery(height);
         }
 
-        for (tx, result) in update_results {
-            let _ = tx.send(result);
+        for (result_tx, update_result) in update_results {
+            if result_tx.send(Ok(update_result)).is_err() {
+                tracing::debug!("cannot send cross-chain result; receiver dropped");
+            }
         }
-        for (tx, result) in confirm_results {
-            let _ = tx.send(result);
+        for (result_tx, recipient) in confirm_results {
+            let result = self
+                .create_cross_chain_actions_for_recipient(recipient)
+                .await;
+            if result_tx.send(result).is_err() {
+                tracing::debug!("cannot send cross-chain result; receiver dropped");
+            }
         }
     }
 
