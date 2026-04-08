@@ -66,7 +66,7 @@ mod metrics {
     use linera_base::prometheus_util::{
         linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
-    use linera_rpc::grpc::{METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
+    use linera_rpc::grpc::{ERROR_TYPE_LABEL, METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
     use prometheus::{HistogramVec, IntCounterVec};
 
     pub static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -97,9 +97,17 @@ mod metrics {
         register_int_counter_vec(
             "proxy_request_error",
             "Proxy request error",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL, ERROR_TYPE_LABEL],
         )
     });
+}
+
+#[cfg(with_metrics)]
+fn grpc_status_name(status: Option<&str>) -> String {
+    match status {
+        Some(code) => format!("{:?}", tonic::Code::from_bytes(code.as_bytes())),
+        None => "HTTP_ERROR".to_owned(),
+    }
 }
 
 #[derive(Clone)]
@@ -175,8 +183,9 @@ where
                     !response.status().is_success() || grpc_status.is_some_and(|s| s != "0");
 
                 if is_error {
+                    let error_type = grpc_status_name(grpc_status);
                     metrics::PROXY_REQUEST_ERROR
-                        .with_label_values(&[&method_name, traffic_type])
+                        .with_label_values(&[&method_name, traffic_type, &error_type])
                         .inc();
                 } else {
                     metrics::PROXY_REQUEST_SUCCESS

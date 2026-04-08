@@ -3925,6 +3925,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "strum 0.26.3",
  "sync_wrapper 1.0.2",
  "test-log",
  "test-strategy",
