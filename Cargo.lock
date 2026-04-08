@@ -6179,6 +6179,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-storage-runtime"
+version = "0.15.15"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cfg_aliases",
+ "clap",
+ "linera-storage",
+ "linera-storage-service",
+ "linera-views",
+ "serde",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "linera-storage-service"
 version = "0.15.15"
 dependencies = [
