@@ -12,7 +12,7 @@ use std::{
 use custom_debug_derive::Debug;
 use futures::{
     future::Future,
-    stream::{self, AbortHandle, FuturesUnordered, StreamExt},
+    stream::{self, AbortHandle, FuturesOrdered, FuturesUnordered, StreamExt},
 };
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -127,6 +127,7 @@ mod metrics {
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
+pub static DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS: usize = 1;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TimingType {
@@ -248,7 +249,7 @@ pub struct Client<Env: Environment> {
     /// tracking.
     pub local_node: LocalNodeClient<Env::Storage>,
     /// Manages the requests sent to validator nodes.
-    requests_scheduler: RequestsScheduler<Env>,
+    requests_scheduler: Arc<RequestsScheduler<Env>>,
     /// The admin chain ID.
     admin_chain_id: ChainId,
     /// Chains that should be tracked by the client, along with their listening mode.
@@ -299,7 +300,8 @@ impl<Env: Environment> Client<Env> {
             Some(chain_modes.clone()),
         );
         let local_node = LocalNodeClient::new(state);
-        let requests_scheduler = RequestsScheduler::new(vec![], requests_scheduler_config);
+        let requests_scheduler =
+            Arc::new(RequestsScheduler::new(vec![], requests_scheduler_config));
 
         Self {
             environment,
@@ -577,18 +579,65 @@ impl<Env: Environment> Client<Env> {
             .load_local_certificates(chain_id, stop, until_block_time)
             .await?;
         let mut next_height = last_info.next_block_height;
-        // Now download the rest in batches from the remote node.
-        while next_height < stop {
-            // TODO(#2045): Analyze network errors instead of using a fixed batch size.
-            let limit = u64::from(stop)
-                .checked_sub(u64::from(next_height))
-                .ok_or(ArithmeticError::Overflow)?
-                .min(self.options.certificate_download_batch_size);
 
-            let certificates = self
-                .requests_scheduler
-                .download_certificates(remote_node, chain_id, next_height, limit)
-                .await?;
+        if next_height >= stop {
+            return Ok(last_info);
+        }
+
+        // Download remaining certificates from the remote node using a pipelined
+        // sliding window. A background task downloads up to `max_concurrent_batch_downloads`
+        // batches concurrently and sends them through a channel for sequential processing.
+        let max_concurrent = self.options.max_concurrent_batch_downloads;
+        let batch_size = self.options.certificate_download_batch_size;
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(max_concurrent);
+        let scheduler = self.requests_scheduler.clone();
+        let remote = remote_node.clone();
+
+        let _download_task = linera_base::Task::spawn(async move {
+            let mut download_height = next_height;
+            let mut in_flight = FuturesOrdered::new();
+
+            let enqueue_batch = |in_flight: &mut FuturesOrdered<_>,
+                                 scheduler: &Arc<RequestsScheduler<Env>>,
+                                 remote: &RemoteNode<Env::ValidatorNode>,
+                                 height: BlockHeight,
+                                 limit: u64| {
+                let scheduler = scheduler.clone();
+                let remote = remote.clone();
+                in_flight.push_back(async move {
+                    scheduler
+                        .download_certificates(&remote, chain_id, height, limit)
+                        .await
+                });
+            };
+
+            // Fill initial window.
+            while in_flight.len() < max_concurrent && download_height < stop {
+                let limit = u64::from(stop)
+                    .saturating_sub(u64::from(download_height))
+                    .min(batch_size);
+                enqueue_batch(&mut in_flight, &scheduler, &remote, download_height, limit);
+                download_height = BlockHeight(u64::from(download_height) + limit);
+            }
+
+            // Drain completed batches and refill the window.
+            while let Some(result) = in_flight.next().await {
+                if sender.send(result).await.is_err() {
+                    break;
+                }
+                if download_height < stop {
+                    let limit = u64::from(stop)
+                        .saturating_sub(u64::from(download_height))
+                        .min(batch_size);
+                    enqueue_batch(&mut in_flight, &scheduler, &remote, download_height, limit);
+                    download_height = BlockHeight(u64::from(download_height) + limit);
+                }
+            }
+        });
+
+        // Process downloaded batches sequentially.
+        while let Some(result) = receiver.recv().await {
+            let certificates = result?;
             let Some(info) = self
                 .process_certificates(slice::from_ref(remote_node), certificates, until_block_time)
                 .await?
