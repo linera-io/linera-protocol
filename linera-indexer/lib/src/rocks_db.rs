@@ -4,9 +4,9 @@
 use std::path::PathBuf;
 
 use clap::Parser as _;
-use linera_service::storage::{StorageCacheSizes, StorageMigration, StoreConfig};
+use linera_service::storage::{StorageCacheConfig, StorageMigration, StoreConfig};
 use linera_views::{
-    lru_prefix_cache::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig,
     rocks_db::{
         PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
@@ -95,7 +95,7 @@ pub type RocksDbRunner = Runner<RocksDbDatabase, RocksDbConfig>;
 impl RocksDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = IndexerConfig::<RocksDbConfig>::parse();
-        let storage_cache_config = StorageCacheConfig {
+        let storage_cache_config = ViewsStorageCacheConfig {
             max_cache_size: config.client.max_cache_size,
             max_value_entry_size: config.client.max_value_entry_size,
             max_find_keys_entry_size: config.client.max_find_keys_entry_size,
@@ -127,12 +127,13 @@ impl RocksDbRunner {
         store_config
             .clone()
             .run_with_store(
-                StorageCacheSizes {
+                StorageCacheConfig {
                     blob_cache_size: config.client.blob_cache_size,
                     confirmed_block_cache_size: config.client.confirmed_block_cache_size,
                     lite_certificate_cache_size: config.client.lite_certificate_cache_size,
                     certificate_raw_cache_size: config.client.certificate_raw_cache_size,
                     event_cache_size: config.client.event_cache_size,
+                    cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
                 },
                 StorageMigration,
             )

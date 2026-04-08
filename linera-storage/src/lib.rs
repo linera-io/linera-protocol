@@ -19,6 +19,7 @@ use linera_base::{
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
+pub use linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS;
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
@@ -40,7 +41,9 @@ use linera_views::{context::Context, views::RootView, ViewError};
 pub use crate::db_storage::metrics;
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
-pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, StorageCacheSizes, WallClock};
+pub use crate::db_storage::{
+    ChainStatesFirstAssignment, DbStorage, StorageCacheConfig, StorageCaches, WallClock,
+};
 
 /// The default namespace to be used when none is specified
 pub const DEFAULT_NAMESPACE: &str = "table_linera";
@@ -85,19 +88,19 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<ConfirmedBlock>, ViewError>;
+    ) -> Result<Option<Arc<ConfirmedBlock>>, ViewError>;
 
     /// Reads a number of confirmed blocks by their hashes.
     async fn read_confirmed_blocks<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<Option<ConfirmedBlock>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, ViewError>;
 
     /// Reads the blob with the given blob ID.
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError>;
 
     /// Reads the blobs with the given blob IDs.
-    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
+    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Arc<Blob>>>, ViewError>;
 
     /// Reads the blob state with the given blob ID.
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError>;
@@ -139,13 +142,13 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError>;
+    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError>;
 
     /// Reads a number of certificates
     async fn read_certificates(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<ConfirmedBlockCertificate>>>, ViewError>;
 
     /// Reads raw certificate bytes by hashes.
     ///
@@ -155,7 +158,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn read_certificates_raw(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<(Vec<u8>, Vec<u8>)>>>, ViewError>;
 
     /// Reads certificates by heights for a given chain.
     /// Returns a vector where each element corresponds to the input height.
@@ -164,7 +167,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<ConfirmedBlockCertificate>>>, ViewError>;
 
     /// Reads raw certificates by heights for a given chain.
     /// Returns a vector where each element corresponds to the input height.
@@ -174,7 +177,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<(Vec<u8>, Vec<u8>)>>>, ViewError>;
 
     /// Returns a vector of certificate hashes for the requested chain and heights.
     /// The resulting vector maintains the order of the input `heights` argument.
@@ -195,7 +198,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     ) -> Result<(), ViewError>;
 
     /// Reads the event with the given ID.
-    async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
+    async fn read_event(&self, id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;
 
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
@@ -259,13 +262,10 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&contract_bytecode_blob_id) {
             Some(content) => content.clone(),
-            None => self
-                .read_blob(contract_bytecode_blob_id)
-                .await?
-                .ok_or(ExecutionError::BlobsNotFound(vec![
-                    contract_bytecode_blob_id,
-                ]))?
-                .into_content(),
+            None => Arc::unwrap_or_clone(self.read_blob(contract_bytecode_blob_id).await?.ok_or(
+                ExecutionError::BlobsNotFound(vec![contract_bytecode_blob_id]),
+            )?)
+            .into_content(),
         };
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),
@@ -325,13 +325,10 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&service_bytecode_blob_id) {
             Some(content) => content.clone(),
-            None => self
-                .read_blob(service_bytecode_blob_id)
-                .await?
-                .ok_or(ExecutionError::BlobsNotFound(vec![
-                    service_bytecode_blob_id,
-                ]))?
-                .into_content(),
+            None => Arc::unwrap_or_clone(self.read_blob(service_bytecode_blob_id).await?.ok_or(
+                ExecutionError::BlobsNotFound(vec![service_bytecode_blob_id]),
+            )?)
+            .into_content(),
         };
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),
@@ -396,14 +393,14 @@ pub enum ResultReadCertificates {
 impl ResultReadCertificates {
     /// Creating the processed read certificates.
     pub fn new(
-        certificates: Vec<Option<ConfirmedBlockCertificate>>,
+        certificates: Vec<Option<Arc<ConfirmedBlockCertificate>>>,
         hashes: Vec<CryptoHash>,
     ) -> Self {
         let (certificates, invalid_hashes) = certificates
             .into_iter()
             .zip(hashes)
             .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
-                Some(cert) => itertools::Either::Left(cert),
+                Some(cert) => itertools::Either::Left(Arc::unwrap_or_clone(cert)),
                 None => itertools::Either::Right(hash),
             });
         if invalid_hashes.is_empty() {
@@ -478,11 +475,11 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         Ok(service)
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError> {
         self.storage.read_blob(blob_id).await
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError> {
         self.storage.read_event(event_id).await
     }
 
@@ -526,3 +523,4 @@ pub trait Clock {
 
     async fn sleep_until(&self, timestamp: Timestamp);
 }
+

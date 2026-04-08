@@ -251,7 +251,8 @@ where
             return Ok(blob);
         }
         let blob = self.storage.read_blob(blob_id).await?;
-        blob.ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
+        blob.map(Arc::unwrap_or_clone)
+            .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
     /// Reads the blobs from the chain manager or from storage. Returns an error if any are
@@ -337,7 +338,7 @@ where
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         let fourth_block_blobs = self.storage.read_blobs(&missing_blob_ids).await?;
         for (index, blob) in missing_indices.into_iter().zip(fourth_block_blobs) {
-            maybe_blobs[index].1 = blob;
+            maybe_blobs[index].1 = blob.map(Arc::unwrap_or_clone);
         }
         Ok(maybe_blobs.into_iter().collect())
     }
@@ -1287,6 +1288,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1295,6 +1297,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1645,6 +1648,7 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
+            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }

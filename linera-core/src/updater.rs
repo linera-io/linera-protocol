@@ -818,7 +818,11 @@ where
             && certificates_by_height.iter().all(|c| c.is_some());
 
         if all_found {
-            return Ok(certificates_by_height.into_iter().flatten().collect());
+            return Ok(certificates_by_height
+                .into_iter()
+                .flatten()
+                .map(Arc::unwrap_or_clone)
+                .collect());
         }
 
         // Fallback to the traditional approach
@@ -1001,6 +1005,7 @@ where
                     .await?
                     .into_iter()
                     .flatten()
+                    .map(Arc::unwrap_or_clone)
                     .collect::<Vec<_>>();
 
                 // Send each certificate

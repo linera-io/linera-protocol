@@ -9,7 +9,9 @@ use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use linera_core::GenesisConfig;
 use linera_execution::WasmRuntime;
-pub use linera_storage::StorageCacheSizes;
+pub use linera_storage::StorageCacheConfig;
+/// Backward-compatible alias.
+pub type StorageCacheSizes = StorageCacheConfig;
 use linera_storage::{DbStorage, Storage, WallClock, DEFAULT_NAMESPACE};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
@@ -126,6 +128,7 @@ impl CommonStorageOptions {
             lite_certificate_cache_size: self.lite_certificate_cache_size,
             certificate_raw_cache_size: self.certificate_raw_cache_size,
             event_cache_size: self.event_cache_size,
+            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
         }
     }
 

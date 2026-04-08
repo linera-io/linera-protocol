@@ -2259,8 +2259,10 @@ dependencies = [
  "cfg_aliases",
  "linera-base",
  "lru",
+ "papaya",
  "prometheus",
  "quick_cache",
+ "tokio",
 ]
 
 [[package]]

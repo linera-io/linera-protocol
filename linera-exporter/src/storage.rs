@@ -106,11 +106,13 @@ where
             Err(guard) => {
                 #[cfg(with_metrics)]
                 metrics::GET_CERTIFICATE_HISTOGRAM.measure_latency();
-                let block = self.storage.read_certificate(hash).await?;
-                let block = block.ok_or_else(|| ExporterError::ReadCertificateError(hash))?;
-                let heaped_block = Arc::new(block);
-                guard.insert(heaped_block.clone()).ok();
-                Ok(heaped_block)
+                let block = self
+                    .storage
+                    .read_certificate(hash)
+                    .await?
+                    .ok_or_else(|| ExporterError::ReadCertificateError(hash))?;
+                guard.insert(block.clone()).ok();
+                Ok(block)
             }
         }
     }
@@ -122,9 +124,8 @@ where
                 #[cfg(with_metrics)]
                 metrics::GET_BLOB_HISTOGRAM.measure_latency();
                 let blob = self.storage.read_blob(blob_id).await?.unwrap();
-                let heaped_blob = Arc::new(blob);
-                guard.insert(heaped_blob.clone()).ok();
-                Ok(heaped_blob)
+                guard.insert(blob.clone()).ok();
+                Ok(blob)
             }
         }
     }

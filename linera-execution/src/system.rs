@@ -6,7 +6,10 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    sync::Arc,
+};
 
 use allocative::Allocative;
 use custom_debug_derive::Debug;
@@ -331,7 +334,7 @@ where
         Some((*epoch, committee))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
+    async fn get_event(&self, event_id: EventId) -> Result<Arc<Vec<u8>>, ExecutionError> {
         match self.context().extra().get_event(event_id.clone()).await? {
             None => Err(ExecutionError::EventsNotFound(vec![event_id])),
             Some(vec) => Ok(vec),
@@ -497,7 +500,10 @@ where
                 let bytes = txn_tracker
                     .oracle(|| async {
                         let bytes = self.get_event(event_id.clone()).await?;
-                        Ok(OracleResponse::Event(event_id.clone(), bytes))
+                        Ok(OracleResponse::Event(
+                            event_id.clone(),
+                            Arc::unwrap_or_clone(bytes),
+                        ))
                     })
                     .await?
                     .to_event(&event_id)?;
@@ -524,7 +530,7 @@ where
                 txn_tracker
                     .oracle(|| async {
                         let bytes = self.get_event(event_id.clone()).await?;
-                        Ok(OracleResponse::Event(event_id, bytes))
+                        Ok(OracleResponse::Event(event_id, Arc::unwrap_or_clone(bytes)))
                     })
                     .await?;
             }
@@ -1005,7 +1011,7 @@ where
 
     pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
         match self.context().extra().get_blob(blob_id).await {
-            Ok(Some(blob)) => Ok(blob.into()),
+            Ok(Some(blob)) => Ok(Arc::unwrap_or_clone(blob).into()),
             Ok(None) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error.into()),
         }
