@@ -4,12 +4,14 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    future::Future,
+    pin,
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
 
 use futures::{
-    future::{Either, Shared},
+    future::{Either, Shared, WeakShared},
     FutureExt as _,
 };
 use linera_base::{
@@ -40,7 +42,7 @@ use linera_storage::{Clock as _, Storage};
 use linera_views::{context::InactiveContext, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{oneshot, OwnedRwLockReadGuard};
+use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
 /// A read guard providing access to a chain's [`ChainStateView`].
@@ -521,6 +523,69 @@ type ChainWorkerFuture<S> = Shared<oneshot::Receiver<ChainWorkerWeak<S>>>;
 /// Callers that find a pending entry clone the `Shared` future and await it.
 type ChainWorkerMap<S> = Arc<papaya::HashMap<ChainId, ChainWorkerFuture<S>>>;
 
+/// A cross-chain request waiting to be processed in a batch.
+pub(crate) enum BatchRequest {
+    Update {
+        origin: ChainId,
+        bundles: Vec<(Epoch, MessageBundle)>,
+        previous_height: Option<BlockHeight>,
+        result_tx: oneshot::Sender<Result<CrossChainUpdateResult, WorkerError>>,
+    },
+    Confirm {
+        recipient: ChainId,
+        latest_height: BlockHeight,
+        result_tx: oneshot::Sender<Result<NetworkActions, WorkerError>>,
+    },
+}
+
+/// A shared, cooperatively-polled future that processes cross-chain batches.
+///
+/// All tasks waiting for cross-chain operations on the same chain share a
+/// single `BatchFuture`. Polling any clone drives the underlying processing
+/// loop. The loop drains the request queue, acquires the write lock, processes
+/// all requests in one batch, and repeats until the queue is empty.
+type BatchFuture = Shared<pin::Pin<Box<dyn Future<Output = ()> + Send>>>;
+type BatchWeak = WeakShared<pin::Pin<Box<dyn Future<Output = ()> + Send>>>;
+
+#[derive(Clone)]
+struct DriverState {
+    /// Send half of the channel whose receiver lives inside the driver future.
+    sender: mpsc::UnboundedSender<BatchRequest>,
+    /// The shared future to clone and poll.
+    future: BatchWeak,
+}
+
+impl DriverState {
+    fn new<StorageClient>(state: ChainWorkerArc<StorageClient>) -> (DriverState, BatchFuture)
+    where
+        StorageClient: Storage + Clone + 'static,
+    {
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let future: pin::Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(async move {
+            loop {
+                let Some(first) = receiver.recv().await else {
+                    break; // All senders dropped.
+                };
+                let mut requests = vec![first];
+                while let Ok(req) = receiver.try_recv() {
+                    requests.push(req);
+                }
+                let mut guard = handle::write_lock(&state).await;
+                guard.process_batch(requests).await;
+            }
+        });
+        let shared = future.shared();
+        let weak = shared.downgrade().expect("future has not been polled yet");
+        let driver_state = DriverState {
+            sender,
+            future: weak,
+        };
+        (driver_state, shared)
+    }
+}
+
+type ChainBatchMap = Arc<papaya::HashMap<ChainId, DriverState>>;
+
 /// Starts a background task that periodically removes dead weak references
 /// from the chain handle map. The actual lifetime management is handled by
 /// each handle's keep-alive task.
@@ -570,6 +635,8 @@ pub struct WorkerState<StorageClient: Storage> {
     /// manages its own lifetime via a keep-alive task. A background sweep
     /// periodically removes dead entries.
     chain_workers: ChainWorkerMap<StorageClient>,
+    /// Per-chain batch processing state for cross-chain requests.
+    chain_batches: ChainBatchMap,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -585,6 +652,7 @@ where
             chain_modes: self.chain_modes.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_workers: self.chain_workers.clone(),
+            chain_batches: self.chain_batches.clone(),
         }
     }
 }
@@ -743,6 +811,7 @@ where
             chain_modes,
             delivery_notifiers: Arc::default(),
             chain_workers,
+            chain_batches: Arc::new(papaya::HashMap::new()),
         }
     }
 
@@ -837,6 +906,44 @@ where
                 .and_then(|r| r.clone().ok())
                 .is_some_and(|weak| weak.ptr_eq(&weak_poisoned))
         });
+    }
+
+    /// Returns or creates the per-chain batch state.
+    async fn get_or_create_chain_batch(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<(mpsc::UnboundedSender<BatchRequest>, BatchFuture), WorkerError> {
+        // Fast path: reuse an existing live driver. The pin guard is !Send,
+        // so it must be dropped before any .await point.
+        {
+            let pin = self.chain_batches.pin();
+            if let Some(driver_state) = pin.get(&chain_id) {
+                if let Some(future) = driver_state.future.upgrade() {
+                    return Ok((driver_state.sender.clone(), future));
+                }
+            }
+        }
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let (new_driver_state, new_future) = DriverState::new(state);
+        let pin = self.chain_batches.pin();
+        match pin.compute(chain_id, |existing| match existing {
+            Some((_, driver_state)) => {
+                if let Some(future) = driver_state.future.upgrade() {
+                    papaya::Operation::Abort((driver_state.sender.clone(), future))
+                } else {
+                    papaya::Operation::Insert(new_driver_state.clone())
+                }
+            }
+            None => papaya::Operation::Insert(new_driver_state.clone()),
+        }) {
+            papaya::Compute::Aborted((sender, future)) => Ok((sender, future)),
+            papaya::Compute::Inserted(_, driver_state)
+            | papaya::Compute::Updated {
+                new: (_, driver_state),
+                ..
+            } => Ok((driver_state.sender.clone(), new_future)),
+            papaya::Compute::Removed { .. } => unreachable!(),
+        }
     }
 
     /// Gets or creates a chain worker for the given chain.
@@ -1075,6 +1182,8 @@ where
         .await
     }
 
+    /// Enqueues a cross-chain update request and cooperatively drives the
+    /// batch-processing future until the result is ready.
     #[instrument(level = "trace", skip(self, origin, recipient, bundles), fields(
         nickname = %self.nickname(),
         origin = %origin,
@@ -1088,12 +1197,77 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
         previous_height: Option<BlockHeight>,
     ) -> Result<CrossChainUpdateResult, WorkerError> {
-        self.chain_write(recipient, |mut guard| async move {
-            guard
-                .process_cross_chain_update(origin, bundles, previous_height)
-                .await
-        })
-        .await
+        let (result_tx, mut rx) = oneshot::channel();
+        let mut request = Some(BatchRequest::Update {
+            origin,
+            bundles,
+            previous_height,
+            result_tx,
+        });
+        loop {
+            let (sender, future) = self.get_or_create_chain_batch(recipient).await?;
+            if let Some(req) = request.take() {
+                if let Err(mpsc::error::SendError(req)) = sender.send(req) {
+                    request = Some(req);
+                    continue; // Driver died; retry will create a new one.
+                }
+            }
+            tokio::select! {
+                biased;
+                result = &mut rx => return result.expect("batch result sender dropped"),
+                _ = future => {
+                    match rx.try_recv() {
+                        Ok(result) => return result,
+                        Err(oneshot::error::TryRecvError::Empty) => {},
+                        Err(oneshot::error::TryRecvError::Closed) => {
+                            return Err(WorkerError::ChainError(Box::new(
+                                ChainError::InternalError("batch driver stopped".into()),
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Enqueues a confirmation request and cooperatively drives the
+    /// batch-processing future until the result is ready.
+    async fn confirm_updated_recipient(
+        &self,
+        sender: ChainId,
+        recipient: ChainId,
+        latest_height: BlockHeight,
+    ) -> Result<NetworkActions, WorkerError> {
+        let (result_tx, mut rx) = oneshot::channel();
+        let mut request = Some(BatchRequest::Confirm {
+            recipient,
+            latest_height,
+            result_tx,
+        });
+        loop {
+            let (sender, future) = self.get_or_create_chain_batch(sender).await?;
+            if let Some(req) = request.take() {
+                if let Err(mpsc::error::SendError(req)) = sender.send(req) {
+                    request = Some(req);
+                    continue;
+                }
+            }
+            tokio::select! {
+                biased;
+                result = &mut rx => return result.expect("batch result sender dropped"),
+                _ = future => {
+                    match rx.try_recv() {
+                        Ok(result) => return result,
+                        Err(oneshot::error::TryRecvError::Empty) => {},
+                        Err(oneshot::error::TryRecvError::Closed) => {
+                            return Err(WorkerError::ChainError(Box::new(
+                                ChainError::InternalError("batch driver stopped".into()),
+                            )));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Returns a stored [`ConfirmedBlockCertificate`] for a chain's block.
@@ -1404,11 +1578,7 @@ where
                 latest_height,
             } => {
                 let actions = self
-                    .chain_write(sender, |mut guard| async move {
-                        guard
-                            .confirm_updated_recipient(recipient, latest_height)
-                            .await
-                    })
+                    .confirm_updated_recipient(sender, recipient, latest_height)
                     .await?;
                 Ok(actions)
             }

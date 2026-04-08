@@ -51,7 +51,7 @@ use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    worker::{NetworkActions, Notification, Reason, WorkerError},
+    worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
 };
 
 /// Type alias for event subscriptions result.
@@ -1147,8 +1147,6 @@ where
             );
             return Ok(CrossChainUpdateResult::NothingToDo);
         }
-        // Save the chain.
-        self.save().await?;
         Ok(CrossChainUpdateResult::Updated(last_updated_height))
     }
 
@@ -1162,7 +1160,7 @@ where
         &mut self,
         recipient: ChainId,
         latest_height: BlockHeight,
-    ) -> Result<NetworkActions, WorkerError> {
+    ) -> Result<(bool, NetworkActions), WorkerError> {
         let fully_delivered = self
             .chain
             .mark_messages_as_received(&recipient, latest_height)
@@ -1176,13 +1174,128 @@ where
             .create_cross_chain_actions_for_recipient(recipient)
             .await?;
 
-        self.save().await?;
+        Ok((fully_delivered, actions))
+    }
 
-        if fully_delivered {
-            self.delivery_notifier.notify(latest_height);
+    /// Notifies delivery waiters that all messages up to `height` have been delivered.
+    pub(crate) fn notify_delivery(&self, height: BlockHeight) {
+        self.delivery_notifier.notify(height);
+    }
+
+    /// Processes a batch of cross-chain requests, performing at most one `save()`.
+    ///
+    /// Both update and confirmation requests are handled together so that a
+    /// single write-lock acquisition covers all pending work for the chain.
+    pub(crate) async fn process_batch(&mut self, requests: Vec<BatchRequest>) {
+        let mut update_results = Vec::new();
+        let mut confirm_results = Vec::new();
+        let mut need_save = false;
+        let mut need_rollback = false;
+        let mut max_delivered_height: Option<BlockHeight> = None;
+
+        for request in requests {
+            match request {
+                BatchRequest::Update {
+                    origin,
+                    bundles,
+                    previous_height,
+                    result_tx,
+                } => {
+                    if need_rollback || result_tx.is_closed() {
+                        let _ = result_tx.send(Ok(CrossChainUpdateResult::NothingToDo));
+                        continue;
+                    }
+                    let result = self
+                        .process_cross_chain_update(origin, bundles, previous_height)
+                        .await;
+                    match &result {
+                        Ok(CrossChainUpdateResult::Updated(_)) => need_save = true,
+                        Ok(CrossChainUpdateResult::GapDetected { .. }) | Err(_) => {
+                            need_rollback = true
+                        }
+                        _ => {}
+                    }
+                    update_results.push((result_tx, result));
+                }
+                BatchRequest::Confirm {
+                    recipient,
+                    latest_height,
+                    result_tx,
+                } => {
+                    if need_rollback || result_tx.is_closed() {
+                        let _ = result_tx.send(Ok(NetworkActions::default()));
+                        continue;
+                    }
+                    match self
+                        .confirm_updated_recipient(recipient, latest_height)
+                        .await
+                    {
+                        Ok((fully_delivered, actions)) => {
+                            need_save = true;
+                            if fully_delivered {
+                                max_delivered_height = Some(
+                                    max_delivered_height
+                                        .map_or(latest_height, |h| h.max(latest_height)),
+                                );
+                            }
+                            confirm_results.push((result_tx, Ok(actions)));
+                        }
+                        Err(e) => {
+                            need_rollback = true;
+                            confirm_results.push((result_tx, Err(e)));
+                        }
+                    }
+                }
+            }
         }
 
-        Ok(actions)
+        if need_rollback {
+            // Don't save; RollbackGuard undoes all pending changes.
+            // Downgrade Updated results so no false confirmations are sent.
+            for (_, result) in &mut update_results {
+                if matches!(result, Ok(CrossChainUpdateResult::Updated(_))) {
+                    *result = Ok(CrossChainUpdateResult::NothingToDo);
+                }
+            }
+            for (_, result) in &mut confirm_results {
+                if result.is_ok() {
+                    *result = Err(WorkerError::ChainError(Box::new(
+                        ChainError::InternalError("batch aborted".into()),
+                    )));
+                }
+            }
+            max_delivered_height = None;
+        } else if need_save {
+            if let Err(e) = self.save().await {
+                let msg = e.to_string();
+                for (_, result) in &mut update_results {
+                    if matches!(result, Ok(CrossChainUpdateResult::Updated(_))) {
+                        *result = Err(WorkerError::ChainError(Box::new(
+                            ChainError::InternalError(msg.clone()),
+                        )));
+                    }
+                }
+                for (_, result) in &mut confirm_results {
+                    if result.is_ok() {
+                        *result = Err(WorkerError::ChainError(Box::new(
+                            ChainError::InternalError(msg.clone()),
+                        )));
+                    }
+                }
+                max_delivered_height = None;
+            }
+        }
+
+        if let Some(height) = max_delivered_height {
+            self.notify_delivery(height);
+        }
+
+        for (tx, result) in update_results {
+            let _ = tx.send(result);
+        }
+        for (tx, result) in confirm_results {
+            let _ = tx.send(result);
+        }
     }
 
     /// Handles a `RevertConfirm` request: walks backward through
@@ -2144,7 +2257,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
-    async fn save(&mut self) -> Result<(), WorkerError> {
+    pub(crate) async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
             if error.must_reload_view() {
                 tracing::error!(
