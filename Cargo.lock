@@ -6163,8 +6163,6 @@ dependencies = [
  "toml",
  "tonic 0.14.2",
  "tonic-health",
- "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tonic-web",
  "tower 0.4.13",

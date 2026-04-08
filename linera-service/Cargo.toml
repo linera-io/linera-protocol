@@ -146,7 +146,6 @@ tonic = { workspace = true, features = [
     "tls-webpki-roots",
 ] }
 tonic-health.workspace = true
-tonic-prost.workspace = true
 tonic-reflection.workspace = true
 tonic-web.workspace = true
 tower.workspace = true
@@ -156,7 +155,6 @@ url = { workspace = true, features = ["serde"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
-tonic-prost-build = { workspace = true, features = ["transport"] }
 
 [dev-dependencies]
 amm.workspace = true
@@ -213,13 +211,9 @@ path = "src/schema_export.rs"
 name = "linera-benchmark"
 path = "src/benchmark.rs"
 
-[[bin]]
-name = "linera-exporter"
-path = "src/exporter/main.rs"
-
 [[bench]]
 name = "transfers"
 harness = false
 
 [package.metadata.cargo-machete]
-ignored = ["tonic-prost"]
+ignored = []
