@@ -582,8 +582,8 @@ where
         }
         let outboxes = self.chain.load_outboxes(&targets).await?;
         for outbox in outboxes {
-            let front = outbox.queue.front().await?;
-            if front.is_some_and(|key| key <= height) {
+            let front = outbox.queue.front();
+            if front.is_some_and(|key| *key <= height) {
                 return Ok(false);
             }
         }
