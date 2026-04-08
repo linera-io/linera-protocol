@@ -1195,9 +1195,7 @@ where
                     result_tx,
                 } => {
                     if need_rollback {
-                        if result_tx.send(Err(WorkerError::BatchRolledBack)).is_err() {
-                            tracing::debug!("cannot send cross-chain result; receiver dropped");
-                        }
+                        send_result(result_tx, Err(WorkerError::BatchRolledBack));
                         continue;
                     }
                     let result = self
@@ -1207,9 +1205,7 @@ where
                         Ok(update_result) => update_result,
                         Err(error) => {
                             need_rollback = true;
-                            if result_tx.send(Err(error)).is_err() {
-                                tracing::debug!("cannot send cross-chain result; receiver dropped");
-                            }
+                            send_result(result_tx, Err(error));
                             continue;
                         }
                     };
@@ -1226,9 +1222,7 @@ where
                     result_tx,
                 } => {
                     if need_rollback {
-                        if result_tx.send(Err(WorkerError::BatchRolledBack)).is_err() {
-                            tracing::debug!("cannot send cross-chain result; receiver dropped");
-                        }
+                        send_result(result_tx, Err(WorkerError::BatchRolledBack));
                         continue;
                     }
                     match self
@@ -1247,9 +1241,7 @@ where
                         }
                         Err(error) => {
                             need_rollback = true;
-                            if result_tx.send(Err(error)).is_err() {
-                                tracing::debug!("cannot send cross-chain result; receiver dropped");
-                            }
+                            send_result(result_tx, Err(error));
                         }
                     }
                 }
@@ -1263,14 +1255,10 @@ where
         }
         if need_rollback {
             for (result_tx, _) in update_results {
-                if result_tx.send(Err(WorkerError::BatchRolledBack)).is_err() {
-                    tracing::debug!("cannot send cross-chain result; receiver dropped");
-                }
+                send_result(result_tx, Err(WorkerError::BatchRolledBack));
             }
             for (result_tx, _) in confirm_results {
-                if result_tx.send(Err(WorkerError::BatchRolledBack)).is_err() {
-                    tracing::debug!("cannot send cross-chain result; receiver dropped");
-                }
+                send_result(result_tx, Err(WorkerError::BatchRolledBack));
             }
             return;
         }
@@ -1280,17 +1268,13 @@ where
         }
 
         for (result_tx, update_result) in update_results {
-            if result_tx.send(Ok(update_result)).is_err() {
-                tracing::debug!("cannot send cross-chain result; receiver dropped");
-            }
+            send_result(result_tx, Ok(update_result));
         }
         for (result_tx, recipient) in confirm_results {
             let result = self
                 .create_cross_chain_actions_for_recipient(recipient)
                 .await;
-            if result_tx.send(result).is_err() {
-                tracing::debug!("cannot send cross-chain result; receiver dropped");
-            }
+            send_result(result_tx, result);
         }
     }
 
@@ -2266,6 +2250,14 @@ where
             return Err(error.into());
         }
         Ok(())
+    }
+}
+
+/// Sends a result through a oneshot channel, logging at `debug` level if the
+/// receiver has been dropped.
+pub(crate) fn send_result<T>(sender: oneshot::Sender<T>, value: T) {
+    if sender.send(value).is_err() {
+        tracing::debug!("cannot send cross-chain result; receiver dropped");
     }
 }
 

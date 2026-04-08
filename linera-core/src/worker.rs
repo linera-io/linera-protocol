@@ -67,8 +67,9 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult,
-        DeliveryNotifier,
+        handle,
+        state::{send_result, ChainWorkerState},
+        BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult, DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -576,16 +577,13 @@ impl DriverState {
                     Err(error) => {
                         tracing::error!(%error, "failed to obtain write lock");
                         for request in requests {
-                            let is_err = match request {
+                            match request {
                                 BatchRequest::Update { result_tx, .. } => {
-                                    result_tx.send(Err(WorkerError::PoisonedWorker)).is_err()
+                                    send_result(result_tx, Err(WorkerError::PoisonedWorker));
                                 }
                                 BatchRequest::Confirm { result_tx, .. } => {
-                                    result_tx.send(Err(WorkerError::PoisonedWorker)).is_err()
+                                    send_result(result_tx, Err(WorkerError::PoisonedWorker));
                                 }
-                            };
-                            if is_err {
-                                tracing::debug!("failed to send error result; receiver dropped");
                             }
                         }
                     }
