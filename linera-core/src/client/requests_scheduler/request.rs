@@ -1,18 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt;
+
 use linera_base::{
     data_types::{Blob, BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 
-use crate::client::requests_scheduler::cache::SubsumingKey;
+use crate::{client::requests_scheduler::cache::SubsumingKey, data_types::CompressedHeights};
 
 /// Unique identifier for different types of download requests.
 ///
 /// Used for request deduplication to avoid redundant downloads of the same data.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum RequestKey {
     /// Download certificates by specific heights
     Certificates {
@@ -25,6 +27,27 @@ pub enum RequestKey {
     PendingBlob { chain_id: ChainId, blob_id: BlobId },
     /// Download certificate for a specific blob
     CertificateForBlob(BlobId),
+}
+
+impl fmt::Debug for RequestKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RequestKey::Certificates { chain_id, heights } => f
+                .debug_struct("Certificates")
+                .field("chain_id", chain_id)
+                .field("heights", &CompressedHeights(heights))
+                .finish(),
+            RequestKey::Blob(blob_id) => f.debug_tuple("Blob").field(blob_id).finish(),
+            RequestKey::PendingBlob { chain_id, blob_id } => f
+                .debug_struct("PendingBlob")
+                .field("chain_id", chain_id)
+                .field("blob_id", blob_id)
+                .finish(),
+            RequestKey::CertificateForBlob(blob_id) => {
+                f.debug_tuple("CertificateForBlob").field(blob_id).finish()
+            }
+        }
+    }
 }
 
 impl RequestKey {
