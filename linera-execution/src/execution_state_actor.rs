@@ -3,7 +3,10 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
@@ -631,7 +634,10 @@ where
                             .get_event(event_id.clone())
                             .await?
                             .ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?;
-                        Ok(OracleResponse::Event(event_id.clone(), event))
+                        Ok(OracleResponse::Event(
+                            event_id.clone(),
+                            Arc::unwrap_or_clone(event),
+                        ))
                     })
                     .await?
                     .to_event(&event_id)?;

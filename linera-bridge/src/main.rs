@@ -129,12 +129,13 @@ impl ServeOptions {
             &self.fungible_app_id_file,
             &self.evm_private_key,
             self.port,
-            linera_storage::StorageCacheSizes {
+            linera_storage::StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
                 confirmed_block_cache_size: self.confirmed_block_cache_size,
                 lite_certificate_cache_size: self.lite_certificate_cache_size,
                 certificate_raw_cache_size: self.certificate_raw_cache_size,
                 event_cache_size: self.event_cache_size,
+                cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
         )
         .await

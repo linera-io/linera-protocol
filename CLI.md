@@ -280,6 +280,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--event-cache-size <EVENT_CACHE_SIZE>` — The maximal number of entries in the event cache
 
   Default value: `1000`
+* `--cache-cleanup-interval-secs <CACHE_CLEANUP_INTERVAL_SECS>` — Interval in seconds between weak reference cleanup sweeps in value caches
+
+  Default value: `30`
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`

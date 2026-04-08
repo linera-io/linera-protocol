@@ -253,7 +253,8 @@ where
             return Ok(blob);
         }
         let blob = self.storage.read_blob(blob_id).await?;
-        blob.ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
+        blob.map(Arc::unwrap_or_clone)
+            .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
     /// Reads the blobs from the chain manager or from storage. Returns an error if any are
@@ -339,7 +340,7 @@ where
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         let fourth_block_blobs = self.storage.read_blobs(&missing_blob_ids).await?;
         for (index, blob) in missing_indices.into_iter().zip(fourth_block_blobs) {
-            maybe_blobs[index].1 = blob;
+            maybe_blobs[index].1 = blob.map(Arc::unwrap_or_clone);
         }
         Ok(maybe_blobs.into_iter().collect())
     }
@@ -463,7 +464,7 @@ where
         }
 
         let mut uncached_hashes = Vec::new();
-        let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
+        let mut height_to_blocks: HashMap<BlockHeight, Arc<Hashed<Block>>> = HashMap::new();
 
         for hash in hashes {
             if let Some(hashed_block) = self.block_values.get_hashed(&hash) {
@@ -486,8 +487,8 @@ where
                 let hashed_block = cert.into_value().into_inner();
                 let height = hashed_block.inner().header.height;
                 self.block_values
-                    .insert_hashed(Cow::Owned(hashed_block.clone()));
-                height_to_blocks.insert(height, hashed_block);
+                    .insert_hashed(Cow::Borrowed(&hashed_block));
+                height_to_blocks.insert(height, Arc::new(hashed_block));
             }
         }
 
@@ -1276,6 +1277,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1284,6 +1286,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1293,6 +1296,7 @@ where
             .storage
             .read_certificate(failed_block_hash)
             .await?
+            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::LocalBlockNotFound {
                 height: failed_height,
                 chain_id,
@@ -1635,6 +1639,7 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
+            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }

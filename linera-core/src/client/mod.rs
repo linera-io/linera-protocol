@@ -869,7 +869,7 @@ impl<Env: Environment> Client<Env> {
             .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
-            return Ok(blob);
+            return Ok(Arc::unwrap_or_clone(blob));
         }
         // Recover history from the current validators, according to the admin chain.
         self.synchronize_chain_state(self.admin_chain_id).await?;
@@ -1428,7 +1428,7 @@ impl<Env: Environment> Client<Env> {
             let certificate = if let Some(certificate) =
                 self.storage_client().read_certificate(current_hash).await?
             {
-                certificate
+                Arc::unwrap_or_clone(certificate)
             } else {
                 let downloaded = self
                     .requests_scheduler
@@ -1826,6 +1826,7 @@ impl<Env: Environment> Client<Env> {
                         .storage_client()
                         .read_blob(blob_id)
                         .await?
+                        .map(Arc::unwrap_or_clone)
                         .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
                     Result::<_, chain_client::Error>::Ok(blob)
                 },

@@ -310,7 +310,7 @@ pub async fn run(
     fungible_app_id_file: &str,
     evm_private_key: &str,
     port: u16,
-    cache_sizes: linera_storage::StorageCacheSizes,
+    cache_sizes: linera_storage::StorageCacheConfig,
 ) -> Result<()> {
     tracing_subscriber::fmt::init();
 

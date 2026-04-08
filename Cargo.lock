@@ -5485,9 +5485,11 @@ dependencies = [
  "linera-base",
  "linera-cache",
  "lru 0.15.0",
+ "papaya",
  "prometheus",
  "quick_cache",
  "serde",
+ "tokio",
 ]
 
 [[package]]
