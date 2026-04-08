@@ -3,13 +3,7 @@
 
 #![allow(dead_code)]
 
-use std::{
-    collections::BTreeMap,
-    fs::File,
-    io::Write,
-    path::Path,
-    process::{Command, Stdio},
-};
+use std::collections::BTreeMap;
 
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
@@ -23,7 +17,8 @@ use linera_chain::{
     types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
-    committee::ValidatorState, system::AdminOperation, Message, MessageKind, Operation,
+    committee::ValidatorState, system::AdminOperation,
+    test_utils::solidity::compile_solidity_contract, Message, MessageKind, Operation,
     ResourceControlPolicy, SystemOperation,
 };
 use revm::{
@@ -412,91 +407,20 @@ pub fn create_test_block(
 }
 
 pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path();
-
-    // Write shared source files so imports resolve
-    for (name, content) in [
-        ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
-        (
-            "WrappedFungibleTypes.sol",
-            evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
-        ),
-        ("LightClient.sol", evm::light_client::SOURCE),
-        ("Microchain.sol", evm::microchain::SOURCE),
-        ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
-    ] {
-        let mut f = File::create(path.join(name)).unwrap();
-        writeln!(f, "{}", content).unwrap();
-    }
-
-    // Write the contract under test
-    let test_path = path.join(file_name);
-    let mut test_file = File::create(&test_path).unwrap();
-    writeln!(test_file, "{}", source_code).unwrap();
-
-    // Write solc config
-    write_compilation_json(path, file_name);
-
-    // Compile
-    let config_file = File::open(path.join("config.json")).unwrap();
-    let output_file = File::create(path.join("result.json")).unwrap();
-
-    let status = Command::new("solc")
-        .current_dir(path)
-        .arg("--standard-json")
-        .stdin(Stdio::from(config_file))
-        .stdout(Stdio::from(output_file))
-        .status()
-        .expect("solc must be installed");
-    assert!(status.success(), "solc compilation failed");
-
-    let contents = std::fs::read_to_string(path.join("result.json")).unwrap();
-    let json_data: serde_json::Value = serde_json::from_str(&contents).unwrap();
-
-    // Check for compilation errors
-    if let Some(errors) = json_data.get("errors") {
-        for error in errors.as_array().unwrap() {
-            let severity = error["severity"].as_str().unwrap_or("");
-            if severity == "error" {
-                panic!(
-                    "solc compilation error: {}",
-                    error["formattedMessage"].as_str().unwrap_or("unknown")
-                );
-            }
-        }
-    }
-
-    let bytecode_hex = json_data["contracts"][file_name][contract_name]["evm"]["bytecode"]
-        ["object"]
-        .as_str()
-        .expect("failed to extract bytecode from solc output");
-    hex::decode(bytecode_hex).unwrap()
-}
-
-fn write_compilation_json(path: &Path, file_name: &str) {
-    let config_path = path.join("config.json");
-    let mut source = File::create(config_path).unwrap();
-    writeln!(
-        source,
-        r#"
-{{
-  "language": "Solidity",
-  "sources": {{
-    "{file_name}": {{
-      "urls": ["./{file_name}"]
-    }}
-  }},
-  "settings": {{
-    "viaIR": true,
-    "outputSelection": {{
-      "*": {{
-        "*": ["evm.bytecode"]
-      }}
-    }}
-  }}
-}}
-"#
+    compile_solidity_contract(
+        source_code,
+        file_name,
+        contract_name,
+        &[
+            ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
+            (
+                "WrappedFungibleTypes.sol",
+                evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
+            ),
+            ("LightClient.sol", evm::light_client::SOURCE),
+            ("Microchain.sol", evm::microchain::SOURCE),
+            ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
+        ],
     )
-    .unwrap();
+    .expect("solc compilation failed")
 }
