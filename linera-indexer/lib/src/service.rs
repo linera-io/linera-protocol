@@ -150,11 +150,11 @@ impl Listener {
             match item {
                 Ok(response) => {
                     if let Some(data) = response.data {
-                        if let Reason::NewBlock { block_hash, .. } = data.notifications.reason {
-                            match self.service.get_value(chain_id, Some(block_hash)).await {
+                        if let Reason::NewBlock { hash, .. } = data.notifications.reason {
+                            match self.service.get_value(chain_id, Some(hash)).await {
                                 Ok(value) => indexer.process(self, &value).await?,
                                 Err(error) => {
-                                    error!("failed to fetch block {block_hash}: {error}")
+                                    error!("failed to fetch block {hash}: {error}")
                                 }
                             }
                         }

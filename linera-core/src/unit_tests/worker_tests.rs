@@ -1375,7 +1375,7 @@ where
                 chain_id: chain_1,
                 reason: NewBlock {
                     height: BlockHeight(0),
-                    block_hash: certificate0.hash(),
+                    hash: certificate0.hash(),
                 }
             },
             Notification {
@@ -1389,7 +1389,7 @@ where
                 chain_id: chain_1,
                 reason: NewBlock {
                     height: BlockHeight(1),
-                    block_hash: certificate1.hash(),
+                    hash: certificate1.hash(),
                 }
             },
             Notification {

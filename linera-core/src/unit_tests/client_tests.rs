@@ -130,12 +130,12 @@ where
     }
     let executed_block_hash = match notifications.next().await {
         Some(Notification {
-            reason: Reason::BlockExecuted { block_hash, height },
+            reason: Reason::BlockExecuted { hash, height },
             chain_id,
         }) => {
             assert_eq!(chain_id, sender.chain_id());
             assert_eq!(height, BlockHeight::ZERO);
-            block_hash
+            hash
         }
         _ => panic!("Expected BlockExecuted notification"),
     };
@@ -146,14 +146,12 @@ where
     let _notification = notifications.next().await;
     match notifications.next().await {
         Some(Notification {
-            reason: Reason::NewBlock {
-                block_hash, height, ..
-            },
+            reason: Reason::NewBlock { hash, height, .. },
             chain_id,
         }) => {
             assert_eq!(chain_id, sender.chain_id());
             assert_eq!(height, BlockHeight::ZERO);
-            assert_eq!(executed_block_hash, block_hash);
+            assert_eq!(executed_block_hash, hash);
         }
         other => panic!("Expected NewBlock notification, got {:?}", other),
     }
