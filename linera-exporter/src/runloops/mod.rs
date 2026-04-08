@@ -24,6 +24,7 @@ use crate::{
 };
 
 mod block_processor;
+mod evm_chain_exporter;
 mod indexer;
 mod logging_exporter;
 mod task_manager;

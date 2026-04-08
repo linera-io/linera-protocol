@@ -5749,6 +5749,7 @@ dependencies = [
  "fs-err",
  "futures",
  "linera-base",
+ "linera-bridge",
  "linera-chain",
  "linera-core",
  "linera-execution",
