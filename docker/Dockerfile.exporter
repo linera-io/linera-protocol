@@ -50,13 +50,13 @@ RUN cargo build ${build_flag:+"$build_flag"} \
     --bin linera-exporter \
     --features $build_features
 
-# Move binary to root; use explicit path to avoid conflict with linera-exporter/ crate directory
-RUN mv target/"$build_folder"/linera-exporter /usr/local/bin/linera-exporter
+# Move binary; renamed to avoid conflict with linera-exporter/ crate directory
+RUN mv target/"$build_folder"/linera-exporter ./linera-exporter-binary
 
 # Optionally copy binaries instead of using the build images above
 FROM scratch AS builder_copy
 ARG binaries
-COPY "$binaries"/linera-exporter /usr/local/bin/linera-exporter
+COPY "$binaries"/linera-exporter ./linera-exporter-binary
 
 FROM builder$copy AS binaries
 
@@ -80,4 +80,4 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 ARG target
 
 # Copy block exporter binary
-COPY --from=binaries /usr/local/bin/linera-exporter ./
+COPY --from=binaries linera-exporter-binary ./linera-exporter

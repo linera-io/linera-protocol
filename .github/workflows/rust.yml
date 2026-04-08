@@ -240,6 +240,9 @@ jobs:
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown --locked
+    - name: Build linera-exporter binary for integration tests
+      run: |
+        cargo build --bin linera-exporter --no-default-features --features rocksdb --locked
     - name: Run all tests using the default features (except storage-service)
       run: |
         # TODO(#2764): Actually link this to the default features
@@ -379,6 +382,9 @@ jobs:
     - name: Wait for storage service to be ready
       run: |
         until nc -z 127.0.0.1 1235; do sleep 1; done
+    - name: Build linera-exporter binary for integration tests
+      run: |
+        cargo build --bin linera-exporter --features storage-service --locked
     - name: Run the storage-service tests
       run: |
         cargo test --features storage-service,opentelemetry -- storage_service --nocapture
