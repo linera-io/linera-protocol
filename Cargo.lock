@@ -5734,6 +5734,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-exporter"
+version = "0.15.15"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "bincode",
+ "cfg_aliases",
+ "clap",
+ "custom_debug_derive",
+ "futures",
+ "linera-base",
+ "linera-chain",
+ "linera-core",
+ "linera-execution",
+ "linera-metrics",
+ "linera-rpc",
+ "linera-sdk",
+ "linera-storage",
+ "linera-storage-runtime",
+ "linera-views",
+ "mini-moka",
+ "prometheus",
+ "quick_cache",
+ "serde",
+ "test-case",
+ "test-log",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "toml",
+ "tonic 0.14.2",
+ "tonic-health",
+ "tonic-prost-build",
+ "tracing",
+]
+
+[[package]]
 name = "linera-faucet-client"
 version = "0.15.15"
 dependencies = [

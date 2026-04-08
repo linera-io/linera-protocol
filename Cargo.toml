@@ -8,6 +8,7 @@ members = [
     "linera-core",
     "linera-ethereum",
     "linera-execution",
+    "linera-exporter",
     "linera-explorer",
     "linera-faucet/client",
     "linera-faucet/server",
@@ -43,6 +44,7 @@ default-members = [
     "linera-core",
     "linera-ethereum",
     "linera-execution",
+    "linera-exporter",
     "linera-explorer",
     "linera-faucet/client",
     "linera-faucet/server",
@@ -320,6 +322,7 @@ linera-client = { version = "0.15.15", path = "./linera-client", default-feature
 linera-core = { version = "0.15.15", path = "./linera-core", default-features = false }
 linera-ethereum = { version = "0.15.15", path = "./linera-ethereum", default-features = false }
 linera-execution = { version = "0.15.15", path = "./linera-execution", default-features = false }
+linera-exporter = { version = "0.15.15", path = "./linera-exporter", default-features = false }
 linera-faucet-client = { version = "0.15.15", path = "linera-faucet/client" }
 linera-faucet-server = { version = "0.15.15", path = "linera-faucet/server" }
 linera-indexer = { version = "0.15.15", path = "./linera-indexer/lib" }
