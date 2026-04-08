@@ -6108,6 +6108,7 @@ dependencies = [
  "linera-core",
  "linera-ethereum",
  "linera-execution",
+ "linera-exporter",
  "linera-faucet-client",
  "linera-faucet-server",
  "linera-metrics",
