@@ -1209,37 +1209,14 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
         previous_height: Option<BlockHeight>,
     ) -> Result<CrossChainUpdateResult, WorkerError> {
-        let (result_tx, mut rx) = oneshot::channel();
-        let mut request = Some(BatchRequest::Update {
+        let (result_tx, rx) = oneshot::channel();
+        let request = BatchRequest::Update {
             origin,
             bundles,
             previous_height,
             result_tx,
-        });
-        loop {
-            let (sender, future) = self.get_or_create_chain_batch(recipient).await?;
-            if let Some(req) = request.take() {
-                if let Err(mpsc::error::SendError(req)) = sender.send(req) {
-                    request = Some(req);
-                    continue; // Driver died; retry will create a new one.
-                }
-            }
-            tokio::select! {
-                biased;
-                result = &mut rx => return result.expect("batch result sender dropped"),
-                _ = future => {
-                    match rx.try_recv() {
-                        Ok(result) => return result,
-                        Err(oneshot::error::TryRecvError::Empty) => {},
-                        Err(oneshot::error::TryRecvError::Closed) => {
-                            return Err(WorkerError::ChainError(Box::new(
-                                ChainError::InternalError("batch driver stopped".into()),
-                            )));
-                        }
-                    }
-                }
-            }
-        }
+        };
+        self.enqueue_and_drive(recipient, request, rx).await
     }
 
     /// Enqueues a confirmation request and cooperatively drives the
@@ -1250,18 +1227,30 @@ where
         recipient: ChainId,
         latest_height: BlockHeight,
     ) -> Result<NetworkActions, WorkerError> {
-        let (result_tx, mut rx) = oneshot::channel();
-        let mut request = Some(BatchRequest::Confirm {
+        let (result_tx, rx) = oneshot::channel();
+        let request = BatchRequest::Confirm {
             recipient,
             latest_height,
             result_tx,
-        });
+        };
+        self.enqueue_and_drive(sender, request, rx).await
+    }
+
+    /// Sends a [`BatchRequest`] to the per-chain driver and cooperatively
+    /// polls the shared processing future until our result arrives.
+    async fn enqueue_and_drive<R>(
+        &self,
+        chain_id: ChainId,
+        request: BatchRequest,
+        mut rx: oneshot::Receiver<Result<R, WorkerError>>,
+    ) -> Result<R, WorkerError> {
+        let mut request = Some(request);
         loop {
-            let (sender, future) = self.get_or_create_chain_batch(sender).await?;
+            let (sender, future) = self.get_or_create_chain_batch(chain_id).await?;
             if let Some(req) = request.take() {
                 if let Err(mpsc::error::SendError(req)) = sender.send(req) {
                     request = Some(req);
-                    continue;
+                    continue; // Driver died; retry will create a new one.
                 }
             }
             tokio::select! {
