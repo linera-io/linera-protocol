@@ -57,6 +57,7 @@ use linera_storage::Storage;
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState};
+use crate::worker::WorkerError;
 
 /// A write guard that automatically rolls back uncommitted chain state changes on drop.
 ///
@@ -150,10 +151,11 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
 /// Acquires a read lock, updating the last-access timestamp.
 pub(crate) async fn read_lock<S: Storage + Clone + 'static>(
     state: &Arc<RwLock<ChainWorkerState<S>>>,
-) -> OwnedRwLockReadGuard<ChainWorkerState<S>> {
+) -> Result<OwnedRwLockReadGuard<ChainWorkerState<S>>, WorkerError> {
     let guard = state.clone().read_owned().await;
+    guard.check_not_poisoned()?;
     guard.touch();
-    guard
+    Ok(guard)
 }
 
 /// Acquires a read lock, initializing the chain if needed.
@@ -165,16 +167,16 @@ pub(crate) async fn read_lock_initialized<S: Storage + Clone + 'static>(
     state: &Arc<RwLock<ChainWorkerState<S>>>,
 ) -> Result<OwnedRwLockReadGuard<ChainWorkerState<S>>, crate::worker::WorkerError> {
     {
-        let guard = read_lock(state).await;
+        let guard = read_lock(state).await?;
         if guard.knows_chain_is_active() {
             return Ok(guard);
         }
     }
     {
-        let mut guard = write_lock(state).await;
+        let mut guard = write_lock(state).await?;
         guard.initialize_and_save_if_needed().await?;
     }
-    Ok(read_lock(state).await)
+    read_lock(state).await
 }
 
 /// Acquires a write lock, updating the last-access timestamp.
@@ -183,10 +185,11 @@ pub(crate) async fn read_lock_initialized<S: Storage + Clone + 'static>(
 /// when dropped, ensuring cancellation safety.
 pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
     state: &Arc<RwLock<ChainWorkerState<S>>>,
-) -> RollbackGuard<S> {
+) -> Result<RollbackGuard<S>, WorkerError> {
     let guard = RollbackGuard(state.clone().write_owned().await);
+    guard.check_not_poisoned()?;
     guard.touch();
-    guard
+    Ok(guard)
 }
 
 /// Spawns a background task that keeps the chain state alive for at least `ttl`

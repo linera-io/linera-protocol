@@ -538,40 +538,55 @@ pub(crate) enum BatchRequest {
     },
 }
 
-/// A shared, cooperatively-polled future that processes cross-chain batches.
+/// A future that processes cross-chain batches.
 ///
 /// All tasks waiting for cross-chain operations on the same chain share a
 /// single `BatchFuture`. Polling any clone drives the underlying processing
 /// loop. The loop drains the request queue, acquires the write lock, processes
 /// all requests in one batch, and repeats until the queue is empty.
-type BatchFuture = Shared<pin::Pin<Box<dyn Future<Output = ()> + Send>>>;
-type BatchWeak = WeakShared<pin::Pin<Box<dyn Future<Output = ()> + Send>>>;
+type BatchFuture = pin::Pin<Box<dyn Future<Output = ()> + Send>>;
 
 #[derive(Clone)]
 struct DriverState {
     /// Send half of the channel whose receiver lives inside the driver future.
     sender: mpsc::UnboundedSender<BatchRequest>,
     /// The shared future to clone and poll.
-    future: BatchWeak,
+    future: WeakShared<BatchFuture>,
 }
 
 impl DriverState {
-    fn new<StorageClient>(state: ChainWorkerArc<StorageClient>) -> (DriverState, BatchFuture)
+    fn new<StorageClient>(
+        state: ChainWorkerArc<StorageClient>,
+    ) -> (DriverState, Shared<BatchFuture>)
     where
         StorageClient: Storage + Clone + 'static,
     {
         let (sender, mut receiver) = mpsc::unbounded_channel();
         let future: pin::Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(async move {
-            loop {
-                let Some(first) = receiver.recv().await else {
-                    break; // All senders dropped.
-                };
+            while let Some(first) = receiver.recv().await {
                 let mut requests = vec![first];
                 while let Ok(req) = receiver.try_recv() {
                     requests.push(req);
                 }
-                let mut guard = handle::write_lock(&state).await;
-                guard.process_batch(requests).await;
+                match handle::write_lock(&state).await {
+                    Ok(mut guard) => guard.process_batch(requests).await,
+                    Err(error) => {
+                        tracing::error!(%error, "failed to obtain write lock");
+                        for request in requests {
+                            let is_err = match request {
+                                BatchRequest::Update { result_tx, .. } => {
+                                    result_tx.send(Err(WorkerError::PoisonedWorker)).is_err()
+                                }
+                                BatchRequest::Confirm { result_tx, .. } => {
+                                    result_tx.send(Err(WorkerError::PoisonedWorker)).is_err()
+                                }
+                            };
+                            if is_err {
+                                tracing::debug!("failed to send error result; receiver dropped");
+                            }
+                        }
+                    }
+                }
             }
         });
         let shared = future.shared();
@@ -854,8 +869,7 @@ where
         let state = self.get_or_create_chain_worker(chain_id).await?;
         let state_ref = &state;
         let result = Box::pin(wrap_future(async move {
-            let guard = handle::read_lock(state_ref).await;
-            guard.check_not_poisoned()?;
+            let guard = handle::read_lock(state_ref).await?;
             f(guard).await
         }))
         .await;
@@ -880,8 +894,7 @@ where
         let state = self.get_or_create_chain_worker(chain_id).await?;
         let state_ref = &state;
         let result = Box::pin(wrap_future(async move {
-            let guard = handle::write_lock(state_ref).await;
-            guard.check_not_poisoned()?;
+            let guard = handle::write_lock(state_ref).await?;
             f(guard).await
         }))
         .await;
@@ -912,30 +925,29 @@ where
     async fn get_or_create_chain_batch(
         &self,
         chain_id: ChainId,
-    ) -> Result<(mpsc::UnboundedSender<BatchRequest>, BatchFuture), WorkerError> {
+    ) -> Result<(mpsc::UnboundedSender<BatchRequest>, Shared<BatchFuture>), WorkerError> {
         // Fast path: reuse an existing live driver. The pin guard is !Send,
         // so it must be dropped before any .await point.
-        {
-            let pin = self.chain_batches.pin();
-            if let Some(driver_state) = pin.get(&chain_id) {
-                if let Some(future) = driver_state.future.upgrade() {
-                    return Ok((driver_state.sender.clone(), future));
-                }
+        if let Some(driver_state) = self.chain_batches.pin().get(&chain_id) {
+            if let Some(future) = driver_state.future.upgrade() {
+                return Ok((driver_state.sender.clone(), future));
             }
         }
         let state = self.get_or_create_chain_worker(chain_id).await?;
         let (new_driver_state, new_future) = DriverState::new(state);
-        let pin = self.chain_batches.pin();
-        match pin.compute(chain_id, |existing| match existing {
-            Some((_, driver_state)) => {
-                if let Some(future) = driver_state.future.upgrade() {
-                    papaya::Operation::Abort((driver_state.sender.clone(), future))
-                } else {
-                    papaya::Operation::Insert(new_driver_state.clone())
+        match self
+            .chain_batches
+            .pin()
+            .compute(chain_id, |existing| match existing {
+                Some((_, driver_state)) => {
+                    if let Some(future) = driver_state.future.upgrade() {
+                        papaya::Operation::Abort((driver_state.sender.clone(), future))
+                    } else {
+                        papaya::Operation::Insert(new_driver_state.clone())
+                    }
                 }
-            }
-            None => papaya::Operation::Insert(new_driver_state.clone()),
-        }) {
+                None => papaya::Operation::Insert(new_driver_state.clone()),
+            }) {
             papaya::Compute::Aborted((sender, future)) => Ok((sender, future)),
             papaya::Compute::Inserted(_, driver_state)
             | papaya::Compute::Updated {
@@ -1301,7 +1313,7 @@ where
         chain_id: ChainId,
     ) -> Result<ChainStateViewReadGuard<StorageClient>, WorkerError> {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        let guard = handle::read_lock(&state).await;
+        let guard = handle::read_lock(&state).await?;
         Ok(ChainStateViewReadGuard(OwnedRwLockReadGuard::map(
             guard,
             |s| s.chain(),
