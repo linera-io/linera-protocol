@@ -11,7 +11,7 @@ use std::{
 };
 
 use futures::{
-    future::{Either, Shared, WeakShared},
+    future::{self, Either, Shared, WeakShared},
     FutureExt as _,
 };
 use linera_base::{
@@ -548,7 +548,10 @@ pub(crate) enum BatchRequest {
 /// cross-chain operations on the same chain can cooperatively poll a
 /// single driver. The driver loops: drain the request channel, acquire the
 /// write lock, process all requests in one batch, repeat.
+#[cfg(not(web))]
 type BatchFuture = pin::Pin<Box<dyn Future<Output = ()> + Send>>;
+#[cfg(web)]
+type BatchFuture = pin::Pin<Box<dyn Future<Output = ()>>>;
 
 #[derive(Clone)]
 struct DriverState {
@@ -567,7 +570,7 @@ impl DriverState {
         StorageClient: Storage + Clone + 'static,
     {
         let (sender, mut receiver) = mpsc::unbounded_channel();
-        let future: pin::Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(async move {
+        let future: BatchFuture = Box::pin(async move {
             while let Some(first) = receiver.recv().await {
                 let mut requests = vec![first];
                 while let Ok(req) = receiver.try_recv() {
@@ -828,6 +831,10 @@ where
             chain_modes,
             delivery_notifiers: Arc::default(),
             chain_workers,
+            // On wasm, `DriverState` is not `Send`/`Sync` (the inner future
+            // isn't `Send`), but `Arc` is still correct: `WorkerState` clones
+            // share this map and wasm is single-threaded.
+            #[allow(clippy::arc_with_non_send_sync)]
             chain_batches: Arc::new(papaya::HashMap::new()),
         }
     }
@@ -1255,20 +1262,21 @@ where
                     continue; // Driver died; retry will create a new one.
                 }
             }
-            tokio::select! {
-                biased;
-                result = &mut rx => return result.expect("batch result sender dropped"),
-                _ = future => {
-                    match rx.try_recv() {
-                        Ok(result) => return result,
-                        Err(oneshot::error::TryRecvError::Empty) => {},
-                        Err(oneshot::error::TryRecvError::Closed) => {
-                            return Err(WorkerError::ChainError(Box::new(
-                                ChainError::InternalError("batch driver stopped".into()),
-                            )));
-                        }
-                    }
+            // Poll rx first (biased): if the result is already available,
+            // return it immediately without driving the batch future further.
+            match future::select(pin::pin!(&mut rx), future).await {
+                Either::Left((result, _)) => {
+                    return result.expect("batch result sender dropped");
                 }
+                Either::Right(((), _)) => match rx.try_recv() {
+                    Ok(result) => return result,
+                    Err(oneshot::error::TryRecvError::Empty) => {}
+                    Err(oneshot::error::TryRecvError::Closed) => {
+                        return Err(WorkerError::ChainError(Box::new(
+                            ChainError::InternalError("batch driver stopped".into()),
+                        )));
+                    }
+                },
             }
         }
     }
