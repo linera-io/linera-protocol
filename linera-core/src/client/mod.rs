@@ -506,7 +506,10 @@ impl<Env: Environment> Client<Env> {
                     self.options.certificate_batch_download_timeout,
                 )
                 .await?;
-            let Some(new_info) = self.process_certificates(&validators, certificates, None).await? else {
+            let Some(new_info) = self
+                .process_certificates(&validators, certificates, None)
+                .await?
+            else {
                 break;
             };
             assert!(new_info.next_block_height > next_height);
@@ -587,11 +590,7 @@ impl<Env: Environment> Client<Env> {
                 .download_certificates(remote_node, chain_id, next_height, limit)
                 .await?;
             let Some(info) = self
-                .process_certificates(
-                    slice::from_ref(remote_node),
-                    certificates,
-                    until_block_time,
-                )
+                .process_certificates(slice::from_ref(remote_node), certificates, until_block_time)
                 .await?
             else {
                 break;
@@ -1617,12 +1616,7 @@ impl<Env: Environment> Client<Env> {
         };
         let remote_info = remote_node.handle_chain_info_query(query).await?;
         let local_info = self
-            .download_certificates_from(
-                remote_node,
-                chain_id,
-                remote_info.next_block_height,
-                None,
-            )
+            .download_certificates_from(remote_node, chain_id, remote_info.next_block_height, None)
             .await?;
 
         if !with_manager_values {
