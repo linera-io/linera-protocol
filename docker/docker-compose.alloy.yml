@@ -17,6 +17,26 @@
 #   TEMPO_OTLP_PASS: your-password
 
 services:
+  cadvisor:
+    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:v0.51.0}
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    command:
+      - "--housekeeping_interval=15s"
+      - "--docker_only=true"
+      - "--disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,advtcp,process,resctrl"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_CADVISOR:-0.50}"
+          memory: ${LIMIT_MEM_CADVISOR:-256M}
+
   alloy:
     image: grafana/alloy:latest
     container_name: alloy

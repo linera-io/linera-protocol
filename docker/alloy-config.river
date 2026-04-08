@@ -52,6 +52,40 @@ prometheus.scrape "shard_metrics" {
   scrape_timeout  = "10s"
 }
 
+// Scrape container resource metrics from cAdvisor
+prometheus.scrape "cadvisor_metrics" {
+  targets = [{
+    __address__ = "cadvisor:8080",
+    job         = "cadvisor",
+    instance    = env("HOSTNAME"),
+  }]
+
+  forward_to = [prometheus.relabel.cadvisor_filter.receiver]
+
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+}
+
+// Filter cAdvisor metrics: keep only what we need with minimal labels
+// Uses labelkeep (whitelist) instead of labeldrop to avoid OTLP 400 errors
+// from unexpected label names or values (long paths, special chars)
+prometheus.relabel "cadvisor_filter" {
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
+
+  // Keep only container-level metrics we care about
+  rule {
+    source_labels = ["__name__"]
+    regex         = "container_memory_usage_bytes|container_memory_rss|container_memory_cache|container_spec_memory_limit_bytes|container_cpu_usage_seconds_total|container_start_time_seconds|container_oom_events_total|container_memory_working_set_bytes"
+    action        = "keep"
+  }
+
+  // Whitelist only the labels we need — drop everything else
+  rule {
+    regex  = "__name__|name|job|instance"
+    action = "labelkeep"
+  }
+}
+
 // Expose Alloy's own metrics
 prometheus.exporter.self "alloy" {}
 
