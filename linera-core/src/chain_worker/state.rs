@@ -1202,10 +1202,7 @@ where
                     result_tx,
                 } => {
                     if need_rollback {
-                        if result_tx
-                            .send(Ok(CrossChainUpdateResult::NothingToDo))
-                            .is_err()
-                        {
+                        if result_tx.send(Err(WorkerError::BatchRolledBack)).is_err() {
                             tracing::debug!("cannot send cross-chain result; receiver dropped");
                         }
                         continue;
@@ -1228,7 +1225,7 @@ where
                     result_tx,
                 } => {
                     if need_rollback {
-                        if result_tx.send(Ok(NetworkActions::default())).is_err() {
+                        if result_tx.send(Err(WorkerError::BatchRolledBack)).is_err() {
                             tracing::debug!("cannot send cross-chain result; receiver dropped");
                         }
                         continue;
@@ -1258,35 +1255,29 @@ where
 
         if need_rollback {
             // Don't save; RollbackGuard undoes all pending changes.
-            // Downgrade Updated results so no false confirmations are sent.
+            // Turn successful results into errors so callers retry.
             for (_, result) in &mut update_results {
                 if matches!(result, Ok(CrossChainUpdateResult::Updated(_))) {
-                    *result = Ok(CrossChainUpdateResult::NothingToDo);
+                    *result = Err(WorkerError::BatchRolledBack);
                 }
             }
             for (_, result) in &mut confirm_results {
                 if result.is_ok() {
-                    *result = Err(WorkerError::ChainError(Box::new(
-                        ChainError::InternalError("batch aborted".into()),
-                    )));
+                    *result = Err(WorkerError::BatchRolledBack);
                 }
             }
             max_delivered_height = None;
         } else if need_save {
-            if let Err(e) = self.save().await {
-                let msg = e.to_string();
+            if let Err(error) = self.save().await {
+                tracing::error!(%error, "failed to save batch; rolling back");
                 for (_, result) in &mut update_results {
                     if matches!(result, Ok(CrossChainUpdateResult::Updated(_))) {
-                        *result = Err(WorkerError::ChainError(Box::new(
-                            ChainError::InternalError(msg.clone()),
-                        )));
+                        *result = Err(WorkerError::BatchRolledBack);
                     }
                 }
                 for (_, result) in &mut confirm_results {
                     if result.is_ok() {
-                        *result = Err(WorkerError::ChainError(Box::new(
-                            ChainError::InternalError(msg.clone()),
-                        )));
+                        *result = Err(WorkerError::BatchRolledBack);
                     }
                 }
                 max_delivered_height = None;

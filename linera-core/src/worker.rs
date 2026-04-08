@@ -416,6 +416,8 @@ pub enum WorkerError {
     Thread(#[from] web_thread_pool::Error),
     #[error("Chain worker was poisoned by a journal resolution failure")]
     PoisonedWorker,
+    #[error("Cross-chain batch was rolled back due to an error in another request")]
+    BatchRolledBack,
 }
 
 impl WorkerError {
@@ -452,7 +454,8 @@ impl WorkerError {
             | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_)
             | WorkerError::IncorrectOutcome { .. }
-            | WorkerError::PoisonedWorker => true,
+            | WorkerError::PoisonedWorker
+            | WorkerError::BatchRolledBack => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
     }
