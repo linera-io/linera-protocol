@@ -20,7 +20,7 @@ path = "src/main.rs"
 
 [features]
 default = ["rocksdb", "storage-service"]
-metrics = ["dep:linera-metrics", "dep:prometheus", "dep:axum", "linera-base/metrics"]
+metrics = ["dep:linera-metrics", "dep:prometheus", "linera-base/metrics"]
 rocksdb = ["linera-views/rocksdb", "linera-storage-runtime/rocksdb"]
 dynamodb = ["linera-views/dynamodb", "linera-storage-runtime/dynamodb"]
 scylladb = ["linera-views/scylladb", "linera-storage-runtime/scylladb"]
@@ -30,10 +30,12 @@ jemalloc = []
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-axum = { workspace = true, optional = true }
+axum.workspace = true
+bcs.workspace = true
 bincode.workspace = true
 clap.workspace = true
 custom_debug_derive.workspace = true
+fs-err.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
@@ -44,21 +46,27 @@ linera-rpc.workspace = true
 linera-sdk.workspace = true
 linera-storage.workspace = true
 linera-storage-runtime.workspace = true
+linera-version.workspace = true
 linera-views.workspace = true
 mini-moka.workspace = true
+papaya.workspace = true
 prometheus = { workspace = true, optional = true }
+prost.workspace = true
 quick_cache.workspace = true
 serde.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 toml.workspace = true
+tonic-prost.workspace = true
 tonic = { workspace = true, features = [
     "transport",
     "tls-native-roots",
     "tls-ring",
     "tls-webpki-roots",
 ] }
+tonic-health.workspace = true
 tracing.workspace = true
 
 [build-dependencies]
@@ -66,6 +74,7 @@ cfg_aliases.workspace = true
 tonic-prost-build = { workspace = true, features = ["transport"] }
 
 [dev-dependencies]
+linera-service.workspace = true
+reqwest.workspace = true
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
-tonic-health.workspace = true
