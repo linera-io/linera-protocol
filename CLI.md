@@ -213,6 +213,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--sender-certificate-download-batch-size <SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of sender certificates we try to download and receive in one go when syncing sender chains
 
   Default value: `20000`
+* `--max-concurrent-batch-downloads <MAX_CONCURRENT_BATCH_DOWNLOADS>` — Maximum number of certificate batches downloaded concurrently during chain sync
+
+  Default value: `1`
 * `--max-joined-tasks <MAX_JOINED_TASKS>` — Maximum number of tasks that can are joined concurrently in the client
 
   Default value: `100`
