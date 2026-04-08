@@ -195,9 +195,11 @@ where
         self.chain.rollback();
     }
 
-    /// Returns whether this worker is poisoned (view is inconsistent).
-    pub(crate) fn is_poisoned(&self) -> bool {
-        self.poisoned
+    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a journal
+    /// resolution failure.
+    pub(crate) fn check_not_poisoned(&self) -> Result<(), WorkerError> {
+        ensure!(!self.poisoned, WorkerError::PoisonedWorker);
+        Ok(())
     }
 
     /// Updates the last-access timestamp to the current time.
@@ -2131,16 +2133,16 @@ where
         chain_id = %self.chain_id()
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
-        if let Err(e) = self.chain.save().await {
-            if e.must_reload_view() {
+        if let Err(error) = self.chain.save().await {
+            if error.must_reload_view() {
                 tracing::error!(
-                    error = ?e,
+                    ?error,
                     chain_id = %self.chain_id(),
                     "Journal resolution failed; marking worker as poisoned"
                 );
                 self.poisoned = true;
             }
-            return Err(e.into());
+            return Err(error.into());
         }
         Ok(())
     }
