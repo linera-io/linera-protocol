@@ -229,7 +229,7 @@ const _: () = {
 };
 
 /// A type for errors happening during execution.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, strum::IntoStaticStr)]
 pub enum ExecutionError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
@@ -432,6 +432,13 @@ impl ExecutionError {
             | ExecutionError::InternalError(_)
             | ExecutionError::IoError(_) => true,
         }
+    }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// e.g. `"ExecutionError::BlobsNotFound"`.
+    pub fn error_type(&self) -> String {
+        let variant: &'static str = self.into();
+        format!("ExecutionError::{variant}")
     }
 
     /// Returns whether this error is caused by a per-block limit being exceeded.

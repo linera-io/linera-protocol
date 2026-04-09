@@ -303,7 +303,7 @@ pub enum Reason {
 }
 
 /// Error type for worker operations.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, strum::IntoStaticStr)]
 pub enum WorkerError {
     #[error(transparent)]
     CryptoError(#[from] CryptoError),
@@ -452,6 +452,21 @@ impl WorkerError {
             | WorkerError::IncorrectOutcome { .. }
             | WorkerError::PoisonedWorker => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
+        }
+    }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// e.g. `"WorkerError::UnexpectedBlockHeight"`.
+    ///
+    /// For `ChainError` variants, delegates to `ChainError::error_type()` to
+    /// surface the underlying error name rather than just `"ChainError"`.
+    pub fn error_type(&self) -> String {
+        match self {
+            WorkerError::ChainError(chain_error) => chain_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("WorkerError::{variant}")
+            }
         }
     }
 
