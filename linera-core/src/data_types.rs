@@ -378,7 +378,9 @@ impl fmt::Debug for CompressedHeights<'_> {
             }
             let range_start = u64::from(heights[index]);
             let mut range_end = range_start;
-            while index + 1 < heights.len() && u64::from(heights[index + 1]) == range_end + 1 {
+            while index + 1 < heights.len()
+                && range_end.checked_add(1) == Some(u64::from(heights[index + 1]))
+            {
                 index += 1;
                 range_end = u64::from(heights[index]);
             }
