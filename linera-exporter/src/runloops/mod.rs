@@ -12,18 +12,19 @@ use indexer::indexer_exporter::Exporter as IndexerExporter;
 use linera_base::identifiers::BlobId;
 use linera_execution::committee::Committee;
 use linera_rpc::NodeOptions;
-use linera_service::config::{DestinationConfig, DestinationId, LimitsConfig};
 use linera_storage::Storage;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use validator_exporter::Exporter as ValidatorExporter;
 
 use crate::{
     common::{BlockId, ExporterError},
+    config::{DestinationConfig, DestinationId, LimitsConfig},
     runloops::task_manager::ExportersTracker,
     storage::BlockProcessorStorage,
 };
 
 mod block_processor;
+mod evm_chain_exporter;
 mod indexer;
 mod logging_exporter;
 mod task_manager;
@@ -32,7 +33,7 @@ mod validator_exporter;
 #[cfg(test)]
 pub use indexer::indexer_api;
 
-pub(crate) fn start_block_processor_task<S, F>(
+pub fn start_block_processor_task<S, F>(
     storage: S,
     shutdown_signal: F,
     limits: LimitsConfig,
@@ -350,10 +351,7 @@ mod test {
         Operation, ResourceControlPolicy, SystemOperation,
     };
     use linera_rpc::{config::TlsConfig, NodeOptions};
-    use linera_service::{
-        cli_wrappers::local_net::LocalNet,
-        config::{Destination, DestinationConfig, DestinationKind, LimitsConfig},
-    };
+    use linera_service::cli_wrappers::local_net::LocalNet;
     use linera_storage::{DbStorage, Storage};
     use linera_views::{memory::MemoryDatabase, ViewError};
     use test_case::test_case;
@@ -362,10 +360,10 @@ mod test {
 
     use super::start_block_processor_task;
     use crate::{
-        common::{get_address, BlockId, CanonicalBlock},
+        common::{get_address, BlockId, CanonicalBlock, ExporterCancellationSignal},
+        config::{Destination, DestinationConfig, DestinationKind, LimitsConfig},
         state::BlockExporterStateView,
         test_utils::{make_simple_state_with_blobs, DummyIndexer, DummyValidator, TestDestination},
-        ExporterCancellationSignal,
     };
 
     #[test_case(DummyIndexer::default())]

@@ -37,7 +37,6 @@ use linera_rpc::{
     },
     HandleConfirmedCertificateRequest,
 };
-use linera_service::config::DestinationKind;
 use linera_storage::Storage;
 use tokio_stream::{wrappers::UnboundedReceiverStream, Stream};
 use tokio_util::sync::CancellationToken;
@@ -45,6 +44,7 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 use crate::{
     common::{get_address, BlockId, CanonicalBlock},
+    config::DestinationKind,
     runloops::indexer_api::{
         element::Payload,
         indexer_server::{Indexer, IndexerServer},

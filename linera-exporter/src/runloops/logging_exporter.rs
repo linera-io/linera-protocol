@@ -4,10 +4,9 @@
 use std::{fs::OpenOptions, future::IntoFuture, io::Write, path::Path, sync::atomic::Ordering};
 
 use linera_chain::types::CertificateValue;
-use linera_service::config::DestinationId;
 use tokio::select;
 
-use crate::storage::ExporterStorage;
+use crate::{config::DestinationId, storage::ExporterStorage};
 
 /// A logging exporter that writes logs to a file.
 ///

@@ -9,34 +9,21 @@ use std::{
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{ExporterCancellationSignal, ExporterError};
-use exporter_service::ExporterService;
 use futures::FutureExt;
 use linera_base::listen_for_shutdown_signals;
+use linera_exporter::{
+    common::{ExporterCancellationSignal, ExporterError},
+    config::BlockExporterConfig,
+    exporter_service::ExporterService,
+    runloops::start_block_processor_task,
+    util,
+};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
 use linera_rpc::NodeOptions;
-use linera_service::{
-    config::BlockExporterConfig,
-    storage::{CommonStorageOptions, Runnable, StorageConfig, StorageMigration},
-    util,
-};
 use linera_storage::Storage;
-use runloops::start_block_processor_task;
+use linera_storage_runtime::{CommonStorageOptions, Runnable, StorageConfig, StorageMigration};
 use tokio_util::sync::CancellationToken;
-
-mod common;
-mod exporter_service;
-#[cfg(with_metrics)]
-mod metrics;
-mod runloops;
-mod state;
-mod storage;
-
-#[cfg(test)]
-mod test_utils;
-#[cfg(test)]
-mod tests;
 
 #[cfg(not(feature = "metrics"))]
 const IS_WITH_METRICS: bool = false;
@@ -414,9 +401,8 @@ impl Runnable for DestinationsContext {
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
+        use linera_exporter::{config::DestinationKind, state::BlockExporterStateView};
         use linera_sdk::views::{RootView, View};
-        use linera_service::config::DestinationKind;
-        use state::BlockExporterStateView;
 
         let context = storage
             .block_exporter_context(self.exporter_id)
@@ -515,119 +501,6 @@ impl Runnable for DestinationsContext {
             }
         }
 
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod health_tests {
-    use std::sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    };
-
-    use linera_base::port::get_free_port;
-    use linera_rpc::{config::TlsConfig, NodeOptions};
-    use linera_service::{
-        cli_wrappers::local_net::LocalNet,
-        config::{Destination, DestinationConfig, LimitsConfig},
-    };
-    use linera_storage::{DbStorage, TestClock};
-    use linera_views::memory::MemoryDatabase;
-    use tokio::time::{sleep, Duration};
-    use tokio_util::sync::CancellationToken;
-
-    use super::start_health_server;
-    use crate::{
-        common::ExporterCancellationSignal,
-        runloops::start_block_processor_task,
-        test_utils::{make_simple_state_with_blobs, DummyIndexer, TestDestination},
-    };
-
-    #[test_log::test(tokio::test)]
-    async fn test_health_endpoint_reflects_exporter_errors() -> anyhow::Result<()> {
-        let cancellation_token = CancellationToken::new();
-        let health = Arc::new(AtomicBool::new(true));
-
-        // Start the production health server on a free port.
-        let health_port = get_free_port().await?;
-        let health_addr = std::net::SocketAddr::from(([127, 0, 0, 1], health_port));
-        start_health_server(
-            health_addr,
-            cancellation_token.clone(),
-            health.clone(),
-            false,
-        )
-        .await;
-
-        // Start a faulty indexer destination.
-        let indexer_port = get_free_port().await?;
-        let indexer = DummyIndexer::default();
-        indexer.set_faulty();
-        tokio::spawn(
-            indexer
-                .clone()
-                .start(indexer_port, cancellation_token.clone()),
-        );
-        LocalNet::ensure_grpc_server_has_started("faulty indexer", indexer_port as usize, "http")
-            .await?;
-
-        // Prepare storage with test blocks.
-        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
-        let (notification, _state) = make_simple_state_with_blobs(&storage).await;
-
-        // Start the block processor with the faulty indexer and shared health flag.
-        let signal = ExporterCancellationSignal::new(cancellation_token.clone());
-        let (notifier, _handle) = start_block_processor_task(
-            storage,
-            signal,
-            LimitsConfig::default(),
-            NodeOptions {
-                send_timeout: Duration::from_millis(4000),
-                recv_timeout: Duration::from_millis(4000),
-                retry_delay: Duration::from_millis(1000),
-                max_retries: 10,
-                ..Default::default()
-            },
-            0,
-            DestinationConfig {
-                committee_destination: false,
-                destinations: vec![Destination::Indexer {
-                    port: indexer_port,
-                    tls: TlsConfig::ClearText,
-                    endpoint: "127.0.0.1".to_owned(),
-                }],
-            },
-            health.clone(),
-        );
-
-        let base = format!("http://127.0.0.1:{health_port}");
-        let client = reqwest::Client::new();
-
-        // Before any errors, health should be 200.
-        let resp = client.get(format!("{base}/health")).send().await?;
-        assert_eq!(resp.status(), 200);
-        assert_eq!(resp.text().await?, "OK");
-
-        // Send a block notification — the faulty indexer will cause a stream error.
-        notifier.send(notification)?;
-
-        // Wait for the error to propagate and flip the health flag.
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-        while health.load(Ordering::Acquire) {
-            assert!(
-                tokio::time::Instant::now() < deadline,
-                "health flag did not flip to unhealthy within timeout"
-            );
-            sleep(Duration::from_millis(100)).await;
-        }
-
-        // After the stream error, health should be 500.
-        let resp = client.get(format!("{base}/health")).send().await?;
-        assert_eq!(resp.status(), 500);
-        assert_eq!(resp.text().await?, "unhealthy");
-
-        cancellation_token.cancel();
         Ok(())
     }
 }

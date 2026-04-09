@@ -23,7 +23,7 @@ use tonic::{
 #[cfg(with_metrics)]
 use super::indexer_api::element::Payload;
 use super::indexer_api::{indexer_client::IndexerClient as IndexerClientInner, Element};
-use crate::ExporterError;
+use crate::common::ExporterError;
 
 pub(super) struct IndexerClient {
     max_retries: u32,

@@ -1,7 +1,10 @@
 name: Bridge E2E
 
 on:
+  merge_group:
   workflow_dispatch:
+  push:
+    branches: [ 'testnet_*', 'main', 'bridge-main']
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
@@ -54,13 +57,38 @@ jobs:
         run: gcloud auth configure-docker us-docker.pkg.dev
 
       - name: Pull linera & exporter images
+        id: pull-images
+        continue-on-error: true
         run: |
           BRANCH="${{ github.base_ref || github.ref_name }}"
           docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
           docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
-          # Re-tag to names the compose file expects
           docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
           docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter
+
+      - name: Build linera image
+        if: steps.pull-images.outcome == 'failure'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          tags: linera-test
+          load: true
+          build-args: |
+            build_flag=
+            build_folder=debug
+
+      - name: Build exporter image
+        if: steps.pull-images.outcome == 'failure'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile.exporter
+          tags: linera-exporter
+          load: true
+          build-args: |
+            build_flag=
+            build_folder=debug
 
       - name: Build foundry-jq image
         run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker

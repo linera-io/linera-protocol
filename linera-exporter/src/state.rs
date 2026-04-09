@@ -17,14 +17,16 @@ use linera_sdk::{
     ensure,
     views::{RootView, View},
 };
-use linera_service::config::DestinationId;
 use linera_views::{
     context::Context, log_view::LogView, map_view::MapView, register_view::RegisterView,
     set_view::SetView, views::ClonableView,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId};
+use crate::{
+    common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
+    config::DestinationId,
+};
 
 /// State of the linera exporter as a view.
 #[derive(Debug, RootView, ClonableView)]
@@ -152,7 +154,7 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct DestinationStates {
+pub struct DestinationStates {
     states: Arc<papaya::HashMap<DestinationId, Arc<AtomicU64>>>,
 }
 

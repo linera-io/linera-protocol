@@ -14,7 +14,6 @@ use futures::{stream::FuturesOrdered, StreamExt};
 use linera_base::data_types::Blob;
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_rpc::NodeOptions;
-use linera_service::config::DestinationId;
 use linera_storage::Storage;
 use tokio::{
     select,
@@ -25,8 +24,10 @@ use tonic::Streaming;
 
 use super::indexer_api::Element;
 use crate::{
-    common::BlockId, runloops::indexer::client::IndexerClient, storage::ExporterStorage,
-    ExporterError,
+    common::{BlockId, ExporterError},
+    config::DestinationId,
+    runloops::indexer::client::IndexerClient,
+    storage::ExporterStorage,
 };
 
 /// On reconnect, resume from a few heights before the last acked height.

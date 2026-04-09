@@ -17,6 +17,7 @@ services:
   # 0b. Foundry tools - persistent service for deploying contracts via forge
   foundry-tools:
     image: "${FOUNDRY_IMAGE:-foundry-jq}"
+    pull_policy: if_not_present
     entrypoint: ["sleep", "infinity"]
     volumes:
       - bridge-shared:/shared
@@ -65,6 +66,7 @@ services:
   # 2. Network (Validator + Faucet) - initializes storage
   linera-network:
     image: "${LINERA_NETWORK_IMAGE:-linera-test}"
+    pull_policy: if_not_present
     ports:
       - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
       - "13001:13001"
@@ -110,6 +112,7 @@ services:
   # 3. Storage init - waits for network to initialize storage
   storage-init:
     image: "${LINERA_NETWORK_IMAGE:-linera-test}"
+    pull_policy: if_not_present
     command:
       - sh
       - -c
@@ -137,6 +140,7 @@ services:
   # 4a. Bridge args init - queries faucet for committee data and outputs constructor args
   bridge-args-init:
     image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
+    pull_policy: if_not_present
     command:
       - sh
       - -c
@@ -156,6 +160,7 @@ services:
   # 4b. Bridge init - deploys LightClient contract to Anvil using constructor args
   bridge-init:
     image: "${FOUNDRY_IMAGE:-foundry-jq}"
+    pull_policy: if_not_present
     user: root
     entrypoint: ["sh", "-c"]
     command:
@@ -221,6 +226,7 @@ services:
   # 5. Block Exporter - starts after storage is initialized and LightClient is deployed
   linera-block-exporter:
     image: "${LINERA_EXPORTER_IMAGE:-linera-exporter}"
+    pull_policy: if_not_present
     ports:
       - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
       - "${EXPORTER_METRICS_PORT:-9091}:9091"
@@ -278,6 +284,7 @@ services:
   #     and the relay can use them.
   bridge-chain-init:
     image: "${LINERA_NETWORK_IMAGE:-linera-test}"
+    pull_policy: if_not_present
     network_mode: "service:linera-network"
     command:
       - sh
@@ -325,6 +332,7 @@ services:
   # validator (whose address is hardcoded as "localhost" in the genesis config).
   linera-relay:
     image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
+    pull_policy: if_not_present
     network_mode: "service:linera-network"
     entrypoint: ["sh", "-c"]
     command:
