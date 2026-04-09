@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use linera_base::{
     crypto::InMemorySigner,
@@ -10,6 +10,7 @@ use linera_base::{
 use linera_chain::data_types::ProposedBlock;
 use linera_client::{client_context::ClientContext, config::GenesisConfig};
 use linera_core::{
+    chain_worker::DynamicTtl,
     client::{Client, ListeningMode, PendingProposal},
     join_set_ext::JoinSet,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
@@ -62,8 +63,8 @@ pub async fn new_test_client_context(
             false,
             chain_modes,
             name,
-            Some(chain_worker_ttl),
-            Some(sender_chain_worker_ttl),
+            Some(Arc::new(DynamicTtl::new(chain_worker_ttl))),
+            Some(Arc::new(DynamicTtl::new(sender_chain_worker_ttl))),
             HashSet::new(),
             chain_client::Options {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,

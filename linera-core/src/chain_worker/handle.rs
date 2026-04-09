@@ -56,7 +56,7 @@ use linera_execution::{QueryContext, ServiceRuntimeEndpoint, ServiceSyncRuntime}
 use linera_storage::Storage;
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
-use super::{config::ChainWorkerConfig, state::ChainWorkerState};
+use super::{config::ChainWorkerConfig, dynamic_ttl::DynamicTtl, state::ChainWorkerState};
 
 /// A write guard that automatically rolls back uncommitted chain state changes on drop.
 ///
@@ -136,13 +136,13 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
     let last_access = state.last_access_arc();
     let chain_id = state.chain().chain_id();
     let arc = Arc::new(RwLock::new(state));
-    let ttl = if is_tracked {
-        config.sender_chain_ttl
+    let dynamic_ttl = if is_tracked {
+        config.sender_chain_ttl.clone()
     } else {
-        config.ttl
+        config.ttl.clone()
     };
-    if let Some(ttl) = ttl {
-        spawn_keep_alive(chain_id, Arc::clone(&arc), last_access, ttl);
+    if let Some(dynamic_ttl) = dynamic_ttl {
+        spawn_keep_alive(chain_id, Arc::clone(&arc), last_access, dynamic_ttl);
     }
     arc
 }
@@ -189,17 +189,21 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
     guard
 }
 
-/// Spawns a background task that keeps the chain state alive for at least `ttl`
-/// after the last access. When the state has been idle for the full TTL, the task
-/// drops the state if it holds the only strong reference.
+/// Spawns a background task that keeps the chain state alive for at least the
+/// current dynamic TTL after the last access. When the state has been idle for
+/// the full TTL, the task drops the state if it holds the only strong reference.
+///
+/// The TTL is read from [`DynamicTtl`] on every iteration, so changes made by an
+/// external memory monitor take effect without restarting the task.
 fn spawn_keep_alive<S: Storage + Clone + 'static>(
     chain_id: ChainId,
     mut state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicTimestamp>,
-    ttl: Duration,
+    dynamic_ttl: Arc<DynamicTtl>,
 ) {
     linera_base::Task::spawn(async move {
         loop {
+            let ttl = dynamic_ttl.current();
             while let Some(remaining) = ttl
                 .checked_sub(last_access.elapsed())
                 .filter(|remaining| *remaining > Duration::ZERO)

@@ -10,6 +10,7 @@ pub mod cli;
 pub mod cli_wrappers;
 pub mod config;
 pub mod controller;
+pub mod memory_monitor;
 pub mod node_service;
 pub mod project;
 pub mod query_subscription;

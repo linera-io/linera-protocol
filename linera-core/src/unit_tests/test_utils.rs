@@ -1107,8 +1107,12 @@ where
             false,
             [(chain_id, mode)],
             format!("Client node for {:.8}", chain_id),
-            Some(Duration::from_secs(30)),
-            Some(Duration::from_secs(1)),
+            Some(Arc::new(crate::chain_worker::DynamicTtl::new(
+                Duration::from_secs(30),
+            ))),
+            Some(Arc::new(crate::chain_worker::DynamicTtl::new(
+                Duration::from_secs(1),
+            ))),
             HashSet::new(),
             options,
             DEFAULT_BLOCK_CACHE_SIZE,

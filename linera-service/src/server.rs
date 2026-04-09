@@ -31,7 +31,8 @@ use linera_base::{
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
 use linera_core::{
-    worker::WorkerState, ChainWorkerConfig, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+    chain_worker::DynamicTtl, worker::WorkerState, ChainWorkerConfig, JoinSetExt as _,
+    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 use linera_execution::{WasmRuntime, WithWasmDefault};
 #[cfg(with_metrics)]
@@ -62,13 +63,14 @@ struct ServerContext {
     notification_config: NotificationConfig,
     shard: Option<usize>,
     block_time_grace_period: Duration,
-    chain_worker_ttl: Duration,
+    chain_worker_ttl: Option<Arc<DynamicTtl>>,
     block_cache_size: usize,
     execution_state_cache_size: usize,
     chain_info_max_received_log_entries: usize,
     cross_chain_message_chunk_limit: usize,
     allow_revert_confirm: bool,
     reset_on_incorrect_outcome_mins: Option<u64>,
+    memory_limit_mb: Option<u64>,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -95,7 +97,7 @@ impl ServerContext {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             block_time_grace_period: self.block_time_grace_period,
-            ttl: util::non_zero_duration(self.chain_worker_ttl),
+            ttl: self.chain_worker_ttl.clone(),
             chain_info_max_received_log_entries: self.chain_info_max_received_log_entries,
             cross_chain_message_chunk_limit: self.cross_chain_message_chunk_limit,
             block_cache_size: self.block_cache_size,
@@ -264,6 +266,20 @@ impl Runnable for ServerContext {
                     .collect()
             }
         };
+
+        if let Some(memory_limit_mb) = self.memory_limit_mb {
+            let mut ttls = Vec::new();
+            if let Some(ttl) = &self.chain_worker_ttl {
+                ttls.push(Arc::clone(ttl));
+            }
+            linera_service::memory_monitor::spawn_memory_monitor(
+                linera_service::memory_monitor::MemoryMonitorConfig {
+                    memory_limit: memory_limit_mb * 1024 * 1024,
+                    poll_interval: Duration::from_secs(5),
+                    ttls,
+                },
+            );
+        }
 
         let mut join_set = match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => self.spawn_simple(
@@ -481,6 +497,12 @@ enum ServerCommand {
         #[arg(long)]
         reset_on_incorrect_outcome_mins: Option<u64>,
 
+        /// RSS memory limit in megabytes. When process memory usage approaches
+        /// this limit, chain worker TTLs are dynamically reduced to evict idle
+        /// workers sooner. If unset, the memory monitor is disabled.
+        #[arg(long, env = "LINERA_MEMORY_LIMIT_MB")]
+        memory_limit_mb: Option<u64>,
+
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
         otlp_exporter_endpoint: Option<String>,
@@ -615,6 +637,7 @@ async fn run(options: ServerOptions) {
             cross_chain_message_chunk_limit,
             allow_revert_confirm,
             reset_on_incorrect_outcome_mins,
+            memory_limit_mb,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -622,6 +645,8 @@ async fn run(options: ServerOptions) {
             let server_config: ValidatorServerConfig =
                 util::read_json(&server_config_path).expect("Failed to read server config");
 
+            let chain_worker_ttl =
+                util::non_zero_duration(chain_worker_ttl).map(|d| Arc::new(DynamicTtl::new(d)));
             let job = ServerContext {
                 server_config,
                 cross_chain_config,
@@ -635,6 +660,7 @@ async fn run(options: ServerOptions) {
                 cross_chain_message_chunk_limit,
                 allow_revert_confirm,
                 reset_on_incorrect_outcome_mins,
+                memory_limit_mb,
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };

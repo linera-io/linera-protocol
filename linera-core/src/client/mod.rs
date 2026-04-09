@@ -45,6 +45,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
+    chain_worker::DynamicTtl,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
@@ -272,8 +273,8 @@ impl<Env: Environment> Client<Env> {
         long_lived_services: bool,
         chain_modes: impl IntoIterator<Item = (ChainId, ListeningMode)>,
         name: impl Into<String>,
-        chain_worker_ttl: Option<Duration>,
-        sender_chain_worker_ttl: Option<Duration>,
+        chain_worker_ttl: Option<Arc<DynamicTtl>>,
+        sender_chain_worker_ttl: Option<Arc<DynamicTtl>>,
         priority_bundle_origins: HashSet<ChainId>,
         options: chain_client::Options,
         block_cache_size: usize,

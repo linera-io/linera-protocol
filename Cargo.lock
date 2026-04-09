@@ -6118,6 +6118,7 @@ dependencies = [
  "serde_json",
  "social",
  "stdext",
+ "sysinfo",
  "task-processor",
  "tempfile",
  "test-case",

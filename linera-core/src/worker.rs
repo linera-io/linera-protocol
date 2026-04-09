@@ -528,16 +528,19 @@ fn start_sweep<S: Storage + Clone + 'static>(
     chain_workers: &ChainWorkerMap<S>,
     config: &ChainWorkerConfig,
 ) {
-    // Sweep at the smaller of the two TTLs. If both are None, workers
-    // live forever so there's nothing to sweep.
-    let interval = match (config.ttl, config.sender_chain_ttl) {
-        (None, None) => return,
-        (Some(d), None) | (None, Some(d)) => d,
-        (Some(a), Some(b)) => a.min(b),
-    };
+    // Collect the DynamicTtl handles so we can read the current interval each iteration.
+    // If both are None, workers live forever so there's nothing to sweep.
+    let ttls: Vec<_> = [config.ttl.clone(), config.sender_chain_ttl.clone()]
+        .into_iter()
+        .flatten()
+        .collect();
+    if ttls.is_empty() {
+        return;
+    }
     let weak_map = Arc::downgrade(chain_workers);
     linera_base::Task::spawn(async move {
         loop {
+            let interval = ttls.iter().map(|t| t.current()).min().unwrap();
             linera_base::time::timer::sleep(interval).await;
             let Some(map) = weak_map.upgrade() else {
                 break;

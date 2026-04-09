@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, num::ParseIntError, str::FromStr};
+use std::{collections::HashSet, num::ParseIntError, str::FromStr, sync::Arc};
 
 use futures::future;
 use linera_base::{
@@ -10,7 +10,9 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, GenericApplicationId},
     time::Duration,
 };
-use linera_core::{data_types::RoundTimeout, node::NotificationStream, worker::Reason};
+use linera_core::{
+    chain_worker::DynamicTtl, data_types::RoundTimeout, node::NotificationStream, worker::Reason,
+};
 use tokio_stream::StreamExt as _;
 
 pub fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> anyhow::Result<T> {
@@ -28,6 +30,11 @@ pub fn non_zero_duration(d: Duration) -> Option<Duration> {
     } else {
         Some(d)
     }
+}
+
+/// Converts a duration to a [`DynamicTtl`] wrapped in `Arc`, or `None` if zero.
+pub fn dynamic_ttl(d: Duration) -> Option<Arc<DynamicTtl>> {
+    non_zero_duration(d).map(|d| Arc::new(DynamicTtl::new(d)))
 }
 
 pub fn parse_secs(s: &str) -> Result<Duration, ParseIntError> {

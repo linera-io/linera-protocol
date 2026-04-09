@@ -7,6 +7,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use linera_base::{crypto::ValidatorSecretKey, identifiers::ChainId, time::Duration};
 
+use super::DynamicTtl;
 use crate::CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES;
 
 /// Configuration parameters for the chain worker and its owning
@@ -28,10 +29,11 @@ pub struct ChainWorkerConfig {
     /// will wait until that timestamp before voting.
     pub block_time_grace_period: Duration,
     /// Idle chain workers free their memory after this duration without requests.
-    /// `None` means no expiry (handle lives forever).
-    pub ttl: Option<Duration>,
+    /// `None` means no expiry (handle lives forever). The TTL can be dynamically
+    /// reduced at runtime (e.g. by a memory monitor) via [`DynamicTtl::set`].
+    pub ttl: Option<Arc<DynamicTtl>>,
     /// TTL for sender chains. `None` means no expiry.
-    pub sender_chain_ttl: Option<Duration>,
+    pub sender_chain_ttl: Option<Arc<DynamicTtl>>,
     /// The size to truncate receive log entries in chain info responses.
     pub chain_info_max_received_log_entries: usize,
     /// Maximum number of entries in the block cache.
@@ -75,7 +77,7 @@ impl Default for ChainWorkerConfig {
             long_lived_services: false,
             block_time_grace_period: Default::default(),
             ttl: None,
-            sender_chain_ttl: Some(Duration::from_secs(1)),
+            sender_chain_ttl: Some(Arc::new(DynamicTtl::new(Duration::from_secs(1)))),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
             block_cache_size: 5000,
             execution_state_cache_size: 10_000,
