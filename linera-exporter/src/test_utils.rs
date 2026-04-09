@@ -551,11 +551,11 @@ pub(crate) async fn make_simple_state_with_blobs<S: Storage>(
 pub async fn ensure_grpc_server_has_started(
     name: &str,
     port: usize,
-    scheme: &str,
+    _scheme: &str,
 ) -> anyhow::Result<()> {
-    let uri = format!("{scheme}://127.0.0.1:{port}");
+    let addr = format!("127.0.0.1:{port}");
     for _ in 0..100 {
-        if reqwest::get(&uri).await.is_ok() {
+        if tokio::net::TcpStream::connect(&addr).await.is_ok() {
             return Ok(());
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;

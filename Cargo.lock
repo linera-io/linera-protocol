@@ -5764,7 +5764,6 @@ dependencies = [
  "prometheus",
  "prost 0.14.1",
  "quick_cache",
- "reqwest 0.11.27",
  "serde",
  "test-case",
  "test-log",

@@ -80,7 +80,6 @@ linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
-reqwest.workspace = true
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 
