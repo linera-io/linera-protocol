@@ -317,7 +317,7 @@ pub fn call_contract<C: SolCall>(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     contract: Address,
-    call: C,
+    call: &C,
 ) -> (C::Return, Vec<Log>, u64) {
     match try_call_contract(db, deployer, contract, call) {
         Ok(ret) => ret,
@@ -331,7 +331,7 @@ pub fn try_call_contract<C: SolCall>(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     contract: Address,
-    call: C,
+    call: &C,
 ) -> Result<(C::Return, Vec<Log>, u64), String> {
     let nonce = db
         .cache

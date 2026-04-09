@@ -35,7 +35,7 @@ members = [
 ]
 default-members = [
     "linera-base",
-    # "linera-bridge", # tested separately in CI (requires solc)
+    # "linera-bridge", # `cargo test` requires solc; runs separately in CI. Clippy covers it via `--workspace`.
     "linera-cache",
     "linera-chain",
     "linera-client",

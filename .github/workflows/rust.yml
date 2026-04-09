@@ -499,7 +499,7 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run clippy
       run: |
-        cargo clippy --locked --all-targets --all-features
+        cargo clippy --locked --all-targets --all-features --workspace
         cargo clippy --locked --no-default-features --features kubernetes
         cargo clippy --locked --no-default-features
         cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features web-default \
