@@ -400,7 +400,7 @@ where
         let mut uncached_hashes = Vec::new();
 
         for (i, hash) in hashes.iter().enumerate() {
-            if let Some(hashed_block) = self.block_values.get_hashed(hash) {
+            if let Some(hashed_block) = self.block_values.get(hash) {
                 blocks.push(Some(ConfirmedBlock::from_hashed(hashed_block)));
             } else {
                 blocks.push(None);

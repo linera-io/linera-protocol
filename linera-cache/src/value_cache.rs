@@ -51,11 +51,6 @@ where
         Self::track_cache_usage(value)
     }
 
-    /// Returns a clone of the value from the cache, if present.
-    pub fn get(&self, key: &K) -> Option<V> {
-        Self::track_cache_usage(self.cache.get(key))
-    }
-
     /// Returns `true` if the cache contains an entry for the given key.
     pub fn contains(&self, key: &K) -> bool {
         self.cache.peek(key).is_some()
@@ -103,7 +98,7 @@ impl<T: Clone + Send + Sync + 'static> ValueCache<CryptoHash, T> {
     ///
     /// The hash used as the cache key is combined with the stored value to
     /// reconstruct the [`Hashed<T>`] without redundant storage.
-    pub fn get_hashed(&self, hash: &CryptoHash) -> Option<Hashed<T>> {
+    pub fn get(&self, hash: &CryptoHash) -> Option<Hashed<T>> {
         let value = Self::track_cache_usage(self.cache.get(hash))?;
         Some(Hashed::unchecked_new(value, *hash))
     }
@@ -178,7 +173,7 @@ mod tests {
         let cache = ValueCache::<CryptoHash, TestValue>::new(TEST_CACHE_SIZE);
         let hash = CryptoHash::test_hash("Missing value");
 
-        assert!(cache.get_hashed(&hash).is_none());
+        assert!(cache.get(&hash).is_none());
         assert!(!cache.contains(&hash));
     }
 
@@ -190,7 +185,7 @@ mod tests {
 
         assert!(cache.insert_hashed(Cow::Borrowed(&value)));
         assert!(cache.contains(&hash));
-        assert_eq!(cache.get_hashed(&hash), Some(value));
+        assert_eq!(cache.get(&hash), Some(value));
     }
 
     #[test]
@@ -204,7 +199,7 @@ mod tests {
 
         for value in &values {
             assert!(cache.contains(&value.hash()));
-            assert_eq!(cache.get_hashed(&value.hash()).as_ref(), Some(value));
+            assert_eq!(cache.get(&value.hash()).as_ref(), Some(value));
         }
     }
 
@@ -217,7 +212,7 @@ mod tests {
 
         for value in &values {
             assert!(cache.contains(&value.hash()));
-            assert_eq!(cache.get_hashed(&value.hash()).as_ref(), Some(value));
+            assert_eq!(cache.get(&value.hash()).as_ref(), Some(value));
         }
     }
 
@@ -234,7 +229,7 @@ mod tests {
 
         for value in &values {
             assert!(cache.contains(&value.hash()));
-            assert_eq!(cache.get_hashed(&value.hash()).as_ref(), Some(value));
+            assert_eq!(cache.get(&value.hash()).as_ref(), Some(value));
         }
     }
 
@@ -266,7 +261,7 @@ mod tests {
 
         // Insert the promoted entry first, then access it to mark it as "hot".
         cache.insert_hashed(Cow::Borrowed(&promoted));
-        cache.get_hashed(&promoted_hash);
+        cache.get(&promoted_hash);
 
         // Insert many more entries to force evictions.
         let extras = create_test_values(1..=TEST_CACHE_SIZE as u64 * 2);
