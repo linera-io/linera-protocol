@@ -149,6 +149,12 @@ Client implementation and command-line tool for the Linera blockchain
 * `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory. Use 0 to disable expiry
 
   Default value: `1000`
+* `--chain-worker-memory-limit <CHAIN_WORKER_MEMORY_LIMIT>` — Memory limit for chain worker eviction. Accepts either megabytes (e.g. "4096") or a percentage of total system/cgroup memory (e.g. "60%"). When process RSS approaches this limit, idle chain worker TTLs are dynamically reduced
+
+  Default value: `60%`
+* `--chain-worker-memory-monitor-interval-ms <CHAIN_WORKER_MEMORY_MONITOR_INTERVAL_MS>` — Polling interval in milliseconds for the chain worker memory monitor
+
+  Default value: `1000`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
 
   Default value: `1000`
