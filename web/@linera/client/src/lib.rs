@@ -29,6 +29,8 @@ pub mod chain;
 pub use chain::Chain;
 pub mod error;
 pub use error::Error;
+pub mod listener;
+pub use listener::Listener;
 pub mod faucet;
 pub mod lock;
 
@@ -44,6 +46,8 @@ pub type Environment = linera_core::environment::Impl<Storage, Network, Signer, 
 
 type JsResult<T> = std::result::Result<T, JsError>;
 type Result<T, E = Error> = std::result::Result<T, E>;
+type ClientContext =
+    std::sync::Arc<futures::lock::Mutex<linera_client::ClientContext<Environment>>>;
 
 #[derive(serde::Deserialize, Default, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
