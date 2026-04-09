@@ -14,7 +14,7 @@ use tracing::info;
 
 use crate::common::{get_address, BadNotificationKind, BlockId, ExporterError};
 
-pub(crate) struct ExporterService {
+pub struct ExporterService {
     block_processor_sender: UnboundedSender<BlockId>,
 }
 
@@ -53,7 +53,7 @@ impl NotifierService for ExporterService {
 }
 
 impl ExporterService {
-    pub(crate) fn new(sender: UnboundedSender<BlockId>) -> ExporterService {
+    pub fn new(sender: UnboundedSender<BlockId>) -> ExporterService {
         ExporterService {
             block_processor_sender: sender,
         }

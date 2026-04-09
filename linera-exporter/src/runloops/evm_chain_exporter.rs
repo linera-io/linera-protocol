@@ -6,10 +6,12 @@ use std::{future::IntoFuture, sync::atomic::Ordering};
 use linera_base::identifiers::BlobType;
 use linera_bridge::evm::client::EvmLightClient;
 use linera_execution::{system::AdminOperation, Operation, SystemOperation};
-use linera_service::config::{Destination, DestinationId};
 use tokio::select;
 
-use crate::storage::ExporterStorage;
+use crate::{
+    config::{Destination, DestinationId},
+    storage::ExporterStorage,
+};
 
 /// An exporter that relays committee changes to a LightClient contract on an EVM chain.
 ///
@@ -98,9 +100,7 @@ impl EvmChainExporter {
                     let blob_id =
                         linera_base::identifiers::BlobId::new(blob_hash, BlobType::Committee);
 
-                    // Find the committee blob — it may be in this block's blobs
-                    // (if PublishCommitteeBlob and CreateCommittee are in the same block)
-                    // or it may have been published in an earlier block.
+                    // Find the committee blob
                     let committee_blob = match blobs.iter().find(|b| b.id() == blob_id) {
                         Some(blob) => Some(blob.clone()),
                         None => match storage.get_blob(blob_id).await {

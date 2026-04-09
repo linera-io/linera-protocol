@@ -1,12 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Storage configuration and runtime infrastructure for the Linera protocol.
+
+use std::{fmt, path::PathBuf, str::FromStr};
+
+use anyhow::{anyhow, bail};
 use async_trait::async_trait;
-use linera_client::config::GenesisConfig;
-<<<<<<< HEAD
+use linera_core::GenesisConfig;
 use linera_execution::WasmRuntime;
-pub use linera_storage::StorageCacheConfig;
-use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
+pub use linera_storage::StorageCacheSizes;
+use linera_storage::{DbStorage, Storage, WallClock, DEFAULT_NAMESPACE};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
     client::StorageServiceDatabase,
@@ -20,7 +24,7 @@ use linera_views::rocks_db::{
     RocksDbStoreInternalConfig,
 };
 use linera_views::{
-    lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig,
     memory::{MemoryDatabase, MemoryStoreConfig},
     store::{KeyValueDatabase, KeyValueStore},
 };
@@ -89,9 +93,9 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub confirmed_block_cache_size: usize,
 
-    /// The maximal number of entries in the confirmed block certificate cache.
+    /// The maximal number of entries in the lite certificate cache.
     #[arg(long, default_value = "1000", global = true)]
-    pub certificate_cache_size: usize,
+    pub lite_certificate_cache_size: usize,
 
     /// The maximal number of entries in the raw certificate cache.
     #[arg(long, default_value = "1000", global = true)]
@@ -101,9 +105,13 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub event_cache_size: usize,
 
-    /// Interval in seconds between weak reference cleanup sweeps in value caches.
-    #[arg(long, default_value_t = linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS, global = true)]
-    pub cache_cleanup_interval_secs: u64,
+    /// The number of entries in the block cache.
+    #[arg(long, default_value = "5000", global = true)]
+    pub block_cache_size: usize,
+
+    /// The number of entries in the execution state cache.
+    #[arg(long, default_value = "10000", global = true)]
+    pub execution_state_cache_size: usize,
 
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
@@ -111,19 +119,18 @@ pub struct CommonStorageOptions {
 }
 
 impl CommonStorageOptions {
-    pub fn storage_cache_config(&self) -> StorageCacheConfig {
-        StorageCacheConfig {
+    pub fn storage_cache_sizes(&self) -> StorageCacheSizes {
+        StorageCacheSizes {
             blob_cache_size: self.blob_cache_size,
             confirmed_block_cache_size: self.confirmed_block_cache_size,
-            certificate_cache_size: self.certificate_cache_size,
+            lite_certificate_cache_size: self.lite_certificate_cache_size,
             certificate_raw_cache_size: self.certificate_raw_cache_size,
             event_cache_size: self.event_cache_size,
-            cache_cleanup_interval_secs: self.cache_cleanup_interval_secs,
         }
     }
 
-    pub fn views_storage_cache_config(&self) -> ViewsStorageCacheConfig {
-        ViewsStorageCacheConfig {
+    pub fn storage_cache_config(&self) -> StorageCacheConfig {
+        StorageCacheConfig {
             max_cache_size: self.storage_max_cache_size,
             max_value_entry_size: self.storage_max_value_entry_size,
             max_find_keys_entry_size: self.storage_max_find_keys_entry_size,
@@ -319,18 +326,11 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             }
             if parts.len() == 2 || parts.len() == 3 {
                 let path = parts[0].to_string().into();
-                let spawn_mode_name = parts
-                    .get(1)
-                    .copied()
-                    .expect("validated by the parts length check above");
-                let spawn_mode = match spawn_mode_name {
+                let spawn_mode = match parts[1] {
                     "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                     "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                     "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                    _ => Err(anyhow!(
-                        "Failed to parse {} as a spawn_mode",
-                        spawn_mode_name
-                    )),
+                    _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
                 }?;
                 let namespace = if parts.len() == 2 {
                     DEFAULT_NAMESPACE.to_string()
@@ -406,8 +406,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     }
                 }
             }
-            let uri = uri.unwrap_or_else(|| "localhost:9042".to_string());
-            let namespace = namespace.unwrap_or_else(|| DEFAULT_NAMESPACE.to_string());
+            let uri = uri.unwrap_or("localhost:9042".to_string());
+            let namespace = namespace.unwrap_or(DEFAULT_NAMESPACE.to_string());
             let inner_storage_config = InnerStorageConfig::ScyllaDb { uri };
             debug!("ScyllaDB connection info: {:?}", inner_storage_config);
             return Ok(StorageConfig {
@@ -426,18 +426,11 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             let path = Path::new(parts[0]);
             let path = path.to_path_buf();
             let path_with_guard = PathWithGuard::new(path);
-            let spawn_mode_name = parts
-                .get(1)
-                .copied()
-                .expect("validated by the parts length check above");
-            let spawn_mode = match spawn_mode_name {
+            let spawn_mode = match parts[1] {
                 "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                 "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                 "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                _ => Err(anyhow!(
-                    "Failed to parse {} as a spawn_mode",
-                    spawn_mode_name
-                )),
+                _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
             }?;
             let protocol = parts[2];
             if protocol != "tcp" {
@@ -479,7 +472,6 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
 }
 
 impl StorageConfig {
-    #[allow(clippy::used_underscore_binding)]
     pub fn maybe_append_shard_path(&mut self, _shard: usize) -> std::io::Result<()> {
         match &mut self.inner_storage_config {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -524,7 +516,7 @@ impl StorageConfig {
                 };
                 let config = StorageServiceStoreConfig {
                     inner_config,
-                    storage_cache_config: options.views_storage_cache_config(),
+                    storage_cache_config: options.storage_cache_config(),
                 };
                 Ok(StoreConfig::StorageService { config, namespace })
             }
@@ -538,7 +530,7 @@ impl StorageConfig {
                 };
                 let config = RocksDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.views_storage_cache_config(),
+                    storage_cache_config: options.storage_cache_config(),
                 };
                 Ok(StoreConfig::RocksDb { config, namespace })
             }
@@ -551,7 +543,7 @@ impl StorageConfig {
                 };
                 let config = DynamoDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.views_storage_cache_config(),
+                    storage_cache_config: options.storage_cache_config(),
                 };
                 Ok(StoreConfig::DynamoDb { config, namespace })
             }
@@ -565,7 +557,7 @@ impl StorageConfig {
                 };
                 let config = ScyllaDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.views_storage_cache_config(),
+                    storage_cache_config: options.storage_cache_config(),
                 };
                 Ok(StoreConfig::ScyllaDb { config, namespace })
             }
@@ -582,7 +574,7 @@ impl StorageConfig {
                 };
                 let first_config = RocksDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.views_storage_cache_config(),
+                    storage_cache_config: options.storage_cache_config(),
                 };
 
                 let inner_config = ScyllaDbStoreInternalConfig {
@@ -593,7 +585,7 @@ impl StorageConfig {
                 };
                 let second_config = ScyllaDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.views_storage_cache_config(),
+                    storage_cache_config: options.storage_cache_config(),
                 };
 
                 let config = DualStoreConfig {
@@ -667,7 +659,7 @@ pub trait RunnableWithStore {
         self,
         config: D::Config,
         namespace: String,
-        cache_sizes: StorageCacheConfig,
+        cache_sizes: StorageCacheSizes,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -675,12 +667,17 @@ pub trait RunnableWithStore {
         D::Error: Send + Sync;
 }
 
+/// Reads a JSON value from a file at the given path.
+fn read_json<T: serde::de::DeserializeOwned>(path: impl Into<PathBuf>) -> anyhow::Result<T> {
+    Ok(serde_json::from_reader(fs_err::File::open(path.into())?)?)
+}
+
 impl StoreConfig {
     pub async fn run_with_storage<Job>(
         self,
         wasm_runtime: Option<WasmRuntime>,
         allow_application_logs: bool,
-        cache_sizes: StorageCacheConfig,
+        cache_sizes: StorageCacheSizes,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
     where
@@ -700,7 +697,7 @@ impl StoreConfig {
                 )
                 .await?
                 .with_allow_application_logs(allow_application_logs);
-                let genesis_config = crate::util::read_json::<GenesisConfig>(genesis_path)?;
+                let genesis_config = read_json::<GenesisConfig>(genesis_path)?;
                 // Memory storage must be initialized every time.
                 genesis_config.initialize_storage(&mut storage).await?;
                 Ok(job.run(storage).await)
@@ -770,7 +767,7 @@ impl StoreConfig {
     #[allow(unused_variables)]
     pub async fn run_with_store<Job>(
         self,
-        cache_sizes: StorageCacheConfig,
+        cache_sizes: StorageCacheSizes,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
     where
@@ -806,52 +803,64 @@ impl StoreConfig {
                 .await?),
         }
     }
-
-    pub async fn initialize(
-        self,
-        cache_sizes: StorageCacheConfig,
-        config: &GenesisConfig,
-    ) -> Result<(), anyhow::Error> {
-        self.run_with_store(cache_sizes, InitializeStorageJob(config))
-            .await
-    }
 }
-=======
-use linera_storage::DbStorage;
-pub use linera_storage::StorageCacheSizes;
-pub use linera_storage_runtime::{
-    AssertStorageV1, CommonStorageOptions, InnerStorageConfig, Runnable, RunnableWithStore,
-    StorageConfig, StorageMigration, StoreConfig,
-};
-use linera_views::store::{KeyValueDatabase, KeyValueStore};
->>>>>>> 8733dc9bcb (Extract linera-exporter from linera-service crate. (#5946))
 
-struct InitializeStorageJob<'a>(&'a GenesisConfig);
+pub struct StorageMigration;
 
 #[async_trait]
-impl RunnableWithStore for InitializeStorageJob<'_> {
+impl RunnableWithStore for StorageMigration {
     type Output = ();
 
     async fn run<D>(
         self,
         config: D::Config,
         namespace: String,
-        cache_sizes: StorageCacheConfig,
+        cache_sizes: StorageCacheSizes,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
         D::Store: KeyValueStore + Clone + Send + Sync + 'static,
         D::Error: Send + Sync,
     {
-        let mut storage =
-            DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None, cache_sizes)
-                .await?;
-        self.0.initialize_storage(&mut storage).await?;
+        if D::exists(&config, &namespace).await? {
+            let wasm_runtime = None;
+            let storage =
+                DbStorage::<D, WallClock>::connect(&config, &namespace, wasm_runtime, cache_sizes)
+                    .await?;
+            storage.migrate_if_needed().await?;
+        }
         Ok(())
     }
 }
 
-<<<<<<< HEAD
+pub struct AssertStorageV1;
+
+#[async_trait]
+impl RunnableWithStore for AssertStorageV1 {
+    type Output = ();
+
+    async fn run<D>(
+        self,
+        config: D::Config,
+        namespace: String,
+        cache_sizes: StorageCacheSizes,
+    ) -> Result<Self::Output, anyhow::Error>
+    where
+        D: KeyValueDatabase + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Error: Send + Sync,
+    {
+        if D::exists(&config, &namespace).await? {
+            let wasm_runtime = None;
+            let storage =
+                DbStorage::<D, WallClock>::connect(&config, &namespace, wasm_runtime, cache_sizes)
+                    .await?;
+            storage.assert_is_migrated_storage().await?;
+        }
+        Ok(())
+    }
+}
+
 #[test]
 fn test_memory_storage_config_from_str() {
     assert_eq!(
@@ -999,19 +1008,4 @@ fn test_scylla_db_storage_config_from_str() {
     assert!(StorageConfig::from_str("scylladb:tcp:address1").is_err());
     assert!(StorageConfig::from_str("scylladb:tcp:address1:tcp:/address2").is_err());
     assert!(StorageConfig::from_str("scylladb:wrong").is_err());
-=======
-/// Initializes storage by running migration and then writing the genesis config.
-pub async fn initialize(
-    store_config: StoreConfig,
-    cache_sizes: StorageCacheSizes,
-    config: &GenesisConfig,
-) -> Result<(), anyhow::Error> {
-    store_config
-        .clone()
-        .run_with_store(cache_sizes, StorageMigration)
-        .await?;
-    store_config
-        .run_with_store(cache_sizes, InitializeStorageJob(config))
-        .await
->>>>>>> 8733dc9bcb (Extract linera-exporter from linera-service crate. (#5946))
 }

@@ -10,7 +10,7 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::{data_types::IncomingBundle, types::ConfirmedBlock};
+use linera_chain::types::ConfirmedBlock;
 use linera_rpc::grpc::{GrpcError, GrpcProtoConversionError};
 use linera_sdk::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
 use tonic::Status;
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum ExporterError {
+pub enum ExporterError {
     #[error("received an invalid notification.")]
     BadNotification(BadNotificationKind),
 
@@ -27,9 +27,6 @@ pub(crate) enum ExporterError {
 
     #[error("Missing certificate: {0}")]
     ReadCertificateError(CryptoHash),
-
-    #[error("Missing blob: {0}")]
-    ReadBlobError(BlobId),
 
     #[error("generic storage error: {0}")]
     ViewError(#[from] ViewError),
@@ -57,7 +54,7 @@ pub(crate) enum ExporterError {
 }
 
 #[derive(Debug)]
-pub(crate) enum BadNotificationKind {
+pub enum BadNotificationKind {
     InvalidChainId {
         #[debug(skip_if = Option::is_none)]
         inner: Option<GrpcProtoConversionError>,
@@ -76,13 +73,13 @@ impl From<BadNotificationKind> for ExporterError {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct CanonicalBlock {
+pub struct CanonicalBlock {
     pub blobs: Box<[BlobId]>,
     pub block_hash: CryptoHash,
 }
 
 impl CanonicalBlock {
-    pub(crate) fn new(hash: CryptoHash, blobs: &[BlobId]) -> CanonicalBlock {
+    pub fn new(hash: CryptoHash, blobs: &[BlobId]) -> CanonicalBlock {
         CanonicalBlock {
             block_hash: hash,
             blobs: blobs.to_vec().into_boxed_slice(),
@@ -91,20 +88,20 @@ impl CanonicalBlock {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-pub(crate) struct BlockId {
+pub struct BlockId {
     pub hash: CryptoHash,
     pub chain_id: ChainId,
     pub height: BlockHeight,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct LiteBlockId {
+pub struct LiteBlockId {
     pub hash: CryptoHash,
     pub height: BlockHeight,
 }
 
 impl BlockId {
-    pub(crate) fn new(chain_id: ChainId, hash: CryptoHash, height: BlockHeight) -> BlockId {
+    pub fn new(chain_id: ChainId, hash: CryptoHash, height: BlockHeight) -> BlockId {
         BlockId {
             hash,
             chain_id,
@@ -112,15 +109,7 @@ impl BlockId {
         }
     }
 
-    pub(crate) fn from_incoming_bundle(incoming_bundle: &IncomingBundle) -> Self {
-        Self {
-            hash: incoming_bundle.bundle.certificate_hash,
-            chain_id: incoming_bundle.origin,
-            height: incoming_bundle.bundle.height,
-        }
-    }
-
-    pub(crate) fn from_confirmed_block(block: &ConfirmedBlock) -> BlockId {
+    pub fn from_confirmed_block(block: &ConfirmedBlock) -> BlockId {
         BlockId::new(block.chain_id(), block.inner().hash(), block.height())
     }
 }
@@ -138,12 +127,12 @@ impl From<BlockId> for LiteBlockId {
 }
 
 #[derive(Clone)]
-pub(crate) struct ExporterCancellationSignal {
+pub struct ExporterCancellationSignal {
     token: CancellationToken,
 }
 
 impl ExporterCancellationSignal {
-    pub(crate) fn new(token: CancellationToken) -> Self {
+    pub fn new(token: CancellationToken) -> Self {
         Self { token }
     }
 }
@@ -157,6 +146,6 @@ impl IntoFuture for ExporterCancellationSignal {
     }
 }
 
-pub(crate) fn get_address(port: u16) -> SocketAddr {
+pub fn get_address(port: u16) -> SocketAddr {
     SocketAddr::from(([0, 0, 0, 0], port))
 }
