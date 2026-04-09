@@ -14,6 +14,7 @@ linera-storage-service
 linera-cache
 linera-storage
 linera-core
+linera-storage-runtime
 linera-ethereum
 linera-metrics
 linera-sdk-derive
@@ -23,5 +24,6 @@ linera-client
 linera-faucet-client
 linera-faucet-server
 # linera-bridge — excluded because it depends on unpublished example crates (fungible, wrapped-fungible)
+linera-exporter --no-verify
 linera-service
 linera-service-graphql-client

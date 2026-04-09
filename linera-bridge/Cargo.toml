@@ -24,7 +24,6 @@ offchain = [
     "dep:op-alloy-network",
     "dep:thiserror",
     "dep:tokio",
-    "dep:url",
 ]
 codegen = [
     "offchain",
@@ -88,7 +87,6 @@ linera-base = { workspace = true, optional = true }
 linera-execution = { workspace = true, optional = true }
 op-alloy-network = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
-url = { workspace = true, optional = true }
 
 clap = { workspace = true, optional = true }
 fs-err = { workspace = true, optional = true }

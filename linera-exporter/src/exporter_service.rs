@@ -125,10 +125,10 @@ mod test {
     use linera_base::{crypto::CryptoHash, identifiers::ChainId, port::get_free_port};
     use linera_core::worker::Notification;
     use linera_rpc::grpc::api::notifier_service_client::NotifierServiceClient;
-    use linera_service::cli_wrappers::local_net::LocalNet;
     use tokio::sync::mpsc::unbounded_channel;
 
     use super::*;
+    use crate::test_utils::ensure_grpc_server_has_started;
 
     #[test_log::test(tokio::test)]
     async fn test_notification_server() -> anyhow::Result<()> {
@@ -138,7 +138,7 @@ mod test {
         let (tx, mut rx) = unbounded_channel();
         let server = ExporterService::new(tx);
         let server_handle = tokio::spawn(server.run(cancellation_token.clone(), port));
-        LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
+        ensure_grpc_server_has_started("test server", port as usize, "http").await?;
 
         let mut client = NotifierServiceClient::connect(format!("http://{endpoint}")).await?;
         let reason = Reason::NewBlock {

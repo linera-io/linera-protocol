@@ -546,3 +546,19 @@ pub(crate) async fn make_simple_state_with_blobs<S: Storage>(
 
     (notification, state)
 }
+
+/// Polls until a gRPC server is accepting connections on the given port.
+pub async fn ensure_grpc_server_has_started(
+    name: &str,
+    port: usize,
+    _scheme: &str,
+) -> anyhow::Result<()> {
+    let addr = format!("127.0.0.1:{port}");
+    for _ in 0..100 {
+        if tokio::net::TcpStream::connect(&addr).await.is_ok() {
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    anyhow::bail!("{name} on port {port} did not start in time")
+}

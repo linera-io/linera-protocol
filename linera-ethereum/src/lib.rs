@@ -12,6 +12,9 @@ pub mod client;
 pub mod common;
 
 #[cfg(not(target_arch = "wasm32"))]
+pub mod light_client;
+
+#[cfg(not(target_arch = "wasm32"))]
 pub mod provider;
 
 /// Helper types for tests and similar purposes.

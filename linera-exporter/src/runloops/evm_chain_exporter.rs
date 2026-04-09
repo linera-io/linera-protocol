@@ -3,9 +3,9 @@
 
 use std::{future::IntoFuture, sync::atomic::Ordering};
 
-use linera_base::identifiers::BlobType;
-use linera_bridge::evm::client::EvmLightClient;
-use linera_execution::{system::AdminOperation, Operation, SystemOperation};
+use linera_base::{crypto::ValidatorPublicKey, identifiers::BlobType};
+use linera_ethereum::light_client::LightClient;
+use linera_execution::{committee::Committee, system::AdminOperation, Operation, SystemOperation};
 use tokio::select;
 
 use crate::{
@@ -19,7 +19,7 @@ use crate::{
 /// calls `LightClient.addCommittee()` on the configured EVM endpoint.
 pub(crate) struct EvmChainExporter {
     id: DestinationId,
-    evm_client: EvmLightClient,
+    evm_client: LightClient,
 }
 
 impl EvmChainExporter {
@@ -37,7 +37,7 @@ impl EvmChainExporter {
             .parse()
             .expect("invalid LightClient contract address");
 
-        let evm_client = EvmLightClient::new(&endpoint, contract_address, &private_key)
+        let evm_client = LightClient::new(&endpoint, contract_address, &private_key)
             .expect("failed to create EVM light client");
 
         EvmChainExporter { id, evm_client }
@@ -121,10 +121,11 @@ impl EvmChainExporter {
                         let committee_bytes = blob.bytes();
                         let certificate_bytes =
                             bcs::to_bytes(&*block_cert).expect("BCS serialization failed");
+                        let validator_keys = extract_validator_keys(committee_bytes)?;
 
                         match self
                             .evm_client
-                            .add_committee(&certificate_bytes, committee_bytes)
+                            .add_committee(&certificate_bytes, committee_bytes, validator_keys)
                             .await
                         {
                             Ok(tx_hash) => {
@@ -153,4 +154,21 @@ impl EvmChainExporter {
             }
         }
     }
+}
+
+/// Extracts uncompressed validator public keys from a BCS-serialized committee blob.
+///
+/// Returns 64-byte uncompressed keys (without the 0x04 prefix) for each validator,
+/// sorted by their compressed byte representation to match BCS canonical map ordering.
+fn extract_validator_keys(committee_blob: &[u8]) -> anyhow::Result<Vec<Vec<u8>>> {
+    let committee: Committee = bcs::from_bytes(committee_blob)?;
+    let mut keys: Vec<ValidatorPublicKey> = committee.validators().keys().copied().collect();
+    keys.sort_by_key(|a| a.as_bytes());
+    Ok(keys
+        .iter()
+        .map(|public| {
+            let uncompressed = public.0.to_encoded_point(false);
+            uncompressed.as_bytes()[1..].to_vec()
+        })
+        .collect())
 }

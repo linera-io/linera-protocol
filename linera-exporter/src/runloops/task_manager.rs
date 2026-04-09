@@ -13,9 +13,11 @@ use std::{
 use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_storage::Storage;
 
+#[cfg(feature = "evm-exporter")]
+use crate::runloops::evm_chain_exporter::EvmChainExporter;
 use crate::{
     config::{Destination, DestinationId, DestinationKind},
-    runloops::{evm_chain_exporter::EvmChainExporter, logging_exporter::LoggingExporter},
+    runloops::logging_exporter::LoggingExporter,
     storage::ExporterStorage,
 };
 
@@ -148,6 +150,7 @@ pub(super) struct ExporterBuilder<F> {
     work_queue_size: usize,
     node_provider: Arc<GrpcNodeProvider>,
     shutdown_signal: F,
+    #[cfg(feature = "evm-exporter")]
     destination_configs: HashMap<DestinationId, Destination>,
     health: Arc<AtomicBool>,
 }
@@ -161,19 +164,19 @@ where
         options: NodeOptions,
         work_queue_size: usize,
         shutdown_signal: F,
-        destinations: &[Destination],
+        #[cfg_attr(not(feature = "evm-exporter"), allow(unused))] destinations: &[Destination],
         health: Arc<AtomicBool>,
     ) -> Self {
         let node_provider = GrpcNodeProvider::new(options);
         let arced_node_provider = Arc::new(node_provider);
-        let destination_configs = destinations.iter().map(|d| (d.id(), d.clone())).collect();
 
         Self {
             options,
             shutdown_signal,
             work_queue_size,
             node_provider: arced_node_provider,
-            destination_configs,
+            #[cfg(feature = "evm-exporter")]
+            destination_configs: destinations.iter().map(|d| (d.id(), d.clone())).collect(),
             health,
         }
     }
@@ -240,6 +243,7 @@ where
                 })
             }
 
+            #[cfg(feature = "evm-exporter")]
             DestinationKind::EvmChain => {
                 let destination = self
                     .destination_configs
@@ -257,6 +261,11 @@ where
                     }
                     result
                 })
+            }
+
+            #[cfg(not(feature = "evm-exporter"))]
+            DestinationKind::EvmChain => {
+                unimplemented!("EvmChain exporter requires the evm-exporter feature")
             }
         }
     }
