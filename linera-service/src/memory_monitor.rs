@@ -13,17 +13,64 @@ use tracing::{debug, info, warn};
 /// Default polling interval for the memory monitor.
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Default fraction of total system memory used as the limit.
-pub const DEFAULT_MEMORY_FRACTION: f64 = 0.6;
+/// Default memory limit: 60% of total system (or cgroup) memory.
+pub const DEFAULT_MEMORY_LIMIT: &str = "60%";
+
+/// A memory limit specified either as an absolute number of megabytes or as a
+/// percentage of total system (or cgroup) memory.
+#[derive(Debug, Clone)]
+pub enum MemoryLimit {
+    /// Absolute limit in megabytes.
+    Megabytes(u64),
+    /// Fraction of total system memory (0.0–1.0).
+    Fraction(f64),
+}
+
+impl MemoryLimit {
+    /// Resolves the limit to an absolute byte count.
+    fn resolve(&self) -> u64 {
+        match *self {
+            MemoryLimit::Megabytes(mb) => mb * 1024 * 1024,
+            MemoryLimit::Fraction(f) => {
+                let total = detect_total_memory();
+                let limit = (total as f64 * f) as u64;
+                info!(
+                    total_mb = total / (1024 * 1024),
+                    limit_mb = limit / (1024 * 1024),
+                    "Using {:.0}% of total memory as chain worker memory limit",
+                    f * 100.0,
+                );
+                limit
+            }
+        }
+    }
+}
+
+/// Parses a memory limit string: either a plain number (megabytes) or a number
+/// followed by `%` (percentage of total memory). E.g. `"4096"` or `"60%"`.
+pub fn parse_memory_limit(s: &str) -> Result<MemoryLimit, String> {
+    if let Some(pct) = s.strip_suffix('%') {
+        let value: f64 = pct
+            .trim()
+            .parse()
+            .map_err(|e| format!("invalid percentage: {e}"))?;
+        if !(0.0..=100.0).contains(&value) {
+            return Err(format!("percentage must be between 0 and 100, got {value}"));
+        }
+        Ok(MemoryLimit::Fraction(value / 100.0))
+    } else {
+        let mb: u64 = s
+            .trim()
+            .parse()
+            .map_err(|e| format!("invalid megabyte value: {e}"))?;
+        Ok(MemoryLimit::Megabytes(mb))
+    }
+}
 
 /// Configuration for the memory monitor.
 pub struct MemoryMonitorConfig {
-    /// The RSS threshold (in bytes) at which the monitor starts reducing TTLs.
-    /// If `None`, defaults to `memory_fraction` of total system (or cgroup) memory.
-    pub memory_limit: Option<u64>,
-    /// Fraction of total system memory to use as the limit when `memory_limit`
-    /// is `None`. Defaults to [`DEFAULT_MEMORY_FRACTION`].
-    pub memory_fraction: f64,
+    /// The RSS threshold at which the monitor starts reducing TTLs.
+    pub memory_limit: MemoryLimit,
     /// How often to poll process RSS.
     pub poll_interval: Duration,
     /// The dynamic TTLs to adjust. All of them are scaled by the same factor.
@@ -48,18 +95,7 @@ pub fn spawn_memory_monitor(config: MemoryMonitorConfig) {
     if config.ttls.is_empty() {
         return;
     }
-    let fraction = config.memory_fraction;
-    let memory_limit = config.memory_limit.unwrap_or_else(|| {
-        let total = detect_total_memory();
-        let limit = (total as f64 * fraction) as u64;
-        info!(
-            total_mb = total / (1024 * 1024),
-            limit_mb = limit / (1024 * 1024),
-            "No explicit memory limit; defaulting to {:.0}% of total memory",
-            fraction * 100.0,
-        );
-        limit
-    });
+    let memory_limit = config.memory_limit.resolve();
     info!(
         memory_limit_mb = memory_limit / (1024 * 1024),
         poll_interval_ms = config.poll_interval.as_millis() as u64,

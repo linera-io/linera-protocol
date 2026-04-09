@@ -537,12 +537,16 @@ fn start_sweep<S: Storage + Clone + 'static>(
     if ttls.is_empty() {
         return;
     }
+    let min_sleep = config.min_ttl_poll_sleep;
+    let max_sleep = config.max_ttl_poll_sleep;
     let weak_map = Arc::downgrade(chain_workers);
     linera_base::Task::spawn(async move {
         loop {
             let interval = ttls.iter().map(|t| t.current()).min().unwrap();
-            linera_base::time::timer::sleep(crate::chain_worker::handle::ttl_poll_sleep(interval))
-                .await;
+            linera_base::time::timer::sleep(crate::chain_worker::handle::ttl_poll_sleep(
+                interval, min_sleep, max_sleep,
+            ))
+            .await;
             let Some(map) = weak_map.upgrade() else {
                 break;
             };

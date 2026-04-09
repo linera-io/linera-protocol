@@ -52,6 +52,12 @@ pub struct ChainWorkerConfig {
     /// `IncorrectOutcome` error is encountered — but only if the given duration has
     /// elapsed since block 0 was last executed (to prevent reset loops).
     pub reset_on_incorrect_outcome: Option<Duration>,
+    /// Minimum sleep between TTL re-checks in keep-alive and sweep loops.
+    /// Prevents busy-looping when the TTL is very small.
+    pub min_ttl_poll_sleep: Duration,
+    /// Maximum sleep between TTL re-checks. Bounds how long it takes to
+    /// notice a TTL reduction by the memory monitor.
+    pub max_ttl_poll_sleep: Duration,
 }
 
 impl ChainWorkerConfig {
@@ -85,6 +91,8 @@ impl Default for ChainWorkerConfig {
             cross_chain_message_chunk_limit: usize::MAX,
             allow_revert_confirm: false,
             reset_on_incorrect_outcome: None,
+            min_ttl_poll_sleep: Duration::from_millis(10),
+            max_ttl_poll_sleep: Duration::from_secs(1),
         }
     }
 }

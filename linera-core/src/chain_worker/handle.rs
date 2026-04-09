@@ -142,7 +142,14 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
         config.ttl.clone()
     };
     if let Some(dynamic_ttl) = dynamic_ttl {
-        spawn_keep_alive(chain_id, Arc::clone(&arc), last_access, dynamic_ttl);
+        spawn_keep_alive(
+            chain_id,
+            Arc::clone(&arc),
+            last_access,
+            dynamic_ttl,
+            config.min_ttl_poll_sleep,
+            config.max_ttl_poll_sleep,
+        );
     }
     arc
 }
@@ -189,17 +196,11 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
     guard
 }
 
-/// Absolute upper bound on how long to sleep before re-reading the dynamic TTL.
-const MAX_TTL_SLEEP: Duration = Duration::from_secs(1);
-
-/// Minimum sleep duration to avoid busy-looping when the TTL is very small.
-const MIN_TTL_SLEEP: Duration = Duration::from_millis(10);
-
 /// Returns how long to sleep before re-checking the TTL. This is half the
-/// current TTL (so we react quickly under high memory pressure) capped to
-/// [`MAX_TTL_SLEEP`] and floored at [`MIN_TTL_SLEEP`].
-pub(crate) fn ttl_poll_sleep(ttl: Duration) -> Duration {
-    (ttl / 2).clamp(MIN_TTL_SLEEP, MAX_TTL_SLEEP)
+/// current TTL (so we react quickly under high memory pressure) clamped to
+/// the configured `[min, max]` range.
+pub(crate) fn ttl_poll_sleep(ttl: Duration, min_sleep: Duration, max_sleep: Duration) -> Duration {
+    (ttl / 2).clamp(min_sleep, max_sleep)
 }
 
 /// Spawns a background task that keeps the chain state alive for at least the
@@ -213,6 +214,8 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
     mut state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicTimestamp>,
     dynamic_ttl: Arc<DynamicTtl>,
+    min_sleep: Duration,
+    max_sleep: Duration,
 ) {
     linera_base::Task::spawn(async move {
         loop {
@@ -227,7 +230,8 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
                     break;
                 };
                 // Cap sleep so we re-read the TTL frequently.
-                linera_base::time::timer::sleep(remaining.min(ttl_poll_sleep(ttl))).await;
+                let poll = ttl_poll_sleep(ttl, min_sleep, max_sleep);
+                linera_base::time::timer::sleep(remaining.min(poll)).await;
             }
             // Idle long enough. Drop our strong reference if it's the only one.
             match Arc::try_unwrap(state) {

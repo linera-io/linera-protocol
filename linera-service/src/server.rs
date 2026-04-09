@@ -70,9 +70,8 @@ struct ServerContext {
     cross_chain_message_chunk_limit: usize,
     allow_revert_confirm: bool,
     reset_on_incorrect_outcome_mins: Option<u64>,
-    memory_limit_mb: Option<u64>,
-    memory_fraction: f64,
-    memory_monitor_interval_ms: u64,
+    chain_worker_memory_limit: linera_service::memory_monitor::MemoryLimit,
+    chain_worker_memory_monitor_interval_ms: u64,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -276,9 +275,10 @@ impl Runnable for ServerContext {
             }
             linera_service::memory_monitor::spawn_memory_monitor(
                 linera_service::memory_monitor::MemoryMonitorConfig {
-                    memory_limit: self.memory_limit_mb.map(|mb| mb * 1024 * 1024),
-                    memory_fraction: self.memory_fraction,
-                    poll_interval: Duration::from_millis(self.memory_monitor_interval_ms),
+                    memory_limit: self.chain_worker_memory_limit.clone(),
+                    poll_interval: Duration::from_millis(
+                        self.chain_worker_memory_monitor_interval_ms,
+                    ),
                     ttls,
                 },
             );
@@ -424,7 +424,6 @@ fn make_server_config<R: CryptoRng>(
 }
 
 #[derive(clap::Parser)]
-#[expect(clippy::large_enum_variant)]
 enum ServerCommand {
     /// Runs a service for each shard of the Linera validator")
     #[command(name = "run")]
@@ -501,29 +500,25 @@ enum ServerCommand {
         #[arg(long)]
         reset_on_incorrect_outcome_mins: Option<u64>,
 
-        /// RSS memory limit in megabytes. When process memory usage approaches
-        /// this limit, chain worker TTLs are dynamically reduced to evict idle
-        /// workers sooner. If unset, defaults to `--memory-fraction` of total
-        /// system (or cgroup) memory.
-        #[arg(long, env = "LINERA_MEMORY_LIMIT_MB")]
-        memory_limit_mb: Option<u64>,
-
-        /// Fraction of total system (or cgroup) memory to use as the memory
-        /// limit when `--memory-limit-mb` is not set.
+        /// Memory limit for chain worker eviction. Accepts either megabytes
+        /// (e.g. "4096") or a percentage of total system/cgroup memory
+        /// (e.g. "60%"). When process RSS approaches this limit, idle chain
+        /// worker TTLs are dynamically reduced.
         #[arg(
             long,
-            env = "LINERA_MEMORY_FRACTION",
-            default_value_t = linera_service::memory_monitor::DEFAULT_MEMORY_FRACTION
+            env = "LINERA_CHAIN_WORKER_MEMORY_LIMIT",
+            default_value = linera_service::memory_monitor::DEFAULT_MEMORY_LIMIT,
+            value_parser = linera_service::memory_monitor::parse_memory_limit,
         )]
-        memory_fraction: f64,
+        chain_worker_memory_limit: linera_service::memory_monitor::MemoryLimit,
 
-        /// Polling interval in milliseconds for the memory monitor.
+        /// Polling interval in milliseconds for the chain worker memory monitor.
         #[arg(
             long,
-            env = "LINERA_MEMORY_MONITOR_INTERVAL_MS",
+            env = "LINERA_CHAIN_WORKER_MEMORY_MONITOR_INTERVAL_MS",
             default_value = "1000"
         )]
-        memory_monitor_interval_ms: u64,
+        chain_worker_memory_monitor_interval_ms: u64,
 
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
@@ -659,9 +654,8 @@ async fn run(options: ServerOptions) {
             cross_chain_message_chunk_limit,
             allow_revert_confirm,
             reset_on_incorrect_outcome_mins,
-            memory_limit_mb,
-            memory_fraction,
-            memory_monitor_interval_ms,
+            chain_worker_memory_limit,
+            chain_worker_memory_monitor_interval_ms,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -684,9 +678,8 @@ async fn run(options: ServerOptions) {
                 cross_chain_message_chunk_limit,
                 allow_revert_confirm,
                 reset_on_incorrect_outcome_mins,
-                memory_limit_mb,
-                memory_fraction,
-                memory_monitor_interval_ms,
+                chain_worker_memory_limit,
+                chain_worker_memory_monitor_interval_ms,
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };
