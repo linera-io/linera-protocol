@@ -281,7 +281,7 @@ doc_scalar!(
 pub enum Reason {
     NewBlock {
         height: BlockHeight,
-        block_hash: CryptoHash,
+        hash: CryptoHash,
     },
     NewEvents {
         height: BlockHeight,
@@ -298,7 +298,7 @@ pub enum Reason {
     },
     BlockExecuted {
         height: BlockHeight,
-        block_hash: CryptoHash,
+        hash: CryptoHash,
     },
 }
 

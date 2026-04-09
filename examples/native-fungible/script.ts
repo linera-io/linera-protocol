@@ -102,9 +102,10 @@ const signer = linera.signer.PrivateKey.fromMnemonic(mnemonic);
 const wallet = await faucet.createWallet();
 const owner = signer.address();
 const chainId = await faucet.claimChain(wallet, owner);
-const client = await new linera.Client(wallet, signer);
 document.querySelector("#chain-id").textContent = chainId;
 document.querySelector("#owner").textContent = owner;
+const client = await new linera.Client(wallet, signer);
+await client.start();
 
 const chain = await client.chain(chainId);
 const application = await chain.application(
