@@ -541,10 +541,8 @@ fn start_sweep<S: Storage + Clone + 'static>(
     linera_base::Task::spawn(async move {
         loop {
             let interval = ttls.iter().map(|t| t.current()).min().unwrap();
-            linera_base::time::timer::sleep(
-                interval.min(crate::chain_worker::handle::MAX_TTL_SLEEP),
-            )
-            .await;
+            linera_base::time::timer::sleep(crate::chain_worker::handle::ttl_poll_sleep(interval))
+                .await;
             let Some(map) = weak_map.upgrade() else {
                 break;
             };

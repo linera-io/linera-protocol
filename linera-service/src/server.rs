@@ -71,6 +71,7 @@ struct ServerContext {
     allow_revert_confirm: bool,
     reset_on_incorrect_outcome_mins: Option<u64>,
     memory_limit_mb: Option<u64>,
+    memory_fraction: f64,
     memory_monitor_interval_ms: u64,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
@@ -276,6 +277,7 @@ impl Runnable for ServerContext {
             linera_service::memory_monitor::spawn_memory_monitor(
                 linera_service::memory_monitor::MemoryMonitorConfig {
                     memory_limit: self.memory_limit_mb.map(|mb| mb * 1024 * 1024),
+                    memory_fraction: self.memory_fraction,
                     poll_interval: Duration::from_millis(self.memory_monitor_interval_ms),
                     ttls,
                 },
@@ -422,6 +424,7 @@ fn make_server_config<R: CryptoRng>(
 }
 
 #[derive(clap::Parser)]
+#[expect(clippy::large_enum_variant)]
 enum ServerCommand {
     /// Runs a service for each shard of the Linera validator")
     #[command(name = "run")]
@@ -500,10 +503,19 @@ enum ServerCommand {
 
         /// RSS memory limit in megabytes. When process memory usage approaches
         /// this limit, chain worker TTLs are dynamically reduced to evict idle
-        /// workers sooner. If unset, defaults to 80% of total system (or
-        /// cgroup) memory.
+        /// workers sooner. If unset, defaults to `--memory-fraction` of total
+        /// system (or cgroup) memory.
         #[arg(long, env = "LINERA_MEMORY_LIMIT_MB")]
         memory_limit_mb: Option<u64>,
+
+        /// Fraction of total system (or cgroup) memory to use as the memory
+        /// limit when `--memory-limit-mb` is not set.
+        #[arg(
+            long,
+            env = "LINERA_MEMORY_FRACTION",
+            default_value_t = linera_service::memory_monitor::DEFAULT_MEMORY_FRACTION
+        )]
+        memory_fraction: f64,
 
         /// Polling interval in milliseconds for the memory monitor.
         #[arg(
@@ -648,6 +660,7 @@ async fn run(options: ServerOptions) {
             allow_revert_confirm,
             reset_on_incorrect_outcome_mins,
             memory_limit_mb,
+            memory_fraction,
             memory_monitor_interval_ms,
             otlp_exporter_endpoint: _,
         } => {
@@ -672,6 +685,7 @@ async fn run(options: ServerOptions) {
                 allow_revert_confirm,
                 reset_on_incorrect_outcome_mins,
                 memory_limit_mb,
+                memory_fraction,
                 memory_monitor_interval_ms,
                 #[cfg(with_metrics)]
                 enable_memory_profiling,

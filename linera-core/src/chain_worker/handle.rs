@@ -189,17 +189,25 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
     guard
 }
 
-/// Maximum time to sleep between re-reading the dynamic TTL. Keeps the
-/// keep-alive and sweep tasks responsive to TTL reductions by the memory
-/// monitor (at most 1 s of lag).
-pub(crate) const MAX_TTL_SLEEP: Duration = Duration::from_secs(1);
+/// Absolute upper bound on how long to sleep before re-reading the dynamic TTL.
+const MAX_TTL_SLEEP: Duration = Duration::from_secs(1);
+
+/// Minimum sleep duration to avoid busy-looping when the TTL is very small.
+const MIN_TTL_SLEEP: Duration = Duration::from_millis(10);
+
+/// Returns how long to sleep before re-checking the TTL. This is half the
+/// current TTL (so we react quickly under high memory pressure) capped to
+/// [`MAX_TTL_SLEEP`] and floored at [`MIN_TTL_SLEEP`].
+pub(crate) fn ttl_poll_sleep(ttl: Duration) -> Duration {
+    (ttl / 2).clamp(MIN_TTL_SLEEP, MAX_TTL_SLEEP)
+}
 
 /// Spawns a background task that keeps the chain state alive for at least the
 /// current dynamic TTL after the last access. When the state has been idle for
 /// the full TTL, the task drops the state if it holds the only strong reference.
 ///
 /// The TTL is re-read from [`DynamicTtl`] after every sleep, so reductions
-/// made by the memory monitor take effect within [`MAX_TTL_SLEEP`].
+/// made by the memory monitor take effect within [`ttl_poll_sleep`].
 fn spawn_keep_alive<S: Storage + Clone + 'static>(
     chain_id: ChainId,
     mut state: Arc<RwLock<ChainWorkerState<S>>>,
@@ -219,7 +227,7 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
                     break;
                 };
                 // Cap sleep so we re-read the TTL frequently.
-                linera_base::time::timer::sleep(remaining.min(MAX_TTL_SLEEP)).await;
+                linera_base::time::timer::sleep(remaining.min(ttl_poll_sleep(ttl))).await;
             }
             // Idle long enough. Drop our strong reference if it's the only one.
             match Arc::try_unwrap(state) {

@@ -13,16 +13,17 @@ use tracing::{debug, info, warn};
 /// Default polling interval for the memory monitor.
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Fraction of total system memory used as the default limit when no explicit
-/// `--memory-limit-mb` is given.
-const DEFAULT_MEMORY_FRACTION: f64 = 0.8;
+/// Default fraction of total system memory used as the limit.
+pub const DEFAULT_MEMORY_FRACTION: f64 = 0.6;
 
 /// Configuration for the memory monitor.
 pub struct MemoryMonitorConfig {
     /// The RSS threshold (in bytes) at which the monitor starts reducing TTLs.
-    /// If `None`, defaults to [`DEFAULT_MEMORY_FRACTION`] of total system
-    /// (or cgroup) memory.
+    /// If `None`, defaults to `memory_fraction` of total system (or cgroup) memory.
     pub memory_limit: Option<u64>,
+    /// Fraction of total system memory to use as the limit when `memory_limit`
+    /// is `None`. Defaults to [`DEFAULT_MEMORY_FRACTION`].
+    pub memory_fraction: f64,
     /// How often to poll process RSS.
     pub poll_interval: Duration,
     /// The dynamic TTLs to adjust. All of them are scaled by the same factor.
@@ -47,14 +48,15 @@ pub fn spawn_memory_monitor(config: MemoryMonitorConfig) {
     if config.ttls.is_empty() {
         return;
     }
+    let fraction = config.memory_fraction;
     let memory_limit = config.memory_limit.unwrap_or_else(|| {
         let total = detect_total_memory();
-        let limit = (total as f64 * DEFAULT_MEMORY_FRACTION) as u64;
+        let limit = (total as f64 * fraction) as u64;
         info!(
             total_mb = total / (1024 * 1024),
             limit_mb = limit / (1024 * 1024),
             "No explicit memory limit; defaulting to {:.0}% of total memory",
-            DEFAULT_MEMORY_FRACTION * 100.0,
+            fraction * 100.0,
         );
         limit
     });
