@@ -104,7 +104,7 @@ where
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
     last_access: Arc<AtomicTimestamp>,
-    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_values: Arc<ValueCache<CryptoHash, Block>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -148,7 +148,7 @@ where
     pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, Block>>,
         execution_state_cache: Option<
             Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
@@ -466,7 +466,7 @@ where
         let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
 
         for hash in hashes {
-            if let Some(hashed_block) = self.block_values.get(&hash) {
+            if let Some(hashed_block) = self.block_values.get_hashed(&hash) {
                 height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
             } else {
                 uncached_hashes.push(hash);
