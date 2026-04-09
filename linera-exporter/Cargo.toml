@@ -20,6 +20,7 @@ path = "src/main.rs"
 
 [features]
 default = ["rocksdb", "storage-service"]
+evm-exporter = ["dep:linera-ethereum"]
 metrics = ["dep:linera-metrics", "dep:prometheus", "linera-base/metrics"]
 rocksdb = ["linera-views/rocksdb", "linera-storage-runtime/rocksdb"]
 dynamodb = ["linera-views/dynamodb", "linera-storage-runtime/dynamodb"]
@@ -38,9 +39,9 @@ custom_debug_derive.workspace = true
 fs-err.workspace = true
 futures.workspace = true
 linera-base.workspace = true
-linera-bridge.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
+linera-ethereum = { workspace = true, optional = true }
 linera-execution.workspace = true
 linera-metrics = { workspace = true, optional = true }
 linera-rpc.workspace = true
@@ -78,7 +79,6 @@ tonic-prost-build = { workspace = true, features = ["transport"] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["test"] }
-linera-service = { workspace = true, features = ["rocksdb"] }
 linera-storage = { workspace = true, features = ["test"] }
 reqwest.workspace = true
 test-case.workspace = true
