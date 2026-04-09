@@ -21,13 +21,21 @@ pub trait KeyValueStoreError:
 {
     /// The name of the backend.
     const BACKEND: &'static str;
+
+    /// Returns `true` if this error represents a journal resolution failure,
+    /// which may leave storage in an inconsistent state requiring a view reload.
+    fn must_reload_view(&self) -> bool {
+        false
+    }
 }
 
 impl<E: KeyValueStoreError> From<E> for ViewError {
     fn from(error: E) -> Self {
+        let must_reload_view = error.must_reload_view();
         Self::StoreError {
             backend: E::BACKEND,
             error: Box::new(error),
+            must_reload_view,
         }
     }
 }

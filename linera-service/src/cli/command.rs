@@ -6,7 +6,7 @@ use std::{borrow::Cow, num::NonZeroU16, path::PathBuf};
 use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, BlockHeight, Epoch},
+    data_types::{Amount, BlockHeight, Epoch, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamId},
     time::Duration,
     vm::VmRuntime,
@@ -360,6 +360,12 @@ pub enum ClientCommand {
         /// blocks 0 through 9.
         #[arg(long)]
         next_height: Option<BlockHeight>,
+
+        /// Stop synchronizing at the first block with a timestamp greater than this
+        /// value (inclusive). The format is `YYYY-MM-DDTHH:MM:SS` or
+        /// `YYYY-MM-DD HH:MM:SS` in UTC.
+        #[arg(long)]
+        until_block_time: Option<Timestamp>,
     },
 
     /// Process all pending incoming messages from the inbox of the given chain by creating as many
@@ -787,6 +793,12 @@ pub enum ClientCommand {
         /// Example: `--subscription-ttl-secs CounterValue=30`
         #[arg(long = "subscription-ttl-secs", value_parser = parse_subscription_ttl)]
         subscription_ttls: Vec<(String, u64)>,
+
+        /// Start in paused mode: do not synchronize chains from the network.
+        /// The service will serve queries from local state only, without downloading
+        /// new blocks or processing incoming messages.
+        #[arg(long)]
+        pause: bool,
     },
 
     /// Query an application with a read-only GraphQL query.

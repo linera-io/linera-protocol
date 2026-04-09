@@ -1757,11 +1757,17 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// If the chain is in follow-only mode, this only downloads blocks for this chain without
     /// fetching manager values or sender/publisher chains.
+    /// Synchronizes the chain state from validators, optionally stopping at a given
+    /// block height or block timestamp.
+    ///
+    /// - If `next_height` is `Some`, downloads blocks up to (but not including) that height.
+    /// - If `until_block_time` is `Some`, downloads blocks up to (but not including) the
+    ///   first block with timestamp >= the given value.
     #[instrument(level = "trace")]
-    /// Synchronizes the chain state up to (but not including) the given block height.
     pub async fn synchronize_up_to(
         &self,
-        next_height: BlockHeight,
+        next_height: Option<BlockHeight>,
+        until_block_time: Option<Timestamp>,
     ) -> Result<Box<ChainInfo>, Error> {
         let (_, committee) = self.client.admin_committee().await?;
         let validators = self.client.make_nodes(&committee)?;
@@ -1772,7 +1778,12 @@ impl<Env: Environment> ChainClient<Env> {
             |_: &()| (),
             |remote_node| async move {
                 self.client
-                    .download_certificates_from(&remote_node, self.chain_id, next_height)
+                    .download_certificates_from(
+                        &remote_node,
+                        self.chain_id,
+                        next_height.unwrap_or(BlockHeight::MAX),
+                        until_block_time,
+                    )
                     .await?;
                 Ok(())
             },

@@ -447,6 +447,7 @@ impl Runnable for Job {
             Sync {
                 chain_id,
                 next_height,
+                until_block_time,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -455,8 +456,10 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
-                if let Some(next_height) = next_height {
-                    chain_client.synchronize_up_to(next_height).await?;
+                if next_height.is_some() || until_block_time.is_some() {
+                    chain_client
+                        .synchronize_up_to(next_height, until_block_time)
+                        .await?;
                 } else {
                     chain_client.synchronize_from_validators().await?;
                 }
@@ -1264,6 +1267,7 @@ impl Runnable for Job {
                 query_cache_size,
                 allowed_subscriptions,
                 subscription_ttls,
+                pause,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1362,6 +1366,7 @@ impl Runnable for Job {
                     query_subscriptions,
                     cancellation_token.clone(),
                     options.enable_memory_profiling(),
+                    pause,
                 );
                 service.run(cancellation_token, command_receiver).await?;
             }
