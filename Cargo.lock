@@ -5459,7 +5459,6 @@ dependencies = [
  "tower-http 0.6.6",
  "tracing",
  "tracing-subscriber 0.3.19",
- "url",
  "wrapped-fungible",
 ]
 

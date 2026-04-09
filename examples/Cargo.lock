@@ -4046,6 +4046,7 @@ version = "0.15.15"
 dependencies = [
  "alloy",
  "alloy-primitives",
+ "alloy-sol-types",
  "anyhow",
  "async-lock",
  "async-trait",
