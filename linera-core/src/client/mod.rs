@@ -18,7 +18,9 @@ use futures::{
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
-    data_types::{ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta},
+    data_types::{
+        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta, Timestamp,
+    },
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
     time::Duration,
@@ -476,7 +478,7 @@ impl<Env: Environment> Client<Env> {
             return Ok(info);
         }
         info = self
-            .load_local_certificates(chain_id, target_next_block_height)
+            .load_local_certificates(chain_id, target_next_block_height, None)
             .await?;
         let mut next_height = info.next_block_height;
         // Download remaining batches using all validators with staggered fallback.
@@ -495,7 +497,10 @@ impl<Env: Environment> Client<Env> {
                     self.options.certificate_batch_download_timeout,
                 )
                 .await?;
-            let Some(new_info) = self.process_certificates(&validators, certificates).await? else {
+            let Some(new_info) = self
+                .process_certificates(&validators, certificates, None)
+                .await?
+            else {
                 break;
             };
             assert!(new_info.next_block_height > next_height);
@@ -514,10 +519,13 @@ impl<Env: Environment> Client<Env> {
 
     /// Loads and processes certificates from local storage for the given chain, from the
     /// current local height up to `end`. Returns the chain info after processing.
+    /// If `until_block_time` is `Some`, stops before processing any certificate whose
+    /// block timestamp is greater than the given value.
     async fn load_local_certificates(
         &self,
         chain_id: ChainId,
         end: BlockHeight,
+        until_block_time: Option<Timestamp>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut last_info = self.local_node.chain_info(chain_id).await?;
         let next_height = last_info.next_block_height;
@@ -533,21 +541,32 @@ impl<Env: Environment> Client<Env> {
             }
         };
         for certificate in certificates {
+            if let Some(until) = until_block_time {
+                if certificate.value().block().header.timestamp >= until {
+                    break;
+                }
+            }
             last_info = self.handle_certificate(certificate).await?.info;
         }
         Ok(last_info)
     }
 
-    /// Downloads and processes all certificates up to (excluding) the specified height from the
-    /// given validator.
+    /// Downloads and processes certificates from the given validator.
+    ///
+    /// Stops when either condition is met:
+    /// - `stop`: the local chain has reached that height (exclusive).
+    /// - `until_block_time`: the next block's timestamp is greater than that value.
     #[instrument(level = "trace", skip_all)]
     async fn download_certificates_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
         stop: BlockHeight,
+        until_block_time: Option<Timestamp>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        let mut last_info = self.load_local_certificates(chain_id, stop).await?;
+        let mut last_info = self
+            .load_local_certificates(chain_id, stop, until_block_time)
+            .await?;
         let mut next_height = last_info.next_block_height;
         // Now download the rest in batches from the remote node.
         while next_height < stop {
@@ -562,7 +581,7 @@ impl<Env: Environment> Client<Env> {
                 .download_certificates(remote_node, chain_id, next_height, limit)
                 .await?;
             let Some(info) = self
-                .process_certificates(slice::from_ref(remote_node), certificates)
+                .process_certificates(slice::from_ref(remote_node), certificates, until_block_time)
                 .await?
             else {
                 break;
@@ -668,11 +687,14 @@ impl<Env: Environment> Client<Env> {
 
     /// Tries to process all the certificates, requesting any missing blobs from the given nodes.
     /// Returns the chain info of the last successfully processed certificate.
+    /// If `until_block_time` is `Some`, stops before processing any certificate whose
+    /// block timestamp is greater or equal than the given value.
     #[instrument(level = "trace", skip_all)]
     async fn process_certificates(
         &self,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
         certificates: Vec<ConfirmedBlockCertificate>,
+        until_block_time: Option<Timestamp>,
     ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
         let mut info = None;
         let required_blob_ids: Vec<_> = certificates
@@ -694,6 +716,11 @@ impl<Env: Environment> Client<Env> {
         }
 
         for certificate in certificates {
+            if let Some(until) = until_block_time {
+                if certificate.value().block().header.timestamp >= until {
+                    break;
+                }
+            }
             info = Some(
                 match self.handle_certificate(certificate.clone()).await {
                     Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
@@ -1549,7 +1576,7 @@ impl<Env: Environment> Client<Env> {
         };
         let remote_info = remote_node.handle_chain_info_query(query).await?;
         let local_info = self
-            .download_certificates_from(remote_node, chain_id, remote_info.next_block_height)
+            .download_certificates_from(remote_node, chain_id, remote_info.next_block_height, None)
             .await?;
 
         if !with_manager_values {

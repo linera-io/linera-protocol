@@ -505,6 +505,7 @@ Synchronize the local state of the chain with a quorum validators
 ###### **Options:**
 
 * `--next-height <NEXT_HEIGHT>` — Stop synchronizing at this block height (exclusive). For instance, `--next-height 0` downloads zero blocks, `--next-height 10` downloads blocks 0 through 9
+* `--until-block-time <UNTIL_BLOCK_TIME>` — Stop synchronizing at the first block with a timestamp greater than this value. The format is `YYYY-MM-DDTHH:MM:SS` or `YYYY-MM-DD HH:MM:SS` in UTC
 
 
 
