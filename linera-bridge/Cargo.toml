@@ -122,7 +122,8 @@ hex.workspace = true
 insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
-linera-execution.workspace = true
+linera-execution = { workspace = true, features = ["revm", "test"] }
+linera-storage = { workspace = true, features = ["test"] }
 proptest.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
