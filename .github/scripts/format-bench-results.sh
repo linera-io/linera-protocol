@@ -49,9 +49,9 @@ fmt_change() {
   if awk "BEGIN { exit !($pct == 0) }"; then
     printf "No change"
   elif awk "BEGIN { exit !($pct > 1) }"; then
-    printf '%s' "\${\\color{red}\\textbf{${formatted}\\%}}\$"
+    printf '%s' "\${\\color{red}\\textbf{${formatted}\\\\%%}}\$"
   elif awk "BEGIN { exit !($pct < -1) }"; then
-    printf '%s' "\${\\color{green}\\textbf{${formatted}\\%}}\$"
+    printf '%s' "\${\\color{green}\\textbf{${formatted}\\\\%%}}\$"
   else
     printf "%s%%" "$formatted"
   fi

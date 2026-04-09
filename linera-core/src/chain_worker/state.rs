@@ -105,17 +105,13 @@ where
     /// the `RwLock`.
     last_access: Arc<AtomicTimestamp>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache:
+        Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
-}
-
-/// Whether the block was processed or skipped. Used for metrics.
-pub enum BlockOutcome {
-    Processed,
-    Preprocessed,
-    Skipped,
+    /// Set to `true` if a journal resolution failure has left storage potentially inconsistent.
+    poisoned: bool,
 }
 
 /// The result of processing a cross-chain update.
@@ -133,6 +129,13 @@ pub(crate) enum CrossChainUpdateResult {
     },
 }
 
+/// Whether the block was processed or skipped. Used for metrics.
+pub enum BlockOutcome {
+    Processed,
+    Preprocessed,
+    Skipped,
+}
+
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + 'static,
@@ -146,8 +149,8 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>,
+        execution_state_cache: Option<
+            Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
         chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
@@ -169,6 +172,7 @@ where
             chain_modes,
             delivery_notifier,
             knows_chain_is_active: false,
+            poisoned: false,
         })
     }
 
@@ -190,6 +194,13 @@ where
     /// Rolls back any uncommitted changes to the chain state.
     pub(crate) fn rollback(&mut self) {
         self.chain.rollback();
+    }
+
+    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a journal
+    /// resolution failure.
+    pub(crate) fn check_not_poisoned(&self) -> Result<(), WorkerError> {
+        ensure!(!self.poisoned, WorkerError::PoisonedWorker);
+        Ok(())
     }
 
     /// Updates the last-access timestamp to the current time.
@@ -333,10 +344,33 @@ where
         Ok(maybe_blobs.into_iter().collect())
     }
 
-    /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
+    /// Creates cross-chain requests for a single recipient from its outbox.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
+    async fn create_cross_chain_actions_for_recipient(
+        &self,
+        recipient: ChainId,
+    ) -> Result<NetworkActions, WorkerError> {
+        let outbox = self.chain.outboxes.try_load_entry(&recipient).await?;
+        let Some(outbox) = outbox else {
+            return Ok(NetworkActions::default());
+        };
+        let heights = outbox.queue.elements().await?;
+        if heights.is_empty() {
+            return Ok(NetworkActions::default());
+        }
+        let heights_by_recipient = BTreeMap::from([(recipient, heights)]);
+        let cross_chain_requests = self
+            .create_cross_chain_requests(heights_by_recipient)
+            .await?;
+        Ok(NetworkActions {
+            cross_chain_requests,
+            notifications: Vec::new(),
+        })
+    }
+
+    /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
     async fn create_network_actions(
         &self,
         old_round: Option<Round>,
@@ -491,6 +525,7 @@ where
             }
         }
 
+        let sender = self.chain.chain_id();
         let mut cross_chain_requests = Vec::new();
         for (recipient, heights) in heights_by_recipient {
             // Extract the predecessor height for this recipient from the first
@@ -503,6 +538,7 @@ where
                 Some(*prev_height)
             });
             let mut bundles = Vec::new();
+            let mut bundles_size = 0;
             for height in heights {
                 let Some(hashed_block) = height_to_blocks.get(&height) else {
                     tracing::warn!(
@@ -512,22 +548,44 @@ where
                     );
                     break;
                 };
-                bundles.extend(
-                    hashed_block
-                        .inner()
-                        .message_bundles_for(recipient, hashed_block.hash()),
-                );
+                let new_bundles = hashed_block
+                    .inner()
+                    .message_bundles_for(recipient, hashed_block.hash())
+                    .collect::<Vec<_>>();
+                let new_size = new_bundles
+                    .iter()
+                    .map(|(_epoch, bundle)| bundle.estimated_size())
+                    .sum::<usize>();
+                // If adding this block's bundles would exceed the chunk limit,
+                // stop here. Always include at least one block's bundles.
+                if bundles_size + new_size > self.config.cross_chain_message_chunk_limit {
+                    if bundles.is_empty() {
+                        warn!(
+                            "Single block at height {height} produces an UpdateRecipient \
+                            of ~{new_size} bytes, exceeding the chunk limit of {}",
+                            self.config.cross_chain_message_chunk_limit
+                        );
+                    } else {
+                        debug!(
+                            "Stopping cross-chain batch for {recipient} at height {height}: \
+                            adding ~{new_size} bytes would exceed chunk limit of {} \
+                            (current batch ~{bundles_size} bytes)",
+                            self.config.cross_chain_message_chunk_limit
+                        );
+                        break;
+                    }
+                }
+                bundles.extend(new_bundles);
+                bundles_size += new_size;
             }
-            if bundles.is_empty() {
-                continue;
+            if !bundles.is_empty() {
+                cross_chain_requests.push(CrossChainRequest::UpdateRecipient {
+                    sender,
+                    recipient,
+                    bundles,
+                    previous_height,
+                });
             }
-            let request = CrossChainRequest::UpdateRecipient {
-                sender: self.chain.chain_id(),
-                recipient,
-                bundles,
-                previous_height,
-            };
-            cross_chain_requests.push(request);
         }
         Ok(cross_chain_requests)
     }
@@ -904,8 +962,10 @@ where
             }
             Err(e) => return Err(e.into()),
         }
-        let confirmed_block = if let Some(mut execution_state) =
-            self.execution_state_cache.remove(&block_hash)
+        let confirmed_block = if let Some(mut execution_state) = self
+            .execution_state_cache
+            .as_ref()
+            .and_then(|cache| cache.remove(&block_hash))
         {
             chain.execution_state = execution_state
                 .with_context(|ctx| {
@@ -1136,7 +1196,7 @@ where
         &mut self,
         recipient: ChainId,
         latest_height: BlockHeight,
-    ) -> Result<(), WorkerError> {
+    ) -> Result<NetworkActions, WorkerError> {
         let fully_delivered = self
             .chain
             .mark_messages_as_received(&recipient, latest_height)
@@ -1145,13 +1205,18 @@ where
                 .all_messages_to_tracked_chains_delivered_up_to(latest_height)
                 .await?;
 
+        // Send the next chunk of cross-chain messages for this recipient, if any.
+        let actions = self
+            .create_cross_chain_actions_for_recipient(recipient)
+            .await?;
+
         self.save().await?;
 
         if fully_delivered {
             self.delivery_notifier.notify(latest_height);
         }
 
-        Ok(())
+        Ok(actions)
     }
 
     /// Handles a `RevertConfirm` request: walks backward through
@@ -1236,8 +1301,10 @@ where
         }
         self.chain.nonempty_outboxes.get_mut().insert(recipient);
 
-        // 4. Create cross-chain requests using existing infrastructure.
-        let actions = self.create_network_actions(None).await?;
+        // 4. Create cross-chain requests for this recipient.
+        let actions = self
+            .create_cross_chain_actions_for_recipient(recipient)
+            .await?;
 
         // 5. Save chain state.
         self.save().await?;
@@ -1663,8 +1730,12 @@ where
         let local_time = self.storage.clock().current_time();
         // Try to use a cached execution state for the requested block.
         // We want to pretend that this block is committed, so we set the next block height.
-        let cached_state =
-            block_hash.and_then(|h| self.execution_state_cache.remove(&h).map(|s| (h, s)));
+        let cached_state = block_hash.and_then(|h| {
+            self.execution_state_cache
+                .as_ref()
+                .and_then(|cache| cache.remove(&h))
+                .map(|s| (h, s))
+        });
         if let Some((requested_block, mut state)) = cached_state {
             let next_block_height = next_block_height
                 .try_add_one()
@@ -1685,7 +1756,9 @@ where
                 .query_application(context, query, self.service_runtime_endpoint.as_mut())
                 .await
                 .with_execution_context(ChainExecutionContext::Query)?;
-            self.execution_state_cache.insert(&requested_block, state);
+            if let Some(cache) = &self.execution_state_cache {
+                cache.insert(&requested_block, state);
+            }
             Ok((outcome, next_block_height))
         } else {
             if block_hash.is_some() {
@@ -2068,15 +2141,17 @@ where
         .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
-        self.execution_state_cache.insert(
-            &block_hash,
-            Box::pin(
-                self.chain
-                    .execution_state
-                    .with_context(|ctx| InactiveContext(ctx.base_key().clone())),
-            )
-            .await,
-        );
+        if let Some(cache) = &self.execution_state_cache {
+            cache.insert(
+                &block_hash,
+                Box::pin(
+                    self.chain
+                        .execution_state
+                        .with_context(|ctx| InactiveContext(ctx.base_key().clone())),
+                )
+                .await,
+            );
+        }
         Ok((executed_block, resource_tracker))
     }
 
@@ -2099,11 +2174,23 @@ where
     }
 
     /// Stores the chain state in persistent storage.
+    ///
+    /// If the save fails, the worker is marked as poisoned and must be reloaded.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
-        self.chain.save().await?;
+        if let Err(error) = self.chain.save().await {
+            if error.must_reload_view() {
+                tracing::error!(
+                    ?error,
+                    chain_id = %self.chain_id(),
+                    "Journal resolution failed; marking worker as poisoned"
+                );
+                self.poisoned = true;
+            }
+            return Err(error.into());
+        }
         Ok(())
     }
 }

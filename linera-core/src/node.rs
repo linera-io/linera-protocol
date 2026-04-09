@@ -345,6 +345,9 @@ pub enum NodeError {
         local_time: Timestamp,
         block_time_grace_period_ms: u64,
     },
+
+    #[error("No validators available to handle the request")]
+    NoValidators,
 }
 
 impl NodeError {
@@ -391,7 +394,8 @@ impl NodeError {
             | NodeError::EmptyBlobsNotFound
             | NodeError::ResponseHandlingError { .. }
             | NodeError::MissingCertificatesByHeights { .. }
-            | NodeError::TooManyCertificatesReturned { .. } => false,
+            | NodeError::TooManyCertificatesReturned { .. }
+            | NodeError::NoValidators => false,
         }
     }
 }

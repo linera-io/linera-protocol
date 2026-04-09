@@ -369,6 +369,44 @@ impl<Env: Environment> RequestsScheduler<Env> {
         .await
     }
 
+    /// Downloads certificates from any of the given validators, using staggered
+    /// concurrent requests so that slow validators are quickly bypassed.
+    pub async fn download_certificates_from_validators(
+        &self,
+        peers: &[RemoteNode<Env::ValidatorNode>],
+        chain_id: ChainId,
+        start: BlockHeight,
+        limit: u64,
+        timeout: Duration,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        if peers.is_empty() {
+            return Err(NodeError::NoValidators);
+        }
+        let heights = (start.0..start.0 + limit)
+            .map(BlockHeight)
+            .collect::<Vec<_>>();
+        let key = RequestKey::Certificates {
+            chain_id,
+            heights: heights.clone(),
+        };
+        communicate_concurrently(
+            peers,
+            async move |peer| {
+                self.with_peer(key, peer, move |peer| {
+                    let heights = heights.clone();
+                    async move {
+                        Box::pin(peer.download_certificates_by_heights(chain_id, heights)).await
+                    }
+                })
+                .await
+            },
+            |errors| errors.last().cloned().unwrap(),
+            timeout,
+        )
+        .await
+        .map_err(|(_validator, error)| error)
+    }
+
     pub async fn download_certificates_by_heights(
         &self,
         peer: &RemoteNode<Env::ValidatorNode>,

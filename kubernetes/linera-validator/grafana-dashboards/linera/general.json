@@ -19,13 +19,13 @@
           "uid": "prometheus"
         },
         "enable": true,
-        "expr": "sum by (instance, validator) (resets(linera_proxy_request_count{validator=~\"$validator\"}[$__rate_interval])) > 0",
+        "expr": "label_replace(\n  max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"})\n  !=\n  max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"} offset 5m),\n  \"validator\",\n  \"$1.testnet-conway.linera.net\",\n  \"cluster\",\n  \"gke-testnet-conway-(validator-\\\\d+)\"\n)",
         "hide": false,
         "iconColor": "rgba(255, 152, 48, 1)",
         "limit": 100,
         "name": "proxy_restart",
         "showIn": 0,
-        "tagKeys": "instance,validator",
+        "tagKeys": "validator,pod",
         "tags": [],
         "titleFormat": "proxy restart",
         "type": "tags"
@@ -36,13 +36,13 @@
           "uid": "prometheus"
         },
         "enable": true,
-        "expr": "sum by (instance, validator) (resets(linera_server_request_count{validator=~\"$validator\"}[$__rate_interval])) > 0",
+        "expr": "label_replace(\n  max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"})\n  !=\n  max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"} offset 5m),\n  \"validator\",\n  \"$1.testnet-conway.linera.net\",\n  \"cluster\",\n  \"gke-testnet-conway-(validator-\\\\d+)\"\n)",
         "hide": false,
         "iconColor": "rgba(255, 96, 96, 1)",
         "limit": 100,
         "name": "shard_restart",
         "showIn": 0,
-        "tagKeys": "instance,validator",
+        "tagKeys": "validator,pod",
         "tags": [],
         "titleFormat": "shard restart",
         "type": "tags"
@@ -465,12 +465,232 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Proxy request latency percentiles broken down by request type over 1 minute intervals",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 50,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
+          "legendFormat": "{{method_name}} - p99",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
+          "legendFormat": "{{method_name}} - p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
+          "legendFormat": "{{method_name}} - p50",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Proxy Latency by Request Type (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Proxy request rate broken down by gRPC method name",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 51,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": true,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (method_name)",
+          "legendFormat": "{{method_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Proxy Request Rate by Request Type",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 25
       },
       "id": 15,
       "panels": [],
@@ -544,7 +764,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 26
       },
       "id": 22,
       "options": {
@@ -656,7 +876,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 26
       },
       "id": 12,
       "options": {
@@ -807,7 +1027,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 34
       },
       "id": 13,
       "options": {
@@ -982,7 +1202,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 34
       },
       "id": 23,
       "options": {
@@ -1007,7 +1227,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(linera:server_request_latency_per_request_type:rate1m{validator=~\"$validator\"}) by (le, method_name))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (le, method_name))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1023,7 +1243,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(linera:server_request_latency_per_request_type:rate1m{validator=~\"$validator\"}) by (le, method_name))",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (le, method_name))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1039,7 +1259,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(linera:server_request_latency_per_request_type:rate1m{validator=~\"$validator\"}) by (le, method_name))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (le, method_name))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1053,12 +1273,111 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Server request rate broken down by gRPC method name",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "id": 52,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": true,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (method_name)",
+          "legendFormat": "{{method_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Server Request Rate by Request Type",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 50
       },
       "id": 8,
       "panels": [],
@@ -1132,7 +1451,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 51
       },
       "id": 9,
       "options": {
@@ -1247,7 +1566,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 51
       },
       "id": 47,
       "options": {
@@ -1362,7 +1681,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 43
+        "y": 59
       },
       "id": 39,
       "options": {
@@ -1463,7 +1782,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 43
+        "y": 59
       },
       "id": 46,
       "options": {
@@ -1568,7 +1887,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 51
+        "y": 67
       },
       "id": 36,
       "options": {
@@ -1682,7 +2001,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 51
+        "y": 67
       },
       "id": 29,
       "options": {
@@ -1789,7 +2108,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 75
       },
       "id": 41,
       "options": {
@@ -1903,7 +2222,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 75
       },
       "id": 5,
       "options": {
@@ -2040,7 +2359,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 83
       },
       "id": 32,
       "options": {
@@ -2154,7 +2473,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 83
       },
       "id": 31,
       "options": {
@@ -2268,7 +2587,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 75
+        "y": 91
       },
       "id": 44,
       "options": {
@@ -2321,7 +2640,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 99
       },
       "id": 34,
       "panels": [],
@@ -2395,7 +2714,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 84
+        "y": 100
       },
       "id": 30,
       "options": {
@@ -2496,7 +2815,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 84
+        "y": 100
       },
       "id": 48,
       "options": {
@@ -2597,7 +2916,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 92
+        "y": 108
       },
       "id": 45,
       "options": {
@@ -2702,7 +3021,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 92
+        "y": 108
       },
       "id": 27,
       "options": {
@@ -2809,7 +3128,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 100
+        "y": 116
       },
       "id": 26,
       "options": {
@@ -2910,7 +3229,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 100
+        "y": 116
       },
       "id": 38,
       "options": {
@@ -3015,7 +3334,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 108
+        "y": 124
       },
       "id": 28,
       "options": {
@@ -3116,7 +3435,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 108
+        "y": 124
       },
       "id": 10,
       "options": {
@@ -3223,7 +3542,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 116
+        "y": 132
       },
       "id": 42,
       "options": {
@@ -3324,7 +3643,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 116
+        "y": 132
       },
       "id": 43,
       "options": {
@@ -3425,7 +3744,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 124
+        "y": 140
       },
       "id": 33,
       "options": {

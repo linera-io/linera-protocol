@@ -84,9 +84,19 @@ fn get_bytecode_path(path: &Path, file_name: &str, contract_name: &str) -> anyho
     Ok(hex::decode(&object)?)
 }
 
-pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
+pub fn compile_solidity_contract(
+    source_code: &str,
+    file_name: &str,
+    contract_name: &str,
+    extra_sources: &[(&str, &str)],
+) -> anyhow::Result<Vec<u8>> {
     let dir = tempdir().unwrap();
     let path = dir.path();
+    for (extra_file_name, extra_source_code) in extra_sources {
+        let extra_code_path = path.join(extra_file_name);
+        let mut extra_code_file = File::create(&extra_code_path)?;
+        writeln!(extra_code_file, "{}", extra_source_code)?;
+    }
     if source_code.contains("Linera.sol") {
         // The source code seems to import Linera.sol, so we import the relevant files.
         for (file_name, literal_path) in [
@@ -108,11 +118,14 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
             .current_dir(path)
             .output()?;
     }
-    let file_name = "test_code.sol";
     let test_code_path = path.join(file_name);
     let mut test_code_file = File::create(&test_code_path)?;
     writeln!(test_code_file, "{}", source_code)?;
     get_bytecode_path(path, file_name, contract_name)
+}
+
+pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
+    compile_solidity_contract(source_code, "test_code.sol", contract_name, &[])
 }
 
 pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {

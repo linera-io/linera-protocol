@@ -412,6 +412,8 @@ pub enum WorkerError {
     MissingNetworkDescription,
     #[error("thread error: {0}")]
     Thread(#[from] web_thread_pool::Error),
+    #[error("Chain worker was poisoned by a journal resolution failure")]
+    PoisonedWorker,
 }
 
 impl WorkerError {
@@ -447,9 +449,23 @@ impl WorkerError {
             | WorkerError::MissingNetworkDescription
             | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_)
-            | WorkerError::IncorrectOutcome { .. } => true,
+            | WorkerError::IncorrectOutcome { .. }
+            | WorkerError::PoisonedWorker => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
+    }
+
+    /// Returns `true` if this error indicates that the chain worker's in-memory
+    /// state may be inconsistent and must be evicted from the cache.
+    fn must_reload_view(&self) -> bool {
+        matches!(
+            self,
+            WorkerError::PoisonedWorker
+                | WorkerError::ViewError(ViewError::StoreError {
+                    must_reload_view: true,
+                    ..
+                })
+        )
     }
 }
 
@@ -543,7 +559,8 @@ pub struct WorkerState<StorageClient: Storage> {
     /// Configuration options for chain workers.
     chain_worker_config: ChainWorkerConfig,
     block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache:
+        Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
     chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -584,6 +601,18 @@ where
     pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
         self.chain_worker_config.priority_bundle_origins = origins;
         self
+    }
+
+    /// Returns an instance with the specified cross-chain message chunk limit.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_cross_chain_message_chunk_limit(mut self, limit: usize) -> Self {
+        self.chain_worker_config.cross_chain_message_chunk_limit = limit;
+        self
+    }
+
+    /// Sets the cross-chain message chunk limit.
+    pub fn set_cross_chain_message_chunk_limit(&mut self, limit: usize) {
+        self.chain_worker_config.cross_chain_message_chunk_limit = limit;
     }
 
     #[instrument(level = "trace", skip(self, value))]
@@ -709,7 +738,8 @@ where
             storage,
             chain_worker_config,
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(UniqueValueCache::new(execution_state_cache_size)),
+            execution_state_cache: (execution_state_cache_size > 0)
+                .then(|| Arc::new(UniqueValueCache::new(execution_state_cache_size))),
             chain_modes,
             delivery_notifiers: Arc::default(),
             chain_workers,
@@ -753,11 +783,19 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        Box::pin(wrap_future(async move {
-            let guard = handle::read_lock(&state).await;
+        let state_ref = &state;
+        let result = Box::pin(wrap_future(async move {
+            let guard = handle::read_lock(state_ref).await;
+            guard.check_not_poisoned()?;
             f(guard).await
         }))
-        .await
+        .await;
+        if let Err(error) = &result {
+            if error.must_reload_view() {
+                self.evict_poisoned_worker(chain_id, &state);
+            }
+        }
+        result
     }
 
     /// Acquires a write lock on the chain worker and executes the given closure.
@@ -771,11 +809,34 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        Box::pin(wrap_future(async move {
-            let guard = handle::write_lock(&state).await;
+        let state_ref = &state;
+        let result = Box::pin(wrap_future(async move {
+            let guard = handle::write_lock(state_ref).await;
+            guard.check_not_poisoned()?;
             f(guard).await
         }))
-        .await
+        .await;
+        if let Err(error) = &result {
+            if error.must_reload_view() {
+                self.evict_poisoned_worker(chain_id, &state);
+            }
+        }
+        result
+    }
+
+    /// Evicts a poisoned chain worker from the cache, but only if the entry still
+    /// points to the same instance. This avoids removing a fresh replacement that
+    /// another task may have already loaded.
+    fn evict_poisoned_worker(&self, chain_id: ChainId, poisoned: &ChainWorkerArc<StorageClient>) {
+        tracing::warn!(%chain_id, "Evicting poisoned chain worker from cache");
+        let pin = self.chain_workers.pin();
+        let weak_poisoned = Arc::downgrade(poisoned);
+        let _ = pin.remove_if(&chain_id, |_key, future| {
+            future
+                .peek()
+                .and_then(|r| r.clone().ok())
+                .is_some_and(|weak| weak.ptr_eq(&weak_poisoned))
+        });
     }
 
     /// Gets or creates a chain worker for the given chain.
@@ -1342,13 +1403,14 @@ where
                 recipient,
                 latest_height,
             } => {
-                self.chain_write(sender, |mut guard| async move {
-                    guard
-                        .confirm_updated_recipient(recipient, latest_height)
-                        .await
-                })
-                .await?;
-                Ok(NetworkActions::default())
+                let actions = self
+                    .chain_write(sender, |mut guard| async move {
+                        guard
+                            .confirm_updated_recipient(recipient, latest_height)
+                            .await
+                    })
+                    .await?;
+                Ok(actions)
             }
             CrossChainRequest::RevertConfirm {
                 sender,

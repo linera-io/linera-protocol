@@ -67,6 +67,13 @@ impl<E: KeyValueStoreError> From<bcs::Error> for ValueSplittingError<E> {
 
 impl<E: KeyValueStoreError + 'static> KeyValueStoreError for ValueSplittingError<E> {
     const BACKEND: &'static str = "value splitting";
+
+    fn must_reload_view(&self) -> bool {
+        match self {
+            ValueSplittingError::InnerStoreError(e) => e.must_reload_view(),
+            _ => false,
+        }
+    }
 }
 
 impl<S> WithError for ValueSplittingDatabase<S>
