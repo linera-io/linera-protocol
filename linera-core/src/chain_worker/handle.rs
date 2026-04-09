@@ -189,12 +189,17 @@ pub(crate) async fn write_lock<S: Storage + Clone + 'static>(
     guard
 }
 
+/// Maximum time to sleep between re-reading the dynamic TTL. Keeps the
+/// keep-alive and sweep tasks responsive to TTL reductions by the memory
+/// monitor (at most 1 s of lag).
+pub(crate) const MAX_TTL_SLEEP: Duration = Duration::from_secs(1);
+
 /// Spawns a background task that keeps the chain state alive for at least the
 /// current dynamic TTL after the last access. When the state has been idle for
 /// the full TTL, the task drops the state if it holds the only strong reference.
 ///
-/// The TTL is read from [`DynamicTtl`] on every iteration, so changes made by an
-/// external memory monitor take effect without restarting the task.
+/// The TTL is re-read from [`DynamicTtl`] after every sleep, so reductions
+/// made by the memory monitor take effect within [`MAX_TTL_SLEEP`].
 fn spawn_keep_alive<S: Storage + Clone + 'static>(
     chain_id: ChainId,
     mut state: Arc<RwLock<ChainWorkerState<S>>>,
@@ -203,13 +208,18 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
 ) {
     linera_base::Task::spawn(async move {
         loop {
-            let ttl = dynamic_ttl.current();
-            while let Some(remaining) = ttl
-                .checked_sub(last_access.elapsed())
-                .filter(|remaining| *remaining > Duration::ZERO)
-            {
-                // Touched recently — sleep for the remaining time.
-                linera_base::time::timer::sleep(remaining).await;
+            // Re-read the TTL each iteration so that changes by the memory
+            // monitor are noticed promptly.
+            loop {
+                let ttl = dynamic_ttl.current();
+                let Some(remaining) = ttl
+                    .checked_sub(last_access.elapsed())
+                    .filter(|r| *r > Duration::ZERO)
+                else {
+                    break;
+                };
+                // Cap sleep so we re-read the TTL frequently.
+                linera_base::time::timer::sleep(remaining.min(MAX_TTL_SLEEP)).await;
             }
             // Idle long enough. Drop our strong reference if it's the only one.
             match Arc::try_unwrap(state) {

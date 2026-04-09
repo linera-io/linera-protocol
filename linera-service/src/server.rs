@@ -71,6 +71,7 @@ struct ServerContext {
     allow_revert_confirm: bool,
     reset_on_incorrect_outcome_mins: Option<u64>,
     memory_limit_mb: Option<u64>,
+    memory_monitor_interval_ms: u64,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -267,15 +268,15 @@ impl Runnable for ServerContext {
             }
         };
 
-        if let Some(memory_limit_mb) = self.memory_limit_mb {
+        {
             let mut ttls = Vec::new();
             if let Some(ttl) = &self.chain_worker_ttl {
                 ttls.push(Arc::clone(ttl));
             }
             linera_service::memory_monitor::spawn_memory_monitor(
                 linera_service::memory_monitor::MemoryMonitorConfig {
-                    memory_limit: memory_limit_mb * 1024 * 1024,
-                    poll_interval: Duration::from_secs(5),
+                    memory_limit: self.memory_limit_mb.map(|mb| mb * 1024 * 1024),
+                    poll_interval: Duration::from_millis(self.memory_monitor_interval_ms),
                     ttls,
                 },
             );
@@ -499,9 +500,18 @@ enum ServerCommand {
 
         /// RSS memory limit in megabytes. When process memory usage approaches
         /// this limit, chain worker TTLs are dynamically reduced to evict idle
-        /// workers sooner. If unset, the memory monitor is disabled.
+        /// workers sooner. If unset, defaults to 80% of total system (or
+        /// cgroup) memory.
         #[arg(long, env = "LINERA_MEMORY_LIMIT_MB")]
         memory_limit_mb: Option<u64>,
+
+        /// Polling interval in milliseconds for the memory monitor.
+        #[arg(
+            long,
+            env = "LINERA_MEMORY_MONITOR_INTERVAL_MS",
+            default_value = "1000"
+        )]
+        memory_monitor_interval_ms: u64,
 
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
@@ -638,6 +648,7 @@ async fn run(options: ServerOptions) {
             allow_revert_confirm,
             reset_on_incorrect_outcome_mins,
             memory_limit_mb,
+            memory_monitor_interval_ms,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -661,6 +672,7 @@ async fn run(options: ServerOptions) {
                 allow_revert_confirm,
                 reset_on_incorrect_outcome_mins,
                 memory_limit_mb,
+                memory_monitor_interval_ms,
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };

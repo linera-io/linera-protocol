@@ -10,14 +10,32 @@ use linera_core::chain_worker::DynamicTtl;
 use sysinfo::{MemoryRefreshKind, Pid, ProcessRefreshKind, RefreshKind, System};
 use tracing::{debug, info, warn};
 
+/// Default polling interval for the memory monitor.
+pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Fraction of total system memory used as the default limit when no explicit
+/// `--memory-limit-mb` is given.
+const DEFAULT_MEMORY_FRACTION: f64 = 0.8;
+
 /// Configuration for the memory monitor.
 pub struct MemoryMonitorConfig {
     /// The RSS threshold (in bytes) at which the monitor starts reducing TTLs.
-    pub memory_limit: u64,
+    /// If `None`, defaults to [`DEFAULT_MEMORY_FRACTION`] of total system
+    /// (or cgroup) memory.
+    pub memory_limit: Option<u64>,
     /// How often to poll process RSS.
     pub poll_interval: Duration,
     /// The dynamic TTLs to adjust. All of them are scaled by the same factor.
     pub ttls: Vec<Arc<DynamicTtl>>,
+}
+
+/// Returns total system memory in bytes. On Linux inside a cgroup (container),
+/// `sysinfo` reports the cgroup memory limit rather than host RAM.
+fn detect_total_memory() -> u64 {
+    let system = System::new_with_specifics(
+        RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
+    );
+    system.total_memory()
 }
 
 /// Spawns a background task that monitors memory usage and adjusts chain worker TTLs.
@@ -29,10 +47,24 @@ pub fn spawn_memory_monitor(config: MemoryMonitorConfig) {
     if config.ttls.is_empty() {
         return;
     }
+    let memory_limit = config.memory_limit.unwrap_or_else(|| {
+        let total = detect_total_memory();
+        let limit = (total as f64 * DEFAULT_MEMORY_FRACTION) as u64;
+        info!(
+            total_mb = total / (1024 * 1024),
+            limit_mb = limit / (1024 * 1024),
+            "No explicit memory limit; defaulting to {:.0}% of total memory",
+            DEFAULT_MEMORY_FRACTION * 100.0,
+        );
+        limit
+    });
     info!(
-        memory_limit_mb = config.memory_limit / (1024 * 1024),
+        memory_limit_mb = memory_limit / (1024 * 1024),
+        poll_interval_ms = config.poll_interval.as_millis() as u64,
         "Starting memory monitor"
     );
+    let poll_interval = config.poll_interval;
+    let ttls = config.ttls;
     tokio::spawn(async move {
         let pid = Pid::from_u32(std::process::id());
         let mut system = System::new_with_specifics(
@@ -41,7 +73,7 @@ pub fn spawn_memory_monitor(config: MemoryMonitorConfig) {
                 .with_processes(ProcessRefreshKind::nothing().with_memory()),
         );
         loop {
-            tokio::time::sleep(config.poll_interval).await;
+            tokio::time::sleep(poll_interval).await;
             system.refresh_processes_specifics(
                 sysinfo::ProcessesToUpdate::Some(&[pid]),
                 true,
@@ -52,7 +84,7 @@ pub fn spawn_memory_monitor(config: MemoryMonitorConfig) {
                 continue;
             };
             let rss = process.memory();
-            let ratio = rss as f64 / config.memory_limit as f64;
+            let ratio = rss as f64 / memory_limit as f64;
             // Scale factor: 1.0 when ratio <= 0.5, linearly decreasing to 0.01 at ratio >= 0.9.
             let scale = if ratio <= 0.5 {
                 1.0
@@ -62,7 +94,7 @@ pub fn spawn_memory_monitor(config: MemoryMonitorConfig) {
                 // Linear interpolation: 1.0 at 0.5, 0.01 at 0.9
                 1.0 - (ratio - 0.5) * (0.99 / 0.4)
             };
-            for ttl in &config.ttls {
+            for ttl in &ttls {
                 let base = ttl.base();
                 let new = Duration::from_secs_f64(base.as_secs_f64() * scale)
                     .max(Duration::from_millis(10));
