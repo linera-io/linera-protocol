@@ -753,7 +753,7 @@ impl<Env: Environment> Client<Env> {
     /// Tries to process all the certificates, requesting any missing blobs from the given nodes.
     /// Returns the chain info of the last successfully processed certificate.
     /// If `until_block_time` is `Some`, stops before processing any certificate whose
-    /// block timestamp is >= the given value (exclusive).
+    /// block timestamp is greater or equal than the given value.
     #[instrument(level = "trace", skip_all)]
     async fn process_certificates(
         &self,
