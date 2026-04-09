@@ -520,7 +520,7 @@ impl<Env: Environment> Client<Env> {
     /// Loads and processes certificates from local storage for the given chain, from the
     /// current local height up to `end`. Returns the chain info after processing.
     /// If `until_block_time` is `Some`, stops before processing any certificate whose
-    /// block timestamp is >= the given value (exclusive).
+    /// block timestamp is greater than the given value.
     async fn load_local_certificates(
         &self,
         chain_id: ChainId,
@@ -555,7 +555,7 @@ impl<Env: Environment> Client<Env> {
     ///
     /// Stops when either condition is met:
     /// - `stop`: the local chain has reached that height (exclusive).
-    /// - `until_block_time`: the next block's timestamp is >= that value (exclusive).
+    /// - `until_block_time`: the next block's timestamp is greater than that value.
     #[instrument(level = "trace", skip_all)]
     async fn download_certificates_from(
         &self,

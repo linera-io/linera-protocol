@@ -1795,7 +1795,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// block height or block timestamp.
     ///
     /// - If `next_height` is `Some`, downloads blocks up to (but not including) that height.
-    /// - If `until_block_time` is `Some`, downloads blocks until one with timestamp >=
+    /// - If `until_block_time` is `Some`, downloads blocks until one with timestamp greater than
     ///   the given value is found.
     #[instrument(level = "trace")]
     pub async fn synchronize_up_to(

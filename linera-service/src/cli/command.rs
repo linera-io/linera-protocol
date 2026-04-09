@@ -362,7 +362,7 @@ pub enum ClientCommand {
         next_height: Option<BlockHeight>,
 
         /// Stop synchronizing at the first block with a timestamp greater than this
-        /// value (inclusive). The format is `YYYY-MM-DDTHH:MM:SS` or
+        /// value. The format is `YYYY-MM-DDTHH:MM:SS` or
         /// `YYYY-MM-DD HH:MM:SS` in UTC.
         #[arg(long)]
         until_block_time: Option<Timestamp>,
