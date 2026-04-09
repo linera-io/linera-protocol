@@ -83,6 +83,7 @@ pub async fn new_test_client_context(
         max_backoff: linera_rpc::node_provider::DEFAULT_MAX_BACKOFF,
         chain_listeners: JoinSet::default(),
         client_metrics: None,
+        chain_worker_ttls: Vec::new(),
     })
 }
 

@@ -92,6 +92,25 @@ pub struct Options {
     )]
     pub sender_chain_worker_ttl: Duration,
 
+    /// Memory limit for chain worker eviction. Accepts either megabytes
+    /// (e.g. "4096") or a percentage of total system/cgroup memory
+    /// (e.g. "60%"). When process RSS approaches this limit, idle chain
+    /// worker TTLs are dynamically reduced.
+    #[arg(
+        long = "chain-worker-memory-limit",
+        default_value = "60%",
+        env = "LINERA_CHAIN_WORKER_MEMORY_LIMIT"
+    )]
+    pub chain_worker_memory_limit: String,
+
+    /// Polling interval in milliseconds for the chain worker memory monitor.
+    #[arg(
+        long,
+        env = "LINERA_CHAIN_WORKER_MEMORY_MONITOR_INTERVAL_MS",
+        default_value = "1000"
+    )]
+    pub chain_worker_memory_monitor_interval_ms: u64,
+
     /// Delay increment for retrying to connect to a validator.
     #[arg(
         long = "retry-delay-ms",

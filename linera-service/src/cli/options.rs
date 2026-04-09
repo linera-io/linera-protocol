@@ -95,7 +95,7 @@ impl Options {
     {
         let genesis_config = wallet.genesis_config().clone();
         let default_chain = wallet.default_chain();
-        Ok(ClientContext::new(
+        let context = ClientContext::new(
             storage,
             wallet,
             signer,
@@ -105,7 +105,23 @@ impl Options {
             self.block_cache_size,
             self.execution_state_cache_size,
         )
-        .await?)
+        .await?;
+
+        let memory_limit = linera_service::memory_monitor::parse_memory_limit(
+            &self.client_options.chain_worker_memory_limit,
+        )
+        .map_err(|e| anyhow::anyhow!("invalid --chain-worker-memory-limit: {e}"))?;
+        linera_service::memory_monitor::spawn_memory_monitor(
+            linera_service::memory_monitor::MemoryMonitorConfig {
+                memory_limit,
+                poll_interval: std::time::Duration::from_millis(
+                    self.client_options.chain_worker_memory_monitor_interval_ms,
+                ),
+                ttls: context.chain_worker_ttls.clone(),
+            },
+        );
+
+        Ok(context)
     }
 
     pub async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {

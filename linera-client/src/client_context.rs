@@ -219,6 +219,8 @@ pub struct ClientContext<Env: Environment> {
     pub default_chain: Option<ChainId>,
     #[cfg(not(web))]
     pub client_metrics: Option<ClientMetrics>,
+    /// Dynamic TTLs for chain workers, exposed so the memory monitor can adjust them.
+    pub chain_worker_ttls: Vec<Arc<linera_core::chain_worker::DynamicTtl>>,
 }
 
 impl<Env: Environment> chain_listener::ClientContext for ClientContext<Env> {
@@ -314,6 +316,13 @@ where
             ),
         };
 
+        let ttl = util::dynamic_ttl(options.chain_worker_ttl);
+        let sender_ttl = util::dynamic_ttl(options.sender_chain_worker_ttl);
+        let chain_worker_ttls = [ttl.clone(), sender_ttl.clone()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
         let client = Client::new(
             linera_core::environment::Impl {
                 network: node_provider,
@@ -325,8 +334,8 @@ where
             options.long_lived_services,
             chain_modes,
             name,
-            util::dynamic_ttl(options.chain_worker_ttl),
-            util::dynamic_ttl(options.sender_chain_worker_ttl),
+            ttl,
+            sender_ttl,
             options.prioritize_bundles_from.clone().unwrap_or_default(),
             options.to_chain_client_options(),
             block_cache_size,
@@ -353,6 +362,7 @@ where
             chain_listeners: JoinSet::default(),
             #[cfg(not(web))]
             client_metrics,
+            chain_worker_ttls,
         })
     }
 }
