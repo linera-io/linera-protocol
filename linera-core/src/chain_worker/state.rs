@@ -39,7 +39,7 @@ use linera_execution::{
     Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ResourceTracker, ServiceRuntimeEndpoint,
 };
-use linera_storage::{Clock as _, ResultReadCertificates, Storage};
+use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::{Context, InactiveContext},
     views::{ReplaceContext as _, RootView as _, View as _},
@@ -415,7 +415,7 @@ where
     /// from storage. The order of the returned blocks matches the order of the input hashes.
     async fn read_confirmed_blocks(
         &self,
-        hashes: Vec<CryptoHash>,
+        hashes: &[CryptoHash],
     ) -> Result<Vec<Option<ConfirmedBlock>>, WorkerError> {
         let mut blocks = Vec::with_capacity(hashes.len());
         let mut uncached_indices = Vec::new();
@@ -459,70 +459,15 @@ where
             .flatten()
             .copied()
             .collect::<BTreeSet<_>>();
-        let next_block_height = self.chain.tip_state.get().next_block_height;
-        let log_heights = heights
-            .range(..next_block_height)
-            .copied()
-            .map(usize::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut hashes = self
-            .chain
-            .confirmed_log
-            .multi_get(log_heights)
-            .await?
-            .into_iter()
-            .zip(&heights)
-            .map(|(maybe_hash, height)| {
-                maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
-                    height: *height,
-                    chain_id: self.chain_id(),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let requested_heights: Vec<BlockHeight> = heights
-            .range(next_block_height..)
-            .copied()
-            .collect::<Vec<BlockHeight>>();
-        for (height, hash) in self
-            .chain
-            .preprocessed_blocks
-            .multi_get_pairs(requested_heights)
-            .await?
-        {
-            let hash = hash.ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound {
-                height,
-                chain_id: self.chain_id(),
-            })?;
-            hashes.push(hash);
-        }
+        let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
 
-        let mut uncached_hashes = Vec::new();
-        let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
+        let blocks = self.read_confirmed_blocks(&hashes).await?;
 
-        for hash in hashes {
-            if let Some(hashed_block) = self.block_values.get(&hash) {
-                height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
-            } else {
-                uncached_hashes.push(hash);
-            }
-        }
-
-        if !uncached_hashes.is_empty() {
-            let certificates = self.storage.read_certificates(&uncached_hashes).await?;
-            let certificates = match ResultReadCertificates::new(certificates, uncached_hashes) {
-                ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(WorkerError::ReadCertificatesError(hashes))
-                }
-            };
-
-            for cert in certificates {
-                let hashed_block = cert.into_value().into_inner();
-                let height = hashed_block.inner().header.height;
-                self.block_values
-                    .insert_hashed(Cow::Owned(hashed_block.clone()));
-                height_to_blocks.insert(height, hashed_block);
-            }
+        let mut height_to_blocks = HashMap::new();
+        for (block, hash) in blocks.into_iter().zip(hashes) {
+            let block = block.ok_or_else(|| WorkerError::ReadCertificatesError(vec![hash]))?;
+            let hashed_block = block.into_inner();
+            height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
         }
 
         let sender = self.chain.chain_id();
@@ -1264,7 +1209,7 @@ where
                 }
             };
             let block = self
-                .read_confirmed_blocks(vec![hash])
+                .read_confirmed_blocks(&[hash])
                 .await?
                 .pop()
                 .flatten()
