@@ -5,11 +5,13 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    future::Future,
+    pin::Pin,
     sync::Arc,
 };
 
 use custom_debug_derive::Debug;
-use futures::{channel::mpsc, StreamExt as _};
+use futures::{channel::mpsc, FutureExt as _, StreamExt as _};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -39,6 +41,19 @@ use crate::{
     OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
     ResourceController, SystemMessage, TransactionTracker, UserContractCode, UserServiceCode,
 };
+
+/// A boxed future that is `Send` on non-web targets but not required to be `Send` on web/wasm.
+#[cfg(not(web))]
+type BoxedFuture<'a> = Pin<Box<dyn Future<Output = Result<(), ExecutionError>> + Send + 'a>>;
+#[cfg(web)]
+type BoxedFuture<'a> = Pin<Box<dyn Future<Output = Result<(), ExecutionError>> + 'a>>;
+
+/// A message action to be sent to the runtime thread during batched execution.
+struct BatchedMessageAction {
+    context: MessageContext,
+    bytes: Vec<u8>,
+    done: oneshot::Sender<Result<(), ExecutionError>>,
+}
 
 /// Actor for handling requests to the execution state.
 pub struct ExecutionStateActor<'a, C> {
@@ -1040,6 +1055,237 @@ where
         self.resource_controller.tracker = controller.tracker;
 
         Ok(())
+    }
+
+    /// Executes multiple user messages on a shared contract runtime, calling `finalize`
+    /// only once at the end. Between each message, the actor handles execution state
+    /// requests and runs `process_subscriptions`.
+    ///
+    /// All messages must target the same `application_id`, belong to the same bundle,
+    /// and have a zero grant — the batching fast path does not handle per-message grant
+    /// accounting.
+    ///
+    /// The returned future is explicitly boxed to hide its inner (deeply nested) type
+    /// from `Send`-bound checking at far-away call sites. Without this boxing the
+    /// transitive type graph in crates like `linera-faucet-server` would blow past
+    /// their `recursion_limit` during `Send` inference.
+    #[instrument(skip_all, fields(application_id = %application_id, batch_size = messages.len()))]
+    pub fn execute_messages_batched<'s>(
+        &'s mut self,
+        application_id: ApplicationId,
+        messages: Vec<(MessageContext, Vec<u8>)>,
+    ) -> BoxedFuture<'s> {
+        Box::pin(async move {
+            assert!(!messages.is_empty());
+
+            let chain_id = self.state.context().extra().chain_id();
+
+            let initial_balance = self
+                .resource_controller
+                .with_state(&mut self.state.system)
+                .await?
+                .balance()?;
+            let controller = ResourceController::new(
+                self.resource_controller.policy().clone(),
+                self.resource_controller.tracker,
+                initial_balance,
+            );
+
+            let is_free = self
+                .resource_controller
+                .policy()
+                .is_free_app(&application_id);
+
+            let (execution_state_sender, mut execution_state_receiver) =
+                futures::channel::mpsc::unbounded();
+
+            let (codes, descriptions): (Vec<_>, Vec<_>) =
+                self.contract_and_dependencies(application_id).await?;
+
+            let allow_application_logs = self
+                .state
+                .context()
+                .extra()
+                .execution_runtime_config()
+                .allow_application_logs;
+
+            // Channel for actor→runtime: sends per-message actions with a done signal.
+            let (action_sender, action_receiver) =
+                std::sync::mpsc::channel::<BatchedMessageAction>();
+
+            let first_context = messages[0].0;
+            let height = first_context.height;
+            let round = first_context.round;
+
+            // Spawn the runtime thread. It waits for actions on the channel, executes each
+            // without finalize, then finalizes once when the channel is closed.
+            let contract_runtime_task = self
+                .state
+                .context()
+                .extra()
+                .thread_pool()
+                .run_send(JsVec(codes), move |codes| async move {
+                    let mut controller = controller;
+                    controller.is_free = is_free;
+                    // The runtime is seeded from the first message; the executing-message
+                    // state and message bytes are updated per message before each action.
+                    let seed_action = UserAction::Message(first_context, Vec::new());
+                    let runtime = ContractSyncRuntime::new(
+                        execution_state_sender,
+                        chain_id,
+                        first_context.refund_grant_to,
+                        controller,
+                        &seed_action,
+                        allow_application_logs,
+                    );
+
+                    for (code, description) in codes.0.into_iter().zip(descriptions) {
+                        runtime.preload_contract(
+                            ApplicationId::from(&description),
+                            code,
+                            description,
+                        );
+                    }
+
+                    let mut last_signer = first_context.authenticated_owner;
+
+                    // Process all actions from the channel.
+                    while let Ok(action) = action_receiver.recv() {
+                        runtime.update_message_context(
+                            &action.context,
+                            action.context.refund_grant_to,
+                        );
+                        last_signer = action.context.authenticated_owner;
+
+                        let user_action = UserAction::Message(action.context, action.bytes);
+                        let result = runtime.run_action_without_finalize(
+                            application_id,
+                            chain_id,
+                            user_action,
+                        );
+
+                        let is_err = result.is_err();
+                        let _ = action.done.send(result.map(|_| ()));
+                        if is_err {
+                            // On error, skip finalize and abort the batch. The actor will
+                            // see the error on the done channel and stop sending.
+                            return Err(ExecutionError::InternalError(
+                                "Batch aborted due to action error",
+                            ));
+                        }
+                    }
+
+                    // All actions done — finalize and return the resource controller.
+                    runtime.finalize_and_finish(chain_id, last_signer, height, round)
+                })
+                .await;
+
+            self.resource_controller.is_free = is_free;
+
+            let mut batch_result: Result<(), ExecutionError> = Ok(());
+            for (msg_context, bytes) in messages {
+                match self
+                    .drive_batched_action(
+                        &action_sender,
+                        &mut execution_state_receiver,
+                        msg_context,
+                        bytes,
+                    )
+                    .await
+                {
+                    Ok(()) => {}
+                    Err(err) => {
+                        batch_result = Err(err);
+                        break;
+                    }
+                }
+                if let Err(err) = self.process_subscriptions(msg_context.into()).await {
+                    batch_result = Err(err);
+                    break;
+                }
+            }
+
+            // Drop the action sender to signal the runtime thread to finalize.
+            drop(action_sender);
+
+            // Drain remaining execution state requests (from finalize).
+            self.drain_execution_requests(&mut execution_state_receiver)
+                .await?;
+
+            let runtime_result = contract_runtime_task.await?;
+            self.resource_controller.is_free = false;
+
+            // Propagate any error encountered during the actor-side loop.
+            batch_result?;
+
+            let controller = runtime_result?;
+            self.resource_controller
+                .with_state(&mut self.state.system)
+                .await?
+                .merge_balance(initial_balance, controller.balance()?)?;
+            self.resource_controller.tracker = controller.tracker;
+
+            Ok(())
+        })
+    }
+
+    /// Sends a single batched message action to the runtime thread and drives the
+    /// actor-side request loop until the runtime signals completion.
+    ///
+    /// Returns a boxed `dyn Future` so its (deeply nested) internal state does not
+    /// inflate the enclosing `execute_messages_batched` future's type. Without this,
+    /// `Send`-bound inference at far-away call sites overflows the recursion limit.
+    fn drive_batched_action<'s>(
+        &'s mut self,
+        action_sender: &'s std::sync::mpsc::Sender<BatchedMessageAction>,
+        execution_state_receiver: &'s mut mpsc::UnboundedReceiver<ExecutionRequest>,
+        msg_context: MessageContext,
+        bytes: Vec<u8>,
+    ) -> BoxedFuture<'s> {
+        Box::pin(async move {
+            let (done_sender, done_receiver) = oneshot::channel();
+            let mut done_receiver = done_receiver.fuse();
+
+            action_sender
+                .send(BatchedMessageAction {
+                    context: msg_context,
+                    bytes,
+                    done: done_sender,
+                })
+                .map_err(|_| {
+                    ExecutionError::InternalError("Runtime thread terminated unexpectedly")
+                })?;
+
+            loop {
+                futures::select! {
+                    maybe_request = execution_state_receiver.next() => {
+                        if let Some(request) = maybe_request {
+                            self.handle_request(request).await?;
+                        }
+                    }
+                    result = &mut done_receiver => {
+                        return result.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
+                    }
+                }
+            }
+        })
+    }
+
+    /// Drains any remaining execution-state requests after the batched runtime
+    /// thread has signalled it is done (typically emitted during `finalize`).
+    ///
+    /// Returned as a boxed `dyn Future` for the same `Send`-inference reasons as
+    /// `drive_batched_action`.
+    fn drain_execution_requests<'s>(
+        &'s mut self,
+        execution_state_receiver: &'s mut mpsc::UnboundedReceiver<ExecutionRequest>,
+    ) -> BoxedFuture<'s> {
+        Box::pin(async move {
+            while let Some(request) = execution_state_receiver.next().await {
+                self.handle_request(request).await?;
+            }
+            Ok(())
+        })
     }
 
     #[instrument(skip_all, fields(

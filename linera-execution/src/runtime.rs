@@ -1104,6 +1104,57 @@ impl ContractSyncRuntime {
 
         Ok((result, runtime.resource_controller))
     }
+
+    /// Executes a single action without finalizing. Used for batched message execution
+    /// where multiple messages share a runtime and finalize is called once at the end.
+    pub(crate) fn run_action_without_finalize(
+        &self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        action: UserAction,
+    ) -> Result<Option<Vec<u8>>, ExecutionError> {
+        self.0
+            .as_ref()
+            .expect("Runtime should not be used after being consumed")
+            .run_action_without_finalize(application_id, chain_id, action)
+    }
+
+    /// Finalizes all loaded applications and consumes the runtime, returning
+    /// the resource controller.
+    pub(crate) fn finalize_and_finish(
+        mut self,
+        chain_id: ChainId,
+        authenticated_owner: Option<AccountOwner>,
+        height: BlockHeight,
+        round: Option<u32>,
+    ) -> Result<ResourceController, ExecutionError> {
+        let finalize_context = FinalizeContext {
+            authenticated_owner,
+            chain_id,
+            height,
+            round,
+        };
+        self.deref_mut().finalize(finalize_context)?;
+        let runtime = self
+            .into_inner()
+            .expect("Runtime clones should have been freed by now");
+        Ok(runtime.resource_controller)
+    }
+
+    /// Updates the per-message context for the next message in a batch.
+    pub(crate) fn update_message_context(
+        &self,
+        context: &MessageContext,
+        refund_grant_to: Option<Account>,
+    ) {
+        let handle = self
+            .0
+            .as_ref()
+            .expect("Runtime should not be used after being consumed");
+        let mut inner = handle.inner();
+        inner.executing_message = Some(ExecutingMessage::from(context));
+        inner.refund_grant_to = refund_grant_to;
+    }
 }
 
 impl ContractSyncRuntimeHandle {
@@ -1144,6 +1195,37 @@ impl ContractSyncRuntimeHandle {
         let result = self.execute(application_id, signer, closure)?;
         self.finalize(finalize_context)?;
         Ok(result)
+    }
+
+    /// Executes a single action without calling finalize afterwards.
+    #[instrument(skip_all, fields(application_id = %application_id))]
+    fn run_action_without_finalize(
+        &self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        action: UserAction,
+    ) -> Result<Option<Vec<u8>>, ExecutionError> {
+        {
+            let runtime = self.inner();
+            assert_eq!(runtime.chain_id, chain_id);
+            assert_eq!(runtime.height, action.height());
+        }
+
+        let signer = action.signer();
+        let closure = move |code: &mut UserContractInstance| match action {
+            UserAction::Instantiate(_context, argument) => {
+                code.instantiate(argument).map(|()| None)
+            }
+            UserAction::Operation(_context, operation) => {
+                code.execute_operation(operation).map(Option::Some)
+            }
+            UserAction::Message(_context, message) => code.execute_message(message).map(|()| None),
+            UserAction::ProcessStreams(_context, updates) => {
+                code.process_streams(updates).map(|()| None)
+            }
+        };
+
+        self.execute(application_id, signer, closure)
     }
 
     /// Notifies all loaded applications that execution is finalizing.

@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    future::Future,
+    pin::Pin,
+};
 
 use custom_debug_derive::Debug;
 #[cfg(with_metrics)]
@@ -28,6 +32,12 @@ use crate::{
     },
     ChainError, ChainExecutionContext, ExecutionResultExt,
 };
+
+/// A boxed future that is `Send` on non-web targets but not required to be `Send` on web/wasm.
+#[cfg(not(web))]
+type BoxedFuture<'a> = Pin<Box<dyn Future<Output = Result<(), ChainError>> + Send + 'a>>;
+#[cfg(web)]
+type BoxedFuture<'a> = Pin<Box<dyn Future<Output = Result<(), ChainError>> + 'a>>;
 
 /// Tracks execution of transactions within a block.
 /// Captures the resource policy, produced messages, oracle responses and events.
@@ -121,16 +131,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 self.resource_controller_mut()
                     .track_block_size_of(&incoming_bundle)
                     .with_execution_context(chain_execution_context)?;
-                for posted_message in incoming_bundle.messages() {
-                    Box::pin(self.execute_message_in_block(
-                        chain,
-                        posted_message,
-                        incoming_bundle,
-                        round,
-                        &mut txn_tracker,
-                    ))
+                self.execute_incoming_bundle(chain, incoming_bundle, round, &mut txn_tracker)
                     .await?;
-                }
             }
             Transaction::ExecuteOperation(operation) => {
                 self.resource_controller_mut()
@@ -178,6 +180,166 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.oracle_responses()?,
             &self.blobs,
         ))
+    }
+
+    /// Executes all messages in an incoming bundle. Groups consecutive zero-grant
+    /// user messages targeting the same application for batched execution
+    /// (shared runtime, single finalize).
+    ///
+    /// Returns a boxed `dyn Future` so its (deeply nested) internal type does not
+    /// inflate the `execute_transaction` future's `Send`-bound type graph, which
+    /// is walked by callers as deep as `linera-faucet-server`.
+    fn execute_incoming_bundle<'s, C>(
+        &'s mut self,
+        chain: &'s mut ExecutionStateView<C>,
+        incoming_bundle: &'s IncomingBundle,
+        round: Option<u32>,
+        txn_tracker: &'s mut TransactionTracker,
+    ) -> BoxedFuture<'s>
+    where
+        C: Context + Clone + 'static,
+        C::Extra: ExecutionRuntimeContext,
+    {
+        Box::pin(async move {
+            // For Reject bundles or bundles with few messages, use the per-message path.
+            if incoming_bundle.action == MessageAction::Reject
+                || !Self::can_batch_bundle(incoming_bundle)
+            {
+                for posted_message in incoming_bundle.messages() {
+                    Box::pin(self.execute_message_in_block(
+                        chain,
+                        posted_message,
+                        incoming_bundle,
+                        round,
+                        txn_tracker,
+                    ))
+                    .await?;
+                }
+                return Ok(());
+            }
+
+            // Accept bundle — group consecutive zero-grant user messages by application_id.
+            let chain_execution_context =
+                ChainExecutionContext::IncomingBundle(txn_tracker.transaction_index());
+            ensure!(!chain.system.closed.get(), ChainError::ClosedChain);
+
+            let messages: Vec<_> = incoming_bundle.messages().collect();
+            let mut i = 0;
+
+            while i < messages.len() {
+                let posted_message = messages[i];
+
+                // Check if this starts a batchable group: zero-grant user message.
+                if posted_message.grant.is_zero() {
+                    if let Message::User { application_id, .. } = &posted_message.message {
+                        let app_id = *application_id;
+                        let start = i;
+                        let mut end = i + 1;
+                        // Extend the group while the next message is also a zero-grant
+                        // user message targeting the same application.
+                        while end < messages.len() {
+                            if !messages[end].grant.is_zero() {
+                                break;
+                            }
+                            let Message::User {
+                                application_id: next_app_id,
+                                ..
+                            } = &messages[end].message
+                            else {
+                                break;
+                            };
+                            if *next_app_id != app_id {
+                                break;
+                            }
+                            end += 1;
+                        }
+
+                        if end - start > 1 {
+                            // Build the batch of (context, bytes) pairs.
+                            let batch: Vec<_> = messages[start..end]
+                                .iter()
+                                .map(|pm| {
+                                    let context = MessageContext {
+                                        chain_id: self.chain_id,
+                                        origin: incoming_bundle.origin,
+                                        is_bouncing: pm.is_bouncing(),
+                                        height: self.block_height,
+                                        round,
+                                        authenticated_owner: pm.authenticated_owner,
+                                        refund_grant_to: pm.refund_grant_to,
+                                        timestamp: self.timestamp,
+                                    };
+                                    let Message::User { bytes, .. } = pm.message.clone() else {
+                                        unreachable!("already checked these are User messages")
+                                    };
+                                    (context, bytes)
+                                })
+                                .collect();
+
+                            let mut actor = ExecutionStateActor::new(
+                                chain,
+                                txn_tracker,
+                                self.resource_controller,
+                            );
+                            actor
+                                .execute_messages_batched(app_id, batch)
+                                .await
+                                .with_execution_context(chain_execution_context)?;
+
+                            i = end;
+                            continue;
+                        }
+                    }
+                }
+
+                // Single message, non-batchable user message, or system message:
+                // fall back to the per-message path.
+                Box::pin(self.execute_message_in_block(
+                    chain,
+                    posted_message,
+                    incoming_bundle,
+                    round,
+                    txn_tracker,
+                ))
+                .await?;
+                i += 1;
+            }
+
+            Ok(())
+        })
+    }
+
+    /// Returns true if the bundle contains at least two consecutive zero-grant user
+    /// messages targeting the same application — the case where batched execution
+    /// avoids redundant runtime creation and finalize calls.
+    fn can_batch_bundle(incoming_bundle: &IncomingBundle) -> bool {
+        if incoming_bundle.action != MessageAction::Accept {
+            return false;
+        }
+        let messages: Vec<_> = incoming_bundle.messages().collect();
+        if messages.len() < 2 {
+            return false;
+        }
+        for window in messages.windows(2) {
+            let (pm_a, pm_b) = (window[0], window[1]);
+            if !pm_a.grant.is_zero() || !pm_b.grant.is_zero() {
+                continue;
+            }
+            if let (
+                Message::User {
+                    application_id: a, ..
+                },
+                Message::User {
+                    application_id: b, ..
+                },
+            ) = (&pm_a.message, &pm_b.message)
+            {
+                if a == b {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Executes a message as part of an incoming bundle in a block.
