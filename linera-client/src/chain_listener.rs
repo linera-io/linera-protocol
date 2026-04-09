@@ -408,12 +408,13 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     /// add them to the wallet and start listening for notifications. (This is not done for
     /// fallback owners, as those would have to monitor all chains anyway.)
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
-        let block = self
-            .storage
-            .read_confirmed_block(hash)
-            .await?
-            .ok_or(chain_client::Error::MissingConfirmedBlock(hash))?
-            .into_block();
+        let block = Arc::unwrap_or_clone(
+            self.storage
+                .read_confirmed_block(hash)
+                .await?
+                .ok_or(chain_client::Error::MissingConfirmedBlock(hash))?,
+        )
+        .into_block();
         let parent_chain_id = block.header.chain_id;
         let blobs = block.created_blobs().into_iter();
         let new_chains = blobs

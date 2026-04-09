@@ -76,7 +76,7 @@ use linera_service::{
     controller::Controller,
     node_service::NodeService,
     project::{self, Project},
-    storage::{Runnable, RunnableWithStore, StorageCacheSizes},
+    storage::{Runnable, RunnableWithStore, StorageCacheConfig},
     task_processor::TaskProcessor,
     util,
 };
@@ -1887,7 +1887,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
         self,
         config: D::Config,
         namespace: String,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,

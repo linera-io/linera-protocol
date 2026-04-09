@@ -279,7 +279,7 @@ impl RunOptions {
                 .storage_config
                 .add_common_storage_options(&self.common_storage_options)
                 .unwrap();
-            let cache_sizes = self.common_storage_options.storage_cache_sizes();
+            let cache_sizes = self.common_storage_options.storage_cache_config();
             // Exporters are part of validator infrastructure and should not output contract logs.
             let allow_application_logs = false;
             store_config
@@ -323,7 +323,7 @@ impl DestinationsCommand {
             action,
         };
 
-        let cache_sizes = options.common_storage_options.storage_cache_sizes();
+        let cache_sizes = options.common_storage_options.storage_cache_config();
         store_config
             .run_with_storage(None, false, cache_sizes, context)
             .await?

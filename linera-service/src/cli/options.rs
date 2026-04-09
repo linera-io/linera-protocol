@@ -113,7 +113,7 @@ impl Options {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common.common_storage_options)?;
-        let cache_sizes = self.common.common_storage_options.storage_cache_sizes();
+        let cache_sizes = self.common.common_storage_options.storage_cache_config();
         let output = Box::pin(store_config.run_with_storage(
             self.common.wasm_runtime.with_wasm_default(),
             self.common.application_logs,
@@ -129,7 +129,7 @@ impl Options {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common.common_storage_options)?;
-        let cache_sizes = self.common.common_storage_options.storage_cache_sizes();
+        let cache_sizes = self.common.common_storage_options.storage_cache_config();
         let output = Box::pin(store_config.run_with_store(cache_sizes, job)).await?;
         Ok(output)
     }
@@ -140,7 +140,7 @@ impl Options {
         let store_config =
             storage_config.add_common_storage_options(&self.common.common_storage_options)?;
         let wallet = self.wallet()?;
-        let cache_sizes = self.common.common_storage_options.storage_cache_sizes();
+        let cache_sizes = self.common.common_storage_options.storage_cache_config();
         store_config
             .initialize(cache_sizes, wallet.genesis_config())
             .await?;
