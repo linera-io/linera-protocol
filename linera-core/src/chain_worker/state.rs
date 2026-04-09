@@ -2127,7 +2127,7 @@ where
     }
 }
 
-/// Returns the missing indices and corresponding blob_ids.
+/// Returns the missing indices and corresponding blob IDs.
 fn missing_indices_blob_ids(maybe_blobs: &[(BlobId, Option<Blob>)]) -> (Vec<usize>, Vec<BlobId>) {
     let mut missing_indices = Vec::new();
     let mut missing_blob_ids = Vec::new();
