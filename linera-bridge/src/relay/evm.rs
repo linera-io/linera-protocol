@@ -22,6 +22,7 @@ sol! {
 
 /// Must match `evm_bridge::BridgeOperation` variant-for-variant for BCS compatibility.
 #[derive(serde::Serialize)]
+#[allow(dead_code)]
 pub(crate) enum BridgeOperation {
     RegisterFungibleApp {
         app_id: linera_base::identifiers::ApplicationId,
