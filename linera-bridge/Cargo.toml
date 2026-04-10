@@ -48,6 +48,7 @@ relay = [
     "dep:linera-persistent",
     "dep:linera-storage",
     "dep:linera-storage-runtime",
+    "dep:linera-wallet",
     "dep:linera-views",
     "linera-storage/rocksdb",
     "linera-views/rocksdb",
@@ -108,6 +109,7 @@ linera-storage = { workspace = true, optional = true }
 linera-storage-runtime = { workspace = true, optional = true, features = [
     "rocksdb",
 ] }
+linera-wallet = { workspace = true, optional = true }
 linera-views = { workspace = true, optional = true }
 prometheus = { workspace = true, optional = true }
 rustls = { version = "0.23", optional = true, features = ["ring"] }

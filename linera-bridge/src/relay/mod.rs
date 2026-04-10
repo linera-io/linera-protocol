@@ -30,13 +30,14 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::{client::ChainClient, wallet::PersistentWallet, worker::Reason};
+use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_persistent::Persist;
 use linera_storage::DbStorage;
 use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
 use linera_views::backends::rocks_db::RocksDbDatabase;
+use linera_wallet::PersistentWallet;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::{

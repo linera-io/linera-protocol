@@ -6,7 +6,7 @@ use linera_base::{
     identifiers::ChainId,
 };
 use linera_core::wallet;
-pub use linera_core::wallet::PersistentWallet as Wallet;
+pub use linera_wallet::PersistentWallet as Wallet;
 
 struct ChainDetails {
     is_default: bool,
