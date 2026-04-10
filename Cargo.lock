@@ -6368,6 +6368,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-wallet"
+version = "0.15.15"
+dependencies = [
+ "futures",
+ "linera-base",
+ "linera-core",
+ "linera-persistent",
+ "serde",
+]
+
+[[package]]
 name = "linera-wasm-instrument"
 version = "0.4.0-linera.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
