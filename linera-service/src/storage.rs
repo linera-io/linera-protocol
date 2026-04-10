@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use linera_client::config::GenesisConfig;
 use linera_storage::DbStorage;
-pub use linera_storage::StorageCacheSizes;
+pub use linera_storage::{StorageCacheConfig, DEFAULT_CLEANUP_INTERVAL_SECS};
 pub use linera_storage_runtime::{
     AssertStorageV1, CommonStorageOptions, InnerStorageConfig, Runnable, RunnableWithStore,
     StorageConfig, StorageMigration, StoreConfig,
@@ -21,7 +21,7 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
         self,
         config: D::Config,
         namespace: String,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -39,7 +39,7 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
 /// Initializes storage by running migration and then writing the genesis config.
 pub async fn initialize(
     store_config: StoreConfig,
-    cache_sizes: StorageCacheSizes,
+    cache_sizes: StorageCacheConfig,
     config: &GenesisConfig,
 ) -> Result<(), anyhow::Error> {
     store_config

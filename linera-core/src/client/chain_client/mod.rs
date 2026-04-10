@@ -2674,7 +2674,9 @@ impl<Env: Environment> ChainClient<Env> {
             .storage_client()
             .read_confirmed_block(hash)
             .await?;
-        block.ok_or(Error::MissingConfirmedBlock(hash))
+        block
+            .map(Arc::unwrap_or_clone)
+            .ok_or(Error::MissingConfirmedBlock(hash))
     }
 
     #[instrument(level = "trace", skip(hash))]
@@ -2683,7 +2685,9 @@ impl<Env: Environment> ChainClient<Env> {
         hash: CryptoHash,
     ) -> Result<ConfirmedBlockCertificate, Error> {
         let certificate = self.client.storage_client().read_certificate(hash).await?;
-        certificate.ok_or(Error::ReadCertificatesError(vec![hash]))
+        certificate
+            .map(Arc::unwrap_or_clone)
+            .ok_or(Error::ReadCertificatesError(vec![hash]))
     }
 
     /// Handles any cross-chain requests for any pending outgoing messages.
@@ -3190,6 +3194,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
             .into_iter()
             .flatten()
+            .map(Arc::unwrap_or_clone)
             .collect::<Vec<_>>();
 
         for certificate in certificates {
@@ -3210,6 +3215,7 @@ impl<Env: Environment> ChainClient<Env> {
                         .await?
                         .into_iter()
                         .flatten()
+                        .map(Arc::unwrap_or_clone)
                         .collect();
                     remote_node.upload_blobs(missing_blobs).await?;
                     remote_node

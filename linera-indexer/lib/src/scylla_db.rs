@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_service::storage::{StorageCacheSizes, StorageMigration, StoreConfig};
+use linera_service::storage::{StorageCacheConfig, StorageMigration, StoreConfig};
 use linera_views::{
-    lru_prefix_cache::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig,
     scylla_db::{ScyllaDbDatabase, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
     store::KeyValueDatabase,
 };
@@ -71,9 +71,9 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "1000")]
     pub confirmed_block_cache_size: usize,
 
-    /// The maximal number of entries in the lite certificate cache.
+    /// The maximal number of entries in the assembled certificate cache.
     #[arg(long, default_value = "1000")]
-    pub lite_certificate_cache_size: usize,
+    pub certificate_cache_size: usize,
 
     /// The maximal number of entries in the raw certificate cache.
     #[arg(long, default_value = "1000")]
@@ -93,7 +93,7 @@ pub type ScyllaDbRunner = Runner<ScyllaDbDatabase, ScyllaDbConfig>;
 impl ScyllaDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = <IndexerConfig<ScyllaDbConfig> as clap::Parser>::parse();
-        let storage_cache_config = StorageCacheConfig {
+        let storage_cache_config = ViewsStorageCacheConfig {
             max_cache_size: config.client.max_cache_size,
             max_value_entry_size: config.client.max_value_entry_size,
             max_find_keys_entry_size: config.client.max_find_keys_entry_size,
@@ -121,12 +121,14 @@ impl ScyllaDbRunner {
         store_config
             .clone()
             .run_with_store(
-                StorageCacheSizes {
+                StorageCacheConfig {
                     blob_cache_size: config.client.blob_cache_size,
                     confirmed_block_cache_size: config.client.confirmed_block_cache_size,
-                    lite_certificate_cache_size: config.client.lite_certificate_cache_size,
+                    certificate_cache_size: config.client.certificate_cache_size,
                     certificate_raw_cache_size: config.client.certificate_raw_cache_size,
                     event_cache_size: config.client.event_cache_size,
+                    cache_cleanup_interval_secs:
+                        linera_service::storage::DEFAULT_CLEANUP_INTERVAL_SECS,
                 },
                 StorageMigration,
             )

@@ -549,9 +549,9 @@ pub trait ExecutionRuntimeContext {
         txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError>;
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
@@ -1343,12 +1343,12 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        Ok(self.blobs.pin().get(&blob_id).cloned())
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError> {
+        Ok(self.blobs.pin().get(&blob_id).cloned().map(Arc::new))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        Ok(self.events.pin().get(&event_id).cloned())
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError> {
+        Ok(self.events.pin().get(&event_id).cloned().map(Arc::new))
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {

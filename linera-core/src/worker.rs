@@ -19,8 +19,10 @@ use linera_base::{
         Timestamp,
     },
     doc_scalar,
+    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
+use linera_cache::{UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
@@ -58,8 +60,6 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
         &self.0
     }
 }
-
-use linera_cache::{UniqueValueCache, ValueCache};
 
 /// Re-export of [`EventSubscriptionsResult`] for use by other crate modules.
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
@@ -572,7 +572,7 @@ pub struct WorkerState<StorageClient: Storage> {
     storage: StorageClient,
     /// Configuration options for chain workers.
     pub(crate) chain_worker_config: ChainWorkerConfig,
-    block_cache: Arc<ValueCache<CryptoHash, Block>>,
+    block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
@@ -650,8 +650,9 @@ where
     ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
         let block = self
             .block_cache
-            .get_hashed(&certificate.value.value_hash)
+            .get(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?;
+        let block = Arc::unwrap_or_clone(block);
 
         match certificate.value.kind {
             linera_chain::types::CertificateKind::Confirmed => {
@@ -732,7 +733,10 @@ where
         WorkerState {
             storage,
             chain_worker_config,
-            block_cache: Arc::new(ValueCache::new(block_cache_size)),
+            block_cache: Arc::new(ValueCache::new(
+                block_cache_size,
+                DEFAULT_CLEANUP_INTERVAL_SECS,
+            )),
             execution_state_cache: (execution_state_cache_size > 0)
                 .then(|| Arc::new(UniqueValueCache::new(execution_state_cache_size))),
             chain_modes,

@@ -353,16 +353,56 @@ impl MultiPartitionBatch {
 
 /// Individual cache sizes for each `ValueCache` in `DbStorage`.
 #[derive(Clone, Copy, Debug)]
-pub struct StorageCacheSizes {
+pub struct StorageCacheConfig {
     pub blob_cache_size: usize,
     pub confirmed_block_cache_size: usize,
-    pub lite_certificate_cache_size: usize,
+    pub certificate_cache_size: usize,
     pub certificate_raw_cache_size: usize,
     pub event_cache_size: usize,
+    pub cache_cleanup_interval_secs: u64,
 }
+
+/// Default cache configuration for testing.
+#[cfg(with_testing)]
+pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig {
+    blob_cache_size: 1000,
+    confirmed_block_cache_size: 1000,
+    certificate_cache_size: 1000,
+    certificate_raw_cache_size: 1000,
+    event_cache_size: 1000,
+    cache_cleanup_interval_secs: linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS,
+};
 
 /// Raw certificate bytes: (lite_certificate_bytes, confirmed_block_bytes).
 type RawCertificate = (Vec<u8>, Vec<u8>);
+
+/// Groups all `ValueCache` instances used by `DbStorage`.
+///
+/// All caches use `ValueCache` which stores values as `Arc<V>` internally,
+/// ensuring memory-efficient sharing across consumers. Adding a new cache
+/// here automatically inherits Arc-based sharing.
+#[derive(Clone)]
+pub struct StorageCaches {
+    pub(crate) blob: Arc<ValueCache<BlobId, Blob>>,
+    pub(crate) confirmed_block: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
+    pub(crate) certificate: Arc<ValueCache<CryptoHash, ConfirmedBlockCertificate>>,
+    pub(crate) certificate_raw: Arc<ValueCache<CryptoHash, RawCertificate>>,
+    pub(crate) event: Arc<ValueCache<EventId, Vec<u8>>>,
+}
+
+impl StorageCaches {
+    /// Creates all caches with the given sizes.
+    pub fn new(sizes: StorageCacheConfig) -> Self {
+        let interval = sizes.cache_cleanup_interval_secs;
+        Self {
+            blob: Arc::new(ValueCache::new(sizes.blob_cache_size, interval)),
+            confirmed_block: Arc::new(ValueCache::new(sizes.confirmed_block_cache_size, interval)),
+            certificate: Arc::new(ValueCache::new(sizes.certificate_cache_size, interval)),
+            certificate_raw: Arc::new(ValueCache::new(sizes.certificate_raw_cache_size, interval)),
+            event: Arc::new(ValueCache::new(sizes.event_cache_size, interval)),
+        }
+    }
+}
 
 /// Main implementation of the [`Storage`] trait.
 #[derive(Clone)]
@@ -373,11 +413,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
-    blob_cache: Arc<ValueCache<BlobId, Blob>>,
-    confirmed_block_cache: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
-    lite_certificate_cache: Arc<ValueCache<CryptoHash, LiteCertificate<'static>>>,
-    certificate_raw_cache: Arc<ValueCache<CryptoHash, RawCertificate>>,
-    event_cache: Arc<ValueCache<EventId, Vec<u8>>>,
+    caches: StorageCaches,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 
@@ -1186,7 +1222,7 @@ where
 
     #[instrument(level = "trace", skip_all, fields(%blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        if self.blob_cache.contains(&blob_id) {
+        if self.caches.blob.contains(&blob_id) {
             #[cfg(with_metrics)]
             metrics::CONTAINS_BLOB_COUNTER
                 .with_label_values(&[metrics::CACHE])
@@ -1211,7 +1247,7 @@ where
         #[cfg(with_metrics)]
         let mut db_checks: u64 = 0;
         for blob_id in blob_ids {
-            if self.blob_cache.contains(blob_id) {
+            if self.caches.blob.contains(blob_id) {
                 #[cfg(with_metrics)]
                 {
                     cache_hits += 1;
@@ -1260,8 +1296,8 @@ where
     async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<ConfirmedBlock>, ViewError> {
-        if let Some(block) = self.confirmed_block_cache.get(&hash) {
+    ) -> Result<Option<Arc<ConfirmedBlock>>, ViewError> {
+        if let Some(block) = self.caches.confirmed_block.get(&hash) {
             #[cfg(with_metrics)]
             metrics::READ_CONFIRMED_BLOCK_COUNTER
                 .with_label_values(&[metrics::CACHE])
@@ -1275,17 +1311,20 @@ where
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[metrics::DB])
             .inc();
-        if let Some(ref block) = value {
-            self.confirmed_block_cache.insert(&hash, block.clone());
+        match value {
+            Some(block) => {
+                self.caches.confirmed_block.insert(&hash, block);
+                Ok(self.caches.confirmed_block.get(&hash))
+            }
+            None => Ok(None),
         }
-        Ok(value)
     }
 
     #[instrument(skip_all)]
     async fn read_confirmed_blocks<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<Option<ConfirmedBlock>>, ViewError> {
+    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
         if hashes.is_empty() {
             return Ok(Vec::new());
@@ -1293,7 +1332,7 @@ where
         let mut results = vec![None; hashes.len()];
         let mut misses = Vec::new();
         for (i, hash) in hashes.iter().enumerate() {
-            if let Some(block) = self.confirmed_block_cache.get(hash) {
+            if let Some(block) = self.caches.confirmed_block.get(hash) {
                 results[i] = Some(block);
             } else {
                 misses.push(i);
@@ -1304,12 +1343,12 @@ where
             let root_keys = Self::get_root_keys_for_certificates(&miss_hashes);
             for (miss_idx, root_key) in misses.iter().zip(root_keys) {
                 let store = self.database.open_shared(&root_key)?;
-                let block = store.read_value::<ConfirmedBlock>(BLOCK_KEY).await?;
-                if let Some(ref b) = block {
-                    self.confirmed_block_cache
-                        .insert(&hashes[*miss_idx], b.clone());
+                if let Some(block) = store.read_value::<ConfirmedBlock>(BLOCK_KEY).await? {
+                    self.caches
+                        .confirmed_block
+                        .insert(&hashes[*miss_idx], block);
+                    results[*miss_idx] = self.caches.confirmed_block.get(&hashes[*miss_idx]);
                 }
-                results[*miss_idx] = block;
             }
         }
         #[cfg(with_metrics)]
@@ -1331,8 +1370,8 @@ where
     }
 
     #[instrument(skip_all, fields(%blob_id))]
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        if let Some(blob) = self.blob_cache.get(&blob_id) {
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError> {
+        if let Some(blob) = self.caches.blob.get(&blob_id) {
             #[cfg(with_metrics)]
             metrics::READ_BLOB_COUNTER
                 .with_label_values(&[metrics::CACHE])
@@ -1346,16 +1385,18 @@ where
         metrics::READ_BLOB_COUNTER
             .with_label_values(&[metrics::DB])
             .inc();
-        let result =
-            maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes));
-        if let Some(ref blob) = result {
-            self.blob_cache.insert(&blob_id, blob.clone());
+        match maybe_blob_bytes {
+            Some(blob_bytes) => {
+                let blob = Blob::new_with_id_unchecked(blob_id, blob_bytes);
+                self.caches.blob.insert(&blob_id, blob);
+                Ok(self.caches.blob.get(&blob_id))
+            }
+            None => Ok(None),
         }
-        Ok(result)
     }
 
     #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
-    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
+    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Arc<Blob>>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -1485,10 +1526,7 @@ where
 
     #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        if self.certificate_raw_cache.contains(&hash)
-            || (self.lite_certificate_cache.contains(&hash)
-                && self.confirmed_block_cache.contains(&hash))
-        {
+        if self.caches.certificate.contains(&hash) || self.caches.certificate_raw.contains(&hash) {
             #[cfg(with_metrics)]
             metrics::CONTAINS_CERTIFICATE_COUNTER
                 .with_label_values(&[metrics::CACHE])
@@ -1509,27 +1547,22 @@ where
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
-        // Deserialized components cache: combine LiteCertificate + ConfirmedBlock
-        if let Some(lite) = self.lite_certificate_cache.get(&hash) {
-            if let Some(block) = self.confirmed_block_cache.get(&hash) {
-                #[cfg(with_metrics)]
-                metrics::READ_CERTIFICATE_COUNTER
-                    .with_label_values(&[metrics::CACHE])
-                    .inc();
-                return Ok(lite.with_value(block));
-            }
-        }
-        // Raw bytes cache — deserialize + populate component caches
-        if let Some((lite_cert_bytes, confirmed_block_bytes)) =
-            self.certificate_raw_cache.get(&hash)
-        {
+    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError> {
+        // Assembled certificate cache (single Arc, no re-assembly)
+        if let Some(cert) = self.caches.certificate.get(&hash) {
             #[cfg(with_metrics)]
             metrics::READ_CERTIFICATE_COUNTER
                 .with_label_values(&[metrics::CACHE])
                 .inc();
-            return self
-                .deserialize_and_cache_certificate(&lite_cert_bytes, &confirmed_block_bytes);
+            return Ok(Some(cert));
+        }
+        // Raw bytes cache — deserialize + populate caches
+        if let Some(raw) = self.caches.certificate_raw.get(&hash) {
+            #[cfg(with_metrics)]
+            metrics::READ_CERTIFICATE_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return self.deserialize_and_cache_certificate(&raw.0, &raw.1);
         }
         // DB
         let root_key = RootKey::ConfirmedBlock(hash).bytes();
@@ -1545,7 +1578,7 @@ where
         let Some(confirmed_block_bytes) = values[1].as_ref() else {
             return Ok(None);
         };
-        self.certificate_raw_cache.insert(
+        self.caches.certificate_raw.insert(
             &hash,
             (lite_cert_bytes.clone(), confirmed_block_bytes.clone()),
         );
@@ -1556,16 +1589,16 @@ where
     async fn read_certificates(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
+    ) -> Result<Vec<Option<Arc<ConfirmedBlockCertificate>>>, ViewError> {
         let raw_certs = self.read_certificates_raw(hashes).await?;
 
         raw_certs
             .into_iter()
             .map(|maybe_raw| {
-                let Some((lite_cert_bytes, confirmed_block_bytes)) = maybe_raw else {
+                let Some(raw) = maybe_raw else {
                     return Ok(None);
                 };
-                self.deserialize_and_cache_certificate(&lite_cert_bytes, &confirmed_block_bytes)
+                self.deserialize_and_cache_certificate(&raw.0, &raw.1)
             })
             .collect()
     }
@@ -1574,14 +1607,14 @@ where
     async fn read_certificates_raw(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError> {
+    ) -> Result<Vec<Option<Arc<(Vec<u8>, Vec<u8>)>>>, ViewError> {
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
         let mut results = vec![None; hashes.len()];
         let mut misses = Vec::new();
         for (i, hash) in hashes.iter().enumerate() {
-            if let Some(raw) = self.certificate_raw_cache.get(hash) {
+            if let Some(raw) = self.caches.certificate_raw.get(hash) {
                 results[i] = Some(raw);
             } else {
                 misses.push(i);
@@ -1593,15 +1626,12 @@ where
             for (miss_idx, root_key) in misses.iter().zip(root_keys) {
                 let store = self.database.open_shared(&root_key)?;
                 let values = store.read_multi_values_bytes(&get_block_keys()).await?;
-                let pair = match (values[0].as_ref(), values[1].as_ref()) {
-                    (Some(lite), Some(block)) => Some((lite.clone(), block.clone())),
-                    _ => None,
-                };
-                if let Some(ref raw) = pair {
-                    self.certificate_raw_cache
-                        .insert(&hashes[*miss_idx], raw.clone());
+                if let (Some(lite), Some(block)) = (values[0].as_ref(), values[1].as_ref()) {
+                    self.caches
+                        .certificate_raw
+                        .insert(&hashes[*miss_idx], (lite.clone(), block.clone()));
+                    results[*miss_idx] = self.caches.certificate_raw.get(&hashes[*miss_idx]);
                 }
-                results[*miss_idx] = pair;
             }
         }
         #[cfg(with_metrics)]
@@ -1651,7 +1681,7 @@ where
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError> {
+    ) -> Result<Vec<Option<Arc<(Vec<u8>, Vec<u8>)>>>, ViewError> {
         let hashes: Vec<Option<CryptoHash>> = self
             .read_certificate_hashes_by_heights(chain_id, heights)
             .await?;
@@ -1696,15 +1726,13 @@ where
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
+    ) -> Result<Vec<Option<Arc<ConfirmedBlockCertificate>>>, ViewError> {
         self.read_certificates_by_heights_raw(chain_id, heights)
             .await?
             .into_iter()
             .map(|maybe_raw| match maybe_raw {
                 None => Ok(None),
-                Some((lite_cert_bytes, confirmed_block_bytes)) => {
-                    self.deserialize_and_cache_certificate(&lite_cert_bytes, &confirmed_block_bytes)
-                }
+                Some(raw) => self.deserialize_and_cache_certificate(&raw.0, &raw.1),
             })
             .collect()
     }
@@ -1734,8 +1762,8 @@ where
     }
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
-    async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        if let Some(event) = self.event_cache.get(&event_id) {
+    async fn read_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError> {
+        if let Some(event) = self.caches.event.get(&event_id) {
             #[cfg(with_metrics)]
             metrics::READ_EVENT_COUNTER
                 .with_label_values(&[metrics::CACHE])
@@ -1750,15 +1778,18 @@ where
         metrics::READ_EVENT_COUNTER
             .with_label_values(&[metrics::DB])
             .inc();
-        if let Some(ref e) = event {
-            self.event_cache.insert(&event_id, e.clone());
+        match event {
+            Some(event_bytes) => {
+                self.caches.event.insert(&event_id, event_bytes);
+                Ok(self.caches.event.get(&event_id))
+            }
+            None => Ok(None),
         }
-        Ok(event)
     }
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
-        if self.event_cache.contains(&event_id) {
+        if self.caches.event.contains(&event_id) {
             #[cfg(with_metrics)]
             metrics::CONTAINS_EVENT_COUNTER
                 .with_label_values(&[metrics::CACHE])
@@ -1875,16 +1906,16 @@ where
         &self,
         lite_cert_bytes: &[u8],
         confirmed_block_bytes: &[u8],
-    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
+    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError> {
         let lite = bcs::from_bytes::<LiteCertificate>(lite_cert_bytes)?;
         let block = bcs::from_bytes::<ConfirmedBlock>(confirmed_block_bytes)?;
         let hash = block.hash();
-        self.lite_certificate_cache.insert(&hash, lite.clone());
-        self.confirmed_block_cache.insert(&hash, block.clone());
+        self.caches.confirmed_block.insert(&hash, block.clone());
         let certificate = lite
             .with_value(block)
             .ok_or(ViewError::InconsistentEntries)?;
-        Ok(Some(certificate))
+        let arc = self.caches.certificate.insert(&hash, certificate);
+        Ok(Some(arc))
     }
 
     #[instrument(skip_all)]
@@ -1925,7 +1956,7 @@ where
     pub(crate) fn new(
         database: Database,
         wasm_runtime: Option<WasmRuntime>,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
         clock: C,
     ) -> Self {
         Self {
@@ -1937,17 +1968,7 @@ where
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
-            blob_cache: Arc::new(ValueCache::new(cache_sizes.blob_cache_size)),
-            confirmed_block_cache: Arc::new(ValueCache::new(
-                cache_sizes.confirmed_block_cache_size,
-            )),
-            lite_certificate_cache: Arc::new(ValueCache::new(
-                cache_sizes.lite_certificate_cache_size,
-            )),
-            certificate_raw_cache: Arc::new(ValueCache::new(
-                cache_sizes.certificate_raw_cache_size,
-            )),
-            event_cache: Arc::new(ValueCache::new(cache_sizes.event_cache_size)),
+            caches: StorageCaches::new(cache_sizes),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
@@ -1969,7 +1990,7 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
     ) -> Result<Self, ViewError> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
         let storage = Self::new(database, wasm_runtime, cache_sizes, WallClock);
@@ -1980,7 +2001,7 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
     ) -> Result<Self, ViewError> {
         let database = Database::connect(config, namespace).await?;
         let storage = Self::new(database, wasm_runtime, cache_sizes, WallClock);
@@ -2057,14 +2078,7 @@ where
         clock: TestClock,
     ) -> Result<Self, ViewError> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        let default_cache_sizes = StorageCacheSizes {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            lite_certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-        };
-        let storage = Self::new(database, wasm_runtime, default_cache_sizes, clock);
+        let storage = Self::new(database, wasm_runtime, DEFAULT_STORAGE_CACHE_CONFIG, clock);
         storage.assert_is_migrated_storage().await?;
         Ok(storage)
     }

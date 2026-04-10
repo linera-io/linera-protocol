@@ -11,7 +11,7 @@ static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 #[export_name = "malloc_conf"]
 pub static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
@@ -378,13 +378,17 @@ where
             }
             DownloadBlob(blob_id) => {
                 let blob = self.storage.read_blob(*blob_id).await?;
-                let blob = blob.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let blob = blob
+                    .map(Arc::unwrap_or_clone)
+                    .ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
                 let content = blob.into_content();
                 Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
             DownloadConfirmedBlock(hash) => {
                 let block = self.storage.read_confirmed_block(*hash).await?;
-                let block = block.ok_or_else(|| anyhow!("Missing confirmed block {hash}"))?;
+                let block = block
+                    .map(Arc::unwrap_or_clone)
+                    .ok_or_else(|| anyhow!("Missing confirmed block {hash}"))?;
                 Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
                     block,
                 ))))
@@ -457,6 +461,7 @@ where
                     .storage
                     .read_certificate(last_used_by)
                     .await?
+                    .map(Arc::unwrap_or_clone)
                     .ok_or_else(|| anyhow!("Certificate not found {}", last_used_by))?;
                 Ok(Some(RpcMessage::BlobLastUsedByCertificateResponse(
                     Box::new(certificate),

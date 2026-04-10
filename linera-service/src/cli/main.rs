@@ -75,7 +75,7 @@ use linera_service::{
     controller::Controller,
     node_service::NodeService,
     project::{self, Project},
-    storage::{AssertStorageV1, Runnable, RunnableWithStore, StorageCacheSizes, StorageMigration},
+    storage::{AssertStorageV1, Runnable, RunnableWithStore, StorageCacheConfig, StorageMigration},
     task_processor::TaskProcessor,
     util,
     wallet::WalletExt as _,
@@ -1847,7 +1847,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
         self,
         config: D::Config,
         namespace: String,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
