@@ -5592,7 +5592,6 @@ dependencies = [
  "linera-chain",
  "linera-core",
  "linera-execution",
- "linera-persistent",
  "linera-storage",
  "linera-storage-service",
  "linera-version",

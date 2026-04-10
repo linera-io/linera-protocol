@@ -101,7 +101,7 @@ futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 linera-chain = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
-linera-core = { workspace = true, optional = true, features = ["fs"] }
+linera-core = { workspace = true, optional = true }
 linera-faucet-client = { workspace = true, optional = true }
 linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 linera-storage = { workspace = true, optional = true }
