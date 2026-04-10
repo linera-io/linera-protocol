@@ -5433,7 +5433,6 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
- "linera-persistent",
  "linera-storage",
  "linera-storage-runtime",
  "linera-views",

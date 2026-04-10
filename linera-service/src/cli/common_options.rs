@@ -8,7 +8,6 @@ use std::{env, path::PathBuf};
 use anyhow::{anyhow, bail, Error};
 use linera_client::config::GenesisConfig;
 use linera_execution::WasmRuntime;
-use linera_persistent as persistent;
 use tracing::{debug, info};
 
 use crate::{
@@ -142,8 +141,8 @@ impl CommonCliOptions {
         Ok(Wallet::read(&self.wallet_path()?)?)
     }
 
-    pub fn signer(&self) -> Result<persistent::File<linera_base::crypto::InMemorySigner>, Error> {
-        Ok(linera_wallet::read_keystore(&self.keystore_path()?)?)
+    pub fn keystore(&self) -> Result<linera_wallet::Keystore, Error> {
+        Ok(linera_wallet::Keystore::read(&self.keystore_path()?)?)
     }
 
     pub fn create_wallet(&self, genesis_config: GenesisConfig) -> Result<Wallet, Error> {
@@ -159,12 +158,12 @@ impl CommonCliOptions {
     pub fn create_keystore(
         &self,
         testing_prng_seed: Option<u64>,
-    ) -> Result<persistent::File<linera_base::crypto::InMemorySigner>, Error> {
+    ) -> Result<linera_wallet::Keystore, Error> {
         let keystore_path = self.keystore_path()?;
         if keystore_path.exists() {
             bail!("Keystore already exists: {}", keystore_path.display());
         }
-        Ok(linera_wallet::create_keystore(
+        Ok(linera_wallet::Keystore::create(
             &keystore_path,
             testing_prng_seed,
         )?)

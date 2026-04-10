@@ -25,15 +25,11 @@ use alloy::{
 };
 use anyhow::{Context as _, Result};
 use futures::StreamExt as _;
-use linera_base::{
-    crypto::InMemorySigner,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
-};
+use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_persistent::Persist;
 use linera_storage::DbStorage;
 use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
 use linera_views::backends::rocks_db::RocksDbDatabase;
@@ -134,9 +130,22 @@ pub async fn run(
         Faucet::new(url.to_string())
     });
 
-    let mut signer: InMemorySigner = linera_wallet::read_keystore(&keystore_path)
-        .context("failed to read keystore")?
-        .into_value();
+    let mut keystore =
+        linera_wallet::Keystore::read(&keystore_path).context("failed to read keystore")?;
+
+    // If claiming from faucet, generate the owner key upfront before creating ClientContext.
+    let faucet_owner = if chain_id_arg.is_none() {
+        Some(AccountOwner::from(
+            keystore
+                .generate_key()
+                .await
+                .context("failed to generate key")?,
+        ))
+    } else {
+        None
+    };
+
+    let signer = keystore.into_signer();
 
     // Parse storage config and create storage.
     let mut storage_config: StorageConfig = storage_path.parse()?;
@@ -232,19 +241,16 @@ pub async fn run(
         tracing::info!(%cid, %owner, "Using pre-existing chain");
         (cid, owner)
     } else {
-        // Claim from faucet.
+        // Claim from faucet using pre-generated key.
         let faucet = faucet
             .as_ref()
             .context("--faucet-url is required when --linera-bridge-chain-id is not provided")?;
+        let owner = faucet_owner.expect("faucet owner was generated above");
         tracing::info!("Claiming bridge chain from faucet...");
-        let owner = AccountOwner::from(signer.generate_new());
         let chain_desc = faucet.claim(&owner).await?;
         let cid = chain_desc.id();
         tracing::info!(%cid, %owner, "Chain claimed, extending wallet...");
         ctx.extend_with_chain(chain_desc, Some(owner)).await?;
-
-        // Save updated keystore (has new key from generate_new).
-        linera_wallet::write_keystore(&keystore_path, signer.clone())?;
 
         // Sync bridge chain.
         let chain_client = ctx.make_chain_client(cid).await?;
