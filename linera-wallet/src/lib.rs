@@ -3,13 +3,41 @@
 
 use std::{
     iter::IntoIterator,
+    path::Path,
     sync::{Arc, RwLock},
 };
 
 use futures::{stream, Stream};
-use linera_base::identifiers::{AccountOwner, ChainId};
+use linera_base::{
+    crypto::InMemorySigner,
+    identifiers::{AccountOwner, ChainId},
+};
 use linera_core::{wallet::*, GenesisConfig};
 use linera_persistent as persistent;
+
+/// Reads a keystore from disk.
+pub fn read_keystore(
+    path: &Path,
+) -> Result<persistent::File<InMemorySigner>, persistent::file::Error> {
+    persistent::File::read(path)
+}
+
+/// Creates a new keystore at `path`, or reads existing one.
+/// If `testing_prng_seed` is provided, uses deterministic key generation.
+pub fn create_keystore(
+    path: &Path,
+    testing_prng_seed: Option<u64>,
+) -> Result<persistent::File<InMemorySigner>, persistent::file::Error> {
+    persistent::File::read_or_create(path, || Ok(InMemorySigner::new(testing_prng_seed)))
+}
+
+/// Writes a signer back to a keystore file at `path`.
+pub fn write_keystore(
+    path: &Path,
+    signer: InMemorySigner,
+) -> Result<persistent::File<InMemorySigner>, persistent::file::Error> {
+    persistent::File::new(path, signer)
+}
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Data {

@@ -134,10 +134,9 @@ pub async fn run(
         Faucet::new(url.to_string())
     });
 
-    let mut signer: InMemorySigner =
-        linera_persistent::File::<InMemorySigner>::read(&keystore_path)
-            .context("failed to read keystore")?
-            .into_value();
+    let mut signer: InMemorySigner = linera_wallet::read_keystore(&keystore_path)
+        .context("failed to read keystore")?
+        .into_value();
 
     // Parse storage config and create storage.
     let mut storage_config: StorageConfig = storage_path.parse()?;
@@ -245,8 +244,7 @@ pub async fn run(
         ctx.extend_with_chain(chain_desc, Some(owner)).await?;
 
         // Save updated keystore (has new key from generate_new).
-        let mut ks_file = linera_persistent::File::new(&keystore_path, signer.clone())?;
-        ks_file.persist().await?;
+        linera_wallet::write_keystore(&keystore_path, signer.clone())?;
 
         // Sync bridge chain.
         let chain_client = ctx.make_chain_client(cid).await?;
