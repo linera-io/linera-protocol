@@ -51,7 +51,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            call,
+            &call,
         );
 
         assert_eq!(light_client.query_current_epoch(), 1);
@@ -77,7 +77,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                call
+                &call
             )
             .is_err(),
             "should reject mismatched committee blob"
@@ -103,7 +103,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                call
+                &call
             )
             .is_err(),
             "should reject non-sequential epoch"
@@ -130,7 +130,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                call
+                &call
             )
             .is_err(),
             "should reject CreateCommittee from non-admin chain"
@@ -162,7 +162,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                call
+                &call
             )
             .is_err(),
             "should reject uncompressed key that is not on the secp256k1 curve"
@@ -187,7 +187,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            call_1,
+            &call_1,
         );
 
         // Attempt epoch 2 transition with a block claiming epoch 0 (not current epoch 1).
@@ -208,7 +208,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                call_2
+                &call_2
             )
             .is_err(),
             "should reject committee transition from wrong epoch block"
@@ -240,7 +240,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                call
+                &call
             )
             .is_err(),
             "should reject substituted keys that don't match the blob"
@@ -296,7 +296,7 @@ mod tests {
                 &mut db,
                 deployer,
                 contract,
-                verifyBlockCall {
+                &verifyBlockCall {
                     data: bcs_bytes.into(),
                 },
             )
@@ -323,7 +323,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            call_1,
+            &call_1,
         );
 
         // Create a block claiming epoch 0 but signed by epoch 1's validator.
@@ -476,7 +476,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                currentEpochCall {},
+                &currentEpochCall {},
             );
             epoch
         }
@@ -486,7 +486,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                verifyBlockCall { data: data.into() },
+                &verifyBlockCall { data: data.into() },
             );
         }
 
@@ -495,7 +495,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                verifyBlockCall { data: data.into() },
+                &verifyBlockCall { data: data.into() },
             )
             .map(|_| ())
         }
@@ -546,7 +546,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            call,
+            &call,
         );
 
         assert_eq!(light_client.query_current_epoch(), 1);
@@ -624,7 +624,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            call,
+            &call,
         );
 
         assert_eq!(light_client.query_current_epoch(), 1);
@@ -748,7 +748,7 @@ mod tests {
                     test_admin_chain_id(),
                 );
 
-                let result = try_call_contract(&mut db, deployer, contract, call);
+                let result = try_call_contract(&mut db, deployer, contract, &call);
                 prop_assert!(result.is_ok(), "addCommittee failed: {:?}", result.err());
             }
         }

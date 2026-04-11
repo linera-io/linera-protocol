@@ -301,6 +301,7 @@ async fn forward_cert_to_evm(
 
 // ── Entry point ──
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
     faucet_url: &str,
@@ -366,7 +367,7 @@ pub async fn run(
     tracing::info!(%admin_chain_id, "Syncing admin chain from validators...");
     let committee = faucet.current_committee().await?;
     tracing::info!(
-        validators = committee.validators().into_iter().count(),
+        validators = committee.validators().len(),
         "Fetched current committee, downloading chain state..."
     );
     let admin_client = ctx.make_chain_client(admin_chain_id).await?;
@@ -463,7 +464,7 @@ pub async fn run(
                     continue;
                 }
 
-                let certs = match chain_client.process_inbox().await {
+                let certs = match Box::pin(chain_client.process_inbox()).await {
                     Ok((certs, _)) => certs,
                     Err(e) => {
                         tracing::error!("Failed to process inbox: {e}");

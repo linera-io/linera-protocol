@@ -120,7 +120,7 @@ fn main() -> Result<()> {
 #[cfg(feature = "relay")]
 impl ServeOptions {
     async fn run(&self) -> Result<()> {
-        linera_bridge::relay::run(
+        Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
             &self.faucet_url,
             self.bridge_address.as_deref(),
@@ -137,7 +137,7 @@ impl ServeOptions {
                 event_cache_size: self.event_cache_size,
                 cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
-        )
+        ))
         .await
     }
 }
@@ -161,7 +161,7 @@ impl GenerateDepositProofOptions {
             "block_header_rlp": alloy_primitives::hex::encode_prefixed(&proof.block_header_rlp),
             "receipt_rlp": alloy_primitives::hex::encode_prefixed(&proof.receipt_rlp),
             "proof_nodes": proof.proof_nodes.iter()
-                .map(|n| alloy_primitives::hex::encode_prefixed(n))
+                .map(alloy_primitives::hex::encode_prefixed)
                 .collect::<Vec<_>>(),
             "tx_index": proof.tx_index,
             "log_indices": proof.log_indices,

@@ -45,7 +45,7 @@ mod tests {
             &mut db,
             deployer,
             contract,
-            addCommitteeCall {
+            &addCommitteeCall {
                 data: bcs_bytes.into(),
                 committeeBlob: committee_bytes.into(),
                 validators: vec![new_uncompressed.into()],
@@ -75,7 +75,7 @@ mod tests {
             &mut db,
             deployer,
             microchain,
-            addBlockCall {
+            &addBlockCall {
                 data: bcs_bytes.into(),
             },
         );

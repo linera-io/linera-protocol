@@ -76,7 +76,7 @@ mod codegen {
             .filter(|name| {
                 fungible_registry.contains_key(**name) && bridge_registry.contains_key(**name)
             })
-            .map(|name| name.to_string())
+            .map(|name| (*name).to_string())
             .collect()
     }
 
