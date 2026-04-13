@@ -31,7 +31,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::DbStorage;
+use linera_storage::{DbStorage, Storage as _};
 use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
 use linera_views::backends::rocks_db::RocksDbDatabase;
 use linera_wallet_json::PersistentWallet;
@@ -205,7 +205,8 @@ pub async fn run(
     tracing::info!(%admin_chain_id, "Syncing admin chain from validators...");
     let admin_client = ctx.make_chain_client(admin_chain_id).await?;
     admin_client.synchronize_from_validators().await?;
-    tracing::info!("Admin chain synced");
+    let admin_chain_height = admin_client.chain_info().await?.next_block_height;
+    tracing::info!(%admin_chain_height, "Admin chain synced");
 
     // ── Resolve bridge chain ──
     let (chain_id, _owner) = if let Some(cid) = chain_id_arg {
@@ -275,6 +276,8 @@ pub async fn run(
         max_retries,
         sqlite_path,
         &db_path,
+        admin_chain_id,
+        admin_chain_height,
     ))
     .await
 }
@@ -293,6 +296,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     max_retries: u32,
     sqlite_path_override: Option<&Path>,
     storage_dir: &Path,
+    admin_chain_id: ChainId,
+    admin_chain_height: linera_base::data_types::BlockHeight,
 ) -> Result<()> {
     // ── Set up centralized clients ──
     let bridge_addr: Address = evm_bridge_address
@@ -308,6 +313,16 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
     let evm_client = Arc::new(evm::EvmClient::new(provider, bridge_addr, relayer_addr));
+
+    // ── Catch up LightClient with any missed committee rotations ──
+    committee::catch_up(
+        chain_client.storage_client(),
+        &evm_client,
+        admin_chain_id,
+        admin_chain_height,
+    )
+    .await
+    .context("committee catch-up failed")?;
 
     let bridge_app_id: ApplicationId = linera_bridge_address
         .parse()
@@ -450,6 +465,39 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                         break;
                     }
                 };
+
+                // Handle admin chain committee updates.
+                if notification.chain_id == admin_chain_id {
+                    if let Reason::NewBlock { height, .. } = &notification.reason {
+                        tracing::debug!(%height, "New admin chain block, checking for committee update");
+                        let heights = vec![*height];
+                        if let Ok(certs) = chain_client
+                            .storage_client()
+                            .read_certificates_by_heights(admin_chain_id, &heights)
+                            .await
+                        {
+                            for cert in certs.into_iter().flatten() {
+                                if let Some((epoch, blob_hash)) = committee::find_create_committee(&cert) {
+                                    let blob_id = linera_base::identifiers::BlobId::new(
+                                        blob_hash,
+                                        linera_base::identifiers::BlobType::Committee,
+                                    );
+                                    match chain_client.storage_client().read_blob(blob_id).await {
+                                        Ok(Some(blob)) => {
+                                            match committee::relay_committee(&evm_client, &cert, blob.bytes()).await {
+                                                Ok(()) => tracing::info!(?epoch, "Committee update relayed"),
+                                                Err(e) => tracing::error!(?epoch, error = %e, "Failed to relay committee"),
+                                            }
+                                        }
+                                        Ok(None) => tracing::error!(?blob_id, "Committee blob not found"),
+                                        Err(e) => tracing::error!(error = %e, "Failed to read committee blob"),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    continue;
+                }
 
                 if !matches!(notification.reason, Reason::NewIncomingBundle { .. }) {
                     continue;
