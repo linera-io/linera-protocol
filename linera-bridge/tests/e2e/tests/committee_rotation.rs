@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end test: trigger a committee rotation on Linera and verify the exporter relays
+//! End-to-end test: trigger a committee rotation on Linera and verify the relay relays
 //! it to the LightClient contract on Anvil (via docker-compose).
 
 use std::time::{Duration, Instant};
@@ -74,10 +74,10 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
     )
     .await;
 
-    tracing::info!("Committee rotation triggered, waiting for exporter to relay...");
+    tracing::info!("Committee rotation triggered, waiting for relay to forward...");
 
     // Poll until epoch advances to 1 (timeout 120s — compose startup is already done,
-    // but the exporter needs to pick up the new committee and relay it).
+    // but the relay needs to pick up the new committee and relay it).
     let timeout = Duration::from_secs(120);
     let poll_interval = Duration::from_secs(3);
     let start = Instant::now();
