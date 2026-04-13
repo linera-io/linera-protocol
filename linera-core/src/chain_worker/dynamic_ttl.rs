@@ -44,10 +44,4 @@ impl DynamicTtl {
         let micros = (ttl.as_micros() as u64).min(self.base_micros);
         self.current_micros.store(micros, Ordering::Relaxed);
     }
-
-    /// Resets the active TTL back to the base value.
-    pub fn reset(&self) {
-        self.current_micros
-            .store(self.base_micros, Ordering::Relaxed);
-    }
 }
