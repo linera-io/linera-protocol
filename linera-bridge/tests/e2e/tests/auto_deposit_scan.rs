@@ -33,7 +33,7 @@ use linera_base::{
 };
 use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
-    start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
+    start_compose, wait_for_light_client, StderrMonitor, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
@@ -371,9 +371,11 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         .env("RUST_LOG", "linera=info,linera_bridge=debug")
         .kill_on_drop(true)
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .context("failed to spawn relay binary")?;
+
+    let relay_monitor = StderrMonitor::spawn(&mut relay_process, "relay");
 
     let relay_url = format!("http://localhost:{relay_port}");
     let client = reqwest::Client::new();
@@ -452,6 +454,8 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     for attempt in 0..60 {
         tokio::time::sleep(Duration::from_secs(5)).await;
 
+        relay_monitor.bail_if_fatal()?;
+
         // Sync chain B to receive minted tokens.
         cc_b.synchronize_from_validators().await?;
         cc_b.process_inbox().await?;
@@ -510,6 +514,8 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
 
     for attempt in 0..60 {
         tokio::time::sleep(Duration::from_secs(5)).await;
+
+        relay_monitor.bail_if_fatal()?;
 
         let balance = erc20_contract.balanceOf(evm_recipient_addr).call().await?;
         tracing::info!(attempt, ?balance, "ERC-20 balance");

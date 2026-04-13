@@ -4,13 +4,14 @@
 //! Shared helpers for linera-bridge end-to-end tests that require
 //! `testcontainers` with docker-compose support.
 
-use std::process::Command;
+use std::{process::Command, sync::Arc};
 
 use alloy::primitives::Address;
 use testcontainers::{
     compose::DockerCompose,
     core::{CmdWaitFor, ExecCommand},
 };
+use tokio::io::AsyncBufReadExt as _;
 
 /// Path inside the container where `linera net up --path` stores wallet files.
 /// Must match the `LINERA_NET_PATH` default in docker-compose.bridge-test.yml.
@@ -217,6 +218,59 @@ pub async fn wait_for_light_client(
     }
     dump_compose_logs(project_name, compose_file);
     panic!("LightClient not deployed within timeout");
+}
+
+/// Monitors a child process's stderr for fatal error patterns.
+/// Returns a handle that can be checked in polling loops to bail early.
+///
+/// Captured lines are re-emitted via `eprintln!` so they appear in test output on failure.
+pub struct StderrMonitor {
+    fatal_error: Arc<std::sync::Mutex<Option<String>>>,
+}
+
+impl StderrMonitor {
+    /// Fatal patterns that indicate a bug (not a transient error).
+    const FATAL_PATTERNS: &[&str] = &[
+        "panicked at",
+        "RuntimeError: unreachable",
+        "deserialization error",
+    ];
+
+    /// Spawns a background task that reads stderr and watches for fatal errors.
+    /// The child process must have `stderr(Stdio::piped())`.
+    pub fn spawn(child: &mut tokio::process::Child, prefix: &str) -> Self {
+        let stderr = child.stderr.take().expect("child stderr was piped");
+        let fatal_error: Arc<std::sync::Mutex<Option<String>>> =
+            Arc::new(std::sync::Mutex::new(None));
+        let fatal = fatal_error.clone();
+        let prefix = prefix.to_owned();
+        tokio::spawn(async move {
+            let mut lines = tokio::io::BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                eprintln!("[{prefix}] {line}");
+                if Self::FATAL_PATTERNS.iter().any(|p| line.contains(p)) {
+                    let mut guard = fatal.lock().unwrap();
+                    if guard.is_none() {
+                        *guard = Some(line);
+                    }
+                }
+            }
+        });
+        Self { fatal_error }
+    }
+
+    /// Returns the first fatal error if one was detected, or `None`.
+    pub fn check(&self) -> Option<String> {
+        self.fatal_error.lock().unwrap().clone()
+    }
+
+    /// Bails with the fatal error message if one was detected.
+    pub fn bail_if_fatal(&self) -> anyhow::Result<()> {
+        if let Some(ref err) = *self.fatal_error.lock().unwrap() {
+            anyhow::bail!("Child process hit a fatal error:\n{err}");
+        }
+        Ok(())
+    }
 }
 
 /// Starts docker compose stack with pre-cleanup of stale state.
