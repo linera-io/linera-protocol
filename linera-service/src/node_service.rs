@@ -820,7 +820,7 @@ where
         };
         if let Some(hash) = hash {
             let block = client.read_confirmed_block(hash).await?;
-            Ok(Some(block))
+            Ok(Some(Arc::unwrap_or_clone(block)))
         } else {
             Ok(None)
         }
@@ -870,7 +870,7 @@ where
             };
             let value = client.read_confirmed_block(next_hash).await?;
             hash = value.block().header.previous_block_hash;
-            values.push(value);
+            values.push(Arc::unwrap_or_clone(value));
         }
         Ok(values)
     }

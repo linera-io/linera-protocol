@@ -562,7 +562,7 @@ where
             .download_pending_blob(chain_id, blob_id)
             .await
             .map_err(Into::into);
-        sender.send(result.map(|blob| blob.into_content()))
+        sender.send(result.map(|blob| blob.content().clone()))
     }
 
     async fn do_handle_pending_blob(
@@ -874,7 +874,7 @@ impl<S: Storage + Clone + Send + Sync + 'static> ChainClient<S> {
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> anyhow::Result<Vec<ConfirmedBlock>> {
+    ) -> anyhow::Result<Vec<Arc<ConfirmedBlock>>> {
         let mut hash = Some(from);
         let mut values = Vec::new();
         for _ in 0..limit {

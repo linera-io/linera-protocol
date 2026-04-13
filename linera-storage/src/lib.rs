@@ -263,10 +263,14 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&contract_bytecode_blob_id) {
             Some(content) => content.clone(),
-            None => Arc::unwrap_or_clone(self.read_blob(contract_bytecode_blob_id).await?.ok_or(
-                ExecutionError::BlobsNotFound(vec![contract_bytecode_blob_id]),
-            )?)
-            .into_content(),
+            None => self
+                .read_blob(contract_bytecode_blob_id)
+                .await?
+                .ok_or(ExecutionError::BlobsNotFound(vec![
+                    contract_bytecode_blob_id,
+                ]))?
+                .content()
+                .clone(),
         };
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),
@@ -326,10 +330,14 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&service_bytecode_blob_id) {
             Some(content) => content.clone(),
-            None => Arc::unwrap_or_clone(self.read_blob(service_bytecode_blob_id).await?.ok_or(
-                ExecutionError::BlobsNotFound(vec![service_bytecode_blob_id]),
-            )?)
-            .into_content(),
+            None => self
+                .read_blob(service_bytecode_blob_id)
+                .await?
+                .ok_or(ExecutionError::BlobsNotFound(vec![
+                    service_bytecode_blob_id,
+                ]))?
+                .content()
+                .clone(),
         };
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),

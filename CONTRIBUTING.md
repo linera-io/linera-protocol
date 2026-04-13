@@ -70,6 +70,17 @@ Contributions should generally follow the [Rust API guidelines](https://rust-lan
   unawaited futures or unhandled errors. `let _x =` should only be used for RAII guards.
 
 
+## Hash-consed types and `Arc<T>`
+
+Any content-addressed immutable data (also known as hash-consed data) — for
+example `Block`, `Blob`, `ConfirmedBlockCertificate` — should be cached and
+passed around as `Arc<T>`. For the "one allocation per content" invariant to
+hold, you must always insert through the dedup cache (`linera-cache`'s
+`ValueCache`) and never `Arc::new` it off-path. See the
+[`linera-cache` README](linera-cache/README.md) for how the invariant is
+enforced.
+
+
 ## Formatting and linting
 
 Make sure to fix the lint errors reported by

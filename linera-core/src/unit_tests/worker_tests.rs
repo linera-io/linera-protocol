@@ -5070,16 +5070,9 @@ where
         .await;
 
     // Process all three blocks on chain_1.
-    env.worker()
-        .process_confirmed_block(cert_0.clone(), None)
-        .await?;
-    env.worker()
-        .process_confirmed_block(cert_1.clone(), None)
-        .await?;
-    let (_, actions, _) = env
-        .worker()
-        .process_confirmed_block(cert_2.clone(), None)
-        .await?;
+    env.worker().process_confirmed_block(cert_0, None).await?;
+    env.worker().process_confirmed_block(cert_1, None).await?;
+    let (_, actions, _) = env.worker().process_confirmed_block(cert_2, None).await?;
 
     // With chunk_limit=1, only the first chunk (height 0) should be returned.
     // The remaining heights stay in the outbox for delivery after confirmation.
@@ -5194,9 +5187,7 @@ where
     env.worker()
         .process_confirmed_block(cert_0.clone(), None)
         .await?;
-    env.worker()
-        .process_confirmed_block(cert_1.clone(), None)
-        .await?;
+    env.worker().process_confirmed_block(cert_1, None).await?;
     env.worker()
         .process_confirmed_block(cert_2.clone(), None)
         .await?;

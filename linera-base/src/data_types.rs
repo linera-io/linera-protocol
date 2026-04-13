@@ -1383,6 +1383,12 @@ impl From<Blob> for BlobContent {
     }
 }
 
+impl From<Arc<Blob>> for BlobContent {
+    fn from(blob: Arc<Blob>) -> BlobContent {
+        blob.content().clone()
+    }
+}
+
 /// A blob of binary data, with its hash.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Allocative)]
 pub struct Blob {

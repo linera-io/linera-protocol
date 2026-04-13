@@ -3,6 +3,8 @@
 
 //! Centralized Linera client for all bridge chain interactions.
 
+use std::sync::Arc;
+
 use anyhow::{Context as _, Result};
 use linera_base::{
     crypto::CryptoHash,
@@ -88,14 +90,17 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
     pub async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<linera_chain::block::ConfirmedBlock> {
+    ) -> Result<Arc<linera_chain::block::ConfirmedBlock>> {
         self.chain_client
             .read_confirmed_block(hash)
             .await
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    pub async fn read_certificate(&self, hash: CryptoHash) -> Result<ConfirmedBlockCertificate> {
+    pub async fn read_certificate(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Arc<ConfirmedBlockCertificate>> {
         self.chain_client
             .read_certificate(hash)
             .await
