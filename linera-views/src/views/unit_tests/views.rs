@@ -17,6 +17,7 @@ use crate::store::{KeyValueDatabase, TestKeyValueDatabase};
 use crate::{
     batch::Batch,
     context::{Context, MemoryContext},
+    lazy_register_view::LazyRegisterView,
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::{HashedRegisterView, RegisterView},
@@ -525,6 +526,31 @@ where
         let mut entry = collection.try_load_entry_mut(&key).await?;
         entry.set(value);
     }
+
+    Ok(())
+}
+
+/// Saves a value using a `RegisterView`, then reopens it as a `LazyRegisterView`
+/// and checks that the value is correctly read back.
+#[tokio::test]
+async fn test_register_view_to_lazy_register_view() -> anyhow::Result<()> {
+    let context = MemoryContext::new_for_testing(());
+
+    // Write a value with RegisterView and persist it.
+    let mut register = RegisterView::<_, String>::load(context.clone()).await?;
+    register.set("hello".to_owned());
+    save_view(&context, &mut register).await?;
+    drop(register);
+
+    // Reopen the same storage location as a LazyRegisterView.
+    let lazy = LazyRegisterView::<_, String>::load(context.clone()).await?;
+
+    // The value should not have been loaded yet.
+    assert!(!lazy.has_pending_changes().await);
+
+    // Reading should lazily fetch the persisted value.
+    let value = lazy.get().await?;
+    assert_eq!(value, "hello");
 
     Ok(())
 }

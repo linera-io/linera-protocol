@@ -148,7 +148,7 @@ pub trait RegisterMockApplication {
     /// Returns the chain to use for the creation of the application.
     ///
     /// This is included in the mocked [`ApplicationId`].
-    fn creator_chain_id(&self) -> ChainId;
+    async fn creator_chain_id(&self) -> ChainId;
 
     /// Registers a new [`MockApplication`] and returns it with the [`ApplicationId`] that was
     /// used for it.
@@ -186,8 +186,8 @@ where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    fn creator_chain_id(&self) -> ChainId {
-        self.system.creator_chain_id()
+    async fn creator_chain_id(&self) -> ChainId {
+        self.system.creator_chain_id().await
     }
 
     async fn register_mock_application_with(
@@ -207,8 +207,8 @@ where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    fn creator_chain_id(&self) -> ChainId {
-        self.description.get().as_ref().expect(
+    async fn creator_chain_id(&self) -> ChainId {
+        self.description.get().await.expect("failed to load description").as_ref().expect(
             "Can't register applications on a system state with no associated `ChainDescription`",
         ).into()
     }
