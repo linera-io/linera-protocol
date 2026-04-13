@@ -201,10 +201,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         C::Extra: ExecutionRuntimeContext,
     {
         Box::pin(async move {
-            // For Reject bundles or bundles with few messages, use the per-message path.
-            if incoming_bundle.action == MessageAction::Reject
-                || !Self::can_batch_bundle(incoming_bundle)
-            {
+            // For Reject bundles, use the per-message path.
+            if incoming_bundle.action == MessageAction::Reject {
                 for posted_message in incoming_bundle.messages() {
                     Box::pin(self.execute_message_in_block(
                         chain,
@@ -225,15 +223,13 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
             let messages: Vec<_> = incoming_bundle.messages().collect();
 
-            // Pre-group user messages by application, preserving order.
+            // Group user messages by application, preserving order.
             let mut app_batches: BTreeMap<ApplicationId, Vec<usize>> = BTreeMap::new();
             for (i, pm) in messages.iter().enumerate() {
                 if let Message::User { application_id, .. } = &pm.message {
                     app_batches.entry(*application_id).or_default().push(i);
                 }
             }
-            // Only apps with ≥2 messages benefit from batching.
-            app_batches.retain(|_, indices| indices.len() >= 2);
 
             let mut executed_apps: BTreeSet<ApplicationId> = BTreeSet::new();
             let mut i = 0;
@@ -241,51 +237,48 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             while i < messages.len() {
                 let posted_message = messages[i];
 
-                // Check if this message belongs to a batchable group.
+                // User messages are executed through the batched path.
                 if let Message::User { application_id, .. } = &posted_message.message {
-                    if let Some(indices) = app_batches.get(application_id) {
-                        if executed_apps.insert(*application_id) {
-                            // First time seeing this app — execute the whole batch.
-                            let app_id = *application_id;
-                            let batch: Vec<_> = indices
-                                .iter()
-                                .map(|&idx| {
-                                    let pm = messages[idx];
-                                    let context = MessageContext {
-                                        chain_id: self.chain_id,
-                                        origin: incoming_bundle.origin,
-                                        is_bouncing: pm.is_bouncing(),
-                                        height: self.block_height,
-                                        round,
-                                        authenticated_owner: pm.authenticated_owner,
-                                        refund_grant_to: pm.refund_grant_to,
-                                        timestamp: self.timestamp,
-                                    };
-                                    let Message::User { bytes, .. } = pm.message.clone() else {
-                                        unreachable!("already checked these are User messages")
-                                    };
-                                    (context, bytes, pm.grant)
-                                })
-                                .collect();
+                    if executed_apps.insert(*application_id) {
+                        let app_id = *application_id;
+                        let indices = &app_batches[&app_id];
+                        let batch: Vec<_> = indices
+                            .iter()
+                            .map(|&idx| {
+                                let pm = messages[idx];
+                                let context = MessageContext {
+                                    chain_id: self.chain_id,
+                                    origin: incoming_bundle.origin,
+                                    is_bouncing: pm.is_bouncing(),
+                                    height: self.block_height,
+                                    round,
+                                    authenticated_owner: pm.authenticated_owner,
+                                    refund_grant_to: pm.refund_grant_to,
+                                    timestamp: self.timestamp,
+                                };
+                                let Message::User { bytes, .. } = pm.message.clone() else {
+                                    unreachable!("already checked these are User messages")
+                                };
+                                (context, bytes, pm.grant)
+                            })
+                            .collect();
 
-                            let mut actor = ExecutionStateActor::new(
-                                chain,
-                                txn_tracker,
-                                self.resource_controller,
-                            );
-                            actor
-                                .execute_messages_batched(app_id, batch)
-                                .await
-                                .with_execution_context(chain_execution_context)?;
-                        }
-                        // Already executed as part of the batch — skip.
-                        i += 1;
-                        continue;
+                        let mut actor = ExecutionStateActor::new(
+                            chain,
+                            txn_tracker,
+                            self.resource_controller,
+                        );
+                        actor
+                            .execute_messages_batched(app_id, batch)
+                            .await
+                            .with_execution_context(chain_execution_context)?;
                     }
+                    // Already executed as part of the batch — skip.
+                    i += 1;
+                    continue;
                 }
 
-                // Single message, non-batchable user message, or system message:
-                // fall back to the per-message path.
+                // System messages: fall back to the per-message path.
                 Box::pin(self.execute_message_in_block(
                     chain,
                     posted_message,
@@ -299,24 +292,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
             Ok(())
         })
-    }
-
-    /// Returns true if the bundle contains at least two user messages targeting the
-    /// same application — the case where batched execution avoids redundant runtime
-    /// creation and finalize calls.
-    fn can_batch_bundle(incoming_bundle: &IncomingBundle) -> bool {
-        if incoming_bundle.action != MessageAction::Accept {
-            return false;
-        }
-        let mut seen = BTreeSet::new();
-        for pm in incoming_bundle.messages() {
-            if let Message::User { application_id, .. } = &pm.message {
-                if !seen.insert(application_id) {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     /// Executes a message as part of an incoming bundle in a block.
