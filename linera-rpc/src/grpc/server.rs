@@ -357,8 +357,8 @@ where
         state: WorkerState<S>,
         shard_id: ShardId,
         internal_network: ValidatorInternalNetworkConfig,
-        cross_chain_config: CrossChainConfig,
-        notification_config: NotificationConfig,
+        cross_chain_config: &CrossChainConfig,
+        notification_config: &NotificationConfig,
         shutdown_signal: CancellationToken,
         join_set: &mut JoinSet,
     ) -> GrpcServerHandle {

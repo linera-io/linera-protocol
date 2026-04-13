@@ -188,7 +188,7 @@ fn get_inner_event_type(event_name_expanded: &str) -> Result<String, EthereumSer
 
 pub fn parse_log(
     event_name_expanded: &str,
-    log: Log,
+    log: &Log,
 ) -> Result<EthereumEvent, EthereumServiceError> {
     let inner_types = get_inner_event_type(event_name_expanded)?;
     let ethereum_types = inner_types

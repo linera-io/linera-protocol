@@ -760,17 +760,17 @@ fn test_lower_to_flat_layout<T>(
     T: Clone + WitStore,
     <T::Layout as Layout>::Flat: Copy + Debug + Eq,
 {
-    test_single_lower_to_flat_layout(&data, expected, expected_memory);
-    test_single_lower_to_flat_layout(&Box::new(data.clone()), expected, expected_memory);
-    test_single_lower_to_flat_layout(&Rc::new(data.clone()), expected, expected_memory);
-    test_single_lower_to_flat_layout(&Arc::new(data), expected, expected_memory);
+    test_single_lower_to_flat_layout(&data, &expected, expected_memory);
+    test_single_lower_to_flat_layout(&Box::new(data.clone()), &expected, expected_memory);
+    test_single_lower_to_flat_layout(&Rc::new(data.clone()), &expected, expected_memory);
+    test_single_lower_to_flat_layout(&Arc::new(data), &expected, expected_memory);
 }
 
 /// Tests that the `data` of type `T` can be lowered to its flat layout and that it matches the
 /// `expected` value.
 fn test_single_lower_to_flat_layout<T>(
     data: &T,
-    expected: <T::Layout as Layout>::Flat,
+    expected: &<T::Layout as Layout>::Flat,
     expected_memory: &[u8],
 ) where
     T: WitStore,
@@ -779,6 +779,6 @@ fn test_single_lower_to_flat_layout<T>(
     let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
-    assert_eq!(data.lower(&mut memory).unwrap(), expected);
+    assert_eq!(data.lower(&mut memory).unwrap(), *expected);
     assert_eq!(&instance.memory_contents(), expected_memory);
 }

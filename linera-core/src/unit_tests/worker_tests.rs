@@ -3388,9 +3388,21 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let bundles1 = certificate1.message_bundles_for(id1).collect::<Vec<_>>();
     let bundles2 = certificate2.message_bundles_for(id1).collect::<Vec<_>>();
     let bundles3 = certificate3.message_bundles_for(id1).collect::<Vec<_>>();
-    let bundles01 = Vec::from_iter(bundles0.iter().cloned().chain(bundles1.iter().cloned()));
-    let bundles012 = Vec::from_iter(bundles01.iter().cloned().chain(bundles2.iter().cloned()));
-    let bundles0123 = Vec::from_iter(bundles012.iter().cloned().chain(bundles3.iter().cloned()));
+    let bundles01: Vec<_> = bundles0
+        .iter()
+        .cloned()
+        .chain(bundles1.iter().cloned())
+        .collect();
+    let bundles012: Vec<_> = bundles01
+        .iter()
+        .cloned()
+        .chain(bundles2.iter().cloned())
+        .collect();
+    let bundles0123: Vec<_> = bundles012
+        .iter()
+        .cloned()
+        .chain(bundles3.iter().cloned())
+        .collect();
 
     fn without_epochs<'a>(
         bundles: impl IntoIterator<Item = &'a (Epoch, MessageBundle)>,
@@ -3455,7 +3467,11 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
                 id1,
                 BlockHeight::ZERO,
                 None,
-                Vec::from_iter(bundles1.iter().cloned().chain(bundles0.iter().cloned())),
+                bundles1
+                    .iter()
+                    .cloned()
+                    .chain(bundles0.iter().cloned())
+                    .collect::<Vec<_>>(),
                 storage
             )
             .await,
@@ -4977,14 +4993,13 @@ where
 
     // With chunk_limit=1, only the first chunk (height 0) should be returned.
     // The remaining heights stay in the outbox for delivery after confirmation.
-    let initial_updates: Vec<_> = actions
+    let initial_updates_count = actions
         .cross_chain_requests
         .iter()
         .filter(|r| matches!(r, CrossChainRequest::UpdateRecipient { .. }))
-        .collect();
+        .count();
     assert_eq!(
-        initial_updates.len(),
-        1,
+        initial_updates_count, 1,
         "Only one UpdateRecipient chunk should be returned initially"
     );
 

@@ -855,7 +855,7 @@ where
     ///
     /// Returns the [`ChainInfo`] from the validator after initialization.
     async fn initialize_new_chain_on_validator(
-        &mut self,
+        &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         // Send chain description and all dependency chains
@@ -878,7 +878,7 @@ where
     ///
     /// This is a best-effort operation - failures are logged but don't fail the entire sync.
     async fn sync_consensus_round(
-        &mut self,
+        &self,
         remote_round: Round,
         manager: &linera_chain::manager::ChainManagerInfo,
     ) -> Result<(), chain_client::Error> {
@@ -958,7 +958,7 @@ where
     /// and sends chain information for those heights. With sparse chains, this only
     /// sends the specific blocks containing the blobs, not all blocks up to those heights.
     async fn send_chain_info_for_blobs(
-        &mut self,
+        &self,
         blob_ids: &[BlobId],
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
@@ -988,56 +988,62 @@ where
     /// specified heights, not all blocks up to those heights. This is more efficient for
     /// sparse chains where only specific blocks are needed.
     async fn send_chain_info_at_heights(
-        &mut self,
+        &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, heights)| {
-            let mut updater = self.clone();
-            async move {
-                // Get all block hashes for this chain at the specified heights in one call
-                let heights_vec: Vec<_> = heights.into_iter().collect();
-                let certificates = updater
-                    .client
-                    .local_node
-                    .storage_client()
-                    .read_certificates_by_heights(chain_id, &heights_vec)
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .map(Arc::unwrap_or_clone)
-                    .collect::<Vec<_>>();
+        chain_heights
+            .into_iter()
+            .map(|(chain_id, heights)| {
+                let mut updater = self.clone();
+                async move {
+                    // Get all block hashes for this chain at the specified heights in one call
+                    let heights_vec: Vec<_> = heights.into_iter().collect();
+                    let certificates = updater
+                        .client
+                        .local_node
+                        .storage_client()
+                        .read_certificates_by_heights(chain_id, &heights_vec)
+                        .await?
+                        .into_iter()
+                        .flatten()
+                        .map(Arc::unwrap_or_clone)
+                        .collect::<Vec<_>>();
 
-                // Send each certificate
-                for certificate in certificates {
-                    updater
-                        .send_confirmed_certificate(certificate, delivery)
-                        .await?;
+                    // Send each certificate
+                    for certificate in certificates {
+                        updater
+                            .send_confirmed_certificate(certificate, delivery)
+                            .await?;
+                    }
+
+                    Ok::<_, chain_client::Error>(())
                 }
-
-                Ok::<_, chain_client::Error>(())
-            }
-        }))
-        .try_collect::<Vec<_>>()
-        .await?;
+            })
+            .collect::<FuturesUnordered<_>>()
+            .try_collect::<Vec<_>>()
+            .await?;
         Ok(())
     }
 
     async fn send_chain_info_up_to_heights(
-        &mut self,
+        &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, height)| {
-            let mut updater = self.clone();
-            async move {
-                updater
-                    .send_chain_information(chain_id, height, delivery, None)
-                    .await
-            }
-        }))
-        .try_collect::<Vec<_>>()
-        .await?;
+        chain_heights
+            .into_iter()
+            .map(|(chain_id, height)| {
+                let mut updater = self.clone();
+                async move {
+                    updater
+                        .send_chain_information(chain_id, height, delivery, None)
+                        .await
+                }
+            })
+            .collect::<FuturesUnordered<_>>()
+            .try_collect::<Vec<_>>()
+            .await?;
         Ok(())
     }
 

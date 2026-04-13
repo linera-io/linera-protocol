@@ -176,6 +176,7 @@ where
     /// Schedules an operation to be included in the block being built.
     ///
     /// The operation is specified as an opaque blob of bytes.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn schedule_raw_operation(&self, operation: Vec<u8>) {
         service_wit::schedule_operation(&operation);
     }

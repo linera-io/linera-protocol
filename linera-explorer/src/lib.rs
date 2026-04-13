@@ -158,7 +158,7 @@ pub enum AddressKind {
     Indexer,
 }
 
-fn url(config: &Config, protocol: Protocol, kind: AddressKind) -> String {
+fn url(config: &Config, protocol: &Protocol, kind: &AddressKind) -> String {
     let protocol = match protocol {
         Protocol::Http => "http",
         Protocol::Websocket => "ws",
@@ -640,7 +640,7 @@ async fn page(
             plugin(&name, indexer).await
         }
         "error" => {
-            let msg = find_arg(args, "msg").unwrap_or("unknown error".to_string());
+            let msg = find_arg(args, "msg").unwrap_or_else(|| "unknown error".to_string());
             Err(anyhow::Error::msg(msg))
         }
         _ => Err(anyhow!("unknown page")),
@@ -660,8 +660,8 @@ async fn route_aux(
         (Some(p), _) => (p, args.to_vec()),
         (_, p) => page_name_and_args(p),
     };
-    let node = url(&data.config, Protocol::Http, AddressKind::Node);
-    let indexer = url(&data.config, Protocol::Http, AddressKind::Indexer);
+    let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
+    let indexer = url(&data.config, &Protocol::Http, &AddressKind::Indexer);
     let result = match chain_info {
         Err(e) => Err(e),
         Ok((chain_id, chain_changed)) => {
@@ -671,7 +671,7 @@ async fn route_aux(
                     // Ignore close errors; we're switching to a new connection anyway.
                     ws.close().await.ok();
                 }
-                let address = url(&data.config, Protocol::Websocket, AddressKind::Node);
+                let address = url(&data.config, &Protocol::Websocket, &AddressKind::Node);
                 subscribe_chain(app, &address, chain_id).await;
             };
             page_result
@@ -706,8 +706,8 @@ pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
 }
 
 #[wasm_bindgen]
-pub fn short_crypto_hash(s: String) -> String {
-    let hash = CryptoHash::from_str(&s).expect("not a crypto hash");
+pub fn short_crypto_hash(s: &str) -> String {
+    let hash = CryptoHash::from_str(s).expect("not a crypto hash");
     format!("{:?}", hash)
 }
 
@@ -794,7 +794,7 @@ pub async fn start(app: JsValue) {
     console_error_panic_hook::set_once();
     set_onpopstate(app.clone());
     let data = from_value::<Data>(app.clone()).expect("cannot parse vue data");
-    let address = url(&data.config, Protocol::Http, AddressKind::Node);
+    let address = url(&data.config, &Protocol::Http, &AddressKind::Node);
     let default_chain = chains(&app, &address).await;
     match default_chain {
         Err(e) => {
@@ -808,7 +808,7 @@ pub async fn start(app: JsValue) {
             .await
         }
         Ok(default_chain) => {
-            let indexer = url(&data.config, Protocol::Http, AddressKind::Indexer);
+            let indexer = url(&data.config, &Protocol::Http, &AddressKind::Indexer);
             plugins(&app, &indexer).await;
             let uri = web_sys::window()
                 .expect("window object not found")

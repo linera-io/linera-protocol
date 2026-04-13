@@ -332,7 +332,7 @@ impl MatchingEngineContract {
         // If some order has amount zero but is after an order of non-zero amount, then it is left.
         let iter = view
             .queue
-            .iter_mut()
+            .try_iter_mut()
             .await
             .expect("Failed to load iterator over level queue");
         let n_remove = iter
@@ -354,7 +354,7 @@ impl MatchingEngineContract {
     ) -> Option<(Amount, bool)> {
         let mut iter = view
             .queue
-            .iter_mut()
+            .try_iter_mut()
             .await
             .expect("Failed to load iterator over level queue");
         let state_order = iter.find(|order| order.order_id == order_id)?;
@@ -537,7 +537,7 @@ impl MatchingEngineContract {
         let mut remove_order = Vec::new();
         let orders = view
             .queue
-            .iter_mut()
+            .try_iter_mut()
             .await
             .expect("Failed to load iterator over orders");
         for order in orders {

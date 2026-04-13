@@ -335,16 +335,20 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             }
             if parts.len() == 2 || parts.len() == 3 {
                 let path = parts[0].to_string().into();
-                let spawn_mode = match parts[1] {
+                let spawn_mode_str = parts.get(1).expect("length already checked");
+                let spawn_mode = match *spawn_mode_str {
                     "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                     "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                     "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                    _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
+                    _ => Err(anyhow!(
+                        "Failed to parse {} as a spawn_mode",
+                        spawn_mode_str
+                    )),
                 }?;
                 let namespace = if parts.len() == 2 {
                     DEFAULT_NAMESPACE.to_string()
                 } else {
-                    parts[2].to_string()
+                    (*parts.get(2).expect("length already checked")).to_string()
                 };
                 let inner_storage_config = InnerStorageConfig::RocksDb { path, spawn_mode };
                 return Ok(StorageConfig {
@@ -415,8 +419,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     }
                 }
             }
-            let uri = uri.unwrap_or("localhost:9042".to_string());
-            let namespace = namespace.unwrap_or(DEFAULT_NAMESPACE.to_string());
+            let uri = uri.unwrap_or_else(|| "localhost:9042".to_string());
+            let namespace = namespace.unwrap_or_else(|| DEFAULT_NAMESPACE.to_string());
             let inner_storage_config = InnerStorageConfig::ScyllaDb { uri };
             debug!("ScyllaDB connection info: {:?}", inner_storage_config);
             return Ok(StorageConfig {
@@ -435,11 +439,15 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             let path = Path::new(parts[0]);
             let path = path.to_path_buf();
             let path_with_guard = PathWithGuard::new(path);
-            let spawn_mode = match parts[1] {
+            let spawn_mode_str = parts.get(1).expect("length already checked");
+            let spawn_mode = match *spawn_mode_str {
                 "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                 "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                 "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
+                _ => Err(anyhow!(
+                    "Failed to parse {} as a spawn_mode",
+                    spawn_mode_str
+                )),
             }?;
             let protocol = parts[2];
             if protocol != "tcp" {
@@ -481,7 +489,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
 }
 
 impl StorageConfig {
-    pub fn maybe_append_shard_path(&mut self, _shard: usize) -> std::io::Result<()> {
+    #[allow(unused_variables)]
+    pub fn maybe_append_shard_path(&mut self, shard: usize) -> std::io::Result<()> {
         match &mut self.inner_storage_config {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             InnerStorageConfig::DualRocksDbScyllaDb {
@@ -489,7 +498,7 @@ impl StorageConfig {
                 spawn_mode: _,
                 uri: _,
             } => {
-                let shard_str = format!("shard_{}", _shard);
+                let shard_str = format!("shard_{}", shard);
                 path_with_guard.path_buf.push(shard_str);
                 std::fs::create_dir_all(&path_with_guard.path_buf)
             }

@@ -465,7 +465,11 @@ where
         heights_by_recipient: BTreeMap<ChainId, Vec<BlockHeight>>,
     ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
-        let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
+        let heights = heights_by_recipient
+            .values()
+            .flatten()
+            .copied()
+            .collect::<BTreeSet<_>>();
         let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
 
         let blocks = self.read_confirmed_blocks(hashes.clone()).await?;
@@ -1012,7 +1016,7 @@ where
     /// `height`.
     #[instrument(level = "trace", skip(self, notify_when_messages_are_delivered))]
     async fn register_delivery_notifier(
-        &mut self,
+        &self,
         height: BlockHeight,
         actions: &NetworkActions,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
@@ -1623,6 +1627,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         Err(WorkerError::NoFallbackMode)
     }
@@ -1960,7 +1965,7 @@ where
             .await?;
         let key_pair = self.config.key_pair();
         let manager = &mut self.chain.manager;
-        match manager.create_vote(proposal, block, key_pair, local_time, blobs)? {
+        match manager.create_vote(&proposal, block, key_pair, local_time, blobs)? {
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
                 self.block_values

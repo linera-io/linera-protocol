@@ -272,7 +272,7 @@ impl<Env: Environment> Client<Env> {
         priority_bundle_origins: HashSet<ChainId>,
         ignored_bundle_origins: HashSet<ChainId>,
         options: chain_client::Options,
-        requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
+        requests_scheduler_config: &requests_scheduler::RequestsSchedulerConfig,
         block_cache_size: usize,
         execution_state_cache_size: usize,
     ) -> Self {
@@ -442,7 +442,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
         next_block_height: BlockHeight,
-        pending_proposal: Option<PendingProposal>,
+        pending_proposal: &Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
         timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
     ) -> ChainClient<Env> {

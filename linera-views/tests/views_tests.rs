@@ -1026,7 +1026,7 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) -> 
     for _ in 0..n_iter {
         let mut key_value_vector_b = key_value_vector.clone();
         key_value_vector_b.shuffle(rng);
-        let operations = span_random_reordering_put_delete(rng, info_op.clone());
+        let operations = span_random_reordering_put_delete(rng, &info_op);
         //
         let mut store1 = MemoryTestStorage::new().await;
         unord1_hashes

@@ -258,6 +258,7 @@ where
     }
 
     /// Logs a `message` with the provided information `level`.
+    #[allow(clippy::needless_pass_by_value)]
     fn log(caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         let allowed = caller
             .user_data_mut()
@@ -769,7 +770,8 @@ where
     ///
     /// This is called by the metering instrumentation, but the fuel consumed argument is
     /// ignored.
-    fn check_execution_time(caller: &mut Caller, _fuel_consumed: u64) -> Result<(), RuntimeError> {
+    #[allow(unused_variables)]
+    fn check_execution_time(caller: &mut Caller, fuel_consumed: u64) -> Result<(), RuntimeError> {
         caller
             .user_data_mut()
             .runtime_mut()

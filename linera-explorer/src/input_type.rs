@@ -7,8 +7,8 @@ use super::js_utils::{getf, unproxy};
 
 /// Adds an input line for lists.
 #[wasm_bindgen]
-pub fn append_input(component: JsValue) {
-    let element = getf(&component, "elt");
+pub fn append_input(component: &JsValue) {
+    let element = getf(component, "elt");
     let input: js_sys::Array = getf(&element, "_input").into();
     let child = unproxy(&getf(&element, "ofType"));
     input.splice(input.length(), 0, &child);
@@ -16,8 +16,8 @@ pub fn append_input(component: JsValue) {
 
 /// Removes an input line.
 #[wasm_bindgen]
-pub fn remove_input(component: JsValue, index: u32) {
-    let element = getf(&component, "elt");
+pub fn remove_input(component: &JsValue, index: u32) {
+    let element = getf(component, "elt");
     let input: js_sys::Array = getf(&element, "_input").into();
     input.splice(index, 1, &JsValue::undefined());
 }

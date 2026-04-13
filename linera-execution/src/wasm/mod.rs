@@ -206,7 +206,7 @@ impl UserServiceModule for WasmServiceModule {
 }
 
 /// Instrument the [`Bytecode`] to add fuel metering.
-pub fn add_metering(bytecode: Bytecode) -> Result<Bytecode, WasmExecutionError> {
+pub fn add_metering(bytecode: &Bytecode) -> Result<Bytecode, WasmExecutionError> {
     struct WasmtimeRules;
 
     impl gas_metering::Rules for WasmtimeRules {

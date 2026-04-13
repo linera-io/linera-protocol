@@ -138,20 +138,21 @@ where
 
     /// Enqueues a block into the in-memory buffer.
     /// Only acquires the buffer lock; no I/O is performed.
+    #[allow(unused_variables)]
     async fn push_block(&self, block: CanonicalBlock) {
-        let _count = self.shared_canonical_state.push(block).await;
+        let count = self.shared_canonical_state.push(block).await;
         #[cfg(with_metrics)]
-        metrics::CANONICAL_STATE_HEIGHT.set(_count as i64);
+        metrics::CANONICAL_STATE_HEIGHT.set(count as i64);
     }
 
-    fn clone(&self) -> Result<Self, ExporterError> {
-        Ok(Self {
+    fn clone(&self) -> Self {
+        Self {
             storage: self.storage.clone(),
             shared_canonical_state: self.shared_canonical_state.clone(),
             blobs_cache: self.blobs_cache.clone(),
             blocks_cache: self.blocks_cache.clone(),
             destination_states: self.destination_states.clone(),
-        })
+        }
     }
 }
 
@@ -204,8 +205,8 @@ where
         self.shared_storage.destination_states.load_state(id)
     }
 
-    pub(crate) fn clone(&self) -> Result<Self, ExporterError> {
-        Ok(ExporterStorage::new(self.shared_storage.clone()?))
+    pub(crate) fn clone(&self) -> Self {
+        ExporterStorage::new(self.shared_storage.clone())
     }
 
     pub(crate) async fn get_latest_index(&self) -> usize {
@@ -245,7 +246,7 @@ where
 
         let shared_storage =
             SharedStorage::new(storage, canonical_state, destination_states, limits);
-        let exporter_storage = ExporterStorage::new(shared_storage.clone()?);
+        let exporter_storage = ExporterStorage::new(shared_storage.clone());
 
         Ok((
             Self {
@@ -332,7 +333,7 @@ where
 
     /// Enqueues a block into the shared canonical state buffer.
     /// Only acquires the buffer lock; no I/O is performed.
-    pub(super) async fn push_block(&mut self, block: CanonicalBlock) {
+    pub(super) async fn push_block(&self, block: CanonicalBlock) {
         self.shared_storage.push_block(block).await
     }
 

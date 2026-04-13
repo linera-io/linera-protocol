@@ -148,7 +148,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
     /// Creates a new `RequestsScheduler` with the provided configuration.
     pub fn new(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
-        config: RequestsSchedulerConfig,
+        config: &RequestsSchedulerConfig,
     ) -> Self {
         Self::with_config(
             nodes,
@@ -971,6 +971,7 @@ mod tests {
     }
 
     /// Helper function to create a test result
+    #[allow(clippy::unnecessary_wraps)]
     fn test_result_ok() -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         Ok(vec![])
     }

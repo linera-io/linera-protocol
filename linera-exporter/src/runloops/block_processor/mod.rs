@@ -127,7 +127,7 @@ where
                                     .collect::<HashSet<_>>();
                                 self.storage.set_latest_committee_blob(new_committee_blob);
                                 if self.committee_destination_update {
-                                    self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
+                                    self.exporters_tracker.shutdown_old_committee(&committee_destinations);
                                     self.storage.new_committee(committee_destinations.clone());
                                     self.exporters_tracker.start_committee_exporters(committee_destinations.clone());
                                 }
@@ -256,7 +256,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone()?,
+            exporter_storage.clone(),
             vec![],
             HashSet::new(),
             Arc::new(AtomicBool::new(true)),
@@ -388,7 +388,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone()?,
+            exporter_storage.clone(),
             vec![],
             HashSet::new(),
             Arc::new(AtomicBool::new(true)),
@@ -510,7 +510,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone()?,
+            exporter_storage.clone(),
             vec![],
             HashSet::new(),
             Arc::new(AtomicBool::new(true)),
@@ -599,7 +599,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone()?,
+            exporter_storage.clone(),
             vec![],
             HashSet::new(),
             Arc::new(AtomicBool::new(true)),
@@ -710,7 +710,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone()?,
+            exporter_storage.clone(),
             vec![],
             HashSet::new(),
             Arc::new(AtomicBool::new(true)),
@@ -801,7 +801,7 @@ mod test {
             NodeOptions::default(),
             256, // work_queue_size must be > 0 for mpsc channel
             signal.clone(),
-            exporter_storage.clone()?,
+            exporter_storage.clone(),
             vec![],
             HashSet::new(),
             Arc::new(AtomicBool::new(true)),

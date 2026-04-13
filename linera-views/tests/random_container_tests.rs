@@ -136,8 +136,8 @@ pub struct KeyValueStateView<C> {
     pub store: KeyValueStoreView<C>,
 }
 
-fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
-    map.retain(|key, _| !key.starts_with(&key_prefix));
+fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: &[u8]) {
+    map.retain(|key, _| !key.starts_with(key_prefix));
 }
 
 #[tokio::test]
@@ -194,7 +194,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
                 view.store.remove_by_prefix(key_prefix.clone())?;
-                remove_by_prefix(&mut new_state_map, key_prefix);
+                remove_by_prefix(&mut new_state_map, &key_prefix);
             }
             if choice == 3 {
                 // Doing the clearing
@@ -288,7 +288,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
                 view.map.remove_by_prefix(key_prefix.clone());
-                remove_by_prefix(&mut new_state_map, key_prefix);
+                remove_by_prefix(&mut new_state_map, &key_prefix);
             }
             if choice == 3 {
                 // Doing the clearing
@@ -431,7 +431,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
                 // changing some random entries
                 let pos = rng.gen_range(0..count);
                 let val = rng.gen::<u8>();
-                let mut iter = view.queue.iter_mut().await?;
+                let mut iter = view.queue.try_iter_mut().await?;
                 (for _ in 0..pos {
                     iter.next();
                 });
@@ -670,7 +670,7 @@ async fn queue_view_mutability_check() -> Result<()> {
                 // changing some random entries
                 let pos = rng.gen_range(0..count);
                 let val = rng.gen::<u8>();
-                let mut iter = view.queue.iter_mut().await?;
+                let mut iter = view.queue.try_iter_mut().await?;
                 (for _ in 0..pos {
                     iter.next();
                 });

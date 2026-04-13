@@ -122,13 +122,13 @@ impl TestEnvironment {
     fn make_app_description(&self) -> (ApplicationDescription, Blob, Blob) {
         let contract = Bytecode::new(b"contract".into());
         let service = Bytecode::new(b"service".into());
-        self.make_app_from_bytecodes(contract, service)
+        self.make_app_from_bytecodes(&contract, &service)
     }
 
     fn make_app_from_bytecodes(
         &self,
-        contract: Bytecode,
-        service: Bytecode,
+        contract: &Bytecode,
+        service: &Bytecode,
     ) -> (ApplicationDescription, Blob, Blob) {
         let contract_blob = Blob::new_contract_bytecode(contract.compress());
         let service_blob = Blob::new_service_bytecode(service.compress());
@@ -278,8 +278,8 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let application = MockApplication::default();
 
     let (another_app, another_contract, another_service) = env.make_app_from_bytecodes(
-        Bytecode::new(b"contractB".into()),
-        Bytecode::new(b"serviceB".into()),
+        &Bytecode::new(b"contractB".into()),
+        &Bytecode::new(b"serviceB".into()),
     );
     let another_app_id = ApplicationId::from(&another_app);
 
