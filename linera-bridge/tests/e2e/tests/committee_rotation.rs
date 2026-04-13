@@ -10,7 +10,7 @@ use alloy::{providers::ProviderBuilder, sol};
 use linera_base::crypto::{AccountPublicKey, ValidatorKeypair};
 use linera_bridge_e2e::{
     compose_file_path, create_extra_wallet, dump_compose_logs, exec_ok, extra_wallet_env,
-    light_client_address, start_compose,
+    light_client_address, start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 
 sol! {
@@ -40,6 +40,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
     let project_name = "linera-bridge-test";
 
     let compose = start_compose(&compose_file, project_name).await;
+    wait_for_light_client(&compose, project_name, &compose_file).await;
 
     // Verify initial epoch is 0.
     let epoch = query_current_epoch().await?;

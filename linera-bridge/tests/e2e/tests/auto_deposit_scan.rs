@@ -33,7 +33,7 @@ use linera_base::{
 };
 use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
-    start_compose, ANVIL_PRIVATE_KEY,
+    start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
@@ -86,6 +86,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
 
     // ── Phase 1: Start docker compose stack ──
     let compose = start_compose(&compose_file, project_name).await;
+    wait_for_light_client(&compose, project_name, &compose_file).await;
 
     // ── Phase 2: Create Linera client, claim chains ──
     tracing::info!("Creating programmatic Linera client...");

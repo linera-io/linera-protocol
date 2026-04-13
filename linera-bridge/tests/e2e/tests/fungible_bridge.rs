@@ -25,7 +25,7 @@ use linera_base::{
 };
 use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
-    start_compose, ANVIL_PRIVATE_KEY,
+    start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{environment::wallet::Memory, worker::Reason};
@@ -59,6 +59,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     let project_name = "linera-bridge-test";
 
     let compose = start_compose(&compose_file, project_name).await;
+    wait_for_light_client(&compose, project_name, &compose_file).await;
 
     // ── 1. Create programmatic Linera client ──
     tracing::info!("Creating programmatic Linera client...");
