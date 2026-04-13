@@ -15,8 +15,12 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+anyhow.workspace = true
+dirs.workspace = true
+fs-err.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-core.workspace = true
 linera-persistent = { workspace = true, features = ["fs"] }
 serde.workspace = true
+tracing.workspace = true

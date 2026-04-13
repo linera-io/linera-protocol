@@ -78,7 +78,6 @@ use linera_service::{
     storage::{AssertStorageV1, Runnable, RunnableWithStore, StorageCacheSizes, StorageMigration},
     task_processor::TaskProcessor,
     util,
-    wallet::WalletExt as _,
 };
 use linera_storage::{DbStorage, Storage};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
@@ -2393,7 +2392,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                         println!("{chain_id}");
                     }
                 } else {
-                    wallet.pretty_print(chain_ids);
+                    linera_wallet::display::pretty_print(&wallet, chain_ids);
                 }
                 Ok(0)
             }

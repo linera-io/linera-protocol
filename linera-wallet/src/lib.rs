@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod display;
+pub mod paths;
+
 use std::{
     iter::IntoIterator,
     path::Path,

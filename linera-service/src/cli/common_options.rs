@@ -5,10 +5,9 @@
 
 use std::{env, path::PathBuf};
 
-use anyhow::{anyhow, bail, Error};
+use anyhow::{bail, Error};
 use linera_client::config::GenesisConfig;
 use linera_execution::WasmRuntime;
-use tracing::{debug, info};
 
 use crate::{
     storage::{CommonStorageOptions, StorageConfig},
@@ -67,22 +66,6 @@ impl CommonCliOptions {
             .unwrap_or_default()
     }
 
-    pub fn config_path() -> Result<PathBuf, Error> {
-        let mut config_dir = dirs::config_dir().ok_or_else(|| {
-            anyhow!(
-                "Default wallet directory is not supported in this platform: \
-                 please specify storage and wallet paths"
-            )
-        })?;
-        config_dir.push("linera");
-        if !config_dir.exists() {
-            debug!("Creating default wallet directory {}", config_dir.display());
-            fs_err::create_dir_all(&config_dir)?;
-        }
-        info!("Using default wallet directory {}", config_dir.display());
-        Ok(config_dir)
-    }
-
     pub fn storage_config(&self) -> Result<StorageConfig, Error> {
         if let Some(config) = &self.storage_config {
             return config.parse();
@@ -97,7 +80,7 @@ impl CommonCliOptions {
                 let spawn_mode =
                     linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
                 let inner_storage_config = crate::storage::InnerStorageConfig::RocksDb {
-                    path: Self::config_path()?.join("wallet.db"),
+                    path: linera_wallet::paths::config_dir()?.join("wallet.db"),
                     spawn_mode,
                 };
                 let namespace = linera_storage::DEFAULT_NAMESPACE.to_string();
@@ -112,29 +95,11 @@ impl CommonCliOptions {
     }
 
     pub fn wallet_path(&self) -> Result<PathBuf, Error> {
-        if let Some(path) = &self.wallet_state_path {
-            return Ok(path.clone());
-        }
-        let suffix = self.suffix();
-        let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
-        if let Some(path) = wallet_env_var {
-            return Ok(path.parse()?);
-        }
-        let config_path = Self::config_path()?;
-        Ok(config_path.join("wallet.json"))
+        linera_wallet::paths::wallet_path(self.wallet_state_path.as_ref(), &self.suffix())
     }
 
     pub fn keystore_path(&self) -> Result<PathBuf, Error> {
-        if let Some(path) = &self.keystore_path {
-            return Ok(path.clone());
-        }
-        let suffix = self.suffix();
-        let keystore_env_var = env::var(format!("LINERA_KEYSTORE{suffix}")).ok();
-        if let Some(path) = keystore_env_var {
-            return Ok(path.parse()?);
-        }
-        let config_path = Self::config_path()?;
-        Ok(config_path.join("keystore.json"))
+        linera_wallet::paths::keystore_path(self.keystore_path.as_ref(), &self.suffix())
     }
 
     pub fn wallet(&self) -> Result<Wallet, Error> {
