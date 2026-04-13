@@ -57,6 +57,31 @@ struct BatchedMessageAction {
     done: oneshot::Sender<Result<Amount, ExecutionError>>,
 }
 
+/// A boxed future that resolves to the runtime thread's result.
+#[cfg(not(web))]
+type RuntimeTask = Pin<
+    Box<
+        dyn Future<Output = Result<Result<ResourceController, ExecutionError>, ExecutionError>>
+            + Send,
+    >,
+>;
+#[cfg(web)]
+type RuntimeTask = Pin<
+    Box<dyn Future<Output = Result<Result<ResourceController, ExecutionError>, ExecutionError>>>,
+>;
+
+/// Handle for an in-progress batched message execution.
+///
+/// Created by [`ExecutionStateActor::start_message_batch`], fed messages via
+/// [`ExecutionStateActor::drive_message_in_batch`], and finalized via
+/// [`ExecutionStateActor::finalize_message_batch`].
+pub struct MessageBatch {
+    action_sender: std::sync::mpsc::Sender<BatchedMessageAction>,
+    execution_state_receiver: mpsc::UnboundedReceiver<ExecutionRequest>,
+    runtime_task: RuntimeTask,
+    initial_balance: Amount,
+}
+
 /// Actor for handling requests to the execution state.
 pub struct ExecutionStateActor<'a, C> {
     state: &'a mut ExecutionStateView<C>,
@@ -1059,206 +1084,131 @@ where
         Ok(())
     }
 
-    /// Executes multiple user messages on a shared contract runtime, calling `finalize`
-    /// only once at the end. Between each message, the actor handles execution state
-    /// requests, runs `process_subscriptions`, and issues grant refunds.
+    /// Starts a batched message execution for the given application. Spawns a runtime
+    /// thread that waits for messages on a channel, executes each without finalize,
+    /// and finalizes once when the batch is finalized.
     ///
-    /// All messages must target the same `application_id` and belong to the same bundle.
-    /// Each message carries its own grant; the runtime credits the grant before execution
-    /// and computes the remainder afterwards so that the actor can issue per-message
-    /// refunds.
-    ///
-    /// The returned future is explicitly boxed to hide its inner (deeply nested) type
-    /// from `Send`-bound checking at far-away call sites. Without this boxing the
-    /// transitive type graph in crates like `linera-faucet-server` would blow past
-    /// their `recursion_limit` during `Send` inference.
-    #[instrument(skip_all, fields(application_id = %application_id, batch_size = messages.len()))]
-    pub fn execute_messages_batched<'b>(
-        &'b mut self,
+    /// `seed_context` is the first message's context, used to seed the runtime.
+    pub async fn start_message_batch(
+        &mut self,
         application_id: ApplicationId,
-        messages: Vec<(MessageContext, Vec<u8>, Amount)>,
-    ) -> BoxedFuture<'b> {
-        Box::pin(async move {
-            assert!(!messages.is_empty());
+        seed_context: MessageContext,
+    ) -> Result<MessageBatch, ExecutionError> {
+        let chain_id = self.state.context().extra().chain_id();
 
-            let chain_id = self.state.context().extra().chain_id();
+        let initial_balance = self
+            .resource_controller
+            .with_state(&mut self.state.system)
+            .await?
+            .balance()?;
+        let controller = ResourceController::new(
+            self.resource_controller.policy().clone(),
+            self.resource_controller.tracker,
+            initial_balance,
+        );
 
-            let initial_balance = self
-                .resource_controller
-                .with_state(&mut self.state.system)
-                .await?
-                .balance()?;
-            let controller = ResourceController::new(
-                self.resource_controller.policy().clone(),
-                self.resource_controller.tracker,
-                initial_balance,
-            );
+        let is_free = self
+            .resource_controller
+            .policy()
+            .is_free_app(&application_id);
 
-            let is_free = self
-                .resource_controller
-                .policy()
-                .is_free_app(&application_id);
+        let (execution_state_sender, execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
 
-            let (execution_state_sender, mut execution_state_receiver) =
-                futures::channel::mpsc::unbounded();
+        let (codes, descriptions): (Vec<_>, Vec<_>) =
+            self.contract_and_dependencies(application_id).await?;
 
-            let (codes, descriptions): (Vec<_>, Vec<_>) =
-                self.contract_and_dependencies(application_id).await?;
+        let allow_application_logs = self
+            .state
+            .context()
+            .extra()
+            .execution_runtime_config()
+            .allow_application_logs;
 
-            let allow_application_logs = self
-                .state
-                .context()
-                .extra()
-                .execution_runtime_config()
-                .allow_application_logs;
+        let (action_sender, action_receiver) = std::sync::mpsc::channel::<BatchedMessageAction>();
 
-            // Channel for actor→runtime: sends per-message actions with a done signal.
-            let (action_sender, action_receiver) =
-                std::sync::mpsc::channel::<BatchedMessageAction>();
+        let height = seed_context.height;
+        let round = seed_context.round;
 
-            let first_context = messages[0].0;
-            let height = first_context.height;
-            let round = first_context.round;
+        // Spawn the runtime thread. It waits for actions on the channel, executes each
+        // without finalize, then finalizes once when the channel is closed.
+        let contract_runtime_task = self
+            .state
+            .context()
+            .extra()
+            .thread_pool()
+            .run_send(JsVec(codes), move |codes| async move {
+                let mut controller = controller;
+                controller.is_free = is_free;
+                let seed_action = UserAction::Message(seed_context, Vec::new());
+                let runtime = ContractSyncRuntime::new(
+                    execution_state_sender,
+                    chain_id,
+                    seed_context.refund_grant_to,
+                    controller,
+                    &seed_action,
+                    allow_application_logs,
+                );
 
-            // Spawn the runtime thread. It waits for actions on the channel, executes each
-            // without finalize, then finalizes once when the channel is closed.
-            let contract_runtime_task = self
-                .state
-                .context()
-                .extra()
-                .thread_pool()
-                .run_send(JsVec(codes), move |codes| async move {
-                    let mut controller = controller;
-                    controller.is_free = is_free;
-                    // The runtime is seeded from the first message; the executing-message
-                    // state and message bytes are updated per message before each action.
-                    let seed_action = UserAction::Message(first_context, Vec::new());
-                    let runtime = ContractSyncRuntime::new(
-                        execution_state_sender,
-                        chain_id,
-                        first_context.refund_grant_to,
-                        controller,
-                        &seed_action,
-                        allow_application_logs,
-                    );
+                for (code, description) in codes.0.into_iter().zip(descriptions) {
+                    runtime.preload_contract(ApplicationId::from(&description), code, description);
+                }
 
-                    for (code, description) in codes.0.into_iter().zip(descriptions) {
-                        runtime.preload_contract(
-                            ApplicationId::from(&description),
-                            code,
-                            description,
-                        );
+                let mut last_signer = seed_context.authenticated_owner;
+
+                while let Ok(action) = action_receiver.recv() {
+                    runtime.update_message_context(&action.context, action.context.refund_grant_to);
+                    last_signer = action.context.authenticated_owner;
+
+                    // Credit the grant before execution so the runtime can draw from it.
+                    let balance_before = runtime.resource_controller_balance()?;
+                    runtime.credit_resource_controller(action.grant)?;
+
+                    let user_action = UserAction::Message(action.context, action.bytes);
+                    let result =
+                        runtime.run_action_without_finalize(application_id, chain_id, user_action);
+
+                    if let Err(err) = result {
+                        let _ = action.done.send(Err(err));
+                        return Err(ExecutionError::InternalError(
+                            "Batch aborted due to action error",
+                        ));
                     }
 
-                    let mut last_signer = first_context.authenticated_owner;
+                    // Compute the grant remainder and remove it from the balance.
+                    // If cost <= grant: remainder = grant - cost, base balance unchanged.
+                    // If cost > grant: remainder = 0, base balance reduced by (cost - grant).
+                    let balance_after = runtime.resource_controller_balance()?;
+                    let grant_remainder = balance_after.saturating_sub(balance_before);
+                    runtime.debit_resource_controller(grant_remainder)?;
 
-                    // Process all actions from the channel.
-                    while let Ok(action) = action_receiver.recv() {
-                        runtime.update_message_context(
-                            &action.context,
-                            action.context.refund_grant_to,
-                        );
-                        last_signer = action.context.authenticated_owner;
-
-                        // Credit the grant before execution so the runtime can draw from it.
-                        let balance_before = runtime.resource_controller_balance()?;
-                        runtime.credit_resource_controller(action.grant)?;
-
-                        let user_action = UserAction::Message(action.context, action.bytes);
-                        let result = runtime.run_action_without_finalize(
-                            application_id,
-                            chain_id,
-                            user_action,
-                        );
-
-                        if let Err(err) = result {
-                            let _ = action.done.send(Err(err));
-                            // On error, skip finalize and abort the batch. The actor will
-                            // see the error on the done channel and stop sending.
-                            return Err(ExecutionError::InternalError(
-                                "Batch aborted due to action error",
-                            ));
-                        }
-
-                        // Compute the grant remainder and remove it from the balance.
-                        // If cost <= grant: remainder = grant - cost, base balance unchanged.
-                        // If cost > grant: remainder = 0, base balance reduced by (cost - grant).
-                        let balance_after = runtime.resource_controller_balance()?;
-                        let grant_remainder = balance_after.saturating_sub(balance_before);
-                        runtime.debit_resource_controller(grant_remainder)?;
-
-                        if action.done.send(Ok(grant_remainder)).is_err() {
-                            return Err(ExecutionError::InternalError(
-                                "Actor dropped done receiver",
-                            ));
-                        }
-                    }
-
-                    // All actions done — finalize and return the resource controller.
-                    runtime.finalize_and_finish(chain_id, last_signer, height, round)
-                })
-                .await;
-
-            self.resource_controller.is_free = is_free;
-
-            let mut batch_result: Result<(), ExecutionError> = Ok(());
-            for (msg_context, bytes, grant) in messages {
-                match self
-                    .drive_batched_action(
-                        &action_sender,
-                        &mut execution_state_receiver,
-                        msg_context,
-                        bytes,
-                        grant,
-                    )
-                    .await
-                {
-                    Ok(()) => {}
-                    Err(err) => {
-                        batch_result = Err(err);
-                        break;
+                    if action.done.send(Ok(grant_remainder)).is_err() {
+                        return Err(ExecutionError::InternalError("Actor dropped done receiver"));
                     }
                 }
-                if let Err(err) = self.process_subscriptions(msg_context.into()).await {
-                    batch_result = Err(err);
-                    break;
-                }
-            }
 
-            // Drop the action sender to signal the runtime thread to finalize.
-            drop(action_sender);
+                runtime.finalize_and_finish(chain_id, last_signer, height, round)
+            })
+            .await;
 
-            // Drain remaining execution state requests (from finalize).
-            self.drain_execution_requests(&mut execution_state_receiver)
-                .await?;
+        self.resource_controller.is_free = is_free;
 
-            let runtime_result = contract_runtime_task.await?;
-            self.resource_controller.is_free = false;
-
-            // Propagate any error encountered during the actor-side loop.
-            batch_result?;
-
-            let controller = runtime_result?;
-            self.resource_controller
-                .with_state(&mut self.state.system)
-                .await?
-                .merge_balance(initial_balance, controller.balance()?)?;
-            self.resource_controller.tracker = controller.tracker;
-
-            Ok(())
+        Ok(MessageBatch {
+            action_sender,
+            execution_state_receiver,
+            runtime_task: Box::pin(async move { contract_runtime_task.await.map_err(Into::into) }),
+            initial_balance,
         })
     }
 
-    /// Sends a single batched message action to the runtime thread and drives the
-    /// actor-side request loop until the runtime signals completion.
+    /// Sends a single message to an in-progress batch and drives the actor-side request
+    /// loop until the runtime signals completion. Issues a grant refund if applicable.
     ///
-    /// Returns a boxed `dyn Future` so its (deeply nested) internal state does not
-    /// inflate the enclosing `execute_messages_batched` future's type. Without this,
-    /// `Send`-bound inference at far-away call sites overflows the recursion limit.
-    fn drive_batched_action<'b>(
+    /// Returns a boxed `dyn Future` to hide its deeply nested internal type from
+    /// `Send`-bound inference at far-away call sites.
+    pub fn drive_message_in_batch<'b>(
         &'b mut self,
-        action_sender: &'b std::sync::mpsc::Sender<BatchedMessageAction>,
-        execution_state_receiver: &'b mut mpsc::UnboundedReceiver<ExecutionRequest>,
+        batch: &'b mut MessageBatch,
         msg_context: MessageContext,
         bytes: Vec<u8>,
         grant: Amount,
@@ -1267,7 +1217,8 @@ where
             let (done_sender, done_receiver) = oneshot::channel();
             let mut done_receiver = done_receiver.fuse();
 
-            action_sender
+            batch
+                .action_sender
                 .send(BatchedMessageAction {
                     context: msg_context,
                     bytes,
@@ -1280,7 +1231,7 @@ where
 
             let grant_remainder = loop {
                 futures::select! {
-                    maybe_request = execution_state_receiver.next() => {
+                    maybe_request = batch.execution_state_receiver.next() => {
                         if let Some(request) = maybe_request {
                             self.handle_request(request).await?;
                         }
@@ -1293,23 +1244,44 @@ where
 
             self.send_refund(msg_context, grant_remainder)?;
 
+            self.process_subscriptions(msg_context.into()).await?;
+
             Ok(())
         })
     }
 
-    /// Drains any remaining execution-state requests after the batched runtime
-    /// thread has signalled it is done (typically emitted during `finalize`).
+    /// Finalizes an in-progress batch: signals the runtime thread to finalize, drains
+    /// remaining execution-state requests, and merges the balance back.
     ///
-    /// Returned as a boxed `dyn Future` for the same `Send`-inference reasons as
-    /// `drive_batched_action`.
-    fn drain_execution_requests<'b>(
-        &'b mut self,
-        execution_state_receiver: &'b mut mpsc::UnboundedReceiver<ExecutionRequest>,
-    ) -> BoxedFuture<'b> {
+    /// Returns a boxed `dyn Future` to hide its deeply nested internal type from
+    /// `Send`-bound inference at far-away call sites.
+    pub fn finalize_message_batch(&mut self, batch: MessageBatch) -> BoxedFuture<'_> {
         Box::pin(async move {
+            let MessageBatch {
+                action_sender,
+                mut execution_state_receiver,
+                runtime_task,
+                initial_balance,
+            } = batch;
+
+            // Drop the action sender to signal the runtime thread to finalize.
+            drop(action_sender);
+
+            // Drain remaining execution state requests (from finalize).
             while let Some(request) = execution_state_receiver.next().await {
                 self.handle_request(request).await?;
             }
+
+            let runtime_result = runtime_task.await?;
+            self.resource_controller.is_free = false;
+
+            let controller = runtime_result?;
+            self.resource_controller
+                .with_state(&mut self.state.system)
+                .await?
+                .merge_balance(initial_balance, controller.balance()?)?;
+            self.resource_controller.tracker = controller.tracker;
+
             Ok(())
         })
     }

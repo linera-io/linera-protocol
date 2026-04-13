@@ -16,9 +16,10 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
 use linera_execution::{
-    execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
-    ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    execution_state_actor::{ExecutionStateActor, MessageBatch},
+    ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, MessageKind,
+    OperationContext, OutgoingMessage, ResourceController, ResourceTracker,
+    SystemExecutionStateView, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::Context;
 use tracing::instrument;
@@ -182,20 +183,21 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         ))
     }
 
-    /// Executes all messages in an incoming bundle. Groups consecutive zero-grant
-    /// user messages targeting the same application for batched execution
-    /// (shared runtime, single finalize).
+    /// Executes all messages in an incoming bundle. User messages targeting the same
+    /// application share a runtime (batched execution with a single finalize), while
+    /// system messages use the per-message path. Messages are executed in their
+    /// original order within the bundle.
     ///
     /// Returns a boxed `dyn Future` so its (deeply nested) internal type does not
     /// inflate the `execute_transaction` future's `Send`-bound type graph, which
     /// is walked by callers as deep as `linera-faucet-server`.
-    fn execute_incoming_bundle<'s, C>(
-        &'s mut self,
-        chain: &'s mut ExecutionStateView<C>,
-        incoming_bundle: &'s IncomingBundle,
+    fn execute_incoming_bundle<'a, C>(
+        &'a mut self,
+        chain: &'a mut ExecutionStateView<C>,
+        incoming_bundle: &'a IncomingBundle,
         round: Option<u32>,
-        txn_tracker: &'s mut TransactionTracker,
-    ) -> BoxedFuture<'s>
+        txn_tracker: &'a mut TransactionTracker,
+    ) -> BoxedFuture<'a>
     where
         C: Context + Clone + 'static,
         C::Extra: ExecutionRuntimeContext,
@@ -216,75 +218,87 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 return Ok(());
             }
 
-            // Accept bundle — group all user messages by application_id.
+            // Accept bundle — execute messages in original order, batching user
+            // messages by application (shared runtime, single finalize per app).
             let chain_execution_context =
                 ChainExecutionContext::IncomingBundle(txn_tracker.transaction_index());
             ensure!(!chain.system.closed.get(), ChainError::ClosedChain);
 
-            let messages: Vec<_> = incoming_bundle.messages().collect();
+            let mut actor = ExecutionStateActor::new(chain, txn_tracker, self.resource_controller);
 
-            // Group user messages by application, preserving order.
-            let mut app_batches: BTreeMap<ApplicationId, Vec<usize>> = BTreeMap::new();
-            for (i, pm) in messages.iter().enumerate() {
-                if let Message::User { application_id, .. } = &pm.message {
-                    app_batches.entry(*application_id).or_default().push(i);
-                }
-            }
+            let mut batches: BTreeMap<ApplicationId, MessageBatch> = BTreeMap::new();
 
-            let mut executed_apps: BTreeSet<ApplicationId> = BTreeSet::new();
-            let mut i = 0;
-
-            while i < messages.len() {
-                let posted_message = messages[i];
-
-                // User messages are executed through the batched path.
-                if let Message::User { application_id, .. } = &posted_message.message {
-                    if executed_apps.insert(*application_id) {
+            for posted_message in incoming_bundle.messages() {
+                match &posted_message.message {
+                    Message::User {
+                        application_id,
+                        bytes,
+                    } => {
                         let app_id = *application_id;
-                        let indices = &app_batches[&app_id];
-                        let batch: Vec<_> = indices
-                            .iter()
-                            .map(|&idx| {
-                                let pm = messages[idx];
-                                let context = MessageContext {
-                                    chain_id: self.chain_id,
-                                    origin: incoming_bundle.origin,
-                                    is_bouncing: pm.is_bouncing(),
-                                    height: self.block_height,
-                                    round,
-                                    authenticated_owner: pm.authenticated_owner,
-                                    refund_grant_to: pm.refund_grant_to,
-                                    timestamp: self.timestamp,
-                                };
-                                let Message::User { bytes, .. } = pm.message.clone() else {
-                                    unreachable!("already checked these are User messages")
-                                };
-                                (context, bytes, pm.grant)
-                            })
-                            .collect();
+                        let context = MessageContext {
+                            chain_id: self.chain_id,
+                            origin: incoming_bundle.origin,
+                            is_bouncing: posted_message.is_bouncing(),
+                            height: self.block_height,
+                            round,
+                            authenticated_owner: posted_message.authenticated_owner,
+                            refund_grant_to: posted_message.refund_grant_to,
+                            timestamp: self.timestamp,
+                        };
 
-                        let mut actor =
-                            ExecutionStateActor::new(chain, txn_tracker, self.resource_controller);
+                        // Lazily start a batch for this application.
+                        if let std::collections::btree_map::Entry::Vacant(e) = batches.entry(app_id)
+                        {
+                            let batch = actor
+                                .start_message_batch(app_id, context)
+                                .await
+                                .with_execution_context(chain_execution_context)?;
+                            e.insert(batch);
+                        }
+
+                        let batch = batches.get_mut(&app_id).expect("just inserted");
                         actor
-                            .execute_messages_batched(app_id, batch)
+                            .drive_message_in_batch(
+                                batch,
+                                context,
+                                bytes.clone(),
+                                posted_message.grant,
+                            )
                             .await
                             .with_execution_context(chain_execution_context)?;
                     }
-                    // Already executed as part of the batch — skip.
-                    i += 1;
-                    continue;
+                    Message::System(_) => {
+                        let context = MessageContext {
+                            chain_id: self.chain_id,
+                            origin: incoming_bundle.origin,
+                            is_bouncing: posted_message.is_bouncing(),
+                            height: self.block_height,
+                            round,
+                            authenticated_owner: posted_message.authenticated_owner,
+                            refund_grant_to: posted_message.refund_grant_to,
+                            timestamp: self.timestamp,
+                        };
+                        let mut grant = posted_message.grant;
+                        Box::pin(actor.execute_message(
+                            context,
+                            posted_message.message.clone(),
+                            (grant > Amount::ZERO).then_some(&mut grant),
+                        ))
+                        .await
+                        .with_execution_context(chain_execution_context)?;
+                        actor
+                            .send_refund(context, grant)
+                            .with_execution_context(chain_execution_context)?;
+                    }
                 }
+            }
 
-                // System messages: fall back to the per-message path.
-                Box::pin(self.execute_message_in_block(
-                    chain,
-                    posted_message,
-                    incoming_bundle,
-                    round,
-                    txn_tracker,
-                ))
-                .await?;
-                i += 1;
+            // Finalize all batches.
+            for (_app_id, batch) in batches {
+                actor
+                    .finalize_message_batch(batch)
+                    .await
+                    .with_execution_context(chain_execution_context)?;
             }
 
             Ok(())
