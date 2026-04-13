@@ -52,7 +52,9 @@ type BoxedFuture<'a> = Pin<Box<dyn Future<Output = Result<(), ExecutionError>> +
 struct BatchedMessageAction {
     context: MessageContext,
     bytes: Vec<u8>,
-    done: oneshot::Sender<Result<(), ExecutionError>>,
+    grant: Amount,
+    /// Receives `Ok(grant_remainder)` on success, or an error.
+    done: oneshot::Sender<Result<Amount, ExecutionError>>,
 }
 
 /// Actor for handling requests to the execution state.
@@ -1059,22 +1061,23 @@ where
 
     /// Executes multiple user messages on a shared contract runtime, calling `finalize`
     /// only once at the end. Between each message, the actor handles execution state
-    /// requests and runs `process_subscriptions`.
+    /// requests, runs `process_subscriptions`, and issues grant refunds.
     ///
-    /// All messages must target the same `application_id`, belong to the same bundle,
-    /// and have a zero grant — the batching fast path does not handle per-message grant
-    /// accounting.
+    /// All messages must target the same `application_id` and belong to the same bundle.
+    /// Each message carries its own grant; the runtime credits the grant before execution
+    /// and computes the remainder afterwards so that the actor can issue per-message
+    /// refunds.
     ///
     /// The returned future is explicitly boxed to hide its inner (deeply nested) type
     /// from `Send`-bound checking at far-away call sites. Without this boxing the
     /// transitive type graph in crates like `linera-faucet-server` would blow past
     /// their `recursion_limit` during `Send` inference.
     #[instrument(skip_all, fields(application_id = %application_id, batch_size = messages.len()))]
-    pub fn execute_messages_batched<'s>(
-        &'s mut self,
+    pub fn execute_messages_batched<'b>(
+        &'b mut self,
         application_id: ApplicationId,
-        messages: Vec<(MessageContext, Vec<u8>)>,
-    ) -> BoxedFuture<'s> {
+        messages: Vec<(MessageContext, Vec<u8>, Amount)>,
+    ) -> BoxedFuture<'b> {
         Box::pin(async move {
             assert!(!messages.is_empty());
 
@@ -1157,6 +1160,10 @@ where
                         );
                         last_signer = action.context.authenticated_owner;
 
+                        // Credit the grant before execution so the runtime can draw from it.
+                        let balance_before = runtime.resource_controller_balance()?;
+                        runtime.credit_resource_controller(action.grant)?;
+
                         let user_action = UserAction::Message(action.context, action.bytes);
                         let result = runtime.run_action_without_finalize(
                             application_id,
@@ -1164,13 +1171,25 @@ where
                             user_action,
                         );
 
-                        let is_err = result.is_err();
-                        let _ = action.done.send(result.map(|_| ()));
-                        if is_err {
+                        if let Err(err) = result {
+                            let _ = action.done.send(Err(err));
                             // On error, skip finalize and abort the batch. The actor will
                             // see the error on the done channel and stop sending.
                             return Err(ExecutionError::InternalError(
                                 "Batch aborted due to action error",
+                            ));
+                        }
+
+                        // Compute the grant remainder and remove it from the balance.
+                        // If cost <= grant: remainder = grant - cost, base balance unchanged.
+                        // If cost > grant: remainder = 0, base balance reduced by (cost - grant).
+                        let balance_after = runtime.resource_controller_balance()?;
+                        let grant_remainder = balance_after.saturating_sub(balance_before);
+                        runtime.debit_resource_controller(grant_remainder)?;
+
+                        if action.done.send(Ok(grant_remainder)).is_err() {
+                            return Err(ExecutionError::InternalError(
+                                "Actor dropped done receiver",
                             ));
                         }
                     }
@@ -1183,13 +1202,14 @@ where
             self.resource_controller.is_free = is_free;
 
             let mut batch_result: Result<(), ExecutionError> = Ok(());
-            for (msg_context, bytes) in messages {
+            for (msg_context, bytes, grant) in messages {
                 match self
                     .drive_batched_action(
                         &action_sender,
                         &mut execution_state_receiver,
                         msg_context,
                         bytes,
+                        grant,
                     )
                     .await
                 {
@@ -1235,13 +1255,14 @@ where
     /// Returns a boxed `dyn Future` so its (deeply nested) internal state does not
     /// inflate the enclosing `execute_messages_batched` future's type. Without this,
     /// `Send`-bound inference at far-away call sites overflows the recursion limit.
-    fn drive_batched_action<'s>(
-        &'s mut self,
-        action_sender: &'s std::sync::mpsc::Sender<BatchedMessageAction>,
-        execution_state_receiver: &'s mut mpsc::UnboundedReceiver<ExecutionRequest>,
+    fn drive_batched_action<'b>(
+        &'b mut self,
+        action_sender: &'b std::sync::mpsc::Sender<BatchedMessageAction>,
+        execution_state_receiver: &'b mut mpsc::UnboundedReceiver<ExecutionRequest>,
         msg_context: MessageContext,
         bytes: Vec<u8>,
-    ) -> BoxedFuture<'s> {
+        grant: Amount,
+    ) -> BoxedFuture<'b> {
         Box::pin(async move {
             let (done_sender, done_receiver) = oneshot::channel();
             let mut done_receiver = done_receiver.fuse();
@@ -1250,13 +1271,14 @@ where
                 .send(BatchedMessageAction {
                     context: msg_context,
                     bytes,
+                    grant,
                     done: done_sender,
                 })
                 .map_err(|_| {
                     ExecutionError::InternalError("Runtime thread terminated unexpectedly")
                 })?;
 
-            loop {
+            let grant_remainder = loop {
                 futures::select! {
                     maybe_request = execution_state_receiver.next() => {
                         if let Some(request) = maybe_request {
@@ -1264,10 +1286,14 @@ where
                         }
                     }
                     result = &mut done_receiver => {
-                        return result.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
+                        break result.map_err(|_| ExecutionError::MissingRuntimeResponse)??;
                     }
                 }
-            }
+            };
+
+            self.send_refund(msg_context, grant_remainder)?;
+
+            Ok(())
         })
     }
 
@@ -1276,10 +1302,10 @@ where
     ///
     /// Returned as a boxed `dyn Future` for the same `Send`-inference reasons as
     /// `drive_batched_action`.
-    fn drain_execution_requests<'s>(
-        &'s mut self,
-        execution_state_receiver: &'s mut mpsc::UnboundedReceiver<ExecutionRequest>,
-    ) -> BoxedFuture<'s> {
+    fn drain_execution_requests<'b>(
+        &'b mut self,
+        execution_state_receiver: &'b mut mpsc::UnboundedReceiver<ExecutionRequest>,
+    ) -> BoxedFuture<'b> {
         Box::pin(async move {
             while let Some(request) = execution_state_receiver.next().await {
                 self.handle_request(request).await?;

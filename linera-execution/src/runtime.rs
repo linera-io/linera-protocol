@@ -1155,6 +1155,43 @@ impl ContractSyncRuntime {
         inner.executing_message = Some(ExecutingMessage::from(context));
         inner.refund_grant_to = refund_grant_to;
     }
+
+    /// Returns the current balance of the resource controller.
+    pub(crate) fn resource_controller_balance(&self) -> Result<Amount, ExecutionError> {
+        let handle = self
+            .0
+            .as_ref()
+            .expect("Runtime should not be used after being consumed");
+        Ok(handle.inner().resource_controller.balance()?)
+    }
+
+    /// Credits the resource controller balance by the given amount.
+    pub(crate) fn credit_resource_controller(&self, amount: Amount) -> Result<(), ExecutionError> {
+        let handle = self
+            .0
+            .as_ref()
+            .expect("Runtime should not be used after being consumed");
+        handle
+            .inner()
+            .resource_controller
+            .account
+            .try_add_assign(amount)?;
+        Ok(())
+    }
+
+    /// Debits the resource controller balance by the given amount.
+    pub(crate) fn debit_resource_controller(&self, amount: Amount) -> Result<(), ExecutionError> {
+        let handle = self
+            .0
+            .as_ref()
+            .expect("Runtime should not be used after being consumed");
+        handle
+            .inner()
+            .resource_controller
+            .account
+            .try_sub_assign(amount)?;
+        Ok(())
+    }
 }
 
 impl ContractSyncRuntimeHandle {

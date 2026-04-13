@@ -13,7 +13,7 @@ use linera_base::prometheus_util::MeasureLatency;
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Timestamp},
     ensure,
-    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
@@ -218,47 +218,39 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 return Ok(());
             }
 
-            // Accept bundle — group consecutive zero-grant user messages by application_id.
+            // Accept bundle — group all user messages by application_id.
             let chain_execution_context =
                 ChainExecutionContext::IncomingBundle(txn_tracker.transaction_index());
             ensure!(!chain.system.closed.get(), ChainError::ClosedChain);
 
             let messages: Vec<_> = incoming_bundle.messages().collect();
+
+            // Pre-group user messages by application, preserving order.
+            let mut app_batches: BTreeMap<ApplicationId, Vec<usize>> = BTreeMap::new();
+            for (i, pm) in messages.iter().enumerate() {
+                if let Message::User { application_id, .. } = &pm.message {
+                    app_batches.entry(*application_id).or_default().push(i);
+                }
+            }
+            // Only apps with ≥2 messages benefit from batching.
+            app_batches.retain(|_, indices| indices.len() >= 2);
+
+            let mut executed_apps: BTreeSet<ApplicationId> = BTreeSet::new();
             let mut i = 0;
 
             while i < messages.len() {
                 let posted_message = messages[i];
 
-                // Check if this starts a batchable group: zero-grant user message.
-                if posted_message.grant.is_zero() {
-                    if let Message::User { application_id, .. } = &posted_message.message {
-                        let app_id = *application_id;
-                        let start = i;
-                        let mut end = i + 1;
-                        // Extend the group while the next message is also a zero-grant
-                        // user message targeting the same application.
-                        while end < messages.len() {
-                            if !messages[end].grant.is_zero() {
-                                break;
-                            }
-                            let Message::User {
-                                application_id: next_app_id,
-                                ..
-                            } = &messages[end].message
-                            else {
-                                break;
-                            };
-                            if *next_app_id != app_id {
-                                break;
-                            }
-                            end += 1;
-                        }
-
-                        if end - start > 1 {
-                            // Build the batch of (context, bytes) pairs.
-                            let batch: Vec<_> = messages[start..end]
+                // Check if this message belongs to a batchable group.
+                if let Message::User { application_id, .. } = &posted_message.message {
+                    if let Some(indices) = app_batches.get(application_id) {
+                        if executed_apps.insert(*application_id) {
+                            // First time seeing this app — execute the whole batch.
+                            let app_id = *application_id;
+                            let batch: Vec<_> = indices
                                 .iter()
-                                .map(|pm| {
+                                .map(|&idx| {
+                                    let pm = messages[idx];
                                     let context = MessageContext {
                                         chain_id: self.chain_id,
                                         origin: incoming_bundle.origin,
@@ -272,7 +264,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                                     let Message::User { bytes, .. } = pm.message.clone() else {
                                         unreachable!("already checked these are User messages")
                                     };
-                                    (context, bytes)
+                                    (context, bytes, pm.grant)
                                 })
                                 .collect();
 
@@ -285,10 +277,10 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                                 .execute_messages_batched(app_id, batch)
                                 .await
                                 .with_execution_context(chain_execution_context)?;
-
-                            i = end;
-                            continue;
                         }
+                        // Already executed as part of the batch — skip.
+                        i += 1;
+                        continue;
                     }
                 }
 
@@ -309,32 +301,17 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         })
     }
 
-    /// Returns true if the bundle contains at least two consecutive zero-grant user
-    /// messages targeting the same application — the case where batched execution
-    /// avoids redundant runtime creation and finalize calls.
+    /// Returns true if the bundle contains at least two user messages targeting the
+    /// same application — the case where batched execution avoids redundant runtime
+    /// creation and finalize calls.
     fn can_batch_bundle(incoming_bundle: &IncomingBundle) -> bool {
         if incoming_bundle.action != MessageAction::Accept {
             return false;
         }
-        let messages: Vec<_> = incoming_bundle.messages().collect();
-        if messages.len() < 2 {
-            return false;
-        }
-        for window in messages.windows(2) {
-            let (pm_a, pm_b) = (window[0], window[1]);
-            if !pm_a.grant.is_zero() || !pm_b.grant.is_zero() {
-                continue;
-            }
-            if let (
-                Message::User {
-                    application_id: a, ..
-                },
-                Message::User {
-                    application_id: b, ..
-                },
-            ) = (&pm_a.message, &pm_b.message)
-            {
-                if a == b {
+        let mut seen = BTreeSet::new();
+        for pm in incoming_bundle.messages() {
+            if let Message::User { application_id, .. } = &pm.message {
+                if !seen.insert(application_id) {
                     return true;
                 }
             }
