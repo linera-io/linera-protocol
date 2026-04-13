@@ -381,10 +381,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             Reason::NewRound { .. } => {
                 self.update_validators(&notification).await?;
             }
-            Reason::NewBlock { block_hash, .. } => {
+            Reason::NewBlock { hash, .. } => {
                 self.update_wallet(notification.chain_id).await?;
                 if listening_mode.is_full() {
-                    self.add_new_chains(*block_hash).await?;
+                    self.add_new_chains(*hash).await?;
                     let publishers = self
                         .update_event_subscriptions(notification.chain_id)
                         .await?;
@@ -408,12 +408,13 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     /// add them to the wallet and start listening for notifications. (This is not done for
     /// fallback owners, as those would have to monitor all chains anyway.)
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
-        let block = self
-            .storage
-            .read_confirmed_block(hash)
-            .await?
-            .ok_or(chain_client::Error::MissingConfirmedBlock(hash))?
-            .into_block();
+        let block = Arc::unwrap_or_clone(
+            self.storage
+                .read_confirmed_block(hash)
+                .await?
+                .ok_or(chain_client::Error::MissingConfirmedBlock(hash))?,
+        )
+        .into_block();
         let parent_chain_id = block.header.chain_id;
         let blobs = block.created_blobs().into_iter();
         let new_chains = blobs
@@ -714,12 +715,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     async fn update_validators(&self, notification: &Notification) -> Result<(), Error> {
         let chain_id = notification.chain_id;
         let listening_client = self.listening.get(&chain_id).expect("missing client");
-        let latest_block = if let Reason::NewBlock { block_hash, .. } = &notification.reason {
-            listening_client
-                .client
-                .read_certificate(*block_hash)
-                .await
-                .ok()
+        let latest_block = if let Reason::NewBlock { hash, .. } = &notification.reason {
+            listening_client.client.read_certificate(*hash).await.ok()
         } else {
             None
         };

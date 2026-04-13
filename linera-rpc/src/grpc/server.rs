@@ -59,7 +59,7 @@ mod metrics {
     };
     use prometheus::{HistogramVec, IntCounterVec};
 
-    use super::super::{METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
+    use super::super::{ERROR_TYPE_LABEL, METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
 
     pub static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
@@ -90,7 +90,7 @@ mod metrics {
         register_int_counter_vec(
             "server_request_error",
             "Server request error",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL, ERROR_TYPE_LABEL],
         )
     });
 
@@ -631,20 +631,20 @@ where
         .await;
     }
 
-    fn log_request_outcome(success: bool, method_name: &str, traffic_type: &str) {
+    fn log_request_success(method_name: &str, traffic_type: &str) {
         #![cfg_attr(not(with_metrics), allow(unused_variables))]
         #[cfg(with_metrics)]
-        {
-            if success {
-                metrics::SERVER_REQUEST_SUCCESS
-                    .with_label_values(&[method_name, traffic_type])
-                    .inc();
-            } else {
-                metrics::SERVER_REQUEST_ERROR
-                    .with_label_values(&[method_name, traffic_type])
-                    .inc();
-            }
-        }
+        metrics::SERVER_REQUEST_SUCCESS
+            .with_label_values(&[method_name, traffic_type])
+            .inc();
+    }
+
+    fn log_request_error(method_name: &str, traffic_type: &str, error_type: &str) {
+        #![cfg_attr(not(with_metrics), allow(unused_variables))]
+        #[cfg(with_metrics)]
+        metrics::SERVER_REQUEST_ERROR
+            .with_label_values(&[method_name, traffic_type, error_type])
+            .inc();
     }
 
     /// Extracts traffic type from a tonic request's extensions.
@@ -693,12 +693,16 @@ where
         Ok(Response::new(
             match self.state.clone().handle_block_proposal(proposal).await {
                 Ok((info, actions)) => {
-                    Self::log_request_outcome(true, "handle_block_proposal", traffic_type);
+                    Self::log_request_success("handle_block_proposal", traffic_type);
                     self.handle_network_actions(actions);
                     info.try_into()?
                 }
                 Err(error) => {
-                    Self::log_request_outcome(false, "handle_block_proposal", traffic_type);
+                    Self::log_request_error(
+                        "handle_block_proposal",
+                        traffic_type,
+                        &error.error_type(),
+                    );
                     self.log_error(&error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
@@ -734,7 +738,7 @@ where
         .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome(true, "handle_lite_certificate", traffic_type);
+                Self::log_request_success("handle_lite_certificate", traffic_type);
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -744,7 +748,11 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_lite_certificate", traffic_type);
+                Self::log_request_error(
+                    "handle_lite_certificate",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle lite certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -778,7 +786,7 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome(true, "handle_confirmed_certificate", traffic_type);
+                Self::log_request_success("handle_confirmed_certificate", traffic_type);
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -788,7 +796,11 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_confirmed_certificate", traffic_type);
+                Self::log_request_error(
+                    "handle_confirmed_certificate",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle confirmed certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -818,12 +830,16 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome(true, "handle_validated_certificate", traffic_type);
+                Self::log_request_success("handle_validated_certificate", traffic_type);
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_validated_certificate", traffic_type);
+                Self::log_request_error(
+                    "handle_validated_certificate",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle validated certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -853,11 +869,15 @@ where
             .await
         {
             Ok((info, _actions)) => {
-                Self::log_request_outcome(true, "handle_timeout_certificate", traffic_type);
+                Self::log_request_success("handle_timeout_certificate", traffic_type);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_timeout_certificate", traffic_type);
+                Self::log_request_error(
+                    "handle_timeout_certificate",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle timeout certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -882,12 +902,16 @@ where
         trace!(?query, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(query).await {
             Ok((info, actions)) => {
-                Self::log_request_outcome(true, "handle_chain_info_query", traffic_type);
+                Self::log_request_success("handle_chain_info_query", traffic_type);
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_chain_info_query", traffic_type);
+                Self::log_request_error(
+                    "handle_chain_info_query",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -917,11 +941,11 @@ where
             .await
         {
             Ok(blob) => {
-                Self::log_request_outcome(true, "download_pending_blob", traffic_type);
+                Self::log_request_success("download_pending_blob", traffic_type);
                 Ok(Response::new(blob.into_content().try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "download_pending_blob", traffic_type);
+                Self::log_request_error("download_pending_blob", traffic_type, &error.error_type());
                 self.log_error(&error, "Failed to download pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -948,11 +972,11 @@ where
         trace!(?chain_id, ?blob_id, "Handle pending blob");
         match self.state.clone().handle_pending_blob(chain_id, blob).await {
             Ok(info) => {
-                Self::log_request_outcome(true, "handle_pending_blob", traffic_type);
+                Self::log_request_success("handle_pending_blob", traffic_type);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_pending_blob", traffic_type);
+                Self::log_request_error("handle_pending_blob", traffic_type, &error.error_type());
                 self.log_error(&error, "Failed to handle pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -982,13 +1006,16 @@ where
             .await
         {
             Ok(actions) => {
-                Self::log_request_outcome(true, "handle_cross_chain_request", traffic_type);
+                Self::log_request_success("handle_cross_chain_request", traffic_type);
                 self.handle_network_actions(actions)
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_cross_chain_request", traffic_type);
-                let nickname = self.state.nickname();
-                error!(nickname, %error, "Failed to handle cross-chain request");
+                Self::log_request_error(
+                    "handle_cross_chain_request",
+                    traffic_type,
+                    &error.error_type(),
+                );
+                self.log_error(&error, "Failed to handle cross-chain request");
             }
         }
         Ok(Response::new(()))

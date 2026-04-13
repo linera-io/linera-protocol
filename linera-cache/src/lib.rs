@@ -7,4 +7,4 @@ mod unique_value_cache;
 mod value_cache;
 
 pub use unique_value_cache::UniqueValueCache;
-pub use value_cache::ValueCache;
+pub use value_cache::{ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};

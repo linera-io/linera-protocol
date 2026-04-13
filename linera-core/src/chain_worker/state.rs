@@ -253,7 +253,8 @@ where
             return Ok(blob);
         }
         let blob = self.storage.read_blob(blob_id).await?;
-        blob.ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
+        blob.map(Arc::unwrap_or_clone)
+            .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
     /// Reads the blobs from the chain manager or from storage. Returns an error if any are
@@ -339,7 +340,7 @@ where
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         let fourth_block_blobs = self.storage.read_blobs(&missing_blob_ids).await?;
         for (index, blob) in missing_indices.into_iter().zip(fourth_block_blobs) {
-            maybe_blobs[index].1 = blob;
+            maybe_blobs[index].1 = blob.map(Arc::unwrap_or_clone);
         }
         Ok(maybe_blobs.into_iter().collect())
     }
@@ -463,7 +464,7 @@ where
         }
 
         let mut uncached_hashes = Vec::new();
-        let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
+        let mut height_to_blocks: HashMap<BlockHeight, Arc<Hashed<Block>>> = HashMap::new();
 
         for hash in hashes {
             if let Some(hashed_block) = self.block_values.get(&hash) {
@@ -484,10 +485,11 @@ where
 
             for cert in certificates {
                 let hashed_block = cert.into_value().into_inner();
+                let hash = hashed_block.hash();
                 let height = hashed_block.inner().header.height;
-                self.block_values
-                    .insert_hashed(Cow::Owned(hashed_block.clone()));
-                height_to_blocks.insert(height, hashed_block);
+                self.block_values.insert_hashed(Cow::Owned(hashed_block));
+                let arc = self.block_values.get(&hash).expect("just inserted");
+                height_to_blocks.insert(height, arc);
             }
         }
 
@@ -899,35 +901,13 @@ where
             );
         }
         let chain = &mut self.chain;
-        match chain
+        chain
             .remove_bundles_from_inboxes(
                 block.header.timestamp,
                 false,
                 block.body.incoming_bundles(),
             )
-            .await
-        {
-            Ok(()) => {}
-            Err(ChainError::InboxGapDetected { origin, .. })
-                if self.config.allow_revert_confirm =>
-            {
-                let retransmit_from = self.get_inbox_next_height(origin).await?;
-                warn!(
-                    "Inbox gap detected for {chain_id} from {origin}: \
-                    requesting resend from {retransmit_from}",
-                );
-                let mut actions = NetworkActions::default();
-                actions
-                    .cross_chain_requests
-                    .push(CrossChainRequest::RevertConfirm {
-                        sender: origin,
-                        recipient: chain_id,
-                        retransmit_from,
-                    });
-                return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
-            }
-            Err(e) => return Err(e.into()),
-        }
+            .await?;
         let confirmed_block = if let Some(mut execution_state) = self
             .execution_state_cache
             .as_ref()
@@ -995,7 +975,10 @@ where
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock { height, block_hash },
+            reason: Reason::NewBlock {
+                height,
+                hash: block_hash,
+            },
         });
         if !updated_streams.is_empty() {
             actions.notifications.push(Notification {
@@ -1106,8 +1089,7 @@ where
             let add_to_received_log = previous_height != Some(bundle.height);
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
-            match self
-                .chain
+            self.chain
                 .receive_message_bundle_with_inbox(
                     &mut inbox,
                     &origin,
@@ -1115,25 +1097,7 @@ where
                     local_time,
                     add_to_received_log,
                 )
-                .await
-            {
-                Ok(()) => {}
-                Err(ChainError::InboxGapDetected { .. }) if self.config.allow_revert_confirm => {
-                    // Don't save — leave the inbox unchanged so the resend can
-                    // reconcile properly. Request from next_height_to_receive
-                    // rather than the specific gap height, so that all pending
-                    // removed_bundles entries can also be reconciled.
-                    warn!(
-                        "Inbox gap detected for {recipient} from {origin}: \
-                        requesting resend from {next_height_to_receive}",
-                    );
-                    return Ok(CrossChainUpdateResult::GapDetected {
-                        origin,
-                        retransmit_from: next_height_to_receive,
-                    });
-                }
-                Err(e) => return Err(e.into()),
-            }
+                .await?;
         }
         inbox.observe_size_metric();
         drop(inbox);
@@ -1317,6 +1281,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1325,6 +1290,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1334,6 +1300,7 @@ where
             .storage
             .read_certificate(failed_block_hash)
             .await?
+            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::LocalBlockNotFound {
                 height: failed_height,
                 chain_id,
@@ -1676,6 +1643,7 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
+            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }

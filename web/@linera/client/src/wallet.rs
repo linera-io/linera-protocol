@@ -23,6 +23,7 @@ pub struct Wallet {
 
 impl Wallet {
     /// Create a new wallet from a genesis config.
+    #[must_use]
     pub fn new(genesis_config: GenesisConfig) -> Self {
         Self {
             chains: Rc::new(wallet::Memory::default()),

@@ -32,7 +32,7 @@ use linera_execution::ExecutionError;
 use linera_views::ViewError;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, strum::IntoStaticStr)]
 pub enum ChainError {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
@@ -211,6 +211,21 @@ impl ChainError {
             | ChainError::InternalError(_)
             | ChainError::BcsError(_) => true,
             ChainError::ExecutionError(execution_error, _) => execution_error.is_local(),
+        }
+    }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// e.g. `"ChainError::UnexpectedBlockHeight"`.
+    ///
+    /// For `ExecutionError` variants, delegates to `ExecutionError::error_type()`
+    /// to surface the underlying error name rather than just `"ExecutionError"`.
+    pub fn error_type(&self) -> String {
+        match self {
+            ChainError::ExecutionError(execution_error, _) => execution_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("ChainError::{variant}")
+            }
         }
     }
 }

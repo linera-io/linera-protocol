@@ -160,7 +160,12 @@ where
         blob_ids: &[BlobId],
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
         let storage = self.storage_client();
-        Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
+        Ok(storage
+            .read_blobs(blob_ids)
+            .await?
+            .into_iter()
+            .map(|opt| opt.map(Arc::unwrap_or_clone))
+            .collect())
     }
 
     /// Reads blob states from storage.

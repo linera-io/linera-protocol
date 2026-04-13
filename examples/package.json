@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "1.58"
+  }
+}
