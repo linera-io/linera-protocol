@@ -413,9 +413,9 @@ where
     fn ttl_timeout(&self) -> Timestamp {
         let now = self.storage.clock().current_time();
         let timeout = if self.is_tracked {
-            self.config.sender_chain_ttl
-        } else {
             self.config.ttl
+        } else {
+            self.config.sender_chain_ttl
         };
         let ttl = TimeDelta::from_micros(u64::try_from(timeout.as_micros()).unwrap_or(u64::MAX));
         now.saturating_add(ttl)
