@@ -263,11 +263,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                             })
                             .collect();
 
-                        let mut actor = ExecutionStateActor::new(
-                            chain,
-                            txn_tracker,
-                            self.resource_controller,
-                        );
+                        let mut actor =
+                            ExecutionStateActor::new(chain, txn_tracker, self.resource_controller);
                         actor
                             .execute_messages_batched(app_id, batch)
                             .await
