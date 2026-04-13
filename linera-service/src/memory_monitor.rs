@@ -110,6 +110,10 @@ pub fn spawn_memory_monitor(config: MemoryMonitorConfig) {
                 .with_memory(MemoryRefreshKind::nothing())
                 .with_processes(ProcessRefreshKind::nothing().with_memory()),
         );
+        if memory_limit == 0 {
+            tracing::error!("disabling memory monitor: memory limit is 0");
+            return;
+        }
         loop {
             tokio::time::sleep(poll_interval).await;
             system.refresh_processes_specifics(
