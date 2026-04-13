@@ -13,6 +13,7 @@
 
 use linera_base::crypto::Signer as _;
 
+mod committee;
 pub mod evm;
 pub mod linera;
 pub(crate) mod metrics;
