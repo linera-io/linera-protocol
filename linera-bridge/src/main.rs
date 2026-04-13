@@ -90,6 +90,11 @@ struct ServeOptions {
     #[arg(long)]
     linera_fungible_address: String,
 
+    /// Address of the LightClient contract on EVM.
+    /// When provided, skips discovering it via FungibleBridge.lightClient().
+    #[arg(long)]
+    evm_light_client_address: Option<String>,
+
     /// EVM private key for signing addBlock transactions
     #[arg(long)]
     evm_private_key: String,
@@ -147,6 +152,7 @@ impl ServeOptions {
             &self.linera_bridge_address,
             &self.linera_fungible_address,
             &self.evm_private_key,
+            self.evm_light_client_address.as_deref(),
             self.port,
             &self.common_storage_options,
             self.monitor_scan_interval,

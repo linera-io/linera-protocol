@@ -89,6 +89,7 @@ pub async fn run(
     linera_bridge_address: &str,
     linera_fungible_address: &str,
     evm_private_key: &str,
+    evm_light_client_address: Option<&str>,
     port: u16,
     common_storage_options: &CommonStorageOptions,
     monitor_scan_interval: u64,
@@ -201,7 +202,7 @@ pub async fn run(
     )
     .await?;
 
-    // ── Sync admin chain (always) ──
+    // ── Sync admin chain ──
     tracing::info!(%admin_chain_id, "Syncing admin chain from validators...");
     let admin_client = ctx.make_chain_client(admin_chain_id).await?;
     admin_client.synchronize_from_validators().await?;
@@ -270,6 +271,7 @@ pub async fn run(
         linera_bridge_address,
         linera_fungible_address,
         evm_private_key,
+        evm_light_client_address,
         port,
         monitor_scan_interval,
         monitor_start_block,
@@ -290,6 +292,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     linera_bridge_address: &str,
     linera_fungible_address: &str,
     evm_private_key: &str,
+    evm_light_client_address: Option<&str>,
     port: u16,
     monitor_scan_interval: u64,
     monitor_start_block: u64,
@@ -312,7 +315,16 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    let evm_client = Arc::new(evm::EvmClient::new(provider, bridge_addr, relayer_addr));
+    let light_client_addr: Option<Address> = evm_light_client_address
+        .map(|s| s.parse())
+        .transpose()
+        .context("invalid --evm-light-client-address")?;
+    let evm_client = Arc::new(evm::EvmClient::new(
+        provider,
+        bridge_addr,
+        relayer_addr,
+        light_client_addr,
+    ));
 
     // ── Catch up LightClient with any missed committee rotations ──
     committee::catch_up(
@@ -340,7 +352,11 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     ));
 
     // ── Start notification listener ──
-    let mut notifications = chain_client.subscribe()?;
+    // Subscribe to admin chain notifications so we detect committee updates
+    // when synchronize_publisher_chains downloads new admin chain blocks.
+    let chain_notifications = chain_client.subscribe()?;
+    let admin_notifications = chain_client.subscribe_to(admin_chain_id)?;
+    let mut notifications = futures::stream::select(chain_notifications, admin_notifications);
     let (listener, _abort_handle, _) = chain_client.listen().await?;
     let chain_listener_handle = tokio::spawn(listener);
 

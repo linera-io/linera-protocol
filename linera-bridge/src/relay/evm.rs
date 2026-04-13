@@ -64,13 +64,22 @@ pub struct EvmClient<P> {
 }
 
 impl<P: Provider> EvmClient<P> {
-    pub fn new(provider: P, bridge_addr: Address, relayer_addr: Address) -> Self {
+    pub fn new(
+        provider: P,
+        bridge_addr: Address,
+        relayer_addr: Address,
+        light_client_override: Option<Address>,
+    ) -> Self {
+        let light_client_addr = tokio::sync::OnceCell::new();
+        if let Some(addr) = light_client_override {
+            light_client_addr.set(addr).ok();
+        }
         Self {
             provider,
             bridge_addr,
             relayer_addr,
             deposit_event_sig: deposit_event_signature(),
-            light_client_addr: tokio::sync::OnceCell::new(),
+            light_client_addr,
         }
     }
 

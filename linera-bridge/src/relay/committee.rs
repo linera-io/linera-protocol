@@ -67,7 +67,13 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     P: Provider,
 {
-    let current_epoch = evm_client.get_current_epoch().await?;
+    let current_epoch = match evm_client.get_current_epoch().await {
+        Ok(epoch) => epoch,
+        Err(e) => {
+            tracing::info!("LightClient not initialized yet, skipping catch-up: {e:#}");
+            return Ok(());
+        }
+    };
     tracing::info!(
         current_epoch,
         %admin_chain_id,
