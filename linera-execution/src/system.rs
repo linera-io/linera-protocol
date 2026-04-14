@@ -205,7 +205,7 @@ pub enum SystemOperation {
     /// Closes the chain.
     CloseChain,
     /// Changes the regular owners and non-fast-round settings of the chain.
-    /// Any owner can execute this operation.
+    /// Only a super owner can execute this operation.
     ChangeOwners {
         /// The regular owners, with their weights that determine how often they are round leader.
         #[debug(skip_if = Vec::is_empty)]
@@ -382,7 +382,12 @@ where
                 timeout_increment,
                 fallback_duration,
             } => {
-                let mut ownership = self.ownership.get().await?.clone();
+                let current_ownership = self.ownership.get().await?;
+                match context.authenticated_owner {
+                    Some(owner) if current_ownership.super_owners.contains(&owner) => {}
+                    _ => return Err(ExecutionError::UnauthorizedChangeOwners),
+                }
+                let mut ownership = current_ownership.clone();
                 ownership.owners = owners.into_iter().collect();
                 ownership.first_leader = first_leader;
                 ownership.multi_leader_rounds = multi_leader_rounds;

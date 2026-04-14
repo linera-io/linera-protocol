@@ -302,7 +302,7 @@ async fn test_change_super_owners_without_authenticated_owner_fails() -> anyhow:
     Ok(())
 }
 
-/// A regular owner can change regular owners via ChangeOwners.
+/// A super owner can change regular owners via ChangeOwners and super owners are preserved.
 #[tokio::test]
 async fn test_change_owners_preserves_super_owners() -> anyhow::Result<()> {
     let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
@@ -338,7 +338,7 @@ async fn test_change_owners_preserves_super_owners() -> anyhow::Result<()> {
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        authenticated_owner: Some(regular_owner),
+        authenticated_owner: Some(super_owner),
         timestamp: Default::default(),
     };
     let mut controller = ResourceController::default();
@@ -352,5 +352,55 @@ async fn test_change_owners_preserves_super_owners() -> anyhow::Result<()> {
     // Regular owners were changed.
     assert!(new_ownership.owners.contains_key(&new_owner));
     assert!(!new_ownership.owners.contains_key(&regular_owner));
+    Ok(())
+}
+
+/// A regular owner cannot change owners via ChangeOwners.
+#[tokio::test]
+async fn test_change_owners_by_regular_owner_fails() -> anyhow::Result<()> {
+    let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let regular_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        owners: [(regular_owner, 100)].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let tc = linera_base::ownership::TimeoutConfig::default();
+    let operation = SystemOperation::ChangeOwners {
+        owners: vec![(regular_owner, 100)],
+        first_leader: None,
+        multi_leader_rounds: 2,
+        open_multi_leader_rounds: false,
+        base_timeout: tc.base_timeout,
+        timeout_increment: tc.timeout_increment,
+        fallback_duration: tc.fallback_duration,
+    };
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(regular_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(operation))
+        .await;
+    assert!(matches!(
+        result,
+        Err(ExecutionError::UnauthorizedChangeOwners)
+    ));
     Ok(())
 }
