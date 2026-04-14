@@ -5485,9 +5485,11 @@ dependencies = [
  "linera-base",
  "linera-cache",
  "lru 0.15.0",
+ "papaya",
  "prometheus",
  "quick_cache",
  "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -5621,6 +5623,7 @@ dependencies = [
  "serde_json",
  "sha3",
  "social",
+ "strum 0.26.3",
  "sync_wrapper 1.0.2",
  "test-case",
  "test-log",

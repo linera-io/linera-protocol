@@ -43,7 +43,7 @@ mod tests {
             &mut microchain.db,
             microchain.deployer,
             microchain.contract,
-            lightClientCall {},
+            &lightClientCall {},
         );
         // Sanity check: the light client was deployed at a non-zero address
         assert_ne!(
@@ -56,7 +56,7 @@ mod tests {
             &mut microchain.db,
             microchain.deployer,
             microchain.contract,
-            chainIdCall {},
+            &chainIdCall {},
         );
         assert_eq!(
             &chain_id_bytes,
@@ -155,7 +155,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                addBlockCall {
+                &addBlockCall {
                     data: bcs_bytes.into(),
                 },
             );
@@ -173,7 +173,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                addBlockCall {
+                &addBlockCall {
                     data: bcs_bytes.into(),
                 },
             )
@@ -185,7 +185,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                blockCountCall {},
+                &blockCountCall {},
             );
             count
         }
@@ -195,7 +195,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                nextExpectedHeightCall {},
+                &nextExpectedHeightCall {},
             );
             height
         }

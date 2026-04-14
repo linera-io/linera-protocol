@@ -20,8 +20,10 @@ test = ["linera-base/test"]
 [dependencies]
 linera-base.workspace = true
 lru.workspace = true
+papaya.workspace = true
 prometheus = { workspace = true, optional = true }
 quick_cache.workspace = true
+tokio = { workspace = true, features = ["time", "rt"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true

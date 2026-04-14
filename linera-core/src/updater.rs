@@ -794,7 +794,11 @@ where
             .read_certificates_by_heights(chain_id, &heights)
             .await?;
 
-        Ok(certificates_by_height.into_iter().flatten().collect())
+        Ok(certificates_by_height
+            .into_iter()
+            .flatten()
+            .map(Arc::unwrap_or_clone)
+            .collect())
     }
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.
@@ -955,6 +959,7 @@ where
                         .await?
                         .into_iter()
                         .flatten()
+                        .map(Arc::unwrap_or_clone)
                         .collect::<Vec<_>>();
 
                     // Send each certificate

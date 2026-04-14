@@ -253,7 +253,8 @@ where
             return Ok(blob);
         }
         let blob = self.storage.read_blob(blob_id).await?;
-        blob.ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
+        blob.map(Arc::unwrap_or_clone)
+            .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
     /// Reads the blobs from the chain manager or from storage. Returns an error if any are
@@ -339,7 +340,7 @@ where
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         let fourth_block_blobs = self.storage.read_blobs(&missing_blob_ids).await?;
         for (index, blob) in missing_indices.into_iter().zip(fourth_block_blobs) {
-            maybe_blobs[index].1 = blob;
+            maybe_blobs[index].1 = blob.map(Arc::unwrap_or_clone);
         }
         Ok(maybe_blobs.into_iter().collect())
     }
@@ -411,37 +412,21 @@ where
         })
     }
 
-    /// Returns confirmed blocks by hash, checking the cache first and batch-loading the rest
-    /// from storage. The order of the returned blocks matches the order of the input hashes.
+    /// Returns confirmed blocks by hash, batch-loading from storage and populating the
+    /// worker-level block cache. The order of the returned blocks matches the order of the
+    /// input hashes.
     async fn read_confirmed_blocks(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<ConfirmedBlock>>, WorkerError> {
-        let mut blocks = Vec::with_capacity(hashes.len());
-        let mut uncached_indices = Vec::new();
-        let mut uncached_hashes = Vec::new();
-
-        for (i, hash) in hashes.iter().enumerate() {
-            if let Some(hashed_block) = self.block_values.get(hash) {
-                blocks.push(Some(ConfirmedBlock::from_hashed(hashed_block)));
-            } else {
-                blocks.push(None);
-                uncached_indices.push(i);
-                uncached_hashes.push(*hash);
-            }
+    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, WorkerError> {
+        let blocks = self
+            .storage
+            .read_confirmed_blocks(hashes.iter().copied())
+            .await?;
+        for block in blocks.iter().flatten() {
+            self.block_values
+                .insert_hashed(Cow::Borrowed(block.inner()));
         }
-
-        if !uncached_hashes.is_empty() {
-            let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
-            for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
-                if let Some(block) = &maybe_block {
-                    self.block_values
-                        .insert_hashed(Cow::Borrowed(block.inner()));
-                }
-                blocks[i] = maybe_block;
-            }
-        }
-
         Ok(blocks)
     }
 
@@ -466,8 +451,7 @@ where
         let mut height_to_blocks = HashMap::new();
         for (block, hash) in blocks.into_iter().zip(hashes) {
             let block = block.ok_or_else(|| WorkerError::ReadCertificatesError(vec![hash]))?;
-            let hashed_block = block.into_inner();
-            height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
+            height_to_blocks.insert(block.height(), block);
         }
 
         let sender = self.chain.chain_id();
@@ -479,13 +463,13 @@ where
             let previous_height = heights.first().and_then(|first_height| {
                 let block = height_to_blocks.get(first_height)?;
                 let (_, prev_height) =
-                    block.inner().body.previous_message_blocks.get(&recipient)?;
+                    block.block().body.previous_message_blocks.get(&recipient)?;
                 Some(*prev_height)
             });
             let mut bundles = Vec::new();
             let mut bundles_size = 0;
             for height in heights {
-                let Some(hashed_block) = height_to_blocks.get(&height) else {
+                let Some(confirmed_block) = height_to_blocks.get(&height) else {
                     tracing::warn!(
                         %height,
                         %recipient,
@@ -493,9 +477,9 @@ where
                     );
                     break;
                 };
-                let new_bundles = hashed_block
-                    .inner()
-                    .message_bundles_for(recipient, hashed_block.hash())
+                let new_bundles = confirmed_block
+                    .block()
+                    .message_bundles_for(recipient, confirmed_block.inner().hash())
                     .collect::<Vec<_>>();
                 let new_size = new_bundles
                     .iter()
@@ -878,35 +862,13 @@ where
             );
         }
         let chain = &mut self.chain;
-        match chain
+        chain
             .remove_bundles_from_inboxes(
                 block.header.timestamp,
                 false,
                 block.body.incoming_bundles(),
             )
-            .await
-        {
-            Ok(()) => {}
-            Err(ChainError::InboxGapDetected { origin, .. })
-                if self.config.allow_revert_confirm =>
-            {
-                let retransmit_from = self.get_inbox_next_height(origin).await?;
-                warn!(
-                    "Inbox gap detected for {chain_id} from {origin}: \
-                    requesting resend from {retransmit_from}",
-                );
-                let mut actions = NetworkActions::default();
-                actions
-                    .cross_chain_requests
-                    .push(CrossChainRequest::RevertConfirm {
-                        sender: origin,
-                        recipient: chain_id,
-                        retransmit_from,
-                    });
-                return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
-            }
-            Err(e) => return Err(e.into()),
-        }
+            .await?;
         let confirmed_block = if let Some(mut execution_state) = self
             .execution_state_cache
             .as_ref()
@@ -974,7 +936,10 @@ where
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock { height, block_hash },
+            reason: Reason::NewBlock {
+                height,
+                hash: block_hash,
+            },
         });
         if !updated_streams.is_empty() {
             actions.notifications.push(Notification {
@@ -1085,8 +1050,7 @@ where
             let add_to_received_log = previous_height != Some(bundle.height);
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
-            match self
-                .chain
+            self.chain
                 .receive_message_bundle_with_inbox(
                     &mut inbox,
                     &origin,
@@ -1094,25 +1058,7 @@ where
                     local_time,
                     add_to_received_log,
                 )
-                .await
-            {
-                Ok(()) => {}
-                Err(ChainError::InboxGapDetected { .. }) if self.config.allow_revert_confirm => {
-                    // Don't save — leave the inbox unchanged so the resend can
-                    // reconcile properly. Request from next_height_to_receive
-                    // rather than the specific gap height, so that all pending
-                    // removed_bundles entries can also be reconciled.
-                    warn!(
-                        "Inbox gap detected for {recipient} from {origin}: \
-                        requesting resend from {next_height_to_receive}",
-                    );
-                    return Ok(CrossChainUpdateResult::GapDetected {
-                        origin,
-                        retransmit_from: next_height_to_receive,
-                    });
-                }
-                Err(e) => return Err(e.into()),
-            }
+                .await?;
         }
         inbox.observe_size_metric();
         drop(inbox);
@@ -1297,6 +1243,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1305,6 +1252,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1314,6 +1262,7 @@ where
             .storage
             .read_certificate(failed_block_hash)
             .await?
+            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::LocalBlockNotFound {
                 height: failed_height,
                 chain_id,
@@ -1656,6 +1605,7 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
+            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }

@@ -966,7 +966,7 @@ Reason:
         STRUCT:
           - height:
               TYPENAME: BlockHeight
-          - block_hash:
+          - hash:
               TYPENAME: CryptoHash
     1:
       NewEvents:
@@ -997,7 +997,7 @@ Reason:
         STRUCT:
           - height:
               TYPENAME: BlockHeight
-          - block_hash:
+          - hash:
               TYPENAME: CryptoHash
 ResourceControlPolicy:
   STRUCT:

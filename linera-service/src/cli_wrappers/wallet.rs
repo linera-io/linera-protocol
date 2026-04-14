@@ -2103,12 +2103,9 @@ pub trait NotificationsExt {
     ) -> impl Future<Output = Result<CryptoHash>> {
         let expected_height = expected_height.into();
         self.wait_for(move |notification| {
-            if let Reason::NewBlock {
-                height, block_hash, ..
-            } = notification.reason
-            {
+            if let Reason::NewBlock { height, hash, .. } = notification.reason {
                 if expected_height.is_none_or(|h| h == height) {
-                    return Some(block_hash);
+                    return Some(hash);
                 }
             }
             None

@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use linera_client::config::GenesisConfig;
 use linera_execution::WasmRuntime;
-pub use linera_storage::StorageCacheSizes;
+pub use linera_storage::StorageCacheConfig;
 use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
@@ -22,7 +22,7 @@ use linera_views::rocks_db::{
     RocksDbStoreInternalConfig,
 };
 use linera_views::{
-    lru_prefix_cache::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig,
     memory::{MemoryDatabase, MemoryStoreConfig},
     store::{KeyValueDatabase, KeyValueStore},
 };
@@ -91,9 +91,9 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub confirmed_block_cache_size: usize,
 
-    /// The maximal number of entries in the lite certificate cache.
+    /// The maximal number of entries in the confirmed block certificate cache.
     #[arg(long, default_value = "1000", global = true)]
-    pub lite_certificate_cache_size: usize,
+    pub certificate_cache_size: usize,
 
     /// The maximal number of entries in the raw certificate cache.
     #[arg(long, default_value = "1000", global = true)]
@@ -103,24 +103,29 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub event_cache_size: usize,
 
+    /// Interval in seconds between weak reference cleanup sweeps in value caches.
+    #[arg(long, default_value_t = linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS, global = true)]
+    pub cache_cleanup_interval_secs: u64,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
 }
 
 impl CommonStorageOptions {
-    pub fn storage_cache_sizes(&self) -> StorageCacheSizes {
-        StorageCacheSizes {
+    pub fn storage_cache_config(&self) -> StorageCacheConfig {
+        StorageCacheConfig {
             blob_cache_size: self.blob_cache_size,
             confirmed_block_cache_size: self.confirmed_block_cache_size,
-            lite_certificate_cache_size: self.lite_certificate_cache_size,
+            certificate_cache_size: self.certificate_cache_size,
             certificate_raw_cache_size: self.certificate_raw_cache_size,
             event_cache_size: self.event_cache_size,
+            cache_cleanup_interval_secs: self.cache_cleanup_interval_secs,
         }
     }
 
-    pub fn storage_cache_config(&self) -> StorageCacheConfig {
-        StorageCacheConfig {
+    pub fn views_storage_cache_config(&self) -> ViewsStorageCacheConfig {
+        ViewsStorageCacheConfig {
             max_cache_size: self.storage_max_cache_size,
             max_value_entry_size: self.storage_max_value_entry_size,
             max_find_keys_entry_size: self.storage_max_find_keys_entry_size,
@@ -521,7 +526,7 @@ impl StorageConfig {
                 };
                 let config = StorageServiceStoreConfig {
                     inner_config,
-                    storage_cache_config: options.storage_cache_config(),
+                    storage_cache_config: options.views_storage_cache_config(),
                 };
                 Ok(StoreConfig::StorageService { config, namespace })
             }
@@ -535,7 +540,7 @@ impl StorageConfig {
                 };
                 let config = RocksDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.storage_cache_config(),
+                    storage_cache_config: options.views_storage_cache_config(),
                 };
                 Ok(StoreConfig::RocksDb { config, namespace })
             }
@@ -548,7 +553,7 @@ impl StorageConfig {
                 };
                 let config = DynamoDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.storage_cache_config(),
+                    storage_cache_config: options.views_storage_cache_config(),
                 };
                 Ok(StoreConfig::DynamoDb { config, namespace })
             }
@@ -562,7 +567,7 @@ impl StorageConfig {
                 };
                 let config = ScyllaDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.storage_cache_config(),
+                    storage_cache_config: options.views_storage_cache_config(),
                 };
                 Ok(StoreConfig::ScyllaDb { config, namespace })
             }
@@ -579,7 +584,7 @@ impl StorageConfig {
                 };
                 let first_config = RocksDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.storage_cache_config(),
+                    storage_cache_config: options.views_storage_cache_config(),
                 };
 
                 let inner_config = ScyllaDbStoreInternalConfig {
@@ -590,7 +595,7 @@ impl StorageConfig {
                 };
                 let second_config = ScyllaDbStoreConfig {
                     inner_config,
-                    storage_cache_config: options.storage_cache_config(),
+                    storage_cache_config: options.views_storage_cache_config(),
                 };
 
                 let config = DualStoreConfig {
@@ -664,7 +669,7 @@ pub trait RunnableWithStore {
         self,
         config: D::Config,
         namespace: String,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -677,7 +682,7 @@ impl StoreConfig {
         self,
         wasm_runtime: Option<WasmRuntime>,
         allow_application_logs: bool,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
     where
@@ -767,7 +772,7 @@ impl StoreConfig {
     #[allow(unused_variables)]
     pub async fn run_with_store<Job>(
         self,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
     where
@@ -806,7 +811,7 @@ impl StoreConfig {
 
     pub async fn initialize(
         self,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
         config: &GenesisConfig,
     ) -> Result<(), anyhow::Error> {
         self.run_with_store(cache_sizes, InitializeStorageJob(config))
@@ -824,7 +829,7 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
         self,
         config: D::Config,
         namespace: String,
-        cache_sizes: StorageCacheSizes,
+        cache_sizes: StorageCacheConfig,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,

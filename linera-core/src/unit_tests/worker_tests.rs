@@ -178,6 +178,7 @@ where
                 allow_messages_from_deprecated_epochs: is_client,
                 long_lived_services: has_long_lived_services,
                 block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+                sender_chain_ttl: None,
                 ..ChainWorkerConfig::default()
             }
             .with_key_pair(Some(keypair.secret_key));
@@ -1380,7 +1381,7 @@ where
                 chain_id: chain_1,
                 reason: NewBlock {
                     height: BlockHeight(0),
-                    block_hash: certificate0.hash(),
+                    hash: certificate0.hash(),
                 }
             },
             Notification {
@@ -1394,7 +1395,7 @@ where
                 chain_id: chain_1,
                 reason: NewBlock {
                     height: BlockHeight(1),
-                    block_hash: certificate1.hash(),
+                    hash: certificate1.hash(),
                 }
             },
             Notification {

@@ -103,7 +103,7 @@ mod tests {
                 &mut db,
                 deployer,
                 token,
-                erc20::transferCall {
+                &erc20::transferCall {
                     to: bridge,
                     amount: alloy_primitives::U256::from(INITIAL_SUPPLY),
                 },
@@ -150,7 +150,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.bridge,
-                addBlockCall {
+                &addBlockCall {
                     data: bcs::to_bytes(&cert).unwrap().into(),
                 },
             );
@@ -163,7 +163,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.token,
-                erc20::balanceOfCall { account },
+                &erc20::balanceOfCall { account },
             );
             balance
         }
@@ -318,7 +318,7 @@ mod tests {
             &mut db,
             deployer,
             token,
-            erc20::transferCall {
+            &erc20::transferCall {
                 to: DEPOSITOR,
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -346,7 +346,7 @@ mod tests {
             &mut t.db,
             DEPOSITOR,
             t.token,
-            erc20::approveCall {
+            &erc20::approveCall {
                 spender: t.bridge,
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -357,7 +357,7 @@ mod tests {
             &mut t.db,
             DEPOSITOR,
             t.bridge,
-            bridge::depositCall {
+            &bridge::depositCall {
                 target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
                 target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
                 target_account_owner: target_owner_bytes().into(),
@@ -433,7 +433,7 @@ mod tests {
             &mut t.db,
             DEPOSITOR,
             t.token,
-            erc20::approveCall {
+            &erc20::approveCall {
                 spender: t.bridge,
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -443,7 +443,7 @@ mod tests {
             &mut t.db,
             DEPOSITOR,
             t.bridge,
-            bridge::depositCall {
+            &bridge::depositCall {
                 target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
                 target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
                 target_account_owner: target_owner_bytes().into(),
@@ -475,7 +475,7 @@ mod tests {
             &mut t.db,
             DEPOSITOR,
             t.bridge,
-            bridge::depositCall {
+            &bridge::depositCall {
                 target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
                 target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
                 target_account_owner: target_owner_bytes().into(),
@@ -494,7 +494,7 @@ mod tests {
             &mut t.db,
             DEPOSITOR,
             t.token,
-            erc20::approveCall {
+            &erc20::approveCall {
                 spender: t.bridge,
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -504,7 +504,7 @@ mod tests {
             &mut t.db,
             DEPOSITOR,
             t.bridge,
-            bridge::depositCall {
+            &bridge::depositCall {
                 target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
                 target_application_id: [0xFF; 32].into(),
                 target_account_owner: target_owner_bytes().into(),
@@ -529,7 +529,7 @@ mod tests {
             &mut t.db,
             DEPOSITOR,
             t.token,
-            erc20::approveCall {
+            &erc20::approveCall {
                 spender: t.bridge,
                 amount: alloy_primitives::U256::from(too_much),
             },
@@ -540,7 +540,7 @@ mod tests {
             &mut t.db,
             DEPOSITOR,
             t.bridge,
-            bridge::depositCall {
+            &bridge::depositCall {
                 target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
                 target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
                 target_account_owner: target_owner_bytes().into(),

@@ -22,7 +22,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
-use linera_cache::{UniqueValueCache, ValueCache};
+use linera_cache::{UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
@@ -281,7 +281,7 @@ doc_scalar!(
 pub enum Reason {
     NewBlock {
         height: BlockHeight,
-        block_hash: CryptoHash,
+        hash: CryptoHash,
     },
     NewEvents {
         height: BlockHeight,
@@ -298,12 +298,12 @@ pub enum Reason {
     },
     BlockExecuted {
         height: BlockHeight,
-        block_hash: CryptoHash,
+        hash: CryptoHash,
     },
 }
 
 /// Error type for worker operations.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, strum::IntoStaticStr)]
 pub enum WorkerError {
     #[error(transparent)]
     CryptoError(#[from] CryptoError),
@@ -452,6 +452,21 @@ impl WorkerError {
             | WorkerError::IncorrectOutcome { .. }
             | WorkerError::PoisonedWorker => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
+        }
+    }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// e.g. `"WorkerError::UnexpectedBlockHeight"`.
+    ///
+    /// For `ChainError` variants, delegates to `ChainError::error_type()` to
+    /// surface the underlying error name rather than just `"ChainError"`.
+    pub fn error_type(&self) -> String {
+        match self {
+            WorkerError::ChainError(chain_error) => chain_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("WorkerError::{variant}")
+            }
         }
     }
 
@@ -657,6 +672,7 @@ where
             .block_cache
             .get(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?;
+        let block = Arc::unwrap_or_clone(block);
 
         match certificate.value.kind {
             linera_chain::types::CertificateKind::Confirmed => {
@@ -737,7 +753,10 @@ where
         WorkerState {
             storage,
             chain_worker_config,
-            block_cache: Arc::new(ValueCache::new(block_cache_size)),
+            block_cache: Arc::new(ValueCache::new(
+                block_cache_size,
+                DEFAULT_CLEANUP_INTERVAL_SECS,
+            )),
             execution_state_cache: (execution_state_cache_size > 0)
                 .then(|| Arc::new(UniqueValueCache::new(execution_state_cache_size))),
             chain_modes,
