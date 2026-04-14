@@ -322,7 +322,7 @@ impl Options {
             self.reject_message_bundles_with_other_application_ids
                 .clone(),
             self.process_events_from_application_ids.clone(),
-            self.never_reject_application_ids.clone(),
+            self.never_reject_application_ids.clone().unwrap_or_default(),
         );
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);

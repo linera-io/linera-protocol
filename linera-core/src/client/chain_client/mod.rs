@@ -166,10 +166,7 @@ impl Options {
             on_failure: BundleFailurePolicy::AutoRetry {
                 max_failures: self.max_block_limit_errors,
                 never_reject_application_ids: Arc::new(
-                    self.message_policy
-                        .never_reject_application_ids
-                        .clone()
-                        .unwrap_or_default(),
+                    self.message_policy.never_reject_application_ids.clone(),
                 ),
             },
             time_budget: self.staging_bundles_time_budget,

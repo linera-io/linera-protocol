@@ -285,13 +285,12 @@ impl IncomingBundle {
                 return false;
             }
         }
-        if let Some(app_ids) = &policy.never_reject_application_ids {
-            if self
-                .messages()
-                .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
-            {
-                return true;
-            }
+        if self.messages().any(|posted_msg| {
+            policy
+                .never_reject_application_ids
+                .contains(&posted_msg.message.application_id())
+        }) {
+            return true;
         }
         if let Some(app_ids) = &policy.reject_message_bundles_without_application_ids {
             if !self

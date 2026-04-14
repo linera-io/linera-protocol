@@ -13,7 +13,7 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use assert_matches::assert_matches;
 use async_graphql::Request;
@@ -842,7 +842,7 @@ where
         None,
         None,
         None,
-        None,
+        HashSet::new(),
     );
 
     // Receiver should only process the event from sender now.
@@ -865,7 +865,7 @@ where
 
     // Let's receive from everyone again.
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None, HashSet::new());
 
     // Receiver should now process the event from sender2 as well.
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -906,7 +906,7 @@ where
         None,
         None,
         Some(Default::default()),
-        None,
+        HashSet::new(),
     );
 
     // Receiver should not process the event.
@@ -920,7 +920,7 @@ where
         None,
         None,
         Some([application_id.forget_abi().into()].into_iter().collect()),
-        None,
+        HashSet::new(),
     );
 
     // Receiver should process the new event now.
@@ -1210,7 +1210,7 @@ where
         Some([fungible_id.forget_abi().into()].into_iter().collect()),
         None,
         None,
-        None,
+        HashSet::new(),
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(certs.len(), 1, "Should accept bundle with fungible message");
@@ -1235,7 +1235,7 @@ where
         Some([crowd_funding_id.forget_abi().into()].into_iter().collect()),
         None,
         None,
-        None,
+        HashSet::new(),
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
@@ -1266,7 +1266,7 @@ where
         Some([fake_app_id.into()].into_iter().collect()),
         None,
         None,
-        None,
+        HashSet::new(),
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
@@ -1303,7 +1303,7 @@ where
         None,
         Some([fungible_id.forget_abi().into()].into_iter().collect()),
         None,
-        None,
+        HashSet::new(),
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
@@ -1346,7 +1346,7 @@ where
             .collect(),
         ),
         None,
-        None,
+        HashSet::new(),
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
