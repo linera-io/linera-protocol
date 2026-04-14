@@ -84,15 +84,11 @@ export DB_PATH="/path/to/your/indexer.db"
 
 ## Development
 
-### Option 1: Start both frontend and backend together
-```bash
-npm run start
-```
+Start the Rust API server and the frontend in separate terminals:
 
-### Option 2: Start them separately
 ```bash
-# Terminal 1 - Start the API server
-npm run server
+# Terminal 1 - Start the Rust API server (requires DATABASE_URL)
+(cd server-rust && cargo run --release)
 
 # Terminal 2 - Start the frontend
 npm run dev
