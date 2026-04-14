@@ -219,6 +219,17 @@ where
         self.service_runtime_task.take()
     }
 
+    /// Returns the pending cross-chain network actions for this chain, without
+    /// initializing the chain's execution state. Intended for callers that only
+    /// need to re-emit cross-chain requests from the outbox of a sender chain
+    /// whose `ChainDescription` we may never have needed.
+    #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
+    pub(crate) async fn cross_chain_network_actions(
+        &self,
+    ) -> Result<NetworkActions, WorkerError> {
+        self.create_network_actions(None).await
+    }
+
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
     #[tracing::instrument(level = "debug", skip(self))]
     pub(crate) async fn handle_chain_info_query(
