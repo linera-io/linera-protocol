@@ -224,9 +224,7 @@ where
     /// need to re-emit cross-chain requests from the outbox of a sender chain
     /// whose `ChainDescription` we may never have needed.
     #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
-    pub(crate) async fn cross_chain_network_actions(
-        &self,
-    ) -> Result<NetworkActions, WorkerError> {
+    pub(crate) async fn cross_chain_network_actions(&self) -> Result<NetworkActions, WorkerError> {
         self.create_network_actions(None).await
     }
 

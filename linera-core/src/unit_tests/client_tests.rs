@@ -1325,7 +1325,9 @@ where
     let sender_id = sender_description.id();
     let sender_chain_desc_blob_id = BlobId::new(sender_id.0, BlobType::ChainDescription);
 
-    let mut sender = builder.make_client(sender_id, None, BlockHeight::ZERO).await?;
+    let mut sender = builder
+        .make_client(sender_id, None, BlockHeight::ZERO)
+        .await?;
     sender.set_preferred_owner(sender_public_key.into());
     sender.synchronize_from_validators().await?;
 
