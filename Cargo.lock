@@ -6098,7 +6098,6 @@ dependencies = [
  "criterion",
  "crowd-funding",
  "current_platform",
- "dirs",
  "ethereum-tracker",
  "fs-err",
  "fs_extra",

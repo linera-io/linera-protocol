@@ -107,8 +107,8 @@ linera-storage = { workspace = true, optional = true }
 linera-storage-runtime = { workspace = true, optional = true, features = [
     "rocksdb",
 ] }
-linera-wallet = { workspace = true, optional = true }
 linera-views = { workspace = true, optional = true }
+linera-wallet = { workspace = true, optional = true }
 prometheus = { workspace = true, optional = true }
 rustls = { version = "0.23", optional = true, features = ["ring"] }
 sqlx = { workspace = true, optional = true, features = [

@@ -99,7 +99,6 @@ clio = { workspace = true, features = ["clap-parse"] }
 colored.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
-dirs.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
 futures.workspace = true
@@ -127,8 +126,8 @@ linera-storage.workspace = true
 linera-storage-runtime.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
-linera-wallet.workspace = true
 linera-views.workspace = true
+linera-wallet.workspace = true
 lru.workspace = true
 nonzero_lit.workspace = true
 papaya.workspace = true
