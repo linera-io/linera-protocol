@@ -246,14 +246,21 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                             timestamp: self.timestamp,
                         };
 
-                        // Lazily start a batch for this application.
-                        if let std::collections::btree_map::Entry::Vacant(e) = batches.entry(app_id)
-                        {
+                        // If this app doesn't have an active batch, finalize all
+                        // existing batches first so their state is flushed to views.
+                        // This ensures cross-app calls see up-to-date state.
+                        if !batches.contains_key(&app_id) {
+                            for (_id, batch) in std::mem::take(&mut batches) {
+                                actor
+                                    .finalize_message_batch(batch)
+                                    .await
+                                    .with_execution_context(chain_execution_context)?;
+                            }
                             let batch = actor
                                 .start_message_batch(app_id, context)
                                 .await
                                 .with_execution_context(chain_execution_context)?;
-                            e.insert(batch);
+                            batches.insert(app_id, batch);
                         }
 
                         let batch = batches.get_mut(&app_id).expect("just inserted");
@@ -268,6 +275,13 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                             .with_execution_context(chain_execution_context)?;
                     }
                     Message::System(_) => {
+                        // Finalize all batches before executing a system message.
+                        for (_id, batch) in std::mem::take(&mut batches) {
+                            actor
+                                .finalize_message_batch(batch)
+                                .await
+                                .with_execution_context(chain_execution_context)?;
+                        }
                         let context = MessageContext {
                             chain_id: self.chain_id,
                             origin: incoming_bundle.origin,
@@ -293,7 +307,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 }
             }
 
-            // Finalize all batches.
+            // Finalize remaining batches.
             for (_app_id, batch) in batches {
                 actor
                     .finalize_message_batch(batch)
