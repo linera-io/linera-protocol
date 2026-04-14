@@ -1189,32 +1189,14 @@ impl<Env: Environment> Client<Env> {
                     remote_heights.iter().copied().zip(local_certs.into_iter())
                 {
                     if let Some(certificate) = maybe_cert {
-                        let certificate = Arc::unwrap_or_clone(certificate);
-                        let check_result =
-                            Self::check_certificate(max_epoch, committees_ref, &certificate);
-                        let check_ok = check_result
-                            .map(|r| r.into_result().is_ok())
-                            .unwrap_or(false);
                         let chain_id = certificate.block().header.chain_id;
-                        if check_ok {
-                            let mode = ReceiveCertificateMode::AlreadyChecked;
-                            if self
-                                .receive_sender_certificate(certificate, mode, None)
-                                .await
-                                .is_ok()
-                            {
-                                if let Err(error) = sender.send(ChainAndHeight { chain_id, height })
-                                {
-                                    error!(
-                                        %chain_id, %height, %error,
-                                        "failed to send chain and height over the channel",
-                                    );
-                                }
-                                continue;
-                            }
+                        if let Err(error) = sender.send(ChainAndHeight { chain_id, height })
+                        {
+                            error!(
+                                %chain_id, %height, %error,
+                                "failed to send chain and height over the channel",
+                            );
                         }
-                        // Check or receive failed — try downloading from a validator.
-                        still_needed.push(height);
                     } else {
                         still_needed.push(height);
                     }
