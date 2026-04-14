@@ -1,6 +1,7 @@
-#![recursion_limit = "512"]
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+#![recursion_limit = "512"]
 
 //! End-to-end test: trigger a committee rotation on Linera and verify the relay relays
 //! it to the LightClient contract on Anvil (via docker-compose).
