@@ -1113,7 +1113,7 @@ where
         }
         inbox.observe_size_metric();
         drop(inbox);
-        if !self.config.allow_inactive_chains && !self.chain.is_active().await {
+        if !self.config.allow_inactive_chains && !self.chain.is_active().await? {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
             // cross-chain update is retried later.

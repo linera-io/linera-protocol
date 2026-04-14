@@ -32,6 +32,7 @@ use linera_views::{
     register_view::RegisterView,
     set_view::SetView,
     views::{ClonableView, ReplaceContext, View},
+    ViewError,
 };
 use serde::{Deserialize, Serialize};
 
@@ -341,19 +342,11 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     /// Invariant for the states of active chains.
-    pub async fn is_active(&self) -> bool {
-        let description = match self.description.get().await {
-            Ok(description) => description,
-            Err(_) => return false,
-        };
-        let ownership = match self.ownership.get().await {
-            Ok(ownership) => ownership,
-            Err(_) => return false,
-        };
-        description.is_some()
-            && ownership.is_active()
+    pub async fn is_active(&self) -> Result<bool, ViewError> {
+        Ok(self.description.get().await?.is_some()
+            && self.ownership.get().await?.is_active()
             && self.current_committee().is_some()
-            && self.admin_chain_id.get().is_some()
+            && self.admin_chain_id.get().is_some())
     }
 
     /// Returns the current committee, if any.

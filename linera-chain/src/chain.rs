@@ -439,8 +439,8 @@ where
     }
 
     /// Invariant for the states of active chains.
-    pub async fn is_active(&self) -> bool {
-        self.execution_state.system.is_active().await
+    pub async fn is_active(&self) -> Result<bool, ChainError> {
+        Ok(self.execution_state.system.is_active().await?)
     }
 
     /// Initializes the chain if it is not active yet.
