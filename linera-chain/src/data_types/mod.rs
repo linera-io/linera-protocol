@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    sync::Arc,
+};
 
 use allocative::Allocative;
 use async_graphql::SimpleObject;
@@ -17,7 +20,9 @@ use linera_base::{
         Amount, Blob, BlockHeight, Epoch, Event, MessagePolicy, OracleResponse, Round, Timestamp,
     },
     doc_scalar, ensure, hex, hex_debug,
-    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, BlobId, ChainId, GenericApplicationId, StreamId,
+    },
     time::Duration,
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
@@ -280,6 +285,14 @@ impl IncomingBundle {
                 return false;
             }
         }
+        if let Some(app_ids) = &policy.never_reject_application_ids {
+            if self
+                .messages()
+                .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
+            {
+                return true;
+            }
+        }
         if let Some(app_ids) = &policy.reject_message_bundles_without_application_ids {
             if !self
                 .messages()
@@ -324,7 +337,7 @@ pub enum MessageAction {
 }
 
 /// Policy for handling message bundle execution failures during block execution.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum BundleFailurePolicy {
     /// Abort block execution on any bundle failure. The proposal is never modified.
     #[default]
@@ -337,16 +350,22 @@ pub enum BundleFailurePolicy {
     /// - For limit errors (block too large, fuel exceeded, etc.): discard the bundle
     ///   so it can be retried in a later block, unless it's the first transaction
     ///   (in which case it's inherently too large and gets rejected).
-    /// - For non-limit errors: reject the bundle (triggering bounced messages).
+    /// - For bundles containing a message from any application in
+    ///   `never_reject_application_ids`: discard the bundle (and subsequent bundles from
+    ///   the same sender) so they can be retried in a later block, and log a warning.
+    /// - For all other non-limit errors: reject the bundle (triggering bounced messages).
     /// - After `max_failures` discarded bundles, discard all remaining message bundles.
     AutoRetry {
         /// Maximum number of discarded bundles before discarding all remaining message bundles.
         max_failures: u32,
+        /// Applications whose messages must never be rejected. A failed bundle containing
+        /// any such message is discarded instead of rejected.
+        never_reject_application_ids: Arc<HashSet<GenericApplicationId>>,
     },
 }
 
 /// Policy for executing message bundles during block execution.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BundleExecutionPolicy {
     /// What to do when a bundle fails.
     pub on_failure: BundleFailurePolicy,

@@ -32,7 +32,7 @@ use linera_views::{
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
 use crate::{
     block::{Block, ConfirmedBlock},
@@ -674,7 +674,7 @@ where
     ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
-        if !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort) {
+        if !matches!(&exec_policy.on_failure, BundleFailurePolicy::Abort) {
             assert!(
                 replaying_oracle_responses.is_none(),
                 "Cannot use AutoRetry policy when replaying oracle responses"
@@ -719,12 +719,15 @@ where
             block,
         )?;
 
-        // Extract max_failures from exec_policy.
-        let max_failures = match exec_policy.on_failure {
-            BundleFailurePolicy::Abort => 0,
-            BundleFailurePolicy::AutoRetry { max_failures } => max_failures,
+        // Extract failure-policy parameters from exec_policy.
+        let (max_failures, never_reject_application_ids) = match &exec_policy.on_failure {
+            BundleFailurePolicy::Abort => (0, None),
+            BundleFailurePolicy::AutoRetry {
+                max_failures,
+                never_reject_application_ids,
+            } => (*max_failures, Some(never_reject_application_ids.clone())),
         };
-        let auto_retry = !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort);
+        let auto_retry = never_reject_application_ids.is_some();
         let mut failure_count = 0u32;
 
         let time_budget = exec_policy.time_budget;
@@ -794,6 +797,14 @@ where
             *chain = saved_chain;
             block_execution_tracker.restore_checkpoint(&saved_tracker);
 
+            let contains_never_reject_message = never_reject_application_ids
+                .as_ref()
+                .is_some_and(|app_ids| {
+                    !app_ids.is_empty()
+                        && incoming_bundle
+                            .messages()
+                            .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
+                });
             if error.is_limit_error() && i > 0 {
                 failure_count += 1;
                 // If we've exceeded max failures, discard all remaining message bundles.
@@ -816,6 +827,20 @@ where
                     Some(incoming_bundle.origin)
                 };
                 Self::discard_remaining_bundles(block, i, maybe_sender);
+                // Continue without incrementing i (next transaction is now at i).
+            } else if contains_never_reject_message
+                && !incoming_bundle.bundle.is_protected()
+                && incoming_bundle.action != MessageAction::Reject
+            {
+                let origin = incoming_bundle.origin;
+                warn!(
+                    %error,
+                    index = i,
+                    %origin,
+                    "Message bundle for a never-reject application failed; discarding the \
+                    bundle (and same-sender subsequent bundles) for retry in a later block"
+                );
+                Self::discard_remaining_bundles(block, i, Some(origin));
                 // Continue without incrementing i (next transaction is now at i).
             } else if incoming_bundle.bundle.is_protected()
                 || incoming_bundle.action == MessageAction::Reject

@@ -13,7 +13,7 @@ use futures::StreamExt;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, InMemorySigner},
     data_types::*,
-    identifiers::{Account, AccountOwner, ApplicationId},
+    identifiers::{Account, AccountOwner, ApplicationId, GenericApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -2742,7 +2742,7 @@ where
     );
 
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None, None, None);
     receiver.synchronize_from_validators().await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2754,7 +2754,7 @@ where
     );
 
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender.synchronize_from_validators().await?;
@@ -2791,6 +2791,7 @@ where
         None,
         None,
         None,
+        None,
     );
     receiver.synchronize_from_validators().await?;
     let certs = receiver.process_inbox().await?.0;
@@ -2801,9 +2802,56 @@ where
 
     // Even if we change the policy, there's no longer a message to receive.
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 0);
+
+    // A never-reject application bypasses a blanket Reject policy: the bundle must be accepted.
+    sender
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    receiver.synchronize_from_validators().await?;
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Reject,
+        None,
+        None,
+        None,
+        None,
+        Some([GenericApplicationId::System].into_iter().collect()),
+    );
+    let certs = receiver.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1);
+    // The transfer was accepted (not bounced): receiver balance is now 2.
+    assert_eq!(
+        receiver.local_balance().await.unwrap(),
+        Amount::from_tokens(2)
+    );
+
+    // `restrict_chain_ids_to` still dominates over never-reject: a message from a non-whitelisted
+    // chain is still filtered out even if it belongs to a never-reject application.
+    sender
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    receiver.synchronize_from_validators().await?;
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        Some([sender2.chain_id()].into_iter().collect()),
+        None,
+        None,
+        None,
+        Some([GenericApplicationId::System].into_iter().collect()),
+    );
+    // The message from `sender` gets rejected (tracked, non-protected) and bounces back.
+    let certs = receiver.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1);
+    assert_eq!(
+        receiver.local_balance().await.unwrap(),
+        Amount::from_tokens(2)
+    );
+    sender.synchronize_from_validators().await?;
+    assert_eq!(sender.process_inbox().await?.0.len(), 1);
 
     Ok(())
 }
@@ -3171,6 +3219,7 @@ where
             chain_client::Options {
                 message_policy: MessagePolicy::new(
                     BlanketMessagePolicy::Reject,
+                    None,
                     None,
                     None,
                     None,

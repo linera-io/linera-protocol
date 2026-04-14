@@ -453,7 +453,10 @@ where
             None,
             vec![],
             BundleExecutionPolicy {
-                on_failure: BundleFailurePolicy::AutoRetry { max_failures: 3 },
+                on_failure: BundleFailurePolicy::AutoRetry {
+                    max_failures: 3,
+                    never_reject_application_ids: Default::default(),
+                },
                 time_budget: None,
             },
         )

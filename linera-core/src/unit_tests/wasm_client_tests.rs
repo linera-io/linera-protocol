@@ -842,6 +842,7 @@ where
         None,
         None,
         None,
+        None,
     );
 
     // Receiver should only process the event from sender now.
@@ -864,7 +865,7 @@ where
 
     // Let's receive from everyone again.
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None, None);
 
     // Receiver should now process the event from sender2 as well.
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -905,6 +906,7 @@ where
         None,
         None,
         Some(Default::default()),
+        None,
     );
 
     // Receiver should not process the event.
@@ -918,6 +920,7 @@ where
         None,
         None,
         Some([application_id.forget_abi().into()].into_iter().collect()),
+        None,
     );
 
     // Receiver should process the new event now.
@@ -1207,6 +1210,7 @@ where
         Some([fungible_id.forget_abi().into()].into_iter().collect()),
         None,
         None,
+        None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(certs.len(), 1, "Should accept bundle with fungible message");
@@ -1229,6 +1233,7 @@ where
         BlanketMessagePolicy::Accept,
         None,
         Some([crowd_funding_id.forget_abi().into()].into_iter().collect()),
+        None,
         None,
         None,
     );
@@ -1259,6 +1264,7 @@ where
         BlanketMessagePolicy::Accept,
         None,
         Some([fake_app_id.into()].into_iter().collect()),
+        None,
         None,
         None,
     );
@@ -1296,6 +1302,7 @@ where
         None,
         None,
         Some([fungible_id.forget_abi().into()].into_iter().collect()),
+        None,
         None,
     );
     let certs = campaign_chain.process_inbox().await?.0;
@@ -1338,6 +1345,7 @@ where
             .into_iter()
             .collect(),
         ),
+        None,
         None,
     );
     let certs = campaign_chain.process_inbox().await?.0;

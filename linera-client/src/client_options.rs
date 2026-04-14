@@ -170,6 +170,14 @@ pub struct Options {
     #[arg(long, value_parser = util::parse_app_set)]
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
 
+    /// A set of application IDs whose messages must never be rejected. Bundles containing any
+    /// message from one of these applications bypass the other rejection rules (except
+    /// `--restrict-chain-ids-to`), and on execution failure they (and subsequent bundles from
+    /// the same sender) are removed from the block for later retry instead of being rejected,
+    /// with a warning logged.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub never_reject_application_ids: Option<HashSet<GenericApplicationId>>,
+
     /// Enable timing reports during operations
     #[cfg(not(web))]
     #[arg(long)]
@@ -314,6 +322,7 @@ impl Options {
             self.reject_message_bundles_with_other_application_ids
                 .clone(),
             self.process_events_from_application_ids.clone(),
+            self.never_reject_application_ids.clone(),
         );
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);

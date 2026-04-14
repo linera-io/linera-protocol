@@ -1639,6 +1639,11 @@ pub struct MessagePolicy {
     /// A collection of applications: If `Some`, only event streams from those
     /// applications will be processed.
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
+    /// A collection of applications whose messages must never be rejected. Bundles containing
+    /// at least one message from any of these applications bypass the other rejection rules
+    /// (except `restrict_chain_ids_to`), and on execution failure they are discarded for later
+    /// retry instead of being rejected.
+    pub never_reject_application_ids: Option<HashSet<GenericApplicationId>>,
 }
 
 /// A blanket policy to apply to all messages by default.
@@ -1675,6 +1680,7 @@ impl MessagePolicy {
         reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
         reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
         process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
+        never_reject_application_ids: Option<HashSet<GenericApplicationId>>,
     ) -> Self {
         Self {
             blanket,
@@ -1682,6 +1688,7 @@ impl MessagePolicy {
             reject_message_bundles_without_application_ids,
             reject_message_bundles_with_other_application_ids,
             process_events_from_application_ids,
+            never_reject_application_ids,
         }
     }
 
@@ -1694,6 +1701,7 @@ impl MessagePolicy {
             reject_message_bundles_without_application_ids: None,
             reject_message_bundles_with_other_application_ids: None,
             process_events_from_application_ids: None,
+            never_reject_application_ids: None,
         }
     }
 
