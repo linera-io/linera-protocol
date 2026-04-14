@@ -19,17 +19,27 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn create_new(name: &str, linera_root: Option<&Path>) -> Result<Self> {
+    pub fn create_new(
+        name: &str,
+        linera_root: Option<&Path>,
+        dir: Option<PathBuf>,
+    ) -> Result<Self> {
         ensure!(
             !name.contains(std::path::is_separator),
             "Project name {name} should not contain path-separators",
         );
-        let root = PathBuf::from(name);
-        ensure!(
-            !root.exists(),
-            "Directory {} already exists",
-            root.display(),
-        );
+        let root = match dir {
+            Some(dir) => dir,
+            None => {
+                let root = PathBuf::from(name);
+                ensure!(
+                    !root.exists(),
+                    "Directory {} already exists",
+                    root.display(),
+                );
+                root
+            }
+        };
         ensure!(
             root.extension().is_none(),
             "Project name {name} should not have a file extension",
@@ -71,9 +81,17 @@ impl Project {
     }
 
     pub fn from_existing_project(root: PathBuf) -> Result<Self> {
+        let root = root.canonicalize().with_context(|| {
+            format!(
+                "Could not find project at {}. \
+                 Make sure the specified directory exists.",
+                root.display()
+            )
+        })?;
         ensure!(
-            root.exists(),
-            "could not find project at {}",
+            root.join("Cargo.toml").exists(),
+            "No Cargo.toml found at {}. \
+             The path must point to a Rust project directory.",
             root.display()
         );
         Ok(Self { root })
@@ -115,13 +133,13 @@ impl Project {
 
     fn create_source_directory(project_root: &Path) -> Result<PathBuf> {
         let source_directory = project_root.join("src");
-        fs_err::create_dir(&source_directory)?;
+        fs_err::create_dir_all(&source_directory)?;
         Ok(source_directory)
     }
 
     fn create_test_directory(project_root: &Path) -> Result<PathBuf> {
         let test_directory = project_root.join("tests");
-        fs_err::create_dir(&test_directory)?;
+        fs_err::create_dir_all(&test_directory)?;
         Ok(test_directory)
     }
 
