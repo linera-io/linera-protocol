@@ -244,6 +244,11 @@ A block height to identify blocks in a chain
 """
 scalar BlockHeight
 
+type BucketQueueView_BlockHeight_e824a938 {
+	count: Int!
+	entries(count: Int): [BlockHeight!]!
+}
+
 """
 A module bytecode (WebAssembly or EVM)
 """
@@ -1223,7 +1228,7 @@ type OutboxStateView {
 	Keep sending these certified blocks of ours until they are acknowledged by
 	receivers.
 	"""
-	queue: QueueView_BlockHeight_e824a938!
+	queue: BucketQueueView_BlockHeight_e824a938!
 }
 
 """
@@ -1345,11 +1350,6 @@ type QueryRoot {
 	Returns the version information on this node service.
 	"""
 	version: VersionInfo!
-}
-
-type QueueView_BlockHeight_e824a938 {
-	count: Int!
-	entries(count: Int): [BlockHeight!]!
 }
 
 type QueueView_MessageBundle_f4399f0b {
