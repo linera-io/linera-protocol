@@ -6,7 +6,7 @@ mod test_helpers;
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use assert_matches::assert_matches;
 use futures::StreamExt;
@@ -2741,14 +2741,10 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Ignore,
-        None,
-        None,
-        None,
-        None,
-        HashSet::new(),
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        blanket: BlanketMessagePolicy::Ignore,
+        ..Default::default()
+    };
     receiver.synchronize_from_validators().await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2759,14 +2755,10 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Reject,
-        None,
-        None,
-        None,
-        None,
-        HashSet::new(),
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        blanket: BlanketMessagePolicy::Reject,
+        ..Default::default()
+    };
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender.synchronize_from_validators().await?;
@@ -2797,14 +2789,10 @@ where
     );
 
     // The receiver will only accept messages from sender, and not from sender2.
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        Some([sender.chain_id()].into_iter().collect()),
-        None,
-        None,
-        None,
-        HashSet::new(),
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        restrict_chain_ids_to: Some([sender.chain_id()].into_iter().collect()),
+        ..Default::default()
+    };
     receiver.synchronize_from_validators().await?;
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
@@ -2813,14 +2801,7 @@ where
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ONE);
 
     // Even if we change the policy, there's no longer a message to receive.
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        None,
-        None,
-        None,
-        HashSet::new(),
-    );
+    receiver.options_mut().message_policy = MessagePolicy::default();
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 0);
 
@@ -2830,14 +2811,11 @@ where
         .await
         .unwrap_ok_committed();
     receiver.synchronize_from_validators().await?;
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Reject,
-        None,
-        None,
-        None,
-        None,
-        [GenericApplicationId::System].into_iter().collect(),
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        blanket: BlanketMessagePolicy::Reject,
+        never_reject_application_ids: [GenericApplicationId::System].into_iter().collect(),
+        ..Default::default()
+    };
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     // The transfer was accepted (not bounced): receiver balance is now 2.
@@ -2853,14 +2831,11 @@ where
         .await
         .unwrap_ok_committed();
     receiver.synchronize_from_validators().await?;
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        Some([sender2.chain_id()].into_iter().collect()),
-        None,
-        None,
-        None,
-        [GenericApplicationId::System].into_iter().collect(),
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        restrict_chain_ids_to: Some([sender2.chain_id()].into_iter().collect()),
+        never_reject_application_ids: [GenericApplicationId::System].into_iter().collect(),
+        ..Default::default()
+    };
     // The message from `sender` gets rejected (tracked, non-protected) and bounces back.
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
@@ -3235,14 +3210,10 @@ where
             None,
             BlockHeight::ZERO,
             chain_client::Options {
-                message_policy: MessagePolicy::new(
-                    BlanketMessagePolicy::Reject,
-                    None,
-                    None,
-                    None,
-                    None,
-                    HashSet::new(),
-                ),
+                message_policy: MessagePolicy {
+                    blanket: BlanketMessagePolicy::Reject,
+                    ..Default::default()
+                },
                 ..chain_client::Options::test_default()
             },
             false,

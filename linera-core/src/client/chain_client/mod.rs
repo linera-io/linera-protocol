@@ -143,7 +143,7 @@ impl Options {
             max_pending_message_bundles: 10,
             max_block_limit_errors: 3,
             staging_bundles_time_budget: None,
-            message_policy: MessagePolicy::new_accept_all(),
+            message_policy: MessagePolicy::default(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),

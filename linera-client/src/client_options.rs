@@ -315,17 +315,21 @@ impl Default for Options {
 impl Options {
     /// Creates [`chain_client::Options`] with the corresponding values.
     pub(crate) fn to_chain_client_options(&self) -> chain_client::Options {
-        let message_policy = MessagePolicy::new(
-            self.blanket_message_policy,
-            self.restrict_chain_ids_to.clone(),
-            self.reject_message_bundles_without_application_ids.clone(),
-            self.reject_message_bundles_with_other_application_ids
+        let message_policy = MessagePolicy {
+            blanket: self.blanket_message_policy,
+            restrict_chain_ids_to: self.restrict_chain_ids_to.clone(),
+            reject_message_bundles_without_application_ids: self
+                .reject_message_bundles_without_application_ids
                 .clone(),
-            self.process_events_from_application_ids.clone(),
-            self.never_reject_application_ids
+            reject_message_bundles_with_other_application_ids: self
+                .reject_message_bundles_with_other_application_ids
+                .clone(),
+            process_events_from_application_ids: self.process_events_from_application_ids.clone(),
+            never_reject_application_ids: self
+                .never_reject_application_ids
                 .clone()
                 .unwrap_or_default(),
-        );
+        };
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
         chain_client::Options {
