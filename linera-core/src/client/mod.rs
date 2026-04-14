@@ -83,7 +83,7 @@ mod metrics {
                 "process_inbox_latency",
                 "process_inbox latency",
                 &[],
-                exponential_bucket_latencies(500.0),
+                exponential_bucket_latencies(10_000.0),
             )
         });
 
@@ -92,7 +92,7 @@ mod metrics {
             "prepare_chain_latency",
             "prepare_chain latency",
             &[],
-            exponential_bucket_latencies(500.0),
+            exponential_bucket_latencies(10_000.0),
         )
     });
 
@@ -101,7 +101,7 @@ mod metrics {
             "synchronize_chain_state_latency",
             "synchronize_chain_state latency",
             &[],
-            exponential_bucket_latencies(500.0),
+            exponential_bucket_latencies(10_000.0),
         )
     });
 
@@ -110,7 +110,7 @@ mod metrics {
             "execute_block_latency",
             "execute_block latency",
             &[],
-            exponential_bucket_latencies(500.0),
+            exponential_bucket_latencies(10_000.0),
         )
     });
 
@@ -119,7 +119,7 @@ mod metrics {
             "find_received_certificates_latency",
             "find_received_certificates latency",
             &[],
-            exponential_bucket_latencies(500.0),
+            exponential_bucket_latencies(10_000.0),
         )
     });
 }
