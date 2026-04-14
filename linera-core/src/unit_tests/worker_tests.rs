@@ -4677,11 +4677,11 @@ where
             timeout_increment: tc.timeout_increment,
             fallback_duration: tc.fallback_duration,
         });
-    let (executed0, _, _) = env
+    let (_, block0, _, _) = env
         .executing_worker()
-        .stage_block_execution(block0, None, vec![])
+        .stage_block_execution(block0, None, vec![], BundleExecutionPolicy::committed())
         .await?;
-    let value0 = ConfirmedBlock::new(executed0);
+    let value0 = ConfirmedBlock::new(block0);
     let cert0 = env.make_certificate(value0.clone());
     env.executing_worker()
         .fully_handle_certificate_with_notifications(cert0, &())
@@ -4696,7 +4696,7 @@ where
         });
     let result = env
         .executing_worker()
-        .stage_block_execution(block1, None, vec![])
+        .stage_block_execution(block1, None, vec![], BundleExecutionPolicy::committed())
         .await;
     assert_matches!(
         result,

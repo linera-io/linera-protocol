@@ -123,7 +123,7 @@ impl BlockBuilder {
         first_leader: Option<AccountOwner>,
         multi_leader_rounds: u32,
         open_multi_leader_rounds: bool,
-        timeout_config: TimeoutConfig,
+        timeout_config: &TimeoutConfig,
     ) -> &mut Self {
         self.with_system_operation(SystemOperation::ChangeOwners {
             owners,

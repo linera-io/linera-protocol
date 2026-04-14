@@ -5,7 +5,6 @@ mod state;
 use std::{
     collections::{hash_map, BTreeMap, BTreeSet, HashMap},
     convert::Infallible,
-    iter,
     sync::Arc,
 };
 
