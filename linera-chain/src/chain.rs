@@ -721,13 +721,13 @@ where
 
         // Extract failure-policy parameters from exec_policy.
         let (max_failures, never_reject_application_ids) = match &exec_policy.on_failure {
-            BundleFailurePolicy::Abort => (0, None),
+            BundleFailurePolicy::Abort => (0, Arc::new(HashSet::new())),
             BundleFailurePolicy::AutoRetry {
                 max_failures,
                 never_reject_application_ids,
-            } => (*max_failures, Some(never_reject_application_ids.clone())),
+            } => (*max_failures, never_reject_application_ids.clone()),
         };
-        let auto_retry = never_reject_application_ids.is_some();
+        let auto_retry = !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort);
         let mut failure_count = 0u32;
 
         let time_budget = exec_policy.time_budget;
@@ -797,13 +797,9 @@ where
             *chain = saved_chain;
             block_execution_tracker.restore_checkpoint(&saved_tracker);
 
-            let contains_never_reject_message = never_reject_application_ids
-                .as_ref()
-                .is_some_and(|app_ids| {
-                    !app_ids.is_empty()
-                        && incoming_bundle
-                            .messages()
-                            .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
+            let contains_never_reject_message = !never_reject_application_ids.is_empty()
+                && incoming_bundle.messages().any(|posted_msg| {
+                    never_reject_application_ids.contains(&posted_msg.message.application_id())
                 });
             if error.is_limit_error() && i > 0 {
                 failure_count += 1;

@@ -1921,7 +1921,12 @@ impl<Env: Environment> Client<Env> {
         loop {
             let result = self
                 .local_node
-                .stage_block_execution(block.clone(), round, published_blobs.clone(), policy.clone())
+                .stage_block_execution(
+                    block.clone(),
+                    round,
+                    published_blobs.clone(),
+                    policy.clone(),
+                )
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.validator_nodes().await?;
