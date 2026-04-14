@@ -117,22 +117,35 @@ jobs:
             "${BRIDGE_IMAGE_BRANCH}" "${BRIDGE_IMAGE_SHORT}" "${BRIDGE_IMAGE_LONG}" "Bridge" &
           PID_BRIDGE=$!
 
-          EXIT_CODE=0
+          SUCCESS_NAMES=""
+          FAILED_NAMES=""
           for NAME_PID in Linera:$PID_LINERA Indexer:$PID_INDEXER Explorer:$PID_EXPLORER Exporter:$PID_EXPORTER Bridge:$PID_BRIDGE; do
             NAME="${NAME_PID%%:*}"
             PID="${NAME_PID##*:}"
-            if ! wait "$PID"; then
-              EXIT_CODE=1
+            if wait "$PID"; then
+              SUCCESS_NAMES="${SUCCESS_NAMES} ${NAME}"
+            else
+              FAILED_NAMES="${FAILED_NAMES} ${NAME}"
               echo "::error::${NAME} build failed"
             fi
-            echo "==================== ${NAME} logs ===================="
-            cat "/tmp/${NAME}.log" || true
-            echo "==================== end ${NAME} logs ===================="
           done
 
-          if [[ $EXIT_CODE -ne 0 ]]; then
-            echo "One or more image builds failed"
-            exit $EXIT_CODE
+          # Print successes first, then failures, so the last thing
+          # on screen when a build fails is the failing log.
+          for NAME in ${SUCCESS_NAMES}; do
+            echo "::group::${NAME} (success)"
+            cat "/tmp/${NAME}.log" 2>/dev/null || true
+            echo "::endgroup::"
+          done
+          for NAME in ${FAILED_NAMES}; do
+            echo "::group::${NAME} (FAILED)"
+            cat "/tmp/${NAME}.log" 2>/dev/null || true
+            echo "::endgroup::"
+          done
+
+          if [ -n "${FAILED_NAMES}" ]; then
+            echo "One or more image builds failed:${FAILED_NAMES}"
+            exit 1
           fi
 
           echo "All image builds completed successfully!"
