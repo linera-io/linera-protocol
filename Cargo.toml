@@ -29,7 +29,7 @@ members = [
     "linera-summary",
     "linera-views",
     "linera-views-derive",
-    "linera-wallet",
+    "linera-wallet-json",
     "linera-witty",
     "linera-witty-macros",
     "linera-witty/test-modules",
@@ -65,7 +65,7 @@ default-members = [
     "linera-summary",
     "linera-views",
     "linera-views-derive",
-    "linera-wallet",
+    "linera-wallet-json",
     # "linera-web", # not this one
     "linera-witty",
     "linera-witty-macros",
@@ -343,7 +343,7 @@ linera-storage-service = { version = "0.15.15", path = "./linera-storage-service
 linera-version = { version = "0.15.15", path = "./linera-version" }
 linera-views = { version = "0.15.15", path = "./linera-views", default-features = false }
 linera-views-derive = { version = "0.15.15", path = "./linera-views-derive" }
-linera-wallet = { version = "0.15.15", path = "./linera-wallet" }
+linera-wallet-json = { version = "0.15.15", path = "./linera-wallet-json" }
 linera-witty = { version = "0.15.15", path = "./linera-witty" }
 linera-witty-macros = { version = "0.15.15", path = "./linera-witty-macros" }
 

@@ -5436,7 +5436,7 @@ dependencies = [
  "linera-storage",
  "linera-storage-runtime",
  "linera-views",
- "linera-wallet",
+ "linera-wallet-json",
  "op-alloy-network",
  "prometheus",
  "proptest",
@@ -6126,7 +6126,7 @@ dependencies = [
  "linera-storage-service",
  "linera-version",
  "linera-views",
- "linera-wallet",
+ "linera-wallet-json",
  "lru 0.15.0",
  "matching-engine",
  "native-fungible",
@@ -6367,7 +6367,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-wallet"
+name = "linera-wallet-json"
 version = "0.15.15"
 dependencies = [
  "anyhow",

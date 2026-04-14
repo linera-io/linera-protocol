@@ -165,7 +165,7 @@ impl Options {
         self.common.wallet()
     }
 
-    pub fn keystore(&self) -> Result<linera_wallet::Keystore, Error> {
+    pub fn keystore(&self) -> Result<linera_wallet_json::Keystore, Error> {
         self.common.keystore()
     }
 
@@ -176,7 +176,7 @@ impl Options {
     pub fn create_keystore(
         &self,
         testing_prng_seed: Option<u64>,
-    ) -> Result<linera_wallet::Keystore, Error> {
+    ) -> Result<linera_wallet_json::Keystore, Error> {
         self.common.create_keystore(testing_prng_seed)
     }
 }

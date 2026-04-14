@@ -80,7 +80,7 @@ impl CommonCliOptions {
                 let spawn_mode =
                     linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
                 let inner_storage_config = crate::storage::InnerStorageConfig::RocksDb {
-                    path: linera_wallet::paths::config_dir()?.join("wallet.db"),
+                    path: linera_wallet_json::paths::config_dir()?.join("wallet.db"),
                     spawn_mode,
                 };
                 let namespace = linera_storage::DEFAULT_NAMESPACE.to_string();
@@ -95,19 +95,19 @@ impl CommonCliOptions {
     }
 
     pub fn wallet_path(&self) -> Result<PathBuf, Error> {
-        linera_wallet::paths::wallet_path(self.wallet_state_path.as_ref(), &self.suffix())
+        linera_wallet_json::paths::wallet_path(self.wallet_state_path.as_ref(), &self.suffix())
     }
 
     pub fn keystore_path(&self) -> Result<PathBuf, Error> {
-        linera_wallet::paths::keystore_path(self.keystore_path.as_ref(), &self.suffix())
+        linera_wallet_json::paths::keystore_path(self.keystore_path.as_ref(), &self.suffix())
     }
 
     pub fn wallet(&self) -> Result<Wallet, Error> {
         Ok(Wallet::read(&self.wallet_path()?)?)
     }
 
-    pub fn keystore(&self) -> Result<linera_wallet::Keystore, Error> {
-        Ok(linera_wallet::Keystore::read(&self.keystore_path()?)?)
+    pub fn keystore(&self) -> Result<linera_wallet_json::Keystore, Error> {
+        Ok(linera_wallet_json::Keystore::read(&self.keystore_path()?)?)
     }
 
     pub fn create_wallet(&self, genesis_config: GenesisConfig) -> Result<Wallet, Error> {
@@ -123,12 +123,12 @@ impl CommonCliOptions {
     pub fn create_keystore(
         &self,
         testing_prng_seed: Option<u64>,
-    ) -> Result<linera_wallet::Keystore, Error> {
+    ) -> Result<linera_wallet_json::Keystore, Error> {
         let keystore_path = self.keystore_path()?;
         if keystore_path.exists() {
             bail!("Keystore already exists: {}", keystore_path.display());
         }
-        Ok(linera_wallet::Keystore::create(
+        Ok(linera_wallet_json::Keystore::create(
             &keystore_path,
             testing_prng_seed,
         )?)

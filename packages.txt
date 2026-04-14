@@ -14,7 +14,7 @@ linera-storage-service
 linera-cache
 linera-storage
 linera-core
-linera-wallet
+linera-json-wallet
 linera-storage-runtime
 linera-ethereum
 linera-metrics
