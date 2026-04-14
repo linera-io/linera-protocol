@@ -336,6 +336,24 @@ impl<Env: Environment> Client<Env> {
         self.environment.storage()
     }
 
+    /// Tries to read a certificate from local storage, using the hash if available
+    /// (fast path) or falling back to a height-based lookup.
+    async fn try_read_local_certificate(
+        &self,
+        chain_id: ChainId,
+        height: BlockHeight,
+        hash: Option<CryptoHash>,
+    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, chain_client::Error> {
+        if let Some(hash) = hash {
+            return Ok(self.storage_client().read_certificate(hash).await?);
+        }
+        let results = self
+            .storage_client()
+            .read_certificates_by_heights(chain_id, &[height])
+            .await?;
+        Ok(results.into_iter().next().flatten())
+    }
+
     pub fn validator_node_provider(&self) -> &Env::Network {
         self.environment.network()
     }
@@ -1122,6 +1140,33 @@ impl<Env: Environment> Client<Env> {
         let committees_ref = &committees;
         let mut nodes = nodes.to_vec();
         while !remote_heights.is_empty() {
+            // Check local storage first — certificates may already be available from
+            // a prior sync cycle, another receiver chain, or a concurrent notification.
+            if let Ok(local_certs) = self
+                .storage_client()
+                .read_certificates_by_heights(sender_chain_id, &remote_heights)
+                .await
+            {
+                let mut still_needed = Vec::new();
+                for (height, maybe_cert) in remote_heights.iter().copied().zip(local_certs) {
+                    if let Some(certificate) = maybe_cert {
+                        let chain_id = certificate.block().header.chain_id;
+                        if let Err(error) = sender.send(ChainAndHeight { chain_id, height }) {
+                            error!(
+                                %chain_id, %height, %error,
+                                "failed to send chain and height over the channel",
+                            );
+                        }
+                    } else {
+                        still_needed.push(height);
+                    }
+                }
+                remote_heights = still_needed;
+                if remote_heights.is_empty() {
+                    break;
+                }
+            }
+
             let remote_heights_ref = &remote_heights;
             let certificates = match communicate_concurrently(
                 &nodes,
@@ -1293,23 +1338,36 @@ impl<Env: Environment> Client<Env> {
         // the chain of previous_message_blocks back to next_outbox_height.
         let mut certificates = BTreeMap::new();
         let mut current_height = height;
+        // On the first iteration we only have a height; subsequent iterations
+        // also carry the hash from `previous_message_blocks`.
+        let mut current_hash: Option<CryptoHash> = None;
 
         // Stop if we've reached the height we've already processed.
         while current_height >= next_outbox_height {
-            // Download the certificate for this height.
-            let downloaded = self
-                .requests_scheduler
-                .download_certificates_by_heights(
-                    remote_node,
-                    sender_chain_id,
-                    vec![current_height],
-                )
-                .await?;
-            let Some(certificate) = downloaded.into_iter().next() else {
-                return Err(chain_client::Error::CannotDownloadMissingSenderBlock {
-                    chain_id: sender_chain_id,
-                    height: current_height,
-                });
+            // Try local storage first — avoids a validator round-trip when
+            // the certificate was already downloaded by a prior sync cycle,
+            // another receiver chain, or a concurrent notification handler.
+            let certificate = if let Some(local) = self
+                .try_read_local_certificate(sender_chain_id, current_height, current_hash)
+                .await?
+            {
+                Arc::unwrap_or_clone(local)
+            } else {
+                let downloaded = self
+                    .requests_scheduler
+                    .download_certificates_by_heights(
+                        remote_node,
+                        sender_chain_id,
+                        vec![current_height],
+                    )
+                    .await?;
+                let Some(certificate) = downloaded.into_iter().next() else {
+                    return Err(chain_client::Error::CannotDownloadMissingSenderBlock {
+                        chain_id: sender_chain_id,
+                        height: current_height,
+                    });
+                };
+                certificate
             };
 
             // Validate the certificate.
@@ -1318,18 +1376,19 @@ impl<Env: Environment> Client<Env> {
 
             // Check if there's a previous message block to our chain.
             let block = certificate.block();
-            let next_height = block
+            let next = block
                 .body
                 .previous_message_blocks
                 .get(&receiver_chain_id)
-                .map(|(_prev_hash, prev_height)| *prev_height);
+                .map(|(prev_hash, prev_height)| (*prev_hash, *prev_height));
 
             // Store this certificate.
             certificates.insert(current_height, certificate);
 
-            if let Some(prev_height) = next_height {
-                // Continue with the previous block.
+            if let Some((prev_hash, prev_height)) = next {
+                // Continue with the previous block (now with its hash for local lookup).
                 current_height = prev_height;
+                current_hash = Some(prev_hash);
             } else {
                 // No more dependencies.
                 break;
