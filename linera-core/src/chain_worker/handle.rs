@@ -137,9 +137,9 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
     let chain_id = state.chain().chain_id();
     let arc = Arc::new(RwLock::new(state));
     let ttl = if is_tracked {
-        config.sender_chain_ttl
-    } else {
         config.ttl
+    } else {
+        config.sender_chain_ttl
     };
     if let Some(ttl) = ttl {
         spawn_keep_alive(chain_id, Arc::clone(&arc), last_access, ttl);

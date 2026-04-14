@@ -150,6 +150,7 @@ where
             allow_messages_from_deprecated_epochs: is_client,
             long_lived_services: has_long_lived_services,
             block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+            sender_chain_ttl: None,
             ..ChainWorkerConfig::default()
         }
         .with_key_pair(Some(validator_keypair.secret_key));
