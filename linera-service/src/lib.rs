@@ -16,5 +16,5 @@ pub mod query_subscription;
 pub mod storage;
 pub mod task_processor;
 pub mod util;
-pub mod wallet;
-pub use wallet::Wallet;
+
+pub use linera_wallet_json::PersistentWallet as Wallet;
