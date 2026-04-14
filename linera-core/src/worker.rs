@@ -1589,6 +1589,19 @@ where
         .await
     }
 
+    /// Returns the pending cross-chain network actions for this chain without
+    /// initializing its execution state. Safe to call on chains whose
+    /// `ChainDescription` blob is not available locally.
+    pub async fn cross_chain_network_actions(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<NetworkActions, WorkerError> {
+        self.chain_read(chain_id, |guard| async move {
+            guard.cross_chain_network_actions().await
+        })
+        .await
+    }
+
     /// Gets tip state and outbox info for next_outbox_heights calculation.
     pub async fn get_tip_state_and_outbox_info(
         &self,
