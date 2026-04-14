@@ -62,14 +62,6 @@ pub struct ChainInfoQuery {
     #[debug(skip_if = Vec::is_empty)]
     #[cfg_attr(with_testing, strategy(proptest::strategy::Just(Vec::new())))]
     pub request_previous_event_blocks: Vec<StreamId>,
-    #[serde(default = "default_true")]
-    pub create_network_actions: bool,
-}
-
-// Default value for create_network_actions.
-// Default for bool returns false.
-fn default_true() -> bool {
-    true
 }
 
 impl ChainInfoQuery {
@@ -86,7 +78,6 @@ impl ChainInfoQuery {
             request_fallback: false,
             request_sent_certificate_hashes_by_heights: Vec::new(),
             request_previous_event_blocks: Vec::new(),
-            create_network_actions: false,
         }
     }
 
@@ -137,11 +128,6 @@ impl ChainInfoQuery {
 
     pub fn with_fallback(mut self) -> Self {
         self.request_fallback = true;
-        self
-    }
-
-    pub fn with_network_actions(mut self) -> Self {
-        self.create_network_actions = true;
         self
     }
 }

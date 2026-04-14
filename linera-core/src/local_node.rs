@@ -118,9 +118,7 @@ where
         &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        // In local nodes, cross-chain actions will be handled internally, so we discard them.
-        let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
-        Ok(response)
+        Ok(self.node.state.handle_chain_info_query(query).await?)
     }
 
     #[instrument(level = "trace", skip_all)]
