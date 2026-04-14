@@ -2741,8 +2741,14 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None, None, HashSet::new());
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Ignore,
+        None,
+        None,
+        None,
+        None,
+        HashSet::new(),
+    );
     receiver.synchronize_from_validators().await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2753,8 +2759,14 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None, None, HashSet::new());
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Reject,
+        None,
+        None,
+        None,
+        None,
+        HashSet::new(),
+    );
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender.synchronize_from_validators().await?;
@@ -2801,8 +2813,14 @@ where
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ONE);
 
     // Even if we change the policy, there's no longer a message to receive.
-    receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None, HashSet::new());
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        None,
+        None,
+        None,
+        HashSet::new(),
+    );
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 0);
 
