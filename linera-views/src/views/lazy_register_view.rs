@@ -67,10 +67,7 @@ where
         &mut self,
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
-        let stored_value = match self.stored_value.get_mut() {
-            Some(value) => OnceLock::from(value.clone()),
-            None => OnceLock::new(),
-        };
+        let stored_value = self.stored_value.clone();
         LazyRegisterView {
             delete_storage_first: self.delete_storage_first,
             context: ctx(&self.context),
@@ -152,10 +149,7 @@ where
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        let stored_value = match self.stored_value.get_mut() {
-            Some(value) => OnceLock::from(value.clone()),
-            None => OnceLock::new(),
-        };
+        let stored_value = self.stored_value.clone();
         Ok(LazyRegisterView {
             delete_storage_first: self.delete_storage_first,
             context: self.context.clone(),
@@ -170,19 +164,6 @@ where
     C: Context,
     T: Default + DeserializeOwned,
 {
-    /// Ensures the stored value is loaded from storage into the `OnceLock` cache.
-    async fn ensure_stored_value(&self) -> Result<(), ViewError> {
-        if self.stored_value.get().is_some() {
-            return Ok(());
-        }
-        let key = self.context.base_key().bytes.clone();
-        let bytes = self.context.store().read_value_bytes(&key).await?;
-        let value: T = from_bytes_option_or_default(&bytes)?;
-        // If another caller raced us, `set` is a no-op and the value is dropped.
-        let _ = self.stored_value.set(Box::new(value));
-        Ok(())
-    }
-
     /// Access the current value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -199,7 +180,12 @@ where
         if let Some(value) = &self.update {
             return Ok(value);
         }
-        self.ensure_stored_value().await?;
+        if self.stored_value.get().is_none() {
+            let key = self.context.base_key().bytes.clone();
+            let bytes = self.context.store().read_value_bytes(&key).await?;
+            let value = from_bytes_option_or_default(&bytes)?;
+            let _ = self.stored_value.set(Box::new(value));
+        }
         Ok(self.stored_value.get().unwrap())
     }
 
@@ -247,25 +233,22 @@ where
     pub async fn get_mut(&mut self) -> Result<&mut T, ViewError> {
         self.delete_storage_first = false;
         if self.update.is_none() {
-            self.ensure_stored_value().await?;
-            let stored = self.stored_value.get().unwrap();
-            self.update = Some(stored.clone());
+            if self.stored_value.get().is_none() {
+                let key = self.context.base_key().bytes.clone();
+                let bytes = self.context.store().read_value_bytes(&key).await?;
+                let value = from_bytes_option_or_default(&bytes)?;
+                let _ = self.stored_value.set(Box::new(value));
+            }
+            self.update = Some(self.stored_value.get().unwrap().clone());
         }
         Ok(self.update.as_mut().unwrap())
     }
 
-    fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
         let _hash_latency = metrics::LAZY_REGISTER_VIEW_HASH_RUNTIME.measure_latency();
-        let value: &T = if let Some(value) = &self.update {
-            value
-        } else {
-            self.stored_value
-                .get()
-                .expect("stored value must be loaded before hashing")
-        };
         let mut hasher = sha3::Sha3_256::default();
-        hasher.update_with_bcs_bytes(value)?;
+        hasher.update_with_bcs_bytes(self.get().await?)?;
         Ok(hasher.finalize())
     }
 }
@@ -278,13 +261,11 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.ensure_stored_value().await?;
-        self.compute_hash()
+        self.compute_hash().await
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.ensure_stored_value().await?;
-        self.compute_hash()
+        self.compute_hash().await
     }
 }
 
