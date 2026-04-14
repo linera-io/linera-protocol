@@ -1185,13 +1185,10 @@ impl<Env: Environment> Client<Env> {
                 .await
             {
                 let mut still_needed = Vec::new();
-                for (height, maybe_cert) in
-                    remote_heights.iter().copied().zip(local_certs.into_iter())
-                {
+                for (height, maybe_cert) in remote_heights.iter().copied().zip(local_certs) {
                     if let Some(certificate) = maybe_cert {
                         let chain_id = certificate.block().header.chain_id;
-                        if let Err(error) = sender.send(ChainAndHeight { chain_id, height })
-                        {
+                        if let Err(error) = sender.send(ChainAndHeight { chain_id, height }) {
                             error!(
                                 %chain_id, %height, %error,
                                 "failed to send chain and height over the channel",
