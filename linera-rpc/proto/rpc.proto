@@ -262,7 +262,7 @@ message ChainInfoQuery {
   optional bytes request_sent_certificate_hashes_by_heights = 11;
 
   // Query the previous event blocks for specific streams.
-  optional bytes request_previous_event_blocks = 13;
+  optional bytes request_previous_event_blocks = 12;
 }
 
 // An authenticated proposal for a new block.
