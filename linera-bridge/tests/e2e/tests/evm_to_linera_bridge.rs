@@ -90,6 +90,7 @@ sol! {
 #[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
 async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_test_writer().try_init().ok();
+    linera_bridge_e2e::ensure_rustls_provider();
     let compose_file = compose_file_path();
     let project_name = "linera-e2l-bridge-test";
 

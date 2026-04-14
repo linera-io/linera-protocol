@@ -97,13 +97,6 @@ pub async fn run(
     max_retries: u32,
     sqlite_path: Option<&Path>,
 ) -> Result<()> {
-    linera_base::tracing::init("linera-bridge");
-
-    // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("failed to install rustls crypto provider");
-
     tracing::info!("Starting bridge relay server...");
 
     // ── Resolve paths (same defaults as linera binary: ~/.config/linera/) ──

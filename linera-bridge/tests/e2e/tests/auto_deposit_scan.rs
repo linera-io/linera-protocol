@@ -15,6 +15,8 @@
 //! 3. FungibleBridge with real applicationId (EVM)
 //! 4. evm-bridge app with bridge address (Linera)
 
+#![recursion_limit = "512"]
+
 use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
 use alloy::{
@@ -33,7 +35,7 @@ use linera_base::{
 };
 use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
-    start_compose, wait_for_light_client, StderrMonitor, ANVIL_PRIVATE_KEY,
+    start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
@@ -81,6 +83,7 @@ sol! {
 #[ignore] // Requires pre-built docker images, Wasm, and relay binary
 async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_test_writer().try_init().ok();
+    linera_bridge_e2e::ensure_rustls_provider();
     let compose_file = compose_file_path();
     let project_name = "linera-auto-scan-test";
 
@@ -320,17 +323,10 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         .wallet(evm_wallet)
         .connect_http(rpc_url);
 
-    let relay_binary = repo_root.join("target/debug/linera-bridge");
-    anyhow::ensure!(
-        relay_binary.exists(),
-        "Relay binary not found at {relay_binary:?}. \
-         Run: cargo build -p linera-bridge --features relay"
-    );
-
     let relay_dir = tempfile::tempdir()?;
     let wallet_path = relay_dir.path().join("wallet.json");
     let keystore_path = relay_dir.path().join("keystore.json");
-    let storage_path = format!("rocksdb:{}", relay_dir.path().join("client.db").display());
+    let storage_config = format!("rocksdb:{}", relay_dir.path().join("client.db").display());
 
     {
         use linera_persistent::Persist;
@@ -338,44 +334,34 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         ks.persist().await?;
     }
 
-    // The relay creates its own chain_client for chain A.
-    // We keep cc_a alive for diagnostics but don't create blocks on it.
-
-    let relay_port = 3002;
-    tracing::info!("Starting relay binary...");
-    let mut relay_process = tokio::process::Command::new(&relay_binary)
-        .args([
-            "serve",
-            "--rpc-url",
+    let relay_port = 3002u16;
+    let bridge_addr_str = format!("{bridge_addr}");
+    let bridge_app_str = format!("{bridge_app_id}");
+    let fungible_app_str = format!("{fungible_app_id}");
+    tracing::info!("Starting relay...");
+    let relay_handle = tokio::spawn(async move {
+        Box::pin(linera_bridge::relay::run(
             "http://localhost:8545",
-            "--faucet-url",
-            "http://localhost:8080",
-            "--wallet",
-            wallet_path.to_str().unwrap(),
-            "--keystore",
-            keystore_path.to_str().unwrap(),
-            "--storage",
-            &storage_path,
-            &format!("--linera-bridge-chain-id={chain_a}"),
-            &format!("--linera-bridge-chain-owner={owner_a}"),
-            &format!("--evm-bridge-address={bridge_addr}"),
-            &format!("--linera-bridge-address={bridge_app_id}"),
-            &format!("--linera-fungible-address={fungible_app_id}"),
-            &format!("--evm-private-key={ANVIL_PRIVATE_KEY}"),
-            &format!("--port={relay_port}"),
-            "--monitor-scan-interval",
-            "5",
-            "--max-retries",
-            "5",
-        ])
-        .env("RUST_LOG", "linera=info,linera_bridge=debug")
-        .kill_on_drop(true)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .context("failed to spawn relay binary")?;
-
-    let relay_monitor = StderrMonitor::spawn(&mut relay_process, "relay");
+            Some("http://localhost:8080"),
+            Some(wallet_path.as_path()),
+            Some(keystore_path.as_path()),
+            Some(&storage_config),
+            Some(chain_a),
+            Some(owner_a),
+            &bridge_addr_str,
+            &bridge_app_str,
+            &fungible_app_str,
+            ANVIL_PRIVATE_KEY,
+            None,
+            relay_port,
+            &linera_storage_runtime::CommonStorageOptions::with_defaults(),
+            5,  // monitor_scan_interval
+            0,  // monitor_start_block
+            5,  // max_retries
+            None,
+        ))
+        .await
+    });
 
     let relay_url = format!("http://localhost:{relay_port}");
     let client = reqwest::Client::new();
@@ -391,7 +377,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             break;
         }
         if attempt == 29 {
-            relay_process.kill().await.ok();
+            relay_handle.abort();
             anyhow::bail!("Relay did not become ready");
         }
     }
@@ -454,7 +440,9 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     for attempt in 0..60 {
         tokio::time::sleep(Duration::from_secs(5)).await;
 
-        relay_monitor.bail_if_fatal()?;
+        if relay_handle.is_finished() {
+            anyhow::bail!("Relay exited unexpectedly: {:?}", relay_handle.await);
+        }
 
         // Sync chain B to receive minted tokens.
         cc_b.synchronize_from_validators().await?;
@@ -474,7 +462,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             }
         }
         if attempt == 59 {
-            relay_process.kill().await.ok();
+            relay_handle.abort();
             anyhow::bail!("Deposit not auto-processed within timeout");
         }
     }
@@ -515,18 +503,20 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     for attempt in 0..60 {
         tokio::time::sleep(Duration::from_secs(5)).await;
 
-        relay_monitor.bail_if_fatal()?;
+        if relay_handle.is_finished() {
+            anyhow::bail!("Relay exited unexpectedly: {:?}", relay_handle.await);
+        }
 
         let balance = erc20_contract.balanceOf(evm_recipient_addr).call().await?;
         tracing::info!(attempt, ?balance, "ERC-20 balance");
 
         if balance >= expected_balance {
-            relay_process.kill().await.ok();
+            relay_handle.abort();
             tracing::info!("Test passed! Both directions: EVM→Linera deposit + Linera→EVM burn.");
             return Ok(());
         }
     }
 
-    relay_process.kill().await.ok();
+    relay_handle.abort();
     anyhow::bail!("Burn not forwarded to EVM within timeout");
 }

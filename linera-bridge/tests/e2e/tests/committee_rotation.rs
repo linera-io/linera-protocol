@@ -1,20 +1,20 @@
+#![recursion_limit = "512"]
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //! End-to-end test: trigger a committee rotation on Linera and verify the relay relays
 //! it to the LightClient contract on Anvil (via docker-compose).
 
-use std::{path::PathBuf, time::{Duration, Instant}};
+use std::time::{Duration, Instant};
 
 use alloy::{providers::ProviderBuilder, sol};
-use anyhow::Context as _;
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner, ValidatorKeypair},
     identifiers::AccountOwner,
 };
 use linera_bridge_e2e::{
     compose_file_path, create_extra_wallet, dump_compose_logs, exec_ok, extra_wallet_env,
-    light_client_address, start_compose, wait_for_light_client, StderrMonitor, ANVIL_PRIVATE_KEY,
+    light_client_address, start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_faucet_client::Faucet;
 
@@ -41,6 +41,7 @@ async fn query_current_epoch() -> anyhow::Result<u32> {
 #[ignore] // Requires pre-built docker images: `make -C linera-bridge build-all`
 async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_test_writer().try_init().ok();
+    linera_bridge_e2e::ensure_rustls_provider();
     let compose_file = compose_file_path();
     let project_name = "linera-bridge-test";
 
@@ -68,55 +69,38 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
         ks.persist().await?;
     }
 
-    // Start a local relay in committee-only mode (no bridge app IDs needed).
-    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .context("manifest dir has fewer than 3 ancestors")?
-        .to_path_buf();
-    let relay_binary = repo_root.join("target/debug/linera-bridge");
-    anyhow::ensure!(
-        relay_binary.exists(),
-        "Relay binary not found at {relay_binary:?}. \
-         Run: cargo build -p linera-bridge --features relay"
-    );
-
-    let relay_port = 3003;
+    // Start the relay as an in-process background task.
     let light_client = light_client_address();
     let wallet_path = relay_dir.path().join("wallet.json");
-    let storage_path = format!("rocksdb:{}", relay_dir.path().join("client.db").display());
-    let mut relay_process = tokio::process::Command::new(&relay_binary)
-        .args([
-            "serve",
-            "--rpc-url",
+    let storage_config = format!("rocksdb:{}", relay_dir.path().join("client.db").display());
+    let relay_port = 3003u16;
+
+    let relay_handle = tokio::spawn(async move {
+        Box::pin(linera_bridge::relay::run(
             "http://localhost:8545",
-            "--faucet-url",
-            "http://localhost:8080",
-            "--wallet",
-            wallet_path.to_str().unwrap(),
-            "--keystore",
-            keystore_path.to_str().unwrap(),
-            "--storage",
-            &storage_path,
-            &format!("--linera-bridge-chain-id={relay_chain_id}"),
-            &format!("--linera-bridge-chain-owner={relay_owner}"),
+            Some("http://localhost:8080"),
+            Some(wallet_path.as_path()),
+            Some(keystore_path.as_path()),
+            Some(&storage_config),
+            Some(relay_chain_id),
+            Some(relay_owner),
             // Dummy values — committee relay only needs the LightClient, not the bridge apps.
-            "--evm-bridge-address=0x0000000000000000000000000000000000000000",
-            "--linera-bridge-address=0000000000000000000000000000000000000000000000000000000000000000",
-            "--linera-fungible-address=0000000000000000000000000000000000000000000000000000000000000000",
-            &format!("--evm-light-client-address={light_client}"),
-            &format!("--evm-private-key={ANVIL_PRIVATE_KEY}"),
-            &format!("--port={relay_port}"),
-        ])
-        .env("RUST_LOG", "linera=info,linera_bridge=debug")
-        .kill_on_drop(true)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .context("failed to spawn relay binary")?;
+            "0x0000000000000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            ANVIL_PRIVATE_KEY,
+            Some(&light_client.to_string()),
+            relay_port,
+            &linera_storage_runtime::CommonStorageOptions::with_defaults(),
+            5,  // monitor_scan_interval
+            0,  // monitor_start_block
+            5,  // max_retries
+            None,
+        ))
+        .await
+    });
 
-    let relay_monitor = StderrMonitor::spawn(&mut relay_process, "relay");
-
+    // Wait for relay's HTTP server to be ready.
     let relay_url = format!("http://localhost:{relay_port}");
     let client = reqwest::Client::new();
     for attempt in 0..30 {
@@ -131,7 +115,6 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             break;
         }
         if attempt == 29 {
-            relay_process.kill().await.ok();
             anyhow::bail!("Relay did not become ready");
         }
     }
@@ -177,6 +160,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             Ok(epoch) if epoch >= 1 => {
                 tracing::info!(epoch, "Epoch advanced");
                 assert_eq!(epoch, 1, "epoch should be exactly 1 after one rotation");
+                relay_handle.abort();
                 return Ok(());
             }
             Ok(epoch) => {
@@ -187,7 +171,12 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             }
         }
 
+        if relay_handle.is_finished() {
+            anyhow::bail!("Relay exited unexpectedly: {:?}", relay_handle.await);
+        }
+
         if start.elapsed() > timeout {
+            relay_handle.abort();
             dump_compose_logs(project_name, &compose_file);
             anyhow::bail!(
                 "Timed out waiting for epoch to advance to 1 (waited {:?})",
@@ -196,6 +185,5 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
         }
 
         tokio::time::sleep(poll_interval).await;
-        relay_monitor.bail_if_fatal()?;
     }
 }
