@@ -1357,8 +1357,12 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
     let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
     // Set a fuel limit that is enough to instantiate the application and do one increment
     // operation, but not ten. We also verify blob fees for the bytecode.
+    // Note: with persistent contract instances within a block, the first action pays the
+    // full instantiation cost (~10k fuel) and later actions within the same block only
+    // pay the per-call cost (~1.5k fuel). Ten increments in a single block add up to
+    // ~23k fuel, so a 20k limit is enough for a single increment but not ten.
     let policy = ResourceControlPolicy {
-        maximum_wasm_fuel_per_block: 30_000,
+        maximum_wasm_fuel_per_block: 20_000,
         blob_read: Amount::from_tokens(10), // Should not be charged.
         blob_published: Amount::from_attos(100),
         blob_byte_read: Amount::from_tokens(10), // Should not be charged.
