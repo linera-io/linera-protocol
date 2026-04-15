@@ -153,7 +153,7 @@ impl SystemExecutionState {
 }
 
 impl RegisterMockApplication for SystemExecutionState {
-    fn creator_chain_id(&self) -> ChainId {
+    async fn creator_chain_id(&self) -> ChainId {
         self.description.as_ref().expect(
             "Can't register applications on a system state with no associated `ChainDescription`",
         ).into()

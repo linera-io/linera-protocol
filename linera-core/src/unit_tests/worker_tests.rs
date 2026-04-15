@@ -611,7 +611,7 @@ where
                 if matches!(error, linera_base::crypto::CryptoError::InvalidSignature {..})
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
     Ok(())
@@ -655,7 +655,7 @@ where
         ) if matches!(**execution_error, ExecutionError::IncorrectTransferAmount))
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
     Ok(())
@@ -951,7 +951,7 @@ where
         Err(WorkerError::InvalidOwner)
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
     Ok(())
@@ -1008,7 +1008,7 @@ where
             })
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
 
@@ -1017,7 +1017,7 @@ where
         .handle_block_proposal(block_proposal0.clone())
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     let block = chain.manager.validated_vote().unwrap().value().block();
     // Multi-leader round - it's not confirmed yet.
     assert!(block.matches_proposed_block(&block_proposal0.content.block));
@@ -1029,7 +1029,7 @@ where
         .handle_validated_certificate(block_certificate0)
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     let block = chain.manager.confirmed_vote().unwrap().value().block();
     // Should be confirmed after handling the certificate.
     assert!(block.matches_proposed_block(&block_proposal0.content.block));
@@ -1046,7 +1046,7 @@ where
         .await?;
 
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     let block = chain.manager.validated_vote().unwrap().value().block();
     assert!(block.matches_proposed_block(&block_proposal1.content.block));
     assert!(chain.manager.confirmed_vote().is_none());
@@ -1139,7 +1139,7 @@ where
 
     {
         let chain = env.worker().chain_state_view(chain_1).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(1));
     }
 
@@ -1164,7 +1164,7 @@ where
 
     {
         let chain = env.worker().chain_state_view(chain_1).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(2));
     }
 
@@ -1176,7 +1176,7 @@ where
 
     {
         let chain = env.worker().chain_state_view(chain_1).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(3));
     }
 
@@ -1584,7 +1584,7 @@ where
         ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
     Ok(())
@@ -1621,7 +1621,7 @@ where
         env.worker().handle_block_proposal(block_proposal).await?;
     chain_info_response.check(env.worker().public_key())?;
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none()); // It was a multi-leader
                                                        // round.
     let validated_certificate =
@@ -1634,7 +1634,7 @@ where
         .await?;
     chain_info_response.check(env.worker().public_key())?;
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.validated_vote().is_none()); // Should be confirmed by now.
     let pending_vote = chain.manager.confirmed_vote().unwrap().lite();
     assert_eq!(
@@ -1907,7 +1907,7 @@ where
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(1),
@@ -1948,7 +1948,7 @@ where
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
     let chain = env.worker().chain_state_view(chain_2).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     Ok(())
 }
 
@@ -1989,7 +1989,7 @@ where
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     let new_sender_chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(new_sender_chain.is_active());
+    assert!(new_sender_chain.is_active().await?);
     assert_eq!(
         Amount::ZERO,
         *new_sender_chain.execution_state.system.balance.get()
@@ -2004,7 +2004,7 @@ where
         new_sender_chain.tip_state.get().block_hash
     );
     let new_recipient_chain = env.worker().chain_state_view(chain_2).await?;
-    assert!(new_recipient_chain.is_active());
+    assert!(new_recipient_chain.is_active().await?);
     assert_eq!(
         Amount::MAX,
         *new_recipient_chain.execution_state.system.balance.get()
@@ -2045,7 +2045,7 @@ where
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
 
     // With the new optimization, transfers to the same chain should not create messages.
@@ -2098,7 +2098,7 @@ where
 
     // Check the sender chain
     let chain_1_state = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain_1_state.is_active());
+    assert!(chain_1_state.is_active().await?);
     assert_eq!(
         Amount::ZERO,
         *chain_1_state.execution_state.system.balance.get()
@@ -2178,7 +2178,7 @@ where
         .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate.clone()))
         .await?;
     let chain = env.worker().chain_state_view(chain_2).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
     assert_eq!(BlockHeight::ZERO, chain.tip_state.get().next_block_height);
     let inbox = chain
@@ -2445,7 +2445,7 @@ where
 
     {
         let recipient_chain = env.worker().chain_state_view(chain_2).await?;
-        assert!(recipient_chain.is_active());
+        assert!(recipient_chain.is_active().await?);
         assert_eq!(
             *recipient_chain.execution_state.system.balance.get(),
             Amount::from_tokens(4)
@@ -2673,7 +2673,7 @@ where
 
     {
         let chain = env.worker().chain_state_view(chain_2).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_no_removed_bundles(&chain).await;
     }
 
@@ -2714,7 +2714,7 @@ where
 
     {
         let chain = env.worker.chain_state_view(chain_1).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_no_removed_bundles(&chain).await;
     }
     Ok(())
@@ -2773,7 +2773,7 @@ where
         .await?;
     {
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active());
+        assert!(admin_chain.is_active().await?);
         assert_no_removed_bundles(&admin_chain).await;
         assert_eq!(
             BlockHeight::from(1),
@@ -2846,7 +2846,7 @@ where
     {
         // The child is active and has not migrated yet.
         let user_chain = env.worker().chain_state_view(user_id).await?;
-        assert!(user_chain.is_active());
+        assert!(user_chain.is_active().await?);
         assert_eq!(
             BlockHeight::ZERO,
             user_chain.tip_state.get().next_block_height
@@ -2928,7 +2928,7 @@ where
         .await?;
     {
         let user_chain = env.worker().chain_state_view(user_id).await?;
-        assert!(user_chain.is_active());
+        assert!(user_chain.is_active().await?);
         assert_eq!(
             BlockHeight::from(1),
             user_chain.tip_state.get().next_block_height
@@ -3034,7 +3034,7 @@ where
 
     // The transfer was started..
     let user_chain = env.worker().chain_state_view(user_id).await?;
-    assert!(user_chain.is_active());
+    assert!(user_chain.is_active().await?);
     assert_eq!(
         BlockHeight::from(1),
         user_chain.tip_state.get().next_block_height
@@ -3047,7 +3047,7 @@ where
 
     // .. and the message has gone through.
     let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-    assert!(admin_chain.is_active());
+    assert!(admin_chain.is_active().await?);
     assert_eq!(admin_chain.inboxes.indices().await?.len(), 1);
     matches!(
         &admin_chain
@@ -3168,7 +3168,7 @@ where
     {
         // The transfer was started..
         let user_chain = env.worker().chain_state_view(user_id).await?;
-        assert!(user_chain.is_active());
+        assert!(user_chain.is_active().await?);
         assert_eq!(
             BlockHeight::from(1),
             user_chain.tip_state.get().next_block_height
@@ -3181,7 +3181,7 @@ where
 
         // .. but the message hasn't gone through.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active());
+        assert!(admin_chain.is_active().await?);
         assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
 
@@ -3230,7 +3230,7 @@ where
     {
         // The admin chain has an anticipated message.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active());
+        assert!(admin_chain.is_active().await?);
         assert!(admin_chain
             .inboxes
             .try_load_entry(&user_id)
@@ -3251,7 +3251,7 @@ where
     {
         // The admin chain has no more anticipated messages.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active());
+        assert!(admin_chain.is_active().await?);
         assert_no_removed_bundles(&admin_chain).await;
     }
 

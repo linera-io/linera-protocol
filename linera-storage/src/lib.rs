@@ -242,7 +242,10 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         self.write_blob(&Blob::new_chain_description(&description))
             .await?;
         let mut chain = self.load_chain(id).await?;
-        assert!(!chain.is_active(), "Attempting to create a chain twice");
+        assert!(
+            !chain.is_active().await?,
+            "Attempting to create a chain twice"
+        );
         let current_time = self.clock().current_time();
         chain.initialize_if_needed(current_time).await?;
         chain.save().await?;
