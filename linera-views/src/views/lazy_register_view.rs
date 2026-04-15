@@ -233,13 +233,8 @@ where
     pub async fn get_mut(&mut self) -> Result<&mut T, ViewError> {
         self.delete_storage_first = false;
         if self.update.is_none() {
-            if self.stored_value.get().is_none() {
-                let key = self.context.base_key().bytes.clone();
-                let bytes = self.context.store().read_value_bytes(&key).await?;
-                let value = from_bytes_option_or_default(&bytes)?;
-                let _ = self.stored_value.set(Box::new(value));
-            }
-            self.update = Some(self.stored_value.get().unwrap().clone());
+            let update = self.get().await?.clone();
+            self.update = Some(Box::new(update));
         }
         Ok(self.update.as_mut().unwrap())
     }
