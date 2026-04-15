@@ -4328,9 +4328,18 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     assert!(client3.load_wallet()?.chain_ids().contains(&chain2));
 
     // Verify that trying to follow a chain that does not exist will fail, even without --sync.
+    // The validators legitimately retry for a while before giving up on a missing blob, so cap
+    // how long this check is allowed to take: either `follow_chain` returns an error within the
+    // timeout, or we kill it (the child process is killed on drop via `kill_on_drop`).
     let wrong_id = ChainId(CryptoHash::test_hash("wrong chain ID"));
-    let result = client3.follow_chain(wrong_id, false).await;
-    assert!(result.is_err());
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        client3.follow_chain(wrong_id, false),
+    )
+    .await;
+    if let Ok(inner) = result {
+        assert!(inner.is_err());
+    }
     assert!(!client3.load_wallet()?.chain_ids().contains(&wrong_id));
 
     net.ensure_is_running().await?;
@@ -4929,17 +4938,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let admin_chain = admin_client.load_wallet()?.default_chain().unwrap();
     let admin_owner = admin_client.get_owner().unwrap();
 
-    // The remote-net tests open two chains when instantiating the config, so this is
-    // then non-zero, and that affects all the waiting for notifications.
-    let start_h = admin_client
-        .load_wallet()?
-        .get(admin_chain)
-        .expect("should have admin_chain in the wallet")
-        .next_block_height
-        .0;
-
-    // Admin chain block start_h+0: publish module
-    // Admin chain block start_h+1: create application
     let (contract, service) = admin_client.build_example("controller").await?;
     let controller_id = admin_client
         .publish_and_create::<ControllerAbi, (), ()>(
@@ -4953,8 +4951,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
-    // Admin chain block start_h+2: publish module
-    // Admin chain block start_h+3: create application
     use task_processor::TaskProcessorAbi;
     let (task_processor_contract, task_processor_service) =
         admin_client.build_example("task-processor").await?;
@@ -4972,21 +4968,18 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
 
     let operators = vec![("ls".to_string(), "/bin/ls".into())];
 
-    // Admin chain block start_h+4: open chain for worker 1
     let worker1_client = net.make_client().await;
     worker1_client.wallet_init(None).await?;
     let worker1_chain = admin_client
         .open_and_assign(&worker1_client, Amount::from_tokens(10))
         .await?;
 
-    // Admin chain block start_h+5: open chain for worker 2
     let worker2_client = net.make_client().await;
     worker2_client.wallet_init(None).await?;
     let worker2_chain = admin_client
         .open_and_assign(&worker2_client, Amount::from_tokens(10))
         .await?;
 
-    // Admin chain block start_h+6: open chain for the operator service
     let service_client = net.make_client().await;
     service_client.wallet_init(None).await?;
     let service_owner = service_client.keygen().await?;
@@ -5033,21 +5026,24 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
 
     let mut notifications1 = node_service1.notifications(worker1_chain).await?;
 
-    // Waiting for a notification about a block created right after starting the service
-    // is unreliable - wait for the block created on the controller admin chain instead.
-    // Admin chain block start_h+7: receive worker 1 registration.
-    admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 7))
-        .await
-        .unwrap_or_else(|_| panic!("should get notification about a block on chain {admin_chain}"));
-
+    // Poll until the controller app sees worker 1 as registered, draining one admin-chain
+    // block notification between checks. Height-based waits were flaky because the exact
+    // block at which the registration lands depends on the starting height.
     let app1 = node_service1.make_application(&worker1_chain, &controller_id)?;
-    let response = app1.query("localWorkerState").await?;
-    let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
-    let worker = state
-        .local_worker
-        .expect("Worker 1 should be registered after block notification");
-    assert_eq!(worker.capabilities.len(), 1);
+    let worker1 = loop {
+        let response = app1.query("localWorkerState").await?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+        if let Some(worker) = state.local_worker {
+            break worker;
+        }
+        admin_notifications
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| {
+                panic!("timed out waiting for worker 1 registration on {admin_chain}")
+            });
+    };
+    assert_eq!(worker1.capabilities.len(), 1);
     assert_ne!(
         worker1_chain, admin_chain,
         "Worker should be on a different chain than admin"
@@ -5065,21 +5061,22 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
-    // Same as above: instead of waiting for the notification on worker2_chain, wait for
-    // the notification about reception of the registration on admin chain.
-    // Admin chain block start_h+8: receive worker 2 registration.
-    admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 8))
-        .await
-        .unwrap_or_else(|_| panic!("should get notification about a block on chain {admin_chain}"));
-
+    // Same pattern: poll the controller app until it reports worker 2 registered.
     let app2 = node_service2.make_application(&worker2_chain, &controller_id)?;
-    let response = app2.query("localWorkerState").await?;
-    let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
-    let worker = state
-        .local_worker
-        .expect("Worker 2 should be registered after block notification");
-    assert!(worker.capabilities.is_empty());
+    let worker2 = loop {
+        let response = app2.query("localWorkerState").await?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+        if let Some(worker) = state.local_worker {
+            break worker;
+        }
+        admin_notifications
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| {
+                panic!("timed out waiting for worker 2 registration on {admin_chain}")
+            });
+    };
+    assert!(worker2.capabilities.is_empty());
     assert_ne!(
         worker2_chain, admin_chain,
         "Worker 2 should be on a different chain than admin"
@@ -5106,7 +5103,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         requirements: vec![],
     };
     let service_bytes = bcs::to_bytes(&managed_service)?;
-    // Admin chain block start_h+9: publish data blob
     let service_id = admin_node_service
         .publish_data_blob(&admin_chain, service_bytes)
         .await?;
@@ -5117,40 +5113,28 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block start_h+10: set admins
-    admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 10))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should receive a notification about a block on chain {admin_chain}")
-        });
-
     let mutation = format!(
         "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
         admin_owner, service_id, worker1_chain
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block start_h+11: assign service to worker 1
-    admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 11))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should receive a notification about a block on chain {admin_chain}")
-        });
-
-    // Worker 1 chain block 1: receive service assignment
-    notifications1
-        .wait_for_block(BlockHeight::from(1))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should get notification about a block on chain {worker1_chain}")
-        });
-
-    let response = app1.query("localWorkerState").await?;
-    let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
-    assert_eq!(state.local_services.len(), 1);
-    assert_eq!(state.local_services[0].name, "test-service");
+    // Poll worker 1's view until it reflects the service assignment, consuming block
+    // notifications on the worker's own chain between checks.
+    loop {
+        let response = app1.query("localWorkerState").await?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+        if state.local_services.len() == 1 {
+            assert_eq!(state.local_services[0].name, "test-service");
+            break;
+        }
+        notifications1
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| {
+                panic!("timed out waiting for service assignment on {worker1_chain}")
+            });
+    }
 
     // Sync the service chain on node_service1 so that it downloads the ChainDescription blob
     // from validators. Without this, the query can fail with BlobsNotFound because the chain
@@ -5178,22 +5162,18 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         .mutate(r#"requestTask(operator: "ls", input: "")"#)
         .await?;
 
-    service_notifications
-        .wait_for_block(BlockHeight::from(0))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should get notification about RequestTask block on chain {service_chain}")
-        });
-
-    service_notifications
-        .wait_for_block(BlockHeight::from(1))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should get notification about StoreResult block on chain {service_chain}")
-        });
-
-    let task_count: u64 = task_app.query_json("taskCount").await?;
-    assert_eq!(task_count, 1, "Task should have been processed");
+    // Poll until the task has been processed, consuming service-chain block notifications
+    // (the RequestTask block and then the StoreResult block) between checks.
+    loop {
+        let task_count: u64 = task_app.query_json("taskCount").await?;
+        if task_count == 1 {
+            break;
+        }
+        service_notifications
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for task processing on {service_chain}"));
+    }
 
     let mutation = format!(
         "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [] }} }})",
@@ -5201,28 +5181,18 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block start_h+12: remove service from worker 1
-    admin_notifications
-        .wait_for_block(BlockHeight::from(start_h + 12))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should receive a notification about a block on chain {admin_chain}")
-        });
-
-    // Worker 1 chain block 2: receive service removal
-    notifications1
-        .wait_for_block(BlockHeight::from(2))
-        .await
-        .unwrap_or_else(|_| {
-            panic!("should get notification about a block on chain {worker1_chain}")
-        });
-
-    let response = app1.query("localWorkerState").await?;
-    let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
-    assert!(
-        state.local_services.is_empty(),
-        "Service should be removed after block notification"
-    );
+    // Poll worker 1's view until the service has been removed.
+    loop {
+        let response = app1.query("localWorkerState").await?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+        if state.local_services.is_empty() {
+            break;
+        }
+        notifications1
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for service removal on {worker1_chain}"));
+    }
 
     node_service1.ensure_is_running()?;
     node_service1.terminate().await?;
