@@ -297,7 +297,7 @@ impl ActiveChain {
         &self,
     ) -> Option<(ConfirmedBlockCertificate, ResourceTracker)> {
         let chain_id = self.id();
-        let (information, _) = self
+        let information = self
             .validator
             .worker()
             .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_message_bundles())

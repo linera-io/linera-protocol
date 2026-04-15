@@ -220,27 +220,28 @@ where
         self.service_runtime_task.take()
     }
 
+    /// Returns the pending cross-chain network actions for this chain, without
+    /// initializing the chain's execution state. Intended for callers that only
+    /// need to re-emit cross-chain requests from the outbox of a sender chain
+    /// whose `ChainDescription` we may never have needed.
+    #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
+    pub(crate) async fn cross_chain_network_actions(&self) -> Result<NetworkActions, WorkerError> {
+        self.create_network_actions(None).await
+    }
+
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
     #[tracing::instrument(level = "debug", skip(self))]
     pub(crate) async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let create_network_actions = query.create_network_actions;
+    ) -> Result<ChainInfoResponse, WorkerError> {
         if let Some((height, round)) = query.request_leader_timeout {
             self.vote_for_leader_timeout(height, round).await?;
         }
         if query.request_fallback {
             self.vote_for_fallback().await?;
         }
-        let response = self.prepare_chain_info_response(query).await?;
-        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = if create_network_actions {
-            self.create_network_actions(None).await?
-        } else {
-            NetworkActions::default()
-        };
-        Ok((response, actions))
+        self.prepare_chain_info_response(query).await
     }
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.

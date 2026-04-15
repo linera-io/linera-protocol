@@ -1299,7 +1299,7 @@ where
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<ChainInfoResponse, WorkerError> {
         trace!("{} <-- {:?}", self.nickname(), query);
         #[cfg(with_metrics)]
         metrics::CHAIN_INFO_QUERIES.inc();
@@ -1585,6 +1585,19 @@ where
     ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
         self.chain_read(chain_id, |guard| async move {
             guard.get_received_certificate_trackers().await
+        })
+        .await
+    }
+
+    /// Returns the pending cross-chain network actions for this chain without
+    /// initializing its execution state. Safe to call on chains whose
+    /// `ChainDescription` blob is not available locally.
+    pub async fn cross_chain_network_actions(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<NetworkActions, WorkerError> {
+        self.chain_read(chain_id, |guard| async move {
+            guard.cross_chain_network_actions().await
         })
         .await
     }

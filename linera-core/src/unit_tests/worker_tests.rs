@@ -2471,7 +2471,7 @@ where
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
     let query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
-    let (response, _actions) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
@@ -3248,7 +3248,7 @@ where
     let stream_id = StreamId::system(NEW_EPOCH_STREAM_NAME);
     let query =
         ChainInfoQuery::new(admin_chain_id).with_previous_event_blocks(vec![stream_id.clone()]);
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
@@ -3526,7 +3526,7 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
@@ -3622,7 +3622,7 @@ where
         .handle_validated_certificate(certificate)
         .await?;
     let query_values = ChainInfoQuery::new(chain_1).with_manager_values();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
@@ -3663,7 +3663,7 @@ where
         .executing_worker()
         .handle_block_proposal(proposal)
         .await?;
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
@@ -3714,7 +3714,7 @@ where
     worker
         .handle_validated_certificate(certificate.clone())
         .await?;
-    let (response, _) = worker.handle_chain_info_query(query_values).await?;
+    let response = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locking,
         Some(Box::new(LockingBlock::Regular(certificate)))
@@ -3809,7 +3809,7 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
@@ -3842,7 +3842,7 @@ where
         .await?;
     assert_matches!(actions.notifications[0].reason, Reason::NewRound { .. });
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query_values)
         .await?;
@@ -4015,7 +4015,7 @@ where
         .handle_block_proposal(proposal)
         .await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query_values)
         .await?;
@@ -4061,7 +4061,7 @@ where
     let query = ChainInfoQuery::new(chain_id)
         .with_fallback()
         .with_committees();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
@@ -4073,7 +4073,7 @@ where
 
     // Even if a long time passes: Without a new epoch there's no fallback mode.
     clock.add(fallback_duration);
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
@@ -4098,7 +4098,7 @@ where
         .await?;
 
     // Epoch was just created at time 0: No fallback mode yet.
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
@@ -4106,7 +4106,7 @@ where
 
     // Advance time past the fallback_duration. Now we should vote for fallback.
     clock.add(fallback_duration);
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
@@ -4121,7 +4121,7 @@ where
         .await?;
 
     // Now we are in fallback mode, and the validator is the leader.
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
@@ -4598,7 +4598,7 @@ where
 
     // Query pending bundles and verify priority chain's bundle comes first.
     let query = ChainInfoQuery::new(chain_2).with_pending_message_bundles();
-    let (response, _actions) = env.worker().handle_chain_info_query(query).await?;
+    let response = env.worker().handle_chain_info_query(query).await?;
     let bundles = &response.info.requested_pending_message_bundles;
 
     assert_eq!(bundles.len(), 2);

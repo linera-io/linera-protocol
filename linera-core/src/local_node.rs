@@ -118,9 +118,7 @@ where
         &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        // In local nodes, cross-chain actions will be handled internally, so we discard them.
-        let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
-        Ok(response)
+        Ok(self.node.state.handle_chain_info_query(query).await?)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -264,16 +262,22 @@ where
     }
 
     /// Handles any pending local cross-chain requests.
+    ///
+    /// Does not initialize the sender chain's execution state, so it is safe to
+    /// call even when the sender's `ChainDescription` blob is not in local storage.
+    /// Previously this went through `handle_chain_info_query`, which unconditionally
+    /// initialized the worker and therefore forced a `ChainDescription` download on
+    /// every call.
     #[instrument(level = "trace", skip(self, notifier))]
     pub async fn retry_pending_cross_chain_requests(
         &self,
         sender_chain: ChainId,
         notifier: &impl Notifier,
     ) -> Result<(), LocalNodeError> {
-        let (_response, actions) = self
+        let actions = self
             .node
             .state
-            .handle_chain_info_query(ChainInfoQuery::new(sender_chain).with_network_actions())
+            .cross_chain_network_actions(sender_chain)
             .await?;
         let mut requests = VecDeque::from_iter(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {

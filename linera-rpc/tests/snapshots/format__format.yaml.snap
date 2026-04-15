@@ -364,7 +364,6 @@ ChainInfoQuery:
     - request_previous_event_blocks:
         SEQ:
           TYPENAME: StreamId
-    - create_network_actions: BOOL
 ChainInfoResponse:
   STRUCT:
     - info:
