@@ -1,0 +1,26 @@
+[package]
+name = "linera-wallet-json"
+description = "Persistent wallet implementation for the Linera protocol."
+readme = "README.md"
+documentation = "https://docs.rs/linera-wallet-json/latest/linera_wallet/"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+dirs.workspace = true
+fs-err.workspace = true
+futures.workspace = true
+linera-base.workspace = true
+linera-core.workspace = true
+linera-persistent = { workspace = true, features = ["fs"] }
+serde.workspace = true
+tracing.workspace = true

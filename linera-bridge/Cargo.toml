@@ -45,9 +45,9 @@ relay = [
     "dep:linera-client",
     "dep:linera-core",
     "dep:linera-faucet-client",
-    "dep:linera-persistent",
     "dep:linera-storage",
     "dep:linera-storage-runtime",
+    "dep:linera-wallet-json",
     "dep:linera-views",
     "linera-storage/rocksdb",
     "linera-views/rocksdb",
@@ -101,14 +101,14 @@ futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 linera-chain = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
-linera-core = { workspace = true, optional = true, features = ["fs"] }
+linera-core = { workspace = true, optional = true }
 linera-faucet-client = { workspace = true, optional = true }
-linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 linera-storage = { workspace = true, optional = true }
 linera-storage-runtime = { workspace = true, optional = true, features = [
     "rocksdb",
 ] }
 linera-views = { workspace = true, optional = true }
+linera-wallet-json = { workspace = true, optional = true }
 prometheus = { workspace = true, optional = true }
 rustls = { version = "0.23", optional = true, features = ["ring"] }
 sqlx = { workspace = true, optional = true, features = [

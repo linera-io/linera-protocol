@@ -8,10 +8,8 @@ use std::{
 
 use futures::{stream, Stream};
 use linera_base::identifiers::{AccountOwner, ChainId};
-use linera_persistent as persistent;
-
-use super::{Chain, Memory, Wallet};
-use crate::GenesisConfig;
+use linera_core::{wallet::*, GenesisConfig};
+use linera_persistent::{self as persistent};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Data {

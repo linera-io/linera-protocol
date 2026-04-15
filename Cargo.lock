@@ -5433,10 +5433,10 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
- "linera-persistent",
  "linera-storage",
  "linera-storage-runtime",
  "linera-views",
+ "linera-wallet-json",
  "op-alloy-network",
  "prometheus",
  "proptest",
@@ -5594,7 +5594,6 @@ dependencies = [
  "linera-chain",
  "linera-core",
  "linera-execution",
- "linera-persistent",
  "linera-storage",
  "linera-storage-service",
  "linera-version",
@@ -6102,7 +6101,6 @@ dependencies = [
  "criterion",
  "crowd-funding",
  "current_platform",
- "dirs",
  "ethereum-tracker",
  "fs-err",
  "fs_extra",
@@ -6131,6 +6129,7 @@ dependencies = [
  "linera-storage-service",
  "linera-version",
  "linera-views",
+ "linera-wallet-json",
  "lru 0.15.0",
  "matching-engine",
  "native-fungible",
@@ -6368,6 +6367,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.105",
+]
+
+[[package]]
+name = "linera-wallet-json"
+version = "0.15.15"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "fs-err",
+ "futures",
+ "linera-base",
+ "linera-core",
+ "linera-persistent",
+ "serde",
+ "tracing",
 ]
 
 [[package]]

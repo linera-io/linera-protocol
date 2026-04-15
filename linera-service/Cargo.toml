@@ -99,7 +99,6 @@ clio = { workspace = true, features = ["clap-parse"] }
 colored.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
-dirs.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
 futures.workspace = true
@@ -110,7 +109,7 @@ kube = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
-linera-core = { workspace = true, features = ["fs"] }
+linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
 linera-exporter = { workspace = true, default-features = false }
 linera-faucet-client.workspace = true
@@ -128,6 +127,7 @@ linera-storage-runtime.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
+linera-wallet-json.workspace = true
 lru.workspace = true
 nonzero_lit.workspace = true
 papaya.workspace = true

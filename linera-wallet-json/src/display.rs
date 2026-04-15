@@ -1,12 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Display/formatting for wallet contents.
+
 use linera_base::{
     data_types::{ChainDescription, ChainOrigin},
     identifiers::ChainId,
 };
 use linera_core::wallet;
-pub use linera_core::wallet::PersistentWallet as Wallet;
+
+use crate::PersistentWallet;
 
 struct ChainDetails {
     is_default: bool,
@@ -17,7 +20,7 @@ struct ChainDetails {
 }
 
 impl ChainDetails {
-    fn new(chain_id: ChainId, wallet: &Wallet) -> Self {
+    fn new(chain_id: ChainId, wallet: &PersistentWallet) -> Self {
         let Some(user_chain) = wallet.get(chain_id) else {
             panic!("Chain {} not found.", chain_id);
         };
@@ -78,36 +81,26 @@ impl ChainDetails {
     }
 }
 
-/// Extension methods for `Wallet` that provide display/presentation functionality.
-pub trait WalletExt {
-    fn pretty_print(&self, chain_ids: Vec<ChainId>);
-}
+/// Prints wallet chain details to stdout.
+pub fn pretty_print(wallet: &PersistentWallet, chain_ids: Vec<ChainId>) {
+    let total_chains = chain_ids.len();
+    let plural_s = if total_chains == 1 { "" } else { "s" };
+    tracing::info!("Found {total_chains} chain{plural_s}");
 
-impl WalletExt for Wallet {
-    fn pretty_print(&self, chain_ids: Vec<ChainId>) {
-        let chain_ids: Vec<_> = chain_ids.into_iter().collect();
-        let total_chains = chain_ids.len();
-
-        let plural_s = if total_chains == 1 { "" } else { "s" };
-        tracing::info!("Found {total_chains} chain{plural_s}");
-
-        let mut chains = chain_ids
-            .into_iter()
-            .map(|chain_id| ChainDetails::new(chain_id, self))
-            .collect::<Vec<_>>();
-        // Print first the default, then the admin chain, then other root chains, and finally the
-        // child chains.
-        chains.sort_unstable_by_key(|chain| {
-            let root_id = chain
-                .origin
-                .and_then(|origin| origin.root())
-                .unwrap_or(u32::MAX);
-            let chain_id = chain.chain_id;
-            (!chain.is_default, !chain.is_admin, root_id, chain_id)
-        });
-        for chain in chains {
-            chain.print_paragraph();
-        }
-        println!("------------------------");
+    let mut chains = chain_ids
+        .into_iter()
+        .map(|chain_id| ChainDetails::new(chain_id, wallet))
+        .collect::<Vec<_>>();
+    chains.sort_unstable_by_key(|chain| {
+        let root_id = chain
+            .origin
+            .and_then(|origin| origin.root())
+            .unwrap_or(u32::MAX);
+        let chain_id = chain.chain_id;
+        (!chain.is_default, !chain.is_admin, root_id, chain_id)
+    });
+    for chain in chains {
+        chain.print_paragraph();
     }
+    println!("------------------------");
 }
