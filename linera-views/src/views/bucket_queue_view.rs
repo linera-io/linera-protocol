@@ -262,8 +262,16 @@ where
                 batch.delete_key(key);
                 let key = self.get_bucket_key(0)?;
                 let bucket = &self.stored_buckets[cursor.offset];
-                let State::Loaded { data } = &bucket.state else {
-                    unreachable!("The front bucket is always loaded.");
+                let data = match &bucket.state {
+                    State::Loaded { data } => data,
+                    State::NotLoaded { length } => {
+                        tracing::error!(
+                            base_key = ?self.context.base_key(),
+                            length,
+                            "The front bucket is not loaded"
+                        );
+                        unreachable!("The front bucket is always loaded.");
+                    }
                 };
                 batch.put_key_value(key, data)?;
                 descriptions.push(BucketDescription {
