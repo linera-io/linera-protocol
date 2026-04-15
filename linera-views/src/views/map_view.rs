@@ -954,7 +954,7 @@ where
             }
         };
         let Update::Set(value) = update else {
-            unreachable!()
+            unreachable!("All branches above produce Update::Set")
         };
         Ok(value)
     }

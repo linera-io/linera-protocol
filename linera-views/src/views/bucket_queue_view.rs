@@ -458,7 +458,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
             Some(Cursor { offset, position }) => {
                 let bucket = &self.stored_buckets[offset];
                 let State::Loaded { data } = &bucket.state else {
-                    unreachable!();
+                    unreachable!("The front bucket should always be loaded");
                 };
                 Some(&data[position])
             }
@@ -486,7 +486,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
             Some(Cursor { offset, position }) => {
                 let bucket = self.stored_buckets.get_mut(offset).unwrap();
                 let State::Loaded { data } = &mut bucket.state else {
-                    unreachable!();
+                    unreachable!("The front bucket should always be loaded");
                 };
                 Some(data.get_mut(position).unwrap())
             }
@@ -617,7 +617,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         }
         let state = &self.stored_buckets.back_mut().unwrap().state;
         let State::Loaded { data } = state else {
-            unreachable!();
+            unreachable!("The back bucket should be loaded after the read above");
         };
         Ok(Some(data.last().unwrap().clone()))
     }
@@ -728,7 +728,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         } else {
             let mut increment = self.count() - count;
             let Some(cursor) = self.cursor else {
-                unreachable!();
+                unreachable!("Cursor should be Some when stored_count > 0");
             };
             let mut position = cursor.position;
             for offset in cursor.offset..self.stored_buckets.len() {
@@ -747,7 +747,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 increment -= size;
                 position = 0;
             }
-            unreachable!();
+            unreachable!("The loop should have returned before exhausting all stored buckets");
         }
     }
 

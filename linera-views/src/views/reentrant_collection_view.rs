@@ -591,7 +591,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             .into_iter()
             .map(|short_key| {
                 let Some(Update::Set(view)) = self.updates.get(&short_key) else {
-                    unreachable!()
+                    unreachable!("Entry should have been inserted as Update::Set by try_load_view_mut")
                 };
                 Ok(WriteGuardedView(
                     view.clone()
@@ -1065,7 +1065,7 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
             hasher.update_with_bytes(&key)?;
             let hash = if let Some(entry) = self.updates.get_mut(&key) {
                 let Update::Set(view) = entry else {
-                    unreachable!();
+                    unreachable!("Loaded entries in updates should always be Update::Set");
                 };
                 let mut view = view
                     .try_write_arc()
@@ -1096,7 +1096,7 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
             hasher.update_with_bytes(&key)?;
             let hash = if let Some(entry) = self.updates.get(&key) {
                 let Update::Set(view) = entry else {
-                    unreachable!();
+                    unreachable!("Loaded entries in updates should always be Update::Set");
                 };
                 let view = view
                     .try_read_arc()

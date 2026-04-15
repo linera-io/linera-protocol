@@ -575,7 +575,7 @@ mod tests {
             segment_key.extend(bytes);
             let value_read = store.read_value_bytes(&segment_key).await.unwrap();
             let Some(value_read) = value_read else {
-                unreachable!()
+                unreachable!("Segment {index} should exist after writing a value that spans multiple segments")
             };
             if index == 0 {
                 value_concat.extend(&value_read[4..]);
