@@ -21,7 +21,7 @@ use linera_chain::{
 };
 use linera_execution::{committee::Committee, ExecutionRuntimeContext};
 use linera_storage::ChainRuntimeContext;
-use linera_views::context::Context;
+use linera_views::{context::Context, ViewError};
 use serde::{Deserialize, Serialize};
 
 use crate::client::chain_client;
@@ -264,18 +264,18 @@ impl CrossChainRequest {
     }
 }
 
-impl<C, S> From<&ChainStateView<C>> for ChainInfo
-where
-    C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
-    ChainRuntimeContext<S>: ExecutionRuntimeContext,
-{
-    fn from(view: &ChainStateView<C>) -> Self {
+impl ChainInfo {
+    pub async fn from_chain_view<C, S>(view: &ChainStateView<C>) -> Result<Self, ViewError>
+    where
+        C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
+        ChainRuntimeContext<S>: ExecutionRuntimeContext,
+    {
         let system_state = &view.execution_state.system;
         let tip_state = view.tip_state.get();
-        ChainInfo {
+        Ok(ChainInfo {
             chain_id: view.chain_id(),
             epoch: *system_state.epoch.get(),
-            description: system_state.description.get().clone(),
+            description: system_state.description.get().await?.clone(),
             manager: Box::new(ChainManagerInfo::from(&view.manager)),
             chain_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
@@ -289,7 +289,7 @@ where
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
             requested_previous_event_blocks: BTreeMap::new(),
-        }
+        })
     }
 }
 

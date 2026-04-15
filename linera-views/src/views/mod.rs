@@ -18,6 +18,9 @@ mod tests;
 /// The `RegisterView` implements a register for a single value.
 pub mod register_view;
 
+/// The `LazyRegisterView` implements a register for a single value with lazy loading.
+pub mod lazy_register_view;
+
 /// The `LogView` implements a log list that can be pushed.
 pub mod log_view;
 
