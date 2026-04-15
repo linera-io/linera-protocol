@@ -6068,7 +6068,6 @@ dependencies = [
  "crowd-funding",
  "current_platform",
  "custom_debug_derive",
- "dirs",
  "ethereum-tracker",
  "fs-err",
  "fs_extra",
@@ -6098,6 +6097,7 @@ dependencies = [
  "linera-storage-service",
  "linera-version",
  "linera-views",
+ "linera-wallet-json",
  "lru 0.15.0",
  "matching-engine",
  "mini-moka",
@@ -6325,6 +6325,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.105",
+]
+
+[[package]]
+name = "linera-wallet-json"
+version = "0.16.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "fs-err",
+ "futures",
+ "linera-base",
+ "linera-client",
+ "linera-core",
+ "linera-persistent",
+ "serde",
+ "tracing",
 ]
 
 [[package]]
