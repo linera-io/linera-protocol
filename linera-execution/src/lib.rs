@@ -12,7 +12,7 @@ pub mod execution_state_actor;
 mod graphql;
 mod policy;
 mod resources;
-mod runtime;
+pub mod runtime;
 pub mod system;
 #[cfg(with_testing)]
 pub mod test_utils;
@@ -485,6 +485,14 @@ pub trait UserContract {
 
     /// Finishes execution of the current transaction.
     fn finalize(&mut self) -> Result<(), ExecutionError>;
+
+    /// Creates a snapshot of the Wasm instance's mutable state (memory and globals).
+    ///
+    /// Returns `None` for non-Wasm contract implementations.
+    fn create_snapshot(&mut self) -> Option<Box<dyn std::any::Any + Send>>;
+
+    /// Restores the Wasm instance's mutable state from a snapshot.
+    fn restore_snapshot(&mut self, snapshot: &(dyn std::any::Any + Send));
 }
 
 /// The public entry points provided by the service part of an application.

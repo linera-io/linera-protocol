@@ -3701,6 +3701,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "flash-loan"
+version = "0.1.0"
+dependencies = [
+ "fungible",
+ "linera-sdk",
+ "serde",
+]
+
+[[package]]
 name = "flate2"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5589,6 +5598,7 @@ dependencies = [
  "criterion",
  "crowd-funding",
  "custom_debug_derive",
+ "flash-loan",
  "fungible",
  "futures",
  "hex-game",
@@ -6168,6 +6178,7 @@ dependencies = [
  "linera-wallet-json",
  "lru 0.15.0",
  "matching-engine",
+ "meta-counter",
  "native-fungible",
  "non-fungible",
  "nonzero_lit",
