@@ -1975,8 +1975,7 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.initialize_and_save_if_needed().await?;
-        let chain = &self.chain;
-        let mut info = ChainInfo::from_chain_view(chain).await?;
+        let mut info = ChainInfo::from_chain_view(&self.chain).await?;
         if query.request_committees {
             info.requested_committees =
                 Some(self.chain.execution_state.system.committees.get().clone());
