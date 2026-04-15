@@ -519,10 +519,8 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 if offset == self.stored_buckets.len() {
                     self.cursor = None;
                 } else {
-                    self.cursor = Some(Cursor { offset, position });
-                    let bucket = self.stored_buckets.get_mut(offset).unwrap();
-                    let index = bucket.index;
-                    if !bucket.is_loaded() {
+                    if !self.stored_buckets[offset].is_loaded() {
+                        let index = self.stored_buckets[offset].index;
                         let key = self.get_bucket_key(index)?;
                         let data = self.context.store().read_value(&key).await?;
                         let data = match data {
@@ -535,6 +533,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                         };
                         self.stored_buckets[offset].state = State::Loaded { data };
                     }
+                    self.cursor = Some(Cursor { offset, position });
                 }
             }
             None => {
@@ -853,5 +852,53 @@ mod graphql {
                 .read_front(count.unwrap_or_else(|| self.count()))
                 .await?)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        batch::Batch,
+        context::{Context, MemoryContext},
+        store::WritableKeyValueStore as _,
+    };
+
+    /// Regression test: a failed load while advancing the cursor in
+    /// `delete_front` must not leave the view in a state where the bucket at
+    /// `cursor.offset` is `NotLoaded`. Previously the cursor was advanced
+    /// before the load was attempted, so a subsequent `pre_save` would hit
+    /// `unreachable!("The front bucket is always loaded.")`.
+    #[tokio::test]
+    async fn delete_front_load_failure_preserves_invariant() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u8, 2>::load(context.clone()).await?;
+        for value in [1u8, 2, 3, 4] {
+            view.push_back(value);
+        }
+        save(&context, &mut view).await?;
+
+        let mut view = BucketQueueView::<_, u8, 2>::load(context.clone()).await?;
+
+        let bucket1_key = view.get_bucket_key(1)?;
+        let mut batch = Batch::new();
+        batch.delete_key(bucket1_key);
+        context.store().write_batch(batch).await?;
+
+        view.delete_front().await?;
+        let err = view.delete_front().await.expect_err("load should fail");
+        assert!(matches!(err, ViewError::MissingEntries(_)));
+
+        save(&context, &mut view).await?;
+
+        Ok(())
+    }
+
+    async fn save<V: View>(context: &V::Context, view: &mut V) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        view.pre_save(&mut batch)?;
+        context.store().write_batch(batch).await?;
+        view.post_save();
+        Ok(())
     }
 }
