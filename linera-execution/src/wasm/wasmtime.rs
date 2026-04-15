@@ -173,6 +173,18 @@ where
             .map_err(WasmExecutionError::from)?;
         Ok(())
     }
+
+    fn create_snapshot(&mut self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(self.instance.create_snapshot()))
+    }
+
+    fn restore_snapshot(&mut self, snapshot: &(dyn std::any::Any + Send)) {
+        if let Some(snapshot) =
+            snapshot.downcast_ref::<linera_witty::wasmtime::WasmInstanceSnapshot>()
+        {
+            self.instance.restore_snapshot(snapshot);
+        }
+    }
 }
 
 impl<Runtime> crate::UserService for WasmtimeServiceInstance<Runtime>

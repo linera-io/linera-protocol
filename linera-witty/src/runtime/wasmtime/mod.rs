@@ -10,7 +10,9 @@ mod parameters;
 mod results;
 
 pub use anyhow;
-use wasmtime::{AsContext, AsContextMut, Extern, Memory, Store, StoreContext, StoreContextMut};
+use wasmtime::{
+    AsContext, AsContextMut, Extern, Memory, Mutability, Store, StoreContext, StoreContextMut, Val,
+};
 pub use wasmtime::{Caller, Linker};
 
 pub use self::{parameters::WasmtimeParameters, results::WasmtimeResults};
@@ -30,11 +32,78 @@ pub struct EntrypointInstance<UserData> {
     store: Store<UserData>,
 }
 
+/// Snapshot of a Wasmtime instance's mutable state (linear memory and mutable globals).
+pub struct WasmInstanceSnapshot {
+    memory_data: Vec<u8>,
+    globals: Vec<(String, Val)>,
+}
+
 impl<UserData> EntrypointInstance<UserData> {
     /// Creates a new [`EntrypointInstance`] with the guest module
     /// [`Instance`][`wasmtime::Instance`] and [`Store`].
     pub fn new(instance: wasmtime::Instance, store: Store<UserData>) -> Self {
         EntrypointInstance { instance, store }
+    }
+
+    /// Creates a snapshot of the Wasm instance's mutable state (memory and globals).
+    pub fn create_snapshot(&mut self) -> WasmInstanceSnapshot {
+        let mut memory_data = Vec::new();
+        let mut globals = Vec::new();
+
+        let exports = self
+            .instance
+            .exports(&mut self.store)
+            .map(|export| (export.name().to_string(), export.into_extern()))
+            .collect::<Vec<_>>();
+
+        for (name, ext) in exports {
+            match ext {
+                Extern::Memory(mem) => {
+                    if memory_data.is_empty() {
+                        memory_data = mem.data(&self.store).to_vec();
+                    }
+                }
+                Extern::Global(global) => {
+                    if global.ty(&self.store).mutability() == Mutability::Var {
+                        globals.push((name, global.get(&mut self.store)));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        WasmInstanceSnapshot {
+            memory_data,
+            globals,
+        }
+    }
+
+    /// Restores the Wasm instance's mutable state from a snapshot.
+    pub fn restore_snapshot(&mut self, snapshot: &WasmInstanceSnapshot) {
+        let exports = self
+            .instance
+            .exports(&mut self.store)
+            .map(|export| (export.name().to_string(), export.into_extern()))
+            .collect::<Vec<_>>();
+
+        let mut memory_restored = false;
+        for (name, ext) in exports {
+            match ext {
+                Extern::Memory(mem) if !memory_restored => {
+                    mem.data_mut(&mut self.store)[..snapshot.memory_data.len()]
+                        .copy_from_slice(&snapshot.memory_data);
+                    memory_restored = true;
+                }
+                Extern::Global(global) => {
+                    if let Some((_, val)) = snapshot.globals.iter().find(|(n, _)| n == &name) {
+                        global
+                            .set(&mut self.store, *val)
+                            .expect("Failed to restore Wasm global from snapshot");
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 }
 

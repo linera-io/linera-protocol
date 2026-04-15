@@ -1328,6 +1328,15 @@ where
     fn finalize(&mut self) -> Result<(), ExecutionError> {
         Ok(())
     }
+
+    fn create_snapshot(&mut self) -> Option<Box<dyn std::any::Any + Send>> {
+        // We do not have snapshots with the REVM blockchain.
+        None
+    }
+
+    fn restore_snapshot(&mut self, _snapshot: &(dyn std::any::Any + Send)) {
+        // Since no snapshot, the restoring is a noop.
+    }
 }
 
 fn process_execution_result(

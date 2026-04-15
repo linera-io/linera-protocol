@@ -327,6 +327,12 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
             None => panic!("Unexpected call to `finalize`"),
         }
     }
+
+    fn create_snapshot(&mut self) -> Option<Box<dyn std::any::Any + Send>> {
+        None
+    }
+
+    fn restore_snapshot(&mut self, _snapshot: &(dyn std::any::Any + Send)) {}
 }
 
 impl UserService for MockApplicationInstance<ServiceSyncRuntimeHandle> {
