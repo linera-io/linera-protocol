@@ -5032,8 +5032,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let app1 = node_service1.make_application(&worker1_chain, &controller_id)?;
     let worker1 = loop {
         let response = app1.query("localWorkerState").await?;
-        let state: LocalWorkerState =
-            serde_json::from_value(response["localWorkerState"].clone())?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
         if let Some(worker) = state.local_worker {
             break worker;
         }
@@ -5066,8 +5065,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let app2 = node_service2.make_application(&worker2_chain, &controller_id)?;
     let worker2 = loop {
         let response = app2.query("localWorkerState").await?;
-        let state: LocalWorkerState =
-            serde_json::from_value(response["localWorkerState"].clone())?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
         if let Some(worker) = state.local_worker {
             break worker;
         }
@@ -5125,8 +5123,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     // notifications on the worker's own chain between checks.
     loop {
         let response = app1.query("localWorkerState").await?;
-        let state: LocalWorkerState =
-            serde_json::from_value(response["localWorkerState"].clone())?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
         if state.local_services.len() == 1 {
             assert_eq!(state.local_services[0].name, "test-service");
             break;
@@ -5175,9 +5172,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         service_notifications
             .wait_for_block(None)
             .await
-            .unwrap_or_else(|_| {
-                panic!("timed out waiting for task processing on {service_chain}")
-            });
+            .unwrap_or_else(|_| panic!("timed out waiting for task processing on {service_chain}"));
     }
 
     let mutation = format!(
@@ -5189,17 +5184,14 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     // Poll worker 1's view until the service has been removed.
     loop {
         let response = app1.query("localWorkerState").await?;
-        let state: LocalWorkerState =
-            serde_json::from_value(response["localWorkerState"].clone())?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
         if state.local_services.is_empty() {
             break;
         }
         notifications1
             .wait_for_block(None)
             .await
-            .unwrap_or_else(|_| {
-                panic!("timed out waiting for service removal on {worker1_chain}")
-            });
+            .unwrap_or_else(|_| panic!("timed out waiting for service removal on {worker1_chain}"));
     }
 
     node_service1.ensure_is_running()?;
