@@ -734,7 +734,11 @@ where
         )?;
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
-        Ok((self.chain_info_response().await?, actions, BlockOutcome::Processed))
+        Ok((
+            self.chain_info_response().await?,
+            actions,
+            BlockOutcome::Processed,
+        ))
     }
 
     /// Initializes `next_expected_events` from `stream_event_counts` (which reflects
@@ -790,7 +794,11 @@ where
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
-            return Ok((self.chain_info_response().await?, actions, BlockOutcome::Skipped));
+            return Ok((
+                self.chain_info_response().await?,
+                actions,
+                BlockOutcome::Skipped,
+            ));
         }
 
         // We haven't processed the block - verify the certificate first
@@ -1024,7 +1032,11 @@ where
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
 
-        Ok((self.chain_info_response().await?, actions, BlockOutcome::Processed))
+        Ok((
+            self.chain_info_response().await?,
+            actions,
+            BlockOutcome::Processed,
+        ))
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
