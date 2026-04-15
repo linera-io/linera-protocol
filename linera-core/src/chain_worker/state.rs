@@ -594,7 +594,7 @@ where
             .get()
             .already_validated_block(certificate.inner().height())?
         {
-            return Ok((self.chain_info_response(), NetworkActions::default()));
+            return Ok((self.chain_info_response().await?, NetworkActions::default()));
         }
         ensure!(
             certificate.inner().epoch() == chain_epoch,
@@ -610,7 +610,7 @@ where
             .handle_timeout_certificate(certificate, self.storage.clock().current_time());
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
-        Ok((self.chain_info_response(), actions))
+        Ok((self.chain_info_response().await?, actions))
     }
 
     /// Tries to load all blobs published in this proposal.
@@ -643,7 +643,7 @@ where
         let missing_blob_ids = missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {
             let chain = &mut self.chain;
-            if chain.ownership().open_multi_leader_rounds {
+            if chain.ownership().await?.open_multi_leader_rounds {
                 // TODO(#3203): Allow multiple pending proposals on permissionless chains.
                 chain.pending_proposed_blobs.clear();
             }
@@ -701,7 +701,7 @@ where
         if already_committed_block || should_skip_validated_block()? {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
-                self.chain_info_response(),
+                self.chain_info_response().await?,
                 NetworkActions::default(),
                 BlockOutcome::Skipped,
             ));
@@ -734,7 +734,11 @@ where
         )?;
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
-        Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
+        Ok((
+            self.chain_info_response().await?,
+            actions,
+            BlockOutcome::Processed,
+        ))
     }
 
     /// Initializes `next_expected_events` from `stream_event_counts` (which reflects
@@ -790,7 +794,11 @@ where
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
-            return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
+            return Ok((
+                self.chain_info_response().await?,
+                actions,
+                BlockOutcome::Skipped,
+            ));
         }
 
         // We haven't processed the block - verify the certificate first
@@ -885,7 +893,7 @@ where
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
             return Ok((
-                self.chain_info_response(),
+                self.chain_info_response().await?,
                 actions,
                 BlockOutcome::Preprocessed,
             ));
@@ -1024,7 +1032,11 @@ where
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
 
-        Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
+        Ok((
+            self.chain_info_response().await?,
+            actions,
+            BlockOutcome::Processed,
+        ))
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
@@ -1126,7 +1138,7 @@ where
         }
         inbox.observe_size_metric();
         drop(inbox);
-        if !self.config.allow_inactive_chains && !self.chain.is_active() {
+        if !self.config.allow_inactive_chains && !self.chain.is_active().await? {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
             // cross-chain update is retried later.
@@ -1639,7 +1651,7 @@ where
         }
         ensure!(was_expected, WorkerError::UnexpectedBlob);
         self.save().await?;
-        Ok(self.chain_info_response())
+        self.chain_info_response().await
     }
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
@@ -1776,7 +1788,8 @@ where
             Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
 
         // No need to sign: only used internally.
-        let mut response = ChainInfoResponse::new(&self.chain, None);
+        let info = ChainInfo::from_chain_view(&self.chain).await?;
+        let mut response = ChainInfoResponse::new(info, None);
         if let Some(signer) = signer {
             response.info.requested_owner_balance = self
                 .chain
@@ -1866,7 +1879,7 @@ where
         }
         if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
             // We already voted for this block.
-            return Ok((self.chain_info_response(), NetworkActions::default()));
+            return Ok((self.chain_info_response().await?, NetworkActions::default()));
         }
         let local_time = self.storage.clock().current_time();
 
@@ -1950,7 +1963,7 @@ where
         }
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
-        Ok((self.chain_info_response(), actions))
+        Ok((self.chain_info_response().await?, actions))
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
@@ -1962,7 +1975,7 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.initialize_and_save_if_needed().await?;
-        let mut info = ChainInfo::from(&self.chain);
+        let mut info = ChainInfo::from_chain_view(&self.chain).await?;
         if query.request_committees {
             info.requested_committees =
                 Some(self.chain.execution_state.system.committees.get().clone());
@@ -2117,8 +2130,9 @@ where
         Ok(())
     }
 
-    pub(crate) fn chain_info_response(&self) -> ChainInfoResponse {
-        ChainInfoResponse::new(&self.chain, self.config.key_pair())
+    pub(crate) async fn chain_info_response(&self) -> Result<ChainInfoResponse, WorkerError> {
+        let info = ChainInfo::from_chain_view(&self.chain).await?;
+        Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }
 
     /// Stores the chain state in persistent storage.

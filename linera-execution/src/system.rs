@@ -25,10 +25,12 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
+    lazy_register_view::HashedLazyRegisterView,
     map_view::HashedMapView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
     views::{ClonableView, HashableView, ReplaceContext, View},
+    ViewError,
 };
 use serde::{Deserialize, Serialize};
 
@@ -67,7 +69,7 @@ mod metrics {
 #[allocative(bound = "C")]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
-    pub description: HashedRegisterView<C, Option<ChainDescription>>,
+    pub description: HashedLazyRegisterView<C, Option<ChainDescription>>,
     /// The number identifying the current configuration.
     pub epoch: HashedRegisterView<C, Epoch>,
     /// The admin of the chain.
@@ -78,7 +80,7 @@ pub struct SystemExecutionStateView<C> {
     // (e.g. the `OpenChain` operation).
     pub committees: HashedRegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
-    pub ownership: HashedRegisterView<C, ChainOwnership>,
+    pub ownership: HashedLazyRegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
     pub balance: HashedRegisterView<C, Amount>,
     /// Balances attributed to a given owner.
@@ -88,7 +90,7 @@ pub struct SystemExecutionStateView<C> {
     /// Whether this chain has been closed.
     pub closed: HashedRegisterView<C, bool>,
     /// Permissions for applications on this chain.
-    pub application_permissions: HashedRegisterView<C, ApplicationPermissions>,
+    pub application_permissions: HashedLazyRegisterView<C, ApplicationPermissions>,
     /// Blobs that have been used or published on this chain.
     pub used_blobs: HashedSetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
@@ -320,11 +322,11 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     /// Invariant for the states of active chains.
-    pub fn is_active(&self) -> bool {
-        self.description.get().is_some()
-            && self.ownership.get().is_active()
+    pub async fn is_active(&self) -> Result<bool, ViewError> {
+        Ok(self.description.get().await?.is_some()
+            && self.ownership.get().await?.is_active()
             && self.current_committee().is_some()
-            && self.admin_chain_id.get().is_some()
+            && self.admin_chain_id.get().is_some())
     }
 
     /// Returns the current committee, if any.
@@ -644,6 +646,7 @@ where
                     && self
                         .ownership
                         .get()
+                        .await?
                         .verify_owner(&authenticated_signer.unwrap()),
                 ExecutionError::UnauthenticatedTransferOwner
             );
@@ -765,7 +768,7 @@ where
     /// Initializes the system application state on a newly opened chain.
     /// Returns `Ok(true)` if the chain was already initialized, `Ok(false)` if it wasn't.
     pub async fn initialize_chain(&mut self, chain_id: ChainId) -> Result<bool, ExecutionError> {
-        if self.description.get().is_some() {
+        if self.description.get().await?.is_some() {
             // already initialized
             return Ok(true);
         }
@@ -836,20 +839,11 @@ where
             block_height,
             chain_index,
         };
+        let committees = self.committees.get();
         let init_chain_config = config.init_chain_config(
             *self.epoch.get(),
-            self.committees
-                .get()
-                .keys()
-                .min()
-                .copied()
-                .unwrap_or(Epoch::ZERO),
-            self.committees
-                .get()
-                .keys()
-                .max()
-                .copied()
-                .unwrap_or(Epoch::ZERO),
+            committees.keys().min().copied().unwrap_or(Epoch::ZERO),
+            committees.keys().max().copied().unwrap_or(Epoch::ZERO),
         );
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();

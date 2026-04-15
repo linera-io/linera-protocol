@@ -66,8 +66,8 @@ impl<C: Send + Sync + Context> ExecutionStateView<C> {
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     #[graphql(derived(name = "description"))]
-    async fn _description(&self) -> &Option<ChainDescription> {
-        self.description.get()
+    async fn _description(&self) -> Result<&Option<ChainDescription>, async_graphql::Error> {
+        Ok(self.description.get().await?)
     }
 
     #[graphql(derived(name = "epoch"))]
@@ -86,8 +86,8 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     }
 
     #[graphql(derived(name = "ownership"))]
-    async fn _ownership(&self) -> &ChainOwnership {
-        self.ownership.get()
+    async fn _ownership(&self) -> Result<&ChainOwnership, async_graphql::Error> {
+        Ok(self.ownership.get().await?)
     }
 
     #[graphql(derived(name = "balance"))]
