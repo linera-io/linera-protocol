@@ -413,21 +413,39 @@ where
         })
     }
 
-    /// Returns confirmed blocks by hash, batch-loading from storage and populating the
-    /// worker-level block cache. The order of the returned blocks matches the order of the
-    /// input hashes.
+    /// Returns confirmed blocks by hash, checking the cache first and batch-loading the rest
+    /// from storage. The order of the returned blocks matches the order of the input hashes.
     async fn read_confirmed_blocks(
         &self,
         hashes: &[CryptoHash],
     ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, WorkerError> {
-        let blocks = self
-            .storage
-            .read_confirmed_blocks(hashes.iter().copied())
-            .await?;
-        for block in blocks.iter().flatten() {
-            self.block_values
-                .insert_hashed(Cow::Borrowed(block.inner()));
+        let mut blocks = Vec::with_capacity(hashes.len());
+        let mut uncached_indices = Vec::new();
+        let mut uncached_hashes = Vec::new();
+
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(hashed_block) = self.block_values.get(hash) {
+                blocks.push(Some(Arc::new(ConfirmedBlock::from_hashed(
+                    Arc::unwrap_or_clone(hashed_block),
+                ))));
+            } else {
+                blocks.push(None);
+                uncached_indices.push(i);
+                uncached_hashes.push(*hash);
+            }
         }
+
+        if !uncached_hashes.is_empty() {
+            let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
+            for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
+                if let Some(block) = &maybe_block {
+                    self.block_values
+                        .insert_hashed(Cow::Borrowed(block.inner()));
+                }
+                blocks[i] = maybe_block;
+            }
+        }
+
         Ok(blocks)
     }
 
