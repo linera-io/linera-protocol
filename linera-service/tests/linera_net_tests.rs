@@ -5559,7 +5559,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
                 panic!("timed out waiting for worker 2 registration on {admin_chain}")
             });
     };
-    assert!(worker2.capabilities.is_empty());
+    assert_eq!(worker2.capabilities.len(), 1);
     assert_ne!(
         worker2_chain, admin_chain,
         "Worker 2 should be on a different chain than admin"
@@ -5687,9 +5687,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         notifications2
             .wait_for_block(None)
             .await
-            .unwrap_or_else(|_| {
-                panic!("timed out waiting for service handoff on {worker2_chain}")
-            });
+            .unwrap_or_else(|_| panic!("timed out waiting for service handoff on {worker2_chain}"));
     }
 
     let admin_task_app = admin_node_service.make_application(&admin_chain, &task_processor_id)?;
@@ -5740,9 +5738,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         admin_notifications
             .wait_for_block(None)
             .await
-            .unwrap_or_else(|_| {
-                panic!("timed out waiting for bounced transfer on {admin_chain}")
-            });
+            .unwrap_or_else(|_| panic!("timed out waiting for bounced transfer on {admin_chain}"));
     }
 
     node_service1.ensure_is_running()?;
