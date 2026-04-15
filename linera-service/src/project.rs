@@ -80,7 +80,7 @@ impl Project {
         Ok(Self { root })
     }
 
-    pub fn from_existing_project(root: PathBuf) -> Result<Self> {
+    pub fn from_existing_project(root: &Path) -> Result<Self> {
         let root = root.canonicalize().with_context(|| {
             format!(
                 "Could not find project at {}. \

@@ -1639,7 +1639,7 @@ impl Runnable for Job {
                     let argument = read_json(json_argument, json_argument_path)?;
                     let project_path = path.unwrap_or_else(|| env::current_dir().unwrap());
 
-                    let project = project::Project::from_existing_project(project_path)?;
+                    let project = project::Project::from_existing_project(&project_path)?;
                     let (contract_path, service_path) = project.build(name)?;
 
                     let module_id = context
@@ -2299,7 +2299,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             ProjectCommand::Test { path } => {
                 let start_time = Instant::now();
                 let path = path.clone().unwrap_or_else(|| env::current_dir().unwrap());
-                let project = Project::from_existing_project(path)?;
+                let project = Project::from_existing_project(&path)?;
                 project.test()?;
                 info!(
                     "Test project created in {} ms",
