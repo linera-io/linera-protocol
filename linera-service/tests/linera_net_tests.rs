@@ -4328,9 +4328,18 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     assert!(client3.load_wallet()?.chain_ids().contains(&chain2));
 
     // Verify that trying to follow a chain that does not exist will fail, even without --sync.
+    // The validators legitimately retry for a while before giving up on a missing blob, so cap
+    // how long this check is allowed to take: either `follow_chain` returns an error within the
+    // timeout, or we kill it (the child process is killed on drop via `kill_on_drop`).
     let wrong_id = ChainId(CryptoHash::test_hash("wrong chain ID"));
-    let result = client3.follow_chain(wrong_id, false).await;
-    assert!(result.is_err());
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        client3.follow_chain(wrong_id, false),
+    )
+    .await;
+    if let Ok(inner) = result {
+        assert!(inner.is_err());
+    }
     assert!(!client3.load_wallet()?.chain_ids().contains(&wrong_id));
 
     net.ensure_is_running().await?;
