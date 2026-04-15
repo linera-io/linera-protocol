@@ -651,7 +651,6 @@ impl BlockExecutionOutcome {
     pub fn iter_created_blobs_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
         self.blobs.iter().flatten().map(|blob| blob.id())
     }
-
 }
 
 /// The data a block proposer signs.

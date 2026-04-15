@@ -72,7 +72,6 @@ impl<T: CertificateValue> GenericCertificate<T> {
         self.value.hash()
     }
 
-
     pub fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
         &self.signatures
     }

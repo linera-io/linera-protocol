@@ -48,7 +48,6 @@ impl Request {
             body: payload.into(),
         }
     }
-
 }
 
 /// The method used in an HTTP request.
@@ -155,7 +154,6 @@ impl Response {
             body: vec![],
         }
     }
-
 }
 
 /// A header for an HTTP request or response.

@@ -303,7 +303,6 @@ pub struct SystemResponse {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
-
 #[derive(Debug)]
 pub struct CreateApplicationResult {
     pub app_id: ApplicationId,

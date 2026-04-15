@@ -921,7 +921,6 @@ impl ChainDescription {
     pub fn timestamp(&self) -> Timestamp {
         self.timestamp
     }
-
 }
 
 impl BcsHashable<'_> for ChainDescription {}

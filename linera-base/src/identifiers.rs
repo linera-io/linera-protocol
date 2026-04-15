@@ -466,7 +466,6 @@ impl std::str::FromStr for GenericApplicationId {
     }
 }
 
-
 impl<A> From<ApplicationId<A>> for AccountOwner {
     fn from(app_id: ApplicationId<A>) -> Self {
         if app_id.is_evm() {
