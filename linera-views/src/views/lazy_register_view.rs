@@ -180,13 +180,13 @@ where
         if let Some(value) = &self.update {
             return Ok(value);
         }
-        if self.stored_value.get().is_none() {
-            let key = self.context.base_key().bytes.clone();
-            let bytes = self.context.store().read_value_bytes(&key).await?;
-            let value = from_bytes_option_or_default(&bytes)?;
-            let _ = self.stored_value.set(Box::new(value));
+        if let Some(value) = self.stored_value.get() {
+            return Ok(value);
         }
-        Ok(self.stored_value.get().unwrap())
+        let key = self.context.base_key().bytes.clone();
+        let bytes = self.context.store().read_value_bytes(&key).await?;
+        let value = from_bytes_option_or_default(&bytes)?;
+        Ok(self.stored_value.get_or_init(|| Box::new(value)))
     }
 
     /// Sets the value in the register.
