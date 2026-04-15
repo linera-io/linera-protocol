@@ -283,12 +283,6 @@ impl Committee {
             .map(|validator| (validator.account_public_key, validator.votes))
     }
 
-    pub fn network_address(&self, author: &ValidatorPublicKey) -> Option<&str> {
-        self.validators
-            .get(author)
-            .map(|state| state.network_address.as_ref())
-    }
-
     pub fn quorum_threshold(&self) -> u64 {
         self.quorum_threshold
     }

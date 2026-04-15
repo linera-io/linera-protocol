@@ -81,18 +81,8 @@ impl ChainInfoQuery {
         }
     }
 
-    pub fn test_next_block_height(mut self, height: BlockHeight) -> Self {
-        self.test_next_block_height = Some(height);
-        self
-    }
-
     pub fn with_committees(mut self) -> Self {
         self.request_committees = true;
-        self
-    }
-
-    pub fn with_owner_balance(mut self, owner: AccountOwner) -> Self {
-        self.request_owner_balance = owner;
         self
     }
 

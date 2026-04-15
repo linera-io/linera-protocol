@@ -98,14 +98,6 @@ impl ProposedBlock {
         })
     }
 
-    /// Returns the number of incoming messages.
-    pub fn message_count(&self) -> usize {
-        self.incoming_bundles()
-            .map(|im| im.bundle.messages.len())
-            .sum()
-    }
-
-
     /// Returns all operations in this block.
     pub fn operations(&self) -> impl Iterator<Item = &Operation> {
         self.transactions.iter().filter_map(|tx| match tx {
