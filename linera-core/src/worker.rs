@@ -650,13 +650,6 @@ where
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn with_reset_on_incorrect_outcome(mut self, minutes: Option<u64>) -> Self {
-        self.chain_worker_config.reset_on_incorrect_outcome =
-            minutes.map(|m| Duration::from_secs(m * 60));
-        self
-    }
-
-    #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.chain_worker_config.nickname
     }

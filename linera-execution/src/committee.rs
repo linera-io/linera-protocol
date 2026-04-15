@@ -277,12 +277,6 @@ impl Committee {
         }
     }
 
-    pub fn keys_and_weights(&self) -> impl Iterator<Item = (ValidatorPublicKey, u64)> + '_ {
-        self.validators
-            .iter()
-            .map(|(name, validator)| (*name, validator.votes))
-    }
-
     pub fn account_keys_and_weights(&self) -> impl Iterator<Item = (AccountPublicKey, u64)> + '_ {
         self.validators
             .values()

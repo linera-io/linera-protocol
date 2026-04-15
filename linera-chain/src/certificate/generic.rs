@@ -72,9 +72,6 @@ impl<T: CertificateValue> GenericCertificate<T> {
         self.value.hash()
     }
 
-    pub fn destructure(self) -> (T, Round, Vec<(ValidatorPublicKey, ValidatorSignature)>) {
-        (self.value, self.round, self.signatures)
-    }
 
     pub fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
         &self.signatures

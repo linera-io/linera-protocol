@@ -142,12 +142,6 @@ impl ChainOwnership {
         self
     }
 
-    /// Fixes the given owner as the leader of the first single-leader round on all heights.
-    pub fn with_first_leader(mut self, owner: AccountOwner) -> Self {
-        self.first_leader = Some(owner);
-        self
-    }
-
     /// Returns whether there are any owners or super owners or it is a public chain.
     pub fn is_active(&self) -> bool {
         !self.super_owners.is_empty()

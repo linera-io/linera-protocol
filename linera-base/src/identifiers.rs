@@ -466,16 +466,6 @@ impl std::str::FromStr for GenericApplicationId {
     }
 }
 
-impl GenericApplicationId {
-    /// Returns the `ApplicationId`, or `None` if it is `System`.
-    pub fn user_application_id(&self) -> Option<&ApplicationId> {
-        if let GenericApplicationId::User(app_id) = self {
-            Some(app_id)
-        } else {
-            None
-        }
-    }
-}
 
 impl<A> From<ApplicationId<A>> for AccountOwner {
     fn from(app_id: ApplicationId<A>) -> Self {

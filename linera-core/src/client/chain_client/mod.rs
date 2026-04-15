@@ -428,12 +428,6 @@ impl<Env: Environment> ChainClient<Env> {
         self.preferred_owner = Some(preferred_owner);
     }
 
-    /// Unsets the preferred owner for signing the blocks.
-    #[instrument(level = "trace", skip(self))]
-    pub fn unset_preferred_owner(&mut self) {
-        self.preferred_owner = None;
-    }
-
     /// Obtains a `ChainStateView` for this client's chain.
     #[instrument(level = "trace")]
     pub async fn chain_state_view(

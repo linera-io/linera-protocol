@@ -632,11 +632,6 @@ impl TestClock {
         self.lock().sleep_callback = Some(Box::new(callback));
     }
 
-    /// Clears the sleep callback.
-    pub fn clear_sleep_callback(&self) {
-        self.lock().sleep_callback = None;
-    }
-
     fn lock(&self) -> std::sync::MutexGuard<'_, TestClockInner> {
         self.0.lock().expect("poisoned TestClock mutex")
     }

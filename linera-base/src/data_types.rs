@@ -9,11 +9,9 @@ use std::ops;
 use std::{
     collections::HashSet,
     fmt::{self, Display},
-    fs,
     hash::Hash,
     io, iter,
     num::ParseIntError,
-    path::Path,
     str::FromStr,
     sync::Arc,
 };
@@ -195,12 +193,6 @@ impl TimeDelta {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
-    /// Returns the given duration, rounded to the nearest microsecond and capped to the maximum
-    /// [`TimeDelta`] value.
-    pub fn from_duration(duration: Duration) -> Self {
-        TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
-    }
-
     /// Returns this [`TimeDelta`] as a number of microseconds.
     pub const fn as_micros(&self) -> u64 {
         self.0
@@ -370,24 +362,6 @@ pub struct SendMessageRequest<Message> {
     pub grant: Resources,
     /// The message itself.
     pub message: Message,
-}
-
-impl<Message> SendMessageRequest<Message>
-where
-    Message: Serialize,
-{
-    /// Serializes the internal `Message` type into raw bytes.
-    pub fn into_raw(self) -> SendMessageRequest<Vec<u8>> {
-        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
-
-        SendMessageRequest {
-            destination: self.destination,
-            authenticated: self.authenticated,
-            is_tracked: self.is_tracked,
-            grant: self.grant,
-            message,
-        }
-    }
 }
 
 /// An error type for arithmetic errors.
@@ -1519,11 +1493,6 @@ impl Blob {
     /// Gets a reference to the inner blob's bytes.
     pub fn bytes(&self) -> &[u8] {
         self.content.bytes()
-    }
-
-    /// Loads data blob from a file.
-    pub fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        Ok(Self::new_data(fs::read(path)?))
     }
 
     /// Returns whether the blob is of [`BlobType::Committee`] variant.

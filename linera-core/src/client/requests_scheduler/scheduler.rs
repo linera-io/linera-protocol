@@ -468,29 +468,6 @@ impl<Env: Environment> RequestsScheduler<Env> {
         self.in_flight_tracker.get_alternative_peers(key).await
     }
 
-    /// Returns current performance metrics for all managed nodes.
-    ///
-    /// Each entry contains:
-    /// - Performance score (f64, normalized 0.0-1.0)
-    /// - EMA success rate (f64, 0.0-1.0)
-    /// - Total requests processed (u64)
-    ///
-    /// Useful for monitoring and debugging node performance.
-    pub async fn get_node_scores(&self) -> BTreeMap<ValidatorPublicKey, (f64, f64, u64)> {
-        let nodes = self.nodes.read().await;
-        let mut result = BTreeMap::new();
-
-        for (key, info) in nodes.iter() {
-            let score = info.calculate_score().await;
-            result.insert(
-                *key,
-                (score, info.ema_success_rate(), info.total_requests()),
-            );
-        }
-
-        result
-    }
-
     /// Wraps a request operation with performance tracking and capacity management.
     ///
     /// This method:
