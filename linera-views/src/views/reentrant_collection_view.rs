@@ -591,7 +591,9 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             .into_iter()
             .map(|short_key| {
                 let Some(Update::Set(view)) = self.updates.get(&short_key) else {
-                    unreachable!("Entry should have been inserted as Update::Set by try_load_view_mut")
+                    unreachable!(
+                        "Entry should have been inserted as Update::Set by try_load_view_mut"
+                    )
                 };
                 Ok(WriteGuardedView(
                     view.clone()
