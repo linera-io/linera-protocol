@@ -126,6 +126,7 @@ impl ChainInfoQuery {
         self
     }
 
+    #[cfg(with_testing)]
     pub fn with_fallback(mut self) -> Self {
         self.request_fallback = true;
         self

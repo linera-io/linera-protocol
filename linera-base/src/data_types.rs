@@ -1009,6 +1009,7 @@ impl ApplicationPermissions {
 
     /// Creates new `ApplicationPermissions` where the given applications are the only ones
     /// whose operations are allowed and mandatory, and they can also manage the chain.
+    #[cfg(with_testing)]
     pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
         Self {
             execute_operations: Some(app_ids.clone()),
