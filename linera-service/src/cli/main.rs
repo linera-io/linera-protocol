@@ -2392,7 +2392,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                         println!("{chain_id}");
                     }
                 } else {
-                    linera_wallet_json::display::pretty_print(&wallet, chain_ids);
+                    linera_json_wallet::display::pretty_print(&wallet, chain_ids);
                 }
                 Ok(0)
             }

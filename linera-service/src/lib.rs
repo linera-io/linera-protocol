@@ -17,4 +17,4 @@ pub mod storage;
 pub mod task_processor;
 pub mod util;
 
-pub use linera_wallet_json::PersistentWallet as Wallet;
+pub use linera_json_wallet::PersistentWallet as Wallet;

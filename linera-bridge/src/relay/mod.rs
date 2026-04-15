@@ -30,10 +30,10 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
+use linera_json_wallet::PersistentWallet;
 use linera_storage::DbStorage;
 use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
 use linera_views::backends::rocks_db::RocksDbDatabase;
-use linera_wallet_json::PersistentWallet;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::{
@@ -131,7 +131,7 @@ pub async fn run(
     });
 
     let mut keystore =
-        linera_wallet_json::Keystore::read(&keystore_path).context("failed to read keystore")?;
+        linera_json_wallet::Keystore::read(&keystore_path).context("failed to read keystore")?;
 
     // If claiming from faucet, generate the owner key upfront before creating ClientContext.
     let faucet_owner = if chain_id_arg.is_none() {

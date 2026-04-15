@@ -1,3 +1,3 @@
-# linera-wallet-json
+# linera-json-wallet
 
 Persistent wallet implementation for the Linera protocol.

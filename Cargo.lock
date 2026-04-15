@@ -5433,10 +5433,10 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
+ "linera-json-wallet",
  "linera-storage",
  "linera-storage-runtime",
  "linera-views",
- "linera-wallet-json",
  "op-alloy-network",
  "prometheus",
  "proptest",
@@ -5929,6 +5929,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-json-wallet"
+version = "0.15.15"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "fs-err",
+ "futures",
+ "linera-base",
+ "linera-core",
+ "linera-persistent",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "linera-kywasmtime"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6119,6 +6134,7 @@ dependencies = [
  "linera-exporter",
  "linera-faucet-client",
  "linera-faucet-server",
+ "linera-json-wallet",
  "linera-metrics",
  "linera-persistent",
  "linera-rpc",
@@ -6129,7 +6145,6 @@ dependencies = [
  "linera-storage-service",
  "linera-version",
  "linera-views",
- "linera-wallet-json",
  "lru 0.15.0",
  "matching-engine",
  "native-fungible",
@@ -6367,21 +6382,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.105",
-]
-
-[[package]]
-name = "linera-wallet-json"
-version = "0.15.15"
-dependencies = [
- "anyhow",
- "dirs",
- "fs-err",
- "futures",
- "linera-base",
- "linera-core",
- "linera-persistent",
- "serde",
- "tracing",
 ]
 
 [[package]]

@@ -127,7 +127,7 @@ linera-storage-runtime.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
-linera-wallet-json.workspace = true
+linera-json-wallet.workspace = true
 lru.workspace = true
 nonzero_lit.workspace = true
 papaya.workspace = true

@@ -1,8 +1,8 @@
 [package]
-name = "linera-wallet-json"
+name = "linera-json-wallet"
 description = "Persistent wallet implementation for the Linera protocol."
 readme = "README.md"
-documentation = "https://docs.rs/linera-wallet-json/latest/linera_wallet/"
+documentation = "https://docs.rs/linera-json-wallet/latest/linera_wallet/"
 
 authors.workspace = true
 edition.workspace = true
