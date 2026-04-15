@@ -2289,11 +2289,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 dir,
             } => {
                 let start_time = Instant::now();
-                Project::create_new(
-                    name,
-                    linera_root.as_ref().map(AsRef::as_ref),
-                    dir.clone(),
-                )?;
+                Project::create_new(name, linera_root.as_ref().map(AsRef::as_ref), dir.clone())?;
                 info!(
                     "New project created in {} ms",
                     start_time.elapsed().as_millis()
