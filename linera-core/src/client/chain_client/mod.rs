@@ -849,12 +849,8 @@ impl<Env: Environment> ChainClient<Env> {
                     .insert(stream_id.clone());
             }
         }
-        // Always fully sync the admin chain for epoch changes.
-        let admin_chain_id = self.client.admin_chain_id;
-        if admin_chain_id != self.chain_id {
-            self.client.synchronize_chain_state(admin_chain_id).await?;
-        }
         // For event publisher chains, do a partial sync using previous_event_blocks.
+        let admin_chain_id = self.client.admin_chain_id;
         let (_, committee) = self.admin_committee().await?;
         let nodes = self.client.make_nodes(&committee)?;
         let tasks = streams_by_chain
