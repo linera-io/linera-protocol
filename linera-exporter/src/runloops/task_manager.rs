@@ -191,12 +191,8 @@ where
 
         match id.kind() {
             DestinationKind::Indexer => {
-                let exporter_task = super::IndexerExporter::new(
-                    id.clone(),
-                    self.work_queue_size,
-                    self.options,
-                    self.health.clone(),
-                );
+                let exporter_task =
+                    super::IndexerExporter::new(id.clone(), self.work_queue_size, self.options);
 
                 tokio::task::spawn(async move {
                     let result = exporter_task

@@ -25,7 +25,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
 fs-err.workspace = true
-linera-core.workspace = true
+linera-client.workspace = true
 linera-execution.workspace = true
 linera-storage = { workspace = true }
 linera-storage-service = { workspace = true, optional = true }

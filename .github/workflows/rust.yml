@@ -213,14 +213,7 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Compile Wasm test modules for Witty integration tests
       run: |
-<<<<<<< HEAD
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
-=======
-        cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown --locked
-    - name: Build linera-exporter binary for integration tests
-      run: |
-        cargo build --bin linera-exporter --locked
->>>>>>> 8733dc9bcb (Extract linera-exporter from linera-service crate. (#5946))
     - name: Run all tests using the default features (except storage-service)
       run: |
         # TODO(#2764): Actually link this to the default features
@@ -338,22 +331,12 @@ jobs:
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
     - name: Wait for storage service to be ready
       run: |
-<<<<<<< HEAD
         STORAGE_HOST=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f1)
         STORAGE_PORT=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f2)
         until nc -z "$STORAGE_HOST" "$STORAGE_PORT"; do sleep 1; done
-=======
-        until nc -z 127.0.0.1 1235; do sleep 1; done
-    - name: Build linera-exporter binary for integration tests
-      run: |
-        cargo build --bin linera-exporter --features storage-service --locked
->>>>>>> 8733dc9bcb (Extract linera-exporter from linera-service crate. (#5946))
     - name: Run the storage-service tests
       run: |
         cargo test --features storage-service,opentelemetry -- storage_service --nocapture
-    - name: Run the exporter integration test
-      run: |
-        cargo test -p linera-service --test exporter_tests --features storage-service -- --ignored --nocapture
 
   check-wit-files:
     needs: changed-files

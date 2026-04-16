@@ -10,7 +10,7 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::types::ConfirmedBlock;
+use linera_chain::{data_types::IncomingBundle, types::ConfirmedBlock};
 use linera_rpc::grpc::{GrpcError, GrpcProtoConversionError};
 use linera_sdk::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,9 @@ pub enum ExporterError {
 
     #[error("Missing certificate: {0}")]
     ReadCertificateError(CryptoHash),
+
+    #[error("Missing blob: {0}")]
+    ReadBlobError(BlobId),
 
     #[error("generic storage error: {0}")]
     ViewError(#[from] ViewError),
@@ -111,6 +114,14 @@ impl BlockId {
 
     pub fn from_confirmed_block(block: &ConfirmedBlock) -> BlockId {
         BlockId::new(block.chain_id(), block.inner().hash(), block.height())
+    }
+
+    pub fn from_incoming_bundle(bundle: &IncomingBundle) -> BlockId {
+        BlockId::new(
+            bundle.origin,
+            bundle.bundle.certificate_hash,
+            bundle.bundle.height,
+        )
     }
 }
 

@@ -66,14 +66,14 @@ metrics = [
 ]
 jemalloc = [
     "tikv-jemallocator",
-    "tikv-jemallocator/profiling_libunwind",
+    "tikv-jemallocator/profiling",
     "linera-metrics/jemalloc",
 ]
-opentelemetry = ["linera-base/opentelemetry", "linera-rpc/opentelemetry"]
 storage-service = [
     "linera-storage-service",
     "linera-storage-runtime/storage-service",
 ]
+opentelemetry = ["linera-rpc/opentelemetry"]
 
 [dependencies]
 alloy-primitives.workspace = true
@@ -88,7 +88,6 @@ async-trait.workspace = true
 async-tungstenite.workspace = true
 axum = { workspace = true, features = ["ws"] }
 bcs.workspace = true
-bincode.workspace = true
 cargo_toml.workspace = true
 cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
@@ -105,12 +104,14 @@ fs_extra = { workspace = true, optional = true }
 futures.workspace = true
 heck.workspace = true
 http.workspace = true
+insta.workspace = true
+is-terminal.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
-linera-core = { workspace = true, features = ["fs"] }
+linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
 linera-exporter = { workspace = true, default-features = false }
 linera-faucet-client.workspace = true
@@ -130,6 +131,9 @@ linera-version.workspace = true
 linera-views.workspace = true
 lru.workspace = true
 nonzero_lit.workspace = true
+opentelemetry.workspace = true
+opentelemetry-otlp.workspace = true
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
 papaya.workspace = true
 pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
@@ -158,15 +162,21 @@ tonic = { workspace = true, features = [
     "tls-webpki-roots",
 ] }
 tonic-health.workspace = true
+tonic-prost.workspace = true
 tonic-reflection.workspace = true
 tonic-web.workspace = true
 tower.workspace = true
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
+tracing-chrome.workspace = true
+tracing-opentelemetry.workspace = true
+tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
 url = { workspace = true, features = ["serde"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
+tonic-prost.workspace = true
+tonic-prost-build = { workspace = true, features = ["transport"] }
 
 [dev-dependencies]
 amm.workspace = true
@@ -202,6 +212,9 @@ test-log = { workspace = true, features = ["trace"] }
 test-strategy.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
+
+[package.metadata.cargo-machete]
+ignored = ["tonic-prost"]
 
 [[bin]]
 name = "linera"

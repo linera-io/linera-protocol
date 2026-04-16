@@ -170,6 +170,7 @@ impl Runnable for ExporterContext {
         )
         .await;
 
+        let health = Arc::new(AtomicBool::new(true));
         let (sender, handle) = start_block_processor_task(
             storage,
             ExporterCancellationSignal::new(shutdown_notifier.clone()),
@@ -177,6 +178,7 @@ impl Runnable for ExporterContext {
             self.node_options,
             self.config.id,
             self.config.destination_config,
+            health,
         );
 
         let service = ExporterService::new(sender);
@@ -202,7 +204,9 @@ impl Runnable for ExporterContext {
 }
 
 fn main() -> Result<()> {
-    linera_base::tracing::init("linera-exporter");
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let cli = <Cli as clap::Parser>::parse();
     match cli.command {
         Command::Run(options) => options.run(),

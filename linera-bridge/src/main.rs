@@ -83,7 +83,6 @@ struct ServeOptions {
     #[arg(long, default_value = "3001")]
     port: u16,
 
-<<<<<<< HEAD
     /// The maximal number of entries in the blob cache.
     #[arg(long, default_value = "1000")]
     blob_cache_size: usize,
@@ -103,27 +102,6 @@ struct ServeOptions {
     /// The maximal number of entries in the event cache.
     #[arg(long, default_value = "1000")]
     event_cache_size: usize,
-=======
-    #[command(flatten)]
-    common_storage_options: linera_storage_runtime::CommonStorageOptions,
-
-    /// Interval between monitor scan loops, in seconds.
-    #[arg(long, default_value = "30")]
-    monitor_scan_interval: u64,
-
-    /// EVM block number to start scanning from for deposit monitoring.
-    #[arg(long, default_value = "0")]
-    monitor_start_block: u64,
-
-    /// Maximum number of retry attempts for pending deposits and burns.
-    #[arg(long, default_value = "10")]
-    max_retries: u32,
-
-    /// Path to the SQLite database for persistent request storage.
-    /// Defaults to `bridge_relay.sqlite3` next to the RocksDB storage directory.
-    #[arg(long)]
-    sqlite_path: Option<std::path::PathBuf>,
->>>>>>> 8733dc9bcb (Extract linera-exporter from linera-service crate. (#5946))
 }
 
 fn main() -> Result<()> {
@@ -151,7 +129,6 @@ impl ServeOptions {
             &self.fungible_app_id_file,
             &self.evm_private_key,
             self.port,
-<<<<<<< HEAD
             linera_storage::StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
                 confirmed_block_cache_size: self.confirmed_block_cache_size,
@@ -160,13 +137,6 @@ impl ServeOptions {
                 event_cache_size: self.event_cache_size,
                 cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
-=======
-            &self.common_storage_options,
-            self.monitor_scan_interval,
-            self.monitor_start_block,
-            self.max_retries,
-            self.sqlite_path.as_deref(),
->>>>>>> 8733dc9bcb (Extract linera-exporter from linera-service crate. (#5946))
         ))
         .await
     }

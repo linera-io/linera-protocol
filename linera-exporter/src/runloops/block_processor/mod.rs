@@ -118,7 +118,7 @@ where
                                     .collect::<HashSet<_>>();
                                 self.storage.set_latest_committee_blob(new_committee_blob);
                                 if self.committee_destination_update {
-                                    self.exporters_tracker.shutdown_old_committee(&committee_destinations);
+                                    self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
                                     self.storage.new_committee(committee_destinations.clone());
                                     self.exporters_tracker.start_committee_exporters(committee_destinations.clone());
                                 }
@@ -189,7 +189,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
+    use std::{
+        collections::HashSet,
+        sync::{atomic::AtomicBool, Arc},
+    };
 
     use linera_base::{
         crypto::CryptoHash,
@@ -239,6 +242,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -376,6 +380,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -493,6 +498,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -581,6 +587,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -691,6 +698,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -781,6 +789,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
 
         let mut block_processor = BlockProcessor::new(

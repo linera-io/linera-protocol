@@ -140,14 +140,8 @@ impl Options {
         let store_config =
             storage_config.add_common_storage_options(&self.common.common_storage_options)?;
         let wallet = self.wallet()?;
-<<<<<<< HEAD
         let cache_sizes = self.common.common_storage_options.storage_cache_config();
-        store_config
-            .initialize(cache_sizes, wallet.genesis_config())
-=======
-        let cache_sizes = self.common.common_storage_options.storage_cache_sizes();
         linera_service::storage::initialize(store_config, cache_sizes, wallet.genesis_config())
->>>>>>> 8733dc9bcb (Extract linera-exporter from linera-service crate. (#5946))
             .await?;
         Ok(())
     }

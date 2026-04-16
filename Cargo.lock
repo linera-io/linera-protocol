@@ -5454,7 +5454,6 @@ dependencies = [
  "linera-execution",
  "linera-faucet-client",
  "linera-storage",
- "linera-storage-runtime",
  "linera-views",
  "op-alloy-network",
  "proptest",
@@ -5751,11 +5750,10 @@ dependencies = [
 
 [[package]]
 name = "linera-exporter"
-version = "0.15.15"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "axum",
  "bcs",
  "bincode",
  "cfg_aliases",
@@ -5795,6 +5793,7 @@ dependencies = [
  "tonic-prost",
  "tonic-prost-build",
  "tracing",
+ "tracing-subscriber 0.3.19",
 ]
 
 [[package]]
@@ -6099,7 +6098,6 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bcs",
- "bincode",
  "call-evm-counter",
  "cargo_toml",
  "cfg-if",
@@ -6129,7 +6127,6 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "linera-base",
- "linera-bridge",
  "linera-chain",
  "linera-client",
  "linera-core",
@@ -6182,6 +6179,8 @@ dependencies = [
  "toml",
  "tonic 0.14.2",
  "tonic-health",
+ "tonic-prost",
+ "tonic-prost-build",
  "tonic-reflection",
  "tonic-web",
  "tower 0.4.13",
@@ -6247,14 +6246,14 @@ dependencies = [
 
 [[package]]
 name = "linera-storage-runtime"
-version = "0.15.15"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "cfg_aliases",
  "clap",
  "fs-err",
- "linera-core",
+ "linera-client",
  "linera-execution",
  "linera-storage",
  "linera-storage-service",

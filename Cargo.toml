@@ -64,7 +64,6 @@ default-members = [
     "linera-summary",
     "linera-views",
     "linera-views-derive",
-    # "linera-web", # not this one
     "linera-witty",
     "linera-witty-macros",
     "linera-witty/test-modules",
@@ -73,7 +72,7 @@ exclude = ["examples", "scripts", "linera-bridge/tests/e2e"]
 resolver = "2"
 
 [workspace.package]
-version = "0.15.15"
+version = "0.16.0"
 authors = ["Linera <contact@linera.io>"]
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.dev"
@@ -82,7 +81,7 @@ edition = "2021"
 
 [workspace.dependencies]
 allocative = "0.3.4"
-alloy = { version = "1.0.42", default-features = false }
+alloy = { version = "=1.0.42", default-features = false }
 alloy-primitives = { version = "1.4.1", default-features = false, features = [
     "serde",
     "k256",
@@ -141,6 +140,7 @@ getrandom = "0.2.12"
 git2 = "0.19.0"
 glob = "0.3.1"
 gloo-utils = "0.2.0"
+gungraun = "0.17.2"
 hdrhistogram = "7.5.4"
 heck = "0.4.1"
 hex = "0.4.3"
@@ -190,7 +190,7 @@ proc-macro2 = "1.0"
 prometheus = "0.13.3"
 prometheus-parse = "0.2.5"
 proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
-prost = "^0.14"
+prost = "0.14"
 quick_cache = { version = "0.6.20", default-features = false, features = [
     "parking_lot",
 ] }
@@ -265,17 +265,17 @@ test-log = { version = "0.2.15", default-features = false, features = [
 test-strategy = "0.3.1"
 thiserror = "1.0.65"
 thiserror-context = "0.1.1"
-tikv-jemallocator = { version = "0.6", git = "https://github.com/linera-io/jemallocator.git", rev = "16f3e75fb145e12f5ae15ed232d1368d4539fc14" }
+tikv-jemallocator = "0.6.0"
 tokio = "1.36.0"
 tokio-stream = "0.1.14"
 tokio-test = "0.4.3"
 tokio-util = "0.7.10"
 toml = "0.8.10"
-tonic = { version = "0.14.2", default-features = false }
-tonic-build = { version = "0.14.2", default-features = false }
+tonic = { version = "0.14", default-features = false }
+tonic-build = { version = "0.14", default-features = false }
 tonic-health = "0.14"
-tonic-prost = "0.14.2"
-tonic-prost-build = { version = "0.14.2", default-features = false }
+tonic-prost = "0.14"
+tonic-prost-build = { version = "0.14", default-features = false }
 tonic-reflection = "0.14"
 tonic-web = "0.14"
 tonic-web-wasm-client = "0.8.0"
@@ -314,35 +314,35 @@ web-time = "1.1.0"
 wit-bindgen = "0.24.0"
 zstd = "0.13.2"
 
-linera-base = { version = "0.15.15", path = "./linera-base" }
-linera-bridge = { version = "0.15.15", path = "./linera-bridge" }
-linera-cache = { version = "0.15.15", path = "./linera-cache" }
-linera-chain = { version = "0.15.15", path = "./linera-chain" }
-linera-client = { version = "0.15.15", path = "./linera-client", default-features = false }
-linera-core = { version = "0.15.15", path = "./linera-core", default-features = false }
-linera-ethereum = { version = "0.15.15", path = "./linera-ethereum", default-features = false }
-linera-execution = { version = "0.15.15", path = "./linera-execution", default-features = false }
-linera-exporter = { version = "0.15.15", path = "./linera-exporter", default-features = false }
-linera-faucet-client = { version = "0.15.15", path = "linera-faucet/client" }
-linera-faucet-server = { version = "0.15.15", path = "linera-faucet/server" }
-linera-indexer = { version = "0.15.15", path = "./linera-indexer/lib" }
-linera-indexer-graphql-client = { version = "0.15.15", path = "./linera-indexer/graphql-client" }
-linera-indexer-plugins = { version = "0.15.15", path = "./linera-indexer/plugins" }
-linera-metrics = { version = "0.15.15", path = "./linera-metrics" }
-linera-persistent = { version = "0.15.15", path = "./linera-persistent" }
-linera-rpc = { version = "0.15.15", path = "./linera-rpc" }
-linera-sdk = { version = "0.15.15", path = "./linera-sdk" }
-linera-sdk-derive = { version = "0.15.15", path = "./linera-sdk-derive" }
-linera-service = { version = "0.15.15", path = "./linera-service", default-features = false }
-linera-service-graphql-client = { version = "0.15.15", path = "./linera-service-graphql-client" }
-linera-storage = { version = "0.15.15", path = "./linera-storage", default-features = false }
-linera-storage-runtime = { version = "0.15.15", path = "./linera-storage-runtime", default-features = false }
-linera-storage-service = { version = "0.15.15", path = "./linera-storage-service", default-features = false }
-linera-version = { version = "0.15.15", path = "./linera-version" }
-linera-views = { version = "0.15.15", path = "./linera-views", default-features = false }
-linera-views-derive = { version = "0.15.15", path = "./linera-views-derive" }
-linera-witty = { version = "0.15.15", path = "./linera-witty" }
-linera-witty-macros = { version = "0.15.15", path = "./linera-witty-macros" }
+linera-base = { version = "0.16.0", path = "./linera-base" }
+linera-bridge = { version = "0.16.0", path = "./linera-bridge" }
+linera-cache = { version = "0.16.0", path = "./linera-cache" }
+linera-chain = { version = "0.16.0", path = "./linera-chain" }
+linera-client = { version = "0.16.0", path = "./linera-client", default-features = false }
+linera-core = { version = "0.16.0", path = "./linera-core", default-features = false }
+linera-ethereum = { version = "0.16.0", path = "./linera-ethereum", default-features = false }
+linera-execution = { version = "0.16.0", path = "./linera-execution", default-features = false }
+linera-exporter = { version = "0.16.0", path = "./linera-exporter", default-features = false }
+linera-faucet-client = { version = "0.16.0", path = "linera-faucet/client" }
+linera-faucet-server = { version = "0.16.0", path = "linera-faucet/server" }
+linera-indexer = { version = "0.16.0", path = "./linera-indexer/lib" }
+linera-indexer-graphql-client = { version = "0.16.0", path = "./linera-indexer/graphql-client" }
+linera-indexer-plugins = { version = "0.16.0", path = "./linera-indexer/plugins" }
+linera-metrics = { version = "0.16.0", path = "./linera-metrics" }
+linera-persistent = { version = "0.16.0", path = "./linera-persistent" }
+linera-rpc = { version = "0.16.0", path = "./linera-rpc" }
+linera-sdk = { version = "0.16.0", path = "./linera-sdk" }
+linera-sdk-derive = { version = "0.16.0", path = "./linera-sdk-derive" }
+linera-service = { version = "0.16.0", path = "./linera-service", default-features = false }
+linera-service-graphql-client = { version = "0.16.0", path = "./linera-service-graphql-client" }
+linera-storage = { version = "0.16.0", path = "./linera-storage", default-features = false }
+linera-storage-runtime = { version = "0.16.0", path = "./linera-storage-runtime", default-features = false }
+linera-storage-service = { version = "0.16.0", path = "./linera-storage-service", default-features = false }
+linera-version = { version = "0.16.0", path = "./linera-version" }
+linera-views = { version = "0.16.0", path = "./linera-views", default-features = false }
+linera-views-derive = { version = "0.16.0", path = "./linera-views-derive" }
+linera-witty = { version = "0.16.0", path = "./linera-witty" }
+linera-witty-macros = { version = "0.16.0", path = "./linera-witty-macros" }
 
 amm = { path = "./examples/amm" }
 call-evm-counter = { path = "./examples/call-evm-counter" }
@@ -359,7 +359,7 @@ non-fungible = { path = "./examples/non-fungible" }
 publish-read-data-blob = { path = "./linera-sdk/tests/fixtures/publish-read-data-blob" }
 social = { path = "./examples/social" }
 task-processor = { path = "./examples/task-processor" }
-time-expiry = { path = "./examples/time-expiry" }
+time-expiry = { path = "./linera-sdk/tests/fixtures/time-expiry" }
 wrapped-fungible = { path = "./examples/wrapped-fungible" }
 
 [workspace.dependencies.aws-config]
@@ -369,7 +369,7 @@ version = "1.6.3"
 [workspace.dependencies.aws-sdk-dynamodb]
 default-features = false
 features = ["rt-tokio", "rustls"]
-version = "1.76.0"
+version = "1.88.0"
 
 [profile.release]
 lto = "thin"
@@ -377,12 +377,6 @@ debug = true
 
 [profile.bench]
 debug = true
-
-# This section is experimental and requires to build `cargo-all-features` from the fork
-# repository: https://github.com/ma2bd/cargo-all-features
-[workspace.metadata.cargo-all-features]
-skip_optional_dependencies = true
-max_combination_size = 1
 
 # Make sure to compile VMs with high optimization level
 [profile.dev.package.linera-wasmer]
@@ -395,9 +389,14 @@ opt-level = 3
 config = "spellcheck-cfg.toml"
 
 [workspace.lints.clippy]
+checked_conversions = "deny"
 doc_link_with_quotes = "deny"
 filter_map_next = "deny"
+flat_map_option = "deny"
+from_iter_instead_of_collect = "deny"
+inefficient_to_string = "deny"
 iter_filter_is_some = "deny"
+iter_not_returning_iterator = "deny"
 large_futures = "deny"
 large_stack_arrays = "deny"
 large_types_passed_by_value = "deny"
@@ -406,14 +405,18 @@ manual_instant_elapsed = "deny"
 manual_is_power_of_two = "deny"
 manual_is_variant_and = "deny"
 map_unwrap_or = "deny"
+map_flatten = "deny"
+match_on_vec_items = "deny"
 mismatching_type_param_order = "deny"
 naive_bytecount = "deny"
+needless_collect = "deny"
+needless_pass_by_value = "deny"
+needless_pass_by_ref_mut = "deny"
 non_std_lazy_statics = "deny"
+or_fun_call = "deny"
 range_minus_one = "deny"
 range_plus_one = "deny"
 ref_option_ref = "deny"
 str_split_at_newline = "deny"
-
-[patch.crates-io]
-tikv-jemallocator = { git = "https://github.com/linera-io/jemallocator.git", rev = "16f3e75fb145e12f5ae15ed232d1368d4539fc14" }
-tikv-jemalloc-sys = { git = "https://github.com/linera-io/jemallocator.git", rev = "16f3e75fb145e12f5ae15ed232d1368d4539fc14" }
+unnecessary_wraps = "deny"
+used_underscore_binding = "deny"
