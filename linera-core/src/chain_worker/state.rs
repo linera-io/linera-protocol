@@ -1737,7 +1737,16 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker, HashSet<ChainId>), WorkerError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            Block,
+            ChainInfoResponse,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        WorkerError,
+    > {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let (_, committee) = self.chain.current_committee()?;
@@ -1763,7 +1772,13 @@ where
         }
 
         let (proposed_block, _) = executed_block.clone().into_proposal();
-        Ok((proposed_block, executed_block, response, resource_tracker, never_reject_origins))
+        Ok((
+            proposed_block,
+            executed_block,
+            response,
+            resource_tracker,
+            never_reject_origins,
+        ))
     }
 
     /// Validates and executes a block proposed to extend this chain.
@@ -2057,16 +2072,11 @@ where
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
     ) -> Result<(Block, ResourceTracker, HashSet<ChainId>), WorkerError> {
-        let (proposed_block, outcome, resource_tracker, never_reject_origins) =
-            Box::pin(self.chain.execute_block(
-                block,
-                local_time,
-                round,
-                published_blobs,
-                None,
-                policy,
-            ))
-            .await?;
+        let (proposed_block, outcome, resource_tracker, never_reject_origins) = Box::pin(
+            self.chain
+                .execute_block(block, local_time, round, published_blobs, None, policy),
+        )
+        .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
         if let Some(cache) = &self.execution_state_cache {

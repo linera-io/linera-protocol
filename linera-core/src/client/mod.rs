@@ -1958,7 +1958,13 @@ impl<Env: Environment> Client<Env> {
                 };
                 self.notifier.notify(&[notification]);
             }
-            let (_modified_block, executed_block, response, _resource_tracker, never_reject_origins) = result?;
+            let (
+                _modified_block,
+                executed_block,
+                response,
+                _resource_tracker,
+                never_reject_origins,
+            ) = result?;
             return Ok((executed_block, response, never_reject_origins));
         }
     }

@@ -975,7 +975,15 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            BlockExecutionOutcome,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        ChainError,
+    > {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()
