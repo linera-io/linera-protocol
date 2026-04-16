@@ -71,7 +71,7 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SCYLLA:-2.00}"
-          memory: ${LIMIT_MEM_SCYLLA:-10G}
+          memory: ${LIMIT_MEM_SCYLLA:-20G}
 
   proxy:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
