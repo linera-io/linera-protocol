@@ -263,6 +263,22 @@ get_git_info() {
 		GIT_BRANCH="unknown"
 	fi
 
+	# Handle detached HEAD — try to resolve the remote branch name
+	if [[ "${GIT_BRANCH}" == "HEAD" ]]; then
+		log WARNING "Git is in detached HEAD state, attempting to resolve remote branch..."
+		local resolved_branch
+		# Try exact match first (e.g. "origin/testnet_conway")
+		if resolved_branch=$(git -C "$REPO_ROOT" describe --all --exact-match HEAD 2>/dev/null); then
+			resolved_branch="${resolved_branch#remotes/origin/}"
+			resolved_branch="${resolved_branch#heads/}"
+			GIT_BRANCH="${resolved_branch}"
+			log INFO "Resolved detached HEAD to branch: ${GIT_BRANCH}"
+		else
+			log WARNING "Could not resolve detached HEAD to a branch name"
+			log WARNING "Set GENESIS_PATH_PREFIX to specify the genesis path manually"
+		fi
+	fi
+
 	if ! GIT_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null); then
 		log WARNING "Unable to detect Git commit, using 'unknown'"
 		GIT_COMMIT="unknown"
@@ -963,13 +979,23 @@ main() {
 	log INFO "  - Path prefix: ${genesis_path_prefix}"
 	log INFO "  - Full URL: ${genesis_url}"
 
-	# Download genesis configuration first (non-destructive, safe to fail early)
+	# Download genesis configuration (non-destructive, graceful fallback to existing file)
 	if ! download_genesis_config "${genesis_url}" "${skip_genesis}" "${force_genesis}"; then
-		log ERROR "Failed to handle genesis configuration"
-		if [[ "${skip_genesis}" != "1" ]]; then
-			log ERROR "You can retry with --skip-genesis to continue without genesis"
+		local config_path="${REPO_ROOT}/${GENESIS_CONFIG_PATH}"
+		if [ -f "${config_path}" ] && [ -s "${config_path}" ]; then
+			log WARNING "Failed to download genesis configuration from: ${genesis_url}"
+			log WARNING "Using existing genesis file at: ${config_path}"
+		else
+			log ERROR "Failed to download genesis configuration from: ${genesis_url}"
+			log ERROR "No existing genesis file found to fall back on"
+			if [[ "${skip_genesis}" != "1" ]]; then
+				log ERROR "Options:"
+				log ERROR "  1. Set GENESIS_URL to the correct URL"
+				log ERROR "  2. Set GENESIS_PATH_PREFIX to the correct path (current: ${genesis_path_prefix})"
+				log ERROR "  3. Place genesis.json manually and use --skip-genesis"
+			fi
+			exit 1
 		fi
-		exit 1
 	fi
 
 	# Generate validator configuration
