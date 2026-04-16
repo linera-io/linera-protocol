@@ -125,7 +125,7 @@ pub struct Options {
     pub notification_circuit_breaker_max_probe_interval: Duration,
     /// Maximum number of event stream IDs to include in a single `PreviousEventBlocks`
     /// request. Larger sets are split into multiple requests.
-    pub max_stream_queries: usize,
+    pub max_event_stream_queries: usize,
 }
 
 struct CircuitBreakerState {
@@ -138,7 +138,7 @@ impl Options {
     pub fn test_default() -> Self {
         use super::{
             DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
-            DEFAULT_MAX_STREAM_QUERIES, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            DEFAULT_MAX_EVENT_STREAM_QUERIES, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
@@ -158,7 +158,7 @@ impl Options {
             allow_fast_blocks: false,
             notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
             notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
-            max_stream_queries: DEFAULT_MAX_STREAM_QUERIES,
+            max_event_stream_queries: DEFAULT_MAX_EVENT_STREAM_QUERIES,
         }
     }
 }

@@ -127,7 +127,7 @@ mod metrics {
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
-pub static DEFAULT_MAX_STREAM_QUERIES: usize = 1000;
+pub static DEFAULT_MAX_EVENT_STREAM_QUERIES: usize = 1000;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TimingType {
@@ -1559,7 +1559,7 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         let stream_ids_vec: Vec<_> = stream_ids.iter().cloned().collect();
         let mut initial_blocks = BTreeSet::new();
-        for chunk in stream_ids_vec.chunks(self.options.max_stream_queries) {
+        for chunk in stream_ids_vec.chunks(self.options.max_event_stream_queries) {
             let query = ChainInfoQuery::new(chain_id).with_previous_event_blocks(chunk.to_vec());
             let info = remote_node.handle_chain_info_query(query).await?;
             initial_blocks.extend(info.requested_previous_event_blocks.values().copied());

@@ -15,7 +15,7 @@ use linera_base::{
 use linera_core::{
     client::{
         chain_client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
-        DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE, DEFAULT_MAX_STREAM_QUERIES,
+        DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE, DEFAULT_MAX_EVENT_STREAM_QUERIES,
         DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
@@ -233,8 +233,8 @@ pub struct Options {
 
     /// Maximum number of event stream IDs to include in a single `PreviousEventBlocks`
     /// request. Larger sets are split into multiple requests.
-    #[arg(long, default_value_t = DEFAULT_MAX_STREAM_QUERIES)]
-    pub max_stream_queries: usize,
+    #[arg(long, default_value_t = DEFAULT_MAX_EVENT_STREAM_QUERIES)]
+    pub max_event_stream_queries: usize,
 
     /// Maximum expected latency in milliseconds for score normalization.
     #[arg(
@@ -341,7 +341,7 @@ impl Options {
                 .notification_circuit_breaker_initial_probe_interval,
             notification_circuit_breaker_max_probe_interval: self
                 .notification_circuit_breaker_max_probe_interval,
-            max_stream_queries: self.max_stream_queries,
+            max_event_stream_queries: self.max_event_stream_queries,
         }
     }
 
