@@ -6258,6 +6258,7 @@ dependencies = [
  "cfg_aliases",
  "convert_case",
  "criterion",
+ "custom_debug_derive",
  "derive_more 1.0.0",
  "futures",
  "generic-array",
