@@ -416,7 +416,7 @@ where
                 self.ownership.set(ownership);
             }
             ChangeApplicationPermissions(application_permissions) => {
-                let current_ownership = self.ownership.get();
+                let current_ownership = self.ownership.get().await?;
                 match context.authenticated_owner {
                     Some(owner) if current_ownership.super_owners.contains(&owner) => {}
                     _ => return Err(ExecutionError::UnauthorizedChangeApplicationPermissions),
@@ -424,7 +424,7 @@ where
                 self.application_permissions.set(application_permissions);
             }
             CloseChain => {
-                let current_ownership = self.ownership.get();
+                let current_ownership = self.ownership.get().await?;
                 match context.authenticated_owner {
                     Some(owner) if current_ownership.super_owners.contains(&owner) => {}
                     _ => return Err(ExecutionError::UnauthorizedCloseChain),

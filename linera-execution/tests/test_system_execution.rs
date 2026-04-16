@@ -163,7 +163,7 @@ async fn test_change_super_owners_by_super_owner() -> anyhow::Result<()> {
     ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
         .execute_operation(context, Operation::system(operation))
         .await?;
-    let new_ownership = view.system.ownership.get();
+    let new_ownership = view.system.ownership.get().await?;
     assert!(new_ownership.super_owners.contains(&new_super_owner));
     assert!(!new_ownership.super_owners.contains(&super_owner));
     assert_eq!(
@@ -346,7 +346,7 @@ async fn test_change_owners_preserves_super_owners() -> anyhow::Result<()> {
     ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
         .execute_operation(context, Operation::system(operation))
         .await?;
-    let new_ownership = view.system.ownership.get();
+    let new_ownership = view.system.ownership.get().await?;
     // Super owners are preserved by ChangeOwners.
     assert!(new_ownership.super_owners.contains(&super_owner));
     // Regular owners were changed.
@@ -555,7 +555,10 @@ async fn test_change_application_permissions_by_super_owner() -> anyhow::Result<
     ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
         .execute_operation(context, Operation::system(operation))
         .await?;
-    assert_eq!(view.system.application_permissions.get(), &new_permissions);
+    assert_eq!(
+        view.system.application_permissions.get().await?,
+        &new_permissions
+    );
     Ok(())
 }
 
@@ -605,7 +608,7 @@ async fn test_change_application_permissions_by_regular_owner_fails() -> anyhow:
     ));
     // Permissions should be unchanged.
     assert_eq!(
-        view.system.application_permissions.get(),
+        view.system.application_permissions.get().await?,
         &initial_permissions
     );
     Ok(())
