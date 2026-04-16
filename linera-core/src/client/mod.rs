@@ -127,6 +127,7 @@ mod metrics {
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
+pub static DEFAULT_MAX_EVENT_STREAM_QUERIES: usize = 1000;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TimingType {
@@ -1520,11 +1521,14 @@ impl<Env: Environment> Client<Env> {
         remote_node: &RemoteNode<Env::ValidatorNode>,
     ) -> Result<(), chain_client::Error> {
         let stream_ids_vec: Vec<_> = stream_ids.iter().cloned().collect();
-        let previous_blocks = remote_node
-            .node
-            .previous_event_blocks(chain_id, stream_ids_vec)
-            .await?;
-        let initial_blocks = previous_blocks.values().copied().collect();
+        let mut initial_blocks = BTreeSet::new();
+        for chunk in stream_ids_vec.chunks(self.options.max_event_stream_queries) {
+            let previous_blocks = remote_node
+                .node
+                .previous_event_blocks(chain_id, chunk.to_vec())
+                .await?;
+            initial_blocks.extend(previous_blocks.values().copied());
+        }
         let local_height = match self.local_node.chain_info(chain_id).await {
             Ok(info) => info.next_block_height,
             Err(LocalNodeError::InactiveChain(_) | LocalNodeError::BlobsNotFound(_)) => {
