@@ -174,6 +174,14 @@ mod metrics {
         )
     });
 
+    pub static PREVIOUS_EVENT_BLOCKS_STREAM_COUNT: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "previous_event_blocks_stream_count",
+            "Number of event streams requested per PreviousEventBlocks query",
+            exponential_bucket_interval(1.0, 10000.0),
+        )
+    });
+
     pub static CHAIN_INFO_QUERIES: LazyLock<IntCounter> = LazyLock::new(|| {
         register_int_counter(
             "chain_info_queries",
@@ -1628,6 +1636,8 @@ where
         chain_id: ChainId,
         stream_ids: Vec<StreamId>,
     ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError> {
+        #[cfg(with_metrics)]
+        metrics::PREVIOUS_EVENT_BLOCKS_STREAM_COUNT.observe(stream_ids.len() as f64);
         self.chain_read(chain_id, |guard| async move {
             guard.get_previous_event_blocks(stream_ids).await
         })
