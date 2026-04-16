@@ -208,6 +208,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-joined-tasks <MAX_JOINED_TASKS>` — Maximum number of tasks that can are joined concurrently in the client
 
   Default value: `100`
+* `--max-event-stream-queries <MAX_EVENT_STREAM_QUERIES>` — Maximum number of event stream IDs to include in a single `PreviousEventBlocks` request. Larger sets are split into multiple requests
+
+  Default value: `1000`
 * `--max-accepted-latency-ms <MAX_ACCEPTED_LATENCY_MS>` — Maximum expected latency in milliseconds for score normalization
 
   Default value: `5000`
