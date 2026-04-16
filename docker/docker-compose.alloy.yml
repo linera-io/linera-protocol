@@ -75,4 +75,4 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_ALLOY:-0.50}"
-          memory: ${LIMIT_MEM_ALLOY:-512M}
+          memory: ${LIMIT_MEM_ALLOY:-1G}

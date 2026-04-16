@@ -23,7 +23,7 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_WEB:-1.00}"
-          memory: ${LIMIT_MEM_WEB:-1536M}
+          memory: ${LIMIT_MEM_WEB:-3G}
 
   scylla-setup:
     image: ubuntu:24.04
@@ -72,7 +72,7 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SCYLLA:-4.00}"
-          memory: ${LIMIT_MEM_SCYLLA:-20G}
+          memory: ${LIMIT_MEM_SCYLLA:-30G}
 
   proxy:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
@@ -110,7 +110,7 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_PROXY:-1.50}"
-          memory: ${LIMIT_MEM_PROXY:-512M}
+          memory: ${LIMIT_MEM_PROXY:-4G}
 
   # Each shard must run with a unique --shard number matching the server.json configuration.
   # Docker Compose replicas don't support per-replica arguments, so we define separate services.
@@ -150,7 +150,7 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SHARD_0:-2.00}"
-          memory: ${LIMIT_MEM_SHARD_0:-2560M}
+          memory: ${LIMIT_MEM_SHARD_0:-6G}
 
   shard-1:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
@@ -187,7 +187,7 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SHARD_1:-2.00}"
-          memory: ${LIMIT_MEM_SHARD_1:-2560M}
+          memory: ${LIMIT_MEM_SHARD_1:-6G}
 
   shard-2:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
@@ -224,7 +224,7 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SHARD_2:-2.00}"
-          memory: ${LIMIT_MEM_SHARD_2:-2560M}
+          memory: ${LIMIT_MEM_SHARD_2:-6G}
 
   shard-3:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
@@ -261,7 +261,7 @@ services:
       resources:
         limits:
           cpus: "${LIMIT_CPUS_SHARD_3:-2.00}"
-          memory: ${LIMIT_MEM_SHARD_3:-2560M}
+          memory: ${LIMIT_MEM_SHARD_3:-6G}
 
   shard-init:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
