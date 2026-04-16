@@ -94,7 +94,7 @@ impl<W> std::ops::Deref for ReadGuardedView<'_, W> {
         match self {
             ReadGuardedView::Loaded { updates, short_key } => {
                 let Update::Set(view) = updates.get(short_key).unwrap() else {
-                    unreachable!();
+                    unreachable!("ReadGuardedView should only reference Update::Set entries");
                 };
                 view
             }
@@ -277,7 +277,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                         let view = W::new(context)?;
                         *entry = Update::Set(view);
                         let Update::Set(view) = entry else {
-                            unreachable!();
+                            unreachable!("Entry was just set to Update::Set");
                         };
                         Ok(view)
                     }
@@ -295,7 +295,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                     W::load(context).await?
                 };
                 let Update::Set(view) = entry.insert(Update::Set(view)) else {
-                    unreachable!();
+                    unreachable!("Entry was just inserted as Update::Set");
                 };
                 Ok(view)
             }
@@ -518,7 +518,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
             match updates.get(short_key) {
                 Some(update) => {
                     let Update::Set(_) = update else {
-                        unreachable!();
+                        unreachable!("Loaded entries in updates should always be Update::Set");
                     };
                     let updates = self.updates.read().await;
                     let view = ReadGuardedView::Loaded {
@@ -839,7 +839,7 @@ impl<W: HashableView> HashableView for ByteCollectionView<W::Context, W> {
             let hash = match updates.get_mut(&key) {
                 Some(entry) => {
                     let Update::Set(view) = entry else {
-                        unreachable!();
+                        unreachable!("Loaded entries in updates should always be Update::Set");
                     };
                     view.hash_mut().await?
                 }
@@ -871,7 +871,7 @@ impl<W: HashableView> HashableView for ByteCollectionView<W::Context, W> {
             let hash = match updates.get(&key) {
                 Some(entry) => {
                     let Update::Set(view) = entry else {
-                        unreachable!();
+                        unreachable!("Loaded entries in updates should always be Update::Set");
                     };
                     view.hash().await?
                 }
