@@ -57,13 +57,13 @@ where
     };
     let handle = std::thread::spawn(move || {
         start_block_processor(
-            storage,
+            &storage,
             shutdown_signal,
             limits,
             options,
             block_exporter_id,
             new_block_queue,
-            destination_config,
+            &destination_config,
             health,
         )
     });
@@ -96,13 +96,13 @@ impl NewBlockQueue {
 #[tokio::main(flavor = "current_thread")]
 #[expect(clippy::too_many_arguments)]
 async fn start_block_processor<S, F>(
-    storage: S,
+    storage: &S,
     shutdown_signal: F,
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
     new_block_queue: NewBlockQueue,
-    destination_config: DestinationConfig,
+    destination_config: &DestinationConfig,
     health: Arc<AtomicBool>,
 ) -> Result<(), ExporterError>
 where
@@ -958,7 +958,7 @@ mod test {
 
         // === SECOND SESSION: Reload and test fallback scan ===
         // This simulates a restart with the new code
-        let (mut block_processor_storage, mut exporter_storage) =
+        let (mut block_processor_storage, exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
 

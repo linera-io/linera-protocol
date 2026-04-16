@@ -107,11 +107,11 @@ where
     }
 
     /// Shuts down block exporters for destinations that are not in the new committee.
-    pub(super) fn shutdown_old_committee(&mut self, new_committee: HashSet<DestinationId>) {
+    pub(super) fn shutdown_old_committee(&mut self, new_committee: &HashSet<DestinationId>) {
         // Shutdown the old committee members that are not in the new committee.
         for id in self
             .current_committee_destinations
-            .difference(&new_committee)
+            .difference(new_committee)
         {
             tracing::info!(id=?id, "shutting down old committee member");
             if let Some(abort_handle) = self.join_handles.remove(id) {
