@@ -231,11 +231,11 @@ where
     /// # })
     /// ```
     pub async fn get_mut(&mut self) -> Result<&mut T, ViewError> {
-        self.delete_storage_first = false;
         if self.update.is_none() {
             let update = self.get().await?.clone();
             self.update = Some(Box::new(update));
         }
+        self.delete_storage_first = false;
         Ok(self.update.as_mut().unwrap())
     }
 
