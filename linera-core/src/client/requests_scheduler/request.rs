@@ -1,13 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Blob, BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 
-use crate::client::requests_scheduler::cache::SubsumingKey;
+use crate::{
+    client::requests_scheduler::cache::SubsumingKey, data_types::debug_compressed_heights,
+};
 
 /// Unique identifier for different types of download requests.
 ///
@@ -17,6 +20,7 @@ pub enum RequestKey {
     /// Download certificates by specific heights
     Certificates {
         chain_id: ChainId,
+        #[debug(with = "debug_compressed_heights")]
         heights: Vec<BlockHeight>,
     },
     /// Download a blob by ID
