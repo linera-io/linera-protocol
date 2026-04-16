@@ -58,7 +58,7 @@ use crate::{
         Network,
     },
     util::{self, ChildExt},
-    wallet::Wallet,
+    Wallet,
 };
 
 /// The name of the environment variable that allows specifying additional arguments to be passed

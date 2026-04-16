@@ -85,7 +85,6 @@ colored.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
 custom_debug_derive.workspace = true
-dirs.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
 futures.workspace = true
@@ -115,6 +114,7 @@ linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
+linera-wallet-json.workspace = true
 lru.workspace = true
 mini-moka.workspace = true
 nonzero_lit.workspace = true
