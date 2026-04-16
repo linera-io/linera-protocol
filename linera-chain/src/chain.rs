@@ -1062,16 +1062,6 @@ where
         Ok(updated_streams)
     }
 
-    /// Returns whether this is a child chain.
-    pub async fn is_child(&self) -> Result<bool, ChainError> {
-        let description = self.execution_state.system.description.get().await?;
-        let Some(description) = description else {
-            // Root chains are always initialized, so this must be a child chain.
-            return Ok(true);
-        };
-        Ok(description.is_child())
-    }
-
     /// Verifies that the block is valid according to the chain's application permission settings.
     #[instrument(skip_all, fields(
         block_height = %block.height,

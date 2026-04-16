@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -625,13 +625,18 @@ where
 {
     /// Returns an instance with the specified set of chain IDs whose incoming bundles
     /// should be processed first.
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self, origins))]
-    pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
+    pub fn with_priority_bundle_origins(
+        mut self,
+        origins: std::collections::HashSet<ChainId>,
+    ) -> Self {
         self.chain_worker_config.priority_bundle_origins = origins;
         self
     }
 
     /// Returns an instance with the specified cross-chain message chunk limit.
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self))]
     pub fn with_cross_chain_message_chunk_limit(mut self, limit: usize) -> Self {
         self.chain_worker_config.cross_chain_message_chunk_limit = limit;
@@ -639,20 +644,15 @@ where
     }
 
     /// Sets the cross-chain message chunk limit.
+    #[cfg(with_testing)]
     pub fn set_cross_chain_message_chunk_limit(&mut self, limit: usize) {
         self.chain_worker_config.cross_chain_message_chunk_limit = limit;
     }
 
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self, value))]
     pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
         self.chain_worker_config.allow_revert_confirm = value;
-        self
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_reset_on_incorrect_outcome(mut self, minutes: Option<u64>) -> Self {
-        self.chain_worker_config.reset_on_incorrect_outcome =
-            minutes.map(|m| Duration::from_secs(m * 60));
         self
     }
 

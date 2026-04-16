@@ -18,7 +18,7 @@ use futures::{
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
+    crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
         ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
@@ -51,7 +51,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, SystemOperation, EPOCH_STREAM_NAME,
         REMOVED_EPOCH_STREAM_NAME,
     },
-    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, QueryOutcome,
 };
 use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
@@ -426,12 +426,6 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", skip(self))]
     pub fn set_preferred_owner(&mut self, preferred_owner: AccountOwner) {
         self.preferred_owner = Some(preferred_owner);
-    }
-
-    /// Unsets the preferred owner for signing the blocks.
-    #[instrument(level = "trace", skip(self))]
-    pub fn unset_preferred_owner(&mut self) {
-        self.preferred_owner = None;
     }
 
     /// Obtains a `ChainStateView` for this client's chain.
@@ -1516,11 +1510,12 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Queries a system application.
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(query))]
     pub async fn query_system_application(
         &self,
-        query: SystemQuery,
-    ) -> Result<QueryOutcome<SystemResponse>, Error> {
+        query: linera_execution::SystemQuery,
+    ) -> Result<QueryOutcome<linera_execution::SystemResponse>, Error> {
         let (
             QueryOutcome {
                 response,
@@ -1529,7 +1524,7 @@ impl<Env: Environment> ChainClient<Env> {
             _,
         ) = self.query_application(Query::System(query), None).await?;
         match response {
-            QueryResponse::System(response) => Ok(QueryOutcome {
+            linera_execution::QueryResponse::System(response) => Ok(QueryOutcome {
                 response,
                 operations,
             }),
@@ -1554,7 +1549,7 @@ impl<Env: Environment> ChainClient<Env> {
             _,
         ) = self.query_application(query, None).await?;
         match response {
-            QueryResponse::User(response_bytes) => {
+            linera_execution::QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;
                 Ok(QueryOutcome {
                     response,
@@ -2121,10 +2116,11 @@ impl<Env: Environment> ChainClient<Env> {
     /// Rotates the key of the chain.
     ///
     /// Replaces current owners of the chain with the new key pair.
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub async fn rotate_key_pair(
         &self,
-        public_key: AccountPublicKey,
+        public_key: linera_base::crypto::AccountPublicKey,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         self.transfer_ownership(public_key.into()).await
     }
@@ -2609,6 +2605,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Sends money to a chain.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,
