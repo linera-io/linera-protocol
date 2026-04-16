@@ -109,11 +109,6 @@ impl<Env: Environment> NodeInfo<Env> {
         self.total_requests += 1;
     }
 
-    /// Returns the current EMA success rate.
-    pub(super) fn ema_success_rate(&self) -> f64 {
-        self.ema_success_rate
-    }
-
     /// Returns the total number of requests processed.
     pub(super) fn total_requests(&self) -> u64 {
         self.total_requests

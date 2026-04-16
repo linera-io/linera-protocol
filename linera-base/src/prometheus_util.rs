@@ -44,19 +44,6 @@ pub fn register_int_counter(name: &str, description: &str) -> IntCounter {
     register_int_counter!(counter_opts).expect("IntCounter can be created")
 }
 
-/// Wrapper around Prometheus `register_int_counter!` macro with `linera` namespace and a subsystem.
-/// Results in metrics named `linera_<subsystem>_<name>`.
-pub fn register_int_counter_with_subsystem(
-    subsystem: &str,
-    name: &str,
-    description: &str,
-) -> IntCounter {
-    let counter_opts = Opts::new(name, description)
-        .namespace(LINERA_NAMESPACE)
-        .subsystem(subsystem);
-    register_int_counter!(counter_opts).expect("IntCounter can be created")
-}
-
 /// Wrapper around Prometheus `register_histogram_vec!` macro which also sets the `linera` namespace
 pub fn register_histogram_vec(
     name: &str,

@@ -2,53 +2,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
+use std::{borrow::Cow, collections::BTreeMap};
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey},
+    crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::policy::ResourceControlPolicy;
-
-/// The identity of a validator.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
-pub struct ValidatorName(pub ValidatorPublicKey);
-
-impl Serialize for ValidatorName {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&self.to_string())
-        } else {
-            serializer.serialize_newtype_struct("ValidatorName", &self.0)
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for ValidatorName {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let value = Self::from_str(&s).map_err(serde::de::Error::custom)?;
-            Ok(value)
-        } else {
-            #[derive(Deserialize)]
-            #[serde(rename = "ValidatorName")]
-            struct ValidatorNameDerived(ValidatorPublicKey);
-
-            let value = ValidatorNameDerived::deserialize(deserializer)?;
-            Ok(Self(value.0))
-        }
-    }
-}
 
 /// Public state of a validator.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]
@@ -201,26 +164,6 @@ impl<'a> From<&'a Committee> for CommitteeMinimal<'a> {
     }
 }
 
-impl std::fmt::Display for ValidatorName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        self.0.fmt(f)
-    }
-}
-
-impl std::str::FromStr for ValidatorName {
-    type Err = CryptoError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ValidatorName(ValidatorPublicKey::from_str(s)?))
-    }
-}
-
-impl From<ValidatorPublicKey> for ValidatorName {
-    fn from(value: ValidatorPublicKey) -> Self {
-        Self(value)
-    }
-}
-
 impl Committee {
     pub fn new(
         validators: BTreeMap<ValidatorPublicKey, ValidatorState>,
@@ -277,22 +220,10 @@ impl Committee {
         }
     }
 
-    pub fn keys_and_weights(&self) -> impl Iterator<Item = (ValidatorPublicKey, u64)> + '_ {
-        self.validators
-            .iter()
-            .map(|(name, validator)| (*name, validator.votes))
-    }
-
     pub fn account_keys_and_weights(&self) -> impl Iterator<Item = (AccountPublicKey, u64)> + '_ {
         self.validators
             .values()
             .map(|validator| (validator.account_public_key, validator.votes))
-    }
-
-    pub fn network_address(&self, author: &ValidatorPublicKey) -> Option<&str> {
-        self.validators
-            .get(author)
-            .map(|state| state.network_address.as_ref())
     }
 
     pub fn quorum_threshold(&self) -> u64 {

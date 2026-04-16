@@ -625,16 +625,12 @@ impl TestClock {
     ///
     /// The callback receives the target timestamp and should return `true` if the clock
     /// should auto-advance to that time, or `false` if the sleep should block normally.
+    #[cfg(with_testing)]
     pub fn set_sleep_callback<F>(&self, callback: F)
     where
         F: Fn(Timestamp) -> bool + Send + Sync + 'static,
     {
         self.lock().sleep_callback = Some(Box::new(callback));
-    }
-
-    /// Clears the sleep callback.
-    pub fn clear_sleep_callback(&self) {
-        self.lock().sleep_callback = None;
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, TestClockInner> {
