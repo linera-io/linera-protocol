@@ -27,7 +27,7 @@ services:
     networks:
       - linera-network
 
-  # 1. ScyllaDB - storage backend for linera network and exporter
+  # 1. ScyllaDB - storage backend for linera network
   scylla-setup:
     image: ubuntu:24.04
     privileged: true
@@ -81,14 +81,10 @@ services:
           --path ${LINERA_NET_PATH:-/tmp/wallet} \
           --with-faucet \
           --faucet-port ${FAUCET_PORT:-8080} \
-          --with-block-exporter \
-          --exporter-address linera-block-exporter \
-          --exporter-port ${BLOCK_EXPORTER_PORT:-8882} \
           $${HTTP_REQUEST_ALLOW_LIST:+--http-request-allow-list $$HTTP_REQUEST_ALLOW_LIST}
     environment:
       - RUST_LOG=linera=info
       - FAUCET_PORT=${FAUCET_PORT:-8080}
-      - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
       - LINERA_NET_PATH=${LINERA_NET_PATH:-/tmp/wallet}
       - HTTP_REQUEST_ALLOW_LIST=${HTTP_REQUEST_ALLOW_LIST:-anvil}
     healthcheck:
@@ -107,6 +103,7 @@ services:
     networks:
       - linera-network
 
+<<<<<<< HEAD
   # 3. Storage init - waits for network to initialize storage
   storage-init:
     image: "${LINERA_NETWORK_IMAGE:-linera-test}"
@@ -135,6 +132,9 @@ services:
       - linera-network
 
   # 4a. Bridge args init - queries faucet for committee data and outputs constructor args
+=======
+  # 3a. Bridge args init - queries faucet for committee data and outputs constructor args
+>>>>>>> d31a5fc784 (Relayer updates committes (#5994))
   bridge-args-init:
     image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
     command:
@@ -153,7 +153,7 @@ services:
     networks:
       - linera-network
 
-  # 4b. Bridge init - deploys LightClient contract to Anvil using constructor args
+  # 3b. Bridge init - deploys LightClient contract to Anvil using constructor args
   bridge-init:
     image: "${FOUNDRY_IMAGE:-foundry-jq}"
     user: root
@@ -218,6 +218,7 @@ services:
     networks:
       - linera-network
 
+<<<<<<< HEAD
   # 5. Block Exporter - starts after storage is initialized and LightClient is deployed
   linera-block-exporter:
     image: "${LINERA_EXPORTER_IMAGE:-linera-exporter}"
@@ -273,6 +274,9 @@ services:
       - linera-network
 
   # 6a. Bridge chain init - claims a chain for the relay before the relay starts.
+=======
+  # 4a. Bridge chain init - claims a chain for the relay before the relay starts.
+>>>>>>> d31a5fc784 (Relayer updates committes (#5994))
   #     Writes bridge-chain-id and relay-owner to /shared/ so the setup script
   #     and the relay can use them.
   bridge-chain-init:
@@ -317,7 +321,7 @@ services:
       linera-network:
         condition: service_healthy
 
-  # 6b. Relay server - processes inbox, forwards blocks to EVM.
+  # 4b. Relay server - processes inbox, forwards blocks to EVM.
   #     Uses the chain claimed by bridge-chain-init.
   #     Bridge address is resolved from /shared/bridge-address (written by setup script).
   # Uses network_mode: service:linera-network so that localhost:13001 reaches the

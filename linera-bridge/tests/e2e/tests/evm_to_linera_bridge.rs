@@ -26,7 +26,7 @@ use linera_base::{
 use linera_bridge::proof::gen::{DepositProofClient as _, HttpDepositProofClient};
 use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
-    start_compose,
+    start_compose, wait_for_light_client,
     ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
@@ -92,11 +92,13 @@ sol! {
 #[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
 async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_test_writer().try_init().ok();
+    linera_bridge_e2e::ensure_rustls_provider();
     let compose_file = compose_file_path();
     let project_name = "linera-e2l-bridge-test";
 
     // ── Phase 1: Start docker compose stack ──
     let compose = start_compose(&compose_file, project_name).await;
+    wait_for_light_client(&compose, project_name, &compose_file).await;
 
     // ── Phase 2: Create programmatic Linera client and claim chain ──
     tracing::info!("Creating programmatic Linera client...");

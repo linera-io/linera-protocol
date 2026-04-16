@@ -22,7 +22,7 @@ anyhow = "1"
 bcs = "0.1.6"
 futures = "0.3"
 linera-base = { path = "../../../linera-base" }
-linera-bridge = { path = "../../../linera-bridge" }
+linera-bridge = { path = "../../../linera-bridge", features = ["relay"] }
 linera-client = { path = "../../../linera-client", default-features = false, features = [
     "wasmer",
 ] }
@@ -33,12 +33,14 @@ linera-execution = { path = "../../../linera-execution" }
 linera-faucet-client = { path = "../../../linera-faucet/client" }
 linera-persistent = { path = "../../../linera-persistent", features = ["fs"] }
 linera-storage = { path = "../../../linera-storage", features = ["wasmer"] }
+linera-storage-runtime = { path = "../../../linera-storage-runtime" }
 linera-views = { path = "../../../linera-views" }
 rand = { version = "0.8", default-features = false, features = ["std_rng"] }
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "rustls-tls",
 ] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"

@@ -90,6 +90,11 @@ struct ServeOptions {
     #[arg(long)]
     linera_fungible_address: String,
 
+    /// Address of the LightClient contract on EVM.
+    /// When provided, skips discovering it via FungibleBridge.lightClient().
+    #[arg(long)]
+    evm_light_client_address: Option<String>,
+
     /// EVM private key for signing addBlock transactions
     #[arg(long)]
     evm_private_key: String,
@@ -152,6 +157,13 @@ fn main() -> Result<()> {
 #[cfg(feature = "relay")]
 impl ServeOptions {
     async fn run(&self) -> Result<()> {
+        linera_base::tracing::init("linera-bridge");
+
+        // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .expect("failed to install rustls crypto provider");
+
         Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
             self.faucet_url.as_deref(),
@@ -164,6 +176,7 @@ impl ServeOptions {
             &self.linera_bridge_address,
             &self.linera_fungible_address,
             &self.evm_private_key,
+            self.evm_light_client_address.as_deref(),
             self.port,
             linera_storage::StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
