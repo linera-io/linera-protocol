@@ -21,7 +21,7 @@ use linera_chain::{
 };
 use linera_execution::{committee::Committee, ExecutionRuntimeContext};
 use linera_storage::ChainRuntimeContext;
-use linera_views::context::Context;
+use linera_views::{context::Context, ViewError};
 use serde::{Deserialize, Serialize};
 
 use crate::client::chain_client;
@@ -62,14 +62,6 @@ pub struct ChainInfoQuery {
     #[debug(skip_if = Vec::is_empty)]
     #[cfg_attr(with_testing, strategy(proptest::strategy::Just(Vec::new())))]
     pub request_previous_event_blocks: Vec<StreamId>,
-    #[serde(default = "default_true")]
-    pub create_network_actions: bool,
-}
-
-// Default value for create_network_actions.
-// Default for bool returns false.
-fn default_true() -> bool {
-    true
 }
 
 impl ChainInfoQuery {
@@ -86,7 +78,6 @@ impl ChainInfoQuery {
             request_fallback: false,
             request_sent_certificate_hashes_by_heights: Vec::new(),
             request_previous_event_blocks: Vec::new(),
-            create_network_actions: false,
         }
     }
 
@@ -137,11 +128,6 @@ impl ChainInfoQuery {
 
     pub fn with_fallback(mut self) -> Self {
         self.request_fallback = true;
-        self
-    }
-
-    pub fn with_network_actions(mut self) -> Self {
-        self.create_network_actions = true;
         self
     }
 }
@@ -278,18 +264,18 @@ impl CrossChainRequest {
     }
 }
 
-impl<C, S> From<&ChainStateView<C>> for ChainInfo
-where
-    C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
-    ChainRuntimeContext<S>: ExecutionRuntimeContext,
-{
-    fn from(view: &ChainStateView<C>) -> Self {
+impl ChainInfo {
+    pub async fn from_chain_view<C, S>(view: &ChainStateView<C>) -> Result<Self, ViewError>
+    where
+        C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
+        ChainRuntimeContext<S>: ExecutionRuntimeContext,
+    {
         let system_state = &view.execution_state.system;
         let tip_state = view.tip_state.get();
-        ChainInfo {
+        Ok(ChainInfo {
             chain_id: view.chain_id(),
             epoch: *system_state.epoch.get(),
-            description: system_state.description.get().clone(),
+            description: system_state.description.get().await?.clone(),
             manager: Box::new(ChainManagerInfo::from(&view.manager)),
             chain_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
@@ -303,7 +289,7 @@ where
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
             requested_previous_event_blocks: BTreeMap::new(),
-        }
+        })
     }
 }
 

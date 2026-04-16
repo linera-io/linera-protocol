@@ -239,7 +239,10 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         self.write_blob(&Blob::new_chain_description(&description))
             .await?;
         let mut chain = self.load_chain(id).await?;
-        assert!(!chain.is_active(), "Attempting to create a chain twice");
+        assert!(
+            !chain.is_active().await?,
+            "Attempting to create a chain twice"
+        );
         let current_time = self.clock().current_time();
         chain.initialize_if_needed(current_time).await?;
         chain.save().await?;
@@ -411,30 +414,6 @@ impl ResultReadCertificates {
             });
         if invalid_hashes.is_empty() {
             Self::Certificates(certificates)
-        } else {
-            Self::InvalidHashes(invalid_hashes)
-        }
-    }
-}
-
-/// The result of processing the obtained read confirmed blocks.
-pub enum ResultReadConfirmedBlocks {
-    Blocks(Vec<ConfirmedBlock>),
-    InvalidHashes(Vec<CryptoHash>),
-}
-
-impl ResultReadConfirmedBlocks {
-    /// Creating the processed read confirmed blocks.
-    pub fn new(blocks: Vec<Option<ConfirmedBlock>>, hashes: Vec<CryptoHash>) -> Self {
-        let (blocks, invalid_hashes) = blocks
-            .into_iter()
-            .zip(hashes)
-            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(block, hash)| match block {
-                Some(block) => itertools::Either::Left(block),
-                None => itertools::Either::Right(hash),
-            });
-        if invalid_hashes.is_empty() {
-            Self::Blocks(blocks)
         } else {
             Self::InvalidHashes(invalid_hashes)
         }

@@ -2671,7 +2671,7 @@
               }
             ]
           },
-          "unit": "\u00b5s"
+          "unit": "µs"
         },
         "overrides": []
       },
@@ -2713,6 +2713,145 @@
       ],
       "title": "I/O Delay",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Maps each Conway validator (GKE cluster) to its ScyllaDB cluster UUID used in scylla-manager backups. Joins scylla_manager_backup_files_size_bytes (UUID + manager pod) with kube_pod_info (manager pod -> GKE cluster). Only actively-backed-up clusters appear; stale scylla-manager registrations are filtered out.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 66
+      },
+      "id": 20,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "group by (cluster, instance) (scylla_manager_backup_files_size_bytes)",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "group by (cluster, pod) (kube_pod_info{pod=~\"scylla-manager-[^-]+-[^-]+\"})",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "B"
+        }
+      ],
+      "title": "Validator → Scylla Cluster UUID",
+      "transformations": [
+        {
+          "filter": {
+            "id": "byRefId",
+            "options": "A"
+          },
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "job": true,
+              "name": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "cluster": "scylla_cluster_uuid",
+              "instance": "manager_pod"
+            }
+          }
+        },
+        {
+          "filter": {
+            "id": "byRefId",
+            "options": "B"
+          },
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "created_by_kind": true,
+              "created_by_name": true,
+              "exported_namespace": true,
+              "host_ip": true,
+              "host_network": true,
+              "job": true,
+              "namespace": true,
+              "node": true,
+              "pod_ip": true,
+              "uid": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "cluster": "validator_gke_cluster",
+              "pod": "manager_pod"
+            }
+          }
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "manager_pod",
+            "mode": "inner"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "manager_pod": 2,
+              "scylla_cluster_uuid": 1,
+              "validator_gke_cluster": 0
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "table"
     }
   ],
   "tags": [

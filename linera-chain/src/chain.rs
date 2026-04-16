@@ -439,8 +439,8 @@ where
     }
 
     /// Invariant for the states of active chains.
-    pub fn is_active(&self) -> bool {
-        self.execution_state.system.is_active()
+    pub async fn is_active(&self) -> Result<bool, ChainError> {
+        Ok(self.execution_state.system.is_active().await?)
     }
 
     /// Initializes the chain if it is not active yet.
@@ -463,7 +463,7 @@ where
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
         // Last, reset the consensus state based on the current ownership.
         self.manager.reset(
-            self.execution_state.system.ownership.get().clone(),
+            self.execution_state.system.ownership.get().await?.clone(),
             BlockHeight(0),
             local_time,
             maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
@@ -573,8 +573,8 @@ where
             .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
     }
 
-    pub fn ownership(&self) -> &ChainOwnership {
-        self.execution_state.system.ownership.get()
+    pub async fn ownership(&self) -> Result<&ChainOwnership, ChainError> {
+        Ok(self.execution_state.system.ownership.get().await?)
     }
 
     /// Removes the incoming message bundles in the block from the inboxes.
@@ -1004,7 +1004,11 @@ where
         }
 
         Self::check_app_permissions(
-            self.execution_state.system.application_permissions.get(),
+            self.execution_state
+                .system
+                .application_permissions
+                .get()
+                .await?,
             &block,
         )?;
 
@@ -1044,7 +1048,8 @@ where
         self.process_outgoing_messages(block).await?;
 
         // Last, reset the consensus state based on the current ownership.
-        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
+        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)
+            .await?;
 
         // Advance to next block height.
         let tip = self.tip_state.get_mut();
@@ -1079,12 +1084,13 @@ where
     }
 
     /// Returns whether this is a child chain.
-    pub fn is_child(&self) -> bool {
-        let Some(description) = self.execution_state.system.description.get() else {
+    pub async fn is_child(&self) -> Result<bool, ChainError> {
+        let description = self.execution_state.system.description.get().await?;
+        let Some(description) = description else {
             // Root chains are always initialized, so this must be a child chain.
-            return true;
+            return Ok(true);
         };
-        description.is_child()
+        Ok(description.is_child())
     }
 
     /// Verifies that the block is valid according to the chain's application permission settings.
@@ -1173,13 +1179,13 @@ where
     }
 
     /// Resets the chain manager for the next block height.
-    fn reset_chain_manager(
+    async fn reset_chain_manager(
         &mut self,
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        let ownership = self.execution_state.system.ownership.get().clone();
+        let ownership = self.execution_state.system.ownership.get().await?.clone();
         let fallback_owners =
             maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();

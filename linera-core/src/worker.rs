@@ -102,7 +102,7 @@ mod metrics {
         exponential_bucket_interval, register_histogram, register_histogram_vec,
         register_int_counter, register_int_counter_vec,
     };
-    use linera_chain::types::ConfirmedBlockCertificate;
+    use linera_chain::{data_types::MessageAction, types::ConfirmedBlockCertificate};
     use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
 
     pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -128,6 +128,9 @@ mod metrics {
 
     pub static INCOMING_BUNDLE_COUNT: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("incoming_bundle_count", "Incoming bundle count"));
+
+    pub static REJECTED_BUNDLE_COUNT: LazyLock<IntCounter> =
+        LazyLock::new(|| register_int_counter("rejected_bundle_count", "Rejected bundle count"));
 
     pub static INCOMING_MESSAGE_COUNT: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("incoming_message_count", "Incoming message count"));
@@ -185,6 +188,7 @@ mod metrics {
         round_number: u32,
         confirmed_transactions: u64,
         confirmed_incoming_bundles: u64,
+        confirmed_rejected_bundles: u64,
         confirmed_incoming_messages: u64,
         confirmed_operations: u64,
         validators_with_signatures: Vec<String>,
@@ -200,6 +204,12 @@ mod metrics {
                 confirmed_transactions: certificate.block().body.transactions.len() as u64,
                 confirmed_incoming_bundles: certificate.block().body.incoming_bundles().count()
                     as u64,
+                confirmed_rejected_bundles: certificate
+                    .block()
+                    .body
+                    .incoming_bundles()
+                    .filter(|b| b.action == MessageAction::Reject)
+                    .count() as u64,
                 confirmed_incoming_messages: certificate
                     .block()
                     .body
@@ -230,6 +240,9 @@ mod metrics {
                     .inc_by(self.confirmed_transactions);
                 if self.confirmed_incoming_bundles > 0 {
                     INCOMING_BUNDLE_COUNT.inc_by(self.confirmed_incoming_bundles);
+                }
+                if self.confirmed_rejected_bundles > 0 {
+                    REJECTED_BUNDLE_COUNT.inc_by(self.confirmed_rejected_bundles);
                 }
                 if self.confirmed_incoming_messages > 0 {
                     INCOMING_MESSAGE_COUNT.inc_by(self.confirmed_incoming_messages);
@@ -1299,7 +1312,7 @@ where
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<ChainInfoResponse, WorkerError> {
         trace!("{} <-- {:?}", self.nickname(), query);
         #[cfg(with_metrics)]
         metrics::CHAIN_INFO_QUERIES.inc();
@@ -1585,6 +1598,19 @@ where
     ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
         self.chain_read(chain_id, |guard| async move {
             guard.get_received_certificate_trackers().await
+        })
+        .await
+    }
+
+    /// Returns the pending cross-chain network actions for this chain without
+    /// initializing its execution state. Safe to call on chains whose
+    /// `ChainDescription` blob is not available locally.
+    pub async fn cross_chain_network_actions(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<NetworkActions, WorkerError> {
+        self.chain_read(chain_id, |guard| async move {
+            guard.cross_chain_network_actions().await
         })
         .await
     }

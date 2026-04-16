@@ -13,7 +13,7 @@ use futures::StreamExt;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, InMemorySigner},
     data_types::*,
-    identifiers::{Account, AccountOwner, ApplicationId, GenericApplicationId},
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, BlobType, GenericApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -1387,6 +1387,13 @@ where
     Ok(())
 }
 
+/// The sender chain should be stored sparsely in the receiver's node: only blocks
+/// that sent messages to us should be downloaded, not the intermediate ones. When
+/// the sender is a non-root chain (so its `ChainDescription` blob isn't in the
+/// receiver's genesis storage) and the sender's height-0 block doesn't send to us,
+/// the `ChainDescription` itself should never be downloaded either — not during
+/// the initial message processing, and not during a later re-sync that routes the
+/// sender through `retry_pending_cross_chain_requests_from_sender_chains`.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -1395,12 +1402,42 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 2, 0, signer).await?;
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let owner = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let receiver_id = receiver.chain_id();
 
+    // Open the sender as a non-root chain so that its `ChainDescription` isn't
+    // pre-populated in the receiver's genesis storage. We also make the sender's
+    // first block a burn rather than a transfer to the receiver: that keeps the
+    // message-sending blocks at height >= 1, so preprocessing them never requires
+    // the sender's `ChainDescription` (only height-0 blocks do).
+    let sender_public_key = builder.signer.generate_new();
+    let sender_ownership = ChainOwnership::single(sender_public_key.into())
+        .with_regular_owner(sender_public_key.into(), 100);
+    let (sender_description, _creation_certificate) = Box::pin(owner.open_chain(
+        sender_ownership,
+        ApplicationPermissions::default(),
+        Amount::from_tokens(4),
+    ))
+    .await
+    .unwrap_ok_committed();
+    let sender_id = sender_description.id();
+    let sender_chain_desc_blob_id = BlobId::new(sender_id.0, BlobType::ChainDescription);
+
+    let mut sender = builder
+        .make_client(sender_id, None, BlockHeight::ZERO)
+        .await?;
+    sender.set_preferred_owner(sender_public_key.into());
+    sender.synchronize_from_validators().await?;
+
+    // Heights 0 and 2 are burns; heights 1 and 3 send to the receiver.
     let cert0 = sender
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    let cert1 = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
@@ -1408,11 +1445,11 @@ where
         )
         .await
         .unwrap_ok_committed();
-    let cert1 = sender
+    let cert2 = sender
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    let cert2 = sender
+    let cert3 = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
@@ -1421,12 +1458,14 @@ where
         .await
         .unwrap_ok_committed();
 
-    // Process the notification about the incoming message.
+    // Process the notification about the most recent incoming message. This walks
+    // back along `previous_message_blocks` and preprocesses only the sender blocks
+    // that sent to us (heights 1 and 3).
     let notification = Notification {
         chain_id: receiver_id,
         reason: Reason::NewIncomingBundle {
-            origin: cert2.block().header.chain_id,
-            height: cert2.block().header.height,
+            origin: sender_id,
+            height: cert3.block().header.height,
         },
     };
     let validator = builder
@@ -1439,25 +1478,31 @@ where
         .await;
     receiver.process_inbox().await?;
 
-    // The first and last blocks sent something to the receiver. The middle one didn't.
-    // So the sender chain should have a gap.
+    // Only the blocks that sent something to the receiver should be in local
+    // storage. The burn blocks in between — and the sender's `ChainDescription`
+    // blob itself — should never have been downloaded.
+    let storage = receiver.storage_client();
+    assert!(!storage.contains_certificate(cert0.hash()).await?);
+    assert!(storage.contains_certificate(cert1.hash()).await?);
+    assert!(!storage.contains_certificate(cert2.hash()).await?);
+    assert!(storage.contains_certificate(cert3.hash()).await?);
     assert!(
-        receiver
-            .storage_client()
-            .contains_certificate(cert0.hash())
-            .await?
+        !storage.contains_blob(sender_chain_desc_blob_id).await?,
+        "preprocessing non-height-0 sender blocks must not download the ChainDescription",
     );
+
+    // `process_notification_from` does not advance the client's
+    // `received_certificate_trackers`, so a subsequent `synchronize_from_validators`
+    // still sees (sender, 1) and (sender, 3) in the received log. But the sender's
+    // outbox has those heights scheduled locally now, so `find_received_certificates`
+    // filters them out and routes the sender through
+    // `retry_pending_cross_chain_requests_from_sender_chains`. Before the fix this
+    // initialized the sender's chain worker inside the receiver's node and, on
+    // failing to find the `ChainDescription` blob in storage, triggered a download.
+    receiver.synchronize_from_validators().await?;
     assert!(
-        !receiver
-            .storage_client()
-            .contains_certificate(cert1.hash())
-            .await?
-    );
-    assert!(
-        receiver
-            .storage_client()
-            .contains_certificate(cert2.hash())
-            .await?
+        !storage.contains_blob(sender_chain_desc_blob_id).await?,
+        "retry_pending_cross_chain_requests must not download the ChainDescription",
     );
 
     Ok(())

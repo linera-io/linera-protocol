@@ -2187,6 +2187,7 @@ impl<Env: Environment> ChainClient<Env> {
             .system
             .ownership
             .get()
+            .await?
             .clone())
     }
 
@@ -2220,6 +2221,7 @@ impl<Env: Environment> ChainClient<Env> {
             .system
             .application_permissions
             .get()
+            .await?
             .clone())
     }
 

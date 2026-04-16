@@ -17,13 +17,15 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
-    fmt::Debug,
+    fmt,
     iter::Peekable,
     ops::Bound,
     vec::IntoIter,
 };
 
 use bcs::serialized_size;
+use custom_debug_derive::Debug;
+use linera_base::hex_debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 
@@ -42,18 +44,22 @@ pub enum WriteOperation {
     /// Delete the given key.
     Delete {
         /// The key that will be deleted.
+        #[debug(with = "hex_debug")]
         key: Vec<u8>,
     },
     /// Delete all the keys matching the given prefix.
     DeletePrefix {
         /// The prefix of the keys to be deleted.
+        #[debug(with = "hex_debug")]
         key_prefix: Vec<u8>,
     },
     /// Set or replace the value of a given key.
     Put {
         /// The key to be inserted or replaced.
+        #[debug(with = "hex_debug")]
         key: Vec<u8>,
         /// The value to be inserted on the key.
+        #[debug(with = "hex_debug")]
         value: Vec<u8>,
     },
 }
@@ -370,7 +376,7 @@ impl Batch {
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait DeletePrefixExpander {
     /// The error type that can happen when expanding the key prefix.
-    type Error: Debug;
+    type Error: fmt::Debug;
 
     /// Returns the list of keys to be appended to the list.
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
