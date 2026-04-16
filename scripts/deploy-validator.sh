@@ -1021,43 +1021,8 @@ main() {
 
 	log INFO "Validator setup completed successfully"
 
-	# Start services
-	if ! start_services; then
-		log ERROR "Failed to start services"
-		exit 1
-	fi
-
-	# Display final information
-	echo ""
-	log INFO "=== Deployment Complete ==="
-	log INFO "Public Key: ${public_key}"
-	log INFO "Validator URL: https://${host}"
-	log INFO "ACME Email: ${ACME_EMAIL}"
-	if [ -n "${xfs_path}" ]; then
-		log INFO "ScyllaDB XFS Path: ${xfs_path}"
-		log INFO "ScyllaDB Cache Size: ${cache_size}"
-	fi
-	echo ""
-	log WARNING "=== IMPORTANT: Next Steps for External Validators ==="
-	log WARNING "1. Save your public key securely - you'll need it for registration"
-	log WARNING "2. Register your validator with the Linera network administrators"
-	log WARNING "3. Monitor your validator's logs to ensure proper operation"
-	log WARNING "4. Keep your validator software updated with the latest releases"
-	echo ""
-	log INFO "Useful commands:"
-	log INFO "  Check service status:"
-	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose ps"
-	log INFO ""
-	log INFO "  View logs:"
-	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose logs -f"
-	log INFO ""
-	log INFO "  Stop services:"
-	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose down"
-	log INFO ""
-	log INFO "  Restart services:"
-	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose restart"
-
 	# Create .env from the production template, then set deployment-specific values
+	# NOTE: This MUST happen before start_services so docker compose picks up the values
 	local env_file="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/.env"
 	local template_file="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/.env.production.template"
 
@@ -1098,6 +1063,42 @@ ${xfs_path:+CACHE_SIZE=${cache_size}}
 EOF
 
 	log INFO "Environment variables saved to ${env_file} (from template + deploy values)"
+
+	# Start services (after .env is populated so docker compose picks up all values)
+	if ! start_services; then
+		log ERROR "Failed to start services"
+		exit 1
+	fi
+
+	# Display final information
+	echo ""
+	log INFO "=== Deployment Complete ==="
+	log INFO "Public Key: ${public_key}"
+	log INFO "Validator URL: https://${host}"
+	log INFO "ACME Email: ${ACME_EMAIL}"
+	if [ -n "${xfs_path}" ]; then
+		log INFO "ScyllaDB XFS Path: ${xfs_path}"
+		log INFO "ScyllaDB Cache Size: ${cache_size}"
+	fi
+	echo ""
+	log WARNING "=== IMPORTANT: Next Steps for External Validators ==="
+	log WARNING "1. Save your public key securely - you'll need it for registration"
+	log WARNING "2. Register your validator with the Linera network administrators"
+	log WARNING "3. Monitor your validator's logs to ensure proper operation"
+	log WARNING "4. Keep your validator software updated with the latest releases"
+	echo ""
+	log INFO "Useful commands:"
+	log INFO "  Check service status:"
+	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose ps"
+	log INFO ""
+	log INFO "  View logs:"
+	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose logs -f"
+	log INFO ""
+	log INFO "  Stop services:"
+	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose down"
+	log INFO ""
+	log INFO "  Restart services:"
+	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose restart"
 }
 
 # Run main function with all arguments
