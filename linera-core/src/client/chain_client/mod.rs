@@ -3,7 +3,7 @@
 
 mod state;
 use std::{
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
     convert::Infallible,
     iter,
     sync::Arc,
@@ -200,7 +200,7 @@ pub struct ChainClient<Env: Environment> {
     timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
     /// Sender chain IDs whose bundles were discarded due to the never-reject policy.
     /// These origins are excluded from `process_inbox` until the client is restarted.
-    skipped_origins: Arc<std::sync::Mutex<HashSet<ChainId>>>,
+    skipped_origins: Arc<papaya::HashSet<ChainId>>,
 }
 
 impl<Env: Environment> Clone for ChainClient<Env> {
@@ -356,7 +356,7 @@ impl<Env: Environment> ChainClient<Env> {
             initial_block_hash,
             initial_next_block_height,
             timing_sender,
-            skipped_origins: Arc::default(),
+            skipped_origins: Arc::new(papaya::HashSet::new()),
         }
     }
 
@@ -560,7 +560,7 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
-        let skipped = self.skipped_origins.lock().expect("poisoned");
+        let skipped = self.skipped_origins.pin();
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
@@ -1480,10 +1480,10 @@ impl<Env: Environment> ChainClient<Env> {
         // Record origins whose bundles were discarded due to the never-reject policy so
         // that `process_inbox` stops retrying them until the client is restarted.
         if !never_reject_origins.is_empty() {
-            self.skipped_origins
-                .lock()
-                .expect("poisoned")
-                .extend(never_reject_origins);
+            let skipped = self.skipped_origins.pin();
+            for origin in never_reject_origins {
+                skipped.insert(origin);
+            }
         }
         let (proposed_block, _) = block.clone().into_proposal();
         *proposal_guard = Some(PendingProposal {
