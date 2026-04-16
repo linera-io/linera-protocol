@@ -188,6 +188,44 @@ pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
     Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
 }
 
+/// Waits for the `bridge-init` container to deploy the LightClient contract.
+/// Must be called before deploying any test contracts to avoid a nonce race
+/// (bridge-init and the test both use Anvil account 0).
+pub async fn wait_for_light_client(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+) {
+    tracing::info!("Waiting for LightClient deployment (bridge-init)...");
+    for attempt in 0..60 {
+        let result = exec_output(
+            compose,
+            "foundry-tools",
+            &format!(
+                "cast code {} --rpc-url http://anvil:8545",
+                light_client_address()
+            ),
+            project_name,
+            compose_file,
+        )
+        .await;
+        if result.trim() != "0x" && !result.trim().is_empty() {
+            tracing::info!(attempt, "LightClient deployed");
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+    dump_compose_logs(project_name, compose_file);
+    panic!("LightClient not deployed within timeout");
+}
+
+/// Installs the rustls crypto provider if not already set.
+/// Required because enabling the `relay` feature links rustls which
+/// needs an explicit provider before any TLS usage.
+pub fn ensure_rustls_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 /// Starts docker compose stack with pre-cleanup of stale state.
 pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -> DockerCompose {
     let compose_file_str = compose_file

@@ -144,6 +144,12 @@ impl CommonStorageOptions {
             max_cache_find_key_values_size: self.storage_max_cache_find_key_values_size,
         }
     }
+
+    /// Returns options matching the clap-defined defaults.
+    pub fn with_defaults() -> Self {
+        use clap::Parser as _;
+        Self::parse_from(std::iter::empty::<String>())
+    }
 }
 
 /// The configuration of the key value store in use.

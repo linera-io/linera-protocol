@@ -13,6 +13,7 @@
 
 use linera_base::crypto::Signer as _;
 
+mod committee;
 pub mod evm;
 pub mod linera;
 pub(crate) mod metrics;
@@ -30,7 +31,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::DbStorage;
+use linera_storage::{DbStorage, Storage as _};
 use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
 use linera_views::backends::rocks_db::RocksDbDatabase;
 use linera_wallet_json::PersistentWallet;
@@ -88,6 +89,7 @@ pub async fn run(
     linera_bridge_address: &str,
     linera_fungible_address: &str,
     evm_private_key: &str,
+    evm_light_client_address: Option<&str>,
     port: u16,
     common_storage_options: &CommonStorageOptions,
     monitor_scan_interval: u64,
@@ -95,13 +97,6 @@ pub async fn run(
     max_retries: u32,
     sqlite_path: Option<&Path>,
 ) -> Result<()> {
-    linera_base::tracing::init("linera-bridge");
-
-    // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("failed to install rustls crypto provider");
-
     tracing::info!("Starting bridge relay server...");
 
     // ── Resolve paths (same defaults as linera binary: ~/.config/linera/) ──
@@ -200,11 +195,12 @@ pub async fn run(
     )
     .await?;
 
-    // ── Sync admin chain (always) ──
+    // ── Sync admin chain ──
     tracing::info!(%admin_chain_id, "Syncing admin chain from validators...");
     let admin_client = ctx.make_chain_client(admin_chain_id).await?;
     admin_client.synchronize_from_validators().await?;
-    tracing::info!("Admin chain synced");
+    let admin_chain_height = admin_client.chain_info().await?.next_block_height;
+    tracing::info!(%admin_chain_height, "Admin chain synced");
 
     // ── Resolve bridge chain ──
     let (chain_id, _owner) = if let Some(cid) = chain_id_arg {
@@ -268,12 +264,15 @@ pub async fn run(
         linera_bridge_address,
         linera_fungible_address,
         evm_private_key,
+        evm_light_client_address,
         port,
         monitor_scan_interval,
         monitor_start_block,
         max_retries,
         sqlite_path,
         &db_path,
+        admin_chain_id,
+        admin_chain_height,
     ))
     .await
 }
@@ -286,12 +285,15 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     linera_bridge_address: &str,
     linera_fungible_address: &str,
     evm_private_key: &str,
+    evm_light_client_address: Option<&str>,
     port: u16,
     monitor_scan_interval: u64,
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path_override: Option<&Path>,
     storage_dir: &Path,
+    admin_chain_id: ChainId,
+    admin_chain_height: linera_base::data_types::BlockHeight,
 ) -> Result<()> {
     // ── Set up centralized clients ──
     let bridge_addr: Address = evm_bridge_address
@@ -306,7 +308,26 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    let evm_client = Arc::new(evm::EvmClient::new(provider, bridge_addr, relayer_addr));
+    let light_client_addr: Option<Address> = evm_light_client_address
+        .map(|s| s.parse())
+        .transpose()
+        .context("invalid --evm-light-client-address")?;
+    let evm_client = Arc::new(evm::EvmClient::new(
+        provider,
+        bridge_addr,
+        relayer_addr,
+        light_client_addr,
+    ));
+
+    // ── Catch up LightClient with any missed committee rotations ──
+    committee::catch_up(
+        chain_client.storage_client(),
+        &evm_client,
+        admin_chain_id,
+        admin_chain_height,
+    )
+    .await
+    .context("committee catch-up failed")?;
 
     let bridge_app_id: ApplicationId = linera_bridge_address
         .parse()
@@ -324,7 +345,11 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     ));
 
     // ── Start notification listener ──
-    let mut notifications = chain_client.subscribe()?;
+    // Subscribe to admin chain notifications so we detect committee updates
+    // when synchronize_publisher_chains downloads new admin chain blocks.
+    let chain_notifications = chain_client.subscribe()?;
+    let admin_notifications = chain_client.subscribe_to(admin_chain_id)?;
+    let mut notifications = futures::stream::select(chain_notifications, admin_notifications);
     let (listener, _abort_handle, _) = chain_client.listen().await?;
     let chain_listener_handle = tokio::spawn(listener);
 
@@ -449,6 +474,39 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                         break;
                     }
                 };
+
+                // Handle admin chain committee updates.
+                if notification.chain_id == admin_chain_id {
+                    if let Reason::NewBlock { height, .. } = &notification.reason {
+                        tracing::debug!(%height, "New admin chain block, checking for committee update");
+                        let heights = vec![*height];
+                        if let Ok(certs) = chain_client
+                            .storage_client()
+                            .read_certificates_by_heights(admin_chain_id, &heights)
+                            .await
+                        {
+                            for cert in certs.into_iter().flatten() {
+                                if let Some((epoch, blob_hash)) = committee::find_create_committee(&cert) {
+                                    let blob_id = linera_base::identifiers::BlobId::new(
+                                        blob_hash,
+                                        linera_base::identifiers::BlobType::Committee,
+                                    );
+                                    match chain_client.storage_client().read_blob(blob_id).await {
+                                        Ok(Some(blob)) => {
+                                            match committee::relay_committee(&evm_client, &cert, blob.bytes()).await {
+                                                Ok(()) => tracing::info!(?epoch, "Committee update relayed"),
+                                                Err(e) => tracing::error!(?epoch, error = %e, "Failed to relay committee"),
+                                            }
+                                        }
+                                        Ok(None) => tracing::error!(?blob_id, "Committee blob not found"),
+                                        Err(e) => tracing::error!(error = %e, "Failed to read committee blob"),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    continue;
+                }
 
                 if !matches!(notification.reason, Reason::NewIncomingBundle { .. }) {
                     continue;
