@@ -12,6 +12,7 @@ services:
       - caddy_config:/config
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     ulimits:
