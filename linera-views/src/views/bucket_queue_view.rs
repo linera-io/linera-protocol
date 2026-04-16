@@ -747,7 +747,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 increment -= size;
                 position = 0;
             }
-            unreachable!("The loop should have returned before exhausting all stored buckets");
+            unreachable!("BucketQueueView::read_back: iterated past all stored buckets without finding the requested position");
         }
     }
 

@@ -576,7 +576,7 @@ mod tests {
             let value_read = store.read_value_bytes(&segment_key).await.unwrap();
             let Some(value_read) = value_read else {
                 unreachable!(
-                    "Segment should exist after writing a value that spans multiple segments"
+                    "value_splitting test: segment key not found in underlying store right after a multi-segment write"
                 )
             };
             if index == 0 {
