@@ -246,7 +246,7 @@ jobs:
 
   ethereum-tests:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true' && github.event_name != 'merge_group'
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

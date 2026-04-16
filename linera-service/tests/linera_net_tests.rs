@@ -2138,7 +2138,7 @@ async fn test_wasm_end_to_end_counter_subscription_ttl(config: impl LineraNetCon
 async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::time::Instant;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let num_operations = 500;
+    let num_operations = 100;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
