@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::AccountSecretKey,
-    data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner},
     ownership::ChainOwnership,
 };
@@ -401,6 +401,254 @@ async fn test_change_owners_by_regular_owner_fails() -> anyhow::Result<()> {
     assert!(matches!(
         result,
         Err(ExecutionError::UnauthorizedChangeOwners)
+    ));
+    Ok(())
+}
+
+/// A super owner can close the chain.
+#[tokio::test]
+async fn test_close_chain_by_super_owner() -> anyhow::Result<()> {
+    let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(super_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(SystemOperation::CloseChain))
+        .await?;
+    assert!(*view.system.closed.get());
+    Ok(())
+}
+
+/// A regular owner cannot close the chain.
+#[tokio::test]
+async fn test_close_chain_by_regular_owner_fails() -> anyhow::Result<()> {
+    let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let regular_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        owners: [(regular_owner, 100)].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(regular_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(SystemOperation::CloseChain))
+        .await;
+    assert!(matches!(
+        result,
+        Err(ExecutionError::UnauthorizedCloseChain)
+    ));
+    assert!(!*view.system.closed.get());
+    Ok(())
+}
+
+/// CloseChain fails without an authenticated owner.
+#[tokio::test]
+async fn test_close_chain_without_authenticated_owner_fails() -> anyhow::Result<()> {
+    let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: None,
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(SystemOperation::CloseChain))
+        .await;
+    assert!(matches!(
+        result,
+        Err(ExecutionError::UnauthorizedCloseChain)
+    ));
+    Ok(())
+}
+
+/// A super owner can change application permissions.
+#[tokio::test]
+async fn test_change_application_permissions_by_super_owner() -> anyhow::Result<()> {
+    let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let new_permissions = ApplicationPermissions {
+        execute_operations: Some(Vec::new()),
+        ..ApplicationPermissions::default()
+    };
+    let operation = SystemOperation::ChangeApplicationPermissions(new_permissions.clone());
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(super_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(operation))
+        .await?;
+    assert_eq!(view.system.application_permissions.get(), &new_permissions);
+    Ok(())
+}
+
+/// A regular owner cannot change application permissions.
+#[tokio::test]
+async fn test_change_application_permissions_by_regular_owner_fails() -> anyhow::Result<()> {
+    let super_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let regular_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        super_owners: [super_owner].into_iter().collect(),
+        owners: [(regular_owner, 100)].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let initial_permissions = ApplicationPermissions::default();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        application_permissions: initial_permissions.clone(),
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let new_permissions = ApplicationPermissions {
+        execute_operations: Some(Vec::new()),
+        ..ApplicationPermissions::default()
+    };
+    let operation = SystemOperation::ChangeApplicationPermissions(new_permissions);
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(regular_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(operation))
+        .await;
+    assert!(matches!(
+        result,
+        Err(ExecutionError::UnauthorizedChangeApplicationPermissions)
+    ));
+    // Permissions should be unchanged.
+    assert_eq!(
+        view.system.application_permissions.get(),
+        &initial_permissions
+    );
+    Ok(())
+}
+
+/// ChangeApplicationPermissions fails on a chain without super owners.
+#[tokio::test]
+async fn test_change_application_permissions_without_super_owners_fails() -> anyhow::Result<()> {
+    let regular_owner = AccountOwner::from(AccountSecretKey::generate().public());
+    let ownership = ChainOwnership {
+        owners: [(regular_owner, 100)].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
+    let state = SystemExecutionState {
+        description: Some(description),
+        balance,
+        ownership,
+        ..SystemExecutionState::default()
+    };
+    let mut view = state.into_view().await;
+    let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
+        execute_operations: Some(Vec::new()),
+        ..ApplicationPermissions::default()
+    });
+    let context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_owner: Some(regular_owner),
+        timestamp: Default::default(),
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
+    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, Operation::system(operation))
+        .await;
+    assert!(matches!(
+        result,
+        Err(ExecutionError::UnauthorizedChangeApplicationPermissions)
     ));
     Ok(())
 }

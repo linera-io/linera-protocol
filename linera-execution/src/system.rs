@@ -202,7 +202,7 @@ pub enum SystemOperation {
     /// Creates (or activates) a new chain.
     /// This will automatically subscribe to the future committees created by `admin_chain_id`.
     OpenChain(OpenChainConfig),
-    /// Closes the chain.
+    /// Closes the chain. Only a super owner can execute this operation.
     CloseChain,
     /// Changes the regular owners and non-fast-round settings of the chain.
     /// Only a super owner can execute this operation.
@@ -237,6 +237,7 @@ pub enum SystemOperation {
         fast_round_duration: Option<TimeDelta>,
     },
     /// Changes the application permissions configuration on this chain.
+    /// Only a super owner can execute this operation.
     ChangeApplicationPermissions(ApplicationPermissions),
     /// Publishes a new application module.
     PublishModule { module_id: ModuleId },
@@ -415,9 +416,21 @@ where
                 self.ownership.set(ownership);
             }
             ChangeApplicationPermissions(application_permissions) => {
+                let current_ownership = self.ownership.get();
+                match context.authenticated_owner {
+                    Some(owner) if current_ownership.super_owners.contains(&owner) => {}
+                    _ => return Err(ExecutionError::UnauthorizedChangeApplicationPermissions),
+                }
                 self.application_permissions.set(application_permissions);
             }
-            CloseChain => self.close_chain(),
+            CloseChain => {
+                let current_ownership = self.ownership.get();
+                match context.authenticated_owner {
+                    Some(owner) if current_ownership.super_owners.contains(&owner) => {}
+                    _ => return Err(ExecutionError::UnauthorizedCloseChain),
+                }
+                self.close_chain()
+            }
             Transfer {
                 owner,
                 amount,
