@@ -7,7 +7,7 @@
 mod tests;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
 
@@ -288,34 +288,6 @@ pub struct SystemResponse {
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
-
-impl UserData {
-    pub fn from_option_string(opt_str: Option<String>) -> Result<Self, usize> {
-        // Convert the Option<String> to Option<[u8; 32]>
-        let option_array = match opt_str {
-            Some(s) => {
-                // Convert the String to a Vec<u8>
-                let vec = s.into_bytes();
-                if vec.len() <= 32 {
-                    // Create an array from the Vec<u8>
-                    let mut array = [b' '; 32];
-
-                    // Copy bytes from the vector into the array
-                    let len = vec.len().min(32);
-                    array[..len].copy_from_slice(&vec[..len]);
-
-                    Some(array)
-                } else {
-                    return Err(vec.len());
-                }
-            }
-            None => None,
-        };
-
-        // Return the UserData with the converted Option<[u8; 32]>
-        Ok(UserData(option_array))
-    }
-}
 
 #[derive(Debug)]
 pub struct CreateApplicationResult {
@@ -955,45 +927,6 @@ where
             .await?;
 
         Ok(description)
-    }
-
-    /// Retrieves the recursive dependencies of applications and applies a topological sort.
-    pub async fn find_dependencies(
-        &mut self,
-        mut stack: Vec<ApplicationId>,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<Vec<ApplicationId>, ExecutionError> {
-        // What we return at the end.
-        let mut result = Vec::new();
-        // The entries already inserted in `result`.
-        let mut sorted = HashSet::new();
-        // The entries for which dependencies have already been pushed once to the stack.
-        let mut seen = HashSet::new();
-
-        while let Some(id) = stack.pop() {
-            if sorted.contains(&id) {
-                continue;
-            }
-            if seen.contains(&id) {
-                // Second time we see this entry. It was last pushed just before its
-                // dependencies -- which are now fully sorted.
-                sorted.insert(id);
-                result.push(id);
-                continue;
-            }
-            // First time we see this entry:
-            // 1. Mark it so that its dependencies are no longer pushed to the stack.
-            seen.insert(id);
-            // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
-            stack.push(id);
-            let app = self.describe_application(id, txn_tracker).await?;
-            for child in app.required_application_ids.iter().rev() {
-                if !seen.contains(child) {
-                    stack.push(*child);
-                }
-            }
-        }
-        Ok(result)
     }
 
     /// Records a blob that is used in this block. If this is the first use on this chain, creates

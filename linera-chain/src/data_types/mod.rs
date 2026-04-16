@@ -98,24 +98,6 @@ impl ProposedBlock {
         })
     }
 
-    /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
-    pub fn incoming_messages(&self) -> impl Iterator<Item = &PostedMessage> {
-        self.incoming_bundles()
-            .flat_map(|incoming_bundle| &incoming_bundle.bundle.messages)
-    }
-
-    /// Returns the number of incoming messages.
-    pub fn message_count(&self) -> usize {
-        self.incoming_bundles()
-            .map(|im| im.bundle.messages.len())
-            .sum()
-    }
-
-    /// Returns an iterator over all transactions as references.
-    pub fn transaction_refs(&self) -> impl Iterator<Item = &Transaction> {
-        self.transactions.iter()
-    }
-
     /// Returns all operations in this block.
     pub fn operations(&self) -> impl Iterator<Item = &Operation> {
         self.transactions.iter().filter_map(|tx| match tx {
@@ -670,10 +652,6 @@ impl BlockExecutionOutcome {
 
     pub fn iter_created_blobs_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
         self.blobs.iter().flatten().map(|blob| blob.id())
-    }
-
-    pub fn created_blobs_ids(&self) -> HashSet<BlobId> {
-        self.iter_created_blobs_ids().collect()
     }
 }
 

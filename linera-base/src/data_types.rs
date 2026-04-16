@@ -13,7 +13,6 @@ use std::{
     hash::Hash,
     io, iter,
     num::ParseIntError,
-    path::Path,
     str::FromStr,
     sync::Arc,
 };
@@ -190,12 +189,6 @@ impl TimeDelta {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
-    /// Returns the given duration, rounded to the nearest microsecond and capped to the maximum
-    /// [`TimeDelta`] value.
-    pub fn from_duration(duration: Duration) -> Self {
-        TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
-    }
-
     /// Returns this [`TimeDelta`] as a number of microseconds.
     pub const fn as_micros(&self) -> u64 {
         self.0
@@ -365,24 +358,6 @@ pub struct SendMessageRequest<Message> {
     pub grant: Resources,
     /// The message itself.
     pub message: Message,
-}
-
-impl<Message> SendMessageRequest<Message>
-where
-    Message: Serialize,
-{
-    /// Serializes the internal `Message` type into raw bytes.
-    pub fn into_raw(self) -> SendMessageRequest<Vec<u8>> {
-        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
-
-        SendMessageRequest {
-            destination: self.destination,
-            authenticated: self.authenticated,
-            is_tracked: self.is_tracked,
-            grant: self.grant,
-            message,
-        }
-    }
 }
 
 /// An error type for arithmetic errors.
@@ -784,11 +759,6 @@ pub enum ChainOrigin {
 }
 
 impl ChainOrigin {
-    /// Whether the chain was created by another chain.
-    pub fn is_child(&self) -> bool {
-        matches!(self, ChainOrigin::Child { .. })
-    }
-
     /// Returns the root chain number, if this is a root chain.
     pub fn root(&self) -> Option<u32> {
         match self {
@@ -937,11 +907,6 @@ impl ChainDescription {
     pub fn timestamp(&self) -> Timestamp {
         self.timestamp
     }
-
-    /// Whether the chain was created by another chain.
-    pub fn is_child(&self) -> bool {
-        self.origin.is_child()
-    }
 }
 
 impl BcsHashable<'_> for ChainDescription {}
@@ -1024,6 +989,7 @@ impl ApplicationPermissions {
 
     /// Creates new `ApplicationPermissions` where the given applications are the only ones
     /// whose operations are allowed and mandatory, and they can also close the chain.
+    #[cfg(with_testing)]
     pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
         Self {
             execute_operations: Some(app_ids.clone()),
@@ -1513,11 +1479,6 @@ impl Blob {
     /// Gets a reference to the inner blob's bytes.
     pub fn bytes(&self) -> &[u8] {
         self.content.bytes()
-    }
-
-    /// Loads data blob from a file.
-    pub fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        Ok(Self::new_data(fs::read(path)?))
     }
 
     /// Returns whether the blob is of [`BlobType::Committee`] variant.

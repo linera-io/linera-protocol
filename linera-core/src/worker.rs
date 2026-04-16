@@ -641,6 +641,7 @@ where
     StorageClient: Storage,
 {
     /// Sets the cross-chain message chunk limit.
+    #[cfg(with_testing)]
     pub fn set_cross_chain_message_chunk_limit(&mut self, limit: usize) {
         self.chain_worker_config.cross_chain_message_chunk_limit = limit;
     }
@@ -651,6 +652,7 @@ where
     }
 
     /// Sets the priority bundle origins.
+    #[cfg(with_testing)]
     pub fn with_priority_bundle_origins(
         mut self,
         origins: std::collections::HashSet<ChainId>,
