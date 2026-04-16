@@ -3,7 +3,7 @@
 
 mod state;
 use std::{
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     sync::Arc,
@@ -198,6 +198,9 @@ pub struct ChainClient<Env: Environment> {
     initial_block_hash: Option<CryptoHash>,
     /// Optional timing sender for benchmarking.
     timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
+    /// Sender chain IDs whose bundles were discarded due to the never-reject policy.
+    /// These origins are excluded from `process_inbox` until the client is restarted.
+    skipped_origins: Arc<std::sync::Mutex<HashSet<ChainId>>>,
 }
 
 impl<Env: Environment> Clone for ChainClient<Env> {
@@ -210,6 +213,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
             initial_next_block_height: self.initial_next_block_height,
             initial_block_hash: self.initial_block_hash,
             timing_sender: self.timing_sender.clone(),
+            skipped_origins: self.skipped_origins.clone(),
         }
     }
 }
@@ -352,6 +356,7 @@ impl<Env: Environment> ChainClient<Env> {
             initial_block_hash,
             initial_next_block_height,
             timing_sender,
+            skipped_origins: Arc::default(),
         }
     }
 
@@ -555,10 +560,12 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
+        let skipped = self.skipped_origins.lock().expect("poisoned");
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
+            .filter(|bundle| !skipped.contains(&bundle.origin))
             .take(self.options.max_pending_message_bundles)
             .collect())
     }
@@ -1461,7 +1468,7 @@ impl<Env: Environment> ChainClient<Env> {
         let round = self.round_for_oracle(&info, &identity).await?;
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let (block, _) = self
+        let (block, _, never_reject_origins) = self
             .client
             .stage_block_execution(
                 proposed_block,
@@ -1470,6 +1477,14 @@ impl<Env: Environment> ChainClient<Env> {
                 self.options.bundle_execution_policy(),
             )
             .await?;
+        // Record origins whose bundles were discarded due to the never-reject policy so
+        // that `process_inbox` stops retrying them until the client is restarted.
+        if !never_reject_origins.is_empty() {
+            self.skipped_origins
+                .lock()
+                .expect("poisoned")
+                .extend(never_reject_origins);
+        }
         let (proposed_block, _) = block.clone().into_proposal();
         *proposal_guard = Some(PendingProposal {
             block: proposed_block,
@@ -1647,7 +1662,7 @@ impl<Env: Environment> ChainClient<Env> {
             )
             .await
         {
-            Ok((_, response)) => Ok((
+            Ok((_, response, _)) => Ok((
                 response.info.chain_balance,
                 response.info.requested_owner_balance,
             )),
@@ -1874,7 +1889,7 @@ impl<Env: Environment> ChainClient<Env> {
                         .get_locking_blobs(&blob_ids, self.chain_id)
                         .await?
                         .ok_or_else(|| Error::InternalError("Missing local locking blobs"))?;
-                    let block = self
+                    let (block, _, _) = self
                         .client
                         .stage_block_execution(
                             proposed_block,
@@ -1882,8 +1897,7 @@ impl<Env: Environment> ChainClient<Env> {
                             blobs.clone(),
                             BundleExecutionPolicy::committed(),
                         )
-                        .await?
-                        .0;
+                        .await?;
                     debug!("Retrying locking block from fast round.");
                     (block, blobs)
                 }
@@ -1893,7 +1907,7 @@ impl<Env: Environment> ChainClient<Env> {
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();
             let round = self.round_for_oracle(&info, &owner).await?;
-            let (block, _) = self
+            let (block, _, _) = self
                 .client
                 .stage_block_execution(
                     proposed_block,

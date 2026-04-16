@@ -1007,7 +1007,7 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
+    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker, HashSet<ChainId>), WorkerError> {
         let chain_id = block.chain_id;
         self.chain_write(chain_id, |mut guard| async move {
             guard

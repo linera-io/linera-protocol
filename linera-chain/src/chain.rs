@@ -671,7 +671,7 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
         if !matches!(&exec_policy.on_failure, BundleFailurePolicy::Abort) {
@@ -729,6 +729,7 @@ where
         };
         let auto_retry = !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort);
         let mut failure_count = 0u32;
+        let mut never_reject_discarded_origins = HashSet::new();
 
         let time_budget = exec_policy.time_budget;
         let mut cumulative_bundle_time = Duration::ZERO;
@@ -829,6 +830,7 @@ where
                 && incoming_bundle.action != MessageAction::Reject
             {
                 let origin = incoming_bundle.origin;
+                never_reject_discarded_origins.insert(origin);
                 warn!(
                     %error,
                     index = i,
@@ -928,6 +930,7 @@ where
                 operation_results,
             },
             resource_tracker,
+            never_reject_discarded_origins,
         ))
     }
 
@@ -972,7 +975,7 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
+    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()
@@ -1023,7 +1026,9 @@ where
             policy,
         )
         .await
-        .map(|(outcome, tracker)| (block, outcome, tracker))
+        .map(|(outcome, tracker, never_reject_origins)| {
+            (block, outcome, tracker, never_reject_origins)
+        })
     }
 
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain

@@ -5,7 +5,7 @@
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::{self, Arc},
 };
 
@@ -913,7 +913,7 @@ where
         } else {
             let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
             let oracle_responses = Some(outcome.oracle_responses.clone());
-            let (proposed_block, verified, _resource_tracker) = chain
+            let (proposed_block, verified, _resource_tracker, _) = chain
                 .execute_block(
                     proposed_block,
                     local_time,
@@ -1737,7 +1737,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
+    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker, HashSet<ChainId>), WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let (_, committee) = self.chain.current_committee()?;
@@ -1746,7 +1746,7 @@ where
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
-        let (executed_block, resource_tracker) =
+        let (executed_block, resource_tracker, never_reject_origins) =
             Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
 
         // No need to sign: only used internally.
@@ -1763,7 +1763,7 @@ where
         }
 
         let (proposed_block, _) = executed_block.clone().into_proposal();
-        Ok((proposed_block, executed_block, response, resource_tracker))
+        Ok((proposed_block, executed_block, response, resource_tracker, never_reject_origins))
     }
 
     /// Validates and executes a block proposed to extend this chain.
@@ -1881,7 +1881,7 @@ where
         let block = if let Some(outcome) = outcome {
             outcome.clone().with(proposal.content.block.clone())
         } else {
-            let (executed_block, _resource_tracker) = Box::pin(self.execute_block(
+            let (executed_block, _resource_tracker, _) = Box::pin(self.execute_block(
                 block.clone(),
                 local_time,
                 round.multi_leader(),
@@ -2056,16 +2056,17 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
-    ) -> Result<(Block, ResourceTracker), WorkerError> {
-        let (proposed_block, outcome, resource_tracker) = Box::pin(self.chain.execute_block(
-            block,
-            local_time,
-            round,
-            published_blobs,
-            None,
-            policy,
-        ))
-        .await?;
+    ) -> Result<(Block, ResourceTracker, HashSet<ChainId>), WorkerError> {
+        let (proposed_block, outcome, resource_tracker, never_reject_origins) =
+            Box::pin(self.chain.execute_block(
+                block,
+                local_time,
+                round,
+                published_blobs,
+                None,
+                policy,
+            ))
+            .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
         if let Some(cache) = &self.execution_state_cache {
@@ -2079,7 +2080,7 @@ where
                 .await,
             );
         }
-        Ok((executed_block, resource_tracker))
+        Ok((executed_block, resource_tracker, never_reject_origins))
     }
 
     /// Initializes and saves the current chain if it is not active yet.

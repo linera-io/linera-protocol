@@ -446,7 +446,7 @@ where
 
     // Stage execution with AutoRetry policy.
     // This should handle the failing message by rejecting the bundle.
-    let (modified_block, auto_retry_executed, _, _) = env
+    let (modified_block, auto_retry_executed, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block.clone(),
@@ -478,7 +478,7 @@ where
     // Now stage the modified block with Abort policy.
     // Since the bundle is already marked as Reject, this should succeed
     // and produce the same outcome.
-    let (_, abort_executed, _, _) = env
+    let (_, abort_executed, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             modified_block.clone(),

@@ -584,7 +584,7 @@ where
         proposal: ProposedBlock,
         blobs: Vec<Blob>,
     ) -> Result<ConfirmedBlockCertificate, anyhow::Error> {
-        let (_, block, _, _) = self
+        let (_, block, _, _, _) = self
             .executing_worker
             .stage_block_execution(proposal, None, blobs, BundleExecutionPolicy::committed())
             .await?;
@@ -901,7 +901,7 @@ where
         .await
         .unwrap();
     // Stage execution to get the block for certificate creation.
-    let (_, block, _, _) = env
+    let (_, block, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block,
@@ -933,7 +933,7 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let (_, block, _, _) = env
+    let (_, block, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block,
@@ -964,7 +964,7 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let (_, block, _, _) = env
+    let (_, block, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block,
@@ -3473,7 +3473,7 @@ where
             timeout_config: TimeoutConfig::default(),
         })
         .with_authenticated_owner(Some(owner0));
-    let (_, block0, _, _) = env
+    let (_, block0, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block0,
@@ -3547,7 +3547,7 @@ where
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let proposed_block1 = make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
-    let (_, block1, _, _) = env
+    let (_, block1, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block1.clone(),
@@ -3605,7 +3605,7 @@ where
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
     let proposed_block2 = make_child_block(&value0.clone()).with_simple_transfer(chain_1, amount);
-    let (_, block2, _, _) = env
+    let (_, block2, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block2.clone(),
@@ -3758,7 +3758,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (_, block0, _, _) = env
+    let (_, block0, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block0,
@@ -3887,7 +3887,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (_, block0, _, _) = env
+    let (_, block0, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block0,
@@ -3920,7 +3920,7 @@ where
         .into_proposal_with_round(owner0, &signer, Round::Fast)
         .await
         .unwrap();
-    let (_, block1, _, _) = env
+    let (_, block1, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block1.clone(),
@@ -3990,7 +3990,7 @@ where
         .await?;
 
     // A validated block certificate from a later round can override the locked fast block.
-    let (_, block2, _, _) = env
+    let (_, block2, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block2.clone(),
