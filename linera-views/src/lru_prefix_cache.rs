@@ -555,6 +555,13 @@ impl LruPrefixCache {
         }
     }
 
+    /// Removes a key's entry from the cache without recording a negative result.
+    /// Used for invalidation before a write, where we don't yet know the outcome.
+    pub(crate) fn invalidate_key(&mut self, key: &[u8]) {
+        let cache_key = CacheKey::Value(key.to_vec());
+        self.remove_cache_key_if_exists(&cache_key);
+    }
+
     /// Deletes a key from the cache.
     pub(crate) fn delete_key(&mut self, key: &[u8]) {
         if self.has_exclusive_access {
@@ -731,12 +738,9 @@ impl LruPrefixCache {
 
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not
     /// create new entries in the cache.
-    pub(crate) fn delete_prefix(&mut self, key_prefix: &[u8]) {
-        // When using delete_prefix, we do not insert `ValueEntry::DoesNotExist`
-        // and instead drop the entries from the value-cache
-        // This is because:
-        // * In non-exclusive access, this could be added by another user.
-        // * In exclusive access, we do this via the `FindKeyValues`.
+    /// Removes all cache entries matching a prefix without recording negative results.
+    /// Used for invalidation before a write, where we don't yet know the outcome.
+    pub(crate) fn invalidate_prefix(&mut self, key_prefix: &[u8]) {
         let mut keys = Vec::new();
         for (key, _) in self
             .value_map
@@ -792,7 +796,7 @@ impl LruPrefixCache {
                 let cache_key = CacheKey::FindKeys(lower_bound.clone());
                 self.update_cache_key_sizes(&cache_key, new_cache_size);
             }
-            // Finding a containing FindKeyValues. If existing update, if not insert.
+            // Finding a containing FindKeyValues. If existing update.
             let lower_bound = self.get_existing_find_key_values_entry_mut(key_prefix);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 // Delete the keys (or key/values) in the entry
@@ -807,9 +811,17 @@ impl LruPrefixCache {
                 // Update the size without changing the position.
                 let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
                 self.update_cache_key_sizes(&cache_key, new_cache_size);
-            } else {
-                // There is no lower bound. Therefore we can insert
-                // the deleted prefix as a FindKeyValues.
+            }
+        }
+    }
+
+    pub(crate) fn delete_prefix(&mut self, key_prefix: &[u8]) {
+        self.invalidate_prefix(key_prefix);
+        if self.has_exclusive_access {
+            // Record the deletion as an empty FindKeyValues entry if there
+            // is no containing entry already.
+            let lower_bound = self.get_existing_find_key_values_entry_mut(key_prefix);
+            if lower_bound.is_none() {
                 let size = key_prefix.len();
                 let cache_key = CacheKey::FindKeyValues(key_prefix.to_vec());
                 let find_key_values_entry = FindKeyValuesEntry(BTreeMap::new());

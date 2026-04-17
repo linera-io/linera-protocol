@@ -353,7 +353,29 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
+        // Invalidate cache entries BEFORE writing to the store. This ensures
+        // cancellation safety: if the write is cancelled after the store commits
+        // but before this function returns, subsequent reads will go to the
+        // store and see the correct (committed) data instead of stale cache.
+        // We use `invalidate_key` (not `delete_key`) to avoid recording a
+        // negative `DoesNotExist` entry — we don't know the outcome yet.
+        if let Some(cache) = &self.cache {
+            let mut cache = cache.lock().unwrap();
+            for operation in &batch.operations {
+                match operation {
+                    WriteOperation::Put { key, .. } | WriteOperation::Delete { key } => {
+                        cache.invalidate_key(key);
+                    }
+                    WriteOperation::DeletePrefix { key_prefix } => {
+                        cache.invalidate_prefix(key_prefix);
+                    }
+                }
+            }
+        }
         self.store.write_batch(batch.clone()).await?;
+        // Repopulate the cache with the written values. If cancelled here,
+        // the cache is simply empty for these keys (invalidated above) and
+        // subsequent reads will go to the store — which is correct.
         if let Some(cache) = &self.cache {
             let mut cache = cache.lock().unwrap();
             for operation in &batch.operations {
