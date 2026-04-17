@@ -1638,7 +1638,7 @@ impl Runnable for Job {
                     let argument = read_json(json_argument, json_argument_path)?;
                     let project_path = path.unwrap_or_else(|| env::current_dir().unwrap());
 
-                    let project = project::Project::from_existing_project(project_path)?;
+                    let project = project::Project::from_existing_project(&project_path)?;
                     let (contract_path, service_path) = project.build(name)?;
 
                     let module_id = context
@@ -2282,9 +2282,13 @@ async fn run(options: &Options) -> Result<i32, Error> {
         }
 
         ClientCommand::Project(project_command) => match project_command {
-            ProjectCommand::New { name, linera_root } => {
+            ProjectCommand::New {
+                name,
+                linera_root,
+                dir,
+            } => {
                 let start_time = Instant::now();
-                Project::create_new(name, linera_root.as_ref().map(AsRef::as_ref))?;
+                Project::create_new(name, linera_root.as_ref().map(AsRef::as_ref), dir.clone())?;
                 info!(
                     "New project created in {} ms",
                     start_time.elapsed().as_millis()
@@ -2294,7 +2298,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             ProjectCommand::Test { path } => {
                 let start_time = Instant::now();
                 let path = path.clone().unwrap_or_else(|| env::current_dir().unwrap());
-                let project = Project::from_existing_project(path)?;
+                let project = Project::from_existing_project(&path)?;
                 project.test()?;
                 info!(
                     "Test project created in {} ms",
@@ -2304,6 +2308,15 @@ async fn run(options: &Options) -> Result<i32, Error> {
             }
             ProjectCommand::PublishAndCreate { .. } => {
                 let start_time = Instant::now();
+                let wallet_path = options.wallet_path()?;
+                ensure!(
+                    wallet_path.exists(),
+                    "No wallet found at {}. \
+                     Please initialize a wallet first, e.g. \
+                     `linera wallet init --faucet <FAUCET_URL>` or \
+                     `linera wallet init --genesis <PATH>`.",
+                    wallet_path.display()
+                );
                 options.run_with_storage(Job(options.clone())).await??;
                 info!(
                     "Project published and created in {} ms",

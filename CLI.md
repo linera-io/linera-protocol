@@ -1189,6 +1189,7 @@ Create a new Linera project
 ###### **Options:**
 
 * `--linera-root <LINERA_ROOT>` — Use the given clone of the Linera repository instead of remote crates
+* `--dir <DIR>` — Use the given directory for the project instead of creating a new one. The directory will be created if it doesn't exist
 
 
 
