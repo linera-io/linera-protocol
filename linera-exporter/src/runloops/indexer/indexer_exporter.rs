@@ -14,15 +14,16 @@ use futures::{stream::FuturesOrdered, StreamExt};
 use linera_base::data_types::Blob;
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_rpc::NodeOptions;
-use linera_service::config::DestinationId;
 use linera_storage::Storage;
 use tokio::{select, sync::mpsc::Sender, time::sleep};
 use tonic::Streaming;
 
 use super::indexer_api::Element;
 use crate::{
-    common::BlockId, runloops::indexer::client::IndexerClient, storage::ExporterStorage,
-    ExporterError,
+    common::{BlockId, ExporterError},
+    config::DestinationId,
+    runloops::indexer::client::IndexerClient,
+    storage::ExporterStorage,
 };
 
 pub(crate) struct Exporter {

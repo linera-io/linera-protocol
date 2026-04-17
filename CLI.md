@@ -274,7 +274,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--confirmed-block-cache-size <CONFIRMED_BLOCK_CACHE_SIZE>` — The maximal number of entries in the confirmed block cache
 
   Default value: `1000`
-* `--certificate-cache-size <CERTIFICATE_CACHE_SIZE>` — The maximal number of entries in the confirmed block certificate cache
+* `--certificate-cache-size <CERTIFICATE_CACHE_SIZE>` — The maximal number of entries in the assembled certificate cache
 
   Default value: `1000`
 * `--certificate-raw-cache-size <CERTIFICATE_RAW_CACHE_SIZE>` — The maximal number of entries in the raw certificate cache

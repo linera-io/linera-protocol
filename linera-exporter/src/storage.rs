@@ -17,7 +17,6 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_sdk::{ensure, views::View};
-use linera_service::config::{DestinationId, LimitsConfig};
 use linera_storage::Storage;
 use linera_views::{
     batch::Batch, context::Context, log_view::LogView, store::WritableKeyValueStore as _,
@@ -30,6 +29,7 @@ use quick_cache::{sync::Cache as FifoCache, Weighter};
 use crate::metrics;
 use crate::{
     common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
+    config::{DestinationId, LimitsConfig},
     state::{BlockExporterStateView, DestinationStates},
 };
 

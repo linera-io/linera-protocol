@@ -40,9 +40,21 @@ wasmtime = [
     "linera-execution/wasmtime",
     "linera-storage/wasmtime",
 ]
-rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
-dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
-scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
+rocksdb = [
+    "linera-views/rocksdb",
+    "linera-core/rocksdb",
+    "linera-storage-runtime/rocksdb",
+]
+dynamodb = [
+    "linera-views/dynamodb",
+    "linera-core/dynamodb",
+    "linera-storage-runtime/dynamodb",
+]
+scylladb = [
+    "linera-views/scylladb",
+    "linera-core/scylladb",
+    "linera-storage-runtime/scylladb",
+]
 kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
 remote-net = []
 metrics = [
@@ -57,7 +69,10 @@ jemalloc = [
     "tikv-jemallocator/profiling",
     "linera-metrics/jemalloc",
 ]
-storage-service = ["linera-storage-service"]
+storage-service = [
+    "linera-storage-service",
+    "linera-storage-runtime/storage-service",
+]
 opentelemetry = ["linera-rpc/opentelemetry"]
 
 [dependencies]
@@ -73,7 +88,6 @@ async-trait.workspace = true
 async-tungstenite.workspace = true
 axum = { workspace = true, features = ["ws"] }
 bcs.workspace = true
-bincode.workspace = true
 cargo_toml.workspace = true
 cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
@@ -84,7 +98,6 @@ clio = { workspace = true, features = ["clap-parse"] }
 colored.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
-custom_debug_derive.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
 futures.workspace = true
@@ -95,11 +108,11 @@ is-terminal.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
-linera-bridge.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
 linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
+linera-exporter = { workspace = true, default-features = false }
 linera-faucet-client.workspace = true
 linera-faucet-server.workspace = true
 linera-metrics = { workspace = true, optional = true }
@@ -111,12 +124,12 @@ linera-rpc = { workspace = true, features = [
 ] }
 linera-sdk = { workspace = true }
 linera-storage.workspace = true
+linera-storage-runtime.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
 linera-wallet-json.workspace = true
 lru.workspace = true
-mini-moka.workspace = true
 nonzero_lit.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true
@@ -126,7 +139,6 @@ pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
 prost = { workspace = true }
-quick_cache.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
@@ -223,10 +235,6 @@ path = "src/schema_export.rs"
 [[bin]]
 name = "linera-benchmark"
 path = "src/benchmark.rs"
-
-[[bin]]
-name = "linera-exporter"
-path = "src/exporter/main.rs"
 
 [[bench]]
 name = "transfers"

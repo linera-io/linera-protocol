@@ -1,0 +1,103 @@
+[package]
+name = "linera-exporter"
+description = "Block exporter for the Linera protocol."
+readme = "README.md"
+documentation = "https://docs.rs/linera-exporter/latest/linera_exporter/"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "linera-exporter"
+path = "src/main.rs"
+
+[features]
+default = ["rocksdb", "storage-service"]
+metrics = ["dep:linera-metrics", "dep:prometheus", "linera-base/metrics"]
+rocksdb = [
+    "linera-views/rocksdb",
+    "linera-storage-runtime/rocksdb",
+    "linera-service/rocksdb",
+]
+dynamodb = [
+    "linera-views/dynamodb",
+    "linera-storage-runtime/dynamodb",
+    "linera-service/dynamodb",
+]
+scylladb = [
+    "linera-views/scylladb",
+    "linera-storage-runtime/scylladb",
+    "linera-service/scylladb",
+]
+storage-service = [
+    "linera-storage-runtime/storage-service",
+    "linera-service/storage-service",
+]
+jemalloc = []
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+bincode.workspace = true
+clap.workspace = true
+custom_debug_derive.workspace = true
+fs-err.workspace = true
+futures.workspace = true
+linera-base.workspace = true
+linera-bridge.workspace = true
+linera-chain.workspace = true
+linera-core.workspace = true
+linera-execution.workspace = true
+linera-metrics = { workspace = true, optional = true }
+linera-rpc.workspace = true
+linera-sdk.workspace = true
+linera-storage.workspace = true
+linera-storage-runtime.workspace = true
+linera-version.workspace = true
+linera-views.workspace = true
+mini-moka.workspace = true
+papaya.workspace = true
+prometheus = { workspace = true, optional = true }
+prost.workspace = true
+quick_cache.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+toml.workspace = true
+tonic = { workspace = true, features = [
+    "transport",
+    "tls-native-roots",
+    "tls-ring",
+    "tls-webpki-roots",
+] }
+tonic-health.workspace = true
+tonic-prost.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["fmt", "ansi"] }
+
+[build-dependencies]
+cfg_aliases.workspace = true
+tonic-prost-build = { workspace = true, features = ["transport"] }
+
+[dev-dependencies]
+linera-base = { workspace = true, features = ["test"] }
+linera-chain = { workspace = true, features = ["test"] }
+linera-sdk = { workspace = true, features = ["test"] }
+linera-service.workspace = true
+linera-storage = { workspace = true, features = ["test"] }
+reqwest.workspace = true
+test-case.workspace = true
+test-log = { workspace = true, features = ["trace"] }
+
+[package.metadata.cargo-machete]
+ignored = ["tonic-prost", "prost"]

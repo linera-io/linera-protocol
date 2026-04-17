@@ -139,8 +139,7 @@ impl Options {
             storage_config.add_common_storage_options(&self.common.common_storage_options)?;
         let wallet = self.wallet()?;
         let cache_sizes = self.common.common_storage_options.storage_cache_config();
-        store_config
-            .initialize(cache_sizes, wallet.genesis_config())
+        linera_service::storage::initialize(store_config, cache_sizes, wallet.genesis_config())
             .await?;
         Ok(())
     }

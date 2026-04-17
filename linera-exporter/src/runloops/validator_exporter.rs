@@ -17,13 +17,13 @@ use linera_core::node::{
     CrossChainMessageDelivery, NodeError, ValidatorNode, ValidatorNodeProvider,
 };
 use linera_rpc::grpc::{GrpcClient, GrpcNodeProvider};
-use linera_service::config::DestinationId;
 use linera_storage::Storage;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::StreamExt;
 
 use crate::{
     common::{BlockId, ExporterError},
+    config::DestinationId,
     storage::ExporterStorage,
 };
 
