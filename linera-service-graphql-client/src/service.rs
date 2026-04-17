@@ -313,10 +313,10 @@ mod from {
                     )
                 })?;
 
-                let module_id: ModuleId = publish_module.module_id.parse().map_err(|_| {
-                    ConversionError::UnexpectedCertificateType(
-                        "Invalid module_id format".to_string(),
-                    )
+                let module_id: ModuleId = publish_module.module_id.parse().map_err(|e| {
+                    ConversionError::UnexpectedCertificateType(format!(
+                        "Invalid module_id format: {e}"
+                    ))
                 })?;
 
                 Ok(SystemOperation::PublishModule { module_id })
@@ -349,10 +349,10 @@ mod from {
                     )
                 })?;
 
-                let module_id: ModuleId = create_application.module_id.parse().map_err(|_| {
-                    ConversionError::UnexpectedCertificateType(
-                        "Invalid module_id format".to_string(),
-                    )
+                let module_id: ModuleId = create_application.module_id.parse().map_err(|e| {
+                    ConversionError::UnexpectedCertificateType(format!(
+                        "Invalid module_id format: {e}"
+                    ))
                 })?;
 
                 let parameters = hex::decode(create_application.parameters_hex).map_err(|_| {
