@@ -422,6 +422,13 @@ BRIDGE_OUTPUT=$(evm_exec \
     "$TOKEN_ADDRESS")
 BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
 wait_for_tx "$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
+# Capture deployment block so the relayer can start its EVM monitor scan
+# at the right place instead of scanning from genesis on every fresh deploy.
+BRIDGE_DEPLOY_TX="$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
+BRIDGE_DEPLOY_BLOCK="$(evm_exec cast receipt --json \
+    --rpc-url "$EVM_RPC_URL" "$BRIDGE_DEPLOY_TX" \
+    | python3 -c "import json,sys; print(int(json.load(sys.stdin)['blockNumber'], 16))")"
+echo "  FungibleBridge deployed in block: $BRIDGE_DEPLOY_BLOCK"
 validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
 BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
 echo "  FungibleBridge: $BRIDGE_ADDRESS"
