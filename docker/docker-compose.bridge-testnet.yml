@@ -1,0 +1,33 @@
+# Long-running linera-bridge relayer for testnet deployments.
+#
+# Prerequisites (operator must do once on the VM):
+#   1. Create /var/lib/linera-bridge (data) and /etc/linera-bridge (env)
+#   2. Run examples/bridge-demo/setup.sh in direct mode with
+#      --relayer-env /etc/linera-bridge/.env to populate both directories
+#   3. Drop the EVM signing key in /etc/linera-bridge/.env.secret
+#      (mode 0600, root:root): EVM_PRIVATE_KEY=0x...
+#
+# See docker/README.testnet.md for the full procedure.
+services:
+  relayer:
+    image: linera-bridge:${BRIDGE_TAG:-testnet_conway}
+    restart: unless-stopped
+    env_file:
+      - /etc/linera-bridge/.env
+      - /etc/linera-bridge/.env.secret
+    ports:
+      # Loopback only — /metrics and /health are not public-facing.
+      # Scrape via SSH tunnel or VPN from the ops network.
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - /var/lib/linera-bridge:/data
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: journald
+      options:
+        tag: linera-bridge
