@@ -692,13 +692,11 @@ pub fn short_crypto_hash(s: String) -> String {
 }
 
 #[wasm_bindgen]
-pub fn short_app_id(s: String) -> String {
-    let len = s.len();
-    if len < 156 {
-        s
-    } else {
-        format!("{}..{}..{}..", &s[..4], &s[64..68], &s[152..156])
+pub fn short_app_id(s: &str) -> String {
+    if s.len() <= 12 {
+        return s.to_string();
     }
+    format!("{}..{}", &s[..4], &s[s.len() - 4..])
 }
 
 fn set_onpopstate(app: JsValue) {
