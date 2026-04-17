@@ -162,3 +162,4 @@ alloy-sol-types.workspace = true
 sqlx = { workspace = true, features = ["runtime-tokio-rustls", "sqlite"] }
 test-case.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tower = { workspace = true, features = ["util"] }
