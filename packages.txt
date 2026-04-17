@@ -14,13 +14,13 @@ linera-storage-service
 linera-cache
 linera-storage
 linera-core
+linera-client
 linera-wallet-json
 linera-ethereum
 linera-metrics
 linera-sdk-derive
 linera-sdk
 linera-rpc
-linera-client
 linera-faucet-client
 linera-faucet-server
 linera-bridge
