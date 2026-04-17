@@ -21,10 +21,25 @@ path = "src/main.rs"
 [features]
 default = ["rocksdb", "storage-service"]
 metrics = ["dep:linera-metrics", "dep:prometheus", "linera-base/metrics"]
-rocksdb = ["linera-views/rocksdb", "linera-storage-runtime/rocksdb"]
-dynamodb = ["linera-views/dynamodb", "linera-storage-runtime/dynamodb"]
-scylladb = ["linera-views/scylladb", "linera-storage-runtime/scylladb"]
-storage-service = ["linera-storage-runtime/storage-service"]
+rocksdb = [
+    "linera-views/rocksdb",
+    "linera-storage-runtime/rocksdb",
+    "linera-service/rocksdb",
+]
+dynamodb = [
+    "linera-views/dynamodb",
+    "linera-storage-runtime/dynamodb",
+    "linera-service/dynamodb",
+]
+scylladb = [
+    "linera-views/scylladb",
+    "linera-storage-runtime/scylladb",
+    "linera-service/scylladb",
+]
+storage-service = [
+    "linera-storage-runtime/storage-service",
+    "linera-service/storage-service",
+]
 jemalloc = []
 
 [dependencies]
@@ -78,7 +93,7 @@ tonic-prost-build = { workspace = true, features = ["transport"] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["test"] }
-linera-service = { workspace = true, features = ["rocksdb"] }
+linera-service.workspace = true
 linera-storage = { workspace = true, features = ["test"] }
 reqwest.workspace = true
 test-case.workspace = true
