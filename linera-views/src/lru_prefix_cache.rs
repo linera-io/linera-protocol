@@ -562,11 +562,17 @@ impl LruPrefixCache {
         self.remove_cache_key_if_exists(&cache_key);
     }
 
-    /// Deletes a key from the cache.
-    pub(crate) fn delete_key(&mut self, key: &[u8]) {
+    /// Records a key deletion in the cache.
+    ///
+    /// # Precondition
+    ///
+    /// `invalidate_key` must have been called first to remove the existing
+    /// cache entry. Calling this without prior invalidation may leave stale
+    /// positive entries alongside the new negative entry.
+    pub(crate) fn record_key_deletion_unchecked(&mut self, key: &[u8]) {
         if self.has_exclusive_access {
             let lower_bound = self.get_existing_keys_entry_mut(key);
-            let mut matching = false; // If matching, no need to insert in the value cache
+            let mut matching = false;
             if let Some((lower_bound, cache_entry)) = lower_bound {
                 let reduced_key = &key[lower_bound.len()..];
                 cache_entry.update_entry(reduced_key, false);
@@ -587,14 +593,15 @@ impl LruPrefixCache {
             if !matching {
                 let cache_entry = ValueEntry::DoesNotExist;
                 self.insert_value(key, cache_entry);
-            } else {
-                let cache_key = CacheKey::Value(key.to_vec());
-                self.remove_cache_key_if_exists(&cache_key);
             }
-        } else {
-            let cache_key = CacheKey::Value(key.to_vec());
-            self.remove_cache_key_if_exists(&cache_key);
         }
+    }
+
+    /// Safely record the deletion of a key from the cache.
+    #[cfg(test)]
+    pub(crate) fn delete_key(&mut self, key: &[u8]) {
+        self.invalidate_key(key);
+        self.record_key_deletion_unchecked(key);
     }
 
     /// Inserts a read_value result into the cache.
@@ -815,8 +822,14 @@ impl LruPrefixCache {
         }
     }
 
-    pub(crate) fn delete_prefix(&mut self, key_prefix: &[u8]) {
-        self.invalidate_prefix(key_prefix);
+    /// Records a prefix deletion in the cache.
+    ///
+    /// # Precondition
+    ///
+    /// `invalidate_prefix` must have been called first to remove matching
+    /// cache entries. Calling this without prior invalidation may leave stale
+    /// positive entries alongside the new negative entry.
+    pub(crate) fn record_prefix_deletion_unchecked(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
             // Record the deletion as an empty FindKeyValues entry if there
             // is no containing entry already.
@@ -830,6 +843,13 @@ impl LruPrefixCache {
                 self.insert_cache_key(cache_key, size);
             }
         }
+    }
+
+    /// Safely record the deletion of a key prefix in the cache.
+    #[cfg(test)]
+    pub(crate) fn delete_prefix(&mut self, key_prefix: &[u8]) {
+        self.invalidate_prefix(key_prefix);
+        self.record_prefix_deletion_unchecked(key_prefix);
     }
 
     /// Returns the cached value, or `Some(None)` if the entry does not exist in the

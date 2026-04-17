@@ -384,10 +384,10 @@ where
                         cache.put_key_value(key, value);
                     }
                     WriteOperation::Delete { key } => {
-                        cache.delete_key(key);
+                        cache.record_key_deletion_unchecked(key);
                     }
                     WriteOperation::DeletePrefix { key_prefix } => {
-                        cache.delete_prefix(key_prefix);
+                        cache.record_prefix_deletion_unchecked(key_prefix);
                     }
                 }
             }
