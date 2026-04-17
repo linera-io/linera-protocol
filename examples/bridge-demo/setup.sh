@@ -27,6 +27,7 @@ TOKEN_ADDRESS=""
 WASM_DIR=""
 CONTRACTS_DIR=""
 OUTPUT_FILE=""
+RELAYER_ENV_FILE=""
 FAUCET_URL=""
 RELAY_URL=""
 RELAY_OWNER=""
@@ -93,6 +94,10 @@ Options:
                             Docker default: /contracts
                             Direct default: ../../linera-bridge/src/solidity
   --output PATH             Output env file (default: .env.local in script dir)
+  --relayer-env PATH        Output file with the env schema consumed by
+                            docker/docker-compose.bridge-testnet.yml
+                            (different schema than --output, which writes
+                            the demo frontend env)
   --faucet-url URL          Linera faucet URL (default: http://localhost:8080)
   --relay-url URL           Relay service URL (default: http://localhost:3001)
   --relay-owner OWNER       Relay's AccountOwner (minter for wrapped-fungible)
@@ -123,6 +128,7 @@ while [[ $# -gt 0 ]]; do
         --wasm-dir)          WASM_DIR="$2"; shift 2 ;;
         --contracts-dir)     CONTRACTS_DIR="$2"; shift 2 ;;
         --output)            OUTPUT_FILE="$2"; shift 2 ;;
+        --relayer-env)       RELAYER_ENV_FILE="$2"; shift 2 ;;
         --faucet-url)        FAUCET_URL="$2"; shift 2 ;;
         --relay-url)         RELAY_URL="$2"; shift 2 ;;
         --relay-owner)       RELAY_OWNER="$2"; shift 2 ;;
@@ -583,6 +589,35 @@ LINERA_TOKEN_ADDRESS=$TOKEN_ADDRESS
 LINERA_BRIDGE_CHAIN_ID=$BRIDGE_CHAIN_ID
 LINERA_EVM_CHAIN_ID=$EVM_CHAIN_ID
 EOF
+
+# ── Relayer env file (consumed by docker-compose.bridge-testnet.yml) ──
+if [[ -n "$RELAYER_ENV_FILE" ]]; then
+    echo "Writing relayer env to $RELAYER_ENV_FILE..."
+    # Paths inside the relayer container — the host bind-mount is
+    # /var/lib/linera-bridge mounted at /data, so the relayer sees
+    # /data/wallet.json etc.
+    cat > "$RELAYER_ENV_FILE" << EOF
+# Chain endpoints
+RPC_URL=$EVM_RPC_URL
+FAUCET_URL=$FAUCET_URL
+
+# Deployed artifacts
+EVM_BRIDGE_ADDRESS=$BRIDGE_ADDRESS
+EVM_TOKEN_ADDRESS=$TOKEN_ADDRESS
+LINERA_BRIDGE_CHAIN_ID=$BRIDGE_CHAIN_ID
+LINERA_BRIDGE_CHAIN_OWNER=$RELAY_OWNER
+LINERA_BRIDGE_APP=$BRIDGE_APP_ID
+LINERA_FUNGIBLE_APP=$WRAPPED_APP_ID
+
+# Runtime
+LINERA_WALLET=/data/wallet.json
+LINERA_KEYSTORE=/data/keystore.json
+LINERA_STORAGE=rocksdb:/data/client.db
+MONITOR_START_BLOCK=$BRIDGE_DEPLOY_BLOCK
+MONITOR_SCAN_INTERVAL=30
+MAX_RETRIES=10
+EOF
+fi
 
 # Write setup-complete marker so the relay knows it's safe to start.
 if [[ -n "$COMPOSE_FILE" ]]; then
