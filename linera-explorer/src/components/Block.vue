@@ -223,11 +223,12 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         </li>
         <div v-if="block.block.body.operationResults.length!==0" class="collapse" :id="'operation-results-collapse-'+block.hash">
           <ul class="list-group">
-            <li v-for="(m, i) in block.block.body.operationResults" class="list-group-item p-0" key="block.hash+'-operationresult-'+i">
-              <div class="card">
-                <div class="card-header">Operation Result {{ i+1 }}</div>
-                <div class="card-body">
-                  <Json :data="m"/>
+            <li v-for="(m, i) in block.block.body.operationResults" class="list-group-item p-0" :key="block.hash+'-operationresult-'+i">
+              <div class="card border-0">
+                <div class="card-header"><strong>Operation Result {{ i+1 }}</strong></div>
+                <div class="card-body small">
+                  <span v-if="Array.isArray(m)" class="font-monospace">{{ m.map((b: number) => b.toString(16).padStart(2, '0')).join('') }}</span>
+                  <Json v-else :data="m"/>
                 </div>
               </div>
             </li>
