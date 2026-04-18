@@ -351,7 +351,6 @@ mod test {
         Operation, ResourceControlPolicy, SystemOperation,
     };
     use linera_rpc::{config::TlsConfig, NodeOptions};
-    use linera_service::cli_wrappers::local_net::LocalNet;
     use linera_storage::{DbStorage, Storage};
     use linera_views::{memory::MemoryDatabase, ViewError};
     use test_case::test_case;
@@ -363,7 +362,10 @@ mod test {
         common::{get_address, BlockId, CanonicalBlock, ExporterCancellationSignal},
         config::{Destination, DestinationConfig, DestinationKind, LimitsConfig},
         state::BlockExporterStateView,
-        test_utils::{make_simple_state_with_blobs, DummyIndexer, DummyValidator, TestDestination},
+        test_utils::{
+            ensure_grpc_server_has_started, make_simple_state_with_blobs, DummyIndexer,
+            DummyValidator, TestDestination,
+        },
     };
 
     #[test_case(DummyIndexer::default())]
@@ -376,7 +378,7 @@ mod test {
         let port = get_free_port().await?;
         let cancellation_token = CancellationToken::new();
         tokio::spawn(destination.clone().start(port, cancellation_token.clone()));
-        LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
+        ensure_grpc_server_has_started("test server", port as usize).await?;
 
         let signal = ExporterCancellationSignal::new(cancellation_token.clone());
         let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
@@ -789,7 +791,7 @@ mod test {
         let port = get_free_port().await?;
         let destination = DummyIndexer::default();
         tokio::spawn(destination.clone().start(port, token.clone()));
-        LocalNet::ensure_grpc_server_has_started("dummy indexer", port as usize, "http").await?;
+        ensure_grpc_server_has_started("dummy indexer", port as usize).await?;
         let destination_address = Destination::Indexer {
             port,
             tls: TlsConfig::ClearText,
@@ -807,7 +809,7 @@ mod test {
         let port = get_free_port().await?;
         let destination = DummyValidator::new(port);
         tokio::spawn(destination.clone().start(port, token.clone()));
-        LocalNet::ensure_grpc_server_has_started("dummy validator", port as usize, "http").await?;
+        ensure_grpc_server_has_started("dummy validator", port as usize).await?;
         let destination_address = Destination::Validator {
             port,
             endpoint: get_address(port as u16).ip().to_string(),
@@ -825,7 +827,7 @@ mod test {
         let destination = DummyIndexer::default();
         destination.set_faulty();
         tokio::spawn(destination.clone().start(port, token.clone()));
-        LocalNet::ensure_grpc_server_has_started("faulty indexer", port as usize, "http").await?;
+        ensure_grpc_server_has_started("faulty indexer", port as usize).await?;
         let destination_address = Destination::Indexer {
             port,
             tls: TlsConfig::ClearText,
@@ -844,7 +846,7 @@ mod test {
         let destination = DummyValidator::default();
         destination.set_faulty();
         tokio::spawn(destination.clone().start(port, token.clone()));
-        LocalNet::ensure_grpc_server_has_started("faulty validator", port as usize, "http").await?;
+        ensure_grpc_server_has_started("faulty validator", port as usize).await?;
         let destination_address = Destination::Validator {
             port,
             endpoint: "127.0.0.1".to_owned(),
