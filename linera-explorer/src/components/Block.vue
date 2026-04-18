@@ -170,18 +170,22 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         <div v-if="block.block.body.events.flat().length!==0" class="collapse" :id="'events-collapse-'+block.hash">
           <ul class="list-group">
             <template v-for="(txEvents, ti) in block.block.body.events" :key="block.hash+'-events-tx-'+ti">
-              <li v-for="(evt, ei) in txEvents" class="list-group-item p-0" :key="block.hash+'-event-'+ti+'-'+ei">
-                <div class="card border-0">
-                  <div class="card-header">
+              <li v-for="(evt, ei) in txEvents" class="list-group-item" :key="block.hash+'-event-'+ti+'-'+ei">
+                <div class="d-flex justify-content-between align-items-center" data-bs-toggle="collapse" :data-bs-target="'#event-'+block.hash+'-'+ti+'-'+ei" role="button">
+                  <span>
                     <strong>Event</strong>
-                    <span class="ms-2 small text-muted">Tx {{ ti+1 }}</span>
                     <span v-if="evt.streamId" class="ms-2 small">
-                      Stream: <span class="font-monospace">{{ evt.streamId.applicationId ? short_app_id(evt.streamId.applicationId) : '' }}{{ evt.streamId.streamName ? '/' + evt.streamId.streamName : '' }}</span>
+                      <span v-if="evt.streamId.applicationId" class="font-monospace">{{ typeof evt.streamId.applicationId === 'string' ? short_app_id(evt.streamId.applicationId) : evt.streamId.applicationId.User ? short_app_id(evt.streamId.applicationId.User) : '' }}</span>
+                      <span v-if="evt.streamId.streamName">/{{ Array.isArray(evt.streamId.streamName) ? String.fromCharCode(...evt.streamId.streamName) : evt.streamId.streamName }}</span>
                     </span>
                     <span v-if="evt.index != null" class="ms-2 badge bg-secondary">index: {{ evt.index }}</span>
-                  </div>
-                  <div v-if="evt.value && evt.value.length > 0" class="card-body small">
-                    <strong>Value:</strong> <span class="font-monospace">{{ evt.value }}</span>
+                    <span v-if="evt.value && evt.value.length > 0" class="ms-2 text-muted small">({{ evt.value.length }} bytes)</span>
+                  </span>
+                  <i class="bi bi-caret-down-fill"></i>
+                </div>
+                <div class="collapse" :id="'event-'+block.hash+'-'+ti+'-'+ei">
+                  <div v-if="evt.value && evt.value.length > 0" class="p-2 small font-monospace" style="word-break:break-all">
+                    {{ evt.value.map((b: number) => b.toString(16).padStart(2, '0')).join('') }}
                   </div>
                 </div>
               </li>
