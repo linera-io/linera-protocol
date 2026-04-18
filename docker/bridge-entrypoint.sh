@@ -18,7 +18,7 @@ set -- linera-bridge serve \
     --evm-private-key="${EVM_PRIVATE_KEY:?EVM_PRIVATE_KEY is required}" \
     --linera-bridge-chain-id="${LINERA_BRIDGE_CHAIN_ID:?LINERA_BRIDGE_CHAIN_ID is required}" \
     --linera-bridge-chain-owner="${LINERA_BRIDGE_CHAIN_OWNER:?LINERA_BRIDGE_CHAIN_OWNER is required}" \
-    --port="${PORT:-5001}" \
+    --port="${PORT:-3001}" \
     --monitor-scan-interval="${MONITOR_SCAN_INTERVAL:-30}" \
     --monitor-start-block="${MONITOR_START_BLOCK:-0}" \
     --max-retries="${MAX_RETRIES:-10}" \

@@ -22,7 +22,10 @@ services:
     volumes:
       - /var/lib/linera-bridge:/data
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:3001/health || exit 1"]
+      # The runtime image only ships netcat (no wget/curl). A bare TCP probe
+      # is enough — the /health route exists for any axum-based liveness
+      # checks downstream collectors might run separately.
+      test: ["CMD", "nc", "-z", "localhost", "3001"]
       interval: 30s
       timeout: 5s
       retries: 3
