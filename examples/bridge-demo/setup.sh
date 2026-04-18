@@ -216,7 +216,9 @@ if [[ -n "$COMPOSE_FILE" ]]; then
 else
     echo "Mode: Direct"
     [[ -z "$EVM_PRIVATE_KEY" ]] && die "--evm-private-key is required in direct mode"
-    [[ -z "$BRIDGE_CHAIN_ID" ]] && die "--linera-bridge-chain-id is required in direct mode"
+    # BRIDGE_CHAIN_ID and RELAY_OWNER may be auto-derived later from a fresh
+    # wallet init + chain claim; their requirement is checked below after the
+    # wallet bootstrap step.
     EVM_RPC_URL="${EVM_RPC_URL:-http://localhost:8545}"
     WASM_DIR="${WASM_DIR:-$SCRIPT_DIR/../../examples/target/wasm32-unknown-unknown/release}"
     CONTRACTS_DIR="${CONTRACTS_DIR:-$SCRIPT_DIR/../../linera-bridge/src/solidity}"
@@ -277,11 +279,39 @@ if [[ -z "$COMPOSE_FILE" ]]; then
         LINERA_WALLET_PATH="$LINERA_TMP_DIR/wallet.json"
         LINERA_KEYSTORE_PATH="$LINERA_TMP_DIR/keystore.json"
         LINERA_STORAGE_PATH="rocksdb:$LINERA_TMP_DIR/client.db"
-        if [[ ! -f "$LINERA_WALLET_PATH" ]]; then
-            echo "Initializing Linera wallet from faucet..."
-            linera_exec wallet init --faucet "$FAUCET_URL"
-        else
-            echo "  Using existing wallet at $LINERA_TMP_DIR"
+    fi
+
+    # Bootstrap the wallet from the faucet if it doesn't exist yet, then
+    # claim a fresh chain to act as the bridge chain. This makes a real-network
+    # deploy work without the operator having to procure chain ID / owner
+    # out-of-band; if they pass --linera-bridge-chain-id and --relay-owner the
+    # auto-derive steps are skipped.
+    if [[ ! -f "$LINERA_WALLET_PATH" ]]; then
+        [[ -z "$FAUCET_URL" ]] && die "--faucet-url is required to initialize a new wallet at $LINERA_WALLET_PATH"
+        echo "Initializing Linera wallet from faucet at $LINERA_WALLET_PATH..."
+        linera_exec wallet init --faucet "$FAUCET_URL"
+    else
+        echo "  Using existing wallet at $LINERA_WALLET_PATH"
+    fi
+
+    if [[ -z "$BRIDGE_CHAIN_ID" || -z "$RELAY_OWNER" ]]; then
+        [[ -z "$FAUCET_URL" ]] && die "--faucet-url is required to claim a bridge chain when --linera-bridge-chain-id / --relay-owner are not provided"
+        echo "Claiming bridge chain from faucet..."
+        CHAIN_CLAIM_OUTPUT="$(linera_exec wallet request-chain --faucet "$FAUCET_URL" 2>&1)"
+        echo "$CHAIN_CLAIM_OUTPUT"
+        # request-chain prints the new chain ID (64-char hex on its own line)
+        # and the AccountOwner that received it (0x-prefixed 64-hex). The same
+        # pattern is used by docker/docker-compose.bridge-test.yml to populate
+        # /shared/{bridge-chain-id,relay-owner} for the e2e relay.
+        if [[ -z "$BRIDGE_CHAIN_ID" ]]; then
+            BRIDGE_CHAIN_ID="$(echo "$CHAIN_CLAIM_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -1)"
+            [[ -z "$BRIDGE_CHAIN_ID" ]] && die "Could not extract bridge chain ID from request-chain output"
+            echo "  Auto-derived bridge chain ID: $BRIDGE_CHAIN_ID"
+        fi
+        if [[ -z "$RELAY_OWNER" ]]; then
+            RELAY_OWNER="$(echo "$CHAIN_CLAIM_OUTPUT" | grep -oE '0x[a-f0-9]{64}' | tail -1)"
+            [[ -z "$RELAY_OWNER" ]] && die "Could not extract relay owner from request-chain output"
+            echo "  Auto-derived relay owner: $RELAY_OWNER"
         fi
     fi
 fi
@@ -406,7 +436,10 @@ if [[ -n "$COMPOSE_FILE" ]]; then
     done
     [[ -z "$RELAY_OWNER" ]] && die "Relay owner not found within timeout"
 else
-    [[ -z "$RELAY_OWNER" ]] && die "--relay-owner is required in direct mode"
+    # In direct mode, RELAY_OWNER is set in the wallet bootstrap step above
+    # — either passed explicitly via --relay-owner or auto-derived from the
+    # request-chain output. If it's still empty here, the bootstrap failed.
+    [[ -z "$RELAY_OWNER" ]] && die "Relay owner unset after wallet bootstrap (this is a bug; check earlier output)"
 fi
 echo "  Relay owner (minter): $RELAY_OWNER"
 
@@ -427,13 +460,15 @@ BRIDGE_OUTPUT=$(evm_exec \
     "$CHAIN_BYTES32" \
     "$TOKEN_ADDRESS")
 BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
-wait_for_tx "$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
+BRIDGE_DEPLOY_TX=$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)
+wait_for_tx "$BRIDGE_DEPLOY_TX"
 # Capture deployment block so the relayer can start its EVM monitor scan
 # at the right place instead of scanning from genesis on every fresh deploy.
-BRIDGE_DEPLOY_TX="$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
+# `cast receipt --json` historically returned blockNumber as 0x-prefixed hex,
+# but newer versions sometimes emit decimal. `int(v, 0)` accepts both.
 BRIDGE_DEPLOY_BLOCK="$(evm_exec cast receipt --json \
     --rpc-url "$EVM_RPC_URL" "$BRIDGE_DEPLOY_TX" \
-    | python3 -c "import json,sys; print(int(json.load(sys.stdin)['blockNumber'], 16))")"
+    | python3 -c "import json,sys; v=json.load(sys.stdin)['blockNumber']; print(int(v,0) if isinstance(v,str) else v)")"
 echo "  FungibleBridge deployed in block: $BRIDGE_DEPLOY_BLOCK"
 validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
 BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
