@@ -145,14 +145,21 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         <div v-if="block.block.body.oracleResponses.flat().length!==0" class="collapse" :id="'oracle-responses-collapse-'+block.hash">
           <ul class="list-group">
             <template v-for="(txOracles, ti) in block.block.body.oracleResponses" :key="block.hash+'-oracles-tx-'+ti">
-              <li v-for="(oracle, oi) in txOracles" class="list-group-item p-0" :key="block.hash+'-oracle-'+ti+'-'+oi">
-                <div class="card border-0">
-                  <div class="card-header">
-                    <strong>Oracle Response</strong>
-                    <span class="ms-2 small text-muted">Tx {{ ti+1 }}</span>
-                  </div>
-                  <div class="card-body small">
-                    <Json :data="oracle"/>
+              <li v-for="(oracle, oi) in txOracles" class="list-group-item" :key="block.hash+'-oracle-'+ti+'-'+oi">
+                <div class="d-flex justify-content-between align-items-center" data-bs-toggle="collapse" :data-bs-target="'#oracle-'+block.hash+'-'+ti+'-'+oi" role="button">
+                  <span>
+                    <strong>Oracle Response {{ oi+1 }}</strong>
+                    <span v-if="Array.isArray(oracle)" class="ms-2 font-monospace small">{{ oracle.map((b: number) => b.toString(16).padStart(2, '0')).join('').substring(0, 16) + (oracle.length > 8 ? '..' : '') }}</span>
+                    <span v-else-if="typeof oracle === 'string'" class="ms-2 font-monospace small">{{ oracle.length > 16 ? oracle.substring(0, 8) + '..' + oracle.substring(oracle.length - 8) : oracle }}</span>
+                    <span class="ms-2 text-muted small">({{ Array.isArray(oracle) ? oracle.length : typeof oracle === 'string' ? oracle.length / 2 : '?' }} bytes)</span>
+                  </span>
+                  <i class="bi bi-caret-down-fill"></i>
+                </div>
+                <div class="collapse" :id="'oracle-'+block.hash+'-'+ti+'-'+oi">
+                  <div class="p-2 small font-monospace" style="word-break:break-all">
+                    <span v-if="Array.isArray(oracle)">{{ oracle.map((b: number) => b.toString(16).padStart(2, '0')).join('') }}</span>
+                    <span v-else-if="typeof oracle === 'string'">{{ oracle }}</span>
+                    <Json v-else :data="oracle"/>
                   </div>
                 </div>
               </li>
