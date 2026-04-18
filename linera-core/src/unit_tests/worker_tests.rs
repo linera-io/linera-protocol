@@ -264,6 +264,16 @@ where
             .await
     }
 
+    async fn add_root_super_owner_chain(
+        &mut self,
+        index: u32,
+        owner: AccountOwner,
+        balance: Amount,
+    ) -> ChainDescription {
+        self.add_root_chain_with_ownership(index, balance, ChainOwnership::single_super(owner))
+            .await
+    }
+
     async fn add_root_chain_with_ownership(
         &mut self,
         index: u32,
@@ -3457,11 +3467,14 @@ where
     let owner1 = AccountOwner::from(key_pairs[1]);
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let clock = storage_builder.clock();
-    let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
+    let chain_1_desc = env
+        .add_root_super_owner_chain(1, owner0, Amount::from_tokens(2))
+        .await;
     let small_transfer = Amount::from_micros(1);
     let chain_1 = chain_1_desc.id();
 
-    // Add another owner and use the leader-based protocol in all rounds.
+    // Add another owner and use the leader-based protocol in all rounds. Also drop the
+    // super-owner set so the chain leaves the Fast round and enters the single-leader rounds.
     // Set owner0 as the first leader to test the first_leader configuration.
     let proposed_block0 = make_first_block(chain_1)
         .with_operation(SystemOperation::ChangeOwners {
@@ -3472,6 +3485,10 @@ where
             base_timeout: TimeoutConfig::default().base_timeout,
             timeout_increment: TimeoutConfig::default().timeout_increment,
             fallback_duration: TimeoutConfig::default().fallback_duration,
+        })
+        .with_operation(SystemOperation::ChangeSuperOwners {
+            super_owners: Vec::new(),
+            fast_round_duration: TimeoutConfig::default().fast_round_duration,
         })
         .with_authenticated_owner(Some(owner0));
     let (_, block0, _, _) = env

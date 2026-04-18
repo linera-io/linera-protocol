@@ -307,7 +307,9 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
-    let mut sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut sender = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
     let certificate = sender
         .rotate_key_pair(new_public_key)
         .await
@@ -352,10 +354,16 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let sender = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
 
     let new_owner: AccountOwner = builder.signer.generate_new().into();
-    let certificate = sender.change_owner(new_owner).await.unwrap().unwrap();
+    let certificate = sender
+        .transfer_super_ownership(new_owner)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
@@ -399,7 +407,9 @@ where
     let mut signer = InMemorySigner::new(None);
     let new_owner = signer.generate_new().into();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let sender = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
     let certificate = sender
         .share_ownership(new_owner, 100)
         .await
@@ -573,7 +583,7 @@ where
     // Open the new chain.
     let (new_description, _certificate) = sender
         .open_chain(
-            ChainOwnership::single(new_public_key.into()),
+            ChainOwnership::single_super(new_public_key.into()),
             ApplicationPermissions::default(),
             Amount::ZERO,
         )
@@ -790,7 +800,9 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    let client1 = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let client1 = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
     let client2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
 
     let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
@@ -1231,7 +1243,9 @@ where
             ..ResourceControlPolicy::default()
         });
     let admin = builder.add_root_chain(0, initial_balance).await?;
-    let user = builder.add_root_chain(1, Amount::ZERO).await?;
+    let user = builder
+        .add_root_super_owner_chain(1, Amount::ZERO)
+        .await?;
     let validators = builder.initial_committee.validators().clone();
 
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel())?;
@@ -1528,7 +1542,7 @@ where
 {
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let client_1a = builder.add_root_chain(1, Amount::ZERO).await?;
+    let client_1a = builder.add_root_super_owner_chain(1, Amount::ZERO).await?;
     let owner_1a = client_1a.identity().await.unwrap();
     let chain_1 = client_1a.chain_id();
     let pk_1b = builder.signer.generate_new();
@@ -1546,7 +1560,9 @@ where
         )
         .await?;
 
-    let client_2a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
+    let client_2a = builder
+        .add_root_super_owner_chain(2, Amount::from_tokens(10))
+        .await?;
     let owner_2a = client_2a.identity().await.unwrap();
     let chain_2 = client_2a.chain_id();
     let pk_2b = builder.signer.generate_new();
@@ -1705,27 +1721,18 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
 
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
-    let client2_a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
+    let client2_a = builder
+        .add_root_super_owner_chain(2, Amount::from_tokens(10))
+        .await?;
 
     let chain_id2 = client2_a.chain_id();
 
     let owner2_a = client2_a.identity().await.unwrap();
     let owner2_b = builder.signer.generate_new().into();
 
-    let tc = TimeoutConfig::default();
-    let owner_change_op = Operation::system(SystemOperation::ChangeOwners {
-        owners: vec![(owner2_a, 50), (owner2_b, 50)],
-        first_leader: None,
-        multi_leader_rounds: 10,
-        open_multi_leader_rounds: false,
-        base_timeout: tc.base_timeout,
-        timeout_increment: tc.timeout_increment,
-        fallback_duration: tc.fallback_duration,
-    });
-    client2_a
-        .execute_operation(owner_change_op.clone())
-        .await
-        .unwrap();
+    let owners = [(owner2_a, 50), (owner2_b, 50)];
+    let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
+    client2_a.change_ownership(ownership).await.unwrap();
 
     let mut client2_b = builder
         .make_client(
@@ -1813,12 +1820,12 @@ where
             amount: Amount::from_tokens(1),
         })));
 
-    // Previous should be the `ChangeOwnership` operation, as the blob operations shouldn't be executed here.
+    // Previous should be the `ChangeOwnership` block, as the blob operations shouldn't be executed here.
     assert!(certificate_values[1]
         .block()
         .body
         .operations()
-        .any(|op| *op == owner_change_op));
+        .any(|op| matches!(op, Operation::System(op) if matches!(**op, SystemOperation::ChangeOwners { .. }))));
     Ok(())
 }
 
@@ -1835,23 +1842,13 @@ where
     let mut signer = InMemorySigner::new(None);
     let owner2 = signer.generate_new().into();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let client1 = builder.add_root_chain(1, Amount::ONE).await?;
+    let client1 = builder.add_root_super_owner_chain(1, Amount::ONE).await?;
     let chain_id = client1.chain_id();
     let owner1 = client1.identity().await?;
-    let tc = TimeoutConfig::default();
-    let owner_change_op = Operation::system(SystemOperation::ChangeOwners {
-        owners: vec![(owner1, 50), (owner2, 50)],
-        first_leader: None,
-        multi_leader_rounds: 10,
-        open_multi_leader_rounds: false,
-        base_timeout: tc.base_timeout,
-        timeout_increment: tc.timeout_increment,
-        fallback_duration: tc.fallback_duration,
-    });
-    client1
-        .execute_operation(owner_change_op.clone())
-        .await
-        .unwrap();
+
+    let owners = [(owner1, 50), (owner2, 50)];
+    let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
+    client1.change_ownership(ownership).await.unwrap();
     let mut client2 = builder
         .make_client(
             chain_id,
@@ -1923,7 +1920,9 @@ where
 
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
-    let client3_a = builder.add_root_chain(3, Amount::from_tokens(10)).await?;
+    let client3_a = builder
+        .add_root_super_owner_chain(3, Amount::from_tokens(10))
+        .await?;
 
     let chain_id3 = client3_a.chain_id();
 
@@ -1931,21 +1930,9 @@ where
     let owner3_b = builder.signer.generate_new().into();
     let owner3_c = builder.signer.generate_new().into();
 
-    let tc = TimeoutConfig::default();
-    let owner_change_op = Operation::system(SystemOperation::ChangeOwners {
-        owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
-        first_leader: None,
-        multi_leader_rounds: 10,
-        open_multi_leader_rounds: false,
-        base_timeout: tc.base_timeout,
-        timeout_increment: tc.timeout_increment,
-        fallback_duration: tc.fallback_duration,
-    });
-
-    client3_a
-        .execute_operation(owner_change_op.clone())
-        .await
-        .unwrap();
+    let owners = [(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)];
+    let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
+    client3_a.change_ownership(ownership).await.unwrap();
 
     let block_hash = client3_a.chain_info().await?.block_hash;
     let mut client3_b = builder
@@ -2150,7 +2137,9 @@ where
     let signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
-    let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let client = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(3))
+        .await?;
     let observer = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = client.chain_id();
     let observer_id = observer.chain_id();
@@ -2284,17 +2273,25 @@ where
     let signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
-    let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let mut client = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(3))
+        .await?;
     let observer = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = client.chain_id();
     let observer_id = observer.chain_id();
     let owner0 = client.identity().await.unwrap();
     let owner1 = AccountSecretKey::generate().public().into();
 
+    // Enable fast blocks so the super owner can propose in the Fast round.
+    client.options_mut().allow_fast_blocks = true;
+
     // Set up multi-owner chain.
     let owners = [(owner0, 100), (owner1, 100)];
     let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
     client.change_ownership(ownership.clone()).await.unwrap();
+
+    // Disable fast blocks again; the chain no longer has super owners.
+    client.options_mut().allow_fast_blocks = false;
 
     // Advance to a round where owner1 is the leader (so owner0 is not).
     let round_where_owner0_not_leader = loop {
@@ -2316,8 +2313,13 @@ where
         .make_client(chain_id, None, BlockHeight::ZERO)
         .await?;
 
-    // Sync client2 to get the current state.
+    // Sync client2 to get the current state. We need an explicit
+    // `synchronize_chain_state` because `prepare_chain` (called by
+    // `synchronize_from_validators`) skips the network sync when the preferred
+    // owner is a super owner with no regular owners—but the ownership was already
+    // changed by `client` from a different client instance.
     client2.synchronize_from_validators().await?;
+    client2.synchronize_chain_state(chain_id).await?;
 
     // Advance validators one more round using client2.
     let timeout = client2
@@ -2394,7 +2396,9 @@ where
     let mut signer = InMemorySigner::new(None);
     let owner1 = signer.generate_new().into();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
-    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let client0 = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(10))
+        .await?;
     let chain_id = client0.chain_id();
     let owner0 = client0.preferred_owner().unwrap();
 
@@ -2538,7 +2542,9 @@ where
     // Configure a chain with two regular and no super owners.
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let client0 = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(10))
+        .await?;
     let chain_id = client0.chain_id();
     let owner0 = client0.identity().await.unwrap();
     let owner1 = builder.signer.generate_new().into();
@@ -3598,7 +3604,9 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
 
     // Create a chain and get its owner.
-    let client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let client = builder
+        .add_root_super_owner_chain(1, Amount::from_tokens(4))
+        .await?;
     let owner = client.identity().await?;
     let chain_id = client.chain_id();
 
@@ -3796,12 +3804,13 @@ where
         .await?;
     let super_owner = sender.identity().await?;
 
-    // Add a regular owner.
+    // Add a regular owner. This clears super owners and converts them to regular owners.
     sender.share_ownership(regular_owner, 100).await.unwrap();
 
-    // Query ownership to verify super owner is still there.
+    // Query ownership to verify super owner was converted to regular owner.
     let ownership = sender.query_chain_ownership().await?;
-    assert!(ownership.super_owners.contains(&super_owner));
+    assert!(ownership.super_owners.is_empty());
+    assert!(ownership.owners.contains_key(&super_owner));
     assert!(ownership.owners.contains_key(&regular_owner));
 
     Ok(())

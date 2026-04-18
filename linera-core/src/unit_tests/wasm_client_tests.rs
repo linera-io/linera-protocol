@@ -296,10 +296,11 @@ where
         .with_policy(ResourceControlPolicy::all_categories());
     // Will publish the module.
     let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
-    // Will create the apps and use them to send a message.
-    let creator = builder.add_root_chain(1, Amount::ONE).await?;
-    // Will receive the message.
-    let receiver = builder.add_root_chain(2, Amount::ONE).await?;
+    // Will create the apps and use them to send a message. Needs super-owner status to call
+    // `change_ownership`.
+    let creator = builder.add_root_super_owner_chain(1, Amount::ONE).await?;
+    // Will receive the message. Also needs super-owner status to call `change_ownership`.
+    let receiver = builder.add_root_super_owner_chain(2, Amount::ONE).await?;
     let receiver_id = receiver.chain_id();
 
     // Handling the message causes an oracle request to the counter service, so no fast blocks

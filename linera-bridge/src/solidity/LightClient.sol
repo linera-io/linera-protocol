@@ -45,8 +45,8 @@ contract LightClient {
             // choice=0 is System
             if (op.choice != 0) continue;
             BridgeTypes.SystemOperation memory sysOp = op.system;
-            // choice=10 is Admin
-            if (sysOp.choice != 10) continue;
+            // choice=11 is Admin
+            if (sysOp.choice != 11) continue;
             BridgeTypes.AdminOperation memory adminOp = sysOp.admin;
             // choice=1 is CreateCommittee
             if (adminOp.choice != 1) continue;

@@ -99,7 +99,7 @@ impl TestValidator {
         let key_pair = AccountSecretKey::generate();
 
         let new_chain_config = InitialChainConfig {
-            ownership: ChainOwnership::single(key_pair.public().into()),
+            ownership: ChainOwnership::single_super(key_pair.public().into()),
             min_active_epoch: epoch,
             max_active_epoch: epoch,
             epoch,

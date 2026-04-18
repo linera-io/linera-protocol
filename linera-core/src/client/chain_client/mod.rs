@@ -2125,7 +2125,13 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         public_key: linera_base::crypto::AccountPublicKey,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
-        self.change_owner(public_key.into()).await
+        let new_owner = public_key.into();
+        let ownership = self.prepare_chain().await?.manager.ownership;
+        if ownership.super_owners.is_empty() {
+            self.change_owner(new_owner).await
+        } else {
+            self.transfer_super_ownership(new_owner).await
+        }
     }
 
     /// Sets the chain to have a single regular owner.
@@ -2155,11 +2161,9 @@ impl<Env: Environment> ChainClient<Env> {
         new_super_owner: AccountOwner,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         let tc = TimeoutConfig::default();
+        // `ChangeOwners` must run before `ChangeSuperOwners`: both require super-owner
+        // authorization, and `ChangeSuperOwners` removes the caller from the super-owner set.
         let operations = vec![
-            Operation::system(SystemOperation::ChangeSuperOwners {
-                super_owners: vec![new_super_owner],
-                fast_round_duration: tc.fast_round_duration,
-            }),
             Operation::system(SystemOperation::ChangeOwners {
                 owners: Vec::new(),
                 first_leader: None,
@@ -2168,6 +2172,10 @@ impl<Env: Environment> ChainClient<Env> {
                 base_timeout: tc.base_timeout,
                 timeout_increment: tc.timeout_increment,
                 fallback_duration: tc.fallback_duration,
+            }),
+            Operation::system(SystemOperation::ChangeSuperOwners {
+                super_owners: vec![new_super_owner],
+                fast_round_duration: tc.fast_round_duration,
             }),
         ];
         self.execute_block(operations, vec![]).await
@@ -2186,9 +2194,15 @@ impl<Env: Environment> ChainClient<Env> {
             ChainError::InactiveChain(self.chain_id)
         );
         let mut owners = ownership.owners.into_iter().collect::<Vec<_>>();
+        // When converting from super-owner-only, include super owners as regular owners.
+        for super_owner in &ownership.super_owners {
+            if !owners.iter().any(|(o, _)| o == super_owner) {
+                owners.push((*super_owner, new_weight));
+            }
+        }
         owners.push((new_owner, new_weight));
         let tc = &ownership.timeout_config;
-        self.execute_operation(SystemOperation::ChangeOwners {
+        let mut operations = vec![Operation::system(SystemOperation::ChangeOwners {
             owners,
             first_leader: ownership.first_leader,
             multi_leader_rounds: ownership.multi_leader_rounds,
@@ -2196,8 +2210,16 @@ impl<Env: Environment> ChainClient<Env> {
             base_timeout: tc.base_timeout,
             timeout_increment: tc.timeout_increment,
             fallback_duration: tc.fallback_duration,
-        })
-        .await
+        })];
+        // Also clear super owners so that the chain leaves Fast round and
+        // all regular owners can propose blocks.
+        if !ownership.super_owners.is_empty() {
+            operations.push(Operation::system(SystemOperation::ChangeSuperOwners {
+                super_owners: Vec::new(),
+                fast_round_duration: tc.fast_round_duration,
+            }));
+        }
+        self.execute_block(operations, vec![]).await
     }
 
     /// Returns the current ownership settings on this chain.
@@ -2223,16 +2245,22 @@ impl<Env: Environment> ChainClient<Env> {
         ownership: ChainOwnership,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         let tc = &ownership.timeout_config;
-        self.execute_operation(SystemOperation::ChangeOwners {
-            owners: ownership.owners.into_iter().collect(),
-            first_leader: ownership.first_leader,
-            multi_leader_rounds: ownership.multi_leader_rounds,
-            open_multi_leader_rounds: ownership.open_multi_leader_rounds,
-            base_timeout: tc.base_timeout,
-            timeout_increment: tc.timeout_increment,
-            fallback_duration: tc.fallback_duration,
-        })
-        .await
+        let operations = vec![
+            Operation::system(SystemOperation::ChangeOwners {
+                owners: ownership.owners.into_iter().collect(),
+                first_leader: ownership.first_leader,
+                multi_leader_rounds: ownership.multi_leader_rounds,
+                open_multi_leader_rounds: ownership.open_multi_leader_rounds,
+                base_timeout: tc.base_timeout,
+                timeout_increment: tc.timeout_increment,
+                fallback_duration: tc.fallback_duration,
+            }),
+            Operation::system(SystemOperation::ChangeSuperOwners {
+                super_owners: ownership.super_owners.into_iter().collect(),
+                fast_round_duration: tc.fast_round_duration,
+            }),
+        ];
+        self.execute_block(operations, vec![]).await
     }
 
     /// Changes the super owners and fast round duration. Only a super owner can do this.
