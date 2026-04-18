@@ -557,9 +557,25 @@ impl LruPrefixCache {
 
     /// Removes a key's entry from the cache without recording a negative result.
     /// Used for invalidation before a write, where we don't yet know the outcome.
+    ///
+    /// Removes containing `FindKeyValues` entries to prevent stale reads via
+    /// `query_read_value`. Containing `FindKeys` entries are kept — they are
+    /// only used for key listing (not value reads) and are needed by
+    /// `record_key_deletion_unchecked` for surgical updates.
     pub(crate) fn invalidate_key(&mut self, key: &[u8]) {
         let cache_key = CacheKey::Value(key.to_vec());
         self.remove_cache_key_if_exists(&cache_key);
+        if self.has_exclusive_access {
+            // Remove containing FindKeyValues entries to prevent stale value reads.
+            let find_kv_to_remove = self
+                .get_existing_find_key_values_entry(key)
+                .map(|(lb, _)| lb.to_vec());
+            if let Some(lower_bound) = find_kv_to_remove {
+                let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
+                self.remove_cache_key_if_exists(&cache_key);
+                self.find_key_values_map.remove(&lower_bound);
+            }
+        }
     }
 
     /// Records a key deletion in the cache.
@@ -788,37 +804,17 @@ impl LruPrefixCache {
                 let cache_key = CacheKey::FindKeyValues(prefix);
                 self.remove_cache_key(&cache_key);
             }
-            // Finding a containing FindKeys. If existing update.
-            let lower_bound = self.get_existing_keys_entry_mut(key_prefix);
-            let result = if let Some((lower_bound, find_entry)) = lower_bound {
-                // Delete the keys in the entry
-                let key_prefix_red = &key_prefix[lower_bound.len()..];
-                find_entry.delete_prefix(key_prefix_red);
-                let new_cache_size = find_entry.size() + lower_bound.len();
-                Some((new_cache_size, lower_bound.clone()))
-            } else {
-                None
-            };
-            if let Some((new_cache_size, lower_bound)) = result {
-                // Update the size without changing the position.
-                let cache_key = CacheKey::FindKeys(lower_bound.clone());
-                self.update_cache_key_sizes(&cache_key, new_cache_size);
-            }
-            // Finding a containing FindKeyValues. If existing update.
-            let lower_bound = self.get_existing_find_key_values_entry_mut(key_prefix);
-            let result = if let Some((lower_bound, find_entry)) = lower_bound {
-                // Delete the keys (or key/values) in the entry
-                let key_prefix_red = &key_prefix[lower_bound.len()..];
-                find_entry.delete_prefix(key_prefix_red);
-                let new_cache_size = find_entry.size() + lower_bound.len();
-                Some((new_cache_size, lower_bound.clone()))
-            } else {
-                None
-            };
-            if let Some((new_cache_size, lower_bound)) = result {
-                // Update the size without changing the position.
+            // Remove containing FindKeyValues entries to prevent stale value
+            // reads. Containing FindKeys entries are kept — they are only used
+            // for key listing and are needed by record_prefix_deletion_unchecked
+            // for surgical updates.
+            let find_kv_to_remove = self
+                .get_existing_find_key_values_entry(key_prefix)
+                .map(|(lb, _)| lb.to_vec());
+            if let Some(lower_bound) = find_kv_to_remove {
                 let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
-                self.update_cache_key_sizes(&cache_key, new_cache_size);
+                self.remove_cache_key_if_exists(&cache_key);
+                self.find_key_values_map.remove(&lower_bound);
             }
         }
     }
@@ -832,10 +828,26 @@ impl LruPrefixCache {
     /// positive entries alongside the new negative entry.
     pub(crate) fn record_prefix_deletion_unchecked(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
-            // Record the deletion as an empty FindKeyValues entry if there
-            // is no containing entry already.
+            // Update any containing FindKeys entry by removing matching sub-keys.
+            let lower_bound = self.get_existing_keys_entry_mut(key_prefix);
+            if let Some((lower_bound, find_entry)) = lower_bound {
+                let key_prefix_red = &key_prefix[lower_bound.len()..];
+                find_entry.delete_prefix(key_prefix_red);
+                let new_cache_size = find_entry.size() + lower_bound.len();
+                let cache_key = CacheKey::FindKeys(lower_bound.to_vec());
+                self.update_cache_key_sizes(&cache_key, new_cache_size);
+            }
+            // Update or insert a containing FindKeyValues entry.
             let lower_bound = self.get_existing_find_key_values_entry_mut(key_prefix);
-            if lower_bound.is_none() {
+            if let Some((lower_bound, find_entry)) = lower_bound {
+                let key_prefix_red = &key_prefix[lower_bound.len()..];
+                find_entry.delete_prefix(key_prefix_red);
+                let new_cache_size = find_entry.size() + lower_bound.len();
+                let cache_key = CacheKey::FindKeyValues(lower_bound.to_vec());
+                self.update_cache_key_sizes(&cache_key, new_cache_size);
+            } else {
+                // No containing entry — record the deleted prefix as an empty
+                // FindKeyValues entry.
                 let size = key_prefix.len();
                 let cache_key = CacheKey::FindKeyValues(key_prefix.to_vec());
                 let find_key_values_entry = FindKeyValuesEntry(BTreeMap::new());
@@ -846,7 +858,7 @@ impl LruPrefixCache {
         }
     }
 
-    /// Safely record the deletion of a key prefix in the cache.
+    /// Safely record the deletion of a key prefix from the cache.
     #[cfg(test)]
     pub(crate) fn delete_prefix(&mut self, key_prefix: &[u8]) {
         self.invalidate_prefix(key_prefix);
@@ -2649,5 +2661,215 @@ mod tests {
         let value = vec![100];
         cache.insert_read_value(&key, &Some(value));
         cache.check_coherence();
+    }
+
+    // --- invalidate_key tests ---
+
+    #[test]
+    fn test_invalidate_key_does_not_cache_negatively() {
+        let mut cache = create_test_cache(true);
+        let key = vec![1, 2];
+        let value = vec![42];
+
+        // Insert a value, then invalidate it.
+        cache.insert_read_value(&key, &Some(value));
+        cache.check_coherence();
+        assert!(cache.query_read_value(&key).is_some());
+
+        cache.invalidate_key(&key);
+        cache.check_coherence();
+
+        // After invalidation, the key should be unknown (None), NOT DoesNotExist.
+        // None means "not in cache, ask the DB". Some(None) would mean "known to not exist".
+        assert_eq!(cache.query_read_value(&key), None);
+    }
+
+    #[test]
+    fn test_invalidate_key_removes_containing_find_key_values() {
+        let mut cache = create_test_cache(true);
+
+        // Insert a FindKeyValues entry for a broad prefix that contains our key.
+        let prefix = vec![1];
+        let key = vec![1, 2];
+        let value = vec![42];
+        cache.insert_find_key_values(prefix.clone(), &[(vec![2], value.clone())]);
+        cache.check_coherence();
+
+        // The key should be queryable via the containing entry.
+        assert_eq!(cache.query_read_value(&key), Some(Some(value)));
+
+        // Invalidate the specific key.
+        cache.invalidate_key(&key);
+        cache.check_coherence();
+
+        // The containing FindKeyValues entry should be removed, so the key
+        // is no longer resolvable from cache.
+        assert_eq!(cache.query_read_value(&key), None);
+    }
+
+    #[test]
+    fn test_invalidate_key_on_nonexistent_key_is_noop() {
+        let mut cache = create_test_cache(true);
+        let key = vec![1, 2];
+
+        // Invalidating a key that was never cached should not panic or insert anything.
+        cache.invalidate_key(&key);
+        cache.check_coherence();
+        assert_eq!(cache.query_read_value(&key), None);
+    }
+
+    // --- invalidate_prefix tests ---
+
+    #[test]
+    fn test_invalidate_prefix_does_not_cache_negatively() {
+        let mut cache = create_test_cache(true);
+        let key1 = vec![1, 2];
+        let key2 = vec![1, 3];
+        let value = vec![42];
+
+        cache.insert_read_value(&key1, &Some(value.clone()));
+        cache.insert_read_value(&key2, &Some(value.clone()));
+        cache.check_coherence();
+
+        cache.invalidate_prefix(&[1]);
+        cache.check_coherence();
+
+        // Keys should be unknown (None), NOT DoesNotExist (Some(None)).
+        assert_eq!(cache.query_read_value(&key1), None);
+        assert_eq!(cache.query_read_value(&key2), None);
+    }
+
+    #[test]
+    fn test_invalidate_prefix_removes_containing_find_key_values() {
+        let mut cache = create_test_cache(true);
+
+        // Insert a FindKeyValues entry for prefix [1] containing sub-keys.
+        let prefix = vec![1];
+        let key1 = vec![1, 2, 3];
+        let key2 = vec![1, 2, 4];
+        let value = vec![42];
+        cache.insert_find_key_values(
+            prefix.clone(),
+            &[(vec![2, 3], value.clone()), (vec![2, 4], value.clone())],
+        );
+        cache.check_coherence();
+
+        // Both keys should be queryable via the containing entry.
+        assert_eq!(cache.query_read_value(&key1), Some(Some(value.clone())));
+        assert_eq!(cache.query_read_value(&key2), Some(Some(value.clone())));
+
+        // Invalidate a sub-prefix that covers both keys.
+        cache.invalidate_prefix(&[1, 2]);
+        cache.check_coherence();
+
+        // The containing entry should be gone — keys are unknown, not negatively cached.
+        assert_eq!(cache.query_read_value(&key1), None);
+        assert_eq!(cache.query_read_value(&key2), None);
+    }
+
+    #[test]
+    fn test_invalidate_prefix_removes_matching_find_keys() {
+        let mut cache = create_test_cache(true);
+
+        let prefix = vec![1, 2];
+        let keys = vec![vec![3], vec![4]];
+        cache.insert_find_keys(prefix.clone(), &keys);
+        cache.check_coherence();
+        assert!(cache.query_find_keys(&prefix).is_some());
+
+        // Invalidate a broader prefix that covers the FindKeys entry.
+        cache.invalidate_prefix(&[1]);
+        cache.check_coherence();
+
+        // The FindKeys entry should be completely gone.
+        assert_eq!(cache.query_find_keys(&prefix), None);
+    }
+
+    // --- delete_prefix regression tests ---
+
+    #[test]
+    fn test_delete_prefix_records_negative_via_find_key_values() {
+        let mut cache = create_test_cache(true);
+        let key1 = vec![1, 2];
+        let value = vec![42];
+
+        cache.insert_read_value(&key1, &Some(value));
+        cache.check_coherence();
+
+        // delete_prefix should record the deletion so queries return DoesNotExist.
+        cache.delete_prefix(&[1]);
+        cache.check_coherence();
+
+        // Key should be known to not exist (Some(None)), not just unknown (None).
+        assert_eq!(cache.query_read_value(&key1), Some(None));
+    }
+
+    #[test]
+    fn test_delete_prefix_updates_containing_find_keys_entry() {
+        let mut cache = create_test_cache(true);
+
+        // Insert a FindKeys entry with a broader prefix.
+        let find_keys_prefix = vec![1];
+        let keys = vec![vec![2, 3], vec![2, 4], vec![3, 5]];
+        cache.insert_find_keys(find_keys_prefix.clone(), &keys);
+        cache.check_coherence();
+
+        // Delete a sub-prefix.
+        cache.delete_prefix(&[1, 2]);
+        cache.check_coherence();
+
+        // The containing FindKeys entry should have the matching keys removed.
+        let remaining = cache.query_find_keys(&find_keys_prefix).unwrap();
+        assert!(!remaining.contains(&vec![2, 3]));
+        assert!(!remaining.contains(&vec![2, 4]));
+        assert!(remaining.contains(&vec![3, 5]));
+    }
+
+    // --- Cancellation safety scenario test ---
+
+    #[test]
+    fn test_invalidate_then_record_does_not_lose_data() {
+        // Simulates the write_batch pattern: invalidate before write,
+        // record after successful write.
+        let mut cache = create_test_cache(true);
+        let key = vec![1, 2];
+        let old_value = vec![10];
+        let new_value = vec![20];
+
+        // Initial state: key has old value.
+        cache.insert_read_value(&key, &Some(old_value.clone()));
+        cache.check_coherence();
+        assert_eq!(cache.query_read_value(&key), Some(Some(old_value)));
+
+        // Step 1: invalidate (pre-write).
+        cache.invalidate_key(&key);
+        cache.check_coherence();
+        // Key is now unknown — reads would go to DB.
+        assert_eq!(cache.query_read_value(&key), None);
+
+        // Step 2: write succeeds, record new value.
+        cache.put_key_value(&key, &new_value);
+        cache.check_coherence();
+        assert_eq!(cache.query_read_value(&key), Some(Some(new_value)));
+    }
+
+    #[test]
+    fn test_invalidate_without_followup_is_safe() {
+        // Simulates cancellation: invalidate runs but the write is cancelled,
+        // so no record step happens.
+        let mut cache = create_test_cache(true);
+        let key = vec![1, 2];
+        let value = vec![42];
+
+        cache.insert_read_value(&key, &Some(value));
+        cache.check_coherence();
+
+        // Invalidate (pre-write), then "cancel" — no record step.
+        cache.invalidate_key(&key);
+        cache.check_coherence();
+
+        // Key is unknown — subsequent reads will go to DB and get correct data.
+        // Crucially, it must NOT return the old stale value.
+        assert_eq!(cache.query_read_value(&key), None);
     }
 }
