@@ -665,12 +665,19 @@ async fn route_aux(
     let (page, new_path) = result.unwrap_or_else(|e| error(&e));
     let page_js = format_bytes(&page.serialize(&SER).unwrap());
     setf(app, "page", &page_js);
-    web_sys::window()
+    let history = web_sys::window()
         .expect("window object not found")
         .history()
-        .expect("history object not found")
-        .push_state_with_url(&page_js, &new_path, Some(&new_path))
-        .expect("push_state failed");
+        .expect("history object not found");
+    if init {
+        history
+            .replace_state_with_url(&page_js, &new_path, Some(&new_path))
+            .expect("replace_state failed");
+    } else {
+        history
+            .push_state_with_url(&page_js, &new_path, Some(&new_path))
+            .expect("push_state failed");
+    }
 }
 
 #[wasm_bindgen]
