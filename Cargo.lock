@@ -5769,7 +5769,6 @@ dependencies = [
  "linera-metrics",
  "linera-rpc",
  "linera-sdk",
- "linera-service",
  "linera-storage",
  "linera-storage-runtime",
  "linera-version",
