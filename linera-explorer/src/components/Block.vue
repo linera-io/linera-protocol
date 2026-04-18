@@ -199,14 +199,20 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         <div v-if="block.block.body.blobs.flat().length!==0" class="collapse" :id="'blobs-collapse-'+block.hash">
           <ul class="list-group">
             <template v-for="(txBlobs, ti) in block.block.body.blobs" :key="block.hash+'-blobs-tx-'+ti">
-              <li v-for="(blob, bi) in txBlobs" class="list-group-item p-0" :key="block.hash+'-blob-'+ti+'-'+bi">
-                <div class="card border-0">
-                  <div class="card-header">
-                    <strong>Blob</strong>
-                    <span class="ms-2 small text-muted">Tx {{ ti+1 }}</span>
-                  </div>
-                  <div class="card-body small">
-                    <Json :data="blob"/>
+              <li v-for="(blob, bi) in txBlobs" class="list-group-item" :key="block.hash+'-blob-'+ti+'-'+bi">
+                <div class="d-flex justify-content-between align-items-center" data-bs-toggle="collapse" :data-bs-target="'#blob-'+block.hash+'-'+ti+'-'+bi" role="button">
+                  <span>
+                    <strong>Blob {{ bi+1 }}</strong>
+                    <span v-if="typeof blob === 'string'" class="ms-2 font-monospace small">{{ blob.length > 16 ? blob.substring(0, 8) + '..' + blob.substring(blob.length - 8) : blob }}</span>
+                    <span v-else-if="Array.isArray(blob)" class="ms-2 font-monospace small">{{ blob.map((b: number) => b.toString(16).padStart(2, '0')).join('').substring(0, 8) + '..' }}</span>
+                    <span class="ms-2 text-muted small">({{ typeof blob === 'string' ? blob.length / 2 : Array.isArray(blob) ? blob.length : '?' }} bytes)</span>
+                  </span>
+                  <i class="bi bi-caret-down-fill"></i>
+                </div>
+                <div class="collapse" :id="'blob-'+block.hash+'-'+ti+'-'+bi">
+                  <div class="p-2 small font-monospace" style="word-break:break-all">
+                    <span v-if="typeof blob === 'string'">{{ blob }}</span>
+                    <span v-else-if="Array.isArray(blob)">{{ blob.map((b: number) => b.toString(16).padStart(2, '0')).join('') }}</span>
                   </div>
                 </div>
               </li>
@@ -223,11 +229,20 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         </li>
         <div v-if="block.block.body.operationResults.length!==0" class="collapse" :id="'operation-results-collapse-'+block.hash">
           <ul class="list-group">
-            <li v-for="(m, i) in block.block.body.operationResults" class="list-group-item p-0" :key="block.hash+'-operationresult-'+i">
-              <div class="card border-0">
-                <div class="card-header"><strong>Operation Result {{ i+1 }}</strong></div>
-                <div class="card-body small">
-                  <span v-if="Array.isArray(m)" class="font-monospace">{{ m.map((b: number) => b.toString(16).padStart(2, '0')).join('') }}</span>
+            <li v-for="(m, i) in block.block.body.operationResults" class="list-group-item" :key="block.hash+'-operationresult-'+i">
+              <div class="d-flex justify-content-between align-items-center" data-bs-toggle="collapse" :data-bs-target="'#opresult-'+block.hash+'-'+i" role="button">
+                <span>
+                  <strong>Operation Result {{ i+1 }}</strong>
+                  <span v-if="Array.isArray(m)" class="ms-2 font-monospace small">{{ m.map((b: number) => b.toString(16).padStart(2, '0')).join('').substring(0, 16) + (m.length > 8 ? '..' : '') }}</span>
+                  <span v-else-if="typeof m === 'string'" class="ms-2 font-monospace small">{{ m.length > 16 ? m.substring(0, 8) + '..' + m.substring(m.length - 8) : m }}</span>
+                  <span class="ms-2 text-muted small">({{ Array.isArray(m) ? m.length : typeof m === 'string' ? m.length / 2 : '?' }} bytes)</span>
+                </span>
+                <i class="bi bi-caret-down-fill"></i>
+              </div>
+              <div class="collapse" :id="'opresult-'+block.hash+'-'+i">
+                <div class="p-2 small font-monospace" style="word-break:break-all">
+                  <span v-if="Array.isArray(m)">{{ m.map((b: number) => b.toString(16).padStart(2, '0')).join('') }}</span>
+                  <span v-else-if="typeof m === 'string'">{{ m }}</span>
                   <Json v-else :data="m"/>
                 </div>
               </div>
