@@ -572,6 +572,7 @@ impl LruPrefixCache {
     pub(crate) fn record_key_deletion_unchecked(&mut self, key: &[u8]) {
         if self.has_exclusive_access {
             let lower_bound = self.get_existing_keys_entry_mut(key);
+            // If matching, no need to insert in the value cache
             let mut matching = false;
             if let Some((lower_bound, cache_entry)) = lower_bound {
                 let reduced_key = &key[lower_bound.len()..];

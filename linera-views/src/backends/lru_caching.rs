@@ -357,8 +357,6 @@ where
         // cancellation safety: if the write is cancelled after the store commits
         // but before this function returns, subsequent reads will go to the
         // store and see the correct (committed) data instead of stale cache.
-        // We use `invalidate_key` (not `delete_key`) to avoid recording a
-        // negative `DoesNotExist` entry — we don't know the outcome yet.
         if let Some(cache) = &self.cache {
             let mut cache = cache.lock().unwrap();
             for operation in &batch.operations {
@@ -373,9 +371,7 @@ where
             }
         }
         self.store.write_batch(batch.clone()).await?;
-        // Repopulate the cache with the written values. If cancelled here,
-        // the cache is simply empty for these keys (invalidated above) and
-        // subsequent reads will go to the store — which is correct.
+        // Repopulate the cache with the written values.
         if let Some(cache) = &self.cache {
             let mut cache = cache.lock().unwrap();
             for operation in &batch.operations {
