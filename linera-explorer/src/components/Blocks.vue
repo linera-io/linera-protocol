@@ -20,6 +20,8 @@ defineProps<{blocks: ConfirmedBlock[]}>()
         <th>#InMessages</th>
         <th>#OutMessages</th>
         <th>#Operations</th>
+        <th>#Events</th>
+        <th>#OracleResponses</th>
         <th>JSON</th>
       </thead>
       <tbody>
@@ -37,6 +39,8 @@ defineProps<{blocks: ConfirmedBlock[]}>()
           <td>{{ getIncomingBundles(b.block.body.transactionMetadata).length }}</td>
           <td>{{ b.block.body.messages.length }}</td>
           <td>{{ getOperations(b.block.body.transactionMetadata).length }}</td>
+          <td>{{ b.block.body.events.flat().length }}</td>
+          <td>{{ b.block.body.oracleResponses.flat().length }}</td>
           <td>
             <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+b.hash+'-modal'" @click="json_load(b.hash+'-json', b)">
               <i class="bi bi-braces"></i>
