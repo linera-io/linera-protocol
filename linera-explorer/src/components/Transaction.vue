@@ -40,7 +40,7 @@ defineProps<{
             <div class="row">
               <div class="col-md-6">
                 <strong>Origin:</strong>
-                <span class="font-monospace">{{ short_hash(transaction.incomingBundle.origin.sender || transaction.incomingBundle.origin) }}</span>
+                <a @click="$root.route(undefined, [['chain', transaction.incomingBundle.origin.sender || transaction.incomingBundle.origin]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(transaction.incomingBundle.origin.sender || transaction.incomingBundle.origin) }}</a>
               </div>
               <div class="col-md-6">
                 <strong>Action:</strong>
@@ -59,7 +59,7 @@ defineProps<{
               </div>
               <div class="col-md-4">
                 <strong>Certificate Hash:</strong>
-                <span class="font-monospace small">{{ short_hash(transaction.incomingBundle.bundle.certificateHash) }}</span>
+                <a @click="$root.route('block', [['block', transaction.incomingBundle.bundle.certificateHash]])" class="btn btn-link btn-sm p-0 font-monospace small">{{ short_hash(transaction.incomingBundle.bundle.certificateHash) }}</a>
               </div>
             </div>
 
