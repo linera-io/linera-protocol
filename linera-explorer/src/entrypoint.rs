@@ -131,7 +131,13 @@ pub async fn query(app: JsValue, query: JsValue, kind: String) {
     let body =
         serde_json::json!({ "query": format!("{} {{{} {}}}", kind, input, response) }).to_string();
     let client = reqwest_client();
-    match client.post(&link).body(body).send().await {
+    match client
+        .post(&link)
+        .header("Content-Type", "application/json")
+        .body(body)
+        .send()
+        .await
+    {
         Err(e) => setf(&app, "errors", &JsValue::from_str(&e.to_string())),
         Ok(response) => match response.text().await {
             Err(e) => setf(&app, "errors", &JsValue::from_str(&e.to_string())),
