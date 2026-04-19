@@ -291,6 +291,7 @@ where
     /// many validators are faulty.
     ///
     /// Returns `true` if the bundle was new, `false` if it was already in `removed_bundles`.
+    #[allow(clippy::comparison_chain)]
     pub(crate) async fn add_bundle(&mut self, bundle: MessageBundle) -> Result<bool, InboxError> {
         // Record the latest cursor.
         let cursor = Cursor::from(&bundle);
