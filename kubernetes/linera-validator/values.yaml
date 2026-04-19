@@ -66,7 +66,7 @@ storageCacheConfig:
 storageCacheSizes:
   blobCacheSize: 1000
   confirmedBlockCacheSize: 10000
-  liteCertificateCacheSize: 5000
+  certificateCacheSize: 5000
   certificateRawCacheSize: 50000
   eventCacheSize: 20000
 

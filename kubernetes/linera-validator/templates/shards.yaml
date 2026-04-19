@@ -113,7 +113,7 @@ spec:
                 --storage-max-cache-find-key-values-size {{ .Values.storageCacheConfig.maxCacheFindKeyValuesSize | int }} \
                 --blob-cache-size {{ .Values.storageCacheSizes.blobCacheSize | int }} \
                 --confirmed-block-cache-size {{ .Values.storageCacheSizes.confirmedBlockCacheSize | int }} \
-                --lite-certificate-cache-size {{ .Values.storageCacheSizes.liteCertificateCacheSize | int }} \
+                --certificate-cache-size {{ .Values.storageCacheSizes.certificateCacheSize | int }} \
                 --certificate-raw-cache-size {{ .Values.storageCacheSizes.certificateRawCacheSize | int }} \
                 --event-cache-size {{ .Values.storageCacheSizes.eventCacheSize | int }} \
                 --block-cache-size {{ .Values.blockCacheSize | int }} \
