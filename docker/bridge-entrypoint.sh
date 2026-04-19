@@ -22,7 +22,7 @@ set -- linera-bridge serve \
     --max-retries="${MAX_RETRIES:-10}" \
     --blob-cache-size="${BLOB_CACHE_SIZE:-1000}" \
     --confirmed-block-cache-size="${CONFIRMED_BLOCK_CACHE_SIZE:-1000}" \
-    --certificate-cache-size="${CERTIFICATE_CACHE_SIZE:-1000}" \
+    --lite-certificate-cache-size="${LITE_CERTIFICATE_CACHE_SIZE:-1000}" \
     --certificate-raw-cache-size="${CERTIFICATE_RAW_CACHE_SIZE:-1000}" \
     --event-cache-size="${EVENT_CACHE_SIZE:-1000}"
 
