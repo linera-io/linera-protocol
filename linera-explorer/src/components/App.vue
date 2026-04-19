@@ -85,7 +85,7 @@ export default {
         </div>
       </div>
     </nav>
-    <div class="container pb-5">
+    <div class="container-fluid pb-5">
       <div v-if="page=='unloaded'">
         <div class="text-center m-5 p-5">
           <span class="spinner-border">
@@ -111,7 +111,12 @@ export default {
       </div>
 
       <div v-else-if="page.blocks">
-        <Blocks :blocks="page.blocks"/>
+        <div class="card">
+          <div class="card-header">Blocks</div>
+          <div class="card-body">
+            <Blocks :blocks="page.blocks"/>
+          </div>
+        </div>
       </div>
 
       <div v-else-if="page.block">
