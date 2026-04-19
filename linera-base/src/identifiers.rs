@@ -581,8 +581,6 @@ impl std::str::FromStr for StreamName {
     Ord,
     PartialEq,
     PartialOrd,
-    Serialize,
-    Deserialize,
     WitLoad,
     WitStore,
     WitType,
@@ -596,6 +594,47 @@ pub struct StreamId {
     pub application_id: GenericApplicationId,
     /// The name of this stream: an application can have multiple streams with different names.
     pub stream_name: StreamName,
+}
+
+impl serde::Serialize for StreamId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_string())
+        } else {
+            use serde::ser::SerializeStruct;
+            let mut state = serializer.serialize_struct("StreamId", 2)?;
+            state.serialize_field("application_id", &self.application_id)?;
+            state.serialize_field("stream_name", &self.stream_name)?;
+            state.end()
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for StreamId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Self::from_str(&s).map_err(serde::de::Error::custom)
+        } else {
+            #[derive(serde::Deserialize)]
+            #[serde(rename = "StreamId")]
+            struct StreamIdHelper {
+                application_id: GenericApplicationId,
+                stream_name: StreamName,
+            }
+            let helper = StreamIdHelper::deserialize(deserializer)?;
+            Ok(StreamId {
+                application_id: helper.application_id,
+                stream_name: helper.stream_name,
+            })
+        }
+    }
 }
 
 impl StreamId {
