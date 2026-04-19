@@ -36,6 +36,7 @@ pub async fn introspection(url: &str) -> Result<Value> {
            ofType { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name ofType {kind name} } } } } } } }";
     let res = client
         .post(url)
+        .header("Content-Type", "application/json")
         .body(format!("{{\"query\":\"{}\"}}", graphql_query))
         .send()
         .await?

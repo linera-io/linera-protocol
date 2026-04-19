@@ -104,7 +104,7 @@ function getMessageMetadata(msg: any) {
 
           <div class="mb-2 small">
             <strong>Destination:</strong>
-            <span class="font-monospace" v-if="typeof msg.destination === 'string'">{{ short_hash(msg.destination) }}</span>
+            <a v-if="typeof msg.destination === 'string'" @click="$root.route(undefined, [['chain', msg.destination]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(msg.destination) }}</a>
             <span v-else>{{ JSON.stringify(msg.destination) }}</span>
           </div>
 

@@ -2,6 +2,12 @@
 import { ApplicationOverview } from '../../gql/service'
 
 defineProps<{apps: ApplicationOverview[]}>()
+
+function safeStringify(obj: any): string {
+  return JSON.stringify(obj, (_key, value) =>
+    typeof value === 'bigint' ? value.toString() : value
+  )
+}
 </script>
 
 <template>
@@ -18,7 +24,7 @@ defineProps<{apps: ApplicationOverview[]}>()
       <tbody>
         <tr v-for="a in apps" :key="'application-'+a.id">
           <td :title="a.id">
-            <a target="_blank" class="btn btn-link btn-sm" @click="$root.route('application', [['app', JSON.stringify(a)]])">
+            <a target="_blank" class="btn btn-link btn-sm" @click="$root.route('application', [['app', safeStringify(a)]])">
               {{ short_app_id(a.id) }}
             </a>
           </td>
