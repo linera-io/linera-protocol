@@ -7,6 +7,7 @@ import InputType from './InputType.vue'
 import OutputType from './OutputType.vue'
 
 export default defineComponent({
+  components: { Json, InputType, OutputType },
   props: {
     entry: {type: Object as PropType<IntrospectionField>, required: true},
     link: {type: String, required: true},
