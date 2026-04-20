@@ -1274,12 +1274,13 @@ where
         let elapsed = local_time.duration_since(block_zero_time);
         if elapsed < min_duration {
             warn!(
-                "Not resetting corrupted chain state for {chain_id} because only \
-                {elapsed:?} elapsed since last block 0 execution (minimum: {min_duration:?})"
+                %chain_id, ?elapsed, ?min_duration,
+                "Not resetting corrupted chain state; not enough time elapsed \
+                since last block 0 execution"
             );
             return Ok(None);
         }
-        warn!("Corrupted chain state detected for {chain_id}; resetting and re-executing");
+        warn!(%chain_id, "Corrupted chain state detected; resetting and re-executing");
         Ok(Some(self.reset_and_reexecute_chain().await?))
     }
 
@@ -1347,8 +1348,8 @@ where
             self.save().await?;
         } else {
             warn!(
-                "Dropping manager snapshot for {chain_id}: pre-reset tip {tip_height} \
-                differs from post-reset tip {new_tip_height}"
+                %tip_height, %new_tip_height,
+                "Dropping manager snapshot: pre-reset tip differs from post-reset tip"
             );
         }
 
@@ -1364,10 +1365,9 @@ where
             .collect::<Vec<_>>();
 
         warn!(
-            "Chain {chain_id} reset and re-executed up to height {}; \
-            sending RevertConfirm to {} senders",
-            self.chain.tip_state.get().next_block_height,
-            revert_requests.len(),
+            tip_height = %self.chain.tip_state.get().next_block_height,
+            num_revert_confirms = revert_requests.len(),
+            "Chain reset and re-executed; sending RevertConfirm to senders"
         );
 
         Ok(revert_requests)
