@@ -4,6 +4,7 @@
 //! An ABI for applications that implement a wrapped (bridged) fungible token with Mint/Burn.
 
 use async_graphql::{Request, Response};
+pub use linera_base::identifiers::Account;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::Amount,
@@ -12,7 +13,7 @@ use linera_base::{
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
 
-pub use super::fungible::{Account, FungibleResponse, InitialState, InitialStateBuilder};
+pub use super::fungible::{FungibleResponse, InitialState, InitialStateBuilder};
 
 /// Parameters for a wrapped fungible token backed by an EVM bridge.
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]

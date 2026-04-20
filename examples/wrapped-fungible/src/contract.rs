@@ -9,13 +9,9 @@ use linera_sdk::{
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-<<<<<<< HEAD
-use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters};
-=======
 use wrapped_fungible::{
-    Account, Message, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
+    Message, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
 };
->>>>>>> 47867eb524 (Move WrappedFungible ABI to linera-sdk (#5913))
 
 pub struct WrappedFungibleTokenContract {
     state: FungibleTokenState,
