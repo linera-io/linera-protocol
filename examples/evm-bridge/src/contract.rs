@@ -8,13 +8,8 @@ use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
 use linera_bridge::proof;
 use linera_sdk::{
     ethereum::{ContractEthereumClient, EthereumQueries},
-<<<<<<< HEAD
-    linera_base_types::{Account, AccountOwner, Amount, ChainId, WithContractAbi},
-    views::{linera_views, RootView, SetView, View, ViewStorageContext},
-=======
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    linera_base_types::{Account, AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
     views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
->>>>>>> 070ac118ea (Rearchitect linera bridge minting and burning mechanisms (#5929))
     Contract, ContractRuntime,
 };
 use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi};
@@ -73,7 +68,7 @@ impl Contract for EvmBridgeContract {
         match operation {
             BridgeOperation::RegisterFungibleApp { app_id } => {
                 self.runtime
-                    .authenticated_signer()
+                    .authenticated_owner()
                     .expect("RegisterFungibleApp requires an authenticated signer");
                 assert!(
                     self.state.fungible_app_id.get().is_none(),

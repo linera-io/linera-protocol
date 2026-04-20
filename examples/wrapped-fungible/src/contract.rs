@@ -5,21 +5,13 @@
 
 use fungible::{state::FungibleTokenState, FungibleResponse, InitialState};
 use linera_sdk::{
-<<<<<<< HEAD
-    linera_base_types::{Account, AccountOwner, Amount, WithContractAbi},
-=======
     linera_base_types::{AccountOwner, Amount, StreamName, WithContractAbi},
->>>>>>> 070ac118ea (Rearchitect linera bridge minting and burning mechanisms (#5929))
     views::{RootView, View},
     Contract, ContractRuntime,
 };
 use wrapped_fungible::{
-<<<<<<< HEAD
-    Message, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
-=======
     Account, BurnEvent, Message, WrappedFungibleOperation, WrappedFungibleTokenAbi,
     WrappedParameters,
->>>>>>> 070ac118ea (Rearchitect linera bridge minting and burning mechanisms (#5929))
 };
 
 pub struct WrappedFungibleTokenContract {
@@ -184,19 +176,9 @@ impl Contract for WrappedFungibleTokenContract {
 }
 
 impl WrappedFungibleTokenContract {
-<<<<<<< HEAD
-    /// Checks that the authenticated signer is the authorized minter and
-    /// that the operation is on the designated mint chain.
-    fn require_minter(&mut self) -> AccountOwner {
-        let signer = self
-            .runtime
-            .authenticated_owner()
-            .expect("Mint/Burn requires an authenticated signer");
-=======
     /// Checks the configured minting restrictions. Each check is only
     /// enforced when the corresponding parameter is `Some`.
     fn require_mint_authorized(&mut self) {
->>>>>>> 070ac118ea (Rearchitect linera bridge minting and burning mechanisms (#5929))
         let params: WrappedParameters = self.runtime.application_parameters();
         if let Some(bridge_app_id) = params.bridge_app_id {
             let caller = self.runtime.authenticated_caller_id();
@@ -208,7 +190,7 @@ impl WrappedFungibleTokenContract {
         if let Some(minter) = params.minter {
             let signer = self
                 .runtime
-                .authenticated_signer()
+                .authenticated_owner()
                 .expect("minter is configured but no authenticated signer");
             assert!(
                 signer == minter,
@@ -231,7 +213,7 @@ impl WrappedFungibleTokenContract {
         } else {
             let source = self
                 .runtime
-                .authenticated_signer()
+                .authenticated_owner()
                 .unwrap_or(AccountOwner::CHAIN);
             self.runtime
                 .prepare_message(Message::Credit {

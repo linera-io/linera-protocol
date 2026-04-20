@@ -31,20 +31,12 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{environment::wallet::Memory, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-<<<<<<< HEAD
 use linera_base::identifiers::Account;
-=======
-use linera_storage::{DbStorage, StorageCacheSizes};
-use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
->>>>>>> 070ac118ea (Rearchitect linera bridge minting and burning mechanisms (#5929))
 use wrapped_fungible::{
     InitialState, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
 };
-<<<<<<< HEAD
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-=======
->>>>>>> 070ac118ea (Rearchitect linera bridge minting and burning mechanisms (#5929))
 
 sol! {
     #[sol(rpc)]

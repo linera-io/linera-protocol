@@ -164,7 +164,7 @@ pub fn register_fungible_application_id(
         db,
         caller,
         bridge,
-        registerFungibleApplicationIdCall {
+        &registerFungibleApplicationIdCall {
             _applicationId: <[u8; 32]>::from(*application_id.as_bytes()).into(),
         },
     );
@@ -282,7 +282,7 @@ pub fn create_certificate_with_events(
             timestamp: Timestamp::from(0),
             state_hash: CryptoHash::new(&TestString::new("state")),
             previous_block_hash: None,
-            authenticated_signer: None,
+            authenticated_owner: None,
             transactions_hash: CryptoHash::new(&TestString::new("tx")),
             messages_hash: CryptoHash::new(&TestString::new("msg")),
             previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg")),

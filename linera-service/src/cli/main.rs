@@ -1626,7 +1626,7 @@ impl Runnable for Job {
                     bytes,
                 };
                 let mut context = options
-                    .create_client_context(storage, wallet, signer.into_value())
+                    .create_client_context(storage, wallet, keystore)
                     .await?;
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
