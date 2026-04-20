@@ -164,7 +164,7 @@ where
         let app_desc_blob_id = blob.id();
         let contract_blob_id = contract_blob.id();
         let service_blob_id = service_blob.id();
-        tracing::debug!(
+        tracing::warn!(
             target: "used_blobs_trace",
             %chain_id,
             %app_desc_blob_id, %contract_blob_id, %service_blob_id,

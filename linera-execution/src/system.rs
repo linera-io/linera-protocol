@@ -35,7 +35,7 @@ use linera_views::{
     ViewError,
 };
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use tracing::warn;
 
 #[cfg(test)]
 use crate::test_utils::SystemExecutionState;
@@ -957,7 +957,7 @@ where
 
         let blob = Blob::new_application_description(&application_description);
         let blob_id = blob.id();
-        debug!(
+        warn!(
             target: "used_blobs_trace",
             chain_id = %self.context().extra().chain_id(),
             %blob_id,
@@ -1021,14 +1021,14 @@ where
     ) -> Result<bool, ExecutionError> {
         let chain_id = self.context().extra().chain_id();
         if self.used_blobs.contains(&blob_id).await? {
-            debug!(
+            warn!(
                 target: "used_blobs_trace",
                 %chain_id, %blob_id,
                 "used_blobs contains blob_id already: short-circuit (no oracle)"
             );
             return Ok(false); // Nothing to do.
         }
-        debug!(
+        warn!(
             target: "used_blobs_trace",
             %chain_id, %blob_id,
             "used_blobs.insert via blob_used (records oracle)"
@@ -1046,7 +1046,7 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
         let chain_id = self.context().extra().chain_id();
-        debug!(
+        warn!(
             target: "used_blobs_trace",
             %chain_id, %blob_id,
             "used_blobs.insert via blob_published"

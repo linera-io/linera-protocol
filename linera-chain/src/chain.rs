@@ -32,7 +32,7 @@ use linera_views::{
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, warn};
 
 use crate::{
     block::{Block, ConfirmedBlock},
@@ -705,7 +705,7 @@ where
                 .policy()
                 .check_blob_size(blob.content())
                 .with_execution_context(ChainExecutionContext::Block)?;
-            debug!(
+            warn!(
                 target: "used_blobs_trace",
                 chain_id = %block.chain_id,
                 height = %block.height,

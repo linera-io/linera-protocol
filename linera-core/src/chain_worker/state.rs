@@ -835,7 +835,7 @@ where
         // If this block is higher than the next expected block in this chain, we're going
         // to have a gap: do not execute this block, only update the outboxes and return.
         if tip.next_block_height < height {
-            debug!(
+            warn!(
                 target: "used_blobs_trace",
                 %chain_id, %height, %block_hash,
                 tip_height = %tip.next_block_height,
@@ -907,7 +907,7 @@ where
             .as_ref()
             .and_then(|cache| cache.remove(&block_hash))
         {
-            debug!(
+            warn!(
                 target: "used_blobs_trace",
                 %chain_id, %height, %block_hash,
                 "process_confirmed_block: execution_state_cache HIT — reusing cached state"
@@ -922,7 +922,7 @@ where
                 .await;
             certificate.into_value()
         } else {
-            debug!(
+            warn!(
                 target: "used_blobs_trace",
                 %chain_id, %height, %block_hash,
                 "process_confirmed_block: execution_state_cache MISS — replaying block"
@@ -2084,7 +2084,7 @@ where
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
         if let Some(cache) = &self.execution_state_cache {
-            debug!(
+            warn!(
                 target: "used_blobs_trace",
                 chain_id = %self.chain_id(),
                 height = %executed_block.header.height,
