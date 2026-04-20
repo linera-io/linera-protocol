@@ -28,7 +28,7 @@ use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight,
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
-        PostedMessage, SignatureAggregator, Transaction,
+        PostedMessage, SignatureAggregator, Transaction, Vote,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -1811,7 +1811,7 @@ where
         env.worker()
             .fully_handle_certificate_with_notifications(certificate, &())
             .await,
-        Err(WorkerError::IncorrectOutcome { .. })
+        Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
     );
     Ok(())
 }
@@ -4622,18 +4622,18 @@ where
     Ok(())
 }
 
-/// Tests the reset-on-incorrect-outcome recovery mechanism.
+/// Tests the reset-on-corrupted-chain-state recovery mechanism.
 ///
 /// Corrupts a chain's `previous_message_blocks` in storage so that re-executing the
 /// next block produces a different `BlockExecutionOutcome`. First verifies that the
-/// corruption causes `IncorrectOutcome` without the recovery flag, then enables the
+/// corruption causes `CorruptedChainState` without the recovery flag, then enables the
 /// flag and verifies that the chain is reset and re-executed successfully.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_reset_on_incorrect_outcome<B>(mut storage_builder: B) -> anyhow::Result<()>
+async fn test_reset_on_corrupted_chain_state<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
@@ -4674,7 +4674,18 @@ where
         );
     }
 
-    // Step 2: Corrupt `previous_message_blocks` in storage. This directly affects
+    // Step 2: Plant a confirmed vote in the chain manager. After the reset, it must
+    // still be present — otherwise the validator could be tricked into double-signing.
+    let planted_vote = {
+        let key_pair = env.worker().chain_worker_config.key_pair().unwrap().copy();
+        let mut chain = storage.load_chain(chain_id).await?;
+        let vote = Vote::new(cert_0.value().clone(), Round::Fast, &key_pair);
+        chain.manager.confirmed_vote.set(Some(vote.clone()));
+        chain.save().await?;
+        vote
+    };
+
+    // Step 3: Corrupt `previous_message_blocks` in storage. This directly affects
     // the BlockExecutionOutcome (it's a field in the outcome struct), so the next
     // block's computed outcome will differ from the certificate's.
     {
@@ -4699,7 +4710,7 @@ where
         )
         .await;
 
-    // Step 4: Verify that WITHOUT recovery, processing fails with IncorrectOutcome.
+    // Step 4: Verify that WITHOUT recovery, processing fails with CorruptedChainState.
     {
         let worker_no_recovery = WorkerState::new(
             storage.clone(),
@@ -4720,7 +4731,7 @@ where
             worker_no_recovery
                 .fully_handle_certificate_with_notifications(cert_1.clone(), &())
                 .await,
-            Err(WorkerError::IncorrectOutcome { .. })
+            Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
         );
     }
 
@@ -4731,7 +4742,7 @@ where
             nickname: "Recovery worker".to_string(),
             allow_inactive_chains: true,
             allow_messages_from_deprecated_epochs: true,
-            reset_on_incorrect_outcome: Some(Duration::from_secs(0)),
+            reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
             block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
             ..ChainWorkerConfig::default()
         }
@@ -4741,6 +4752,28 @@ where
         None,
     );
 
+    // The first call returns the original error but triggers a background reset that
+    // re-executes prior blocks and fixes the corruption.
+    assert_matches!(
+        worker_with_recovery
+            .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+            .await,
+        Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
+    );
+    // The previously cast confirmed vote must have survived the reset, or the
+    // validator could be tricked into double-signing. We check this before the
+    // retry because `apply_confirmed_block` for cert_1 would otherwise wipe the
+    // manager during the course of the retry.
+    {
+        let chain = worker_with_recovery.chain_state_view(chain_id).await?;
+        let restored_vote = chain.manager.confirmed_vote.get().as_ref();
+        assert_eq!(
+            restored_vote.map(|v| v.signature),
+            Some(planted_vote.signature),
+            "confirmed_vote should be restored after reset-and-reexecute"
+        );
+    }
+    // After the reset, retrying the certificate should succeed.
     worker_with_recovery
         .fully_handle_certificate_with_notifications(cert_1.clone(), &())
         .await?;
