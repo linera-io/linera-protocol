@@ -324,15 +324,14 @@ pub async fn run(
     let default_dir = dirs::config_dir()
         .context("no config directory on this platform")?
         .join("linera");
-    let wallet_path = wallet_path
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| default_dir.join("wallet.json"));
-    let keystore_path = keystore_path
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| default_dir.join("keystore.json"));
-    let storage_path = storage_config
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("rocksdb:{}", default_dir.join("wallet.db").display()));
+    let wallet_path =
+        wallet_path.map_or_else(|| default_dir.join("wallet.json"), |p| p.to_path_buf());
+    let keystore_path =
+        keystore_path.map_or_else(|| default_dir.join("keystore.json"), |p| p.to_path_buf());
+    let storage_path = storage_config.map_or_else(
+        || format!("rocksdb:{}", default_dir.join("wallet.db").display()),
+        |s| s.to_string(),
+    );
 
     tracing::info!(
         wallet = %wallet_path.display(),
@@ -374,7 +373,7 @@ pub async fn run(
 
     let admin_chain_id = wallet.genesis_config().admin_chain_id();
     let genesis_config = wallet.genesis_config().clone();
-    let mut ctx = ClientContext::new(
+    let mut ctx = Box::pin(ClientContext::new(
         storage,
         wallet,
         signer.clone(),
@@ -383,7 +382,7 @@ pub async fn run(
         genesis_config,
         linera_core::worker::DEFAULT_BLOCK_CACHE_SIZE,
         linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-    )
+    ))
     .await?;
 
     // ── Sync admin chain (always) ──
@@ -419,9 +418,10 @@ pub async fn run(
 
         // Verify our keystore contains an owner key for this chain.
         let ownership = chain_client.query_chain_ownership().await?;
-        let our_keys: Vec<AccountOwner> = signer.keys().into_iter().map(|(o, _)| o).collect();
-        let owner = our_keys
+        let owner = signer
+            .keys()
             .into_iter()
+            .map(|(o, _)| o)
             .find(|o| ownership.super_owners.contains(o) || ownership.owners.contains_key(o))
             .context("keystore has no key that is an owner of the specified --chain-id")?;
         tracing::info!(%cid, %owner, "Using pre-existing chain");
