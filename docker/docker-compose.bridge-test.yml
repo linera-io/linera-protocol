@@ -70,23 +70,27 @@ services:
       - "13001:13001"
       - "9090:9090"
       - "${RELAY_PORT:-3001}:${RELAY_PORT:-3001}"
-    command: >
-      sh -c "mkdir -p ${LINERA_NET_PATH:-/tmp/wallet} &&
-      ./linera net
-      --storage scylladb:tcp:scylla:9042:table_default
-      up
-      --path ${LINERA_NET_PATH:-/tmp/wallet}
-      --with-faucet
-      --faucet-port ${FAUCET_PORT:-8080}
-      --with-block-exporter
-      --exporter-address linera-block-exporter
-      --exporter-port ${BLOCK_EXPORTER_PORT:-8882}
-      --http-request-allow-list ${HTTP_REQUEST_ALLOW_LIST:-anvil}"
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p ${LINERA_NET_PATH:-/tmp/wallet} &&
+        ./linera net \
+          --storage scylladb:tcp:scylla:9042:table_default \
+          up \
+          --path ${LINERA_NET_PATH:-/tmp/wallet} \
+          --with-faucet \
+          --faucet-port ${FAUCET_PORT:-8080} \
+          --with-block-exporter \
+          --exporter-address linera-block-exporter \
+          --exporter-port ${BLOCK_EXPORTER_PORT:-8882} \
+          $${HTTP_REQUEST_ALLOW_LIST:+--http-request-allow-list $$HTTP_REQUEST_ALLOW_LIST}
     environment:
       - RUST_LOG=linera=info
       - FAUCET_PORT=${FAUCET_PORT:-8080}
       - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
       - LINERA_NET_PATH=${LINERA_NET_PATH:-/tmp/wallet}
+      - HTTP_REQUEST_ALLOW_LIST=${HTTP_REQUEST_ALLOW_LIST:-}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/'${FAUCET_PORT:-8080}"]
       interval: 5s
