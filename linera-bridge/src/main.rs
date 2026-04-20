@@ -97,16 +97,14 @@ struct ServeOptions {
     /// The maximal number of entries in the blob cache.
     #[arg(long, default_value = "1000")]
     blob_cache_size: usize,
-<<<<<<< HEAD
-=======
 
     /// The maximal number of entries in the confirmed block cache.
     #[arg(long, default_value = "1000")]
     confirmed_block_cache_size: usize,
 
-    /// The maximal number of entries in the lite certificate cache.
+    /// The maximal number of entries in the certificate cache.
     #[arg(long, default_value = "1000")]
-    lite_certificate_cache_size: usize,
+    certificate_cache_size: usize,
 
     /// The maximal number of entries in the raw certificate cache.
     #[arg(long, default_value = "1000")]
@@ -127,7 +125,6 @@ struct ServeOptions {
     /// Maximum number of retry attempts for pending deposits and burns.
     #[arg(long, default_value = "10")]
     max_retries: u32,
->>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
 }
 
 fn main() -> Result<()> {
@@ -158,20 +155,17 @@ impl ServeOptions {
             &self.linera_fungible_address,
             &self.evm_private_key,
             self.port,
-<<<<<<< HEAD
-            self.blob_cache_size,
-=======
-            linera_storage::StorageCacheSizes {
+            linera_storage::StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
                 confirmed_block_cache_size: self.confirmed_block_cache_size,
-                lite_certificate_cache_size: self.lite_certificate_cache_size,
+                certificate_cache_size: self.certificate_cache_size,
                 certificate_raw_cache_size: self.certificate_raw_cache_size,
                 event_cache_size: self.event_cache_size,
+                cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
             self.monitor_scan_interval,
             self.monitor_start_block,
             self.max_retries,
->>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
         ))
         .await
     }

@@ -3684,24 +3684,15 @@ dependencies = [
 
 [[package]]
 name = "linera-cache"
-<<<<<<< HEAD
 version = "0.16.0"
-=======
-version = "0.15.15"
->>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
 dependencies = [
  "cfg_aliases",
  "linera-base",
  "lru 0.15.0",
-<<<<<<< HEAD
  "papaya",
  "prometheus",
  "quick_cache",
  "tokio",
-=======
- "prometheus",
- "quick_cache",
->>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
 ]
 
 [[package]]
@@ -5170,11 +5161,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls 0.23.37",
-<<<<<<< HEAD
  "socket2 0.6.3",
-=======
- "socket2 0.6.2",
->>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -5211,11 +5198,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
-<<<<<<< HEAD
  "socket2 0.6.3",
-=======
- "socket2 0.6.2",
->>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
  "tracing",
  "windows-sys 0.60.2",
 ]

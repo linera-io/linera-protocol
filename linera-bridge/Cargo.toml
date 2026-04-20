@@ -109,11 +109,8 @@ linera-faucet-client = { workspace = true, optional = true }
 linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 linera-storage = { workspace = true, optional = true }
 linera-views = { workspace = true, optional = true }
-<<<<<<< HEAD
 linera-wallet-json = { workspace = true, optional = true }
-=======
 prometheus = { workspace = true, optional = true }
->>>>>>> 7517c26e12 (Actively scan EVM and Linera chains to detect new and completed bridging requests. (#5793))
 rustls = { version = "0.23", optional = true, features = ["ring"] }
 tower-http = { workspace = true, optional = true, features = ["cors"] }
 tracing = { workspace = true, optional = true }

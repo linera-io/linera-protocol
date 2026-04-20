@@ -28,7 +28,7 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::{client::ChainClient, wallet::PersistentWallet, worker::Reason};
+use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_persistent::Persist;
@@ -40,6 +40,7 @@ use linera_views::{
     },
     lru_prefix_cache::StorageCacheConfig,
 };
+use linera_wallet_json::PersistentWallet;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::{
@@ -60,7 +61,7 @@ pub async fn run(
     linera_fungible_address: &str,
     evm_private_key: &str,
     port: u16,
-    cache_sizes: linera_storage::StorageCacheSizes,
+    cache_sizes: linera_storage::StorageCacheConfig,
     monitor_scan_interval: u64,
     monitor_start_block: u64,
     max_retries: u32,
@@ -127,7 +128,7 @@ pub async fn run(
 
     let admin_chain_id = wallet.genesis_config().admin_chain_id();
     let genesis_config = wallet.genesis_config().clone();
-    let mut ctx = ClientContext::new(
+    let mut ctx = Box::pin(ClientContext::new(
         storage,
         wallet,
         signer.clone(),
@@ -136,7 +137,7 @@ pub async fn run(
         genesis_config,
         linera_core::worker::DEFAULT_BLOCK_CACHE_SIZE,
         linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-    )
+    ))
     .await?;
 
     // ── Sync admin chain (always) ──
@@ -176,9 +177,10 @@ pub async fn run(
 
         // Verify our keystore contains an owner key for this chain.
         let ownership = chain_client.query_chain_ownership().await?;
-        let our_keys: Vec<AccountOwner> = signer.keys().into_iter().map(|(o, _)| o).collect();
-        let owner = our_keys
+        let owner = signer
+            .keys()
             .into_iter()
+            .map(|(o, _)| o)
             .find(|o| ownership.super_owners.contains(o) || ownership.owners.contains_key(o))
             .context("keystore has no key that is an owner of the specified --chain-id")?;
         tracing::info!(%cid, %owner, "Using pre-existing chain");
@@ -224,7 +226,7 @@ type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
 
 async fn create_rocksdb_storage(
     path: &Path,
-    cache_sizes: linera_storage::StorageCacheSizes,
+    cache_sizes: linera_storage::StorageCacheConfig,
 ) -> Result<RocksDbStorage> {
     let config = LruCachingConfig {
         inner_config: RocksDbStoreInternalConfig {

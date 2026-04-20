@@ -77,30 +77,27 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
     }
 
     pub async fn chain_info(&self) -> Result<Box<linera_core::data_types::ChainInfo>> {
-        Ok(self
-            .chain_client
+        self.chain_client
             .chain_info()
             .await
-            .map_err(|e| anyhow::anyhow!(e))?)
+            .map_err(|e| anyhow::anyhow!(e))
     }
 
     pub async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
     ) -> Result<linera_chain::block::ConfirmedBlock> {
-        Ok(self
-            .chain_client
+        self.chain_client
             .read_confirmed_block(hash)
             .await
-            .map_err(|e| anyhow::anyhow!(e))?)
+            .map_err(|e| anyhow::anyhow!(e))
     }
 
     pub async fn read_certificate(&self, hash: CryptoHash) -> Result<ConfirmedBlockCertificate> {
-        Ok(self
-            .chain_client
+        self.chain_client
             .read_certificate(hash)
             .await
-            .map_err(|e| anyhow::anyhow!(e))?)
+            .map_err(|e| anyhow::anyhow!(e))
     }
 
     pub async fn query_deposit_processed(&self, deposit_key: &DepositKey) -> Result<bool> {
