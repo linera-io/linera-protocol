@@ -85,7 +85,7 @@ impl Contract for EvmBridgeContract {
 
                 // Only cache when called by an authenticated signer (chain owner),
                 // preventing unauthenticated callers from bloating state.
-                if self.runtime.authenticated_signer().is_some() {
+                if self.runtime.authenticated_owner().is_some() {
                     self.state
                         .verified_block_hashes
                         .insert(&block_hash)

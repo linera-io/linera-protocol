@@ -3637,6 +3637,7 @@ dependencies = [
  "linera-base",
  "linera-execution",
  "op-alloy-network",
+ "thiserror 1.0.69",
  "tokio",
  "url",
 ]
@@ -3966,6 +3967,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "convert_case 0.6.0",
+ "custom_debug_derive",
  "derive_more 1.0.0",
  "futures",
  "generic-array",
