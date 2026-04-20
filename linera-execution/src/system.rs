@@ -35,6 +35,7 @@ use linera_views::{
     ViewError,
 };
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 #[cfg(test)]
 use crate::test_utils::SystemExecutionState;
@@ -955,7 +956,14 @@ where
             .await?;
 
         let blob = Blob::new_application_description(&application_description);
-        self.used_blobs.insert(&blob.id())?;
+        let blob_id = blob.id();
+        debug!(
+            target: "used_blobs_trace",
+            chain_id = %self.context().extra().chain_id(),
+            %blob_id,
+            "used_blobs.insert via create_application (app description)"
+        );
+        self.used_blobs.insert(&blob_id)?;
         txn_tracker.add_created_blob(blob);
 
         Ok(CreateApplicationResult {
@@ -1011,9 +1019,20 @@ where
         txn_tracker: &mut TransactionTracker,
         blob_id: BlobId,
     ) -> Result<bool, ExecutionError> {
+        let chain_id = self.context().extra().chain_id();
         if self.used_blobs.contains(&blob_id).await? {
+            debug!(
+                target: "used_blobs_trace",
+                %chain_id, %blob_id,
+                "used_blobs contains blob_id already: short-circuit (no oracle)"
+            );
             return Ok(false); // Nothing to do.
         }
+        debug!(
+            target: "used_blobs_trace",
+            %chain_id, %blob_id,
+            "used_blobs.insert via blob_used (records oracle)"
+        );
         self.used_blobs.insert(&blob_id)?;
         txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
         Ok(true)
@@ -1026,6 +1045,12 @@ where
         blob_id: &BlobId,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
+        let chain_id = self.context().extra().chain_id();
+        debug!(
+            target: "used_blobs_trace",
+            %chain_id, %blob_id,
+            "used_blobs.insert via blob_published"
+        );
         self.used_blobs.insert(blob_id)?;
         txn_tracker.add_published_blob(*blob_id);
         Ok(())

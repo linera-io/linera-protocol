@@ -835,6 +835,12 @@ where
         // If this block is higher than the next expected block in this chain, we're going
         // to have a gap: do not execute this block, only update the outboxes and return.
         if tip.next_block_height < height {
+            debug!(
+                target: "used_blobs_trace",
+                %chain_id, %height, %block_hash,
+                tip_height = %tip.next_block_height,
+                "process_confirmed_block: PREPROCESSING (future block, not executing)"
+            );
             // Update the outboxes and event streams.
             let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
@@ -901,6 +907,11 @@ where
             .as_ref()
             .and_then(|cache| cache.remove(&block_hash))
         {
+            debug!(
+                target: "used_blobs_trace",
+                %chain_id, %height, %block_hash,
+                "process_confirmed_block: execution_state_cache HIT — reusing cached state"
+            );
             chain.execution_state = execution_state
                 .with_context(|ctx| {
                     chain
@@ -911,6 +922,11 @@ where
                 .await;
             certificate.into_value()
         } else {
+            debug!(
+                target: "used_blobs_trace",
+                %chain_id, %height, %block_hash,
+                "process_confirmed_block: execution_state_cache MISS — replaying block"
+            );
             let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
             let oracle_responses = Some(outcome.oracle_responses.clone());
             let (proposed_block, verified, _resource_tracker) = chain
@@ -2068,6 +2084,13 @@ where
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
         if let Some(cache) = &self.execution_state_cache {
+            debug!(
+                target: "used_blobs_trace",
+                chain_id = %self.chain_id(),
+                height = %executed_block.header.height,
+                %block_hash,
+                "execute_block: caching post-execution state in execution_state_cache"
+            );
             cache.insert(
                 &block_hash,
                 Box::pin(

@@ -161,9 +161,18 @@ where
         let application_id = From::from(&application_description);
         let blob = Blob::new_application_description(&application_description);
 
-        self.system.used_blobs.insert(&blob.id())?;
-        self.system.used_blobs.insert(&contract_blob.id())?;
-        self.system.used_blobs.insert(&service_blob.id())?;
+        let app_desc_blob_id = blob.id();
+        let contract_blob_id = contract_blob.id();
+        let service_blob_id = service_blob.id();
+        tracing::debug!(
+            target: "used_blobs_trace",
+            %chain_id,
+            %app_desc_blob_id, %contract_blob_id, %service_blob_id,
+            "used_blobs.insert x3 via instantiate_application"
+        );
+        self.system.used_blobs.insert(&app_desc_blob_id)?;
+        self.system.used_blobs.insert(&contract_blob_id)?;
+        self.system.used_blobs.insert(&service_blob_id)?;
 
         self.context()
             .extra()
