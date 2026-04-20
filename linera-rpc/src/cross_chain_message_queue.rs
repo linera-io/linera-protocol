@@ -84,6 +84,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
             queue,
             match action {
                 Action::Proceed { .. } => {
+                    let target_chain_id = state.task.request.target_chain_id();
                     if let Err(error) = run_task(state.task).await {
                         warn!(
                             nickname = state.nickname,
@@ -91,6 +92,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                             retry = state.retries,
                             from_shard = this_shard,
                             to_shard,
+                            chain_id = %target_chain_id,
                             "Failed to send cross-chain query",
                         );
 

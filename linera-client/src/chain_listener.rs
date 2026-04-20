@@ -503,7 +503,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         context: Arc<Mutex<C>>,
         chain_id: ChainId,
     ) -> Result<(), Error> {
-        info!("Starting background certificate sync for chain {chain_id}");
+        info!("Starting background certificate sync");
         let client = context.lock().await.make_chain_client(chain_id).await?;
 
         Ok(client.find_received_certificates().await?)
