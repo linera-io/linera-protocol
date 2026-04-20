@@ -28,7 +28,7 @@ use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight,
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
-        PostedMessage, SignatureAggregator, Transaction,
+        PostedMessage, SignatureAggregator, Transaction, Vote,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -4674,7 +4674,18 @@ where
         );
     }
 
-    // Step 2: Corrupt `previous_message_blocks` in storage. This directly affects
+    // Step 2: Plant a confirmed vote in the chain manager. After the reset, it must
+    // still be present — otherwise the validator could be tricked into double-signing.
+    let planted_vote = {
+        let key_pair = env.worker().chain_worker_config.key_pair().unwrap().copy();
+        let mut chain = storage.load_chain(chain_id).await?;
+        let vote = Vote::new(cert_0.value().clone(), Round::Fast, &key_pair);
+        chain.manager.confirmed_vote.set(Some(vote.clone()));
+        chain.save().await?;
+        vote
+    };
+
+    // Step 3: Corrupt `previous_message_blocks` in storage. This directly affects
     // the BlockExecutionOutcome (it's a field in the outcome struct), so the next
     // block's computed outcome will differ from the certificate's.
     {
@@ -4749,6 +4760,19 @@ where
             .await,
         Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
     );
+    // The previously cast confirmed vote must have survived the reset, or the
+    // validator could be tricked into double-signing. We check this before the
+    // retry because `apply_confirmed_block` for cert_1 would otherwise wipe the
+    // manager during the course of the retry.
+    {
+        let chain = worker_with_recovery.chain_state_view(chain_id).await?;
+        let restored_vote = chain.manager.confirmed_vote.get().as_ref();
+        assert_eq!(
+            restored_vote.map(|v| v.signature),
+            Some(planted_vote.signature),
+            "confirmed_vote should be restored after reset-and-reexecute"
+        );
+    }
     // After the reset, retrying the certificate should succeed.
     worker_with_recovery
         .fully_handle_certificate_with_notifications(cert_1.clone(), &())

@@ -27,7 +27,7 @@ use linera_chain::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
         OriginalProposal, ProposalContent, ProposedBlock,
     },
-    manager,
+    manager::{self, ManagerSafetySnapshot},
     types::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
@@ -1300,7 +1300,11 @@ where
         let hashes = self.chain.confirmed_log.read(..).await?;
         let preprocessed = self.chain.preprocessed_blocks.index_values().await?;
 
-        // 2. Clear the chain state entirely and save.
+        // 2. Snapshot safety-critical manager state so that we cannot be tricked
+        //    into double-signing if the reset wipes votes we already cast.
+        let manager_snapshot = ManagerSafetySnapshot::capture(&self.chain.manager).await?;
+
+        // 3. Clear the chain state entirely and save.
         self.chain.clear();
         self.knows_chain_is_active = false;
         self.save().await?;
@@ -1309,7 +1313,7 @@ where
             re-executing all blocks"
         );
 
-        // 3. Re-load certificates one at a time by hash and re-process them.
+        // 4. Re-load certificates one at a time by hash and re-process them.
         for (index, hash) in hashes.into_iter().enumerate() {
             let height = BlockHeight(index as u64);
             let cert = self
@@ -1330,7 +1334,12 @@ where
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
 
-        // 4. Build RevertConfirm requests so each sender resends messages we may
+        // 5. Restore any previously cast votes and locking block so we cannot be
+        //    asked to sign a conflicting statement at the same height/round.
+        manager_snapshot.restore(&mut self.chain.manager)?;
+        self.save().await?;
+
+        // 6. Build RevertConfirm requests so each sender resends messages we may
         //    have lost during the reset.
         let revert_requests = sender_ids
             .into_iter()
