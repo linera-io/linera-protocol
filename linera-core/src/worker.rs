@@ -839,7 +839,10 @@ where
             if error.must_reload_view() {
                 self.evict_poisoned_worker(chain_id, &state);
             } else if error.indicates_corrupted_chain_state() {
-                Box::pin(wrap_future(self.reset_corrupted_chain_state(chain_id, &state))).await;
+                Box::pin(wrap_future(
+                    self.reset_corrupted_chain_state(chain_id, &state),
+                ))
+                .await;
             }
         }
         result
