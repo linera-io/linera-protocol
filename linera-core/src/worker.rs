@@ -1146,18 +1146,29 @@ where
                     return;
                 }
             };
-            let Some(sender) = &this.outbound_cross_chain_sender else {
-                if !requests.is_empty() {
-                    warn!(
-                        %chain_id, dropped = requests.len(),
-                        "No outbound cross-chain sender installed; \
-                        RevertConfirms after corruption reset are dropped"
-                    );
+            if let Some(sender) = &this.outbound_cross_chain_sender {
+                // Sharded validator path: let the RPC layer route each request to
+                // the shard that owns the target chain.
+                for request in requests {
+                    sender(request);
                 }
-                return;
-            };
-            for request in requests {
-                sender(request);
+            } else {
+                // No routing dispatcher is installed (client node or test), so all
+                // involved chains are co-located on this worker. Dispatch locally
+                // in a loop, following any cascading cross-chain requests.
+                let mut queue = VecDeque::from(requests);
+                while let Some(request) = queue.pop_front() {
+                    match this.handle_cross_chain_request(request).await {
+                        Ok(actions) => queue.extend(actions.cross_chain_requests),
+                        Err(error) => {
+                            warn!(
+                                %chain_id, %error,
+                                "Failed to dispatch cross-chain request after \
+                                resetting corrupted chain state"
+                            );
+                        }
+                    }
+                }
             }
         })
         .forget();
