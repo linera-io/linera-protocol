@@ -1159,7 +1159,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Downloads and processes certificates for sender chain blocks.
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "debug", skip_all, fields(chain_id = %sender_chain_id))]
     async fn download_and_process_sender_chain(
         &self,
         sender_chain_id: ChainId,
@@ -1171,7 +1171,7 @@ impl<Env: Environment> Client<Env> {
         let (max_epoch, committees) = match self.admin_committees().await {
             Ok(result) => result,
             Err(error) => {
-                error!(%error, %sender_chain_id, "could not read admin committees");
+                error!(%error, "could not read admin committees");
                 return;
             }
         };
@@ -1257,7 +1257,6 @@ impl<Env: Environment> Client<Env> {
                     nodes.retain(|node| !faulty_validators.contains(&node.public_key));
                     if nodes.is_empty() {
                         info!(
-                            chain_id = %sender_chain_id,
                             "could not download certificates for chain - no more correct validators left"
                         );
                         return;
@@ -1267,7 +1266,6 @@ impl<Env: Environment> Client<Env> {
             };
 
             trace!(
-                chain_id = %sender_chain_id,
                 num_certificates = %certificates.len(),
                 "received certificates",
             );
@@ -1307,10 +1305,7 @@ impl<Env: Environment> Client<Env> {
 
             remote_heights.retain(|height| !to_remove_from_queue.contains(height));
         }
-        trace!(
-            chain_id = %sender_chain_id,
-            "find_received_certificates: finished processing chain",
-        );
+        trace!("find_received_certificates: finished processing chain");
     }
 
     /// Downloads the log of received messages for a chain from a validator.

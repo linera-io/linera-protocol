@@ -503,7 +503,7 @@ where
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
         tracing::trace!(
-            "Processing new messages to {chain_id:.8} from {origin} at height {}",
+            "Processing new messages from {origin} at height {}",
             bundle.height,
         );
         let chain_and_height = ChainAndHeight {
@@ -609,7 +609,7 @@ where
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
-                "Removing [{}] from {chain_id:.8}'s inbox for {origin:}",
+                "Removing [{}] from inbox for {origin}",
                 bundles
                     .iter()
                     .map(|bundle| bundle.height.to_string())

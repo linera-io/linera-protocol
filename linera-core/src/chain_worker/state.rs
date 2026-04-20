@@ -850,7 +850,7 @@ where
                     },
                 });
             }
-            trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
+            trace!("Preprocessed confirmed block {height}");
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
             return Ok((
@@ -930,7 +930,7 @@ where
                     let elapsed = local_time.duration_since(block_zero_time);
                     if elapsed >= min_duration {
                         warn!(
-                            "IncorrectOutcome for block {height} on chain {chain_id}; \
+                            "IncorrectOutcome for block {height}; \
                             resetting chain state and re-executing"
                         );
                         return self
@@ -942,7 +942,7 @@ where
                             .await;
                     }
                     warn!(
-                        "IncorrectOutcome for block {height} on chain {chain_id}; \
+                        "IncorrectOutcome for block {height}; \
                         not resetting because only {elapsed:?} elapsed since last \
                         block 0 execution (minimum: {min_duration:?})"
                     );
@@ -960,7 +960,7 @@ where
             .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
-        trace!("Processed confirmed block {height} on chain {chain_id:.8}");
+        trace!("Processed confirmed block {height}");
         actions.notifications.push(Notification {
             chain_id,
             reason: Reason::NewBlock {
@@ -1021,7 +1021,7 @@ where
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    #[instrument(level = "trace", skip(self, bundles))]
+    #[instrument(level = "debug", skip(self, bundles), fields(chain_id = %self.chain_id()))]
     pub(crate) async fn process_cross_chain_update(
         &mut self,
         origin: ChainId,
@@ -1040,10 +1040,9 @@ where
         // we haven't received yet, the inbox has a gap.
         if let Some(prev) = sender_previous_height {
             if prev >= next_height_to_receive {
-                let recipient = self.chain_id();
                 if self.config.allow_revert_confirm {
                     warn!(
-                        "Inbox gap detected for {recipient} from {origin}: \
+                        "Inbox gap detected from {origin}: \
                         sender declares previous height {prev} but we only have up to \
                         {next_height_to_receive}; requesting resend",
                     );
@@ -1053,7 +1052,7 @@ where
                     });
                 }
                 return Err(ChainError::InboxGapDetected {
-                    chain_id: recipient,
+                    chain_id: self.chain_id(),
                     origin,
                     expected_height: prev,
                     actual_height: bundles.first().map(|(_, b)| b.height).unwrap_or_default(),
@@ -1098,7 +1097,7 @@ where
             // now. Accordingly, do not send a confirmation, so that the
             // cross-chain update is retried later.
             warn!(
-                "Refusing to deliver messages to {recipient} from {origin} \
+                "Refusing to deliver messages from {origin} \
                 at height {last_updated_height} because the recipient is still inactive",
             );
             return Ok(CrossChainUpdateResult::NothingToDo);
@@ -1263,7 +1262,7 @@ where
         self.knows_chain_is_active = false;
         self.save().await?;
         warn!(
-            "Cleared chain state for {chain_id} up to height {tip_height}; \
+            "Cleared chain state up to height {tip_height}; \
             re-executing all blocks"
         );
 
@@ -1317,7 +1316,7 @@ where
         }
 
         warn!(
-            "Chain {chain_id} reset and re-executed up to height {}; \
+            "Chain reset and re-executed up to height {}; \
             sent RevertConfirm to {} senders",
             self.chain.tip_state.get().next_block_height,
             actions
@@ -2112,7 +2111,6 @@ where
             if error.must_reload_view() {
                 tracing::error!(
                     ?error,
-                    chain_id = %self.chain_id(),
                     "Journal resolution failed; marking worker as poisoned"
                 );
                 self.poisoned = true;
