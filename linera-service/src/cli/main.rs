@@ -79,7 +79,6 @@ use linera_service::{
     storage::{Runnable, RunnableWithStore, StorageCacheConfig},
     task_processor::TaskProcessor,
     util,
-    wallet::WalletExt as _,
 };
 use linera_storage::{DbStorage, Storage};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
@@ -2488,7 +2487,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
             WalletCommand::ForgetKeys { chain_id } => {
                 let start_time = Instant::now();
                 let owner = options.wallet()?.forget_keys(*chain_id)?;
-<<<<<<< HEAD
                 if !options
                     .keystore()?
                     .contains_key(&owner)
@@ -2496,19 +2494,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     .expect("Signer error")
                 {
                     warn!("no keypair found in keystore for chain {chain_id}");
-=======
-                if let Some(owner) = owner {
-                    if !options
-                        .signer()?
-                        .contains_key(&owner)
-                        .await
-                        .expect("Signer error")
-                    {
-                        warn!("no keypair found in keystore for chain {chain_id}");
-                    }
-                } else {
-                    warn!("no owner key found for chain {chain_id}");
->>>>>>> 857be0b3aa (Improve linera bridge relayer API (#5754))
                 }
                 info!(
                     "Chain keys forgotten in {} ms",

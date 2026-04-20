@@ -821,27 +821,18 @@ impl<Env: Environment> ClientContext<Env> {
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, Error> {
         info!("Loading bytecode files");
-<<<<<<< HEAD
-        let contract_bytecode = Bytecode::load_from_file(&contract)
-            .await
-            .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
-        let service_bytecode = Bytecode::load_from_file(&service)
-            .await
-            .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
-=======
-        let contract_bytecode = Bytecode::load_from_file(&contract).map_err(|e| {
+        let contract_bytecode = Bytecode::load_from_file(&contract).await.map_err(|e| {
             std::io::Error::new(
                 e.kind(),
                 format!("failed to load contract bytecode from {contract:?}: {e}"),
             )
         })?;
-        let service_bytecode = Bytecode::load_from_file(&service).map_err(|e| {
+        let service_bytecode = Bytecode::load_from_file(&service).await.map_err(|e| {
             std::io::Error::new(
                 e.kind(),
                 format!("failed to load service bytecode from {service:?}: {e}"),
             )
         })?;
->>>>>>> 857be0b3aa (Improve linera bridge relayer API (#5754))
 
         info!("Publishing module");
         let (blobs, module_id) =

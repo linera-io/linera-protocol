@@ -110,7 +110,7 @@ kube = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
-linera-core = { workspace = true, features = ["fs"] }
+linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
 linera-exporter = { workspace = true, default-features = false }
 linera-faucet-client.workspace = true

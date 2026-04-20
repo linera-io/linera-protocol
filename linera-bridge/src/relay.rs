@@ -27,7 +27,7 @@ use linera_base::{
 };
 use linera_chain::data_types::Transaction;
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::{client::ChainClient, wallet::PersistentWallet, worker::Reason};
+use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Message, Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_persistent::Persist;
@@ -39,6 +39,7 @@ use linera_views::{
     },
     lru_prefix_cache::StorageCacheConfig,
 };
+use linera_wallet_json::PersistentWallet;
 use tokio::sync::{mpsc, oneshot};
 use tower_http::cors::CorsLayer;
 
@@ -280,7 +281,14 @@ async fn create_rocksdb_storage(path: &Path, blob_cache_size: usize) -> Result<R
         &config,
         "bridge_relay",
         Some(WasmRuntime::default()),
-        blob_cache_size,
+        linera_storage::StorageCacheConfig {
+            blob_cache_size,
+            confirmed_block_cache_size: blob_cache_size,
+            certificate_cache_size: blob_cache_size,
+            certificate_raw_cache_size: blob_cache_size,
+            event_cache_size: blob_cache_size,
+            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
+        },
     )
     .await?;
     Ok(storage)
@@ -301,7 +309,7 @@ pub async fn run(
     linera_fungible_address: &str,
     evm_private_key: &str,
     port: u16,
-    cache_sizes: linera_storage::StorageCacheConfig,
+    blob_cache_size: usize,
 ) -> Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -339,25 +347,10 @@ pub async fn run(
     let genesis_config = faucet.genesis_config().await?;
     tracing::info!("Genesis config received");
 
-<<<<<<< HEAD
-    let config = MemoryStoreConfig {
-        max_stream_queries: 10,
-        kill_on_drop: true,
-    };
-    tracing::info!("Creating storage...");
-    let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(
-        &config,
-        "bridge-relay",
-        Some(WasmRuntime::default()),
-        cache_sizes,
-    )
-    .await?;
-=======
     let mut signer: InMemorySigner =
         linera_persistent::File::<InMemorySigner>::read(&keystore_path)
             .context("failed to read keystore")?
             .into_value();
->>>>>>> 857be0b3aa (Improve linera bridge relayer API (#5754))
 
     // Parse storage path: expect "rocksdb:/path/to/db"
     let db_path = storage_path
@@ -397,11 +390,7 @@ pub async fn run(
     tracing::info!(%admin_chain_id, "Syncing admin chain from validators...");
     let committee = faucet.current_committee().await?;
     tracing::info!(
-<<<<<<< HEAD
         validators = committee.validators().len(),
-=======
-        validators = committee.validators().iter().count(),
->>>>>>> 857be0b3aa (Improve linera bridge relayer API (#5754))
         "Fetched current committee, downloading chain state..."
     );
     let admin_client = ctx.make_chain_client(admin_chain_id).await?;

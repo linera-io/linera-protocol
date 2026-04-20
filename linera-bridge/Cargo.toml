@@ -53,6 +53,7 @@ relay = [
     "dep:linera-faucet-client",
     "dep:linera-persistent",
     "dep:linera-storage",
+    "dep:linera-wallet-json",
     "dep:linera-views",
     "linera-storage/rocksdb",
     "linera-views/rocksdb",
@@ -105,11 +106,12 @@ futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 linera-chain = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
-linera-core = { workspace = true, optional = true, features = ["fs"] }
+linera-core = { workspace = true, optional = true }
 linera-faucet-client = { workspace = true, optional = true }
 linera-persistent = { workspace = true, optional = true, features = ["fs"] }
 linera-storage = { workspace = true, optional = true }
 linera-views = { workspace = true, optional = true }
+linera-wallet-json = { workspace = true, optional = true }
 rustls = { version = "0.23", optional = true, features = ["ring"] }
 tower-http = { workspace = true, optional = true, features = ["cors"] }
 tracing = { workspace = true, optional = true }

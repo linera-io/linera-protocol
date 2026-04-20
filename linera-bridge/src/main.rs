@@ -97,22 +97,6 @@ struct ServeOptions {
     /// The maximal number of entries in the blob cache.
     #[arg(long, default_value = "1000")]
     blob_cache_size: usize,
-
-    /// The maximal number of entries in the confirmed block cache.
-    #[arg(long, default_value = "1000")]
-    confirmed_block_cache_size: usize,
-
-    /// The maximal number of entries in the assembled certificate cache.
-    #[arg(long, default_value = "1000")]
-    certificate_cache_size: usize,
-
-    /// The maximal number of entries in the raw certificate cache.
-    #[arg(long, default_value = "1000")]
-    certificate_raw_cache_size: usize,
-
-    /// The maximal number of entries in the event cache.
-    #[arg(long, default_value = "1000")]
-    event_cache_size: usize,
 }
 
 fn main() -> Result<()> {
@@ -143,18 +127,7 @@ impl ServeOptions {
             &self.linera_fungible_address,
             &self.evm_private_key,
             self.port,
-<<<<<<< HEAD
-            linera_storage::StorageCacheConfig {
-                blob_cache_size: self.blob_cache_size,
-                confirmed_block_cache_size: self.confirmed_block_cache_size,
-                certificate_cache_size: self.certificate_cache_size,
-                certificate_raw_cache_size: self.certificate_raw_cache_size,
-                event_cache_size: self.event_cache_size,
-                cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-            },
-=======
             self.blob_cache_size,
->>>>>>> 857be0b3aa (Improve linera bridge relayer API (#5754))
         ))
         .await
     }
