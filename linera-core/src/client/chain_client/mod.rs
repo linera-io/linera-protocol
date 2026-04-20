@@ -908,9 +908,9 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
-    #[instrument(level = "trace")]
+    #[instrument(level = "debug", skip(self), fields(chain_id = %self.chain_id))]
     pub async fn find_received_certificates(&self) -> Result<(), Error> {
-        debug!(chain_id = %self.chain_id, "starting find_received_certificates");
+        debug!("starting find_received_certificates");
         #[cfg(with_metrics)]
         let _latency = super::metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
         // Use network information from the local chain.
@@ -1013,7 +1013,7 @@ impl<Env: Environment> ChainClient<Env> {
             error!(
                 chain_id = %self.chain_id,
                 %error,
-                "Failed to update the certificate trackers for chain",
+                "Failed to update the certificate trackers",
             );
         }
     }
@@ -1293,8 +1293,8 @@ impl<Env: Environment> ChainClient<Env> {
                     },
                 ))) if expected_block_height > found_block_height => {
                     tracing::info!(
-                        "Local state is outdated; synchronizing chain {:.8}",
-                        self.chain_id
+                        chain_id = %self.chain_id,
+                        "Local state is outdated; synchronizing chain"
                     );
                     self.synchronize_chain_state(self.chain_id).await?;
                 }
@@ -1332,6 +1332,7 @@ impl<Env: Environment> ChainClient<Env> {
         let lock_start = linera_base::time::Instant::now();
         let mut proposal_guard = mutex.lock_owned().await;
         tracing::debug!(
+            chain_id = %self.chain_id,
             lock_wait_ms = lock_start.elapsed().as_millis(),
             "acquired proposal_mutex in execute_block"
         );
@@ -1822,7 +1823,7 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// The caller must hold the proposal mutex via `proposal_guard`. The pending proposal
     /// is read from and cleared through the guard, ensuring synchronization.
-    #[instrument(level = "trace", skip(proposal_guard))]
+    #[instrument(level = "debug", skip(self, proposal_guard), fields(chain_id = %self.chain_id))]
     async fn process_pending_block_without_prepare(
         &self,
         proposal_guard: &mut Option<PendingProposal>,
