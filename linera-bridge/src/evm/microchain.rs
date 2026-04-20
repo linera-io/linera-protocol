@@ -187,18 +187,5 @@ mod tests {
             );
             count
         }
-<<<<<<< HEAD
-
-        fn query_next_expected_height(&mut self) -> u64 {
-            let (height, _, _) = call_contract(
-                &mut self.db,
-                self.deployer,
-                self.contract,
-                &nextExpectedHeightCall {},
-            );
-            height
-        }
-=======
->>>>>>> 108ddaaacb (Remove sequential block height requirement from Microchain contract (#5763))
     }
 }
