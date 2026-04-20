@@ -958,10 +958,9 @@ where
         let blob = Blob::new_application_description(&application_description);
         let blob_id = blob.id();
         warn!(
-            target: "used_blobs_trace",
             chain_id = %self.context().extra().chain_id(),
             %blob_id,
-            "used_blobs.insert via create_application (app description)"
+            "used_blobs_trace: used_blobs.insert via create_application (app description)"
         );
         self.used_blobs.insert(&blob_id)?;
         txn_tracker.add_created_blob(blob);
@@ -1022,16 +1021,14 @@ where
         let chain_id = self.context().extra().chain_id();
         if self.used_blobs.contains(&blob_id).await? {
             warn!(
-                target: "used_blobs_trace",
                 %chain_id, %blob_id,
-                "used_blobs contains blob_id already: short-circuit (no oracle)"
+                "used_blobs_trace: used_blobs contains blob_id already: short-circuit (no oracle)"
             );
             return Ok(false); // Nothing to do.
         }
         warn!(
-            target: "used_blobs_trace",
             %chain_id, %blob_id,
-            "used_blobs.insert via blob_used (records oracle)"
+            "used_blobs_trace: used_blobs.insert via blob_used (records oracle)"
         );
         self.used_blobs.insert(&blob_id)?;
         txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
@@ -1047,9 +1044,8 @@ where
     ) -> Result<(), ExecutionError> {
         let chain_id = self.context().extra().chain_id();
         warn!(
-            target: "used_blobs_trace",
             %chain_id, %blob_id,
-            "used_blobs.insert via blob_published"
+            "used_blobs_trace: used_blobs.insert via blob_published"
         );
         self.used_blobs.insert(blob_id)?;
         txn_tracker.add_published_blob(*blob_id);

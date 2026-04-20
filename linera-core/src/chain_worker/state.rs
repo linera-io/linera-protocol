@@ -836,10 +836,9 @@ where
         // to have a gap: do not execute this block, only update the outboxes and return.
         if tip.next_block_height < height {
             warn!(
-                target: "used_blobs_trace",
                 %chain_id, %height, %block_hash,
                 tip_height = %tip.next_block_height,
-                "process_confirmed_block: PREPROCESSING (future block, not executing)"
+                "used_blobs_trace: process_confirmed_block: PREPROCESSING (future block, not executing)"
             );
             // Update the outboxes and event streams.
             let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
@@ -908,9 +907,8 @@ where
             .and_then(|cache| cache.remove(&block_hash))
         {
             warn!(
-                target: "used_blobs_trace",
                 %chain_id, %height, %block_hash,
-                "process_confirmed_block: execution_state_cache HIT — reusing cached state"
+                "used_blobs_trace: process_confirmed_block: execution_state_cache HIT — reusing cached state"
             );
             chain.execution_state = execution_state
                 .with_context(|ctx| {
@@ -923,9 +921,8 @@ where
             certificate.into_value()
         } else {
             warn!(
-                target: "used_blobs_trace",
                 %chain_id, %height, %block_hash,
-                "process_confirmed_block: execution_state_cache MISS — replaying block"
+                "used_blobs_trace: process_confirmed_block: execution_state_cache MISS — replaying block"
             );
             let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
             let oracle_responses = Some(outcome.oracle_responses.clone());
@@ -2085,11 +2082,10 @@ where
         let block_hash = CryptoHash::new(&executed_block);
         if let Some(cache) = &self.execution_state_cache {
             warn!(
-                target: "used_blobs_trace",
                 chain_id = %self.chain_id(),
                 height = %executed_block.header.height,
                 %block_hash,
-                "execute_block: caching post-execution state in execution_state_cache"
+                "used_blobs_trace: execute_block: caching post-execution state in execution_state_cache"
             );
             cache.insert(
                 &block_hash,

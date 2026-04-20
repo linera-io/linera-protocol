@@ -706,11 +706,10 @@ where
                 .check_blob_size(blob.content())
                 .with_execution_context(ChainExecutionContext::Block)?;
             warn!(
-                target: "used_blobs_trace",
                 chain_id = %block.chain_id,
                 height = %block.height,
                 %blob_id,
-                "used_blobs.insert via execute_block_inner (published_blobs)"
+                "used_blobs_trace: used_blobs.insert via execute_block_inner (published_blobs)"
             );
             chain.system.used_blobs.insert(&blob_id)?;
         }
