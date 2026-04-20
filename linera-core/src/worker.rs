@@ -517,7 +517,17 @@ where
     chain_worker_tasks: Arc<Mutex<JoinSet>>,
     /// The cache of running [`ChainWorkerActor`]s.
     chain_workers: Arc<Mutex<BTreeMap<ChainId, ChainActorEndpoint<StorageClient>>>>,
+    /// Shard-routing dispatcher for outbound cross-chain requests. Used when we need
+    /// to send cross-chain requests outside of the normal `NetworkActions` return
+    /// path — in particular, the `RevertConfirm`s emitted after resetting a
+    /// corrupted chain. The RPC server layer installs this; without it, those
+    /// requests are dropped with a warning.
+    outbound_cross_chain_sender: Option<OutboundCrossChainSender>,
 }
+
+/// Dispatcher for outbound cross-chain requests that handles the source-shard-to-
+/// target-shard routing that the worker itself is not aware of.
+pub type OutboundCrossChainSender = Arc<dyn Fn(CrossChainRequest) + Send + Sync>;
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
 where
@@ -534,6 +544,7 @@ where
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_worker_tasks: self.chain_worker_tasks.clone(),
             chain_workers: self.chain_workers.clone(),
+            outbound_cross_chain_sender: self.outbound_cross_chain_sender.clone(),
         }
     }
 }
@@ -570,6 +581,7 @@ where
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
             chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
+            outbound_cross_chain_sender: None,
         }
     }
 
@@ -592,7 +604,16 @@ where
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
             chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
+            outbound_cross_chain_sender: None,
         }
+    }
+
+    /// Installs a shard-routing dispatcher used for outbound cross-chain requests
+    /// generated outside the normal response path (specifically, after resetting a
+    /// corrupted chain). Without it, such requests are dropped.
+    pub fn with_outbound_cross_chain_sender(mut self, sender: OutboundCrossChainSender) -> Self {
+        self.outbound_cross_chain_sender = Some(sender);
+        self
     }
 
     #[instrument(level = "trace", skip(self, value))]
@@ -1096,8 +1117,8 @@ where
 
     /// Spawns a detached task that asks the chain worker actor to recover the chain
     /// from a detected state corruption and dispatches any generated `RevertConfirm`
-    /// requests. Errors are logged; the originating caller already has an error
-    /// to propagate.
+    /// requests via the installed shard-routing sender. Errors are logged; the
+    /// originating caller already has an error to propagate.
     fn spawn_reset_corrupted_chain_state(&self, chain_id: ChainId) {
         let this = self.clone();
         linera_base::Task::spawn(async move {
@@ -1125,18 +1146,18 @@ where
                     return;
                 }
             };
-            let mut queue = VecDeque::from(requests);
-            while let Some(request) = queue.pop_front() {
-                match this.handle_cross_chain_request(request).await {
-                    Ok(actions) => queue.extend(actions.cross_chain_requests),
-                    Err(error) => {
-                        warn!(
-                            %chain_id, %error,
-                            "Failed to dispatch cross-chain request after \
-                            resetting corrupted chain state"
-                        );
-                    }
+            let Some(sender) = &this.outbound_cross_chain_sender else {
+                if !requests.is_empty() {
+                    warn!(
+                        %chain_id, dropped = requests.len(),
+                        "No outbound cross-chain sender installed; \
+                        RevertConfirms after corruption reset are dropped"
+                    );
                 }
+                return;
+            };
+            for request in requests {
+                sender(request);
             }
         })
         .forget();
