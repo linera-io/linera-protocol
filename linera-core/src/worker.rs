@@ -26,9 +26,7 @@ use linera_cache::{UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock,
-    },
+    data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
@@ -380,15 +378,6 @@ pub enum WorkerError {
     #[error("The block does not contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
     #[error(
-        "The given outcome is not what we computed after executing the block.\n\
-        Computed: {computed:#?}\n\
-        Submitted: {submitted:#?}"
-    )]
-    IncorrectOutcome {
-        computed: Box<BlockExecutionOutcome>,
-        submitted: Box<BlockExecutionOutcome>,
-    },
-    #[error(
         "Block timestamp ({block_timestamp}) is further in the future from local time \
         ({local_time}) than block time grace period ({block_time_grace_period:?}) \
         [us:{block_timestamp_us}:{local_time_us}]",
@@ -469,7 +458,6 @@ impl WorkerError {
             | WorkerError::MissingNetworkDescription
             | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_)
-            | WorkerError::IncorrectOutcome { .. }
             | WorkerError::PoisonedWorker => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
@@ -507,13 +495,11 @@ impl WorkerError {
     /// internally inconsistent, so the worker should consider resetting and
     /// re-executing it from storage.
     fn indicates_corrupted_chain_state(&self) -> bool {
-        match self {
-            WorkerError::IncorrectOutcome { .. } => true,
-            WorkerError::ChainError(chain_error) => {
-                matches!(chain_error.as_ref(), ChainError::CorruptedChainState(_))
-            }
-            _ => false,
-        }
+        matches!(
+            self,
+            WorkerError::ChainError(chain_error)
+                if matches!(chain_error.as_ref(), ChainError::CorruptedChainState(_))
+        )
     }
 }
 

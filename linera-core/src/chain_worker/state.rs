@@ -969,10 +969,12 @@ where
                 .await?;
             // We should always agree on the messages and state hash.
             if outcome != verified {
-                return Err(WorkerError::IncorrectOutcome {
-                    submitted: Box::new(outcome),
-                    computed: Box::new(verified),
-                });
+                return Err(ChainError::CorruptedChainState(format!(
+                    "computed block outcome differs from the certificate.\n\
+                    Computed: {verified:#?}\n\
+                    Submitted: {outcome:#?}"
+                ))
+                .into());
             }
             ConfirmedBlock::new(Block::new(proposed_block, verified))
         };

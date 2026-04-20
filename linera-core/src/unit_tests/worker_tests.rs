@@ -1811,7 +1811,7 @@ where
         env.worker()
             .fully_handle_certificate_with_notifications(certificate, &())
             .await,
-        Err(WorkerError::IncorrectOutcome { .. })
+        Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
     );
     Ok(())
 }
@@ -4626,7 +4626,7 @@ where
 ///
 /// Corrupts a chain's `previous_message_blocks` in storage so that re-executing the
 /// next block produces a different `BlockExecutionOutcome`. First verifies that the
-/// corruption causes `IncorrectOutcome` without the recovery flag, then enables the
+/// corruption causes `CorruptedChainState` without the recovery flag, then enables the
 /// flag and verifies that the chain is reset and re-executed successfully.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
@@ -4699,7 +4699,7 @@ where
         )
         .await;
 
-    // Step 4: Verify that WITHOUT recovery, processing fails with IncorrectOutcome.
+    // Step 4: Verify that WITHOUT recovery, processing fails with CorruptedChainState.
     {
         let worker_no_recovery = WorkerState::new(
             storage.clone(),
@@ -4720,7 +4720,7 @@ where
             worker_no_recovery
                 .fully_handle_certificate_with_notifications(cert_1.clone(), &())
                 .await,
-            Err(WorkerError::IncorrectOutcome { .. })
+            Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
         );
     }
 
@@ -4747,7 +4747,7 @@ where
         worker_with_recovery
             .fully_handle_certificate_with_notifications(cert_1.clone(), &())
             .await,
-        Err(WorkerError::IncorrectOutcome { .. })
+        Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
     );
     // After the reset, retrying the certificate should succeed.
     worker_with_recovery
