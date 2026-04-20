@@ -839,48 +839,57 @@ where
             if error.must_reload_view() {
                 self.evict_poisoned_worker(chain_id, &state);
             } else if error.indicates_corrupted_chain_state() {
-                Box::pin(wrap_future(
-                    self.reset_corrupted_chain_state(chain_id, &state),
-                ))
-                .await;
+                self.spawn_reset_corrupted_chain_state(chain_id, state);
             }
         }
         result
     }
 
-    /// Re-acquires a write lock and asks the chain worker to recover from a detected
-    /// state corruption. Generated `RevertConfirm` requests are dispatched through the
-    /// normal cross-chain pipeline. Any error along the way is logged but not returned:
-    /// the caller already has the original error to propagate.
-    async fn reset_corrupted_chain_state(
+    /// Spawns a detached task that re-acquires the write lock and recovers the
+    /// chain from a detected state corruption. Running the recovery in a separate
+    /// task ensures it survives cancellation of the originating request: if the
+    /// caller's future is dropped mid-way through re-execution, the chain would
+    /// otherwise be left at a partial tip and our safety snapshot would be lost.
+    /// Generated `RevertConfirm` requests are dispatched through the normal
+    /// cross-chain pipeline. Errors are logged; the caller already has the
+    /// original error to propagate.
+    fn spawn_reset_corrupted_chain_state(
         &self,
         chain_id: ChainId,
-        state: &ChainWorkerArc<StorageClient>,
-    ) {
-        let requests = {
-            let mut guard = handle::write_lock(state).await;
-            match guard.maybe_reset_corrupted_chain_state().await {
-                Ok(Some(requests)) => requests,
-                Ok(None) => return,
-                Err(error) => {
-                    tracing::error!(%chain_id, %error, "Failed to reset corrupted chain state");
-                    return;
+        state: ChainWorkerArc<StorageClient>,
+    ) where
+        StorageClient: Clone,
+    {
+        let this = self.clone();
+        linera_base::Task::spawn(async move {
+            let requests = {
+                let mut guard = handle::write_lock(&state).await;
+                match guard.maybe_reset_corrupted_chain_state().await {
+                    Ok(Some(requests)) => requests,
+                    Ok(None) => return,
+                    Err(error) => {
+                        tracing::error!(
+                            %chain_id, %error, "Failed to reset corrupted chain state"
+                        );
+                        return;
+                    }
+                }
+            };
+            let mut queue = VecDeque::from(requests);
+            while let Some(request) = queue.pop_front() {
+                match this.handle_cross_chain_request(request).await {
+                    Ok(actions) => queue.extend(actions.cross_chain_requests),
+                    Err(error) => {
+                        tracing::warn!(
+                            %chain_id, %error,
+                            "Failed to dispatch cross-chain request after \
+                            resetting corrupted chain state"
+                        );
+                    }
                 }
             }
-        };
-        let mut queue = VecDeque::from(requests);
-        while let Some(request) = queue.pop_front() {
-            match self.handle_cross_chain_request(request).await {
-                Ok(actions) => queue.extend(actions.cross_chain_requests),
-                Err(error) => {
-                    tracing::warn!(
-                        %chain_id, %error,
-                        "Failed to dispatch cross-chain request after \
-                        resetting corrupted chain state"
-                    );
-                }
-            }
-        }
+        })
+        .forget();
     }
 
     /// Evicts a poisoned chain worker from the cache, but only if the entry still
