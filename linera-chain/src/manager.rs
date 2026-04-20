@@ -798,7 +798,7 @@ impl ManagerSafetySnapshot {
     /// Reads the safety-critical fields from the given `manager`.
     pub async fn capture<C>(manager: &ChainManager<C>) -> Result<Self, ViewError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
     {
         Ok(Self {
             confirmed_vote: manager.confirmed_vote.get().clone(),
@@ -815,7 +815,7 @@ impl ManagerSafetySnapshot {
     /// upper bound on what this validator has already committed to.
     pub fn restore<C>(self, manager: &mut ChainManager<C>) -> Result<(), ViewError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
     {
         manager.confirmed_vote.set(self.confirmed_vote);
         manager.validated_vote.set(self.validated_vote);
