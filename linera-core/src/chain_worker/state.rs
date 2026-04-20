@@ -2108,14 +2108,9 @@ where
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
-            if error.must_reload_view() {
-                tracing::error!(
-                    ?error,
-                    "Journal resolution failed; marking worker as poisoned"
-                );
-                self.poisoned = true;
-            }
-            return Err(error.into());
+            tracing::error!(?error, "Chain save failed; marking worker as poisoned");
+            self.poisoned = true;
+            return Err(WorkerError::PoisonedWorker);
         }
         Ok(())
     }

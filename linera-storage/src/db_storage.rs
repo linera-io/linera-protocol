@@ -775,10 +775,7 @@ where
             .with_label_values(&[metrics::DB])
             .inc();
         match value {
-            Some(block) => {
-                self.caches.confirmed_block.insert(&hash, block);
-                Ok(self.caches.confirmed_block.get(&hash))
-            }
+            Some(block) => Ok(Some(self.caches.confirmed_block.insert(&hash, block))),
             None => Ok(None),
         }
     }
@@ -807,10 +804,11 @@ where
             for (miss_idx, root_key) in misses.iter().zip(root_keys) {
                 let store = self.database.open_shared(&root_key)?;
                 if let Some(block) = store.read_value::<ConfirmedBlock>(BLOCK_KEY).await? {
-                    self.caches
-                        .confirmed_block
-                        .insert(&hashes[*miss_idx], block);
-                    results[*miss_idx] = self.caches.confirmed_block.get(&hashes[*miss_idx]);
+                    results[*miss_idx] = Some(
+                        self.caches
+                            .confirmed_block
+                            .insert(&hashes[*miss_idx], block),
+                    );
                 }
             }
         }
@@ -851,8 +849,7 @@ where
         match maybe_blob_bytes {
             Some(blob_bytes) => {
                 let blob = Blob::new_with_id_unchecked(blob_id, blob_bytes);
-                self.caches.blob.insert(&blob_id, blob);
-                Ok(self.caches.blob.get(&blob_id))
+                Ok(Some(self.caches.blob.insert(&blob_id, blob)))
             }
             None => Ok(None),
         }
@@ -1090,10 +1087,11 @@ where
                 let store = self.database.open_shared(&root_key)?;
                 let values = store.read_multi_values_bytes(&get_block_keys()).await?;
                 if let (Some(lite), Some(block)) = (values[0].as_ref(), values[1].as_ref()) {
-                    self.caches
-                        .certificate_raw
-                        .insert(&hashes[*miss_idx], (lite.clone(), block.clone()));
-                    results[*miss_idx] = self.caches.certificate_raw.get(&hashes[*miss_idx]);
+                    results[*miss_idx] = Some(
+                        self.caches
+                            .certificate_raw
+                            .insert(&hashes[*miss_idx], (lite.clone(), block.clone())),
+                    );
                 }
             }
         }
@@ -1248,10 +1246,7 @@ where
             .with_label_values(&[metrics::DB])
             .inc();
         match event {
-            Some(event_bytes) => {
-                self.caches.event.insert(&event_id, event_bytes);
-                Ok(self.caches.event.get(&event_id))
-            }
+            Some(event_bytes) => Ok(Some(self.caches.event.insert(&event_id, event_bytes))),
             None => Ok(None),
         }
     }
