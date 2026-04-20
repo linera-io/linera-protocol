@@ -969,27 +969,6 @@ where
                 .await?;
             // We should always agree on the messages and state hash.
             if outcome != verified {
-                if let Some(min_duration) = self.config.reset_on_incorrect_outcome {
-                    let block_zero_time = *self.chain.block_zero_executed_at.get();
-                    let elapsed = local_time.duration_since(block_zero_time);
-                    if elapsed >= min_duration {
-                        warn!(
-                            "IncorrectOutcome for block {height} on chain {chain_id}; \
-                            resetting chain state and re-executing"
-                        );
-                        return self
-                            .reset_and_reexecute_chain(
-                                certificate,
-                                notify_when_messages_are_delivered,
-                            )
-                            .await;
-                    }
-                    warn!(
-                        "IncorrectOutcome for block {height} on chain {chain_id}; \
-                        not resetting because only {elapsed:?} elapsed since last \
-                        block 0 execution (minimum: {min_duration:?})"
-                    );
-                }
                 return Err(WorkerError::IncorrectOutcome {
                     submitted: Box::new(outcome),
                     computed: Box::new(verified),
@@ -1278,16 +1257,39 @@ where
         Ok(actions)
     }
 
+    /// If the config enables corruption recovery and the min-duration guard is
+    /// satisfied, resets the chain state and re-executes all confirmed blocks.
+    /// Returns `RevertConfirm` requests to dispatch, or `None` if no reset happened.
+    pub(crate) async fn maybe_reset_corrupted_chain_state(
+        &mut self,
+    ) -> Result<Option<Vec<CrossChainRequest>>, WorkerError> {
+        let Some(min_duration) = self.config.reset_on_corrupted_chain_state else {
+            return Ok(None);
+        };
+        let chain_id = self.chain_id();
+        let local_time = self.storage.clock().current_time();
+        let block_zero_time = *self.chain.block_zero_executed_at.get();
+        let elapsed = local_time.duration_since(block_zero_time);
+        if elapsed < min_duration {
+            warn!(
+                "Not resetting corrupted chain state for {chain_id} because only \
+                {elapsed:?} elapsed since last block 0 execution (minimum: {min_duration:?})"
+            );
+            return Ok(None);
+        }
+        warn!("Corrupted chain state detected for {chain_id}; resetting and re-executing");
+        Ok(Some(self.reset_and_reexecute_chain().await?))
+    }
+
     /// Resets the chain state completely and re-executes all confirmed blocks from storage.
-    /// Sends `RevertConfirm` to all known senders so they resend cross-chain messages.
+    /// Returns a `RevertConfirm` request for every known sender so they resend cross-chain
+    /// messages that may have been lost during the reset.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
     ))]
-    async fn reset_and_reexecute_chain(
+    pub(crate) async fn reset_and_reexecute_chain(
         &mut self,
-        failed_certificate: ConfirmedBlockCertificate,
-        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+    ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         let chain_id = self.chain_id();
         let tip_height = self.chain.tip_state.get().next_block_height;
 
@@ -1326,37 +1328,25 @@ where
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
 
-        // 4. Now process the original certificate that triggered the error.
-        let result = Box::pin(
-            self.process_confirmed_block(failed_certificate, notify_when_messages_are_delivered),
-        )
-        .await?;
-
-        // 5. Send RevertConfirm to all senders so they resend messages we may
+        // 4. Build RevertConfirm requests so each sender resends messages we may
         //    have lost during the reset.
-        let (info, mut actions, outcome) = result;
-        for sender_id in sender_ids {
-            actions
-                .cross_chain_requests
-                .push(CrossChainRequest::RevertConfirm {
-                    sender: sender_id,
-                    recipient: chain_id,
-                    retransmit_from: BlockHeight::ZERO,
-                });
-        }
+        let revert_requests = sender_ids
+            .into_iter()
+            .map(|sender| CrossChainRequest::RevertConfirm {
+                sender,
+                recipient: chain_id,
+                retransmit_from: BlockHeight::ZERO,
+            })
+            .collect::<Vec<_>>();
 
         warn!(
             "Chain {chain_id} reset and re-executed up to height {}; \
-            sent RevertConfirm to {} senders",
+            sending RevertConfirm to {} senders",
             self.chain.tip_state.get().next_block_height,
-            actions
-                .cross_chain_requests
-                .iter()
-                .filter(|r| matches!(r, CrossChainRequest::RevertConfirm { .. }))
-                .count(),
+            revert_requests.len(),
         );
 
-        Ok((info, actions, outcome))
+        Ok(revert_requests)
     }
 
     #[instrument(skip_all, fields(

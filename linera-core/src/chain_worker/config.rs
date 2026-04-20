@@ -48,10 +48,10 @@ pub struct ChainWorkerConfig {
     pub cross_chain_message_chunk_limit: usize,
     /// Whether to attempt recovery via `RevertConfirm` when an inbox gap is detected.
     pub allow_revert_confirm: bool,
-    /// If set, reset the chain state and re-execute all blocks when an
-    /// `IncorrectOutcome` error is encountered — but only if the given duration has
+    /// If set, reset the chain state and re-execute all blocks when the chain
+    /// state is detected to be corrupted — but only if the given duration has
     /// elapsed since block 0 was last executed (to prevent reset loops).
-    pub reset_on_incorrect_outcome: Option<Duration>,
+    pub reset_on_corrupted_chain_state: Option<Duration>,
 }
 
 impl ChainWorkerConfig {
@@ -85,7 +85,7 @@ impl Default for ChainWorkerConfig {
             ignored_bundle_origins: HashSet::new(),
             cross_chain_message_chunk_limit: usize::MAX,
             allow_revert_confirm: false,
-            reset_on_incorrect_outcome: None,
+            reset_on_corrupted_chain_state: None,
         }
     }
 }

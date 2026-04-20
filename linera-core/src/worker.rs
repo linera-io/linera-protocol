@@ -502,6 +502,19 @@ impl WorkerError {
                 })
         )
     }
+
+    /// Returns `true` if this error indicates that the chain's persisted state is
+    /// internally inconsistent, so the worker should consider resetting and
+    /// re-executing it from storage.
+    fn indicates_corrupted_chain_state(&self) -> bool {
+        match self {
+            WorkerError::IncorrectOutcome { .. } => true,
+            WorkerError::ChainError(chain_error) => {
+                matches!(chain_error.as_ref(), ChainError::CorruptedChainState(_))
+            }
+            _ => false,
+        }
+    }
 }
 
 impl From<ChainError> for WorkerError {
@@ -839,9 +852,46 @@ where
         if let Err(error) = &result {
             if error.must_reload_view() {
                 self.evict_poisoned_worker(chain_id, &state);
+            } else if error.indicates_corrupted_chain_state() {
+                Box::pin(self.reset_corrupted_chain_state(chain_id, &state)).await;
             }
         }
         result
+    }
+
+    /// Re-acquires a write lock and asks the chain worker to recover from a detected
+    /// state corruption. Generated `RevertConfirm` requests are dispatched through the
+    /// normal cross-chain pipeline. Any error along the way is logged but not returned:
+    /// the caller already has the original error to propagate.
+    async fn reset_corrupted_chain_state(
+        &self,
+        chain_id: ChainId,
+        state: &ChainWorkerArc<StorageClient>,
+    ) {
+        let requests = {
+            let mut guard = handle::write_lock(state).await;
+            match guard.maybe_reset_corrupted_chain_state().await {
+                Ok(Some(requests)) => requests,
+                Ok(None) => return,
+                Err(error) => {
+                    tracing::error!(%chain_id, %error, "Failed to reset corrupted chain state");
+                    return;
+                }
+            }
+        };
+        let mut queue = VecDeque::from(requests);
+        while let Some(request) = queue.pop_front() {
+            match self.handle_cross_chain_request(request).await {
+                Ok(actions) => queue.extend(actions.cross_chain_requests),
+                Err(error) => {
+                    tracing::warn!(
+                        %chain_id, %error,
+                        "Failed to dispatch cross-chain request after \
+                        resetting corrupted chain state"
+                    );
+                }
+            }
+        }
     }
 
     /// Evicts a poisoned chain worker from the cache, but only if the entry still

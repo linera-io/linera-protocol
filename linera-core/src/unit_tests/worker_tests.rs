@@ -4622,7 +4622,7 @@ where
     Ok(())
 }
 
-/// Tests the reset-on-incorrect-outcome recovery mechanism.
+/// Tests the reset-on-corrupted-chain-state recovery mechanism.
 ///
 /// Corrupts a chain's `previous_message_blocks` in storage so that re-executing the
 /// next block produces a different `BlockExecutionOutcome`. First verifies that the
@@ -4633,7 +4633,7 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_reset_on_incorrect_outcome<B>(mut storage_builder: B) -> anyhow::Result<()>
+async fn test_reset_on_corrupted_chain_state<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
@@ -4731,7 +4731,7 @@ where
             nickname: "Recovery worker".to_string(),
             allow_inactive_chains: true,
             allow_messages_from_deprecated_epochs: true,
-            reset_on_incorrect_outcome: Some(Duration::from_secs(0)),
+            reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
             block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
             ..ChainWorkerConfig::default()
         }
@@ -4741,6 +4741,15 @@ where
         None,
     );
 
+    // The first call returns the original error but triggers a background reset that
+    // re-executes prior blocks and fixes the corruption.
+    assert_matches!(
+        worker_with_recovery
+            .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+            .await,
+        Err(WorkerError::IncorrectOutcome { .. })
+    );
+    // After the reset, retrying the certificate should succeed.
     worker_with_recovery
         .fully_handle_certificate_with_notifications(cert_1.clone(), &())
         .await?;
