@@ -441,9 +441,7 @@ where
                 .get_mut()
                 .get_mut(&update)
                 .ok_or_else(|| {
-                    ChainError::CorruptedChainState(
-                        "message counter should be present".into(),
-                    )
+                    ChainError::CorruptedChainState("message counter should be present".into())
                 })?;
             *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
             if *counter == 0 {
@@ -1320,9 +1318,7 @@ where
                         let index =
                             usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                         Some(self.confirmed_log.get(index).await?.ok_or_else(|| {
-                            ChainError::CorruptedChainState(
-                                "missing entry in confirmed_log".into(),
-                            )
+                            ChainError::CorruptedChainState("missing entry in confirmed_log".into())
                         })?)
                     }
                     // The block with last added message has not been executed yet. If we have it,
