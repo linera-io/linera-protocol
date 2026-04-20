@@ -1335,9 +1335,22 @@ where
         }
 
         // 5. Restore any previously cast votes and locking block so we cannot be
-        //    asked to sign a conflicting statement at the same height/round.
-        manager_snapshot.restore(&mut self.chain.manager)?;
-        self.save().await?;
+        //    asked to sign a conflicting statement at the same height/round. Votes
+        //    in the manager always belong to the pending height (one past the tip),
+        //    so restoring is only meaningful if re-execution landed at the same
+        //    tip. Otherwise the restored state would refer to a stale pending
+        //    height and could only break the manager's invariants without any
+        //    safety benefit — so we drop the snapshot in that case.
+        let new_tip_height = self.chain.tip_state.get().next_block_height;
+        if new_tip_height == tip_height {
+            manager_snapshot.restore(&mut self.chain.manager)?;
+            self.save().await?;
+        } else {
+            warn!(
+                "Dropping manager snapshot for {chain_id}: pre-reset tip {tip_height} \
+                differs from post-reset tip {new_tip_height}"
+            );
+        }
 
         // 6. Build RevertConfirm requests so each sender resends messages we may
         //    have lost during the reset.
