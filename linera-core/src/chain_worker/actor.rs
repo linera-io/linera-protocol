@@ -41,7 +41,7 @@ use super::{
 use crate::{
     chain_worker::BlockOutcome,
     client::ListeningMode,
-    data_types::{ChainInfoQuery, ChainInfoResponse},
+    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     worker::{NetworkActions, WorkerError},
 };
 
@@ -304,6 +304,15 @@ where
         #[allow(clippy::type_complexity)]
         callback:
             oneshot::Sender<Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, WorkerError>>,
+    },
+
+    /// If the config enables corruption recovery and the min-duration guard is
+    /// satisfied, reset the chain state and re-execute all confirmed blocks.
+    /// Returns the list of `RevertConfirm` requests to dispatch, or `None` if no
+    /// reset happened.
+    ResetCorruptedChainState {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Option<Vec<CrossChainRequest>>, WorkerError>>,
     },
 }
 

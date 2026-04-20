@@ -23,9 +23,7 @@ use linera_cache::{UniqueValueCache, ValueCache};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock,
-    },
+    data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
@@ -344,15 +342,6 @@ pub enum WorkerError {
     #[error("The block does not contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
     #[error(
-        "The given outcome is not what we computed after executing the block.\n\
-        Computed: {computed:#?}\n\
-        Submitted: {submitted:#?}"
-    )]
-    IncorrectOutcome {
-        computed: Box<BlockExecutionOutcome>,
-        submitted: Box<BlockExecutionOutcome>,
-    },
-    #[error(
         "Block timestamp ({block_timestamp}) is further in the future from local time \
         ({local_time}) than block time grace period ({block_time_grace_period:?}) \
         [us:{block_timestamp_us}:{local_time_us}]",
@@ -443,8 +432,7 @@ impl WorkerError {
             | WorkerError::ChainActorSendError { .. }
             | WorkerError::ChainActorRecvError { .. }
             | WorkerError::Thread(_)
-            | WorkerError::ReadCertificatesError(_)
-            | WorkerError::IncorrectOutcome { .. } => true,
+            | WorkerError::ReadCertificatesError(_) => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
     }
@@ -453,6 +441,17 @@ impl WorkerError {
     /// which may leave storage in an inconsistent state requiring a view reload.
     pub fn must_reload_view(&self) -> bool {
         matches!(self, WorkerError::ViewError(e) if e.must_reload_view())
+    }
+
+    /// Returns `true` if this error indicates that the chain's persisted state is
+    /// internally inconsistent, so the worker should consider resetting and
+    /// re-executing it from storage.
+    fn indicates_corrupted_chain_state(&self) -> bool {
+        matches!(
+            self,
+            WorkerError::ChainError(chain_error)
+                if matches!(chain_error.as_ref(), ChainError::CorruptedChainState(_))
+        )
     }
 }
 
@@ -622,8 +621,8 @@ where
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn with_reset_on_incorrect_outcome(mut self, minutes: Option<u64>) -> Self {
-        self.chain_worker_config.reset_on_incorrect_outcome =
+    pub fn with_reset_on_corrupted_chain_state(mut self, minutes: Option<u64>) -> Self {
+        self.chain_worker_config.reset_on_corrupted_chain_state =
             minutes.map(|m| Duration::from_secs(m * 60));
         self
     }
@@ -1071,7 +1070,7 @@ where
         }
 
         // Finally, wait a response.
-        match response.await {
+        let result = match response.await {
             Err(e) => {
                 // The actor endpoint was dropped. Better luck next time!
                 Err(WorkerError::ChainActorRecvError {
@@ -1080,7 +1079,67 @@ where
                 })
             }
             Ok(response) => response,
+        };
+        // If the operation failed with a corruption signal, detach a task to reset
+        // the chain state and re-execute all blocks. Running the recovery in a
+        // separate task ensures it survives cancellation of the originating
+        // request: if the caller's future is dropped mid-way through re-execution,
+        // the chain would otherwise be left at a partial tip and our safety
+        // snapshot would be lost.
+        if let Err(error) = &result {
+            if error.indicates_corrupted_chain_state() {
+                self.spawn_reset_corrupted_chain_state(chain_id);
+            }
         }
+        result
+    }
+
+    /// Spawns a detached task that asks the chain worker actor to recover the chain
+    /// from a detected state corruption and dispatches any generated `RevertConfirm`
+    /// requests. Errors are logged; the originating caller already has an error
+    /// to propagate.
+    fn spawn_reset_corrupted_chain_state(&self, chain_id: ChainId) {
+        let this = self.clone();
+        linera_base::Task::spawn(async move {
+            let (callback, response) = oneshot::channel();
+            let request = ChainWorkerRequest::ResetCorruptedChainState { callback };
+            if this
+                .call_and_maybe_create_chain_worker_endpoint(chain_id, request)
+                .is_err()
+            {
+                warn!(%chain_id, "Failed to send reset-corrupted-chain-state request");
+                return;
+            }
+            let requests = match response.await {
+                Ok(Ok(Some(requests))) => requests,
+                Ok(Ok(None)) => return,
+                Ok(Err(error)) => {
+                    error!(%chain_id, %error, "Failed to reset corrupted chain state");
+                    return;
+                }
+                Err(error) => {
+                    error!(
+                        %chain_id, %error,
+                        "Chain worker actor dropped the reset request"
+                    );
+                    return;
+                }
+            };
+            let mut queue = VecDeque::from(requests);
+            while let Some(request) = queue.pop_front() {
+                match this.handle_cross_chain_request(request).await {
+                    Ok(actions) => queue.extend(actions.cross_chain_requests),
+                    Err(error) => {
+                        warn!(
+                            %chain_id, %error,
+                            "Failed to dispatch cross-chain request after \
+                            resetting corrupted chain state"
+                        );
+                    }
+                }
+            }
+        })
+        .forget();
     }
 
     /// Find an endpoint and call it. Create the endpoint if necessary.
