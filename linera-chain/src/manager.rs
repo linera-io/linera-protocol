@@ -750,6 +750,55 @@ where
     }
 }
 
+/// The safety-critical fields of a [`ChainManager`]: previously cast votes and the
+/// locking block. Re-applying these after a chain reset prevents a validator from
+/// being tricked into double-signing at a height/round it has already voted on.
+#[derive(Debug, Default)]
+pub struct ManagerSafetySnapshot {
+    confirmed_vote: Option<Vote<ConfirmedBlock>>,
+    validated_vote: Option<Vote<ValidatedBlock>>,
+    timeout_vote: Option<Vote<Timeout>>,
+    fallback_vote: Option<Vote<Timeout>>,
+    locking_block: Option<LockingBlock>,
+    locking_blobs: Vec<(BlobId, Blob)>,
+}
+
+impl ManagerSafetySnapshot {
+    /// Reads the safety-critical fields from the given `manager`.
+    pub async fn capture<C>(manager: &ChainManager<C>) -> Result<Self, ViewError>
+    where
+        C: Context + Clone + 'static,
+    {
+        Ok(Self {
+            confirmed_vote: manager.confirmed_vote.get().clone(),
+            validated_vote: manager.validated_vote.get().clone(),
+            timeout_vote: manager.timeout_vote.get().clone(),
+            fallback_vote: manager.fallback_vote.get().clone(),
+            locking_block: manager.locking_block.get().clone(),
+            locking_blobs: manager.locking_blobs.index_values().await?,
+        })
+    }
+
+    /// Writes the captured fields back into `manager`, overriding anything that
+    /// may have been produced by re-execution. The restored state is the safe
+    /// upper bound on what this validator has already committed to.
+    pub fn restore<C>(self, manager: &mut ChainManager<C>) -> Result<(), ViewError>
+    where
+        C: Context + Clone + 'static,
+    {
+        manager.confirmed_vote.set(self.confirmed_vote);
+        manager.validated_vote.set(self.validated_vote);
+        manager.timeout_vote.set(self.timeout_vote);
+        manager.fallback_vote.set(self.fallback_vote);
+        manager.locking_block.set(self.locking_block);
+        manager.locking_blobs.clear();
+        for (blob_id, blob) in self.locking_blobs {
+            manager.locking_blobs.insert(&blob_id, blob)?;
+        }
+        Ok(())
+    }
+}
+
 /// Chain manager information that is included in `ChainInfo` sent to clients.
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
