@@ -157,7 +157,12 @@ fn main() -> Result<()> {
 #[cfg(feature = "relay")]
 impl ServeOptions {
     async fn run(&self) -> Result<()> {
-        linera_base::tracing::init("linera-bridge");
+        tracing_subscriber::fmt::init();
+
+        // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .expect("failed to install rustls crypto provider");
 
         // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
         rustls::crypto::ring::default_provider()

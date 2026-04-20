@@ -1102,7 +1102,7 @@ impl ClientCommand {
             | ClientCommand::Validator { .. }
             | ClientCommand::RetryPendingBlock { .. }
             | ClientCommand::QueryApplication { .. } => "client".into(),
-            | ClientCommand::ExecuteOperation { .. } => "client".into(),
+            ClientCommand::ExecuteOperation { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
             ClientCommand::Net { .. } => "net".into(),

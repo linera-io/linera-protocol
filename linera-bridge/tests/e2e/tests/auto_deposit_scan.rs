@@ -227,8 +227,8 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
 
     tracing::info!("Publishing evm-bridge module...");
-    let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm"))?;
-    let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm"))?;
+    let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm")).await?;
+    let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm")).await?;
     let (eb_module_id, _) = cc_a
         .publish_module(eb_contract, eb_service, VmRuntime::Wasm)
         .await?
@@ -254,8 +254,10 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     tracing::info!(%bridge_app_id, "evm-bridge app created");
 
     tracing::info!("Publishing wrapped-fungible module...");
-    let wf_contract = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm"))?;
-    let wf_service = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm"))?;
+    let wf_contract =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm")).await?;
+    let wf_service =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm")).await?;
     let (wf_module_id, _) = cc_a
         .publish_module(wf_contract, wf_service, VmRuntime::Wasm)
         .await?
@@ -354,7 +356,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
-            &linera_storage_runtime::CommonStorageOptions::with_defaults(),
+            linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
             5,  // monitor_scan_interval
             0,  // monitor_start_block
             5,  // max_retries

@@ -1,15 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-<<<<<<< HEAD
-#![recursion_limit = "256"]
-
-//! End-to-end test: trigger a committee rotation on Linera and verify the exporter relays
-=======
 #![recursion_limit = "512"]
 
 //! End-to-end test: trigger a committee rotation on Linera and verify the relay relays
->>>>>>> d31a5fc784 (Relayer updates committes (#5994))
 //! it to the LightClient contract on Anvil (via docker-compose).
 
 use std::time::{Duration, Instant};
@@ -98,7 +92,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             ANVIL_PRIVATE_KEY,
             Some(&light_client.to_string()),
             relay_port,
-            &linera_storage_runtime::CommonStorageOptions::with_defaults(),
+            linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
             5,  // monitor_scan_interval
             0,  // monitor_start_block
             5,  // max_retries

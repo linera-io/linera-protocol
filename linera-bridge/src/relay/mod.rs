@@ -34,9 +34,8 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-<<<<<<< HEAD
 use linera_persistent::Persist;
-use linera_storage::DbStorage;
+use linera_storage::{DbStorage, Storage as _};
 use linera_views::{
     backends::{
         lru_caching::LruCachingConfig,
@@ -44,11 +43,6 @@ use linera_views::{
     },
     lru_prefix_cache::StorageCacheConfig,
 };
-=======
-use linera_storage::{DbStorage, Storage as _};
-use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
-use linera_views::backends::rocks_db::RocksDbDatabase;
->>>>>>> d31a5fc784 (Relayer updates committes (#5994))
 use linera_wallet_json::PersistentWallet;
 use tokio::sync::{mpsc, RwLock};
 
@@ -112,16 +106,6 @@ pub async fn run(
     max_retries: u32,
     sqlite_path: Option<&Path>,
 ) -> Result<()> {
-<<<<<<< HEAD
-    tracing_subscriber::fmt::init();
-
-    // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("failed to install rustls crypto provider");
-
-=======
->>>>>>> d31a5fc784 (Relayer updates committes (#5994))
     tracing::info!("Starting bridge relay server...");
 
     // ── Resolve paths (same defaults as linera binary: ~/.config/linera/) ──
@@ -273,13 +257,9 @@ pub async fn run(
         monitor_start_block,
         max_retries,
         sqlite_path,
-<<<<<<< HEAD
         Path::new(db_path),
-=======
-        &db_path,
         admin_chain_id,
         admin_chain_height,
->>>>>>> d31a5fc784 (Relayer updates committes (#5994))
     ))
     .await
 }
