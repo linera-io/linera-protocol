@@ -96,9 +96,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
-    let mut client1 = builder
-        .add_root_super_owner_chain(1, Amount::ONE)
-        .await?;
+    let mut client1 = builder.add_root_super_owner_chain(1, Amount::ONE).await?;
     let chain_id1 = client1.chain_id();
     let client2 = builder.add_root_chain(2, Amount::ONE).await?;
     // Start a chain listener for chain 1 with a new key.
@@ -552,9 +550,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
     // Chain 0: admin chain (regular owner).
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     // Chain 1: the chain under test (super owner, will change ownership).
-    let mut client1 = builder
-        .add_root_super_owner_chain(1, Amount::ONE)
-        .await?;
+    let mut client1 = builder.add_root_super_owner_chain(1, Amount::ONE).await?;
     let chain_id1 = client1.chain_id();
     // Chain 2: sender of incoming messages.
     let client2 = builder.add_root_chain(2, Amount::ONE).await?;

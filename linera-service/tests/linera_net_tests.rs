@@ -25,7 +25,7 @@ use guard::INTEGRATION_TEST_GUARD;
 use linera_base::vm::{EvmInstantiation, EvmOperation, EvmQuery};
 use linera_base::{
     crypto::{CryptoHash, Secp256k1SecretKey},
-    data_types::{Amount, ApplicationPermissions},
+    data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, OwnerSpender},
     time::{Duration, Instant},
     vm::VmRuntime,
@@ -5452,8 +5452,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     service_client.wallet_init(None).await?;
     let service_owner = service_client.keygen().await?;
     // We make it a multi-owner chain, so that worker1 can also propose.
+    // The controller application is allowed to manage the chain from the start.
     let service_chain = admin_client
-        .open_multi_owner_chain(
+        .open_multi_owner_chain_with_manage_chain(
             admin_chain,
             vec![
                 (service_owner, 100),
@@ -5469,20 +5470,10 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             u32::MAX,
             Amount::from_tokens(10),
             1000,
+            vec![controller_id.forget_abi()],
         )
         .await?;
     service_client.assign(service_owner, service_chain).await?;
-    // Service chain block 0: allow the controller application to change ownership
-    service_client
-        .change_application_permissions(
-            service_chain,
-            ApplicationPermissions {
-                manage_chain: vec![controller_id.forget_abi()],
-                ..Default::default()
-            },
-        )
-        .await
-        .expect("changing application permissions should succeed");
 
     let admin_port = get_node_port().await;
     let mut admin_node_service = admin_client

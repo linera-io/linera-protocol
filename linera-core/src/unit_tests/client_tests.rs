@@ -1243,9 +1243,7 @@ where
             ..ResourceControlPolicy::default()
         });
     let admin = builder.add_root_chain(0, initial_balance).await?;
-    let user = builder
-        .add_root_super_owner_chain(1, Amount::ZERO)
-        .await?;
+    let user = builder.add_root_super_owner_chain(1, Amount::ZERO).await?;
     let validators = builder.initial_committee.validators().clone();
 
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel())?;
