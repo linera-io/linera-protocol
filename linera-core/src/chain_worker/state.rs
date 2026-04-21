@@ -801,33 +801,24 @@ where
             ));
         }
 
-        // We haven't processed the block - verify the certificate first.
+        // We haven't processed the block - verify the certificate first. A miss produces
+        // `ExecutionError::EventsNotFound`, which the client-side retry path watches for
+        // to trigger an admin-chain sync.
         let epoch = block.header.epoch;
-        let committee = match self.storage.get_or_load_committee(epoch).await? {
-            Some(committee) => committee,
-            None => {
-                // Surface the same error a normal committee load would produce,
-                // so retry logic (e.g. syncing admin-chain blocks) sees the
-                // expected `EventsNotFound` variant.
-                let committee = self
-                    .chain
-                    .execution_state
-                    .context()
-                    .extra()
-                    .get_committees(epoch..=epoch)
-                    .await
-                    .map_err(|error| {
-                        ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-                    })?
-                    .remove(&epoch)
-                    .ok_or_else(|| {
-                        ChainError::InternalError(format!(
-                            "missing committee for epoch {epoch}; this is a bug"
-                        ))
-                    })?;
-                Arc::new(committee)
-            }
-        };
+        let committee = self
+            .chain
+            .execution_state
+            .context()
+            .extra()
+            .get_committees(epoch..=epoch)
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?
+            .remove(&epoch)
+            .ok_or_else(|| {
+                ChainError::InternalError(format!(
+                    "missing committee for epoch {epoch}; this is a bug"
+                ))
+            })?;
         certificate.check(&committee)?;
 
         // Certificate check passed - which means the blobs the block requires are legitimate and

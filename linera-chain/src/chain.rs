@@ -8,7 +8,7 @@ use std::{
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
         OracleResponse, Timestamp,

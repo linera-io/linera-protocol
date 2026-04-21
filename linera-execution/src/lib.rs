@@ -37,7 +37,7 @@ use linera_base::{
         Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
         Timestamp,
     },
-    doc_scalar, ensure, hex_debug, http,
+    doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, DataBlobHash, EventId,
         GenericApplicationId, ModuleId, StreamId, StreamName,
@@ -558,80 +558,40 @@ pub trait ExecutionRuntimeContext {
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
-    /// Returns the committees for the epochs in the given range.
+    /// Returns the committees for the epochs in the given range. Delegates per-epoch
+    /// look-ups to [`Self::get_or_load_committee`] so the process-global cache is hit,
+    /// and surfaces any missing epochs as a single [`ExecutionError::EventsNotFound`].
     async fn get_committees(
         &self,
         epoch_range: RangeInclusive<Epoch>,
     ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
-        let net_description = self
-            .get_network_description()
-            .await?
-            .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
-        let committee_hashes = futures::future::join_all(
-            (epoch_range.start().0..=epoch_range.end().0).map(|epoch| async move {
-                if epoch == 0 {
-                    // Genesis epoch is stored in NetworkDescription.
-                    Ok((epoch, net_description.genesis_committee_blob_hash))
-                } else {
-                    let event_id = EventId {
-                        chain_id: net_description.admin_chain_id,
-                        stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                        index: epoch,
-                    };
-                    let event = self
-                        .get_event(event_id.clone())
-                        .await?
-                        .ok_or_else(|| ExecutionError::EventsNotFound(vec![event_id]))?;
-                    Ok((epoch, bcs::from_bytes(&event)?))
+        let mut committees = BTreeMap::new();
+        let mut missing = Vec::new();
+        for index in epoch_range.start().0..=epoch_range.end().0 {
+            let epoch = Epoch(index);
+            match self.get_or_load_committee(epoch).await? {
+                Some(committee) => {
+                    committees.insert(epoch, (*committee).clone());
                 }
-            }),
-        )
-        .await;
-        let missing_events = committee_hashes
-            .iter()
-            .filter_map(|result| {
-                if let Err(ExecutionError::EventsNotFound(event_ids)) = result {
-                    return Some(event_ids);
-                }
-                None
-            })
-            .flatten()
-            .cloned()
-            .collect::<Vec<_>>();
-        ensure!(
-            missing_events.is_empty(),
-            ExecutionError::EventsNotFound(missing_events)
-        );
-        let committee_hashes = committee_hashes
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-        let committees = futures::future::join_all(committee_hashes.into_iter().map(
-            |(epoch, committee_hash)| async move {
-                let blob_id = BlobId::new(committee_hash, BlobType::Committee);
-                let committee_blob = self
-                    .get_blob(blob_id)
-                    .await?
-                    .ok_or_else(|| ExecutionError::BlobsNotFound(vec![blob_id]))?;
-                Ok((Epoch(epoch), bcs::from_bytes(committee_blob.bytes())?))
-            },
-        ))
-        .await;
-        let missing_blobs = committees
-            .iter()
-            .filter_map(|result| {
-                if let Err(ExecutionError::BlobsNotFound(blob_ids)) = result {
-                    return Some(blob_ids);
-                }
-                None
-            })
-            .flatten()
-            .cloned()
-            .collect::<Vec<_>>();
-        ensure!(
-            missing_blobs.is_empty(),
-            ExecutionError::BlobsNotFound(missing_blobs)
-        );
-        committees.into_iter().collect()
+                None => missing.push(epoch),
+            }
+        }
+        if !missing.is_empty() {
+            let net_description = self
+                .get_network_description()
+                .await?
+                .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
+            let event_ids = missing
+                .into_iter()
+                .map(|epoch| EventId {
+                    chain_id: net_description.admin_chain_id,
+                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                    index: epoch.0,
+                })
+                .collect();
+            return Err(ExecutionError::EventsNotFound(event_ids));
+        }
+        Ok(committees)
     }
 
     /// Returns the committee for `epoch`, consulting the shared cache first.
