@@ -604,7 +604,17 @@ pub struct WorkerState<StorageClient: Storage> {
     /// manages its own lifetime via a keep-alive task. A background sweep
     /// periodically removes dead entries.
     chain_workers: ChainWorkerMap<StorageClient>,
+    /// Shard-routing dispatcher for outbound cross-chain requests. Used when we need
+    /// to send cross-chain requests outside of the normal `NetworkActions` return
+    /// path — in particular, the `RevertConfirm`s emitted after resetting a
+    /// corrupted chain. The RPC server layer installs this; without it, we fall
+    /// back to dispatching locally through `handle_cross_chain_request`.
+    outbound_cross_chain_sender: Option<OutboundCrossChainSender>,
 }
+
+/// Dispatcher for outbound cross-chain requests that handles the source-shard-to-
+/// target-shard routing that the worker itself is not aware of.
+pub type OutboundCrossChainSender = Arc<dyn Fn(CrossChainRequest) + Send + Sync>;
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
 where
@@ -619,6 +629,7 @@ where
             chain_modes: self.chain_modes.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_workers: self.chain_workers.clone(),
+            outbound_cross_chain_sender: self.outbound_cross_chain_sender.clone(),
         }
     }
 }
@@ -762,7 +773,17 @@ where
             chain_modes,
             delivery_notifiers: Arc::default(),
             chain_workers,
+            outbound_cross_chain_sender: None,
         }
+    }
+
+    /// Installs a shard-routing dispatcher used for outbound cross-chain requests
+    /// generated outside the normal response path (specifically, after resetting a
+    /// corrupted chain). Without it, such requests are dispatched locally in a
+    /// loop via `handle_cross_chain_request`.
+    pub fn with_outbound_cross_chain_sender(mut self, sender: OutboundCrossChainSender) -> Self {
+        self.outbound_cross_chain_sender = Some(sender);
+        self
     }
 
     #[instrument(level = "trace", skip(self, certificate, notifier))]
@@ -850,9 +871,11 @@ where
     /// task ensures it survives cancellation of the originating request: if the
     /// caller's future is dropped mid-way through re-execution, the chain would
     /// otherwise be left at a partial tip and our safety snapshot would be lost.
-    /// Generated `RevertConfirm` requests are dispatched through the normal
-    /// cross-chain pipeline. Errors are logged; the caller already has the
-    /// original error to propagate.
+    /// Generated `RevertConfirm` requests are dispatched via the installed
+    /// shard-routing sender when present (sharded validators), or locally
+    /// through `handle_cross_chain_request` otherwise (client nodes and tests).
+    /// Errors are logged; the caller already has the original error to
+    /// propagate.
     fn spawn_reset_corrupted_chain_state(
         &self,
         chain_id: ChainId,
@@ -875,16 +898,27 @@ where
                     }
                 }
             };
-            let mut queue = VecDeque::from(requests);
-            while let Some(request) = queue.pop_front() {
-                match this.handle_cross_chain_request(request).await {
-                    Ok(actions) => queue.extend(actions.cross_chain_requests),
-                    Err(error) => {
-                        tracing::warn!(
-                            %chain_id, %error,
-                            "Failed to dispatch cross-chain request after \
-                            resetting corrupted chain state"
-                        );
+            if let Some(sender) = &this.outbound_cross_chain_sender {
+                // Sharded validator path: let the RPC layer route each request to
+                // the shard that owns the target chain.
+                for request in requests {
+                    sender(request);
+                }
+            } else {
+                // No routing dispatcher is installed (client node or test), so all
+                // involved chains are co-located on this worker. Dispatch locally
+                // in a loop, following any cascading cross-chain requests.
+                let mut queue = VecDeque::from(requests);
+                while let Some(request) = queue.pop_front() {
+                    match this.handle_cross_chain_request(request).await {
+                        Ok(actions) => queue.extend(actions.cross_chain_requests),
+                        Err(error) => {
+                            warn!(
+                                %chain_id, %error,
+                                "Failed to dispatch cross-chain request after \
+                                resetting corrupted chain state"
+                            );
+                        }
                     }
                 }
             }
