@@ -2503,7 +2503,9 @@ async fn run(options: &Options) -> Result<i32, Error> {
 
             WalletCommand::ForgetChain { chain_id } => {
                 let start_time = Instant::now();
-                options.wallet()?.remove(*chain_id)?
+                options
+                    .wallet()?
+                    .remove(*chain_id)?
                     .ok_or_else(|| anyhow::anyhow!("nonexistent chain `{chain_id}`"))?;
                 info!("Chain forgotten in {} ms", start_time.elapsed().as_millis());
                 Ok(0)
