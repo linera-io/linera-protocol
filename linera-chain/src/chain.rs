@@ -8,7 +8,7 @@ use std::{
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{
         ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
         OracleResponse, Timestamp,
@@ -499,13 +499,21 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let fallback_owners: Vec<(AccountPublicKey, u64)> = match self
+            .execution_state
+            .system
+            .current_committee()
+            .await?
+        {
+            Some((_, committee)) => committee.account_keys_and_weights().collect(),
+            None => Vec::new(),
+        };
         // Last, reset the consensus state based on the current ownership.
         self.manager.reset(
             self.execution_state.system.ownership.get().await?.clone(),
             BlockHeight(0),
             local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
+            fallback_owners.into_iter(),
         )?;
         Ok(())
     }
@@ -607,10 +615,11 @@ where
         }
     }
 
-    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+    pub async fn current_committee(&self) -> Result<(Epoch, Arc<Committee>), ChainError> {
         self.execution_state
             .system
             .current_committee()
+            .await?
             .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
     }
 
@@ -733,6 +742,7 @@ where
         let committee_policy = chain
             .system
             .current_committee()
+            .await?
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
             .1
             .policy()
@@ -1028,6 +1038,7 @@ where
             .execution_state
             .system
             .current_committee()
+            .await?
             .is_some_and(|(_epoch, committee)| {
                 committee
                     .policy()
@@ -1271,14 +1282,20 @@ where
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let fallback_owners: Vec<(AccountPublicKey, u64)> = match self
+            .execution_state
+            .system
+            .current_committee()
+            .await?
+        {
+            Some((_, committee)) => committee.account_keys_and_weights().collect(),
+            None => Vec::new(),
+        };
         let ownership = self.execution_state.system.ownership.get().await?.clone();
-        let fallback_owners =
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
         self.manager
-            .reset(ownership, next_height, local_time, fallback_owners)
+            .reset(ownership, next_height, local_time, fallback_owners.into_iter())
     }
 
     /// Updates the outboxes with the messages sent in the block.

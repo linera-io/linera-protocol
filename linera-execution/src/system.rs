@@ -78,7 +78,11 @@ pub struct SystemExecutionStateView<C> {
     // Not using a `MapView` because the set active of committees is supposed to be
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
     // (e.g. the `OpenChain` operation).
-    pub committees: HashedRegisterView<C, BTreeMap<Epoch, Committee>>,
+    //
+    // Lazy: committee lookups are served from `ExecutionRuntimeContext::shared_committees`.
+    // This view is only loaded when executing an operation that mutates the map (admin-chain
+    // `CreateCommittee`/`RemoveCommittee`, or `ProcessNewEpoch`/`ProcessRemovedEpoch`).
+    pub committees: HashedLazyRegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
     pub ownership: HashedLazyRegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
@@ -325,15 +329,28 @@ where
     pub async fn is_active(&self) -> Result<bool, ViewError> {
         Ok(self.description.get().await?.is_some()
             && self.ownership.get().await?.is_active()
-            && self.current_committee().is_some()
+            && self.current_committee().await?.is_some()
             && self.admin_chain_id.get().is_some())
     }
 
-    /// Returns the current committee, if any.
-    pub fn current_committee(&self) -> Option<(Epoch, &Committee)> {
-        let epoch = self.epoch.get();
-        let committee = self.committees.get().get(epoch)?;
-        Some((*epoch, committee))
+    /// Returns the chain's current epoch together with its committee.
+    ///
+    /// The committee is served from the process-global [`SharedCommittees`] cache, falling
+    /// back to loading the `NewCommittee` event (or the genesis committee blob for epoch 0)
+    /// on a miss. The chain's own `committees` view is not consulted.
+    pub async fn current_committee(
+        &self,
+    ) -> Result<Option<(Epoch, Arc<Committee>)>, ViewError> {
+        let epoch = *self.epoch.get();
+        let Some(committee) = self
+            .context()
+            .extra()
+            .get_or_load_committee(epoch)
+            .await?
+        else {
+            return Ok(None);
+        };
+        Ok(Some((epoch, committee)))
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Arc<Vec<u8>>, ExecutionError> {
@@ -433,7 +450,7 @@ where
                         let committee =
                             bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                         self.blob_used(txn_tracker, blob_id).await?;
-                        self.committees.get_mut().insert(epoch, committee);
+                        self.committees.get_mut().await?.insert(epoch, committee);
                         self.epoch.set(epoch);
                         txn_tracker.add_event(
                             StreamId::system(EPOCH_STREAM_NAME),
@@ -443,7 +460,7 @@ where
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
                         ensure!(
-                            self.committees.get_mut().remove(&epoch).is_some(),
+                            self.committees.get_mut().await?.remove(&epoch).is_some(),
                             ExecutionError::InvalidCommitteeRemoval
                         );
                         txn_tracker.add_event(
@@ -512,12 +529,12 @@ where
                 let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
                 let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                 self.blob_used(txn_tracker, blob_id).await?;
-                self.committees.get_mut().insert(epoch, committee);
+                self.committees.get_mut().await?.insert(epoch, committee);
                 self.epoch.set(epoch);
             }
             ProcessRemovedEpoch(epoch) => {
                 ensure!(
-                    self.committees.get_mut().remove(&epoch).is_some(),
+                    self.committees.get_mut().await?.remove(&epoch).is_some(),
                     ExecutionError::InvalidCommitteeRemoval
                 );
                 let admin_chain_id = self
@@ -839,7 +856,7 @@ where
             block_height,
             chain_index,
         };
-        let committees = self.committees.get();
+        let committees = self.committees.get().await?;
         let init_chain_config = config.init_chain_config(
             *self.epoch.get(),
             committees.keys().min().copied().unwrap_or(Epoch::ZERO),

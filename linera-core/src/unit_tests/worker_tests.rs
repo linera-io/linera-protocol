@@ -2870,7 +2870,16 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
+        assert_eq!(
+            user_chain
+                .execution_state
+                .system
+                .committees
+                .get()
+                .await?
+                .len(),
+            1
+        );
     }
     // Make the child receive the pending messages.
     let certificate3 = env.make_certificate(ConfirmedBlock::new(
@@ -2937,7 +2946,16 @@ where
             *user_chain.execution_state.system.admin_chain_id.get(),
             Some(admin_chain_id)
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
+        assert_eq!(
+            user_chain
+                .execution_state
+                .system
+                .committees
+                .get()
+                .await?
+                .len(),
+            2
+        );
         assert_no_removed_bundles(&user_chain).await;
         Ok(())
     }
@@ -3406,7 +3424,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: true,
         current_epoch: Epoch::from(1),
-        committees: &committees,
+        committees: committees.clone(),
     };
     // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
     assert_eq!(
@@ -3437,7 +3455,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: false,
         current_epoch: Epoch::from(1),
-        committees: &committees,
+        committees,
     };
     // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
     assert_eq!(

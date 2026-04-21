@@ -135,15 +135,16 @@ async fn empty_accounts_are_removed() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn hashing_test() -> anyhow::Result<()> {
+    use std::sync::Arc;
+
     let (mut view, _) = new_view_and_context().await;
 
     let zero_hash = CryptoHash::from([0u8; 32]);
 
     assert_ne!(view.crypto_hash_mut().await?, zero_hash);
 
-    let mut committees = BTreeMap::new();
-    committees.insert(Epoch(0), Committee::default());
-    view.system.committees.set(committees.clone());
+    let shared = view.system.context().extra().shared_committees().clone();
+    shared.insert(Epoch(0), Arc::new(Committee::default()));
     view.system.epoch.set(Epoch(0));
     // The hash should still be nonzero before the threshold epoch.
     assert_ne!(view.crypto_hash_mut().await?, zero_hash);
@@ -153,8 +154,7 @@ async fn hashing_test() -> anyhow::Result<()> {
         .policy_mut()
         .http_request_allow_list
         .insert(FLAG_ZERO_HASH.to_owned());
-    committees.insert(Epoch(1), committee);
-    view.system.committees.set(committees);
+    shared.insert(Epoch(1), Arc::new(committee));
     view.system.epoch.set(Epoch(1));
     // Starting from this epoch, the hash should be all zeros.
     assert_eq!(view.crypto_hash_mut().await?, zero_hash);

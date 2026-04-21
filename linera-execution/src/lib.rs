@@ -641,7 +641,7 @@ pub trait ExecutionRuntimeContext {
     async fn get_or_load_committee(
         &self,
         epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+    ) -> Result<Option<Arc<Committee>>, ViewError> {
         if let Some(committee) = self.shared_committees().get(epoch) {
             return Ok(Some(committee));
         }
