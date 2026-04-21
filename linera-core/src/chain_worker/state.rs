@@ -2169,6 +2169,9 @@ where
             self.poisoned = true;
             return Err(WorkerError::PoisonedWorker);
         }
+        // Committee lookups go through the process-global SharedCommittees cache, so the
+        // chain-local `committees` map doesn't need to sit in memory across worker calls.
+        self.chain.execution_state.system.committees.evict();
         Ok(())
     }
 }

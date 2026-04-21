@@ -274,6 +274,18 @@ where
 pub type HashedLazyRegisterView<C, T> =
     WrappedHashableContainerView<C, LazyRegisterView<C, T>, HasherOutput>;
 
+impl<C, T> WrappedHashableContainerView<C, LazyRegisterView<C, T>, HasherOutput>
+where
+    C: Context,
+    T: Default + Send + Sync + Serialize + DeserializeOwned,
+{
+    /// Drops the in-memory cache of the wrapped value without invalidating
+    /// the memoized hash (the logical content is unchanged).
+    pub fn evict(&mut self) {
+        self.inner_mut_preserve_hash().evict();
+    }
+}
+
 #[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;

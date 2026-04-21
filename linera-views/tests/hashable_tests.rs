@@ -79,3 +79,18 @@ async fn lazy_register_view_evict() -> Result<()> {
     assert_eq!(*view.get().await?, 42);
     Ok(())
 }
+
+// The wrapper's memoized hash is logically the same before and after eviction,
+// so evict() must not invalidate it (re-hashing requires reloading the value,
+// which defeats the purpose of the eviction).
+#[tokio::test]
+async fn hashed_lazy_register_view_evict_preserves_hash() -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    let mut view = HashedLazyRegisterView::<_, u64>::load(context).await?;
+    view.set(123);
+    let hash_before = view.hash().await?;
+    view.evict();
+    let hash_after = view.hash().await?;
+    assert_eq!(hash_before, hash_after);
+    Ok(())
+}
