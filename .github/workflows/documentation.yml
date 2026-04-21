@@ -44,6 +44,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Compute docs
       run: |
@@ -66,6 +67,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install cargo tools
       run: |
