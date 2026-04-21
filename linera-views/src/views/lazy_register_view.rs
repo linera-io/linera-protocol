@@ -211,6 +211,12 @@ where
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
+
+    /// Drops the in-memory cache of the stored value. Subsequent `get()` calls
+    /// reload from storage. Pending unsaved updates are not affected.
+    pub fn evict(&mut self) {
+        self.stored_value = OnceLock::new();
+    }
 }
 
 impl<C, T> LazyRegisterView<C, T>
