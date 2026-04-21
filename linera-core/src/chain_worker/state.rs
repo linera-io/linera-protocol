@@ -1040,8 +1040,10 @@ where
         // we haven't received yet, the inbox has a gap.
         if let Some(prev) = sender_previous_height {
             if prev >= next_height_to_receive {
+                let chain_id = self.chain_id();
                 if self.config.allow_revert_confirm {
                     warn!(
+                        %chain_id,
                         "Inbox gap detected from {origin}: \
                         sender declares previous height {prev} but we only have up to \
                         {next_height_to_receive}; requesting resend",
@@ -1052,7 +1054,7 @@ where
                     });
                 }
                 return Err(ChainError::InboxGapDetected {
-                    chain_id: self.chain_id(),
+                    chain_id,
                     origin,
                     expected_height: prev,
                     actual_height: bundles.first().map(|(_, b)| b.height).unwrap_or_default(),
@@ -1097,6 +1099,7 @@ where
             // now. Accordingly, do not send a confirmation, so that the
             // cross-chain update is retried later.
             warn!(
+                chain_id = %self.chain_id(),
                 "Refusing to deliver messages from {origin} \
                 at height {last_updated_height} because the recipient is still inactive",
             );
@@ -1262,6 +1265,7 @@ where
         self.knows_chain_is_active = false;
         self.save().await?;
         warn!(
+            %chain_id,
             "Cleared chain state up to height {tip_height}; \
             re-executing all blocks"
         );
@@ -2108,7 +2112,11 @@ where
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
-            tracing::error!(?error, "Chain save failed; marking worker as poisoned");
+            tracing::error!(
+                ?error,
+                chain_id = %self.chain_id(),
+                "Chain save failed; marking worker as poisoned"
+            );
             self.poisoned = true;
             return Err(WorkerError::PoisonedWorker);
         }
