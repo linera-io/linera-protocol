@@ -755,6 +755,21 @@ where
 
         // Check if we already processed this block.
         let tip = self.chain.tip_state.get().clone();
+        let used_blobs_snapshot: Vec<_> = self
+            .chain
+            .execution_state
+            .system
+            .used_blobs
+            .indices()
+            .await
+            .unwrap_or_default();
+        warn!(
+            %chain_id, %height, %block_hash,
+            tip_height = %tip.next_block_height,
+            used_blobs_count = used_blobs_snapshot.len(),
+            ?used_blobs_snapshot,
+            "used_blobs_trace: process_confirmed_block: ENTRY"
+        );
         if tip.next_block_height > height {
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
@@ -2126,11 +2141,34 @@ where
         chain_id = %self.chain_id()
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
+        let chain_id = self.chain_id();
+        let tip_height = self.chain.tip_state.get().next_block_height;
+        let used_blobs_count = self
+            .chain
+            .execution_state
+            .system
+            .used_blobs
+            .indices()
+            .await
+            .map(|v| v.len())
+            .unwrap_or(usize::MAX);
+        warn!(
+            %chain_id, %tip_height, used_blobs_count,
+            "used_blobs_trace: save: START"
+        );
         if let Err(error) = self.chain.save().await {
+            warn!(
+                %chain_id, %tip_height, %error,
+                "used_blobs_trace: save: FAILED"
+            );
             tracing::error!(?error, "Chain save failed; marking worker as poisoned");
             self.poisoned = true;
             return Err(WorkerError::PoisonedWorker);
         }
+        warn!(
+            %chain_id, %tip_height,
+            "used_blobs_trace: save: OK"
+        );
         Ok(())
     }
 }

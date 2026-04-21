@@ -82,6 +82,13 @@ impl<S: Storage + Clone + 'static> DerefMut for RollbackGuard<S> {
 
 impl<S: Storage + Clone + 'static> Drop for RollbackGuard<S> {
     fn drop(&mut self) {
+        let chain = self.0.chain();
+        let chain_id = chain.chain_id();
+        let tip_height = chain.tip_state.get().next_block_height;
+        tracing::warn!(
+            %chain_id, %tip_height,
+            "used_blobs_trace: RollbackGuard::drop — calling chain.rollback()"
+        );
         self.0.rollback();
     }
 }
