@@ -80,6 +80,12 @@ impl PersistentWallet {
             if *default == Some(id) {
                 *default = None;
             }
+            if default.is_none() {
+                let items = self.0.chains.items();
+                if items.len() == 1 {
+                    *default = Some(items[0].0);
+                }
+            }
         }
         self.0.save()?;
         Ok(chain)
@@ -182,6 +188,18 @@ impl PersistentWallet {
             .chains
             .remove(chain_id)
             .ok_or_else(|| anyhow::anyhow!("nonexistent chain `{chain_id}`"))?;
+        {
+            let mut default = self.0.default.write().unwrap();
+            if *default == Some(chain_id) {
+                *default = None;
+            }
+            if default.is_none() {
+                let items = self.0.chains.items();
+                if items.len() == 1 {
+                    *default = Some(items[0].0);
+                }
+            }
+        }
         self.0.save()?;
         Ok(chain)
     }
