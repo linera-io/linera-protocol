@@ -730,8 +730,8 @@ impl QueryBlock {
 
         match result {
             Ok(certificates) => {
-                let block = certificates[0].block();
-                println!("{:#?}", block);
+                let confirmed_block = certificates[0].inner();
+                println!("{:#?}", confirmed_block);
             }
             Err(error) => {
                 tracing::error!("{}", error);
