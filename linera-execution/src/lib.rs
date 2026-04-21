@@ -666,7 +666,9 @@ pub trait ExecutionRuntimeContext {
             return Ok(None);
         };
         let committee: Committee = bcs::from_bytes(blob.bytes())?;
-        Ok(Some(self.shared_committees().insert(epoch, Arc::new(committee))))
+        Ok(Some(
+            self.shared_committees().insert(epoch, Arc::new(committee)),
+        ))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;

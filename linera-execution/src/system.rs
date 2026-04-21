@@ -338,16 +338,9 @@ where
     /// The committee is served from the process-global [`SharedCommittees`] cache, falling
     /// back to loading the `NewCommittee` event (or the genesis committee blob for epoch 0)
     /// on a miss. The chain's own `committees` view is not consulted.
-    pub async fn current_committee(
-        &self,
-    ) -> Result<Option<(Epoch, Arc<Committee>)>, ViewError> {
+    pub async fn current_committee(&self) -> Result<Option<(Epoch, Arc<Committee>)>, ViewError> {
         let epoch = *self.epoch.get();
-        let Some(committee) = self
-            .context()
-            .extra()
-            .get_or_load_committee(epoch)
-            .await?
-        else {
+        let Some(committee) = self.context().extra().get_or_load_committee(epoch).await? else {
             return Ok(None);
         };
         Ok(Some((epoch, committee)))

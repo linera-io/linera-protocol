@@ -3409,7 +3409,14 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
     assert_eq!(
         helper
-            .select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone(), storage)
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::ZERO,
+                None,
+                bundles01.clone(),
+                storage
+            )
             .await?,
         without_epochs(&bundles01)
     );
@@ -3467,7 +3474,14 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     // bundles01 is all epoch 0 → both accepted.
     assert_eq!(
         helper
-            .select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone(), storage)
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::ZERO,
+                None,
+                bundles01.clone(),
+                storage
+            )
             .await?,
         without_epochs(&bundles01)
     );

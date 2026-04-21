@@ -24,15 +24,15 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
-use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
+use linera_execution::{
+    committee::Committee, system::EPOCH_STREAM_NAME, BlobState, ExecutionError,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, SharedCommittees, TransactionTracker,
+    UserContractCode, UserServiceCode, WasmRuntime,
+};
 #[cfg(with_revm)]
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
     EvmRuntime,
-};
-use linera_execution::{
-    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, SharedCommittees,
-    TransactionTracker, UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
