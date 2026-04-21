@@ -63,7 +63,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera validator update`↴](#linera-validator-update)
 * [`linera validator list`↴](#linera-validator-list)
 * [`linera validator query`↴](#linera-validator-query)
-* [`linera validator query-certificate`↴](#linera-validator-query-certificate)
+* [`linera validator query-block`↴](#linera-validator-query-block)
 * [`linera validator remove`↴](#linera-validator-remove)
 * [`linera validator sync`↴](#linera-validator-sync)
 * [`linera storage`↴](#linera-storage)
@@ -1338,7 +1338,7 @@ Manage validators in the committee
 * `update` — Apply multiple validator changes from JSON input
 * `list` — List all validators in the committee
 * `query` — Query a single validator's state and connectivity
-* `query-certificate` — Query a single validator for a certificate at a particular chain and height
+* `query-block` — Query a single validator for a block at a particular chain and height
 * `remove` — Remove a validator from the committee
 * `sync` — Synchronize chain state to a validator
 
@@ -1436,13 +1436,13 @@ Connects to a validator at the specified network address and queries its view of
 
 
 
-## `linera validator query-certificate`
+## `linera validator query-block`
 
-Query a single validator for a certificate at a particular chain and height.
+Query a single validator for a block at a particular chain and height.
 
 Connects to a validator at the specified network address and queries its view of the blockchain.
 
-**Usage:** `linera validator query-certificate [OPTIONS] --height <HEIGHT> <ADDRESS>`
+**Usage:** `linera validator query-block [OPTIONS] --height <HEIGHT> <ADDRESS>`
 
 ###### **Arguments:**
 
