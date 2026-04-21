@@ -347,55 +347,30 @@ where
 
 impl<K> WritableKeyValueStore for LruCachingStore<K>
 where
-    K: WritableKeyValueStore + Clone + Send + 'static,
-    K::Error: Send,
+    K: WritableKeyValueStore,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        // Spawn a task to ensure the DB write and cache update run to
-        // completion atomically, even if the caller's future is cancelled
-        // (e.g. by RollbackGuard). Without this, a cancellation between
-        // the DB write and cache update leaves the cache stale, causing
-        // data loss on the next save.
-        //
-        // We use `tokio::task::spawn` (not `linera_base::Task::spawn`)
-        // because the latter cancels on drop via `RemoteHandle`.
-        let store = self.store.clone();
-        let cache = self.cache.clone();
-        let task = async move {
-            store.write_batch(batch.clone()).await?;
-            if let Some(cache) = &cache {
-                let mut cache = cache.lock().unwrap();
-                for operation in &batch.operations {
-                    match operation {
-                        WriteOperation::Put { key, value } => {
-                            cache.put_key_value(key, value);
-                        }
-                        WriteOperation::Delete { key } => {
-                            cache.delete_key(key);
-                        }
-                        WriteOperation::DeletePrefix { key_prefix } => {
-                            cache.delete_prefix(key_prefix);
-                        }
+        self.store.write_batch(batch.clone()).await?;
+        if let Some(cache) = &self.cache {
+            let mut cache = cache.lock().unwrap();
+            for operation in &batch.operations {
+                match operation {
+                    WriteOperation::Put { key, value } => {
+                        cache.put_key_value(key, value);
+                    }
+                    WriteOperation::Delete { key } => {
+                        cache.delete_key(key);
+                    }
+                    WriteOperation::DeletePrefix { key_prefix } => {
+                        cache.delete_prefix(key_prefix);
                     }
                 }
             }
-            Ok(())
-        };
-        // On native, spawn a task that runs to completion even if the
-        // caller is cancelled. On web, cancellation safety is not a
-        // concern (no RollbackGuard / concurrent chain workers).
-        #[cfg(not(web))]
-        match tokio::task::spawn(task).await {
-            Ok(result) => result,
-            Err(join_error) => std::panic::resume_unwind(join_error.into_panic()),
         }
-        #[cfg(web)]
-        {
-            task.await
-        }
+        Ok(())
     }
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
