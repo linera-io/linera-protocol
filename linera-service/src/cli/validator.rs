@@ -82,7 +82,7 @@ pub enum Command {
     Update(Update),
     List(List),
     Query(Query),
-    QueryCertificate(QueryCertificate),
+    QueryBlock(QueryBlock),
     Remove(Remove),
     Sync(Sync),
 }
@@ -177,12 +177,12 @@ pub struct Query {
     public_key: Option<ValidatorPublicKey>,
 }
 
-/// Query a single validator for a certificate at a particular chain and height.
+/// Query a single validator for a block at a particular chain and height.
 ///
 /// Connects to a validator at the specified network address and queries its
 /// view of the blockchain.
 #[derive(Debug, Clone, clap::Parser)]
-pub struct QueryCertificate {
+pub struct QueryBlock {
     /// Network address of the validator (e.g., grpcs://host:port)
     address: String,
     /// Chain ID to query about (defaults to default chain)
@@ -250,7 +250,7 @@ impl Command {
             Update(command) => command.run(context).await,
             List(command) => command.run(context).await,
             Query(command) => command.run(context).await,
-            QueryCertificate(command) => command.run(context).await,
+            QueryBlock(command) => command.run(context).await,
             Remove(command) => command.run(context).await,
             Sync(command) => Box::pin(command.run(context)).await,
         }
@@ -711,7 +711,7 @@ impl Query {
     }
 }
 
-impl QueryCertificate {
+impl QueryBlock {
     async fn run(
         &self,
         context: &mut ClientContext<impl linera_core::Environment>,
