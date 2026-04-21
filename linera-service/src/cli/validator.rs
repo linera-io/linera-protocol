@@ -714,7 +714,7 @@ impl Query {
 impl QueryBlock {
     async fn run(
         &self,
-        context: &mut ClientContext<impl linera_core::Environment>,
+        context: &ClientContext<impl linera_core::Environment>,
     ) -> anyhow::Result<()> {
         let node = context.make_node_provider().make_node(&self.address)?;
         let chain_id = self.chain_id.unwrap_or_else(|| context.default_chain());
