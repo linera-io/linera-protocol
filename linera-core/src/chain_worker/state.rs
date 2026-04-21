@@ -35,7 +35,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    system::EventSubscriptions, Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query,
+    system::EventSubscriptions, ExecutionRuntimeContext as _, ExecutionStateView, Query,
     QueryContext, QueryOutcome, ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, Storage};
@@ -1085,15 +1085,18 @@ where
             }
         }
 
-        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain).await?;
+        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
-        let bundles = helper.select_message_bundles(
-            &origin,
-            recipient,
-            next_height_to_receive,
-            last_anticipated_block_height,
-            bundles,
-        )?;
+        let bundles = helper
+            .select_message_bundles(
+                &origin,
+                recipient,
+                next_height_to_receive,
+                last_anticipated_block_height,
+                bundles,
+                &self.storage,
+            )
+            .await?;
         let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
             return Ok(CrossChainUpdateResult::NothingToDo);
         };
@@ -2221,41 +2224,37 @@ fn check_block_epoch(
 pub(crate) struct CrossChainUpdateHelper {
     pub(crate) allow_messages_from_deprecated_epochs: bool,
     pub(crate) current_epoch: Epoch,
-    pub(crate) committees: BTreeMap<Epoch, Committee>,
 }
 
 impl CrossChainUpdateHelper {
     /// Creates a new [`CrossChainUpdateHelper`].
-    async fn new<C>(
-        config: &ChainWorkerConfig,
-        chain: &ChainStateView<C>,
-    ) -> Result<Self, WorkerError>
+    fn new<C>(config: &ChainWorkerConfig, chain: &ChainStateView<C>) -> Self
     where
         C: Context + Clone + 'static,
     {
-        Ok(CrossChainUpdateHelper {
+        CrossChainUpdateHelper {
             allow_messages_from_deprecated_epochs: config.allow_messages_from_deprecated_epochs,
             current_epoch: *chain.execution_state.system.epoch.get(),
-            committees: chain.execution_state.system.committees.get().await?.clone(),
-        })
+        }
     }
 
     /// Checks basic invariants and deals with repeated heights and deprecated epochs.
     /// * Returns a range of message bundles that are both new to us and not relying on
     ///   an untrusted set of validators.
     /// * In the case of validators, if the epoch(s) of the highest bundles are not
-    ///   trusted, we only accept bundles that contain messages that were already
-    ///   executed by anticipation (i.e. received in certified blocks).
+    ///   known to the process, we only accept bundles that contain messages that were
+    ///   already executed by anticipation (i.e. received in certified blocks).
     /// * Basic invariants are checked for good measure. We still crucially trust
     ///   the worker of the sending chain to have verified and executed the blocks
     ///   correctly.
-    pub(crate) fn select_message_bundles(
+    pub(crate) async fn select_message_bundles<S: Storage>(
         &self,
         origin: &ChainId,
         recipient: ChainId,
         next_height_to_receive: BlockHeight,
         last_anticipated_block_height: Option<BlockHeight>,
         mut bundles: Vec<(Epoch, MessageBundle)>,
+        storage: &S,
     ) -> Result<Vec<MessageBundle>, WorkerError> {
         let mut latest_height = None;
         let mut skipped_len = 0;
@@ -2271,12 +2270,14 @@ impl CrossChainUpdateHelper {
             if bundle.height < next_height_to_receive {
                 skipped_len = i + 1;
             }
-            // Check if the height is trusted or the epoch is trusted.
-            if self.allow_messages_from_deprecated_epochs
+            // Check if the height is trusted or the epoch is known to the process.
+            // "Known" means we have the `NewCommittee` event (and therefore the committee
+            // blob) locally — either in the shared cache or in storage.
+            let epoch_is_known = self.allow_messages_from_deprecated_epochs
                 || Some(bundle.height) <= last_anticipated_block_height
                 || *epoch >= self.current_epoch
-                || self.committees.contains_key(epoch)
-            {
+                || storage.get_or_load_committee(*epoch).await?.is_some();
+            if epoch_is_known {
                 trusted_len = i + 1;
             }
         }
@@ -2291,7 +2292,7 @@ impl CrossChainUpdateHelper {
             let (sample_epoch, sample_bundle) = &bundles[trusted_len];
             warn!(
                 "Refusing messages to {recipient:.8} from {origin:} at height {} \
-                 because the epoch {} is not trusted any more",
+                 because the epoch {} is not known locally",
                 sample_bundle.height, sample_epoch,
             );
         }
