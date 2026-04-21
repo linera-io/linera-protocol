@@ -153,8 +153,8 @@ function getMessageMetadata(msg: any) {
             <strong>Grant:</strong> {{ msg.grant }}
           </div>
 
-          <div v-if="msg.authenticatedOwner" class="mt-2 small">
-            <strong>Authenticated Owner:</strong> {{ msg.authenticatedOwner }}
+          <div v-if="msg.authenticatedSigner" class="mt-2 small">
+            <strong>Authenticated Owner:</strong> {{ msg.authenticatedSigner }}
           </div>
         </div>
       </div>
