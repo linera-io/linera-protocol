@@ -47,7 +47,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     environment::{wallet::Wallet as _, Environment},
-    local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode, ValidatorNodeProvider as _},
     notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
@@ -801,14 +801,23 @@ impl<Env: Environment> Client<Env> {
         Ok(info)
     }
 
-    /// Obtains all the committees trusted by any of the given chains. Also returns the highest
-    /// of their epochs.
+    /// Returns all committees known to the process at epochs up to and including the admin
+    /// chain's current epoch, together with that epoch.
     #[instrument(level = "trace", skip_all)]
     async fn admin_committees(
         &self,
     ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
-        Ok((info.epoch, info.into_committees()?))
+        let query = ChainInfoQuery::new(self.admin_chain_id);
+        let info = self.local_node.handle_chain_info_query(query).await?.info;
+        let max_epoch = info.epoch;
+        let mut committees = BTreeMap::new();
+        for index in 0..=max_epoch.0 {
+            let epoch = Epoch(index);
+            if let Some(committee) = self.storage_client().get_or_load_committee(epoch).await? {
+                committees.insert(epoch, (*committee).clone());
+            }
+        }
+        Ok((max_epoch, committees))
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.

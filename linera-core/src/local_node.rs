@@ -458,25 +458,17 @@ where
 
 /// Extension trait for [`ChainInfo`]s from our local node. These should always be valid and
 /// contain the requested information.
+///
+/// Only `revoke_epochs` (via `ChainClient::epoch_and_committees`) still asks for the chain's
+/// committees map; every other caller looks committees up in `SharedCommittees` directly.
 pub trait LocalChainInfoExt {
     /// Returns the requested map of committees.
     fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError>;
-
-    /// Returns a reference to the current committee.
-    fn current_committee(&self) -> Result<&Committee, LocalNodeError>;
 }
 
 impl LocalChainInfoExt for ChainInfo {
     fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {
         self.requested_committees
             .ok_or(LocalNodeError::InvalidChainInfoResponse)
-    }
-
-    fn current_committee(&self) -> Result<&Committee, LocalNodeError> {
-        self.requested_committees
-            .as_ref()
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .get(&self.epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 }

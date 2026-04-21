@@ -515,9 +515,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
     pub async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id)
-            .with_manager_values()
-            .with_committees();
+        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self
             .client
             .local_node
@@ -1248,8 +1246,14 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn request_leader_timeout(&self) -> Result<TimeoutCertificate, Error> {
         let chain_id = self.chain_id;
-        let info = self.chain_info_with_committees().await?;
-        let committee = info.current_committee()?;
+        let info = self.chain_info().await?;
+        let committee = self
+            .client
+            .storage_client()
+            .get_or_load_committee(info.epoch)
+            .await?
+            .ok_or(LocalNodeError::InactiveChain(chain_id))?;
+        let committee = &*committee;
         let height = info.next_block_height;
         let round = info.manager.current_round;
         let action = CommunicateAction::RequestTimeout {
@@ -1492,7 +1496,7 @@ impl<Env: Environment> ChainClient<Env> {
                 use the `linera retry-pending-block` command to commit that first"
             )
         );
-        let info = self.chain_info_with_committees().await?;
+        let info = self.chain_info_with_manager_values().await?;
         let timestamp = self.next_timestamp(&transactions, info.timestamp);
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
@@ -2144,8 +2148,13 @@ impl<Env: Environment> ChainClient<Env> {
                 "Conflicting proposal in the current round",
             ));
         };
-        let current_committee = info
-            .current_committee()?
+        let current_committee = self
+            .client
+            .storage_client()
+            .get_or_load_committee(info.epoch)
+            .await?
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
+        let current_committee = current_committee
             .validators
             .values()
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
