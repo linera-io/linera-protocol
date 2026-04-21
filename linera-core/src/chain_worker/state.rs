@@ -2151,20 +2151,25 @@ where
 
     /// Stores the chain state in persistent storage.
     ///
-    /// If the save fails, the worker is marked as poisoned and must be reloaded.
+    /// Poisons the worker up front and clears the flag only after the underlying
+    /// `save()` has fully returned. This makes the poison sticky on both error
+    /// and cancellation: if the caller's future is dropped between the storage
+    /// write landing and `post_save()` refreshing the in-memory views, the flag
+    /// stays set and the next access will evict and reload from storage.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
-        if let Err(error) = self.chain.save().await {
+        self.poisoned = true;
+        self.chain.save().await.map_err(|error| {
             tracing::error!(
                 ?error,
                 chain_id = %self.chain_id(),
                 "Chain save failed; marking worker as poisoned"
             );
-            self.poisoned = true;
-            return Err(WorkerError::PoisonedWorker);
-        }
+            WorkerError::PoisonedWorker
+        })?;
+        self.poisoned = false;
         Ok(())
     }
 }
