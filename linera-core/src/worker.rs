@@ -425,7 +425,7 @@ pub enum WorkerError {
     MissingNetworkDescription,
     #[error("thread error: {0}")]
     Thread(#[from] web_thread_pool::Error),
-    #[error("Chain worker was poisoned by a journal resolution failure")]
+    #[error("Chain worker in-memory state is stale and must be reloaded from storage")]
     PoisonedWorker,
 }
 
