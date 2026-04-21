@@ -320,8 +320,8 @@ impl Committee {
 /// Committees are network-global state (created by the admin chain, agreed on
 /// by every validator), so caching them once per process avoids holding a
 /// separate copy in every chain's execution state. The map is populated
-/// lazily by `get_or_load`-style lookups in [`ExecutionRuntimeContext`] and in
-/// the storage layer.
+/// lazily by `get_or_load`-style lookups in [`crate::ExecutionRuntimeContext`]
+/// and in the storage layer.
 #[derive(Clone, Debug, Default)]
 pub struct SharedCommittees {
     map: Arc<papaya::HashMap<Epoch, Arc<Committee>>>,
