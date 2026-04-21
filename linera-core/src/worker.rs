@@ -422,7 +422,7 @@ pub enum WorkerError {
 
     #[error("Fallback mode is not available on this network")]
     NoFallbackMode,
-    #[error("Chain worker was poisoned by a journal resolution failure")]
+    #[error("Chain worker in-memory state is stale and must be reloaded from storage")]
     PoisonedWorker,
 }
 

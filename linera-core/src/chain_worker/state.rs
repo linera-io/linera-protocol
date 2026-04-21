@@ -195,8 +195,9 @@ where
         self.chain.rollback();
     }
 
-    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a journal
-    /// resolution failure.
+    /// Returns `WorkerError::PoisonedWorker` if the in-memory state is known to be
+    /// stale relative to storage (e.g. because a save failed or was cancelled
+    /// mid-flight) and the worker must be evicted and reloaded.
     pub(crate) fn check_not_poisoned(&self) -> Result<(), WorkerError> {
         ensure!(!self.poisoned, WorkerError::PoisonedWorker);
         Ok(())
