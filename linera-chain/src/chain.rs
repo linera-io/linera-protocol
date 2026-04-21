@@ -499,18 +499,7 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let fallback_owners: Vec<(AccountPublicKey, u64)> =
-            match self.execution_state.system.current_committee().await? {
-                Some((_, committee)) => committee.account_keys_and_weights().collect(),
-                None => Vec::new(),
-            };
-        // Last, reset the consensus state based on the current ownership.
-        self.manager.reset(
-            self.execution_state.system.ownership.get().await?.clone(),
-            BlockHeight(0),
-            local_time,
-            fallback_owners.into_iter(),
-        )?;
+        self.reset_chain_manager(BlockHeight(0), local_time).await?;
         Ok(())
     }
 
@@ -1278,20 +1267,15 @@ where
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let fallback_owners: Vec<(AccountPublicKey, u64)> =
-            match self.execution_state.system.current_committee().await? {
-                Some((_, committee)) => committee.account_keys_and_weights().collect(),
-                None => Vec::new(),
-            };
+        let maybe_committee = self.execution_state.system.current_committee().await?;
         let ownership = self.execution_state.system.ownership.get().await?.clone();
+        let fallback_owners = maybe_committee
+            .iter()
+            .flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
-        self.manager.reset(
-            ownership,
-            next_height,
-            local_time,
-            fallback_owners.into_iter(),
-        )
+        self.manager
+            .reset(ownership, next_height, local_time, fallback_owners)
     }
 
     /// Updates the outboxes with the messages sent in the block.
