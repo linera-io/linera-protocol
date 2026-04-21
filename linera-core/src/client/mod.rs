@@ -1134,7 +1134,7 @@ impl<Env: Environment> Client<Env> {
         let (max_epoch, committees) = match self.admin_committees().await {
             Ok(result) => result,
             Err(error) => {
-                error!(%error, "could not read admin committees");
+                error!(%error, %sender_chain_id, "could not read admin committees");
                 return;
             }
         };
@@ -1220,6 +1220,7 @@ impl<Env: Environment> Client<Env> {
                     nodes.retain(|node| !faulty_validators.contains(&node.public_key));
                     if nodes.is_empty() {
                         info!(
+                            chain_id = %sender_chain_id,
                             "could not download certificates for chain - no more correct validators left"
                         );
                         return;
