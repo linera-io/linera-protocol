@@ -182,28 +182,6 @@ impl PersistentWallet {
             .ok_or_else(|| anyhow::anyhow!("keypair not found for chain `{chain_id}`"))
     }
 
-    pub fn forget_chain(&self, chain_id: ChainId) -> anyhow::Result<Chain> {
-        let chain = self
-            .0
-            .chains
-            .remove(chain_id)
-            .ok_or_else(|| anyhow::anyhow!("nonexistent chain `{chain_id}`"))?;
-        {
-            let mut default = self.0.default.write().unwrap();
-            if *default == Some(chain_id) {
-                *default = None;
-            }
-            if default.is_none() {
-                let items = self.0.chains.items();
-                if items.len() == 1 {
-                    *default = Some(items[0].0);
-                }
-            }
-        }
-        self.0.save()?;
-        Ok(chain)
-    }
-
     pub fn save(&self) -> Result<(), persistent::file::Error> {
         self.0.save()
     }
