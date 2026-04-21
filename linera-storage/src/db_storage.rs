@@ -17,7 +17,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode, WasmRuntime,
+    BlobState, ExecutionRuntimeConfig, SharedCommittees, UserContractCode, UserServiceCode,
+    WasmRuntime,
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
@@ -413,6 +414,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    shared_committees: SharedCommittees,
     caches: StorageCaches,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
@@ -1213,6 +1215,7 @@ where
             execution_runtime_config: self.execution_runtime_config,
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
+            shared_committees: self.shared_committees.clone(),
         };
         let root_key = RootKey::ChainState(chain_id).bytes();
         let store = self.database.open_exclusive(&root_key)?;
@@ -1867,6 +1870,10 @@ where
         Ok(())
     }
 
+    fn shared_committees(&self) -> &SharedCommittees {
+        &self.shared_committees
+    }
+
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
         self.wasm_runtime
     }
@@ -1963,6 +1970,7 @@ where
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
+            shared_committees: SharedCommittees::new(),
             caches: StorageCaches::new(cache_sizes),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }

@@ -65,7 +65,7 @@ pub use crate::wasm::{
     ServiceRuntimeApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    committee::Committee,
+    committee::{Committee, SharedCommittees},
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::{ExecutionRequest, ExecutionStateActor},
     policy::ResourceControlPolicy,
@@ -537,6 +537,9 @@ pub trait ExecutionRuntimeContext {
 
     fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>>;
 
+    /// Process-global cache of committees by epoch, shared across all chains.
+    fn shared_committees(&self) -> &SharedCommittees;
+
     async fn get_user_contract(
         &self,
         description: &ApplicationDescription,
@@ -629,6 +632,41 @@ pub trait ExecutionRuntimeContext {
             ExecutionError::BlobsNotFound(missing_blobs)
         );
         committees.into_iter().collect()
+    }
+
+    /// Returns the committee for `epoch`, consulting the shared cache first.
+    /// On a miss, the `NewCommittee` event and the committee blob are loaded
+    /// from storage and the result is memoized. Returns `Ok(None)` if the
+    /// network description, the event, or the blob is not available locally.
+    async fn get_or_load_committee(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+        if let Some(committee) = self.shared_committees().get(epoch) {
+            return Ok(Some(committee));
+        }
+        let Some(net_description) = self.get_network_description().await? else {
+            return Ok(None);
+        };
+        let blob_hash = if epoch.0 == 0 {
+            net_description.genesis_committee_blob_hash
+        } else {
+            let event_id = EventId {
+                chain_id: net_description.admin_chain_id,
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                index: epoch.0,
+            };
+            match self.get_event(event_id).await? {
+                Some(bytes) => bcs::from_bytes(&bytes)?,
+                None => return Ok(None),
+            }
+        };
+        let blob_id = BlobId::new(blob_hash, BlobType::Committee);
+        let Some(blob) = self.get_blob(blob_id).await? else {
+            return Ok(None);
+        };
+        let committee: Committee = bcs::from_bytes(blob.bytes())?;
+        Ok(Some(self.shared_committees().insert(epoch, Arc::new(committee))))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
@@ -1272,6 +1310,7 @@ pub struct TestExecutionRuntimeContext {
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
     blobs: Arc<papaya::HashMap<BlobId, Blob>>,
     events: Arc<papaya::HashMap<EventId, Vec<u8>>>,
+    shared_committees: SharedCommittees,
 }
 
 #[cfg(with_testing)]
@@ -1285,6 +1324,7 @@ impl TestExecutionRuntimeContext {
             user_services: Arc::default(),
             blobs: Arc::default(),
             events: Arc::default(),
+            shared_committees: SharedCommittees::new(),
         }
     }
 }
@@ -1311,6 +1351,10 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
+    }
+
+    fn shared_committees(&self) -> &SharedCommittees {
+        &self.shared_committees
     }
 
     async fn get_user_contract(
