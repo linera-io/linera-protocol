@@ -832,18 +832,19 @@ where
 
     /// Acquires a write lock on the chain worker and executes the given closure.
     ///
-    /// On native targets, the write work runs on a detached task (via
-    /// [`linera_base::task::run_detached`]) so that caller cancellation does
-    /// not unwind the task mid-save. The [`RollbackGuard`] lives inside the
-    /// detached task, so the write lock is held until the DB round-trip and
-    /// `post_save` have fully completed — subsequent readers, including a
-    /// freshly-loaded replacement worker, only see the committed state.
-    #[cfg(not(web))]
+    /// The write work runs on a detached task (via [`linera_base::task::run_detached`])
+    /// so that caller cancellation does not unwind the task mid-save. The
+    /// [`RollbackGuard`] lives inside the detached task, so the write lock is held
+    /// until the DB round-trip and `post_save` have fully completed — subsequent
+    /// readers, including a freshly-loaded replacement worker, only see the
+    /// committed state.
     async fn chain_write<R, F, Fut>(&self, chain_id: ChainId, f: F) -> Result<R, WorkerError>
     where
-        F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut + Send + 'static,
-        Fut: std::future::Future<Output = Result<R, WorkerError>> + Send,
-        R: Send + 'static,
+        F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut
+            + linera_base::task::MaybeSend
+            + 'static,
+        Fut: std::future::Future<Output = Result<R, WorkerError>> + linera_base::task::MaybeSend,
+        R: linera_base::task::MaybeSend + 'static,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
         let state_for_task = state.clone();
@@ -852,30 +853,6 @@ where
             guard.check_not_poisoned()?;
             f(guard).await
         })))
-        .await;
-        if let Err(error) = &result {
-            if error.must_reload_view() {
-                self.evict_poisoned_worker(chain_id, &state);
-            }
-        }
-        result
-    }
-
-    /// Web variant: `ChainWorkerState` isn't `Send` on wasm and there's no
-    /// cross-task cancellation to worry about, so skip the detach.
-    #[cfg(web)]
-    async fn chain_write<R, F, Fut>(&self, chain_id: ChainId, f: F) -> Result<R, WorkerError>
-    where
-        F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut,
-        Fut: std::future::Future<Output = Result<R, WorkerError>>,
-    {
-        let state = self.get_or_create_chain_worker(chain_id).await?;
-        let state_ref = &state;
-        let result = Box::pin(wrap_future(async move {
-            let guard = handle::write_lock(state_ref).await;
-            guard.check_not_poisoned()?;
-            f(guard).await
-        }))
         .await;
         if let Err(error) = &result {
             if error.must_reload_view() {

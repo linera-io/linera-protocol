@@ -7,6 +7,22 @@ Abstractions over tasks that can be used natively or on the Web.
 
 use futures::{future, Future, FutureExt as _};
 
+/// `Send` on native targets; no bound on web (where there's only one thread).
+///
+/// Use this in generic bounds that need `Send` on native but should compile on
+/// web without the bound. Combined with [`run_detached`], this lets a single
+/// function body support both targets.
+#[cfg(not(web))]
+pub trait MaybeSend: Send {}
+#[cfg(not(web))]
+impl<T: Send> MaybeSend for T {}
+
+/// `Send` on native targets; no bound on web (where there's only one thread).
+#[cfg(web)]
+pub trait MaybeSend {}
+#[cfg(web)]
+impl<T> MaybeSend for T {}
+
 /// Spawns `future` on the runtime and awaits its completion.
 ///
 /// Unlike [`Task::spawn`], dropping the returned future does *not* cancel the
@@ -16,8 +32,8 @@ use futures::{future, Future, FutureExt as _};
 #[cfg(not(web))]
 pub async fn run_detached<F, R>(future: F) -> R
 where
-    F: Future<Output = R> + Send + 'static,
-    R: Send + 'static,
+    F: Future<Output = R> + MaybeSend + 'static,
+    R: MaybeSend + 'static,
 {
     tokio::task::spawn(future)
         .await
@@ -30,8 +46,8 @@ where
 #[cfg(web)]
 pub async fn run_detached<F, R>(future: F) -> R
 where
-    F: Future<Output = R> + 'static,
-    R: 'static,
+    F: Future<Output = R> + MaybeSend + 'static,
+    R: MaybeSend + 'static,
 {
     let (tx, rx) = futures::channel::oneshot::channel();
     wasm_bindgen_futures::spawn_local(async move {
