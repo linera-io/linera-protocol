@@ -2,16 +2,10 @@ name: ScyllaDB tests
 
 on:
   push:
-    branches: [ main, 'devnet_*', 'testnet_*' ]
+    branches: [ main, 'devnet_*', 'testnet_*', 'store-safety-dbg' ]
   pull_request:
     branches:
       - "**"
-    paths:
-      - '.github/workflows/scylladb.yml'
-      - 'toolchains/**'
-      - 'linera-views/**'
-      - 'linera-storage/**'
-      - 'linera-service/src/storage.rs'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull requests

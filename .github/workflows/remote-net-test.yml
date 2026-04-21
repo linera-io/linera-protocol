@@ -4,6 +4,8 @@ on:
   push:
     branches: [ 'devnet_*', 'testnet_*' ]
   pull_request:
+    paths-ignore:
+      - "**"
   merge_group:
   workflow_dispatch:
 

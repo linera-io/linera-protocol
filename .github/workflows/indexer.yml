@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - "**"
+    paths-ignore:
+      - "**"
   merge_group:
   workflow_dispatch:
 
