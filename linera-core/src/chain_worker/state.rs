@@ -1991,6 +1991,12 @@ where
         self.initialize_and_save_if_needed().await?;
         let mut info = ChainInfo::from_chain_view(&self.chain).await?;
         if query.request_committees {
+            // Must reflect the chain's *own* view of which epochs it trusts:
+            // `collect_epoch_changes` in the chain client uses `min(committees.keys())`
+            // to decide where to start emitting `ProcessRemovedEpoch` ops. With a
+            // process-wide snapshot we would re-process the admin chain's own
+            // revocations. The load is transient — `committees` is evicted on the
+            // next save.
             info.requested_committees = Some(
                 self.chain
                     .execution_state

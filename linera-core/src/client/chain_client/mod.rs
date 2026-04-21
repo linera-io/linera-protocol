@@ -661,15 +661,21 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
     pub async fn local_committee(&self) -> Result<Committee, Error> {
-        let info = match self.chain_info_with_committees().await {
+        let info = match self.chain_info().await {
             Ok(info) => info,
             Err(LocalNodeError::BlobsNotFound(_)) => {
                 self.synchronize_chain_state(self.chain_id).await?;
-                self.chain_info_with_committees().await?
+                self.chain_info().await?
             }
             Err(err) => return Err(err.into()),
         };
-        Ok(info.into_current_committee()?)
+        let committee = self
+            .client
+            .storage_client()
+            .get_or_load_committee(info.epoch)
+            .await?
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
+        Ok((*committee).clone())
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.

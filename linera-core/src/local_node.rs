@@ -462,9 +462,6 @@ pub trait LocalChainInfoExt {
     /// Returns the requested map of committees.
     fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError>;
 
-    /// Returns the current committee.
-    fn into_current_committee(self) -> Result<Committee, LocalNodeError>;
-
     /// Returns a reference to the current committee.
     fn current_committee(&self) -> Result<&Committee, LocalNodeError>;
 }
@@ -473,13 +470,6 @@ impl LocalChainInfoExt for ChainInfo {
     fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {
         self.requested_committees
             .ok_or(LocalNodeError::InvalidChainInfoResponse)
-    }
-
-    fn into_current_committee(self) -> Result<Committee, LocalNodeError> {
-        self.requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .remove(&self.epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 
     fn current_committee(&self) -> Result<&Committee, LocalNodeError> {

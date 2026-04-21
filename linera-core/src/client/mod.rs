@@ -813,8 +813,14 @@ impl<Env: Environment> Client<Env> {
 
     /// Obtains the committee for the latest epoch on the admin chain.
     pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
-        Ok((info.epoch, info.into_current_committee()?))
+        let query = ChainInfoQuery::new(self.admin_chain_id);
+        let info = self.local_node.handle_chain_info_query(query).await?.info;
+        let committee = self
+            .storage_client()
+            .get_or_load_committee(info.epoch)
+            .await?
+            .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
+        Ok((info.epoch, (*committee).clone()))
     }
 
     /// Obtains the validators for the latest epoch.
