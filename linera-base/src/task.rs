@@ -61,7 +61,9 @@ where
 {
     let (tx, rx) = futures::channel::oneshot::channel();
     wasm_bindgen_futures::spawn_local(async move {
-        let _ = tx.send(future.await);
+        if tx.send(future.await).is_err() {
+            tracing::debug!("run_detached: receiver dropped before result was delivered");
+        }
     });
     rx.await
         .expect("spawned task dropped without sending its result")
