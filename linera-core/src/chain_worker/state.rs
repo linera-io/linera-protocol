@@ -889,7 +889,7 @@ where
                     },
                 });
             }
-            trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
+            trace!("Preprocessed confirmed block {height}");
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
             return Ok((
@@ -984,7 +984,7 @@ where
             .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
-        trace!("Processed confirmed block {height} on chain {chain_id:.8}");
+        trace!("Processed confirmed block {height}");
         let hash = confirmed_block.inner().hash();
         actions.notifications.push(Notification {
             chain_id,
@@ -1047,7 +1047,7 @@ where
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    #[instrument(level = "trace", skip(self, bundles))]
+    #[instrument(level = "debug", skip(self, bundles), fields(chain_id = %self.chain_id()))]
     pub(crate) async fn process_cross_chain_update(
         &mut self,
         origin: ChainId,
@@ -1066,11 +1066,12 @@ where
         // we haven't received yet, the inbox has a gap.
         if let Some(prev) = previous_height {
             if prev >= next_height_to_receive {
-                let recipient = self.chain_id();
+                let chain_id = self.chain_id();
                 if self.config.allow_revert_confirm && self.config.recovery_allowed_for(&recipient)
                 {
                     warn!(
-                        "Inbox gap detected for {recipient} from {origin}: \
+                        %chain_id,
+                        "Inbox gap detected from {origin}: \
                         sender declares previous height {prev} but we only have up to \
                         {next_height_to_receive}; requesting resend",
                     );
@@ -1080,7 +1081,7 @@ where
                     });
                 }
                 return Err(ChainError::InboxGapDetected {
-                    chain_id: recipient,
+                    chain_id,
                     origin,
                     expected_height: prev,
                     actual_height: bundles.first().map(|(_, b)| b.height).unwrap_or_default(),
@@ -1125,7 +1126,8 @@ where
             // now. Accordingly, do not send a confirmation, so that the
             // cross-chain update is retried later.
             warn!(
-                "Refusing to deliver messages to {recipient} from {origin} \
+                chain_id = %self.chain_id(),
+                "Refusing to deliver messages from {origin} \
                 at height {last_updated_height} because the recipient is still inactive",
             );
             return Ok(CrossChainUpdateResult::NothingToDo);
@@ -1314,7 +1316,8 @@ where
         self.knows_chain_is_active = false;
         self.save().await?;
         warn!(
-            "Cleared chain state for {chain_id} up to height {tip_height}; \
+            %chain_id,
+            "Cleared chain state up to height {tip_height}; \
             re-executing all blocks"
         );
 
