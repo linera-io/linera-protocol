@@ -151,7 +151,7 @@ impl Contract for WrappedFungibleTokenContract {
         }
     }
 
-    async fn store(mut self) {
+    async fn save(&mut self) {
         self.state.save().await.expect("Failed to save state");
     }
 }

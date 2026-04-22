@@ -129,14 +129,19 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// subscribes to.
     async fn process_streams(&mut self, _updates: Vec<StreamUpdate>) {}
 
-    /// Finishes the execution of the current transaction.
+    /// Persists the application state to storage.
     ///
-    /// This is called once at the end of the transaction, to allow all applications that
-    /// participated in the transaction to perform any final operations, such as persisting their
-    /// state.
+    /// This may be called multiple times during block execution (e.g. before checkpoints).
+    /// The contract instance remains alive after this call and can continue processing
+    /// subsequent actions. Implementations should call `.save()` on their view state.
+    async fn save(&mut self);
+
+    /// Finishes the execution and validates the final state.
     ///
-    /// The application may also cancel the transaction by panicking if there are any pendencies.
-    async fn store(self);
+    /// This is called once at the end of the block, after all transactions have been
+    /// processed. The application may cancel the block by panicking if the state is
+    /// invalid. After this call the contract instance is dropped.
+    async fn terminate(self) {}
 }
 
 /// The service interface of a Linera application.

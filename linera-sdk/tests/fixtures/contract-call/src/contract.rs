@@ -118,5 +118,5 @@ impl Contract for ContractTransferContract {
         panic!("Contract transfer application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {}
+    async fn save(&mut self) {}
 }

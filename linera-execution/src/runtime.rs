@@ -1226,6 +1226,17 @@ impl ContractSyncRuntime {
                         tracker: ResourceTracker::default(),
                     });
                 }
+
+                RuntimeCommand::SaveAllInstances => {
+                    let result = handle.save_all_instances();
+
+                    let sender = handle.inner().execution_state_sender.clone();
+                    let _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
+                        result: result.map(|()| None),
+                        final_balance: Amount::ZERO,
+                        tracker: ResourceTracker::default(),
+                    });
+                }
             }
         }
 
@@ -1348,7 +1359,30 @@ impl ContractSyncRuntimeHandle {
         runtime.is_finalizing = false;
     }
 
-    /// Notifies all loaded applications that execution is finalizing.
+    /// Saves state of all loaded applications without dropping them.
+    ///
+    /// Used before checkpointing to flush Wasm-side in-memory state to the host's
+    /// key-value store. Contract instances remain loaded and can continue processing.
+    #[instrument(skip_all)]
+    fn save_all_instances(&self) -> Result<(), ExecutionError> {
+        let applications: Vec<_> = self
+            .inner()
+            .applications_to_finalize
+            .iter()
+            .copied()
+            .rev()
+            .collect();
+
+        for application in applications {
+            self.execute(application, None, |contract| {
+                contract.save().map(|_| None)
+            })?;
+        }
+
+        Ok(())
+    }
+
+    /// Saves and terminates all loaded applications, ending execution.
     #[instrument(skip_all)]
     fn finalize(&self, context: FinalizeContext) -> Result<(), ExecutionError> {
         let applications = mem::take(&mut self.inner().applications_to_finalize)
@@ -1359,7 +1393,8 @@ impl ContractSyncRuntimeHandle {
 
         for application in applications {
             self.execute(application, context.authenticated_owner, |contract| {
-                contract.finalize().map(|_| None)
+                contract.save()?;
+                contract.terminate().map(|_| None)
             })?;
             self.inner().loaded_applications.remove(&application);
         }

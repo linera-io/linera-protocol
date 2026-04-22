@@ -553,6 +553,55 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         Ok(())
     }
 
+    /// Saves all loaded contract instances on the runtime thread.
+    ///
+    /// Calls `save()` on all loaded contracts so their in-memory state is flushed to the
+    /// host's key-value store. Contract instances remain loaded and can continue processing.
+    /// Used before checkpointing to ensure the chain's view captures all pending state.
+    /// When no block-level runtime thread is running (e.g. on web), this is a no-op.
+    pub async fn save_runtime_instances<C>(
+        &mut self,
+        chain: &mut ExecutionStateView<C>,
+    ) -> Result<(), ChainError>
+    where
+        C: Context + Clone + 'static,
+        C::Extra: ExecutionRuntimeContext,
+    {
+        use futures::StreamExt as _;
+
+        let Some(command_tx) = self.command_tx.as_ref() else {
+            return Ok(());
+        };
+
+        command_tx
+            .send(RuntimeCommand::SaveAllInstances)
+            .map_err(|_| {
+                ChainError::InternalError("Runtime thread stopped unexpectedly".to_string())
+            })?;
+
+        // Wait for the acknowledgment (ActionComplete).
+        let mut txn_tracker = TransactionTracker::default();
+        let mut actor = ExecutionStateActor::new(chain, &mut txn_tracker, self.resource_controller);
+        let receiver = self
+            .execution_state_receiver
+            .as_mut()
+            .expect("execution_state_receiver should match command_tx presence");
+        while let Some(request) = receiver.next().await {
+            if let ExecutionRequest::ActionComplete { result, .. } = request {
+                result.map_err(|error| {
+                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+                })?;
+                break;
+            }
+            actor
+                .handle_request(request)
+                .await
+                .map_err(|error| ChainError::InternalError(error.to_string()))?;
+        }
+
+        Ok(())
+    }
+
     /// Finalizes the execution and returns the collected results.
     ///
     /// This method should be called after all transactions have been processed.

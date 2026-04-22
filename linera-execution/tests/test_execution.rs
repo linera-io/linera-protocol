@@ -130,8 +130,10 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         },
     ));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    target_application.expect_call(ExpectedCall::default_save());
+    target_application.expect_call(ExpectedCall::default_terminate());
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::default_terminate());
 
     let context = OperationContext {
         authenticated_owner: Some(owner),
@@ -267,7 +269,8 @@ async fn test_simulated_session() -> anyhow::Result<()> {
         }
     }));
 
-    target_application.expect_call(ExpectedCall::finalize(|runtime| {
+    target_application.expect_call(ExpectedCall::default_save());
+    target_application.expect_call(ExpectedCall::terminate(|runtime| {
         match runtime.read_value_bytes(state_key)? {
             Some(session_is_open) if session_is_open == vec![u8::from(false)] => Ok(()),
             Some(_) => Err(ExecutionError::UserError("Leaked session".to_owned())),
@@ -276,7 +279,8 @@ async fn test_simulated_session() -> anyhow::Result<()> {
             )),
         }
     }));
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::default_terminate());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -333,7 +337,8 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 
     let error_message = "Session leaked";
 
-    target_application.expect_call(ExpectedCall::finalize(|runtime| {
+    target_application.expect_call(ExpectedCall::default_save());
+    target_application.expect_call(ExpectedCall::terminate(|runtime| {
         match runtime.read_value_bytes(state_key)? {
             Some(session_is_open) if session_is_open == vec![u8::from(false)] => Ok(()),
             Some(_) => Err(ExecutionError::UserError(error_message.to_owned())),
@@ -343,7 +348,8 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
         }
     }));
 
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::default_terminate());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -377,7 +383,8 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
 
     let error_message = "Finalize aborted execution";
 
-    application.expect_call(ExpectedCall::finalize(|_runtime| {
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::terminate(|_runtime| {
         Err(ExecutionError::UserError(error_message.to_owned()))
     }));
 
@@ -435,12 +442,16 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
 
     let error_message = "Third application aborted execution";
 
-    fourth_application.expect_call(ExpectedCall::default_finalize());
-    third_application.expect_call(ExpectedCall::finalize(|_runtime| {
+    fourth_application.expect_call(ExpectedCall::default_save());
+    fourth_application.expect_call(ExpectedCall::default_terminate());
+    third_application.expect_call(ExpectedCall::default_save());
+    third_application.expect_call(ExpectedCall::terminate(|_runtime| {
         Err(ExecutionError::UserError(error_message.to_owned()))
     }));
-    second_application.expect_call(ExpectedCall::default_finalize());
-    first_application.expect_call(ExpectedCall::default_finalize());
+    second_application.expect_call(ExpectedCall::default_save());
+    second_application.expect_call(ExpectedCall::default_terminate());
+    first_application.expect_call(ExpectedCall::default_save());
+    first_application.expect_call(ExpectedCall::default_terminate());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -561,14 +572,18 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         },
     );
 
-    fourth_application.expect_call(ExpectedCall::default_finalize());
-    third_application.expect_call(ExpectedCall::finalize(|runtime| {
+    fourth_application.expect_call(ExpectedCall::default_save());
+    fourth_application.expect_call(ExpectedCall::default_terminate());
+    third_application.expect_call(ExpectedCall::default_save());
+    third_application.expect_call(ExpectedCall::terminate(|runtime| {
         runtime.send_message(second_message)?;
         runtime.send_message(third_message)?;
         Ok(())
     }));
-    second_application.expect_call(ExpectedCall::default_finalize());
-    first_application.expect_call(ExpectedCall::finalize(|runtime| {
+    second_application.expect_call(ExpectedCall::default_save());
+    second_application.expect_call(ExpectedCall::default_terminate());
+    first_application.expect_call(ExpectedCall::default_save());
+    first_application.expect_call(ExpectedCall::terminate(|runtime| {
         runtime.send_message(fourth_message)?;
         Ok(())
     }));
@@ -620,7 +635,8 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
         move |_runtime, _operation| Ok(vec![]),
     ));
 
-    caller_application.expect_call(ExpectedCall::finalize({
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::terminate({
         move |runtime| {
             runtime.try_call_application(false, target_id, vec![])?;
             Ok(())
@@ -672,13 +688,15 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
         Ok(vec![])
     }));
 
-    target_application.expect_call(ExpectedCall::finalize({
+    target_application.expect_call(ExpectedCall::default_save());
+    target_application.expect_call(ExpectedCall::terminate({
         move |runtime| {
             runtime.try_call_application(false, caller_id, vec![])?;
             Ok(())
         }
     }));
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::default_terminate());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -724,8 +742,10 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
         Ok(vec![])
     }));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::finalize({
+    target_application.expect_call(ExpectedCall::default_save());
+    target_application.expect_call(ExpectedCall::default_terminate());
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::terminate({
         move |runtime| {
             runtime.try_call_application(false, target_id, vec![])?;
             Ok(())
@@ -832,7 +852,8 @@ async fn test_simple_message() -> anyhow::Result<()> {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -897,8 +918,10 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         Ok(vec![])
     }));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    target_application.expect_call(ExpectedCall::default_save());
+    target_application.expect_call(ExpectedCall::default_terminate());
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::default_terminate());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -973,9 +996,12 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
         },
     ));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
-    middle_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    target_application.expect_call(ExpectedCall::default_save());
+    target_application.expect_call(ExpectedCall::default_terminate());
+    middle_application.expect_call(ExpectedCall::default_save());
+    middle_application.expect_call(ExpectedCall::default_terminate());
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::default_terminate());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -1082,9 +1108,12 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         },
     ));
 
-    sending_target_application.expect_call(ExpectedCall::default_finalize());
-    silent_target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    sending_target_application.expect_call(ExpectedCall::default_save());
+    sending_target_application.expect_call(ExpectedCall::default_terminate());
+    silent_target_application.expect_call(ExpectedCall::default_save());
+    silent_target_application.expect_call(ExpectedCall::default_terminate());
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::default_terminate());
 
     // Execute the operation, starting the test scenario
     let context = create_dummy_operation_context(chain_id);
@@ -1201,7 +1230,8 @@ async fn test_open_chain() -> anyhow::Result<()> {
             Ok(vec![])
         }
     }));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let mut controller = ResourceController::default();
     let operation = Operation::User {
@@ -1288,7 +1318,8 @@ async fn test_close_chain() -> anyhow::Result<()> {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let mut controller = ResourceController::default();
     let operation = Operation::User {
@@ -1315,7 +1346,8 @@ async fn test_close_chain() -> anyhow::Result<()> {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let operation = Operation::User {
         application_id,
@@ -1390,7 +1422,8 @@ async fn test_message_receipt_spending_chain_balance(
         runtime.transfer(receiver_chain_account, recipient, amount)?;
         Ok(())
     }));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let context = create_dummy_message_context(chain_id, authenticated_owner);
     let mut controller = ResourceController::default();
@@ -1430,8 +1463,10 @@ async fn test_read_application_description() -> anyhow::Result<()> {
         },
     ));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
+    target_application.expect_call(ExpectedCall::default_save());
+    target_application.expect_call(ExpectedCall::default_terminate());
+    caller_application.expect_call(ExpectedCall::default_save());
+    caller_application.expect_call(ExpectedCall::default_terminate());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();

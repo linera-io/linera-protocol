@@ -45,7 +45,7 @@ impl linera_sdk::Contract for Contract {
         panic!("This application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {}
+    async fn save(&mut self) {}
 }
 
 impl Contract {

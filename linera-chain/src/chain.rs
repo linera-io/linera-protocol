@@ -811,7 +811,12 @@ where
             }
 
             // Checkpoint before bundle transactions if using auto-retry.
+            // Save all loaded contract instances first so their in-memory state
+            // is flushed to the chain's key-value store before cloning.
             let checkpoint = if auto_retry && is_bundle {
+                block_execution_tracker
+                    .save_runtime_instances(chain)
+                    .await?;
                 Some((
                     chain.clone_unchecked()?,
                     block_execution_tracker.create_checkpoint(),

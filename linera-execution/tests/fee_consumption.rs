@@ -270,7 +270,8 @@ async fn test_fee_consumption(
         }
         Ok(())
     }));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let refund_grant_to = authenticated_owner
         .map(|owner| Account { chain_id, owner })
@@ -468,7 +469,8 @@ async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
         runtime.emit(StreamName(b"test".to_vec()), b"event data".to_vec())?;
         Ok(())
     }));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let refund_grant_to = Some(Account {
         chain_id,
@@ -539,7 +541,8 @@ async fn test_free_app_operation_still_charged() -> anyhow::Result<()> {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let context = linera_execution::OperationContext {
         chain_id,

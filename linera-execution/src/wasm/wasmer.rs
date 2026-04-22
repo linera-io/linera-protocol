@@ -181,9 +181,17 @@ where
     }
 
     #[instrument(skip_all)]
-    fn finalize(&mut self) -> Result<(), ExecutionError> {
+    fn save(&mut self) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
-            .finalize()
+            .save()
+            .map_err(WasmExecutionError::from)?;
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    fn terminate(&mut self) -> Result<(), ExecutionError> {
+        ContractEntrypoints::new(&mut self.instance)
+            .terminate()
             .map_err(WasmExecutionError::from)?;
         Ok(())
     }
