@@ -25,34 +25,20 @@ impl<T> MaybeSend for T {}
 
 /// Spawns `future` on the runtime and awaits its completion.
 ///
-/// Unlike [`Task::spawn`], dropping the returned future does *not* cancel the
-/// spawned task — it runs to completion in the background. Use this when the
-/// spawned work (e.g. a storage write paired with its in-memory finalization)
-/// must not be torn apart mid-flight by caller cancellation.
-#[cfg(not(web))]
-pub async fn run_detached<F, R>(future: F) -> R
-where
-    F: Future<Output = R> + MaybeSend + 'static,
-    R: MaybeSend + 'static,
-{
-    tokio::task::spawn(future)
-        .await
-        .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
-}
-
-/// Web variant: runs `future` on the event loop via
-/// [`wasm_bindgen_futures::spawn_local`], delivering the output via a oneshot.
-/// The spawned task is inherently detached from any handle on web.
-#[cfg(web)]
+/// Unlike [`Task::spawn`] on its own, dropping the returned future does *not*
+/// cancel the spawned task — it runs to completion in the background. Use this
+/// when the spawned work (e.g. a storage write paired with its in-memory
+/// finalization) must not be torn apart mid-flight by caller cancellation.
 pub async fn run_detached<F, R>(future: F) -> R
 where
     F: Future<Output = R> + MaybeSend + 'static,
     R: MaybeSend + 'static,
 {
     let (tx, rx) = futures::channel::oneshot::channel();
-    wasm_bindgen_futures::spawn_local(async move {
+    Task::spawn(async move {
         let _ = tx.send(future.await);
-    });
+    })
+    .forget();
     rx.await
         .expect("spawned task dropped without sending its result")
 }
