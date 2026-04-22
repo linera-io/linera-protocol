@@ -2006,6 +2006,108 @@ where
     Ok(())
 }
 
+/// Tests the flash-loan application with a non-trivial `terminate()` that verifies
+/// loan repayment with interest using the fungible token.
+///
+/// Flow (all on the same chain):
+///   1. Create and fund the fungible token (owner gets 1000 tokens).
+///   2. Create the flash-loan app, parameterized with the fungible app ID and 1% interest.
+///   3. Fund the flash-loan pool: transfer 100 tokens from owner to flash-loan's account.
+///   4. In a single block: GetCash(50) + RepayLoan(51) (50 + 1% interest = 50.5, repay 51).
+///   5. Block finalization calls `terminate()` which asserts:
+///      - Outstanding loans == 0
+///      - Flash-loan's fungible balance >= initial + interest
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_flash_loan_terminate(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_flash_loan_terminate(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+async fn run_test_flash_loan_terminate<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+
+    let chain = builder.add_root_chain(0, Amount::from_tokens(10)).await?;
+    let chain_owner = chain.preferred_owner().unwrap();
+
+    // 1. Publish and create the fungible token with 1000 tokens for the chain owner.
+    let fungible_module = chain.publish_wasm_example("fungible").await?;
+    let fungible_module =
+        fungible_module.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
+    let accounts = BTreeMap::from_iter([(chain_owner, Amount::from_tokens(1_000))]);
+    let state = InitialState { accounts };
+    let params = Parameters::new("FUN");
+    let (fungible_id, _cert) = chain
+        .create_application(fungible_module, &params, &state, vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // 2. Publish and create the flash-loan app.
+    let flash_loan_module = chain.publish_wasm_example("flash-loan").await?;
+    let flash_loan_module = flash_loan_module
+        .with_abi::<flash_loan::FlashLoanAbi, flash_loan::FlashLoanParameters, flash_loan::FlashLoanInitialState>();
+    let pool_balance = Amount::from_tokens(100);
+    let flash_params = flash_loan::FlashLoanParameters {
+        fungible_app_id: fungible_id,
+        interest_millionths: 10_000, // 1%
+    };
+    let flash_init = flash_loan::FlashLoanInitialState { pool_balance };
+    let (flash_loan_id, _cert) = chain
+        .create_application(
+            flash_loan_module,
+            &flash_params,
+            &flash_init,
+            vec![fungible_id.forget_abi()],
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // 3. Fund the flash-loan pool: transfer 100 tokens from owner to flash-loan's account.
+    let flash_loan_account = AccountOwner::from(flash_loan_id.forget_abi());
+    let fund_pool = FungibleOperation::Transfer {
+        owner: chain_owner,
+        amount: pool_balance,
+        target_account: Account {
+            chain_id: chain.chain_id(),
+            owner: flash_loan_account,
+        },
+    };
+    chain
+        .execute_operation(Operation::user(fungible_id, &fund_pool)?)
+        .await
+        .unwrap_ok_committed();
+
+    // 4. In a single block: borrow 50 tokens and repay 51 (50 + 1% interest rounded up).
+    let borrow_amount = Amount::from_tokens(50);
+    let repay_amount = Amount::from_tokens(51);
+    let get_cash_op = Operation::user(
+        flash_loan_id,
+        &flash_loan::Operation::GetCash {
+            amount: borrow_amount,
+        },
+    )?;
+    let repay_op = Operation::user(
+        flash_loan_id,
+        &flash_loan::Operation::RepayLoan {
+            amount: repay_amount,
+        },
+    )?;
+    // Both operations in the same block: terminate() runs once at the end and checks
+    // that all loans are repaid and the pool balance covers initial + interest.
+    chain
+        .execute_operations(vec![get_cash_op, repay_op], vec![])
+        .await
+        .unwrap_ok_committed();
+
+    Ok(())
+}
+
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
