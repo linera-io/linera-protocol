@@ -127,6 +127,7 @@ mod metrics {
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
+pub static DEFAULT_MAX_EVENT_STREAM_QUERIES: usize = 1000;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TimingType {
@@ -1158,7 +1159,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Downloads and processes certificates for sender chain blocks.
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "debug", skip_all, fields(chain_id = %sender_chain_id))]
     async fn download_and_process_sender_chain(
         &self,
         sender_chain_id: ChainId,
@@ -1170,7 +1171,7 @@ impl<Env: Environment> Client<Env> {
         let (max_epoch, committees) = match self.admin_committees().await {
             Ok(result) => result,
             Err(error) => {
-                error!(%error, %sender_chain_id, "could not read admin committees");
+                error!(%error, "could not read admin committees");
                 return;
             }
         };
@@ -1256,7 +1257,6 @@ impl<Env: Environment> Client<Env> {
                     nodes.retain(|node| !faulty_validators.contains(&node.public_key));
                     if nodes.is_empty() {
                         info!(
-                            chain_id = %sender_chain_id,
                             "could not download certificates for chain - no more correct validators left"
                         );
                         return;
@@ -1266,7 +1266,6 @@ impl<Env: Environment> Client<Env> {
             };
 
             trace!(
-                chain_id = %sender_chain_id,
                 num_certificates = %certificates.len(),
                 "received certificates",
             );
@@ -1306,10 +1305,7 @@ impl<Env: Environment> Client<Env> {
 
             remote_heights.retain(|height| !to_remove_from_queue.contains(height));
         }
-        trace!(
-            chain_id = %sender_chain_id,
-            "find_received_certificates: finished processing chain",
-        );
+        trace!("find_received_certificates: finished processing chain");
     }
 
     /// Downloads the log of received messages for a chain from a validator.
@@ -1557,13 +1553,12 @@ impl<Env: Environment> Client<Env> {
         remote_node: &RemoteNode<Env::ValidatorNode>,
     ) -> Result<(), chain_client::Error> {
         let stream_ids_vec: Vec<_> = stream_ids.iter().cloned().collect();
-        let query = ChainInfoQuery::new(chain_id).with_previous_event_blocks(stream_ids_vec);
-        let info = remote_node.handle_chain_info_query(query).await?;
-        let initial_blocks = info
-            .requested_previous_event_blocks
-            .values()
-            .copied()
-            .collect();
+        let mut initial_blocks = BTreeSet::new();
+        for chunk in stream_ids_vec.chunks(self.options.max_event_stream_queries) {
+            let query = ChainInfoQuery::new(chain_id).with_previous_event_blocks(chunk.to_vec());
+            let info = remote_node.handle_chain_info_query(query).await?;
+            initial_blocks.extend(info.requested_previous_event_blocks.values().copied());
+        }
         let local_height = match self.local_node.chain_info(chain_id).await {
             Ok(info) => info.next_block_height,
             Err(LocalNodeError::InactiveChain(_) | LocalNodeError::BlobsNotFound(_)) => {

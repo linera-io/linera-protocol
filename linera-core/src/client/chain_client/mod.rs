@@ -18,7 +18,7 @@ use futures::{
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
+    crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
         ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
@@ -51,7 +51,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, SystemOperation, EPOCH_STREAM_NAME,
         REMOVED_EPOCH_STREAM_NAME,
     },
-    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, QueryOutcome,
 };
 use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
@@ -123,6 +123,9 @@ pub struct Options {
     /// Maximum probe interval for the notification circuit breaker. The probe interval
     /// doubles on each failure but is capped at this value.
     pub notification_circuit_breaker_max_probe_interval: Duration,
+    /// Maximum number of event stream IDs to include in a single `PreviousEventBlocks`
+    /// request. Larger sets are split into multiple requests.
+    pub max_event_stream_queries: usize,
 }
 
 struct CircuitBreakerState {
@@ -135,7 +138,7 @@ impl Options {
     pub fn test_default() -> Self {
         use super::{
             DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
-            DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            DEFAULT_MAX_EVENT_STREAM_QUERIES, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
@@ -155,6 +158,7 @@ impl Options {
             allow_fast_blocks: false,
             notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
             notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
+            max_event_stream_queries: DEFAULT_MAX_EVENT_STREAM_QUERIES,
         }
     }
 }
@@ -434,12 +438,6 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", skip(self))]
     pub fn set_preferred_owner(&mut self, preferred_owner: AccountOwner) {
         self.preferred_owner = Some(preferred_owner);
-    }
-
-    /// Unsets the preferred owner for signing the blocks.
-    #[instrument(level = "trace", skip(self))]
-    pub fn unset_preferred_owner(&mut self) {
-        self.preferred_owner = None;
     }
 
     /// Obtains a `ChainStateView` for this client's chain.
@@ -920,9 +918,9 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
-    #[instrument(level = "trace")]
+    #[instrument(level = "debug", skip(self), fields(chain_id = %self.chain_id))]
     pub async fn find_received_certificates(&self) -> Result<(), Error> {
-        debug!(chain_id = %self.chain_id, "starting find_received_certificates");
+        debug!("starting find_received_certificates");
         #[cfg(with_metrics)]
         let _latency = super::metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
         // Use network information from the local chain.
@@ -1025,7 +1023,7 @@ impl<Env: Environment> ChainClient<Env> {
             error!(
                 chain_id = %self.chain_id,
                 %error,
-                "Failed to update the certificate trackers for chain",
+                "Failed to update the certificate trackers",
             );
         }
     }
@@ -1305,8 +1303,8 @@ impl<Env: Environment> ChainClient<Env> {
                     },
                 ))) if expected_block_height > found_block_height => {
                     tracing::info!(
-                        "Local state is outdated; synchronizing chain {:.8}",
-                        self.chain_id
+                        chain_id = %self.chain_id,
+                        "Local state is outdated; synchronizing chain"
                     );
                     self.synchronize_chain_state(self.chain_id).await?;
                 }
@@ -1344,6 +1342,7 @@ impl<Env: Environment> ChainClient<Env> {
         let lock_start = linera_base::time::Instant::now();
         let mut proposal_guard = mutex.lock_owned().await;
         tracing::debug!(
+            chain_id = %self.chain_id,
             lock_wait_ms = lock_start.elapsed().as_millis(),
             "acquired proposal_mutex in execute_block"
         );
@@ -1534,11 +1533,12 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Queries a system application.
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(query))]
     pub async fn query_system_application(
         &self,
-        query: SystemQuery,
-    ) -> Result<QueryOutcome<SystemResponse>, Error> {
+        query: linera_execution::SystemQuery,
+    ) -> Result<QueryOutcome<linera_execution::SystemResponse>, Error> {
         let (
             QueryOutcome {
                 response,
@@ -1547,7 +1547,7 @@ impl<Env: Environment> ChainClient<Env> {
             _,
         ) = self.query_application(Query::System(query), None).await?;
         match response {
-            QueryResponse::System(response) => Ok(QueryOutcome {
+            linera_execution::QueryResponse::System(response) => Ok(QueryOutcome {
                 response,
                 operations,
             }),
@@ -1572,7 +1572,7 @@ impl<Env: Environment> ChainClient<Env> {
             _,
         ) = self.query_application(query, None).await?;
         match response {
-            QueryResponse::User(response_bytes) => {
+            linera_execution::QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;
                 Ok(QueryOutcome {
                     response,
@@ -1841,7 +1841,7 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// The caller must hold the proposal mutex via `proposal_guard`. The pending proposal
     /// is read from and cleared through the guard, ensuring synchronization.
-    #[instrument(level = "trace", skip(proposal_guard))]
+    #[instrument(level = "debug", skip(self, proposal_guard), fields(chain_id = %self.chain_id))]
     async fn process_pending_block_without_prepare(
         &self,
         proposal_guard: &mut Option<PendingProposal>,
@@ -2138,10 +2138,11 @@ impl<Env: Environment> ChainClient<Env> {
     /// Rotates the key of the chain.
     ///
     /// Replaces current owners of the chain with the new key pair.
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub async fn rotate_key_pair(
         &self,
-        public_key: AccountPublicKey,
+        public_key: linera_base::crypto::AccountPublicKey,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         self.transfer_ownership(public_key.into()).await
     }
@@ -2626,6 +2627,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Sends money to a chain.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,

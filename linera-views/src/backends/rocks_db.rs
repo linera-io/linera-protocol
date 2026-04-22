@@ -352,7 +352,7 @@ impl RocksDbStoreInternal {
         let max_stream_queries = config.max_stream_queries;
         let spawn_mode = config.spawn_mode;
         if !std::path::Path::exists(&path_buf) {
-            std::fs::create_dir(path_buf.clone())?;
+            std::fs::create_dir_all(path_buf.clone())?;
         }
         let sys = System::new_with_specifics(
             RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram()),

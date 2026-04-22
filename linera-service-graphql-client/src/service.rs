@@ -13,11 +13,13 @@ pub type JSONObject = serde_json::Value;
 
 #[cfg(target_arch = "wasm32")]
 mod types {
-    use linera_base::data_types::Round;
+    use std::collections::BTreeSet;
+
+    use linera_base::identifiers::StreamId;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
 
-    use super::{BlockHeight, ChainId, CryptoHash};
+    use super::{BlockHeight, ChainId, CryptoHash, Round};
 
     pub type ChainManager = Value;
     pub type ChainOwnership = Value;
@@ -31,26 +33,38 @@ mod types {
     pub type ApplicationDescription = Value;
     pub type OperationResult = Value;
 
+    /// Mirrors `linera_core::worker::Notification`.
+    /// Duplicated because `linera-core` doesn't compile for wasm32.
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     pub struct Notification {
         pub chain_id: ChainId,
         pub reason: Reason,
     }
 
+    /// Mirrors `linera_core::worker::Reason`.
+    /// Duplicated because `linera-core` doesn't compile for wasm32.
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-    #[expect(clippy::enum_variant_names)]
     pub enum Reason {
         NewBlock {
             height: BlockHeight,
+            hash: CryptoHash,
+        },
+        NewEvents {
+            height: BlockHeight,
             block_hash: CryptoHash,
+            event_streams: BTreeSet<StreamId>,
         },
         NewIncomingBundle {
-            origin: Origin,
+            origin: ChainId,
             height: BlockHeight,
         },
         NewRound {
             height: BlockHeight,
             round: Round,
+        },
+        BlockExecuted {
+            height: BlockHeight,
+            hash: CryptoHash,
         },
     }
 }
@@ -313,10 +327,10 @@ mod from {
                     )
                 })?;
 
-                let module_id: ModuleId = publish_module.module_id.parse().map_err(|_| {
-                    ConversionError::UnexpectedCertificateType(
-                        "Invalid module_id format".to_string(),
-                    )
+                let module_id: ModuleId = publish_module.module_id.parse().map_err(|e| {
+                    ConversionError::UnexpectedCertificateType(format!(
+                        "Invalid module_id format: {e}"
+                    ))
                 })?;
 
                 Ok(SystemOperation::PublishModule { module_id })
@@ -349,10 +363,10 @@ mod from {
                     )
                 })?;
 
-                let module_id: ModuleId = create_application.module_id.parse().map_err(|_| {
-                    ConversionError::UnexpectedCertificateType(
-                        "Invalid module_id format".to_string(),
-                    )
+                let module_id: ModuleId = create_application.module_id.parse().map_err(|e| {
+                    ConversionError::UnexpectedCertificateType(format!(
+                        "Invalid module_id format: {e}"
+                    ))
                 })?;
 
                 let parameters = hex::decode(create_application.parameters_hex).map_err(|_| {

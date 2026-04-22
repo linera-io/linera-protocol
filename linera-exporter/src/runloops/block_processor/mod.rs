@@ -9,12 +9,12 @@ use std::{
 
 use linera_base::crypto::CryptoHash;
 use linera_execution::committee::Committee;
-use linera_service::config::DestinationId;
 use linera_storage::Storage;
 use tokio::time::{interval, MissedTickBehavior};
 
 use crate::{
     common::ExporterError,
+    config::DestinationId,
     runloops::{block_processor::walker::Walker, ExportersTracker, NewBlockQueue},
     storage::BlockProcessorStorage,
 };
@@ -189,7 +189,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
+    use std::{
+        collections::HashSet,
+        sync::{atomic::AtomicBool, Arc},
+    };
 
     use linera_base::{
         crypto::CryptoHash,
@@ -198,24 +201,22 @@ mod test {
         time::Duration,
     };
     use linera_chain::{
-        data_types::{BlockExecutionOutcome, IncomingBundle, MessageBundle},
+        data_types::{BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle},
         test::{make_child_block, make_first_block, BlockTestExt},
         types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate},
     };
     use linera_rpc::NodeOptions;
-    use linera_sdk::test::MessageAction;
-    use linera_service::config::LimitsConfig;
     use linera_storage::{DbStorage, Storage, TestClock};
     use linera_views::memory::MemoryDatabase;
     use tokio::sync::mpsc::unbounded_channel;
     use tokio_util::sync::CancellationToken;
 
     use crate::{
-        common::BlockId,
+        common::{BlockId, ExporterCancellationSignal},
+        config::LimitsConfig,
         runloops::{BlockProcessor, ExportersTracker, NewBlockQueue},
         storage::BlockProcessorStorage,
         test_utils::make_simple_state_with_blobs,
-        ExporterCancellationSignal,
     };
 
     #[test_log::test(tokio::test)]
@@ -241,6 +242,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -378,6 +380,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -495,6 +498,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -583,6 +587,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -693,6 +698,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -783,6 +789,7 @@ mod test {
             exporter_storage.clone()?,
             vec![],
             HashSet::new(),
+            Arc::new(AtomicBool::new(true)),
         );
 
         let mut block_processor = BlockProcessor::new(

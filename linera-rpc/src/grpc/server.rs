@@ -932,7 +932,7 @@ where
     ) -> Result<Response<PendingBlobResult>, Status> {
         let traffic_type = Self::get_traffic_type(&request);
         let (chain_id, blob_id) = request.into_inner().try_into()?;
-        trace!(?chain_id, ?blob_id, "Download pending blob");
+        trace!(?blob_id, "Download pending blob");
         match self
             .state
             .clone()
@@ -968,7 +968,7 @@ where
         let (chain_id, blob_content) = request.into_inner().try_into()?;
         let blob = Blob::new(blob_content);
         let blob_id = blob.id();
-        trace!(?chain_id, ?blob_id, "Handle pending blob");
+        trace!(?blob_id, "Handle pending blob");
         match self.state.clone().handle_pending_blob(chain_id, blob).await {
             Ok(info) => {
                 Self::log_request_success("handle_pending_blob", traffic_type);

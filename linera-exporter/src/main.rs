@@ -1,38 +1,29 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{ExporterCancellationSignal, ExporterError};
-use exporter_service::ExporterService;
 use futures::FutureExt;
 use linera_base::listen_for_shutdown_signals;
+use linera_exporter::{
+    common::{ExporterCancellationSignal, ExporterError},
+    config::BlockExporterConfig,
+    exporter_service::ExporterService,
+    runloops::start_block_processor_task,
+    util,
+};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
 use linera_rpc::NodeOptions;
-use linera_service::{
-    config::BlockExporterConfig,
-    storage::{CommonStorageOptions, Runnable, StorageConfig},
-    util,
-};
 use linera_storage::Storage;
-use runloops::start_block_processor_task;
+use linera_storage_runtime::{CommonStorageOptions, Runnable, StorageConfig};
 use tokio_util::sync::CancellationToken;
-
-mod common;
-mod exporter_service;
-#[cfg(with_metrics)]
-mod metrics;
-mod runloops;
-mod state;
-mod storage;
-
-#[cfg(test)]
-mod test_utils;
-#[cfg(test)]
-mod tests;
 
 #[cfg(not(feature = "metrics"))]
 const IS_WITH_METRICS: bool = false;
@@ -183,6 +174,7 @@ impl Runnable for ExporterContext {
         )
         .await;
 
+        let health = Arc::new(AtomicBool::new(true));
         let (sender, handle) = start_block_processor_task(
             storage,
             ExporterCancellationSignal::new(shutdown_notifier.clone()),
@@ -190,6 +182,7 @@ impl Runnable for ExporterContext {
             self.node_options,
             self.config.id,
             self.config.destination_config,
+            health,
         );
 
         let service = ExporterService::new(sender);
@@ -215,7 +208,9 @@ impl Runnable for ExporterContext {
 }
 
 fn main() -> Result<()> {
-    linera_service::tracing::init("linera-exporter");
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let cli = <Cli as clap::Parser>::parse();
     match cli.command {
         Command::Run(options) => options.run(),
@@ -350,9 +345,8 @@ impl Runnable for DestinationsContext {
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
+        use linera_exporter::{config::DestinationKind, state::BlockExporterStateView};
         use linera_sdk::views::{RootView, View};
-        use linera_service::config::DestinationKind;
-        use state::BlockExporterStateView;
 
         let context = storage
             .block_exporter_context(self.exporter_id)

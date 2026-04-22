@@ -4,6 +4,7 @@
 use std::{
     collections::HashSet,
     future::{Future, IntoFuture},
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use block_processor::BlockProcessor;
@@ -11,19 +12,19 @@ use indexer::indexer_exporter::Exporter as IndexerExporter;
 use linera_base::identifiers::BlobId;
 use linera_execution::committee::Committee;
 use linera_rpc::NodeOptions;
-use linera_service::config::{DestinationConfig, DestinationId, LimitsConfig};
 use linera_storage::Storage;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use validator_exporter::Exporter as ValidatorExporter;
 
 use crate::{
     common::{BlockId, ExporterError},
+    config::{DestinationConfig, DestinationId, LimitsConfig},
     runloops::task_manager::ExportersTracker,
     storage::BlockProcessorStorage,
 };
 
 mod block_processor;
-pub(crate) mod evm_chain_exporter;
+mod evm_chain_exporter;
 mod indexer;
 mod logging_exporter;
 mod task_manager;
@@ -32,13 +33,14 @@ mod validator_exporter;
 #[cfg(test)]
 pub use indexer::indexer_api;
 
-pub(crate) fn start_block_processor_task<S, F>(
+pub fn start_block_processor_task<S, F>(
     storage: S,
     shutdown_signal: F,
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
     destination_config: DestinationConfig,
+    health: Arc<AtomicBool>,
 ) -> (
     UnboundedSender<BlockId>,
     std::thread::JoinHandle<Result<(), ExporterError>>,
@@ -61,7 +63,8 @@ where
             options,
             block_exporter_id,
             new_block_queue,
-            destination_config,
+            &destination_config,
+            health,
         )
     });
 
@@ -91,6 +94,7 @@ impl NewBlockQueue {
 }
 
 #[tokio::main(flavor = "current_thread")]
+#[expect(clippy::too_many_arguments)]
 async fn start_block_processor<S, F>(
     storage: &S,
     shutdown_signal: F,
@@ -98,7 +102,8 @@ async fn start_block_processor<S, F>(
     options: NodeOptions,
     block_exporter_id: u32,
     new_block_queue: NewBlockQueue,
-    destination_config: DestinationConfig,
+    destination_config: &DestinationConfig,
+    health: Arc<AtomicBool>,
 ) -> Result<(), ExporterError>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -110,7 +115,7 @@ where
         .iter()
         .map(|destination| destination.id())
         .collect::<Vec<_>>();
-    let (block_processor_storage, mut exporter_storage) = BlockProcessorStorage::load(
+    let (mut block_processor_storage, mut exporter_storage) = BlockProcessorStorage::load(
         storage.clone(),
         block_exporter_id,
         startup_destinations.clone(),
@@ -120,9 +125,27 @@ where
 
     let startup_committee_destinations = if destination_config.committee_destination {
         // Load persisted committee destinations from storage if available
-        let persisted_committee_destinations =
-            load_persisted_committee_destinations(storage, &block_processor_storage).await;
+        // This may perform a fallback scan if no persisted blob ID exists
+        let (persisted_committee_destinations, blob_id_to_persist) =
+            match load_persisted_committee_destinations(
+                storage,
+                &block_processor_storage,
+                &exporter_storage,
+            )
+            .await
+            {
+                Some((destinations, blob_id)) => (Some(destinations), blob_id),
+                None => (None, None),
+            };
 
+        // If we found a committee via fallback scan, persist it for future startups
+        if let Some(blob_id) = blob_id_to_persist {
+            tracing::info!(
+                ?blob_id,
+                "Persisting committee blob ID found via fallback scan"
+            );
+            block_processor_storage.set_latest_committee_blob(blob_id);
+        }
         let latest_committee_destinations = persisted_committee_destinations.unwrap_or_default();
         tracing::info!(
             ?latest_committee_destinations,
@@ -140,8 +163,9 @@ where
         limits.work_queue_size.into(),
         shutdown_signal.clone(),
         exporter_storage.clone()?,
-        destination_config.destinations,
+        destination_config.destinations.clone(),
         startup_committee_destinations,
+        health,
     );
 
     let mut block_processor = BlockProcessor::new(
@@ -161,10 +185,17 @@ where
 }
 
 /// Loads the persisted committee destinations from storage.
+/// If no committee blob ID is persisted, falls back to scanning the canonical blocks.
+///
+/// Returns:
+/// - `None` if no committee is found
+/// - `Some((destinations, None))` if loaded from persisted blob ID (no need to persist)
+/// - `Some((destinations, Some(blob_id)))` if found via scan (caller should persist blob_id)
 async fn load_persisted_committee_destinations<S>(
     storage: &S,
     block_processor_storage: &BlockProcessorStorage<S>,
-) -> Option<Vec<DestinationId>>
+    exporter_storage: &crate::storage::ExporterStorage<S>,
+) -> Option<(Vec<DestinationId>, Option<BlobId>)>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
@@ -172,10 +203,14 @@ where
     if let Some(committee_blob_id) = block_processor_storage.get_latest_committee_blob() {
         tracing::info!(?committee_blob_id, "Found persisted committee blob ID");
 
-        return load_committee_from_blob(storage, committee_blob_id).await;
+        if let Some(destinations) = load_committee_from_blob(storage, committee_blob_id).await {
+            return Some((destinations, None));
+        }
     }
 
-    None
+    // Fallback: scan backwards through canonical blocks to find the latest committee
+    tracing::info!("No persisted committee blob ID, scanning canonical blocks...");
+    scan_canonical_blocks_for_committee(storage, exporter_storage).await
 }
 
 /// Loads the committee destinations from a specific blob ID.
@@ -222,9 +257,80 @@ where
     Some(destinations)
 }
 
+/// Scans backwards through canonical blocks to find the latest committee.
+/// Returns the destinations and the blob ID that should be persisted for future startups.
+async fn scan_canonical_blocks_for_committee<S>(
+    storage: &S,
+    exporter_storage: &crate::storage::ExporterStorage<S>,
+) -> Option<(Vec<DestinationId>, Option<BlobId>)>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    use linera_base::identifiers::BlobType;
+    use linera_execution::{system::AdminOperation, Operation, SystemOperation};
+
+    let latest_index = exporter_storage.get_latest_index();
+    if latest_index == 0 {
+        tracing::info!("No blocks in canonical state to scan");
+        return None;
+    }
+
+    tracing::info!(
+        latest_index,
+        "Scanning canonical blocks backwards for committee"
+    );
+
+    // Scan backwards from latest_index - 1 to 0
+    for index in (0..latest_index).rev() {
+        let (block_cert, _blob_ids) = match exporter_storage.get_block_with_blob_ids(index).await {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::warn!(
+                    index,
+                    error = ?e,
+                    "Failed to read block at index during committee scan"
+                );
+                continue;
+            }
+        };
+
+        // Check if this block has a CreateCommittee operation
+        let committee_blob_id = block_cert.value().block().body.operations().find_map(|op| {
+            if let Operation::System(boxed) = op {
+                if let SystemOperation::Admin(AdminOperation::CreateCommittee {
+                    blob_hash, ..
+                }) = boxed.as_ref()
+                {
+                    return Some(BlobId::new(*blob_hash, BlobType::Committee));
+                }
+            }
+            None
+        });
+
+        if let Some(blob_id) = committee_blob_id {
+            tracing::info!(index, ?blob_id, "Found committee blob via backward scan");
+
+            if let Some(destinations) = load_committee_from_blob(storage, blob_id).await {
+                // Return the blob ID so caller can persist it
+                return Some((destinations, Some(blob_id)));
+            }
+        }
+    }
+
+    tracing::info!("No committee found in canonical blocks");
+    None
+}
+
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, sync::atomic::Ordering, time::Duration};
+    use std::{
+        collections::BTreeMap,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        time::Duration,
+    };
 
     use linera_base::{
         crypto::{AccountPublicKey, Secp256k1PublicKey},
@@ -245,10 +351,6 @@ mod test {
         Operation, ResourceControlPolicy, SystemOperation,
     };
     use linera_rpc::{config::TlsConfig, NodeOptions};
-    use linera_service::{
-        cli_wrappers::local_net::LocalNet,
-        config::{Destination, DestinationConfig, DestinationKind, LimitsConfig},
-    };
     use linera_storage::{DbStorage, Storage};
     use linera_views::{memory::MemoryDatabase, ViewError};
     use test_case::test_case;
@@ -257,10 +359,13 @@ mod test {
 
     use super::start_block_processor_task;
     use crate::{
-        common::{get_address, BlockId, CanonicalBlock},
+        common::{get_address, BlockId, CanonicalBlock, ExporterCancellationSignal},
+        config::{Destination, DestinationConfig, DestinationKind, LimitsConfig},
         state::BlockExporterStateView,
-        test_utils::{make_simple_state_with_blobs, DummyIndexer, DummyValidator, TestDestination},
-        ExporterCancellationSignal,
+        test_utils::{
+            ensure_grpc_server_has_started, make_simple_state_with_blobs, DummyIndexer,
+            DummyValidator, TestDestination,
+        },
     };
 
     #[test_case(DummyIndexer::default())]
@@ -273,7 +378,7 @@ mod test {
         let port = get_free_port().await?;
         let cancellation_token = CancellationToken::new();
         tokio::spawn(destination.clone().start(port, cancellation_token.clone()));
-        LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
+        ensure_grpc_server_has_started("test server", port as usize).await?;
 
         let signal = ExporterCancellationSignal::new(cancellation_token.clone());
         let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
@@ -314,6 +419,7 @@ mod test {
                 committee_destination: false,
                 destinations: vec![destination_address],
             },
+            Arc::new(AtomicBool::new(true)),
         );
 
         assert!(
@@ -371,6 +477,7 @@ mod test {
                 committee_destination: false,
                 destinations: destinations.clone(),
             },
+            Arc::new(AtomicBool::new(true)),
         );
 
         assert!(
@@ -427,6 +534,7 @@ mod test {
                 destinations: destinations.clone(),
                 committee_destination: false,
             },
+            Arc::new(AtomicBool::new(true)),
         );
 
         sleep(Duration::from_secs(4)).await;
@@ -488,6 +596,7 @@ mod test {
                 committee_destination: true,
                 destinations: vec![],
             },
+            Arc::new(AtomicBool::new(true)),
         );
 
         let mut single_validator = BTreeMap::new();
@@ -637,7 +746,8 @@ mod test {
         where
             S: Storage + Clone + Send + Sync + 'static,
         {
-            let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet())?;
+            let committee =
+                Committee::new(validators.clone(), ResourceControlPolicy::testnet()).unwrap();
             let chain_id = self.chain_description.id();
             let chain_blob = Blob::new_chain_description(&self.chain_description);
 
@@ -681,7 +791,7 @@ mod test {
         let port = get_free_port().await?;
         let destination = DummyIndexer::default();
         tokio::spawn(destination.clone().start(port, token.clone()));
-        LocalNet::ensure_grpc_server_has_started("dummy indexer", port as usize, "http").await?;
+        ensure_grpc_server_has_started("dummy indexer", port as usize).await?;
         let destination_address = Destination::Indexer {
             port,
             tls: TlsConfig::ClearText,
@@ -699,7 +809,7 @@ mod test {
         let port = get_free_port().await?;
         let destination = DummyValidator::new(port);
         tokio::spawn(destination.clone().start(port, token.clone()));
-        LocalNet::ensure_grpc_server_has_started("dummy validator", port as usize, "http").await?;
+        ensure_grpc_server_has_started("dummy validator", port as usize).await?;
         let destination_address = Destination::Validator {
             port,
             endpoint: get_address(port as u16).ip().to_string(),
@@ -717,7 +827,7 @@ mod test {
         let destination = DummyIndexer::default();
         destination.set_faulty();
         tokio::spawn(destination.clone().start(port, token.clone()));
-        LocalNet::ensure_grpc_server_has_started("faulty indexer", port as usize, "http").await?;
+        ensure_grpc_server_has_started("faulty indexer", port as usize).await?;
         let destination_address = Destination::Indexer {
             port,
             tls: TlsConfig::ClearText,
@@ -736,7 +846,7 @@ mod test {
         let destination = DummyValidator::default();
         destination.set_faulty();
         tokio::spawn(destination.clone().start(port, token.clone()));
-        LocalNet::ensure_grpc_server_has_started("faulty validator", port as usize, "http").await?;
+        ensure_grpc_server_has_started("faulty validator", port as usize).await?;
         let destination_address = Destination::Validator {
             port,
             endpoint: "127.0.0.1".to_owned(),
@@ -744,5 +854,158 @@ mod test {
 
         destinations.push(destination_address);
         Ok(destination)
+    }
+
+    /// Tests that when no committee blob ID is persisted, the fallback scan
+    /// through canonical blocks finds the latest committee.
+    #[tokio::test]
+    async fn test_fallback_committee_scan_finds_committee() -> anyhow::Result<()> {
+        use std::collections::BTreeMap;
+
+        use linera_base::{
+            crypto::{AccountPublicKey, CryptoHash},
+            data_types::{Blob, BlobContent, Epoch, Round},
+            identifiers::{BlobId, BlobType, ChainId},
+        };
+        use linera_chain::{
+            data_types::BlockExecutionOutcome,
+            test::{make_child_block, make_first_block, BlockTestExt},
+            types::{ConfirmedBlock, ConfirmedBlockCertificate},
+        };
+        use linera_execution::{
+            committee::{Committee, ValidatorState},
+            system::AdminOperation,
+            Operation, ResourceControlPolicy, SystemOperation,
+        };
+
+        use super::load_persisted_committee_destinations;
+        use crate::storage::BlockProcessorStorage;
+
+        // Create a test committee with a specific network address
+        let validator_key = linera_base::crypto::ValidatorPublicKey::test_key(1);
+        let account_key = AccountPublicKey::test_key(1);
+        let expected_address = "Tcp:validator1:9000";
+        let mut validators = BTreeMap::new();
+        validators.insert(
+            validator_key,
+            ValidatorState {
+                network_address: expected_address.to_string(),
+                votes: 100,
+                account_public_key: account_key,
+            },
+        );
+        let committee = Committee::new(validators, ResourceControlPolicy::default()).unwrap();
+        let committee_bytes = bcs::to_bytes(&committee)?;
+        let committee_blob = Blob::new(BlobContent::new_committee(committee_bytes));
+        let committee_blob_hash = CryptoHash::new(committee_blob.content());
+        let _committee_blob_id = BlobId::new(committee_blob_hash, BlobType::Committee);
+
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
+
+        // Store the committee blob
+        storage.write_blobs(&[committee_blob]).await?;
+
+        // Create blocks including one with CreateCommittee operation
+        let chain_id = ChainId(CryptoHash::test_hash("admin_chain"));
+        let create_committee_op = Operation::System(Box::new(SystemOperation::Admin(
+            AdminOperation::CreateCommittee {
+                epoch: Epoch::ZERO,
+                blob_hash: committee_blob_hash,
+            },
+        )));
+
+        // First block (no committee)
+        let block1 =
+            ConfirmedBlock::new(BlockExecutionOutcome::default().with(make_first_block(chain_id)));
+        let cert1 = ConfirmedBlockCertificate::new(block1.clone(), Round::Fast, vec![]);
+        storage.write_blobs_and_certificate(&[], &cert1).await?;
+
+        // Second block with CreateCommittee
+        let block2 = ConfirmedBlock::new(
+            BlockExecutionOutcome::default()
+                .with(make_child_block(&block1).with_operation(create_committee_op)),
+        );
+        let cert2 = ConfirmedBlockCertificate::new(block2.clone(), Round::Fast, vec![]);
+        storage.write_blobs_and_certificate(&[], &cert2).await?;
+
+        // === FIRST SESSION: Process blocks and save ===
+        // This simulates an existing database from before the persistence feature was added
+        {
+            let (mut block_processor_storage, _) =
+                BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                    .await?;
+
+            let block1_id = crate::common::BlockId::from_confirmed_block(&block1);
+            let block2_id = crate::common::BlockId::from_confirmed_block(&block2);
+
+            block_processor_storage.index_block(&block1_id).await?;
+            block_processor_storage
+                .push_block(crate::common::CanonicalBlock::new(block1_id.hash, &[]));
+
+            block_processor_storage.index_block(&block2_id).await?;
+            block_processor_storage
+                .push_block(crate::common::CanonicalBlock::new(block2_id.hash, &[]));
+
+            // Save but don't persist the committee blob ID
+            block_processor_storage.save().await?;
+
+            // Verify no persisted committee blob ID
+            assert!(
+                block_processor_storage
+                    .get_latest_committee_blob()
+                    .is_none(),
+                "Expected no persisted committee blob ID"
+            );
+        }
+
+        // === SECOND SESSION: Reload and test fallback scan ===
+        // This simulates a restart with the new code
+        let (mut block_processor_storage, exporter_storage) =
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
+
+        // Verify still no persisted committee blob ID after reload
+        assert!(
+            block_processor_storage
+                .get_latest_committee_blob()
+                .is_none(),
+            "Expected no persisted committee blob ID after reload"
+        );
+
+        // Now call load_persisted_committee_destinations
+        // This should trigger the fallback scan
+        let result = load_persisted_committee_destinations(
+            &storage,
+            &block_processor_storage,
+            &exporter_storage,
+        )
+        .await;
+
+        // Should find the committee via fallback scan
+        assert!(
+            result.is_some(),
+            "Expected fallback scan to find the committee"
+        );
+
+        let (destinations, found_blob_id) = result.unwrap();
+        assert!(
+            found_blob_id.is_some(),
+            "Expected blob ID to be returned for persistence"
+        );
+        assert_eq!(destinations.len(), 1);
+        assert_eq!(destinations[0].address(), expected_address);
+        {
+            block_processor_storage.set_latest_committee_blob(found_blob_id.unwrap());
+
+            let latest_committee_blob = block_processor_storage
+                .get_latest_committee_blob()
+                .expect("Expected persisted committee blob ID after scan");
+            assert_eq!(
+                found_blob_id.unwrap(),
+                latest_committee_blob,
+                "Returned blob ID should match persisted blob ID"
+            );
+        }
+        Ok(())
     }
 }

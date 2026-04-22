@@ -8,8 +8,10 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::Duration,
 };
 
+use anyhow::{bail, Context as _, Result};
 use async_trait::async_trait;
 use futures::{stream, StreamExt};
 use linera_base::{
@@ -38,14 +40,21 @@ use linera_rpc::{
     },
     HandleConfirmedCertificateRequest,
 };
-use linera_service::config::DestinationKind;
 use linera_storage::Storage;
 use tokio_stream::{wrappers::UnboundedReceiverStream, Stream};
 use tokio_util::sync::CancellationToken;
-use tonic::{transport::Server, Request, Response, Status, Streaming};
+use tonic::{
+    transport::{Endpoint, Server},
+    Request, Response, Status, Streaming,
+};
+use tonic_health::pb::{
+    health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
+};
+use tracing::{info, warn};
 
 use crate::{
     common::{get_address, BlockId, CanonicalBlock},
+    config::DestinationKind,
     runloops::indexer_api::{
         element::Payload,
         indexer_server::{Indexer, IndexerServer},
@@ -550,4 +559,23 @@ pub(crate) async fn make_simple_state_with_blobs<S: Storage>(
     ];
 
     (notification, state)
+}
+
+pub(crate) async fn ensure_grpc_server_has_started(nickname: &str, port: usize) -> Result<()> {
+    let endpoint = Endpoint::new(format!("http://localhost:{port}"))
+        .context("endpoint should always parse")?;
+    let connection = endpoint.connect_lazy();
+    let mut client = HealthClient::new(connection);
+    linera_base::time::timer::sleep(Duration::from_millis(100)).await;
+    for i in 0..10 {
+        linera_base::time::timer::sleep(Duration::from_millis(i * 500)).await;
+        let result = client.check(HealthCheckRequest::default()).await;
+        if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
+            info!(?port, "Successfully started {nickname}");
+            return Ok(());
+        } else {
+            warn!("Waiting for {nickname} to start");
+        }
+    }
+    bail!("Failed to start {nickname}");
 }

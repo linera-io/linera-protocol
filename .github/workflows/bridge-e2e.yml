@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   bridge-e2e:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 60
 
     steps:
@@ -39,6 +39,7 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
+          version: "34.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
@@ -56,39 +57,41 @@ jobs:
       - name: Configure Docker for GCP
         run: gcloud auth configure-docker us-docker.pkg.dev
 
-      - name: Pull linera image
-        id: pull-linera
+      - name: Pull linera & exporter images
+        id: pull-images
         continue-on-error: true
         run: |
           BRANCH="${{ github.base_ref || github.ref_name }}"
           docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
+          docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
           docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
 
       - name: Build linera image
-        if: steps.pull-linera.outcome == 'failure'
+        if: steps.pull-images.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile
-          load: true
           tags: linera-test
-
-      - name: Pull exporter image
-        id: pull-exporter
-        continue-on-error: true
-        run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
-          docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter
+          load: true
+          build-args: |
+            build_flag=
+            build_folder=debug
 
       - name: Build exporter image
-        if: steps.pull-exporter.outcome == 'failure'
+        if: steps.pull-images.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.exporter
-          load: true
           tags: linera-exporter
+          load: true
+          build-args: |
+            build_flag=
+            build_folder=debug
+
+      - name: Build foundry-jq image
+        run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
 
       - uses: dorny/paths-filter@v3
         id: changes
@@ -98,9 +101,6 @@ jobs:
               - 'linera-bridge/**'
               - '!linera-bridge/tests/e2e/**'
               - 'docker/Dockerfile.bridge'
-
-      - name: Build foundry-jq image
-        run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
 
       - name: Pull bridge image (unchanged)
         id: pull-bridge

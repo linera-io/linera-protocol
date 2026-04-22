@@ -491,35 +491,48 @@ async fn plugin(plugin: &str, indexer: &str) -> Result<(Page, String)> {
 }
 
 fn format_bytes(value: &JsValue) -> JsValue {
-    let modified_value = value.clone();
-    if let Some(object) = js_sys::Object::try_from(value) {
-        js_sys::Object::keys(object)
-            .iter()
-            .for_each(|k: JsValue| match k.as_string() {
-                None => (),
-                Some(key_str) => {
-                    if &key_str == "bytes" {
-                        let array: Vec<u8> =
-                            js_sys::Uint8Array::from(getf(&modified_value, "bytes")).to_vec();
-                        let array_hex = hex::encode(array);
-                        let hex_len = array_hex.len();
-                        let hex_elided = if hex_len > 128 {
-                            // don't show all hex digits if the bytes array is too long
-                            format!("{}..{}", &array_hex[0..4], &array_hex[hex_len - 4..])
-                        } else {
-                            array_hex
-                        };
-                        setf(&modified_value, "bytes", &JsValue::from_str(&hex_elided))
-                    } else {
-                        setf(
-                            &modified_value,
-                            &key_str,
-                            &format_bytes(&getf(&modified_value, &key_str)),
-                        )
-                    }
-                }
-            });
+    // Skip non-object types (primitives, null, undefined, BigInt, etc.)
+    let object = match js_sys::Object::try_from(value) {
+        Some(obj) => obj,
+        None => return value.clone(),
     };
+    let modified_value = value.clone();
+    for k in js_sys::Object::keys(object).iter() {
+        let key_str = match k.as_string() {
+            Some(s) => s,
+            None => continue,
+        };
+        let child = match js_sys::Reflect::get(&modified_value, &k) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if key_str == "bytes" && js_sys::Array::is_array(&child) {
+            let js_arr = js_sys::Array::from(&child);
+            let mut valid = true;
+            let mut array = Vec::with_capacity(js_arr.length() as usize);
+            for v in js_arr.iter() {
+                if let Some(f) = v.as_f64() {
+                    array.push(f as u8);
+                } else {
+                    valid = false;
+                    break;
+                }
+            }
+            if valid {
+                let array_hex = hex::encode(array);
+                let hex_len = array_hex.len();
+                let hex_elided = if hex_len > 128 {
+                    format!("{}..{}", &array_hex[0..4], &array_hex[hex_len - 4..])
+                } else {
+                    array_hex
+                };
+                setf(&modified_value, "bytes", &JsValue::from_str(&hex_elided));
+            }
+        } else {
+            let formatted = format_bytes(&child);
+            let _ = js_sys::Reflect::set(&modified_value, &k, &formatted);
+        }
+    }
     modified_value
 }
 
@@ -665,12 +678,19 @@ async fn route_aux(
     let (page, new_path) = result.unwrap_or_else(|e| error(&e));
     let page_js = format_bytes(&page.serialize(&SER).unwrap());
     setf(app, "page", &page_js);
-    web_sys::window()
+    let history = web_sys::window()
         .expect("window object not found")
         .history()
-        .expect("history object not found")
-        .push_state_with_url(&page_js, &new_path, Some(&new_path))
-        .expect("push_state failed");
+        .expect("history object not found");
+    if init {
+        history
+            .replace_state_with_url(&page_js, &new_path, Some(&new_path))
+            .expect("replace_state failed");
+    } else {
+        history
+            .push_state_with_url(&page_js, &new_path, Some(&new_path))
+            .expect("push_state failed");
+    }
 }
 
 #[wasm_bindgen]
@@ -691,7 +711,10 @@ pub fn short_crypto_hash(s: &str) -> String {
 
 #[wasm_bindgen]
 pub fn short_app_id(s: &str) -> String {
-    format!("{}..{}..{}..", &s[..4], &s[64..68], &s[152..156])
+    if s.len() <= 12 {
+        return s.to_string();
+    }
+    format!("{}..{}", &s[..4], &s[s.len() - 4..])
 }
 
 fn set_onpopstate(app: JsValue) {
@@ -735,18 +758,28 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
         while let Some(evt) = wsio.next().await {
             match evt {
                 WsMessage::Text(message) => {
-                    let graphql_message = serde_json::from_str::<
+                    let graphql_message = match serde_json::from_str::<
                         GQuery<Response<notifications::ResponseData>>,
                     >(&message)
-                    .expect("unexpected websocket response");
+                    {
+                        Ok(msg) => msg,
+                        Err(e) => {
+                            log_str(&format!("ignoring websocket message: {}", e));
+                            continue;
+                        }
+                    };
                     if let Some(payload) = graphql_message.payload {
                         if let Some(message_data) = payload.data {
                             let data =
                                 from_value::<Data>(app.clone()).expect("cannot parse vue data");
-                            if let Reason::NewBlock { .. } = message_data.notifications.reason {
-                                if message_data.notifications.chain_id == chain {
-                                    route_aux(&app, &data, &None, &Vec::new(), false).await
-                                }
+                            let should_refresh = matches!(
+                                &message_data.notifications.reason,
+                                Reason::NewBlock { .. }
+                                    | Reason::BlockExecuted { .. }
+                                    | Reason::NewEvents { .. }
+                            );
+                            if should_refresh && message_data.notifications.chain_id == chain {
+                                route_aux(&app, &data, &None, &Vec::new(), false).await
                             }
                         }
                         if let Some(errors) = payload.errors {

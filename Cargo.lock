@@ -5749,6 +5749,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-exporter"
+version = "0.16.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "bincode",
+ "cfg_aliases",
+ "clap",
+ "custom_debug_derive",
+ "fs-err",
+ "futures",
+ "linera-base",
+ "linera-bridge",
+ "linera-chain",
+ "linera-core",
+ "linera-execution",
+ "linera-metrics",
+ "linera-rpc",
+ "linera-sdk",
+ "linera-storage",
+ "linera-storage-runtime",
+ "linera-version",
+ "linera-views",
+ "mini-moka",
+ "papaya",
+ "prometheus",
+ "prost 0.14.1",
+ "quick_cache",
+ "reqwest 0.11.27",
+ "serde",
+ "test-case",
+ "test-log",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "toml",
+ "tonic 0.14.2",
+ "tonic-health",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tracing",
+ "tracing-subscriber 0.3.19",
+]
+
+[[package]]
 name = "linera-faucet-client"
 version = "0.16.0"
 dependencies = [
@@ -6050,7 +6097,6 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bcs",
- "bincode",
  "call-evm-counter",
  "cargo_toml",
  "cfg-if",
@@ -6067,8 +6113,6 @@ dependencies = [
  "criterion",
  "crowd-funding",
  "current_platform",
- "custom_debug_derive",
- "dirs",
  "ethereum-tracker",
  "fs-err",
  "fs_extra",
@@ -6081,12 +6125,12 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "linera-base",
- "linera-bridge",
  "linera-chain",
  "linera-client",
  "linera-core",
  "linera-ethereum",
  "linera-execution",
+ "linera-exporter",
  "linera-faucet-client",
  "linera-faucet-server",
  "linera-metrics",
@@ -6095,12 +6139,13 @@ dependencies = [
  "linera-sdk",
  "linera-service",
  "linera-storage",
+ "linera-storage-runtime",
  "linera-storage-service",
  "linera-version",
  "linera-views",
+ "linera-wallet-json",
  "lru 0.15.0",
  "matching-engine",
- "mini-moka",
  "native-fungible",
  "non-fungible",
  "nonzero_lit",
@@ -6113,7 +6158,6 @@ dependencies = [
  "prometheus",
  "proptest",
  "prost 0.14.1",
- "quick_cache",
  "rand 0.8.5",
  "reqwest 0.11.27",
  "serde",
@@ -6196,6 +6240,25 @@ dependencies = [
  "test-case",
  "test-log",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "linera-storage-runtime"
+version = "0.16.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cfg_aliases",
+ "clap",
+ "fs-err",
+ "linera-client",
+ "linera-execution",
+ "linera-storage",
+ "linera-storage-service",
+ "linera-views",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 
@@ -6326,6 +6389,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.105",
+]
+
+[[package]]
+name = "linera-wallet-json"
+version = "0.16.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "fs-err",
+ "futures",
+ "linera-base",
+ "linera-client",
+ "linera-core",
+ "linera-persistent",
+ "serde",
+ "tracing",
 ]
 
 [[package]]

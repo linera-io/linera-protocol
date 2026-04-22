@@ -1366,6 +1366,11 @@ pub enum ProjectCommand {
         /// Use the given clone of the Linera repository instead of remote crates.
         #[arg(long)]
         linera_root: Option<PathBuf>,
+
+        /// Use the given directory for the project instead of creating a new one.
+        /// The directory will be created if it doesn't exist.
+        #[arg(long)]
+        dir: Option<PathBuf>,
     },
 
     /// Test a Linera project.

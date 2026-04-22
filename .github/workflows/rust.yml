@@ -166,6 +166,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run Wasm application tests
       run: |
@@ -187,6 +188,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run linera-sdk fixtures
       run: |
@@ -210,6 +212,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Compile Wasm test modules for Witty integration tests
       run: |
@@ -234,6 +237,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Check for outdated CLI.md
       run: |
@@ -246,7 +250,7 @@ jobs:
 
   ethereum-tests:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true' && github.event_name != 'merge_group'
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -279,6 +283,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install serde-generate-bin
       run: |
@@ -321,6 +326,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build example applications
       run: |
@@ -471,6 +477,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run Wasm application lints
       run: |
@@ -496,6 +503,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run clippy
       run: |
@@ -522,6 +530,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run cargo doc
       run: |
@@ -539,6 +548,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Check linera-service GraphQL schema
       run: |

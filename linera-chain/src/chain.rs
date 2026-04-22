@@ -503,7 +503,7 @@ where
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
         tracing::trace!(
-            "Processing new messages to {chain_id:.8} from {origin} at height {}",
+            "Processing new messages from {origin} at height {}",
             bundle.height,
         );
         let chain_and_height = ChainAndHeight {
@@ -609,7 +609,7 @@ where
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
-                "Removing [{}] from {chain_id:.8}'s inbox for {origin:}",
+                "Removing [{}] from inbox for {origin}",
                 bundles
                     .iter()
                     .map(|bundle| bundle.height.to_string())
@@ -1094,16 +1094,6 @@ where
         let updated_streams = self.process_emitted_events(block).await?;
         self.preprocessed_blocks.insert(&height, hash)?;
         Ok(updated_streams)
-    }
-
-    /// Returns whether this is a child chain.
-    pub async fn is_child(&self) -> Result<bool, ChainError> {
-        let description = self.execution_state.system.description.get().await?;
-        let Some(description) = description else {
-            // Root chains are always initialized, so this must be a child chain.
-            return Ok(true);
-        };
-        Ok(description.is_child())
     }
 
     /// Verifies that the block is valid according to the chain's application permission settings.

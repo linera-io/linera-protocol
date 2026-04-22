@@ -209,6 +209,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-joined-tasks <MAX_JOINED_TASKS>` — Maximum number of tasks that can are joined concurrently in the client
 
   Default value: `100`
+* `--max-event-stream-queries <MAX_EVENT_STREAM_QUERIES>` — Maximum number of event stream IDs to include in a single `PreviousEventBlocks` request. Larger sets are split into multiple requests
+
+  Default value: `1000`
 * `--max-accepted-latency-ms <MAX_ACCEPTED_LATENCY_MS>` — Maximum expected latency in milliseconds for score normalization
 
   Default value: `5000`
@@ -272,7 +275,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--confirmed-block-cache-size <CONFIRMED_BLOCK_CACHE_SIZE>` — The maximal number of entries in the confirmed block cache
 
   Default value: `1000`
-* `--certificate-cache-size <CERTIFICATE_CACHE_SIZE>` — The maximal number of entries in the confirmed block certificate cache
+* `--certificate-cache-size <CERTIFICATE_CACHE_SIZE>` — The maximal number of entries in the assembled certificate cache
 
   Default value: `1000`
 * `--certificate-raw-cache-size <CERTIFICATE_RAW_CACHE_SIZE>` — The maximal number of entries in the raw certificate cache
@@ -1187,6 +1190,7 @@ Create a new Linera project
 ###### **Options:**
 
 * `--linera-root <LINERA_ROOT>` — Use the given clone of the Linera repository instead of remote crates
+* `--dir <DIR>` — Use the given directory for the project instead of creating a new one. The directory will be created if it doesn't exist
 
 
 

@@ -9,9 +9,8 @@ use linera_execution::{system::AdminOperation, Operation, SystemOperation};
 use linera_storage::Storage;
 
 use crate::{
-    common::{BlockId, CanonicalBlock},
+    common::{BlockId, CanonicalBlock, ExporterError},
     storage::BlockProcessorStorage,
-    ExporterError,
 };
 
 pub(super) struct Walker<'a, S>

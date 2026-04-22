@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -625,13 +625,18 @@ where
 {
     /// Returns an instance with the specified set of chain IDs whose incoming bundles
     /// should be processed first.
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self, origins))]
-    pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
+    pub fn with_priority_bundle_origins(
+        mut self,
+        origins: std::collections::HashSet<ChainId>,
+    ) -> Self {
         self.chain_worker_config.priority_bundle_origins = origins;
         self
     }
 
     /// Returns an instance with the specified cross-chain message chunk limit.
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self))]
     pub fn with_cross_chain_message_chunk_limit(mut self, limit: usize) -> Self {
         self.chain_worker_config.cross_chain_message_chunk_limit = limit;
@@ -639,20 +644,15 @@ where
     }
 
     /// Sets the cross-chain message chunk limit.
+    #[cfg(with_testing)]
     pub fn set_cross_chain_message_chunk_limit(&mut self, limit: usize) {
         self.chain_worker_config.cross_chain_message_chunk_limit = limit;
     }
 
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self, value))]
     pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
         self.chain_worker_config.allow_revert_confirm = value;
-        self
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_reset_on_incorrect_outcome(mut self, minutes: Option<u64>) -> Self {
-        self.chain_worker_config.reset_on_incorrect_outcome =
-            minutes.map(|m| Duration::from_secs(m * 60));
         self
     }
 
@@ -832,21 +832,27 @@ where
 
     /// Acquires a write lock on the chain worker and executes the given closure.
     ///
-    /// The [`RollbackGuard`] automatically rolls back uncommitted chain state changes
-    /// when dropped, ensuring cancellation safety. The future is boxed to keep deeply
-    /// nested types off the stack.
+    /// The write work runs on a detached task (via [`linera_base::task::run_detached`])
+    /// so that caller cancellation does not unwind the task mid-save. The
+    /// [`RollbackGuard`] lives inside the detached task, so the write lock is held
+    /// until the DB round-trip and `post_save` have fully completed — subsequent
+    /// readers, including a freshly-loaded replacement worker, only see the
+    /// committed state.
     async fn chain_write<R, F, Fut>(&self, chain_id: ChainId, f: F) -> Result<R, WorkerError>
     where
-        F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut,
-        Fut: std::future::Future<Output = Result<R, WorkerError>>,
+        F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut
+            + linera_base::task::MaybeSend
+            + 'static,
+        Fut: std::future::Future<Output = Result<R, WorkerError>> + linera_base::task::MaybeSend,
+        R: linera_base::task::MaybeSend + 'static,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        let state_ref = &state;
-        let result = Box::pin(wrap_future(async move {
-            let guard = handle::write_lock(state_ref).await;
+        let state_for_task = state.clone();
+        let result = Box::pin(wrap_future(linera_base::task::run_detached(async move {
+            let guard = handle::write_lock(&state_for_task).await;
             guard.check_not_poisoned()?;
             f(guard).await
-        }))
+        })))
         .await;
         if let Err(error) = &result {
             if error.must_reload_view() {
@@ -1018,7 +1024,7 @@ where
         WorkerError,
     > {
         let chain_id = block.chain_id;
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard
                 .stage_block_execution(block, round, &published_blobs, policy)
                 .await
@@ -1037,7 +1043,7 @@ where
         query: Query,
         block_hash: Option<CryptoHash>,
     ) -> Result<(QueryOutcome, BlockHeight), WorkerError> {
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard.query_application(query, block_hash).await
         })
         .await
@@ -1074,7 +1080,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard
                 .process_confirmed_block(certificate, notify_when_messages_are_delivered)
                 .await
@@ -1093,7 +1099,7 @@ where
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard.process_validated_block(certificate).await
         })
         .await
@@ -1110,7 +1116,7 @@ where
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let chain_id = certificate.value().chain_id();
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard.process_timeout(certificate).await
         })
         .await
@@ -1129,7 +1135,7 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
         previous_height: Option<BlockHeight>,
     ) -> Result<CrossChainUpdateResult, WorkerError> {
-        self.chain_write(recipient, |mut guard| async move {
+        self.chain_write(recipient, move |mut guard| async move {
             guard
                 .process_cross_chain_update(origin, bundles, previous_height)
                 .await
@@ -1202,7 +1208,7 @@ where
         }
 
         let response = self
-            .chain_write(chain_id, |mut guard| async move {
+            .chain_write(chain_id, move |mut guard| async move {
                 guard.handle_block_proposal(proposal).await
             })
             .await?;
@@ -1215,7 +1221,10 @@ where
 
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     // Other fields will be included in the caller's span.
-    #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
+    #[instrument(skip_all, fields(
+        chain_id = %certificate.value.chain_id,
+        hash = %certificate.value.value_hash,
+    ))]
     pub async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
@@ -1327,7 +1336,7 @@ where
         metrics::CHAIN_INFO_QUERIES.inc();
         let chain_id = query.chain_id;
         let result = self
-            .chain_write(chain_id, |mut guard| async move {
+            .chain_write(chain_id, move |mut guard| async move {
                 guard.handle_chain_info_query(query).await
             })
             .await;
@@ -1344,10 +1353,7 @@ where
         chain_id: ChainId,
         blob_id: BlobId,
     ) -> Result<Blob, WorkerError> {
-        trace!(
-            "{} <-- download_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname()
-        );
+        trace!("{} <-- download_pending_blob({blob_id:8})", self.nickname());
         let result = self
             .chain_read(chain_id, |guard| async move {
                 guard.download_pending_blob(blob_id).await
@@ -1371,12 +1377,9 @@ where
         blob: Blob,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let blob_id = blob.id();
-        trace!(
-            "{} <-- handle_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname()
-        );
+        trace!("{} <-- handle_pending_blob({blob_id:8})", self.nickname());
         let result = self
-            .chain_write(chain_id, |mut guard| async move {
+            .chain_write(chain_id, move |mut guard| async move {
                 guard.handle_pending_blob(blob).await
             })
             .await;
@@ -1445,7 +1448,7 @@ where
                 latest_height,
             } => {
                 let actions = self
-                    .chain_write(sender, |mut guard| async move {
+                    .chain_write(sender, move |mut guard| async move {
                         guard
                             .confirm_updated_recipient(recipient, latest_height)
                             .await
@@ -1458,7 +1461,7 @@ where
                 recipient,
                 retransmit_from,
             } => {
-                self.chain_write(sender, |mut guard| async move {
+                self.chain_write(sender, move |mut guard| async move {
                     guard
                         .handle_revert_confirm(recipient, retransmit_from)
                         .await
@@ -1479,7 +1482,7 @@ where
         chain_id: ChainId,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard
                 .update_received_certificate_trackers(new_trackers)
                 .await
