@@ -451,14 +451,14 @@ where
                 )
                 .await?;
             }
-            NodeError::InactiveChain(chain_id) => {
+            NodeError::InactiveChain(inactive_chain_id) => {
                 tracing::debug!(
                     address,
-                    %chain_id,
+                    chain_id = %inactive_chain_id,
                     "Validator has inactive chain; sending chain info.",
                 );
                 self.send_chain_information(
-                    *chain_id,
+                    *inactive_chain_id,
                     height,
                     CrossChainMessageDelivery::NonBlocking,
                     None,
@@ -685,7 +685,7 @@ where
     /// # Returns
     /// - `Ok(())` if synchronization completed successfully or the validator is already up to date
     /// - `Err` if there was a communication or storage error
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "debug", skip_all, fields(%chain_id))]
     pub async fn send_chain_information(
         &mut self,
         chain_id: ChainId,

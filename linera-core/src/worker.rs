@@ -1245,7 +1245,10 @@ where
 
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     // Other fields will be included in the caller's span.
-    #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
+    #[instrument(skip_all, fields(
+        chain_id = %certificate.value.chain_id,
+        hash = %certificate.value.value_hash,
+    ))]
     pub async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
@@ -1374,10 +1377,7 @@ where
         chain_id: ChainId,
         blob_id: BlobId,
     ) -> Result<Blob, WorkerError> {
-        trace!(
-            "{} <-- download_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname()
-        );
+        trace!("{} <-- download_pending_blob({blob_id:8})", self.nickname());
         let result = self
             .chain_read(chain_id, |guard| async move {
                 guard.download_pending_blob(blob_id).await
@@ -1401,10 +1401,7 @@ where
         blob: Blob,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let blob_id = blob.id();
-        trace!(
-            "{} <-- handle_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname()
-        );
+        trace!("{} <-- handle_pending_blob({blob_id:8})", self.nickname());
         let result = self
             .chain_write(chain_id, move |mut guard| async move {
                 guard.handle_pending_blob(blob).await
