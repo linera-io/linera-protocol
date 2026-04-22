@@ -10,14 +10,14 @@ use std::{
 use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
+    data_types::{ArithmeticError, Blob, BlockHeight},
     identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
     types::{Block, GenericCertificate},
 };
-use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome, ResourceTracker};
+use linera_execution::{BlobState, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::ViewError;
 use thiserror::Error;
@@ -453,22 +453,5 @@ where
     /// Gets the chain manager's seed for leader election.
     pub async fn get_manager_seed(&self, chain_id: ChainId) -> Result<u64, LocalNodeError> {
         Ok(self.node.state.get_manager_seed(chain_id).await?)
-    }
-}
-
-/// Extension trait for [`ChainInfo`]s from our local node. These should always be valid and
-/// contain the requested information.
-///
-/// Only `revoke_epochs` (via `ChainClient::epoch_and_committees`) still asks for the chain's
-/// committees map; every other caller looks committees up in `SharedCommittees` directly.
-pub trait LocalChainInfoExt {
-    /// Returns the requested map of committees.
-    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError>;
-}
-
-impl LocalChainInfoExt for ChainInfo {
-    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {
-        self.requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)
     }
 }

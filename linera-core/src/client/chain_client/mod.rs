@@ -71,7 +71,7 @@ use super::{
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
     environment::Environment,
-    local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider as _,
@@ -651,9 +651,10 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
     ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
         let info = self.chain_info_with_committees().await?;
-        let epoch = info.epoch;
-        let committees = info.into_committees()?;
-        Ok((epoch, committees))
+        let committees = info
+            .requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+        Ok((info.epoch, committees))
     }
 
     /// Obtains the committee for the current epoch of the local chain.
