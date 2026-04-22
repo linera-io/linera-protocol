@@ -594,42 +594,22 @@ pub trait ExecutionRuntimeContext {
         Ok(committees)
     }
 
-    /// Returns the committee for `epoch`, consulting the shared cache first.
-    /// On a miss, the `NewCommittee` event and the committee blob are loaded
-    /// from storage and the result is memoized. Returns `Ok(None)` if the
-    /// network description, the event, or the blob is not available locally.
+    /// Returns the committee for `epoch`, consulting the shared cache first. On a miss,
+    /// loads the `NewCommittee` event and the committee blob from storage and memoizes
+    /// the result. Returns `Ok(None)` if the network description, the event, or the
+    /// blob is not available locally.
+    ///
+    /// Determinism during block execution: call sites inside the runtime must only ask
+    /// for epochs up to and including the chain's current epoch (`self.epoch.get()`).
+    /// The chain-state invariant guarantees that every such committee is knowable (either
+    /// in the shared cache, in storage, or — for the chain's current epoch during a block
+    /// that just created it — in the pending update on the chain's own `committees`
+    /// view). Queries for strictly greater epochs read from a mutable process-wide cache
+    /// and are not deterministic.
     async fn get_or_load_committee(
         &self,
         epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ViewError> {
-        if let Some(committee) = self.shared_committees().get(epoch) {
-            return Ok(Some(committee));
-        }
-        let Some(net_description) = self.get_network_description().await? else {
-            return Ok(None);
-        };
-        let blob_hash = if epoch.0 == 0 {
-            net_description.genesis_committee_blob_hash
-        } else {
-            let event_id = EventId {
-                chain_id: net_description.admin_chain_id,
-                stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                index: epoch.0,
-            };
-            match self.get_event(event_id).await? {
-                Some(bytes) => bcs::from_bytes(&bytes)?,
-                None => return Ok(None),
-            }
-        };
-        let blob_id = BlobId::new(blob_hash, BlobType::Committee);
-        let Some(blob) = self.get_blob(blob_id).await? else {
-            return Ok(None);
-        };
-        let committee: Committee = bcs::from_bytes(blob.bytes())?;
-        Ok(Some(
-            self.shared_committees().insert(epoch, Arc::new(committee)),
-        ))
-    }
+    ) -> Result<Option<Arc<Committee>>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -1373,6 +1353,39 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             genesis_committee_blob_hash,
             name: "dummy network description".to_string(),
         }))
+    }
+
+    async fn get_or_load_committee(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<Arc<Committee>>, ViewError> {
+        if let Some(committee) = self.shared_committees.get(epoch) {
+            return Ok(Some(committee));
+        }
+        let Some(net_description) = self.get_network_description().await? else {
+            return Ok(None);
+        };
+        let blob_hash = if epoch.0 == 0 {
+            net_description.genesis_committee_blob_hash
+        } else {
+            let event_id = EventId {
+                chain_id: net_description.admin_chain_id,
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                index: epoch.0,
+            };
+            match self.get_event(event_id).await? {
+                Some(bytes) => bcs::from_bytes(&bytes)?,
+                None => return Ok(None),
+            }
+        };
+        let blob_id = BlobId::new(blob_hash, BlobType::Committee);
+        let Some(blob) = self.get_blob(blob_id).await? else {
+            return Ok(None);
+        };
+        let committee: Committee = bcs::from_bytes(blob.bytes())?;
+        Ok(Some(
+            self.shared_committees.insert(epoch, Arc::new(committee)),
+        ))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

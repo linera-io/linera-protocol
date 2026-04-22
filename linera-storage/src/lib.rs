@@ -537,6 +537,13 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         self.storage.read_network_description().await
     }
 
+    async fn get_or_load_committee(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<Arc<Committee>>, ViewError> {
+        self.storage.get_or_load_committee(epoch).await
+    }
+
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         self.storage.contains_blob(blob_id).await
     }
