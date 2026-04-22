@@ -335,15 +335,23 @@ where
 
     /// Returns the chain's current epoch together with its committee.
     ///
-    /// The committee is served from the process-global [`crate::SharedCommittees`] cache,
-    /// falling back to loading the `NewCommittee` event (or the genesis committee blob for
-    /// epoch 0) on a miss. The chain's own `committees` view is not consulted.
+    /// Serves lookups from the process-global [`crate::SharedCommittees`] cache, falling
+    /// back to the `NewCommittee` event on the admin chain (or the genesis committee blob
+    /// for epoch 0). If neither source has the committee — which happens when a
+    /// `CreateCommittee`/`ProcessNewEpoch` op earlier in the current block created it, but
+    /// the block hasn't been saved yet so the `NewCommittee` event isn't persisted (and
+    /// we deliberately don't populate the shared cache from an unconfirmed block) — fall
+    /// back to reading the chain's own `committees` view, where the new committee sits as
+    /// a pending update.
     pub async fn current_committee(&self) -> Result<Option<(Epoch, Arc<Committee>)>, ViewError> {
         let epoch = *self.epoch.get();
-        let Some(committee) = self.context().extra().get_or_load_committee(epoch).await? else {
+        if let Some(committee) = self.context().extra().get_or_load_committee(epoch).await? {
+            return Ok(Some((epoch, committee)));
+        }
+        let Some(committee) = self.committees.get().await?.get(&epoch).cloned() else {
             return Ok(None);
         };
-        Ok(Some((epoch, committee)))
+        Ok(Some((epoch, Arc::new(committee))))
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Arc<Vec<u8>>, ExecutionError> {
