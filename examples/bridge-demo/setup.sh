@@ -297,8 +297,19 @@ echo ""
 
 # ── 1. Deploy or read LightClient ──
 if [[ -n "$COMPOSE_FILE" && -z "$LIGHT_CLIENT_ADDR" ]]; then
-    echo "Reading LightClient address from /shared/..."
-    LIGHT_CLIENT_ADDR=$(dc_exec foundry-tools cat /shared/light-client-address | tr -d '[:space:]')
+    echo "Waiting for LightClient address from /shared/..."
+    for i in $(seq 1 60); do
+        LIGHT_CLIENT_ADDR=$(dc_exec foundry-tools cat /shared/light-client-address 2>/dev/null | tr -d '[:space:]') || true
+        if echo "$LIGHT_CLIENT_ADDR" | grep -qiE '^0x[0-9a-f]{40}$'; then
+            break
+        fi
+        LIGHT_CLIENT_ADDR=""
+        echo "  Waiting... ($i/60)"
+        sleep 2
+    done
+    if [[ -z "$LIGHT_CLIENT_ADDR" ]]; then
+        die "LightClient address not found within timeout"
+    fi
 elif [[ -z "$LIGHT_CLIENT_ADDR" ]]; then
     echo "Fetching LightClient constructor args from faucet..."
     LC_ARGS_JSON=$("$LINERA_BRIDGE_BIN" init-light-client --faucet-url "$FAUCET_URL" --output /dev/null)
@@ -321,7 +332,7 @@ import sys, json; print(json.load(sys.stdin)['epoch'])
     echo "  Deploying LightClient (epoch=$LC_EPOCH)..."
     LC_OUTPUT=$(evm_exec \
         forge create "LightClient.sol:LightClient" \
-        --root "$CONTRACTS_DIR" --config-path "$SCRIPT_DIR/foundry.toml" \
+        --root "$CONTRACTS_DIR" --via-ir --optimize --optimizer-runs 1 --evm-version shanghai \
         "${FORGE_USE_SOLC[@]}" \
         --out /tmp/forge-out --cache-path /tmp/forge-cache \
         --rpc-url "$EVM_RPC_URL" \
@@ -339,8 +350,8 @@ echo "  LightClient: $LIGHT_CLIENT_ADDR"
 if [[ -n "$COMPOSE_FILE" && -z "$BRIDGE_CHAIN_ID" ]]; then
     echo "Waiting for bridge chain ID..."
     for i in $(seq 1 30); do
-        BRIDGE_CHAIN_ID=$(dc_exec foundry-tools cat /shared/bridge-chain-id 2>/dev/null | tr -d '[:space:]')
-        BRIDGE_CHAIN_ID=$(normalize_hex "$BRIDGE_CHAIN_ID")
+        BRIDGE_CHAIN_ID=$(dc_exec foundry-tools cat /shared/bridge-chain-id 2>/dev/null | tr -d '[:space:]') || true
+        BRIDGE_CHAIN_ID=$(normalize_hex "$BRIDGE_CHAIN_ID") || true
         if echo "$BRIDGE_CHAIN_ID" | grep -qE '^[a-f0-9]{64}$'; then
             break
         fi
@@ -371,7 +382,7 @@ if [[ -z "$TOKEN_ADDRESS" ]]; then
     echo "Deploying MockERC20..."
     ERC20_OUTPUT=$(evm_exec \
         forge create "$CONTRACTS_DIR/MockERC20.sol:MockERC20" \
-        --root "$CONTRACTS_DIR" --config-path "$SCRIPT_DIR/foundry.toml" \
+        --root "$CONTRACTS_DIR" --via-ir --optimize --optimizer-runs 1 --evm-version shanghai \
         "${FORGE_USE_SOLC[@]}" \
         --out /tmp/forge-out --cache-path /tmp/forge-cache \
         --rpc-url "$EVM_RPC_URL" \
@@ -391,7 +402,7 @@ TOKEN_ADDR_HEX=$(echo "$TOKEN_ADDRESS" | sed 's/^0x//')
 echo "Reading relay owner..."
 if [[ -n "$COMPOSE_FILE" ]]; then
     for i in $(seq 1 30); do
-        RELAY_OWNER=$(dc_exec foundry-tools cat /shared/relay-owner 2>/dev/null | tr -d '[:space:]')
+        RELAY_OWNER=$(dc_exec foundry-tools cat /shared/relay-owner 2>/dev/null | tr -d '[:space:]') || true
         if [[ -n "$RELAY_OWNER" ]]; then
             break
         fi
@@ -410,7 +421,7 @@ CHAIN_BYTES32="0x${BRIDGE_CHAIN_ID}"
 
 BRIDGE_OUTPUT=$(evm_exec \
     forge create "$CONTRACTS_DIR/FungibleBridge.sol:FungibleBridge" \
-    --root "$CONTRACTS_DIR" --config-path "$SCRIPT_DIR/foundry.toml" \
+    --root "$CONTRACTS_DIR" --via-ir --optimize --optimizer-runs 1 --evm-version shanghai \
     "${FORGE_USE_SOLC[@]}" --ignored-error-codes 6321 \
     --out /tmp/forge-out --cache-path /tmp/forge-cache \
     --rpc-url "$EVM_RPC_URL" \
