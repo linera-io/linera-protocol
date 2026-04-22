@@ -36,9 +36,9 @@ use crate::{
     util::{OracleResponseExt as _, RespondExt as _},
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
     ExecutionStateView, FinalizeContext, JsVec, Message, MessageContext, MessageKind, ModuleId,
-    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
-    ResourceController, ResourceTracker, SystemMessage, TransactionTracker, UserContractCode,
-    UserServiceCode,
+    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
+    QueryOutcome, ResourceController, ResourceTracker, SystemMessage, TransactionTracker,
+    UserContractCode, UserServiceCode,
 };
 
 /// Commands sent from the async side to the contract runtime thread.

@@ -130,8 +130,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 // instances persist across messages within an incoming bundle.
                 #[cfg(not(web))]
                 let (mut runtime_channels, contract_runtime_task) = {
-                    let (command_tx, command_rx) =
-                        std::sync::mpsc::channel::<RuntimeCommand>();
+                    let (command_tx, command_rx) = std::sync::mpsc::channel::<RuntimeCommand>();
                     let (execution_state_sender, execution_state_receiver) =
                         futures::channel::mpsc::unbounded();
 
@@ -214,11 +213,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
                     // Handle remaining state requests (write_batch from finalize) until
                     // channel closes.
-                    let mut actor = ExecutionStateActor::new(
-                        chain,
-                        &mut txn_tracker,
-                        self.resource_controller,
-                    );
+                    let mut actor =
+                        ExecutionStateActor::new(chain, &mut txn_tracker, self.resource_controller);
                     while let Some(request) = execution_state_receiver.next().await {
                         if let ExecutionRequest::ActionComplete { .. } = request {
                             continue;
@@ -226,18 +222,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                         actor
                             .handle_request(request)
                             .await
-                            .map_err(|error| {
-                                ChainError::InternalError(error.to_string())
-                            })?;
+                            .map_err(|error| ChainError::InternalError(error.to_string()))?;
                     }
 
                     // Wait for the runtime thread to finish and use its final tracker.
                     let runtime_resource_controller = contract_runtime_task
                         .await
                         .map_err(|error| {
-                            ChainError::InternalError(format!(
-                                "Runtime thread failed: {error}"
-                            ))
+                            ChainError::InternalError(format!("Runtime thread failed: {error}"))
                         })?
                         .map_err(|error| {
                             ChainError::InternalError(format!(
@@ -352,9 +344,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                             channels,
                         )
                     }
-                    None => {
-                        ExecutionStateActor::new(chain, txn_tracker, self.resource_controller)
-                    }
+                    None => ExecutionStateActor::new(chain, txn_tracker, self.resource_controller),
                 };
                 Box::pin(actor.execute_message(
                     context,
