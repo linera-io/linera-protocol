@@ -107,3 +107,8 @@ pub fn initialize(options: Option<InitializeOptions>) {
         )
         .init();
 }
+
+#[wasm_bindgen]
+pub fn panic() {
+    panic!("oh no!");
+}
