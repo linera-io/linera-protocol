@@ -1754,25 +1754,30 @@ where
     Ok(())
 }
 
-/// Tests that staging block execution with AutoRetry policy (which may reject failing bundles)
-/// produces the same outcome as re-staging the resulting modified block with Abort policy.
+/// Tests that contract state is correctly preserved through checkpoint restoration
+/// and that execution continues correctly afterward.
 ///
-/// This verifies the checkpointing mechanism: when a bundle fails and gets rejected,
-/// the execution state is properly restored, and the modified block can be re-executed
-/// deterministically.
+/// The test sends three bundles to the receiver:
+///   1. Increment counter by 5 (succeeds)
+///   2. Fail (triggers auto-retry → reject, checkpoint restores to after bundle 1)
+///   3. Increment counter by 3 (succeeds, must execute on top of bundle 1's state)
+///
+/// After auto-retry, the counter must be 8 (5 + 3). This verifies both that bundle 1's
+/// state survives the checkpoint restoration and that bundle 3 executes correctly on
+/// the restored state.
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn test_memory_auto_retry_produces_consistent_outcome(
+async fn test_memory_checkpoint_preserves_state_across_bundles(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    run_test_auto_retry_produces_consistent_outcome(MemoryStorageBuilder::with_wasm_runtime(
+    run_test_checkpoint_preserves_state_across_bundles(MemoryStorageBuilder::with_wasm_runtime(
         wasm_runtime,
     ))
     .await
 }
 
-async fn run_test_auto_retry_produces_consistent_outcome<B>(
+async fn run_test_checkpoint_preserves_state_across_bundles<B>(
     storage_builder: B,
 ) -> anyhow::Result<()>
 where
@@ -1783,11 +1788,8 @@ where
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
 
-    // Will publish the module.
     let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
-    // Will create the apps and send messages.
     let creator = builder.add_root_chain(1, Amount::ONE).await?;
-    // Will receive the messages.
     let receiver = builder.add_root_chain(2, Amount::ONE).await?;
     let receiver_id = receiver.chain_id();
 
@@ -1800,7 +1802,7 @@ where
 
     // Creator creates the apps.
     creator.synchronize_from_validators().await?;
-    let initial_value = 10_u64;
+    let initial_value = 0_u64;
     let (application_id1, _) = creator
         .create_application(module_id1, &(), &initial_value, vec![])
         .await
@@ -1815,54 +1817,58 @@ where
         .await
         .unwrap_ok_committed();
 
-    // Send a message that will succeed.
-    let mut operation = meta_counter::Operation::increment(receiver_id, 5, true);
-    operation.fuel_grant = 1_000_000;
+    // Send first increment (bundle 1: +5, succeeds).
+    let mut op1 = meta_counter::Operation::increment(receiver_id, 5, false);
+    op1.fuel_grant = 1_000_000;
     creator
-        .execute_operation(Operation::user(application_id2, &operation)?)
+        .execute_operation(Operation::user(application_id2, &op1)?)
         .await
         .unwrap_ok_committed();
 
-    // Send a message that will fail (causing rejection via AutoRetry).
-    let operation = meta_counter::Operation::fail(receiver_id);
+    // Send a failing message (bundle 2: triggers auto-retry → reject).
+    let op2 = meta_counter::Operation::fail(receiver_id);
     creator
-        .execute_operation(Operation::user(application_id2, &operation)?)
+        .execute_operation(Operation::user(application_id2, &op2)?)
         .await
         .unwrap_ok_committed();
 
-    // Synchronize the receiver to get the messages in inbox.
+    // Send second increment (bundle 3: +3, succeeds on restored state).
+    let mut op3 = meta_counter::Operation::increment(receiver_id, 3, false);
+    op3.fuel_grant = 1_000_000;
+    creator
+        .execute_operation(Operation::user(application_id2, &op3)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Synchronize and process inbox on the receiver.
     receiver.synchronize_from_validators().await?;
-
-    // Process inbox - this uses AutoRetry internally, which will reject the failing bundle.
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1, "Should have one certificate");
 
     let cert = &certs[0];
     let incoming_bundles: Vec<_> = cert.block().body.incoming_bundles().collect();
 
-    // Verify we have bundles and at least one was rejected.
-    assert!(!incoming_bundles.is_empty(), "Should have incoming bundles");
-    let rejected_count = incoming_bundles
+    // Verify the failing bundle was rejected and the others accepted.
+    let accepted = incoming_bundles
+        .iter()
+        .filter(|b| b.action == MessageAction::Accept)
+        .count();
+    let rejected = incoming_bundles
         .iter()
         .filter(|b| b.action == MessageAction::Reject)
         .count();
-    assert!(rejected_count > 0, "At least one bundle should be rejected");
+    assert!(accepted == 2, "At least two bundles should be accepted");
+    assert!(rejected == 1, "At least one bundle should be rejected");
 
-    // The test verifies that:
-    // 1. AutoRetry successfully handled the failing bundle by rejecting it
-    // 2. The block was successfully committed with the rejected bundle
-    // 3. The state is consistent (we can query it)
-
-    // Query the application to verify the successful message was processed.
+    // Query the counter to verify both increments were preserved through the checkpoint.
     let query = async_graphql::Request::new("{ value }");
     let outcome = receiver
         .query_user_application(application_id2, &query)
         .await?;
 
-    // The value should be 5 (from the increment operation that succeeded).
     let expected = QueryOutcome {
         response: async_graphql::Response::new(async_graphql::Value::from_json(
-            json!({"value": 5}),
+            json!({"value": 8}),
         )?),
         operations: vec![],
     };
