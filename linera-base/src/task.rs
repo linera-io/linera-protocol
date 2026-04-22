@@ -29,44 +29,33 @@ impl<T> MaybeSend for T {}
 /// to completion in the background. Use this when the spawned work (e.g. a
 /// storage write paired with its in-memory finalization) must not be torn
 /// apart mid-flight by caller cancellation.
-///
-/// On native, this is just `tokio::task::spawn(future).await`, which already
-/// detaches on drop. On web, `wasm_bindgen_futures::spawn_local` is
-/// fire-and-forget, so we deliver the output through a oneshot channel.
-#[cfg(not(web))]
 pub async fn run_detached<F, R>(future: F) -> R
 where
     F: Future<Output = R> + MaybeSend + 'static,
     R: MaybeSend + 'static,
 {
-    tokio::task::spawn(future)
-        .await
-        .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
-}
-
-/// Spawns `future` on the runtime and awaits its completion.
-///
-/// Dropping the returned future does *not* cancel the spawned task — it runs
-/// to completion in the background. Use this when the spawned work (e.g. a
-/// storage write paired with its in-memory finalization) must not be torn
-/// apart mid-flight by caller cancellation.
-///
-/// On web, `wasm_bindgen_futures::spawn_local` is fire-and-forget, so we
-/// deliver the output through a oneshot channel.
-#[cfg(web)]
-pub async fn run_detached<F, R>(future: F) -> R
-where
-    F: Future<Output = R> + MaybeSend + 'static,
-    R: MaybeSend + 'static,
-{
-    let (tx, rx) = futures::channel::oneshot::channel();
-    wasm_bindgen_futures::spawn_local(async move {
-        if tx.send(future.await).is_err() {
-            tracing::debug!("run_detached: receiver dropped before result was delivered");
-        }
-    });
-    rx.await
-        .expect("spawned task dropped without sending its result")
+    // On native, `tokio::task::spawn` returns a `JoinHandle` that already
+    // detaches on drop. On web, `wasm_bindgen_futures::spawn_local` is
+    // fire-and-forget, so we deliver the output through a oneshot channel.
+    #[cfg(not(web))]
+    {
+        tokio::task::spawn(future)
+            .await
+            .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
+    }
+    #[cfg(web)]
+    {
+        let (tx, rx) = futures::channel::oneshot::channel();
+        wasm_bindgen_futures::spawn_local(async move {
+            if tx.send(future.await).is_err() {
+                tracing::debug!(
+                    "run_detached: receiver dropped before result was delivered"
+                );
+            }
+        });
+        rx.await
+            .expect("spawned task dropped without sending its result")
+    }
 }
 
 /// The type of a future awaiting another task.
