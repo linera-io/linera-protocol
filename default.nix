@@ -21,6 +21,7 @@
     protobuf
     git
     wasm-bindgen-cli_0_2_100
+    symbolicator
     pnpm
     rust-jemalloc-sys
   ];
