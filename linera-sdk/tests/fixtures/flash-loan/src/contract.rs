@@ -78,8 +78,7 @@ impl Contract for FlashLoanContract {
         let params = self.runtime.application_parameters();
         let interest_millionths = params.interest_millionths as u128;
         let borrowed_attos = u128::from(total_borrowed);
-        let min_interest =
-            Amount::from_attos(borrowed_attos * interest_millionths / 1_000_000);
+        let min_interest = Amount::from_attos(borrowed_attos * interest_millionths / 1_000_000);
         let min_repayment = total_borrowed.saturating_add(min_interest);
         assert!(
             total_repaid >= min_repayment,

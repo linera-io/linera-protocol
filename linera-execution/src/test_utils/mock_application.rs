@@ -354,9 +354,7 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
         match self.next_expected_call() {
             Some(ExpectedCall::Terminate(handler)) => handler(&mut self.runtime),
             Some(unexpected_call) => {
-                panic!(
-                    "Expected a call to `terminate`, got a call to `{unexpected_call}` instead."
-                )
+                panic!("Expected a call to `terminate`, got a call to `{unexpected_call}` instead.")
             }
             None => panic!("Unexpected call to `terminate`"),
         }

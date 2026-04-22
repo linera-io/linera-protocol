@@ -3912,12 +3912,8 @@ async fn test_wasm_end_to_end_matching_engine_benchmark(
     );
 
     // Wait for both bundles to arrive on the admin chain.
-    notifications_admin
-        .wait_for_bundle(chain_a, None)
-        .await?;
-    notifications_admin
-        .wait_for_bundle(chain_b, None)
-        .await?;
+    notifications_admin.wait_for_bundle(chain_a, None).await?;
+    notifications_admin.wait_for_bundle(chain_b, None).await?;
 
     // Benchmark: process inbox on the matching engine chain.
     // This is where all 100 messages (50 bids + 50 asks) get matched.

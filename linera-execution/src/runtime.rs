@@ -1375,9 +1375,7 @@ impl ContractSyncRuntimeHandle {
             .collect();
 
         for application in applications {
-            self.execute(application, None, |contract| {
-                contract.save().map(|_| None)
-            })?;
+            self.execute(application, None, |contract| contract.save().map(|_| None))?;
         }
 
         Ok(())

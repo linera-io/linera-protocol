@@ -3,9 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use linera_sdk::{
-    linera_base_types::WithServiceAbi, Service, ServiceRuntime,
-};
+use linera_sdk::{linera_base_types::WithServiceAbi, Service, ServiceRuntime};
 
 pub struct FlashLoanService;
 
