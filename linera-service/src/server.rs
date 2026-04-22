@@ -16,6 +16,7 @@ pub static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\
 
 use std::{
     borrow::Cow,
+    collections::HashSet,
     num::NonZeroU16,
     path::{Path, PathBuf},
     sync::Arc,
@@ -27,6 +28,7 @@ use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
 use linera_base::{
     crypto::{CryptoRng, Ed25519SecretKey},
+    identifiers::ChainId,
     listen_for_shutdown_signals,
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
@@ -69,6 +71,7 @@ struct ServerContext {
     execution_state_cache_size: usize,
     allow_revert_confirm: bool,
     reset_on_corrupted_chain_state_mins: Option<u64>,
+    recovery_whitelist: Option<HashSet<ChainId>>,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -103,6 +106,7 @@ impl ServerContext {
             reset_on_corrupted_chain_state: self
                 .reset_on_corrupted_chain_state_mins
                 .map(|m| linera_base::time::Duration::from_secs(m * 60)),
+            recovery_whitelist: self.recovery_whitelist.clone(),
             cross_chain_message_chunk_limit: self.cross_chain_message_chunk_limit,
             ..ChainWorkerConfig::default()
         };
@@ -478,6 +482,13 @@ enum ServerCommand {
         #[arg(long)]
         reset_on_corrupted_chain_state_mins: Option<u64>,
 
+        /// Optional whitelist of chain IDs allowed to use the `--allow-revert-confirm`
+        /// and `--reset-on-corrupted-chain-state-mins` recovery mechanisms. If not
+        /// specified, every chain is eligible. Values may be passed as a
+        /// comma-separated list or by repeating the flag.
+        #[arg(long, value_delimiter = ',')]
+        recovery_whitelist: Option<Vec<ChainId>>,
+
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
         otlp_exporter_endpoint: Option<String>,
@@ -612,6 +623,7 @@ async fn run(options: ServerOptions) {
             cross_chain_message_chunk_limit,
             allow_revert_confirm,
             reset_on_corrupted_chain_state_mins,
+            recovery_whitelist,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -632,6 +644,7 @@ async fn run(options: ServerOptions) {
                 execution_state_cache_size: common_storage_options.execution_state_cache_size,
                 allow_revert_confirm,
                 reset_on_corrupted_chain_state_mins,
+                recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };
