@@ -1067,8 +1067,7 @@ where
         if let Some(prev) = previous_height {
             if prev >= next_height_to_receive {
                 let chain_id = self.chain_id();
-                if self.config.allow_revert_confirm && self.config.recovery_allowed_for(&recipient)
-                {
+                if self.config.allow_revert_confirm && self.config.recovery_allowed_for(&chain_id) {
                     warn!(
                         %chain_id,
                         "Inbox gap detected from {origin}: \
