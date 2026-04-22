@@ -20,7 +20,9 @@ use linera_execution::{
     OperationContext, OutgoingMessage, ResourceController, ResourceTracker,
     SystemExecutionStateView, TransactionOutcome, TransactionTracker,
 };
-use linera_views::{context::Context, views::View};
+use linera_views::context::Context;
+#[cfg(not(web))]
+use linera_views::views::View;
 use tracing::instrument;
 
 #[cfg(with_metrics)]
