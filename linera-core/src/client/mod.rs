@@ -1122,7 +1122,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Downloads and processes certificates for sender chain blocks.
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "debug", skip_all, fields(chain_id = %sender_chain_id))]
     async fn download_and_process_sender_chain(
         &self,
         sender_chain_id: ChainId,
@@ -1230,7 +1230,6 @@ impl<Env: Environment> Client<Env> {
             };
 
             trace!(
-                chain_id = %sender_chain_id,
                 num_certificates = %certificates.len(),
                 "received certificates",
             );
@@ -1270,10 +1269,7 @@ impl<Env: Environment> Client<Env> {
 
             remote_heights.retain(|height| !to_remove_from_queue.contains(height));
         }
-        trace!(
-            chain_id = %sender_chain_id,
-            "find_received_certificates: finished processing chain",
-        );
+        trace!("find_received_certificates: finished processing chain");
     }
 
     /// Downloads the log of received messages for a chain from a validator.
