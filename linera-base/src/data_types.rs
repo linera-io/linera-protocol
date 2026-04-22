@@ -1599,10 +1599,11 @@ pub struct MessagePolicy {
     /// A collection of applications: If `Some`, only event streams from those
     /// applications will be processed.
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
-    /// A collection of applications whose messages must never be rejected. Bundles containing
-    /// at least one message from any of these applications bypass the other rejection rules
-    /// (except `restrict_chain_ids_to`), and on execution failure they are discarded for later
-    /// retry instead of being rejected. An empty set disables this feature.
+    /// A collection of applications whose messages must never be rejected. Bundles whose
+    /// messages are all from one of these applications bypass the other rejection rules
+    /// (except `restrict_chain_ids_to`), and on execution failure they are discarded for
+    /// later retry instead of being rejected. A bundle that contains any message from an
+    /// application not on this list can be rejected. An empty set disables this feature.
     pub never_reject_application_ids: HashSet<GenericApplicationId>,
 }
 
