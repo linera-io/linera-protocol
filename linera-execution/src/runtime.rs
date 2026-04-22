@@ -28,8 +28,10 @@ use tracing::instrument;
 
 use crate::{
     execution::UserAction,
-    execution_state_actor::{ExecutionRequest, ExecutionStateSender},
-    resources::ResourceController,
+    execution_state_actor::{
+        ExecuteCommand, ExecutionRequest, ExecutionStateSender, RuntimeCommand,
+    },
+    resources::{ResourceController, ResourceTracker},
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, DataBlobHash,
@@ -1104,6 +1106,136 @@ impl ContractSyncRuntime {
 
         Ok((result, runtime.resource_controller))
     }
+
+    /// Creates a new `ContractSyncRuntime` for bundle-level execution.
+    ///
+    /// Unlike `new`, this does not take a specific action — the runtime will receive
+    /// actions via `run_bundle_loop`.
+    pub fn new_for_bundle(
+        execution_state_sender: ExecutionStateSender,
+        chain_id: ChainId,
+        height: BlockHeight,
+        round: Option<u32>,
+        timestamp: Timestamp,
+        resource_controller: ResourceController,
+        allow_application_logs: bool,
+    ) -> Self {
+        SyncRuntime(Some(ContractSyncRuntimeHandle::from(
+            SyncRuntimeInternal::new(
+                chain_id,
+                height,
+                round,
+                None, // executing_message: set per action
+                execution_state_sender,
+                None, // deadline
+                None, // refund_grant_to: set per action
+                resource_controller,
+                timestamp,
+                allow_application_logs,
+            ),
+        )))
+    }
+
+    /// Runs a bundle-level loop, receiving commands from the async side.
+    ///
+    /// The runtime thread stays alive for the entire incoming bundle, processing
+    /// messages one at a time. Contract instances are kept loaded across messages
+    /// so that cross-application state is visible without flushing to storage.
+    ///
+    /// Returns the `ResourceController` after all instances have been finalized.
+    pub fn run_bundle_loop(
+        self,
+        command_rx: &std::sync::mpsc::Receiver<RuntimeCommand>,
+    ) -> Result<ResourceController, ExecutionError> {
+        let handle = self.0.as_ref().expect("Runtime should be initialized");
+
+        loop {
+            let command = command_rx
+                .recv()
+                .map_err(|_| ExecutionError::MissingRuntimeResponse)?;
+
+            match command {
+                RuntimeCommand::Execute(cmd) => {
+                    let ExecuteCommand {
+                        application_id,
+                        action,
+                        refund_grant_to,
+                        codes,
+                        initial_balance,
+                        is_free,
+                        tracker,
+                    } = *cmd;
+                    // Preload any new contract codes.
+                    for (code, description) in codes {
+                        self.preload_contract(ApplicationId::from(&description), code, description);
+                    }
+
+                    // Sync the main controller's balance, is_free flag, and tracker into
+                    // the runtime controller before executing.
+                    {
+                        let mut inner = handle.inner();
+                        inner.resource_controller.account = initial_balance;
+                        inner.resource_controller.is_free = is_free;
+                        inner.resource_controller.tracker = tracker;
+                    }
+
+                    let result = handle.execute_action(application_id, &action, refund_grant_to);
+
+                    // Read back the runtime controller's final state so the async side can
+                    // merge the balance delta and copy the tracker back.
+                    let (final_balance, final_tracker) = {
+                        let inner = handle.inner();
+                        (
+                            inner.resource_controller.account,
+                            inner.resource_controller.tracker,
+                        )
+                    };
+
+                    // Signal completion through the state request channel.
+                    let sender = handle.inner().execution_state_sender.clone();
+                    let _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
+                        result,
+                        final_balance,
+                        tracker: final_tracker,
+                    });
+                }
+
+                RuntimeCommand::FinalizeAll { context, tracker } => {
+                    // Sync the main controller's tracker so finalize accumulates against
+                    // the budget.
+                    {
+                        let mut inner = handle.inner();
+                        inner.resource_controller.tracker = *tracker;
+                        // Finalize runs cleanup code; skip balance deductions since there
+                        // is no action-specific payer at this point.
+                        inner.resource_controller.is_free = true;
+                        inner.resource_controller.account = Amount::MAX;
+                    }
+                    handle.finalize(context)?;
+                    break;
+                }
+
+                RuntimeCommand::DropAllInstances => {
+                    handle.drop_all_instances();
+
+                    // Signal completion through the state request channel.
+                    let sender = handle.inner().execution_state_sender.clone();
+                    let _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
+                        result: Ok(None),
+                        final_balance: Amount::ZERO,
+                        tracker: ResourceTracker::default(),
+                    });
+                }
+            }
+        }
+
+        // Consume self and return the resource controller.
+        let runtime = self
+            .into_inner()
+            .expect("Runtime clones should have been freed by now");
+
+        Ok(runtime.resource_controller)
+    }
 }
 
 impl ContractSyncRuntimeHandle {
@@ -1144,6 +1276,76 @@ impl ContractSyncRuntimeHandle {
         let result = self.execute(application_id, signer, closure)?;
         self.finalize(finalize_context)?;
         Ok(result)
+    }
+
+    /// Executes a single user action without finalizing.
+    ///
+    /// Updates the runtime's `executing_message` and `refund_grant_to` context
+    /// based on the action, then executes the contract code.
+    #[instrument(skip_all, fields(application_id = %application_id))]
+    fn execute_action(
+        &self,
+        application_id: ApplicationId,
+        action: &UserAction,
+        refund_grant_to: Option<Account>,
+    ) -> Result<Option<Vec<u8>>, ExecutionError> {
+        // Update per-action context on the runtime.
+        {
+            let mut runtime = self.inner();
+            runtime.executing_message = if let UserAction::Message(context, _) = action {
+                Some(context.into())
+            } else {
+                None
+            };
+            runtime.refund_grant_to = refund_grant_to;
+        }
+
+        let signer = action.signer();
+        // We need to clone the action data out since execute takes FnOnce.
+        let closure = match action {
+            UserAction::Instantiate(_context, argument) => {
+                let argument = argument.clone();
+                Box::new(move |code: &mut UserContractInstance| {
+                    code.instantiate(argument).map(|()| None)
+                })
+                    as Box<
+                        dyn FnOnce(
+                            &mut UserContractInstance,
+                        )
+                            -> Result<Option<Vec<u8>>, ExecutionError>,
+                    >
+            }
+            UserAction::Operation(_context, operation) => {
+                let operation = operation.clone();
+                Box::new(move |code: &mut UserContractInstance| {
+                    code.execute_operation(operation).map(Option::Some)
+                })
+            }
+            UserAction::Message(_context, message) => {
+                let message = message.clone();
+                Box::new(move |code: &mut UserContractInstance| {
+                    code.execute_message(message).map(|()| None)
+                })
+            }
+            UserAction::ProcessStreams(_context, updates) => {
+                let updates = updates.clone();
+                Box::new(move |code: &mut UserContractInstance| {
+                    code.process_streams(updates).map(|()| None)
+                })
+            }
+        };
+
+        self.execute(application_id, signer, closure)
+    }
+
+    /// Drops all loaded contract instances without finalizing.
+    ///
+    /// Used during checkpoint rollback to discard stale in-memory state.
+    fn drop_all_instances(&self) {
+        let mut runtime = self.inner();
+        runtime.loaded_applications.clear();
+        runtime.applications_to_finalize.clear();
+        runtime.is_finalizing = false;
     }
 
     /// Notifies all loaded applications that execution is finalizing.
