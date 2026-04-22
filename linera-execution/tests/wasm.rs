@@ -107,7 +107,10 @@ async fn test_fuel_for_counter_wasm_application(
         ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
             .execute_operation(
                 context,
-                Operation::User { application_id: app_id, bytes: counter_increment_bytes(*increment) },
+                Operation::User {
+                    application_id: app_id,
+                    bytes: counter_increment_bytes(*increment),
+                },
             )
             .await?;
         let txn_outcome = txn_tracker.into_outcome().unwrap();
