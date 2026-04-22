@@ -3,7 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use alloy_primitives::{Bytes, B256};
+use alloy_primitives::Bytes;
 use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
 use fungible::Account;
 use linera_bridge::proof;
@@ -126,19 +126,26 @@ impl EvmBridgeContract {
             "rpc_endpoint must be configured to verify block hashes"
         );
 
-        let client = ContractEthereumClient::new(params.rpc_endpoint.clone());
-        assert!(
-            client
-                .is_block_hash_finalized(B256::from(block_hash))
-                .await
-                .expect("failed to check block finality — block may not exist"),
-            "block is not finalized"
-        );
+        // Use our own service as an oracle so that the underlying EVM JSON-RPC
+        // calls (two of them) collapse into one deterministic boolean in the
+        // block's oracle responses.
+        let application_id = self.runtime.application_id();
+        let hash_hex = hex::encode(block_hash);
+        let query = async_graphql::Request::new(format!(
+            "query {{ isBlockHashFinalized(blockHash: \"0x{hash_hex}\") }}"
+        ));
+        let response = self.runtime.query_service(application_id, query);
 
-        log::info!(
-            "verified block hash {} is finalized",
-            hex::encode(block_hash)
-        );
+        let async_graphql::Value::Object(data) = response.data else {
+            panic!("Unexpected response from service: {response:#?}");
+        };
+        let finalized = match &data["isBlockHashFinalized"] {
+            async_graphql::Value::Boolean(b) => *b,
+            other => panic!("Unexpected value for isBlockHashFinalized: {other:#?}"),
+        };
+        assert!(finalized, "block is not finalized");
+
+        log::info!("verified block hash 0x{hash_hex} is finalized");
     }
 
     async fn process_deposit(
