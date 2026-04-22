@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -629,7 +629,7 @@ where
     #[instrument(level = "trace", skip(self, origins))]
     pub fn with_priority_bundle_origins(
         mut self,
-        origins: std::collections::HashSet<ChainId>,
+        origins: HashSet<ChainId>,
     ) -> Self {
         self.chain_worker_config.priority_bundle_origins = origins;
         self
