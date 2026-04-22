@@ -285,11 +285,13 @@ impl IncomingBundle {
                 return false;
             }
         }
-        if self.messages().any(|posted_msg| {
-            policy
-                .never_reject_application_ids
-                .contains(&posted_msg.message.application_id())
-        }) {
+        if !policy.never_reject_application_ids.is_empty()
+            && self.messages().all(|posted_msg| {
+                policy
+                    .never_reject_application_ids
+                    .contains(&posted_msg.message.application_id())
+            })
+        {
             return true;
         }
         if let Some(app_ids) = &policy.reject_message_bundles_without_application_ids {
@@ -349,7 +351,7 @@ pub enum BundleFailurePolicy {
     /// - For limit errors (block too large, fuel exceeded, etc.): discard the bundle
     ///   so it can be retried in a later block, unless it's the first transaction
     ///   (in which case it's inherently too large and gets rejected).
-    /// - For bundles containing a message from any application in
+    /// - For bundles whose messages are all from applications in
     ///   `never_reject_application_ids`: discard the bundle (and subsequent bundles from
     ///   the same sender) so they can be retried in a later block, and log a warning.
     /// - For all other non-limit errors: reject the bundle (triggering bounced messages).
@@ -357,8 +359,9 @@ pub enum BundleFailurePolicy {
     AutoRetry {
         /// Maximum number of discarded bundles before discarding all remaining message bundles.
         max_failures: u32,
-        /// Applications whose messages must never be rejected. A failed bundle containing
-        /// any such message is discarded instead of rejected.
+        /// Applications whose messages must never be rejected. A failed bundle whose messages
+        /// are all from such applications is discarded instead of rejected. A bundle that
+        /// contains any message from an application not on this list can be rejected.
         never_reject_application_ids: Arc<HashSet<GenericApplicationId>>,
     },
 }

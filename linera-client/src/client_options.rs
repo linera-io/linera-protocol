@@ -170,11 +170,12 @@ pub struct Options {
     #[arg(long, value_parser = util::parse_app_set)]
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
 
-    /// A set of application IDs whose messages must never be rejected. Bundles containing any
-    /// message from one of these applications bypass the other rejection rules (except
+    /// A set of application IDs whose messages must never be rejected. Bundles whose messages
+    /// are all from one of these applications bypass the other rejection rules (except
     /// `--restrict-chain-ids-to`), and on execution failure they (and subsequent bundles from
     /// the same sender) are removed from the block for later retry instead of being rejected,
-    /// with a warning logged.
+    /// with a warning logged. Bundles that contain any message from an application not on this
+    /// list can be rejected.
     #[arg(long, value_parser = util::parse_app_set)]
     pub never_reject_application_ids: Option<HashSet<GenericApplicationId>>,
 

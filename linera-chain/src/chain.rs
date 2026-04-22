@@ -798,8 +798,8 @@ where
             *chain = saved_chain;
             block_execution_tracker.restore_checkpoint(&saved_tracker);
 
-            let contains_never_reject_message = !never_reject_application_ids.is_empty()
-                && incoming_bundle.messages().any(|posted_msg| {
+            let all_messages_never_reject = !never_reject_application_ids.is_empty()
+                && incoming_bundle.messages().all(|posted_msg| {
                     never_reject_application_ids.contains(&posted_msg.message.application_id())
                 });
             if error.is_limit_error() && i > 0 {
@@ -825,7 +825,7 @@ where
                 };
                 Self::discard_remaining_bundles(block, i, maybe_sender);
                 // Continue without incrementing i (next transaction is now at i).
-            } else if contains_never_reject_message
+            } else if all_messages_never_reject
                 && !incoming_bundle.bundle.is_protected()
                 && incoming_bundle.action != MessageAction::Reject
             {
