@@ -1875,6 +1875,137 @@ where
     Ok(())
 }
 
+/// Tests that contract state is correctly preserved through checkpoint restoration
+/// and that execution continues correctly afterward.
+///
+/// This specifically exercises the `save()` entry point: before each checkpoint,
+/// `save_runtime_instances()` flushes in-memory Wasm contract state to the host's
+/// key-value store. Without this flush, `clone_unchecked()` would capture stale state
+/// and restoring the checkpoint would lose successful bundles' mutations.
+///
+/// The test sends three bundles to the receiver:
+///   1. Increment counter by 5 (succeeds)
+///   2. Fail (triggers auto-retry → reject, checkpoint restores to after bundle 1)
+///   3. Increment counter by 3 (succeeds, must execute on top of bundle 1's state)
+///
+/// After auto-retry, the counter must be 8 (5 + 3). This verifies both that bundle 1's
+/// state survives the checkpoint restoration AND that bundle 3 executes correctly on
+/// the restored state. Without the save-before-checkpoint fix, the counter would be 3
+/// because bundle 1's Wasm state was never flushed to the host.
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_checkpoint_preserves_state_across_bundles(
+    wasm_runtime: WasmRuntime,
+) -> anyhow::Result<()> {
+    run_test_checkpoint_preserves_state_across_bundles(MemoryStorageBuilder::with_wasm_runtime(
+        wasm_runtime,
+    ))
+    .await
+}
+
+async fn run_test_checkpoint_preserves_state_across_bundles<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+
+    let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let creator = builder.add_root_chain(1, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(2, Amount::ONE).await?;
+    let receiver_id = receiver.chain_id();
+
+    // Publish counter and meta-counter modules.
+    let module_id1 = publisher.publish_wasm_example("counter").await?;
+    let module_id1 = module_id1.with_abi::<counter::CounterAbi, (), u64>();
+    let module_id2 = publisher.publish_wasm_example("meta-counter").await?;
+    let module_id2 =
+        module_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
+
+    // Creator creates the apps.
+    creator.synchronize_from_validators().await?;
+    let initial_value = 0_u64;
+    let (application_id1, _) = creator
+        .create_application(module_id1, &(), &initial_value, vec![])
+        .await
+        .unwrap_ok_committed();
+    let (application_id2, _) = creator
+        .create_application(
+            module_id2,
+            &application_id1,
+            &(),
+            vec![application_id1.forget_abi()],
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Send first increment (bundle 1: +5, succeeds).
+    let mut op1 = meta_counter::Operation::increment(receiver_id, 5, false);
+    op1.fuel_grant = 1_000_000;
+    creator
+        .execute_operation(Operation::user(application_id2, &op1)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Send a failing message (bundle 2: triggers auto-retry → reject).
+    let op2 = meta_counter::Operation::fail(receiver_id);
+    creator
+        .execute_operation(Operation::user(application_id2, &op2)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Send second increment (bundle 3: +3, succeeds on restored state).
+    let mut op3 = meta_counter::Operation::increment(receiver_id, 3, false);
+    op3.fuel_grant = 1_000_000;
+    creator
+        .execute_operation(Operation::user(application_id2, &op3)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Synchronize and process inbox on the receiver.
+    receiver.synchronize_from_validators().await?;
+    let certs = receiver.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1, "Should have one certificate");
+
+    let cert = &certs[0];
+    let incoming_bundles: Vec<_> = cert.block().body.incoming_bundles().collect();
+
+    // Verify the failing bundle was rejected and the others accepted.
+    let accepted = incoming_bundles
+        .iter()
+        .filter(|b| b.action == MessageAction::Accept)
+        .count();
+    let rejected = incoming_bundles
+        .iter()
+        .filter(|b| b.action == MessageAction::Reject)
+        .count();
+    assert!(accepted >= 2, "At least two bundles should be accepted");
+    assert!(rejected >= 1, "At least one bundle should be rejected");
+
+    // Query the counter to verify both increments were preserved through the checkpoint.
+    // Without the save-before-checkpoint fix, this would be 3 instead of 8
+    // (bundle 1's increment lost during checkpoint restore).
+    let query = async_graphql::Request::new("{ value }");
+    let outcome = receiver
+        .query_user_application(application_id2, &query)
+        .await?;
+
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(async_graphql::Value::from_json(
+            json!({"value": 8}),
+        )?),
+        operations: vec![],
+    };
+    assert_eq!(outcome, expected);
+
+    Ok(())
+}
+
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

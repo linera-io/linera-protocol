@@ -1356,6 +1356,7 @@ impl ContractSyncRuntimeHandle {
         let mut runtime = self.inner();
         runtime.loaded_applications.clear();
         runtime.applications_to_finalize.clear();
+        runtime.call_stack.clear();
         runtime.is_finalizing = false;
     }
 
