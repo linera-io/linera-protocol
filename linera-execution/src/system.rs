@@ -79,9 +79,11 @@ pub struct SystemExecutionStateView<C> {
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
     // (e.g. the `OpenChain` operation).
     //
-    // Lazy: committee lookups are served from `ExecutionRuntimeContext::shared_committees`.
-    // This view is only loaded when executing an operation that mutates the map (admin-chain
-    // `CreateCommittee`/`RemoveCommittee`, or `ProcessNewEpoch`/`ProcessRemovedEpoch`).
+    // Lazy: committee lookups are served from the process-global `SharedCommittees` cache
+    // (via `Storage::get_or_load_committee`), with a fall-back to this view for the
+    // mid-block case in `current_committee`. This view is only loaded when executing an
+    // operation that mutates the map (admin-chain `CreateCommittee`/`RemoveCommittee`, or
+    // `ProcessNewEpoch`/`ProcessRemovedEpoch`).
     pub committees: HashedLazyRegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
     pub ownership: HashedLazyRegisterView<C, ChainOwnership>,

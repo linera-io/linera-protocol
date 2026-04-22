@@ -465,7 +465,6 @@ pub struct ChainRuntimeContext<S> {
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
-    shared_committees: SharedCommittees,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -489,10 +488,6 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
 
     fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
-    }
-
-    fn shared_committees(&self) -> &SharedCommittees {
-        &self.shared_committees
     }
 
     async fn get_user_contract(

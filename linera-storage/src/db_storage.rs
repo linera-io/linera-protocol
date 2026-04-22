@@ -1215,7 +1215,6 @@ where
             execution_runtime_config: self.execution_runtime_config,
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
-            shared_committees: self.shared_committees.clone(),
         };
         let root_key = RootKey::ChainState(chain_id).bytes();
         let store = self.database.open_exclusive(&root_key)?;

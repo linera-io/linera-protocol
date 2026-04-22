@@ -537,9 +537,6 @@ pub trait ExecutionRuntimeContext {
 
     fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>>;
 
-    /// Process-global cache of committees by epoch, shared across all chains.
-    fn shared_committees(&self) -> &SharedCommittees;
-
     async fn get_user_contract(
         &self,
         description: &ApplicationDescription,
@@ -1252,7 +1249,6 @@ pub struct TestExecutionRuntimeContext {
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
     blobs: Arc<papaya::HashMap<BlobId, Blob>>,
     events: Arc<papaya::HashMap<EventId, Vec<u8>>>,
-    shared_committees: SharedCommittees,
 }
 
 #[cfg(with_testing)]
@@ -1266,7 +1262,6 @@ impl TestExecutionRuntimeContext {
             user_services: Arc::default(),
             blobs: Arc::default(),
             events: Arc::default(),
-            shared_committees: SharedCommittees::new(),
         }
     }
 }
@@ -1293,10 +1288,6 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
-    }
-
-    fn shared_committees(&self) -> &SharedCommittees {
-        &self.shared_committees
     }
 
     async fn get_user_contract(
@@ -1359,9 +1350,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         &self,
         epoch: Epoch,
     ) -> Result<Option<Arc<Committee>>, ViewError> {
-        if let Some(committee) = self.shared_committees.get(epoch) {
-            return Ok(Some(committee));
-        }
+        // No caching here — tests rarely load the same committee twice, and they don't
+        // benefit from the process-wide deduplication that `SharedCommittees` provides
+        // in production.
         let Some(net_description) = self.get_network_description().await? else {
             return Ok(None);
         };
@@ -1383,9 +1374,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             return Ok(None);
         };
         let committee: Committee = bcs::from_bytes(blob.bytes())?;
-        Ok(Some(
-            self.shared_committees.insert(epoch, Arc::new(committee)),
-        ))
+        Ok(Some(Arc::new(committee)))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
