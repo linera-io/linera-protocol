@@ -52,10 +52,11 @@ jobs:
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - uses: jetli/wasm-bindgen-action@v0.2.0
       with:
-        version: latest
+        version: 0.2.100
     - name: Build example applications
       run: |
         cd examples

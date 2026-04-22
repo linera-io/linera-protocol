@@ -73,6 +73,7 @@ jobs:
         rustflags: ""
     - uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - uses: nanasess/setup-chromedriver@v2
     - uses: jetli/wasm-pack-action@v0.4.0
