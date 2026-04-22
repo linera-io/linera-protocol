@@ -1020,16 +1020,12 @@ where
         }
 
         let mandatory_apps_need_accepted_message = self
-            .execution_state
-            .system
             .current_committee()
             .await?
-            .is_some_and(|(_epoch, committee)| {
-                committee
-                    .policy()
-                    .http_request_allow_list
-                    .contains(FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE)
-            });
+            .1
+            .policy()
+            .http_request_allow_list
+            .contains(FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE);
         Self::check_app_permissions(
             self.execution_state
                 .system
