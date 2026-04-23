@@ -12,7 +12,7 @@ pub mod execution_state_actor;
 mod graphql;
 mod policy;
 mod resources;
-mod runtime;
+pub mod runtime;
 pub mod system;
 #[cfg(with_testing)]
 pub mod test_utils;
@@ -483,8 +483,11 @@ pub trait UserContract {
     /// Reacts to new events on streams this application subscribes to.
     fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError>;
 
-    /// Finishes execution of the current transaction.
-    fn finalize(&mut self) -> Result<(), ExecutionError>;
+    /// Persists the application state to storage without consuming the instance.
+    fn save(&mut self) -> Result<(), ExecutionError>;
+
+    /// Validates the final state and finishes execution.
+    fn terminate(&mut self) -> Result<(), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.

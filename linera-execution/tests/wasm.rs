@@ -19,12 +19,23 @@ use linera_views::{context::Context as _, views::View};
 use serde_json::json;
 use test_case::test_case;
 
+/// Serializes a counter increment operation in BCS format.
+/// This mirrors `counter::CounterOperation::Increment { value }` without
+/// pulling in the `counter` crate (which transitively requires `linera-storage`).
+fn counter_increment_bytes(value: u64) -> Vec<u8> {
+    // BCS: variant index 0 (ULEB128, 1 byte for index < 128) + u64 value (8 bytes LE)
+    let mut bytes = Vec::with_capacity(9);
+    bytes.push(0); // variant index 0 = Increment
+    bytes.extend_from_slice(&value.to_le_bytes());
+    bytes
+}
+
 /// Test if the "counter" example application in `linera-sdk` compiled to a Wasm module can be
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[cfg_attr(with_wasmer, test_case(WasmRuntime::Wasmer, 71_229; "wasmer"))]
-#[cfg_attr(with_wasmtime, test_case(WasmRuntime::Wasmtime, 71_229; "wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmRuntime::Wasmer, 56_897; "wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmRuntime::Wasmtime, 56_897; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,
@@ -96,7 +107,10 @@ async fn test_fuel_for_counter_wasm_application(
         ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
             .execute_operation(
                 context,
-                Operation::user_without_abi(app_id, increment).unwrap(),
+                Operation::User {
+                    application_id: app_id,
+                    bytes: counter_increment_bytes(*increment),
+                },
             )
             .await?;
         let txn_outcome = txn_tracker.into_outcome().unwrap();

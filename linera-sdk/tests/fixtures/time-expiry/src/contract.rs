@@ -59,10 +59,7 @@ impl Contract for TimeExpiryContract {
         panic!("TimeExpiry application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {
-        self.state
-            .save_and_drop()
-            .await
-            .expect("Failed to save state");
+    async fn save(&mut self) {
+        self.state.save().await.expect("Failed to save state");
     }
 }

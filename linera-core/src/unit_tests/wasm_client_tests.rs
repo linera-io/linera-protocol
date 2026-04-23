@@ -1357,8 +1357,12 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
     let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
     // Set a fuel limit that is enough to instantiate the application and do one increment
     // operation, but not ten. We also verify blob fees for the bytecode.
+    // Note: with persistent contract instances within a block, the first action pays the
+    // full instantiation cost (~10k fuel) and later actions within the same block only
+    // pay the per-call cost (~1.5k fuel). Ten increments in a single block add up to
+    // ~23k fuel, so a 20k limit is enough for a single increment but not ten.
     let policy = ResourceControlPolicy {
-        maximum_wasm_fuel_per_block: 30_000,
+        maximum_wasm_fuel_per_block: 20_000,
         blob_read: Amount::from_tokens(10), // Should not be charged.
         blob_published: Amount::from_attos(100),
         blob_byte_read: Amount::from_tokens(10), // Should not be charged.
@@ -1867,6 +1871,239 @@ where
         operations: vec![],
     };
     assert_eq!(outcome, expected);
+
+    Ok(())
+}
+
+/// Tests that contract state is correctly preserved through checkpoint restoration
+/// and that execution continues correctly afterward.
+///
+/// This specifically exercises the `save()` entry point: before each checkpoint,
+/// `save_runtime_instances()` flushes in-memory Wasm contract state to the host's
+/// key-value store. Without this flush, `clone_unchecked()` would capture stale state
+/// and restoring the checkpoint would lose successful bundles' mutations.
+///
+/// The test sends three bundles to the receiver:
+///   1. Increment counter by 5 (succeeds)
+///   2. Fail (triggers auto-retry → reject, checkpoint restores to after bundle 1)
+///   3. Increment counter by 3 (succeeds, must execute on top of bundle 1's state)
+///
+/// After auto-retry, the counter must be 8 (5 + 3). This verifies both that bundle 1's
+/// state survives the checkpoint restoration AND that bundle 3 executes correctly on
+/// the restored state. Without the save-before-checkpoint fix, the counter would be 3
+/// because bundle 1's Wasm state was never flushed to the host.
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_checkpoint_preserves_state_across_bundles(
+    wasm_runtime: WasmRuntime,
+) -> anyhow::Result<()> {
+    run_test_checkpoint_preserves_state_across_bundles(MemoryStorageBuilder::with_wasm_runtime(
+        wasm_runtime,
+    ))
+    .await
+}
+
+async fn run_test_checkpoint_preserves_state_across_bundles<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+
+    let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let creator = builder.add_root_chain(1, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(2, Amount::ONE).await?;
+    let receiver_id = receiver.chain_id();
+
+    // Publish counter and meta-counter modules.
+    let module_id1 = publisher.publish_wasm_example("counter").await?;
+    let module_id1 = module_id1.with_abi::<counter::CounterAbi, (), u64>();
+    let module_id2 = publisher.publish_wasm_example("meta-counter").await?;
+    let module_id2 =
+        module_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
+
+    // Creator creates the apps.
+    creator.synchronize_from_validators().await?;
+    let initial_value = 0_u64;
+    let (application_id1, _) = creator
+        .create_application(module_id1, &(), &initial_value, vec![])
+        .await
+        .unwrap_ok_committed();
+    let (application_id2, _) = creator
+        .create_application(
+            module_id2,
+            &application_id1,
+            &(),
+            vec![application_id1.forget_abi()],
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Send first increment (bundle 1: +5, succeeds).
+    let mut op1 = meta_counter::Operation::increment(receiver_id, 5, false);
+    op1.fuel_grant = 1_000_000;
+    creator
+        .execute_operation(Operation::user(application_id2, &op1)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Send a failing message (bundle 2: triggers auto-retry → reject).
+    let op2 = meta_counter::Operation::fail(receiver_id);
+    creator
+        .execute_operation(Operation::user(application_id2, &op2)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Send second increment (bundle 3: +3, succeeds on restored state).
+    let mut op3 = meta_counter::Operation::increment(receiver_id, 3, false);
+    op3.fuel_grant = 1_000_000;
+    creator
+        .execute_operation(Operation::user(application_id2, &op3)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Synchronize and process inbox on the receiver.
+    receiver.synchronize_from_validators().await?;
+    let certs = receiver.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1, "Should have one certificate");
+
+    let cert = &certs[0];
+    let incoming_bundles: Vec<_> = cert.block().body.incoming_bundles().collect();
+
+    // Verify the failing bundle was rejected and the others accepted.
+    let accepted = incoming_bundles
+        .iter()
+        .filter(|b| b.action == MessageAction::Accept)
+        .count();
+    let rejected = incoming_bundles
+        .iter()
+        .filter(|b| b.action == MessageAction::Reject)
+        .count();
+    assert!(accepted >= 2, "At least two bundles should be accepted");
+    assert!(rejected >= 1, "At least one bundle should be rejected");
+
+    // Query the counter to verify both increments were preserved through the checkpoint.
+    // Without the save-before-checkpoint fix, this would be 3 instead of 8
+    // (bundle 1's increment lost during checkpoint restore).
+    let query = async_graphql::Request::new("{ value }");
+    let outcome = receiver
+        .query_user_application(application_id2, &query)
+        .await?;
+
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(async_graphql::Value::from_json(
+            json!({"value": 8}),
+        )?),
+        operations: vec![],
+    };
+    assert_eq!(outcome, expected);
+
+    Ok(())
+}
+
+/// Tests the flash-loan application with a non-trivial `terminate()` that verifies
+/// loan repayment with interest using the fungible token.
+///
+/// Flow (all on the same chain):
+///   1. Create and fund the fungible token (owner gets 1000 tokens).
+///   2. Create the flash-loan app, parameterized with the fungible app ID and 1% interest.
+///   3. Fund the flash-loan pool: transfer 100 tokens from owner to flash-loan's account.
+///   4. In a single block: GetCash(50) + RepayLoan(51) (50 + 1% interest = 50.5, repay 51).
+///   5. Block finalization calls `terminate()` which asserts:
+///      - Outstanding loans == 0
+///      - Flash-loan's fungible balance >= initial + interest
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_flash_loan_terminate(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_flash_loan_terminate(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+async fn run_test_flash_loan_terminate<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+
+    let chain = builder.add_root_chain(0, Amount::from_tokens(10)).await?;
+    let chain_owner = chain.preferred_owner().unwrap();
+
+    // 1. Publish and create the fungible token with 1000 tokens for the chain owner.
+    let fungible_module = chain.publish_wasm_example("fungible").await?;
+    let fungible_module =
+        fungible_module.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
+    let accounts = BTreeMap::from_iter([(chain_owner, Amount::from_tokens(1_000))]);
+    let state = InitialState { accounts };
+    let params = Parameters::new("FUN");
+    let (fungible_id, _cert) = chain
+        .create_application(fungible_module, &params, &state, vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // 2. Publish and create the flash-loan app.
+    let flash_loan_module = chain.publish_wasm_example("flash-loan").await?;
+    let flash_loan_module = flash_loan_module
+        .with_abi::<flash_loan::FlashLoanAbi, flash_loan::FlashLoanParameters, flash_loan::FlashLoanInitialState>();
+    let pool_balance = Amount::from_tokens(100);
+    let flash_params = flash_loan::FlashLoanParameters {
+        fungible_app_id: fungible_id,
+        interest_millionths: 10_000, // 1%
+    };
+    let flash_init = flash_loan::FlashLoanInitialState { pool_balance };
+    let (flash_loan_id, _cert) = chain
+        .create_application(
+            flash_loan_module,
+            &flash_params,
+            &flash_init,
+            vec![fungible_id.forget_abi()],
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // 3. Fund the flash-loan pool: transfer 100 tokens from owner to flash-loan's account.
+    let flash_loan_account = AccountOwner::from(flash_loan_id.forget_abi());
+    let fund_pool = FungibleOperation::Transfer {
+        owner: chain_owner,
+        amount: pool_balance,
+        target_account: Account {
+            chain_id: chain.chain_id(),
+            owner: flash_loan_account,
+        },
+    };
+    chain
+        .execute_operation(Operation::user(fungible_id, &fund_pool)?)
+        .await
+        .unwrap_ok_committed();
+
+    // 4. In a single block: borrow 50 tokens and repay 51 (50 + 1% interest rounded up).
+    let borrow_amount = Amount::from_tokens(50);
+    let repay_amount = Amount::from_tokens(51);
+    let get_cash_op = Operation::user(
+        flash_loan_id,
+        &flash_loan::Operation::GetCash {
+            amount: borrow_amount,
+        },
+    )?;
+    let repay_op = Operation::user(
+        flash_loan_id,
+        &flash_loan::Operation::RepayLoan {
+            amount: repay_amount,
+        },
+    )?;
+    // Both operations in the same block: terminate() runs once at the end and checks
+    // that all loans are repaid and the pool balance covers initial + interest.
+    chain
+        .execute_operations(vec![get_cash_op, repay_op], vec![])
+        .await
+        .unwrap_ok_committed();
 
     Ok(())
 }

@@ -100,5 +100,5 @@ impl Contract for MetaCounterContract {
         }
     }
 
-    async fn store(self) {}
+    async fn save(&mut self) {}
 }

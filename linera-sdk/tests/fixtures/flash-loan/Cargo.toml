@@ -1,0 +1,21 @@
+[package]
+name = "flash-loan"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+fungible.workspace = true
+linera-sdk.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+linera-sdk = { workspace = true, features = ["test"] }
+
+[[bin]]
+name = "flash_loan_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "flash_loan_service"
+path = "src/service.rs"

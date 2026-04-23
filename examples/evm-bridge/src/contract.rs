@@ -72,7 +72,7 @@ impl Contract for EvmBridgeContract {
 
     async fn execute_message(&mut self, _message: ()) {}
 
-    async fn store(mut self) {
+    async fn save(&mut self) {
         self.state.save().await.expect("Failed to save state");
     }
 }

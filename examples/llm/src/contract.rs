@@ -31,5 +31,5 @@ impl Contract for LlmContract {
         panic!("Llm application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {}
+    async fn save(&mut self) {}
 }

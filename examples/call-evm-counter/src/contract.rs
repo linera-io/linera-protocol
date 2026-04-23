@@ -74,5 +74,5 @@ impl Contract for CallCounterContract {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {}
+    async fn save(&mut self) {}
 }

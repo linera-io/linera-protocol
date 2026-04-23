@@ -1,22 +1,28 @@
 # Contract Finalization
 
-When a transaction finishes executing successfully, there's a final step where
-all loaded application contracts have their `Contract::store` implementation
-called. This can be seen to be similar to executing a destructor. In that sense,
-applications may want to perform some final operations after execution finished.
-While finalizing, contracts may send messages, read and write to the state, but
-are not allowed to call other applications, because they are all also in the
-process of finalizing.
+When a block finishes executing successfully, there's a final step where all
+loaded application contracts are finalized. Finalization happens in two stages:
 
-While finalizing, contracts can force the transaction to fail by panicking. The
-block is then rejected, even if the entire transaction's operation had succeeded
-before the application's `Contract::store` was called. This allows a contract to
-reject transactions if other applications don't follow any required constraints
-it establishes after it responds to a cross-application call.
+1. **`Contract::save`** is called on each loaded contract. This flushes the
+   contract's in-memory state to storage. `save` is also called before
+   checkpoints during block execution, so it may run multiple times.
+
+2. **`Contract::terminate`** is called once, consuming the contract instance.
+   This is the place to perform final validation. The default implementation
+   is empty, so contracts only need to override it when they have invariants
+   to enforce.
+
+During finalization, contracts may read their own state but are **not** allowed
+to call other applications, because they are all also in the process of
+finalizing.
+
+If `terminate` panics, the block is rejected even if every operation and message
+in the block had succeeded. This allows a contract to reject blocks that violate
+invariants established during cross-application calls.
 
 As an example, a contract that executes a cross-application call with
 `Operation::StartSession` may require the same caller to perform another
-cross-application call with `Operation::EndSession` before the transaction ends.
+cross-application call with `Operation::EndSession` before the block ends.
 
 ```rust,edition2021
 # extern crate serde;
@@ -102,13 +108,15 @@ impl Contract for MyContract {
         unreachable!("This example doesn't support messages");
     }
 
-    async fn store(mut self) {
+    async fn save(&mut self) {
+        self.state.save().await.expect("Failed to save state");
+    }
+
+    async fn terminate(self) {
         assert!(
             self.active_sessions.is_empty(),
             "Some sessions have not ended"
         );
-
-        self.state.save().await.expect("Failed to save state");
     }
 }
 ```

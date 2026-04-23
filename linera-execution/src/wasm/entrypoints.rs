@@ -13,7 +13,8 @@ pub trait ContractEntrypoints {
     fn execute_operation(operation: Vec<u8>) -> Vec<u8>;
     fn execute_message(message: Vec<u8>);
     fn process_streams(streams: Vec<StreamUpdate>);
-    fn finalize();
+    fn save();
+    fn terminate();
 }
 
 /// WIT entrypoints for application services.

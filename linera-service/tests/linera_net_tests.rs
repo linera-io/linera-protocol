@@ -420,6 +420,14 @@ impl MatchingEngineApp {
         let mutation = format!("executeOrder(order: {})", order.to_value());
         self.0.mutate(mutation).await.unwrap()
     }
+
+    async fn multiple_orders(&self, orders: &[matching_engine::Order]) -> Value {
+        let mutations: Vec<String> = orders
+            .iter()
+            .map(|order| format!("executeOrder(order: {})", order.to_value()))
+            .collect();
+        self.0.multiple_mutate(&mutations).await.unwrap()
+    }
 }
 
 struct AmmApp(ApplicationWrapper<amm::AmmAbi>);
@@ -3730,6 +3738,209 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     app_fungible1_admin
         .assert_balances([(owner_a, Amount::ZERO), (owner_b, Amount::ZERO)])
         .await;
+
+    node_service_admin.ensure_is_running()?;
+    node_service_a.ensure_is_running()?;
+    node_service_b.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_test_service_tcp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_matching_engine_benchmark(
+    config: impl LineraNetConfig,
+) -> Result<()> {
+    use std::collections::BTreeMap;
+
+    use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let num_orders: usize = 50;
+
+    let (mut net, client_admin) = config.instantiate().await?;
+
+    let client_a = net.make_client().await;
+    let client_b = net.make_client().await;
+
+    client_a.wallet_init(None).await?;
+    client_b.wallet_init(None).await?;
+
+    let (contract_fungible_a, service_fungible_a) = client_a.build_example("fungible").await?;
+    let (contract_fungible_b, service_fungible_b) = client_b.build_example("fungible").await?;
+    let (contract_matching, service_matching) =
+        client_admin.build_example("matching-engine").await?;
+
+    let chain_admin = client_admin.load_wallet()?.default_chain().unwrap();
+    let chain_a = client_admin.open_and_assign(&client_a, Amount::ONE).await?;
+    let chain_b = client_admin.open_and_assign(&client_b, Amount::ONE).await?;
+
+    let owner_a = get_account_owner(&client_a);
+    let owner_b = get_account_owner(&client_b);
+
+    // owner_a needs sum(1..=num_orders) token0 for bids at prices 1..=num_orders
+    let total_token0: u128 = (num_orders as u128 * (num_orders as u128 + 1)) / 2;
+    // owner_b needs num_orders token1 for asks (1 token1 each)
+    let total_token1: u128 = num_orders as u128;
+
+    let accounts0 = BTreeMap::from([(owner_a, Amount::from_tokens(total_token0))]);
+    let state_fungible0 = fungible::InitialState {
+        accounts: accounts0,
+    };
+    let accounts1 = BTreeMap::from([(owner_b, Amount::from_tokens(total_token1))]);
+    let state_fungible1 = fungible::InitialState {
+        accounts: accounts1,
+    };
+
+    let params0 = fungible::Parameters::new("ZERO");
+    let token0 = client_a
+        .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
+            contract_fungible_a,
+            service_fungible_a,
+            VmRuntime::Wasm,
+            &params0,
+            &state_fungible0,
+            &[],
+            None,
+        )
+        .await?;
+    let params1 = fungible::Parameters::new("ONE");
+    let token1 = client_b
+        .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
+            contract_fungible_b,
+            service_fungible_b,
+            VmRuntime::Wasm,
+            &params1,
+            &state_fungible1,
+            &[],
+            None,
+        )
+        .await?;
+
+    // Use ProcessInbox::Skip for admin so we control when matching happens.
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let port3 = get_node_port().await;
+    let mut node_service_admin = client_admin
+        .run_node_service(port1, ProcessInbox::Skip)
+        .await?;
+    let mut node_service_a = client_a
+        .run_node_service(port2, ProcessInbox::Automatic)
+        .await?;
+    let mut node_service_b = client_b
+        .run_node_service(port3, ProcessInbox::Automatic)
+        .await?;
+
+    let mut notifications_admin = node_service_admin.notifications(chain_admin).await?;
+
+    // Setting up the matching engine on the admin chain.
+    let parameter = Parameters {
+        tokens: [token0, token1],
+        price_decimals: 0,
+    };
+    let module_id = node_service_admin
+        .publish_module::<MatchingEngineAbi, Parameters, ()>(
+            &chain_admin,
+            contract_matching,
+            service_matching,
+            VmRuntime::Wasm,
+        )
+        .await?;
+    let application_id_matching = node_service_admin
+        .create_application(
+            &chain_admin,
+            &module_id,
+            &parameter,
+            &(),
+            &[token0.forget_abi(), token1.forget_abi()],
+        )
+        .await?;
+
+    let app_matching_a =
+        MatchingEngineApp(node_service_a.make_application(&chain_a, &application_id_matching)?);
+    let app_matching_b =
+        MatchingEngineApp(node_service_b.make_application(&chain_b, &application_id_matching)?);
+    let app_matching_admin = MatchingEngineApp(
+        node_service_admin.make_application(&chain_admin, &application_id_matching)?,
+    );
+
+    // Build 50 bid orders from owner_a at prices 1..=50
+    let bids: Vec<matching_engine::Order> = (1..=num_orders as u64)
+        .map(|price| matching_engine::Order::Insert {
+            owner: owner_a,
+            quantity: Amount::ONE,
+            nature: OrderNature::Bid,
+            price: Price { price },
+        })
+        .collect();
+
+    // Build 50 ask orders from owner_b at prices 1..=50
+    let asks: Vec<matching_engine::Order> = (1..=num_orders as u64)
+        .map(|price| matching_engine::Order::Insert {
+            owner: owner_b,
+            quantity: Amount::ONE,
+            nature: OrderNature::Ask,
+            price: Price { price },
+        })
+        .collect();
+
+    // Submit all bids in one block from chain_a
+    let bench_submit_start = std::time::Instant::now();
+    app_matching_a.multiple_orders(&bids).await;
+    let bids_elapsed = bench_submit_start.elapsed();
+    eprintln!(
+        "[BENCH] Submitted {} bid orders in {:?}",
+        num_orders, bids_elapsed
+    );
+
+    // Submit all asks in one block from chain_b
+    let bench_submit_start = std::time::Instant::now();
+    app_matching_b.multiple_orders(&asks).await;
+    let asks_elapsed = bench_submit_start.elapsed();
+    eprintln!(
+        "[BENCH] Submitted {} ask orders in {:?}",
+        num_orders, asks_elapsed
+    );
+
+    // Wait for both bundles to arrive on the admin chain.
+    notifications_admin.wait_for_bundle(chain_a, None).await?;
+    notifications_admin.wait_for_bundle(chain_b, None).await?;
+
+    // Benchmark: process inbox on the matching engine chain.
+    // This is where all 100 messages (50 bids + 50 asks) get matched.
+    let bench_matching_start = std::time::Instant::now();
+    let certs = node_service_admin.process_inbox(&chain_admin).await?;
+    let matching_elapsed = bench_matching_start.elapsed();
+    eprintln!(
+        "[BENCH] Matching engine process_inbox ({} bids + {} asks): {:?}, {} certs",
+        num_orders,
+        num_orders,
+        matching_elapsed,
+        certs.len()
+    );
+
+    // Verify: all orders should be fully matched, none remaining.
+    let order_ids_a = app_matching_admin.get_account_info(&owner_a).await;
+    let order_ids_b = app_matching_admin.get_account_info(&owner_b).await;
+    assert!(
+        order_ids_a.is_empty(),
+        "Expected no remaining orders for owner_a, got {}",
+        order_ids_a.len()
+    );
+    assert!(
+        order_ids_b.is_empty(),
+        "Expected no remaining orders for owner_b, got {}",
+        order_ids_b.len()
+    );
 
     node_service_admin.ensure_is_running()?;
     node_service_a.ensure_is_running()?;

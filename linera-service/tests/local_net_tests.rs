@@ -851,6 +851,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         .benchmark(BenchmarkCommand::Single {
             options: BenchmarkOptions {
                 num_chains: 2,
+                tokens_per_chain: Amount::from_tokens(1),
                 transactions_per_block: 10,
                 bps: 2,
                 runtime_in_seconds: Some(5),

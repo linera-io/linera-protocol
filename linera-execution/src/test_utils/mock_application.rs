@@ -132,7 +132,9 @@ type ProcessStreamHandler = Box<
         + Send
         + Sync,
 >;
-type FinalizeHandler =
+type SaveHandler =
+    Box<dyn FnOnce(&mut ContractSyncRuntimeHandle) -> Result<(), ExecutionError> + Send + Sync>;
+type TerminateHandler =
     Box<dyn FnOnce(&mut ContractSyncRuntimeHandle) -> Result<(), ExecutionError> + Send + Sync>;
 type HandleQueryHandler = Box<
     dyn FnOnce(&mut ServiceSyncRuntimeHandle, Vec<u8>) -> Result<Vec<u8>, ExecutionError>
@@ -151,8 +153,10 @@ pub enum ExpectedCall {
     ExecuteMessage(#[debug(skip)] ExecuteMessageHandler),
     /// An expected call to [`UserContract::process_streams`].
     ProcessStreams(#[debug(skip)] ProcessStreamHandler),
-    /// An expected call to [`UserContract::finalize`].
-    Finalize(#[debug(skip)] FinalizeHandler),
+    /// An expected call to [`UserContract::save`].
+    Save(#[debug(skip)] SaveHandler),
+    /// An expected call to [`UserContract::terminate`].
+    Terminate(#[debug(skip)] TerminateHandler),
     /// An expected call to [`UserService::handle_query`].
     HandleQuery(#[debug(skip)] HandleQueryHandler),
 }
@@ -164,7 +168,8 @@ impl Display for ExpectedCall {
             ExpectedCall::ExecuteOperation(_) => "execute_operation",
             ExpectedCall::ExecuteMessage(_) => "execute_message",
             ExpectedCall::ProcessStreams(_) => "process_streams",
-            ExpectedCall::Finalize(_) => "finalize",
+            ExpectedCall::Save(_) => "save",
+            ExpectedCall::Terminate(_) => "terminate",
             ExpectedCall::HandleQuery(_) => "handle_query",
         };
 
@@ -220,21 +225,38 @@ impl ExpectedCall {
         ExpectedCall::ProcessStreams(Box::new(handler))
     }
 
-    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::save`]
     /// implementation, which is handled by the provided `handler`.
-    pub fn finalize(
+    pub fn save(
         handler: impl FnOnce(&mut ContractSyncRuntimeHandle) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
     ) -> Self {
-        ExpectedCall::Finalize(Box::new(handler))
+        ExpectedCall::Save(Box::new(handler))
     }
 
-    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::save`]
     /// implementation, which is handled by the default implementation which does nothing.
-    pub fn default_finalize() -> Self {
-        Self::finalize(|_| Ok(()))
+    pub fn default_save() -> Self {
+        Self::save(|_| Ok(()))
+    }
+
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::terminate`]
+    /// implementation, which is handled by the provided `handler`.
+    pub fn terminate(
+        handler: impl FnOnce(&mut ContractSyncRuntimeHandle) -> Result<(), ExecutionError>
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        ExpectedCall::Terminate(Box::new(handler))
+    }
+
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::terminate`]
+    /// implementation, which is handled by the default implementation which does nothing.
+    pub fn default_terminate() -> Self {
+        Self::terminate(|_| Ok(()))
     }
 
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
@@ -318,13 +340,23 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
         }
     }
 
-    fn finalize(&mut self) -> Result<(), ExecutionError> {
+    fn save(&mut self) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::Finalize(handler)) => handler(&mut self.runtime),
+            Some(ExpectedCall::Save(handler)) => handler(&mut self.runtime),
             Some(unexpected_call) => {
-                panic!("Expected a call to `finalize`, got a call to `{unexpected_call}` instead.")
+                panic!("Expected a call to `save`, got a call to `{unexpected_call}` instead.")
             }
-            None => panic!("Unexpected call to `finalize`"),
+            None => panic!("Unexpected call to `save`"),
+        }
+    }
+
+    fn terminate(&mut self) -> Result<(), ExecutionError> {
+        match self.next_expected_call() {
+            Some(ExpectedCall::Terminate(handler)) => handler(&mut self.runtime),
+            Some(unexpected_call) => {
+                panic!("Expected a call to `terminate`, got a call to `{unexpected_call}` instead.")
+            }
+            None => panic!("Unexpected call to `terminate`"),
         }
     }
 }

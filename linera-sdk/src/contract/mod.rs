@@ -98,15 +98,25 @@ macro_rules! contract {
                 )
             }
 
-            fn finalize() {
+            fn save() {
+                use $crate::util::BlockingWait as _;
+                $crate::contract::run_async_entrypoint::<$contract, _, _>(
+                    unsafe { &mut CONTRACT },
+                    move |contract| {
+                        contract.save().blocking_wait()
+                    },
+                )
+            }
+
+            fn terminate() {
                 use $crate::util::BlockingWait as _;
 
                 let Some(contract) = (unsafe { CONTRACT.take() }) else {
                     $crate::ContractLogger::install();
-                    panic!("Calling `store` on a `Contract` instance that wasn't loaded");
+                    panic!("Calling `terminate` on a `Contract` instance that wasn't loaded");
                 };
 
-                contract.store().blocking_wait();
+                contract.terminate().blocking_wait();
             }
         }
 
