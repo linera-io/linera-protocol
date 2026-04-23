@@ -796,11 +796,6 @@ where
             .await
             .map_err(|error| {
                 ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-            })?
-            .ok_or_else(|| {
-                ChainError::InternalError(format!(
-                    "committee blob for epoch {epoch} missing; this is a bug"
-                ))
             })?;
         certificate.check(&committee)?;
 

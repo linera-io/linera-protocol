@@ -651,11 +651,11 @@ impl<Env: Environment> ChainClient<Env> {
             .get(&info.epoch)
             .copied()
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-        self.storage_client()
+        Ok(self
+            .storage_client()
             .get_or_load_committee_by_hash(hash)
             .await
-            .map_err(LocalNodeError::from)?
-            .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id).into())
+            .map_err(LocalNodeError::from)?)
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.

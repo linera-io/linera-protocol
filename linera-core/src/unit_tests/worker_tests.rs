@@ -4138,8 +4138,7 @@ where
         .executing_worker()
         .storage
         .get_or_load_committee_by_hash(committee_hash)
-        .await?
-        .expect("committee blob should be present");
+        .await?;
     let expected_key = committee
         .validators
         .get(&env.executing_worker().public_key())

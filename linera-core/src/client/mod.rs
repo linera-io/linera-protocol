@@ -859,11 +859,7 @@ impl<Env: Environment> Client<Env> {
             .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
         let committees =
             futures::future::try_join_all(hashes.into_iter().map(|(epoch, hash)| async move {
-                let committee = self
-                    .storage_client()
-                    .get_or_load_committee_by_hash(hash)
-                    .await?
-                    .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
+                let committee = self.storage_client().get_or_load_committee_by_hash(hash).await?;
                 Ok::<_, LocalNodeError>((epoch, committee))
             }))
             .await?
@@ -885,8 +881,7 @@ impl<Env: Environment> Client<Env> {
         let committee = self
             .storage_client()
             .get_or_load_committee_by_hash(hash)
-            .await?
-            .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
+            .await?;
         Ok((info.epoch, committee))
     }
 

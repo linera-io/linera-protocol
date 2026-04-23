@@ -23,15 +23,15 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
-#[cfg(with_revm)]
-use linera_execution::{
-    evm::revm::{EvmContractModule, EvmServiceModule},
-    EvmRuntime,
-};
 use linera_execution::{
     committee::Committee, BlobState, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, SharedCommittees, TransactionTracker, UserContractCode,
     UserServiceCode, WasmRuntime,
+};
+#[cfg(with_revm)]
+use linera_execution::{
+    evm::revm::{EvmContractModule, EvmServiceModule},
+    EvmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
@@ -392,18 +392,17 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn get_or_load_committee_by_hash(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+    ) -> Result<Arc<Committee>, ExecutionError> {
         if let Some(committee) = self.shared_committees().get(hash) {
-            return Ok(Some(committee));
+            return Ok(committee);
         }
         let blob_id = BlobId::new(hash, BlobType::Committee);
-        let Some(blob) = self.read_blob(blob_id).await? else {
-            return Ok(None);
-        };
+        let blob = self
+            .read_blob(blob_id)
+            .await?
+            .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
         let committee = bcs::from_bytes(blob.bytes())?;
-        Ok(Some(
-            self.shared_committees().insert(hash, Arc::new(committee)),
-        ))
+        Ok(self.shared_committees().insert(hash, Arc::new(committee)))
     }
 
     /// Lists the blob IDs in storage.
@@ -522,7 +521,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
     async fn get_or_load_committee_by_hash(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+    ) -> Result<Arc<Committee>, ExecutionError> {
         self.storage.get_or_load_committee_by_hash(hash).await
     }
 

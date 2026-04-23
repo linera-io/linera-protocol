@@ -335,7 +335,7 @@ where
             .extra()
             .get_or_load_committee_by_hash(hash)
             .await?;
-        Ok(committee.map(|c| (epoch, c)))
+        Ok(Some((epoch, committee)))
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Arc<Vec<u8>>, ExecutionError> {
@@ -438,8 +438,7 @@ where
                         self.context()
                             .extra()
                             .get_or_load_committee_by_hash(blob_hash)
-                            .await?
-                            .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
+                            .await?;
                         self.blob_used(txn_tracker, blob_id).await?;
                         self.committees.get_mut().insert(epoch, blob_hash);
                         self.epoch.set(epoch);
@@ -527,10 +526,11 @@ where
                 self.context()
                     .extra()
                     .get_or_load_committee_by_hash(event_data.blob_hash)
-                    .await?
-                    .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
+                    .await?;
                 self.blob_used(txn_tracker, blob_id).await?;
-                self.committees.get_mut().insert(epoch, event_data.blob_hash);
+                self.committees
+                    .get_mut()
+                    .insert(epoch, event_data.blob_hash);
                 self.epoch.set(epoch);
             }
             ProcessRemovedEpoch(epoch) => {

@@ -542,7 +542,9 @@ pub trait ExecutionRuntimeContext {
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
-    /// Returns the committee whose serialized form hashes to `hash`.
+    /// Returns the committee whose serialized form hashes to `hash`. Returns
+    /// `ExecutionError::BlobsNotFound` if the committee blob is missing from
+    /// storage.
     ///
     /// Implementations should cache results in a process-wide
     /// [`SharedCommittees`] map so that repeated lookups are cheap across
@@ -550,7 +552,7 @@ pub trait ExecutionRuntimeContext {
     async fn get_or_load_committee_by_hash(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<Arc<Committee>>, ExecutionError>;
+    ) -> Result<Arc<Committee>, ExecutionError>;
 
     /// Returns the committee blob hashes for the epochs in the given range.
     async fn get_committee_hashes(
@@ -1380,13 +1382,16 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     async fn get_or_load_committee_by_hash(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+    ) -> Result<Arc<Committee>, ExecutionError> {
         let blob_id = BlobId::new(hash, BlobType::Committee);
-        let Some(blob) = self.blobs.pin().get(&blob_id).cloned() else {
-            return Ok(None);
-        };
+        let blob = self
+            .blobs
+            .pin()
+            .get(&blob_id)
+            .cloned()
+            .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
         let committee: Committee = bcs::from_bytes(blob.bytes())?;
-        Ok(Some(Arc::new(committee)))
+        Ok(Arc::new(committee))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
