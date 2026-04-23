@@ -41,7 +41,9 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
+    batch::Batch,
     context::{Context, InactiveContext},
+    store::WritableKeyValueStore as _,
     views::{ReplaceContext as _, RootView as _, View as _},
 };
 use tokio::sync::oneshot;
@@ -1270,10 +1272,16 @@ where
         //    into double-signing if the reset wipes votes we already cast.
         let manager_snapshot = ManagerSafetySnapshot::capture(&self.chain.manager).await?;
 
-        // 3. Clear the chain state entirely and save.
-        self.chain.clear();
+        // 3. Wipe every key under this chain's storage root and reload a fresh
+        //    `ChainStateView`. `ChainStateView::clear` + `save` would only reset
+        //    the in-memory view; `HistoricallyHashableView` deliberately keeps
+        //    its `stored_hash` across clears, so the historical hash would carry
+        //    over from the pre-reset state and the replayed block outcomes would
+        //    never match the original certificates' `state_hash`. Deleting the
+        //    storage prefix and reloading is equivalent to creating the chain
+        //    from scratch, which is what replay expects.
+        self.wipe_and_reload_chain().await?;
         self.knows_chain_is_active = false;
-        self.save().await?;
         warn!(
             %chain_id,
             "Cleared chain state up to height {tip_height}; \
@@ -2127,6 +2135,43 @@ where
             return Err(WorkerError::PoisonedWorker);
         }
         Ok(())
+    }
+
+    /// Deletes every key under this chain's storage root and replaces `self.chain`
+    /// with a freshly loaded (empty) view. If either the write or the reload fails,
+    /// the worker is marked as poisoned: the partial deletion may have left
+    /// storage inconsistent with the in-memory view, so it cannot be reused.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
+    async fn wipe_and_reload_chain(&mut self) -> Result<(), WorkerError> {
+        let context = self.chain.context().clone();
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(Vec::new());
+        if let Err(error) = context.store().write_batch(batch).await {
+            tracing::error!(
+                ?error,
+                chain_id = %self.chain_id(),
+                "Wiping chain storage failed; marking worker as poisoned"
+            );
+            self.poisoned = true;
+            return Err(WorkerError::PoisonedWorker);
+        }
+        match ChainStateView::load(context).await {
+            Ok(chain) => {
+                self.chain = chain;
+                Ok(())
+            }
+            Err(error) => {
+                tracing::error!(
+                    ?error,
+                    chain_id = %self.chain_id(),
+                    "Reloading chain after wipe failed; marking worker as poisoned"
+                );
+                self.poisoned = true;
+                Err(WorkerError::PoisonedWorker)
+            }
+        }
     }
 }
 

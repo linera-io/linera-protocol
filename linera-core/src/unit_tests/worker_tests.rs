@@ -4780,19 +4780,6 @@ where
 /// next block produces a different `BlockExecutionOutcome`. First verifies that the
 /// corruption causes `CorruptedChainState` without the recovery flag, then enables the
 /// flag and verifies that the chain is reset and re-executed successfully.
-//
-// TODO(#6063-port): Disabled on main because `ExecutionStateView` wraps its inner
-// view in `HistoricallyHashableView`, so the execution state hash is history-
-// dependent. `reset_and_reexecute_chain` wipes the chain and replays the
-// confirmed log, which produces a fresh (empty) history and therefore a
-// different hash than the original certificate's — making the re-execution
-// fail with another `CorruptedChainState`. On `testnet_conway` the equivalent
-// view uses plain `HashableView`, so the hash is state-based and the test
-// passes. Fixing this requires either replaying the stored batches verbatim
-// or switching the hash back to state-based. Keeping the recovery code so
-// the CLI flags and `CorruptedChainState` routing are in place, but this test
-// cannot be enabled until the underlying mismatch is resolved.
-#[ignore = "Incompatible with HistoricallyHashableView on main (see TODO above)"]
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
