@@ -195,27 +195,35 @@ services:
   #     Writes bridge-chain-id and relay-owner to /shared/ so the setup script
   #     and the relay can use them.
   bridge-chain-init:
-    image: "${LINERA_BRIDGE_INIT_IMAGE:-linera-bridge-init}"
+    image: "${LINERA_NETWORK_IMAGE:-linera-test}"
     pull_policy: if_not_present
     network_mode: "service:linera-network"
-    entrypoint: ["sh", "-c"]
     command:
+      - sh
+      - -c
       - |
         set -e
         FAUCET=http://localhost:${FAUCET_PORT:-8080}
         RELAY_WALLET=/shared/relay-wallet
 
-        echo "Initializing relay wallet + claiming bridge chain via linera-bridge-init..."
+        echo "Initializing relay wallet..."
         mkdir -p $$RELAY_WALLET
-        OUTPUT=$$(linera-bridge-init \
-          --faucet-url "$$FAUCET" \
-          --wallet "$$RELAY_WALLET/wallet.json" \
-          --keystore "$$RELAY_WALLET/keystore.json")
+        LINERA_WALLET=$$RELAY_WALLET/wallet.json \
+        LINERA_KEYSTORE=$$RELAY_WALLET/keystore.json \
+        LINERA_STORAGE=rocksdb:$$RELAY_WALLET/client.db \
+          ./linera wallet init --faucet "$$FAUCET"
+
+        echo "Claiming bridge chain..."
+        OUTPUT=$$(LINERA_WALLET=$$RELAY_WALLET/wallet.json \
+        LINERA_KEYSTORE=$$RELAY_WALLET/keystore.json \
+        LINERA_STORAGE=rocksdb:$$RELAY_WALLET/client.db \
+          ./linera wallet request-chain --faucet "$$FAUCET" 2>&1)
         echo "$$OUTPUT"
 
-        # Parse the JSON payload printed on stdout.
-        CHAIN_ID=$$(echo "$$OUTPUT" | sed -n 's/.*"chain_id": "\([^"]*\)".*/\1/p')
-        OWNER=$$(echo "$$OUTPUT" | sed -n 's/.*"owner": "\([^"]*\)".*/\1/p')
+        # Extract chain ID (64-char hex on its own line)
+        CHAIN_ID=$$(echo "$$OUTPUT" | grep -oE '^[a-f0-9]{64}$$' | tail -1)
+        # Extract owner (the AccountOwner printed by request-chain)
+        OWNER=$$(echo "$$OUTPUT" | grep -oE '0x[a-f0-9]{64}' | tail -1)
 
         echo "Bridge chain: $$CHAIN_ID"
         echo "Relay owner:  $$OWNER"

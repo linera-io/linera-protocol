@@ -91,10 +91,6 @@ build-all: build-wasm ## Build Wasm files and all docker images (debug mode)
 		--build-arg build_flag="" \
 		--build-arg build_folder=debug \
 		-t linera-bridge ..
-	cd $(DOCKER_DIR) && docker build -f ./Dockerfile.bridge-init \
-		--build-arg build_flag="" \
-		--build-arg build_folder=debug \
-		-t linera-bridge-init ..
 	cd $(DOCKER_DIR) && docker build -f ./Dockerfile.foundry \
 		-t foundry-jq .
 

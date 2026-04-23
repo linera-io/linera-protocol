@@ -2,7 +2,6 @@
 members = [
     "linera-base",
     "linera-bridge",
-    "linera-bridge-init",
     "linera-cache",
     "linera-chain",
     "linera-client",

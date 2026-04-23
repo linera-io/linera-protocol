@@ -5432,7 +5432,6 @@ dependencies = [
  "linera-client",
  "linera-core",
  "linera-execution",
- "linera-faucet-client",
  "linera-storage",
  "linera-storage-runtime",
  "linera-views",
@@ -5460,20 +5459,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.19",
  "wrapped-fungible",
-]
-
-[[package]]
-name = "linera-bridge-init"
-version = "0.15.15"
-dependencies = [
- "anyhow",
- "clap",
- "linera-base",
- "linera-faucet-client",
- "linera-wallet-json",
- "serde_json",
- "tokio",
- "tracing",
 ]
 
 [[package]]
