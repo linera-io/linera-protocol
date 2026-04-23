@@ -458,6 +458,7 @@ where
 
                         let (_epoch, committee) = system
                             .current_committee()
+                            .await?
                             .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
                         let allowed_hosts = &committee.policy().http_request_allow_list;
 
