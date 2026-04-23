@@ -15,7 +15,7 @@ use linera_base::{
         ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode,
         NetworkDescription, TimeDelta, Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
 pub use linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS;
@@ -29,8 +29,9 @@ use linera_execution::{
     EvmRuntime,
 };
 use linera_execution::{
-    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, TransactionTracker,
-    UserContractCode, UserServiceCode, WasmRuntime,
+    committee::Committee, BlobState, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, SharedCommittees, TransactionTracker, UserContractCode,
+    UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
@@ -383,6 +384,28 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError>;
 
+    /// Returns the process-wide committee cache shared by all chains.
+    fn shared_committees(&self) -> &SharedCommittees;
+
+    /// Returns the committee whose serialized form hashes to `hash`, loading it
+    /// from the blob store on cache miss.
+    async fn get_or_load_committee_by_hash(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+        if let Some(committee) = self.shared_committees().get(hash) {
+            return Ok(Some(committee));
+        }
+        let blob_id = BlobId::new(hash, BlobType::Committee);
+        let Some(blob) = self.read_blob(blob_id).await? else {
+            return Ok(None);
+        };
+        let committee = bcs::from_bytes(blob.bytes())?;
+        Ok(Some(
+            self.shared_committees().insert(hash, Arc::new(committee)),
+        ))
+    }
+
     /// Lists the blob IDs in storage.
     async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError>;
 
@@ -494,6 +517,13 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         self.storage.read_network_description().await
+    }
+
+    async fn get_or_load_committee_by_hash(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+        self.storage.get_or_load_committee_by_hash(hash).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

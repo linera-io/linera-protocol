@@ -65,7 +65,7 @@ pub use crate::wasm::{
     ServiceRuntimeApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    committee::Committee,
+    committee::{Committee, SharedCommittees},
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::{ExecutionRequest, ExecutionStateActor},
     policy::ResourceControlPolicy,
@@ -541,6 +541,16 @@ pub trait ExecutionRuntimeContext {
     async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+
+    /// Returns the committee whose serialized form hashes to `hash`.
+    ///
+    /// Implementations should cache results in a process-wide
+    /// [`SharedCommittees`] map so that repeated lookups are cheap across
+    /// chains.
+    async fn get_or_load_committee_by_hash(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Option<Arc<Committee>>, ExecutionError>;
 
     /// Returns the committees for the epochs in the given range.
     async fn get_committees(
@@ -1394,6 +1404,18 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             genesis_committee_blob_hash,
             name: "dummy network description".to_string(),
         }))
+    }
+
+    async fn get_or_load_committee_by_hash(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+        let blob_id = BlobId::new(hash, BlobType::Committee);
+        let Some(blob) = self.blobs.pin().get(&blob_id).cloned() else {
+            return Ok(None);
+        };
+        let committee: Committee = bcs::from_bytes(blob.bytes())?;
+        Ok(Some(Arc::new(committee)))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
