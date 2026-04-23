@@ -74,7 +74,7 @@ mod metrics {
             "proxy_request_latency",
             "Proxy request latency",
             &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-            linear_bucket_interval(1.0, 50.0, 2000.0),
+            linear_bucket_interval(1.0, 50.0, 5000.0),
         )
     });
     pub static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
