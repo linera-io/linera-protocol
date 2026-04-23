@@ -69,7 +69,7 @@ use super::{
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
     environment::Environment,
-    local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider as _,
@@ -624,16 +624,18 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     async fn epoch_and_committees(
         &self,
-    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
+    ) -> Result<(Epoch, BTreeMap<Epoch, CryptoHash>), LocalNodeError> {
         let info = self.chain_info_with_committees().await?;
         let epoch = info.epoch;
-        let committees = info.into_committees()?;
+        let committees = info
+            .requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
         Ok((epoch, committees))
     }
 
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
-    pub async fn local_committee(&self) -> Result<Committee, Error> {
+    pub async fn local_committee(&self) -> Result<Arc<Committee>, Error> {
         let info = match self.chain_info_with_committees().await {
             Ok(info) => info,
             Err(LocalNodeError::BlobsNotFound(_)) => {
@@ -642,12 +644,23 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Err(err) => return Err(err.into()),
         };
-        Ok(info.into_current_committee()?)
+        let hash = info
+            .requested_committees
+            .as_ref()
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
+            .get(&info.epoch)
+            .copied()
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
+        self.storage_client()
+            .get_or_load_committee_by_hash(hash)
+            .await
+            .map_err(LocalNodeError::from)?
+            .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id).into())
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
     #[instrument(level = "trace")]
-    pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
+    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
         self.client.admin_committee().await
     }
 
@@ -797,7 +810,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?
         };
         if let Ok(new_committee) = self.local_committee().await {
-            if Some(&new_committee) != old_committee {
+            if old_committee.is_none_or(|old| *new_committee != *old) {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
                 self.communicate_chain_updates(&new_committee, latest_certificate)
@@ -1209,8 +1222,8 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn request_leader_timeout(&self) -> Result<TimeoutCertificate, Error> {
         let chain_id = self.chain_id;
-        let info = self.chain_info_with_committees().await?;
-        let committee = info.current_committee()?;
+        let info = self.chain_info().await?;
+        let committee = self.local_committee().await?;
         let height = info.next_block_height;
         let round = info.manager.current_round;
         let action = CommunicateAction::RequestTimeout {
@@ -1221,14 +1234,14 @@ impl<Env: Environment> ChainClient<Env> {
         let value = Timeout::new(chain_id, height, info.epoch);
         let certificate = Box::new(
             self.client
-                .communicate_chain_action(committee, action, value)
+                .communicate_chain_action(&committee, action, value)
                 .await?,
         );
         self.client.handle_certificate(*certificate.clone()).await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.client
             .communicate_chain_updates(
-                committee,
+                &committee,
                 chain_id,
                 height,
                 CrossChainMessageDelivery::NonBlocking,
@@ -1252,7 +1265,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", skip_all)]
     pub async fn synchronize_chain_state_from_committee(
         &self,
-        committee: Committee,
+        committee: Arc<Committee>,
     ) -> Result<Box<ChainInfo>, Error> {
         self.client
             .synchronize_chain_from_committee(self.chain_id, committee)
@@ -2094,8 +2107,9 @@ impl<Env: Environment> ChainClient<Env> {
                 "Conflicting proposal in the current round",
             ));
         };
-        let current_committee = info
-            .current_committee()?
+        let current_committee = self
+            .local_committee()
+            .await?
             .validators
             .values()
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))

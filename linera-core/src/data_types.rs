@@ -19,7 +19,7 @@ use linera_chain::{
     types::ConfirmedBlockCertificate,
     ChainStateView,
 };
-use linera_execution::{committee::Committee, ExecutionRuntimeContext};
+use linera_execution::ExecutionRuntimeContext;
 use linera_storage::ChainRuntimeContext;
 use linera_views::{context::Context, ViewError};
 use serde::{Deserialize, Serialize};
@@ -150,9 +150,9 @@ pub struct ChainInfo {
     /// The requested owner balance, if any.
     #[debug(skip_if = Option::is_none)]
     pub requested_owner_balance: Option<Amount>,
-    /// The current committees.
+    /// Committee blob hashes indexed by epoch, if requested.
     #[debug(skip_if = Option::is_none)]
-    pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
+    pub requested_committees: Option<BTreeMap<Epoch, CryptoHash>>,
     /// The received messages that are waiting be picked in the next block (if requested).
     #[debug(skip_if = Vec::is_empty)]
     pub requested_pending_message_bundles: Vec<IncomingBundle>,

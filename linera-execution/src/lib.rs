@@ -552,11 +552,11 @@ pub trait ExecutionRuntimeContext {
         hash: CryptoHash,
     ) -> Result<Option<Arc<Committee>>, ExecutionError>;
 
-    /// Returns the committees for the epochs in the given range.
-    async fn get_committees(
+    /// Returns the committee blob hashes for the epochs in the given range.
+    async fn get_committee_hashes(
         &self,
         epoch_range: RangeInclusive<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
+    ) -> Result<BTreeMap<Epoch, CryptoHash>, ExecutionError> {
         let net_description = self
             .get_network_description()
             .await?
@@ -565,7 +565,7 @@ pub trait ExecutionRuntimeContext {
             (epoch_range.start().0..=epoch_range.end().0).map(|epoch| async move {
                 if epoch == 0 {
                     // Genesis epoch is stored in NetworkDescription.
-                    Ok((epoch, net_description.genesis_committee_blob_hash))
+                    Ok((Epoch(epoch), net_description.genesis_committee_blob_hash))
                 } else {
                     let event_id = EventId {
                         chain_id: net_description.admin_chain_id,
@@ -577,7 +577,7 @@ pub trait ExecutionRuntimeContext {
                         .await?
                         .ok_or_else(|| ExecutionError::EventsNotFound(vec![event_id]))?;
                     let event_data: EpochEventData = bcs::from_bytes(&event)?;
-                    Ok((epoch, event_data.blob_hash))
+                    Ok((Epoch(epoch), event_data.blob_hash))
                 }
             }),
         )
@@ -597,36 +597,7 @@ pub trait ExecutionRuntimeContext {
             missing_events.is_empty(),
             ExecutionError::EventsNotFound(missing_events)
         );
-        let committee_hashes = committee_hashes
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-        let committees = futures::future::join_all(committee_hashes.into_iter().map(
-            |(epoch, committee_hash)| async move {
-                let blob_id = BlobId::new(committee_hash, BlobType::Committee);
-                let committee_blob = self
-                    .get_blob(blob_id)
-                    .await?
-                    .ok_or_else(|| ExecutionError::BlobsNotFound(vec![blob_id]))?;
-                Ok((Epoch(epoch), bcs::from_bytes(committee_blob.bytes())?))
-            },
-        ))
-        .await;
-        let missing_blobs = committees
-            .iter()
-            .filter_map(|result| {
-                if let Err(ExecutionError::BlobsNotFound(blob_ids)) = result {
-                    return Some(blob_ids);
-                }
-                None
-            })
-            .flatten()
-            .cloned()
-            .collect::<Vec<_>>();
-        ensure!(
-            missing_blobs.is_empty(),
-            ExecutionError::BlobsNotFound(missing_blobs)
-        );
-        committees.into_iter().collect()
+        committee_hashes.into_iter().collect()
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;

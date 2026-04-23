@@ -85,11 +85,12 @@ pub struct SystemExecutionStateView<C> {
     pub epoch: RegisterView<C, Epoch>,
     /// The admin of the chain.
     pub admin_chain_id: RegisterView<C, Option<ChainId>>,
-    /// The committees that we trust, indexed by epoch number.
-    // Not using a `MapView` because the set active of committees is supposed to be
+    /// The blob hashes of the committees we trust, indexed by epoch number.
+    // Not using a `MapView` because the set of active committees is supposed to be
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
-    // (e.g. the `OpenChain` operation).
-    pub committees: RegisterView<C, BTreeMap<Epoch, Committee>>,
+    // (e.g. the `OpenChain` operation). The actual committees live in the blob store
+    // and are cached process-wide via `SharedCommittees`.
+    pub committees: RegisterView<C, BTreeMap<Epoch, CryptoHash>>,
     /// Ownership of the chain.
     pub ownership: LazyRegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
@@ -317,15 +318,24 @@ where
     pub async fn is_active(&self) -> Result<bool, ViewError> {
         Ok(self.description.get().await?.is_some()
             && self.ownership.get().await?.is_active()
-            && self.current_committee().is_some()
+            && self.committees.get().contains_key(self.epoch.get())
             && self.admin_chain_id.get().is_some())
     }
 
     /// Returns the current committee, if any.
-    pub fn current_committee(&self) -> Option<(Epoch, &Committee)> {
-        let epoch = self.epoch.get();
-        let committee = self.committees.get().get(epoch)?;
-        Some((*epoch, committee))
+    pub async fn current_committee(
+        &self,
+    ) -> Result<Option<(Epoch, Arc<Committee>)>, ExecutionError> {
+        let epoch = *self.epoch.get();
+        let Some(&hash) = self.committees.get().get(&epoch) else {
+            return Ok(None);
+        };
+        let committee = self
+            .context()
+            .extra()
+            .get_or_load_committee_by_hash(hash)
+            .await?;
+        Ok(committee.map(|c| (epoch, c)))
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Arc<Vec<u8>>, ExecutionError> {
@@ -424,10 +434,14 @@ where
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
                         self.check_next_epoch(epoch)?;
                         let blob_id = BlobId::new(blob_hash, BlobType::Committee);
-                        let committee =
-                            bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
+                        // Validate that the blob exists and deserializes as a Committee.
+                        self.context()
+                            .extra()
+                            .get_or_load_committee_by_hash(blob_hash)
+                            .await?
+                            .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
                         self.blob_used(txn_tracker, blob_id).await?;
-                        self.committees.get_mut().insert(epoch, committee);
+                        self.committees.get_mut().insert(epoch, blob_hash);
                         self.epoch.set(epoch);
                         let event_data = EpochEventData {
                             blob_hash,
@@ -509,9 +523,14 @@ where
                     .to_event(&event_id)?;
                 let event_data: EpochEventData = bcs::from_bytes(&bytes)?;
                 let blob_id = BlobId::new(event_data.blob_hash, BlobType::Committee);
-                let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
+                // Validate that the blob exists and deserializes as a Committee.
+                self.context()
+                    .extra()
+                    .get_or_load_committee_by_hash(event_data.blob_hash)
+                    .await?
+                    .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
                 self.blob_used(txn_tracker, blob_id).await?;
-                self.committees.get_mut().insert(epoch, committee);
+                self.committees.get_mut().insert(epoch, event_data.blob_hash);
                 self.epoch.set(epoch);
             }
             ProcessRemovedEpoch(epoch) => {
@@ -858,7 +877,7 @@ where
         let committees = self
             .context()
             .extra()
-            .get_committees(min_active_epoch..=max_active_epoch)
+            .get_committee_hashes(min_active_epoch..=max_active_epoch)
             .await?;
         let admin_chain_id = self
             .context()
