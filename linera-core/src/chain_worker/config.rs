@@ -50,6 +50,11 @@ pub struct ChainWorkerConfig {
     /// state is detected to be corrupted — but only if the given duration has
     /// elapsed since block 0 was last executed (to prevent reset loops).
     pub reset_on_corrupted_chain_state: Option<Duration>,
+    /// Optional whitelist restricting which chains are eligible for the
+    /// `allow_revert_confirm` and `reset_on_corrupted_chain_state` recovery
+    /// mechanisms. If `None`, every chain is eligible (subject to the
+    /// respective feature flag). If `Some`, only chains in the set are.
+    pub recovery_whitelist: Option<HashSet<ChainId>>,
 }
 
 impl ChainWorkerConfig {
@@ -63,6 +68,14 @@ impl ChainWorkerConfig {
     /// Gets a reference to the [`ValidatorSecretKey`], if available.
     pub fn key_pair(&self) -> Option<&ValidatorSecretKey> {
         self.key_pair.as_ref().map(Arc::as_ref)
+    }
+
+    /// Returns whether `chain_id` is allowed to attempt the `RevertConfirm` and
+    /// corrupted-state-reset recovery mechanisms.
+    pub(crate) fn recovery_allowed_for(&self, chain_id: &ChainId) -> bool {
+        self.recovery_whitelist
+            .as_ref()
+            .is_none_or(|set| set.contains(chain_id))
     }
 }
 
@@ -84,6 +97,7 @@ impl Default for ChainWorkerConfig {
             cross_chain_message_chunk_limit: usize::MAX,
             allow_revert_confirm: false,
             reset_on_corrupted_chain_state: None,
+            recovery_whitelist: None,
         }
     }
 }
