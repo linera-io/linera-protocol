@@ -102,7 +102,10 @@ mod metrics {
         exponential_bucket_interval, register_histogram, register_histogram_vec,
         register_int_counter, register_int_counter_vec,
     };
-    use linera_chain::{data_types::MessageAction, types::ConfirmedBlockCertificate};
+    use linera_chain::{
+        data_types::MessageAction,
+        types::{CertificateValue, ConfirmedBlockCertificate, GenericCertificate},
+    };
     use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
 
     pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -180,6 +183,45 @@ mod metrics {
             "Number of chain info queries processed",
         )
     });
+
+    pub static CERTIFICATE_BYTES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "certificate_bytes",
+            "Serialized size of certificates processed by the worker, in bytes. \
+             Labelled by certificate kind so confirmed/validated/timeout can be separated.",
+            &["kind"],
+            exponential_bucket_interval(128.0, 262_144.0),
+        )
+    });
+
+    pub static CERTIFICATE_SIGNER_COUNT: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "certificate_signer_count",
+            "Number of validator signatures attached to each processed certificate. \
+             Combined with certificate_bytes, lets the signature component be isolated \
+             from the payload component.",
+            &["kind"],
+            exponential_bucket_interval(1.0, 100.0),
+        )
+    });
+
+    /// Observes the serialized size and signer count of a certificate at worker ingress.
+    /// Serialized size is computed via `bcs::serialized_size`, which walks the value
+    /// without allocating an intermediate buffer.
+    pub fn observe_certificate<T>(cert: &GenericCertificate<T>, kind: &'static str)
+    where
+        T: CertificateValue,
+        GenericCertificate<T>: serde::Serialize,
+    {
+        if let Ok(size) = bcs::serialized_size(cert) {
+            CERTIFICATE_BYTES
+                .with_label_values(&[kind])
+                .observe(size as f64);
+        }
+        CERTIFICATE_SIGNER_COUNT
+            .with_label_values(&[kind])
+            .observe(cert.signatures().len() as f64);
+    }
 
     /// Holds metrics data extracted from a confirmed block certificate.
     pub struct MetricsData {
@@ -1256,6 +1298,8 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname(), certificate);
         #[cfg(with_metrics)]
+        metrics::observe_certificate(&certificate, "confirmed");
+        #[cfg(with_metrics)]
         let metrics_data = metrics::MetricsData::new(&certificate);
 
         #[allow(unused_variables)]
@@ -1281,6 +1325,8 @@ where
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname(), certificate);
+        #[cfg(with_metrics)]
+        metrics::observe_certificate(&certificate, "validated");
 
         #[cfg(with_metrics)]
         let round = certificate.round;
@@ -1311,6 +1357,8 @@ where
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname(), certificate);
+        #[cfg(with_metrics)]
+        metrics::observe_certificate(&certificate, "timeout");
         self.process_timeout(certificate).await
     }
 
