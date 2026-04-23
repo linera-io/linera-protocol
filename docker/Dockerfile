@@ -27,8 +27,14 @@ ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/x86_64-linux-gnu"
 # ── Stage 0: chef base (rust + cargo-chef + system deps) ──
 FROM rust:1.86-slim-bookworm AS chef
 
+# `rm -f /etc/apt/apt.conf.d/docker-clean`: Debian's slim images ship that file
+# with `APT::Keep-Downloaded-Packages "false";`, which makes apt delete
+# downloaded `.deb` files right after install. That defeats the cache mount on
+# `/var/cache/apt` — every rebuild re-downloads. Remove the config so packages
+# stay in the cache mount across builds.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
     apt-get update && apt-get install --no-install-recommends -y \
     pkg-config \
     protobuf-compiler \
