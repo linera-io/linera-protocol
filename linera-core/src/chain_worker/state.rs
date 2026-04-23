@@ -1067,7 +1067,7 @@ where
         if let Some(prev) = previous_height {
             if prev >= next_height_to_receive {
                 let chain_id = self.chain_id();
-                if self.config.allow_revert_confirm {
+                if self.config.allow_revert_confirm && self.config.recovery_allowed_for(&chain_id) {
                     warn!(
                         %chain_id,
                         "Inbox gap detected from {origin}: \
@@ -1271,6 +1271,9 @@ where
             return Ok(None);
         };
         let chain_id = self.chain_id();
+        if !self.config.recovery_allowed_for(&chain_id) {
+            return Ok(None);
+        }
         let local_time = self.storage.clock().current_time();
         let block_zero_time = *self.chain.block_zero_executed_at.get();
         let elapsed = local_time.duration_since(block_zero_time);

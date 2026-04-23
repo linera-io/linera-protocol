@@ -4735,7 +4735,45 @@ where
         );
     }
 
-    // Step 5: Now create a worker WITH recovery enabled and process the same block.
+    // Step 4b: Verify that with recovery enabled but a whitelist that EXCLUDES
+    // `chain_id`, no reset happens — retrying still fails with the same error.
+    {
+        let worker_not_whitelisted = WorkerState::new(
+            storage.clone(),
+            ChainWorkerConfig {
+                nickname: "Whitelist-excludes worker".to_string(),
+                allow_inactive_chains: true,
+                allow_messages_from_deprecated_epochs: true,
+                reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
+                recovery_whitelist: Some(HashSet::from([target_id])),
+                block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+                ..ChainWorkerConfig::default()
+            }
+            .with_key_pair(Some(
+                env.worker().chain_worker_config.key_pair().unwrap().copy(),
+            )),
+            None,
+        );
+
+        assert_matches!(
+            worker_not_whitelisted
+                .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+                .await,
+            Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
+        );
+        // Retry: without a reset there is no way to recover, so the same error repeats.
+        // The retry serializes behind the background reset task's write lock, so by the
+        // time it starts the reset task has already decided to skip.
+        assert_matches!(
+            worker_not_whitelisted
+                .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+                .await,
+            Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
+        );
+    }
+
+    // Step 5: Now create a worker WITH recovery enabled and a whitelist that
+    // includes `chain_id`, and process the same block.
     let worker_with_recovery = WorkerState::new(
         storage.clone(),
         ChainWorkerConfig {
@@ -4743,6 +4781,7 @@ where
             allow_inactive_chains: true,
             allow_messages_from_deprecated_epochs: true,
             reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
+            recovery_whitelist: Some(HashSet::from([chain_id])),
             block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
             ..ChainWorkerConfig::default()
         }
