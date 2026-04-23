@@ -9,6 +9,14 @@ import OutgoingMessages from './OutgoingMessages.vue'
 
 const props = defineProps<{block: ConfirmedBlock, title: string}>()
 
+function displayValue(v: any): string {
+  if (typeof v === 'bigint') return v.toString()
+  if (typeof v === 'object' && v !== null) {
+    return JSON.stringify(v, (_k, val) => typeof val === 'bigint' ? val.toString() : val)
+  }
+  return String(v)
+}
+
 const operations = computed(() => getOperations(props.block.block.body.transactionMetadata))
 const incomingBundles = computed(() => getIncomingBundles(props.block.block.body.transactionMetadata))
 const transactions = computed(() => props.block.block.body.transactionMetadata || [])
@@ -128,7 +136,7 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
               <div class="card">
                 <div class="card-header">Previous message from chain {{ id }} was sent at block</div>
                 <div class="card-body">
-                  <a @click="$root.route('block', [['block', hash]])" class="btn btn-link">{{ hash }}</a>
+                  <a @click="$root.route('block', [['block', displayValue(hash)]])" class="btn btn-link">{{ displayValue(hash) }}</a>
                 </div>
               </div>
             </li>
