@@ -3264,7 +3264,9 @@ where
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let mut storage_builder = MemoryStorageBuilder::default();
     let env = TestEnvironment::new(&mut storage_builder, true, false).await?;
-    let committees = BTreeMap::from([(Epoch::from(1), env.committee().clone())]);
+    // CrossChainUpdateHelper only checks `contains_key` on this map, so a dummy hash
+    // per known epoch is enough.
+    let committees = BTreeMap::from([(Epoch::from(1), CryptoHash::test_hash("epoch 1"))]);
 
     let chain_0 = env.admin_description.clone();
     let chain_1 = dummy_chain_description(1);
@@ -4126,12 +4128,18 @@ where
         .handle_chain_info_query(query.clone())
         .await?;
     let manager = response.info.manager;
-    let expected_key = response
+    let committee_hash = *response
         .info
         .requested_committees
         .unwrap()
         .get(&response.info.epoch)
-        .unwrap()
+        .unwrap();
+    let committee = env
+        .executing_worker()
+        .storage
+        .get_or_load_committee_by_hash(committee_hash)
+        .await?;
+    let expected_key = committee
         .validators
         .get(&env.executing_worker().public_key())
         .unwrap()

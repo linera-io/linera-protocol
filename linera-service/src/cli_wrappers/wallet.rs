@@ -32,7 +32,6 @@ use linera_base::{
 };
 use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_core::worker::Notification;
-use linera_execution::committee::Committee;
 use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_command_opts::to_args;
@@ -1652,7 +1651,10 @@ impl NodeService {
         Ok(module_id.with_abi())
     }
 
-    pub async fn query_committees(&self, chain_id: &ChainId) -> Result<BTreeMap<Epoch, Committee>> {
+    pub async fn query_committees(
+        &self,
+        chain_id: &ChainId,
+    ) -> Result<BTreeMap<Epoch, CryptoHash>> {
         let query = format!(
             "query {{ chain(chainId:\"{chain_id}\") {{
                 executionState {{ system {{ committees }} }}

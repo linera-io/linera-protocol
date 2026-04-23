@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use linera_base::{
-    crypto::ValidatorPublicKey,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ChainDescription, Epoch, Timestamp},
     doc_scalar,
     identifiers::{AccountOwner, ChainId},
@@ -81,7 +81,7 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     }
 
     #[graphql(derived(name = "committees"))]
-    async fn _committees(&self) -> &BTreeMap<Epoch, Committee> {
+    async fn _committees(&self) -> &BTreeMap<Epoch, CryptoHash> {
         self.committees.get()
     }
 

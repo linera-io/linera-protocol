@@ -372,7 +372,7 @@ pub async fn run(
     );
     let admin_client = ctx.make_chain_client(admin_chain_id).await?;
     admin_client
-        .synchronize_chain_state_from_committee(committee)
+        .synchronize_chain_state_from_committee(Arc::new(committee))
         .await?;
     tracing::info!("Admin chain synced");
 

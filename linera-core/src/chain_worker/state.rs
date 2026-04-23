@@ -36,7 +36,7 @@ use linera_chain::{
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
-    Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, Storage};
@@ -582,8 +582,8 @@ where
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.initialize_and_save_if_needed().await?;
-        let (chain_epoch, committee) = self.chain.current_committee()?;
-        certificate.check(committee)?;
+        let (chain_epoch, committee) = self.chain.current_committee().await?;
+        certificate.check(&committee)?;
         if self
             .chain
             .tip_state
@@ -684,9 +684,9 @@ where
                 found_block_height: header.height,
             }
         );
-        let (epoch, committee) = self.chain.current_committee()?;
+        let (epoch, committee) = self.chain.current_committee().await?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
-        certificate.check(committee)?;
+        certificate.check(&committee)?;
         let already_committed_block = self.chain.tip_state.get().already_validated_block(height)?;
         let should_skip_validated_block = || {
             self.chain
@@ -766,37 +766,38 @@ where
             ));
         }
 
-        // We haven't processed the block - verify the certificate first
+        // We haven't processed the block - verify the certificate first.
+        // Resolve the committee hash from the admin chain's epoch event stream; the
+        // chain-local `committees` map is just a cache of the same hashes for trusted
+        // epochs, so we can skip it and always hit the event stream.
         let epoch = block.header.epoch;
-        // Get the committee for the block's epoch from storage.
-        if let Some(committee) = self
+        let hash = self
             .chain
             .execution_state
-            .system
-            .committees
-            .get()
-            .get(&epoch)
-        {
-            certificate.check(committee)?;
-        } else {
-            let committee = self
-                .chain
-                .execution_state
-                .context()
-                .extra()
-                .get_committees(epoch..=epoch)
-                .await
-                .map_err(|error| {
-                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-                })?
-                .remove(&epoch)
-                .ok_or_else(|| {
-                    ChainError::InternalError(format!(
-                        "missing committee for epoch {epoch}; this is a bug"
-                    ))
-                })?;
-            certificate.check(&committee)?;
-        }
+            .context()
+            .extra()
+            .get_committee_hashes(epoch..=epoch)
+            .await
+            .map_err(|error| {
+                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+            })?
+            .remove(&epoch)
+            .ok_or_else(|| {
+                ChainError::InternalError(format!(
+                    "missing committee for epoch {epoch}; this is a bug"
+                ))
+            })?;
+        let committee = self
+            .chain
+            .execution_state
+            .context()
+            .extra()
+            .get_or_load_committee_by_hash(hash)
+            .await
+            .map_err(|error| {
+                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+            })?;
+        certificate.check(&committee)?;
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
         // we can take note of it, so that if any are missing, we will accept them when the client
@@ -870,7 +871,7 @@ where
         // properly chained. Verify that the chain is active and that the epoch we used for
         // verifying the certificate is actually the active one on the chain.
         self.initialize_and_save_if_needed().await?;
-        let (epoch, _) = self.chain.current_committee()?;
+        let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
         let published_blobs = block
@@ -1600,7 +1601,7 @@ where
             .await?
         {
             if !pending_blobs.validated.get() {
-                let (_, committee) = self.chain.current_committee()?;
+                let (_, committee) = self.chain.current_committee().await?;
                 let policy = committee.policy();
                 policy
                     .check_blob_size(blob.content())
@@ -1743,7 +1744,7 @@ where
     ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
-        let (_, committee) = self.chain.current_committee()?;
+        let (_, committee) = self.chain.current_committee().await?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
         self.chain
@@ -1794,7 +1795,7 @@ where
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;
         // Check the epoch.
-        let (epoch, committee) = chain.current_committee()?;
+        let (epoch, committee) = chain.current_committee().await?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
@@ -1813,7 +1814,7 @@ where
             }
             Some(OriginalProposal::Regular { certificate }) => {
                 // Verify that this block has been validated by a quorum before.
-                certificate.check(committee)?;
+                certificate.check(&committee)?;
             }
             Some(OriginalProposal::Fast(signature)) => {
                 let original_proposal = BlockProposal {
@@ -2169,7 +2170,7 @@ fn check_block_epoch(
 pub(crate) struct CrossChainUpdateHelper<'a> {
     pub(crate) allow_messages_from_deprecated_epochs: bool,
     pub(crate) current_epoch: Epoch,
-    pub(crate) committees: &'a BTreeMap<Epoch, Committee>,
+    pub(crate) committees: &'a BTreeMap<Epoch, CryptoHash>,
 }
 
 impl<'a> CrossChainUpdateHelper<'a> {
