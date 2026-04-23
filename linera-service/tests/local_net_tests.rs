@@ -1163,15 +1163,8 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     let (mut net, client) = config.instantiate().await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
-    // Change the ownership so that the blocks inserted are not
-    // fast blocks. Fast blocks are not allowed for the oracles.
-    let owner1 = {
-        let wallet = client.load_wallet()?;
-        let user_chain = wallet.get(chain).unwrap();
-        *user_chain.owner.as_ref().unwrap()
-    };
-
-    client.change_ownership(chain, vec![], vec![owner1]).await?;
+    // Genesis chains use `ChainOwnership::single()` (regular owner, no super owner),
+    // so there are no fast blocks — oracles work without any ownership change.
     let (contract, service) = client.build_example("ethereum-tracker").await?;
 
     tracing::info!("Publishing Ethereum tracker contract");

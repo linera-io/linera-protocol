@@ -282,6 +282,14 @@ pub enum ExecutionError {
     MissingRuntimeResponse,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(ApplicationId),
+    #[error("Only a super owner can change super owners, and only if the chain already has super owners")]
+    UnauthorizedChangeSuperOwners,
+    #[error("Only a super owner can change the set of owners")]
+    UnauthorizedChangeOwners,
+    #[error("Only a super owner can close the chain")]
+    UnauthorizedCloseChain,
+    #[error("Only a super owner can change the application permissions")]
+    UnauthorizedChangeApplicationPermissions,
     #[error("Failed to make network reqwest: {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered I/O error: {0}")]
@@ -389,6 +397,10 @@ impl ExecutionError {
             | ExecutionError::BlockTooLarge
             | ExecutionError::HttpResponseSizeLimitExceeded { .. }
             | ExecutionError::UnauthorizedApplication(_)
+            | ExecutionError::UnauthorizedChangeSuperOwners
+            | ExecutionError::UnauthorizedChangeOwners
+            | ExecutionError::UnauthorizedCloseChain
+            | ExecutionError::UnauthorizedChangeApplicationPermissions
             | ExecutionError::UnexpectedOracleResponse
             | ExecutionError::JsonError(_)
             | ExecutionError::BcsError(_)

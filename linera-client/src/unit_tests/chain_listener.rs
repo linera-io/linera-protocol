@@ -87,7 +87,7 @@ impl chain_listener::ClientContext for ClientContext {
 /// timeout certificates until it becomes the leader and can process the inbox.
 #[test_log::test(tokio::test)]
 async fn test_chain_listener() -> anyhow::Result<()> {
-    // Create two chains.
+    // Create three chains: admin (regular), chain under test (super owner), sender (regular).
     let mut signer = InMemorySigner::new(Some(42));
     let key_pair = signer.generate_new();
     let owner: AccountOwner = key_pair.into();
@@ -95,15 +95,16 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
-    let client0 = builder.add_root_chain(0, Amount::ONE).await?;
-    let chain_id0 = client0.chain_id();
-    let client1 = builder.add_root_chain(1, Amount::ONE).await?;
-    // Start a chain listener for chain 0 with a new key.
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let mut client1 = builder.add_root_super_owner_chain(1, Amount::ONE).await?;
+    let chain_id1 = client1.chain_id();
+    let client2 = builder.add_root_chain(2, Amount::ONE).await?;
+    // Start a chain listener for chain 1 with a new key.
     let genesis_config = GenesisConfig::new_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
-    let epoch0 = client0.chain_info().await?.epoch;
     let epoch1 = client1.chain_info().await?.epoch;
+    let epoch2 = client2.chain_info().await?.epoch;
 
     let mut context = ClientContext {
         client: Arc::new(Client::new(
@@ -115,8 +116,8 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             },
             admin_chain_id,
             false,
-            [(chain_id0, ListeningMode::FullChain)],
-            format!("Client node for {:.8}", chain_id0),
+            [(chain_id1, ListeningMode::FullChain)],
+            format!("Client node for {:.8}", chain_id1),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
             HashSet::new(),
@@ -127,18 +128,18 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         )),
     };
     context
-        .update_wallet_for_new_chain(chain_id0, Some(owner), clock.current_time(), epoch0)
+        .update_wallet_for_new_chain(chain_id1, Some(owner), clock.current_time(), epoch1)
         .await?;
     context
         .update_wallet_for_new_chain(
-            client1.chain_id(),
-            client1.preferred_owner(),
+            client2.chain_id(),
+            client2.preferred_owner(),
             clock.current_time(),
-            epoch1,
+            epoch2,
         )
         .await?;
 
-    // Transfer ownership of chain 0 to the chain listener and some other key. The listener will
+    // Transfer ownership of chain 1 to the chain listener and some other key. The listener will
     // be leader in ~10% of the rounds.
     let owners = [(owner, 1), (AccountPublicKey::test_key(1).into(), 9)];
     let timeout_config = TimeoutConfig {
@@ -146,7 +147,9 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         timeout_increment: TimeDelta::ZERO,
         ..TimeoutConfig::default()
     };
-    client0
+    // Enable fast blocks so the super owner can propose the ownership change.
+    client1.options_mut().allow_fast_blocks = true;
+    client1
         .change_ownership(ChainOwnership::multiple(owners, 0, timeout_config))
         .await?;
 
@@ -166,15 +169,15 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     .unwrap();
 
     let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
-    // Transfer one token to chain 0. The listener should eventually become leader and receive
+    // Transfer one token to chain 1. The listener should eventually become leader and receive
     // the message.
-    let recipient0 = Account::chain(chain_id0);
-    client1
-        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient0)
+    let recipient1 = Account::chain(chain_id1);
+    client2
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient1)
         .await?;
     for i in 0.. {
-        client0.synchronize_from_validators().boxed().await?;
-        let balance = client0.local_balance().await?;
+        client1.synchronize_from_validators().boxed().await?;
+        let balance = client1.local_balance().await?;
         if balance == Amount::from_tokens(2) {
             break;
         }
@@ -544,11 +547,13 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
 
-    // Chain 0: the chain under test (owned by both autosigner and dynamic).
-    let client0 = builder.add_root_chain(0, Amount::ONE).await?;
-    let chain_id0 = client0.chain_id();
-    // Chain 1: sender of incoming messages.
-    let client1 = builder.add_root_chain(1, Amount::ONE).await?;
+    // Chain 0: admin chain (regular owner).
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    // Chain 1: the chain under test (super owner, will change ownership).
+    let mut client1 = builder.add_root_super_owner_chain(1, Amount::ONE).await?;
+    let chain_id1 = client1.chain_id();
+    // Chain 2: sender of incoming messages.
+    let client2 = builder.add_root_chain(2, Amount::ONE).await?;
 
     // Transfer ownership to both the autosigner and dynamic owners.
     // Use multi_leader_rounds > 0 so both owners can propose without waiting for leadership.
@@ -557,7 +562,9 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         timeout_increment: TimeDelta::ZERO,
         ..TimeoutConfig::default()
     };
-    client0
+    // Enable fast blocks so the super owner can propose the ownership change.
+    client1.options_mut().allow_fast_blocks = true;
+    client1
         .change_ownership(ChainOwnership::multiple(
             [(autosigner_owner, 1), (dynamic_owner, 1)],
             100,
@@ -579,8 +586,8 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             },
             admin_chain_id,
             false,
-            [(chain_id0, ListeningMode::FullChain)],
-            format!("Client node for {:.8}", chain_id0),
+            [(chain_id1, ListeningMode::FullChain)],
+            format!("Client node for {:.8}", chain_id1),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
             HashSet::new(),
@@ -592,22 +599,22 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
     };
 
     // Set wallet owner to the autosigner (as wallet.setOwner() would in the web client).
-    let chain0_info = client0.chain_info().await?;
+    let chain1_info = client1.chain_info().await?;
     context.wallet().insert(
-        chain_id0,
+        chain_id1,
         wallet::Chain {
             owner: Some(autosigner_owner),
-            block_hash: chain0_info.block_hash,
-            next_block_height: chain0_info.next_block_height,
+            block_hash: chain1_info.block_hash,
+            next_block_height: chain1_info.next_block_height,
             timestamp: clock.current_time(),
             pending_proposal: None,
-            epoch: Some(chain0_info.epoch),
+            epoch: Some(chain1_info.epoch),
         },
     );
     context
         .update_wallet_for_new_chain(
-            client1.chain_id(),
-            client1.preferred_owner(),
+            client2.chain_id(),
+            client2.preferred_owner(),
             clock.current_time(),
             Epoch::ZERO,
         )
@@ -616,7 +623,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
     // Simulate the web client's client.chain({owner: dynamicAddress}) followed by an
     // operation (e.g. addOwner). This calls update_wallet, which with the bug overwrites
     // the wallet owner with the ChainClient's preferred_owner.
-    let mut chain_client = context.make_chain_client(chain_id0).await?;
+    let mut chain_client = context.make_chain_client(chain_id1).await?;
     chain_client.set_preferred_owner(dynamic_owner);
     context.update_wallet(&chain_client).await?;
 
@@ -639,17 +646,17 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
 
     let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
-    // Send a message from chain 1 to chain 0. The listener should process the inbox.
-    let recipient0 = Account::chain(chain_id0);
-    client1
-        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient0)
+    // Send a message from chain 2 to chain 1. The listener should process the inbox.
+    let recipient1 = Account::chain(chain_id1);
+    client2
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient1)
         .await?;
 
     // Wait for the listener to process the inbox (creating a block after the
     // change_ownership block).
     for i in 0.. {
-        client0.synchronize_from_validators().boxed().await?;
-        let balance = client0.local_balance().await?;
+        client1.synchronize_from_validators().boxed().await?;
+        let balance = client1.local_balance().await?;
         if balance == Amount::from_tokens(2) {
             break;
         }
@@ -667,7 +674,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
     // The inbox-processing block is at height 1 (created by the listener).
     // Verify the listener's block was signed by the autosigner, not the dynamic signer.
     let certs = storage
-        .read_certificates_by_heights(chain_id0, &[BlockHeight::from(1)])
+        .read_certificates_by_heights(chain_id1, &[BlockHeight::from(1)])
         .await?;
     let inbox_cert = certs[0]
         .as_ref()
@@ -685,12 +692,12 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         .transfer(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client1.chain_id()),
+            Account::chain(client2.chain_id()),
         )
         .await?;
 
     let certs = storage
-        .read_certificates_by_heights(chain_id0, &[BlockHeight::from(2)])
+        .read_certificates_by_heights(chain_id1, &[BlockHeight::from(2)])
         .await?;
     let user_cert = certs[0]
         .as_ref()

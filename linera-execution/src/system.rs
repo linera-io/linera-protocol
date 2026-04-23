@@ -17,13 +17,14 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, Timestamp,
+        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, TimeDelta,
+        Timestamp,
     },
     ensure, hex_debug,
     identifiers::{
         Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, OwnerSpender, StreamId,
     },
-    ownership::{ChainOwnership, TimeoutConfig},
+    ownership::ChainOwnership,
 };
 use linera_views::{
     context::Context,
@@ -201,13 +202,11 @@ pub enum SystemOperation {
     /// Creates (or activates) a new chain.
     /// This will automatically subscribe to the future committees created by `admin_chain_id`.
     OpenChain(OpenChainConfig),
-    /// Closes the chain.
+    /// Closes the chain. Only a super owner can execute this operation.
     CloseChain,
-    /// Changes the ownership of the chain.
-    ChangeOwnership {
-        /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
-        #[debug(skip_if = Vec::is_empty)]
-        super_owners: Vec<AccountOwner>,
+    /// Changes the regular owners and non-fast-round settings of the chain.
+    /// Only a super owner can execute this operation.
+    ChangeOwners {
         /// The regular owners, with their weights that determine how often they are round leader.
         #[debug(skip_if = Vec::is_empty)]
         owners: Vec<(AccountOwner, u64)>,
@@ -220,10 +219,25 @@ pub enum SystemOperation {
         /// This should only be `true` on chains with restrictive application permissions and an
         /// application-based mechanism to select block proposers.
         open_multi_leader_rounds: bool,
-        /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
-        timeout_config: TimeoutConfig,
+        /// The timeout configuration (excluding fast round duration): how long multi-leader and
+        /// single-leader rounds last.
+        base_timeout: TimeDelta,
+        /// The duration by which the timeout increases after each single-leader round.
+        timeout_increment: TimeDelta,
+        /// The age of an incoming tracked or protected message after which the validators start
+        /// transitioning the chain to fallback mode.
+        fallback_duration: TimeDelta,
+    },
+    /// Changes the super owners and fast round duration of the chain.
+    /// Only a super owner can execute this operation. Rejected if the chain has no super owners.
+    ChangeSuperOwners {
+        /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
+        super_owners: Vec<AccountOwner>,
+        /// The duration of the fast round.
+        fast_round_duration: Option<TimeDelta>,
     },
     /// Changes the application permissions configuration on this chain.
+    /// Only a super owner can execute this operation.
     ChangeApplicationPermissions(ApplicationPermissions),
     /// Publishes a new application module.
     PublishModule { module_id: ModuleId },
@@ -360,27 +374,63 @@ where
                 #[cfg(with_metrics)]
                 metrics::OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
             }
-            ChangeOwnership {
-                super_owners,
+            ChangeOwners {
                 owners,
                 first_leader,
                 multi_leader_rounds,
                 open_multi_leader_rounds,
-                timeout_config,
+                base_timeout,
+                timeout_increment,
+                fallback_duration,
             } => {
-                self.ownership.set(ChainOwnership {
-                    super_owners: super_owners.into_iter().collect(),
-                    owners: owners.into_iter().collect(),
-                    first_leader,
-                    multi_leader_rounds,
-                    open_multi_leader_rounds,
-                    timeout_config,
-                });
+                let current_ownership = self.ownership.get().await?;
+                match context.authenticated_owner {
+                    Some(owner) if current_ownership.super_owners.contains(&owner) => {}
+                    _ => return Err(ExecutionError::UnauthorizedChangeOwners),
+                }
+                let mut ownership = current_ownership.clone();
+                ownership.owners = owners.into_iter().collect();
+                ownership.first_leader = first_leader;
+                ownership.multi_leader_rounds = multi_leader_rounds;
+                ownership.open_multi_leader_rounds = open_multi_leader_rounds;
+                ownership.timeout_config.base_timeout = base_timeout;
+                ownership.timeout_config.timeout_increment = timeout_increment;
+                ownership.timeout_config.fallback_duration = fallback_duration;
+                self.ownership.set(ownership);
+            }
+            ChangeSuperOwners {
+                super_owners,
+                fast_round_duration,
+            } => {
+                let current_ownership = self.ownership.get().await?;
+                if current_ownership.super_owners.is_empty() {
+                    return Err(ExecutionError::UnauthorizedChangeSuperOwners);
+                }
+                match context.authenticated_owner {
+                    Some(owner) if current_ownership.super_owners.contains(&owner) => {}
+                    _ => return Err(ExecutionError::UnauthorizedChangeSuperOwners),
+                }
+                let mut ownership = current_ownership.clone();
+                ownership.super_owners = super_owners.into_iter().collect();
+                ownership.timeout_config.fast_round_duration = fast_round_duration;
+                self.ownership.set(ownership);
             }
             ChangeApplicationPermissions(application_permissions) => {
+                let current_ownership = self.ownership.get().await?;
+                match context.authenticated_owner {
+                    Some(owner) if current_ownership.super_owners.contains(&owner) => {}
+                    _ => return Err(ExecutionError::UnauthorizedChangeApplicationPermissions),
+                }
                 self.application_permissions.set(application_permissions);
             }
-            CloseChain => self.close_chain(),
+            CloseChain => {
+                let current_ownership = self.ownership.get().await?;
+                match context.authenticated_owner {
+                    Some(owner) if current_ownership.super_owners.contains(&owner) => {}
+                    _ => return Err(ExecutionError::UnauthorizedCloseChain),
+                }
+                self.close_chain()
+            }
             Transfer {
                 owner,
                 amount,

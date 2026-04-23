@@ -99,7 +99,7 @@ impl TestValidator {
         let key_pair = AccountSecretKey::generate();
 
         let new_chain_config = InitialChainConfig {
-            ownership: ChainOwnership::single(key_pair.public().into()),
+            ownership: ChainOwnership::single_super(key_pair.public().into()),
             min_active_epoch: epoch,
             max_active_epoch: epoch,
             epoch,
@@ -304,6 +304,23 @@ impl TestValidator {
         Box::pin(self.new_chain_with_keypair(key_pair)).await
     }
 
+    /// Creates a new microchain whose owner is a super owner, and returns the [`ActiveChain`]
+    /// that can be used to add blocks to it.
+    pub async fn new_super_owner_chain(&self) -> ActiveChain {
+        let key_pair = AccountSecretKey::generate();
+        let description = Box::pin(self.request_new_chain_from_admin_chain_with_ownership(
+            ChainOwnership::single_super(key_pair.public().into()),
+        ))
+        .await;
+        let chain = ActiveChain::new(key_pair, description.clone(), self.clone());
+
+        Box::pin(chain.handle_received_messages()).await;
+
+        self.chains.pin().insert(description.id(), chain.clone());
+
+        chain
+    }
+
     /// Adds an existing [`ActiveChain`].
     pub fn add_chain(&self, chain: ActiveChain) {
         self.chains.pin().insert(chain.id(), chain);
@@ -313,6 +330,17 @@ impl TestValidator {
     ///
     /// Returns the [`ChainDescription`] of the new chain.
     async fn request_new_chain_from_admin_chain(&self, owner: AccountOwner) -> ChainDescription {
+        self.request_new_chain_from_admin_chain_with_ownership(ChainOwnership::single(owner))
+            .await
+    }
+
+    /// Adds a block to the admin chain to create a new chain with the given ownership.
+    ///
+    /// Returns the [`ChainDescription`] of the new chain.
+    async fn request_new_chain_from_admin_chain_with_ownership(
+        &self,
+        ownership: ChainOwnership,
+    ) -> ChainDescription {
         let admin_chain_id = self.admin_chain_id;
         let pinned = self.chains.pin();
         let admin_chain = pinned
@@ -320,7 +348,7 @@ impl TestValidator {
             .expect("Admin chain should be created when the `TestValidator` is constructed");
 
         let open_chain_config = OpenChainConfig {
-            ownership: ChainOwnership::single(owner),
+            ownership,
             balance: Amount::from_tokens(10),
             application_permissions: ApplicationPermissions::default(),
         };

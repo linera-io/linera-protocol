@@ -231,12 +231,24 @@ where
         system_operation: SystemOperation,
         chain_id: ChainId,
     ) -> Result<CryptoHash, Error> {
+        self.execute_system_operations(vec![system_operation], chain_id)
+            .await
+    }
+
+    async fn execute_system_operations(
+        &self,
+        system_operations: Vec<SystemOperation>,
+        chain_id: ChainId,
+    ) -> Result<CryptoHash, Error> {
         let certificate = self
             .apply_client_command(&chain_id, move |client| {
-                let operation = Operation::system(system_operation.clone());
+                let operations: Vec<_> = system_operations
+                    .iter()
+                    .map(|op| Operation::system(op.clone()))
+                    .collect();
                 async move {
                     let result = client
-                        .execute_operation(operation)
+                        .execute_operations(operations, vec![])
                         .await
                         .map_err(Error::from);
                     (result, client)
@@ -533,24 +545,40 @@ where
         Ok(maybe_cert.as_ref().map(GenericCertificate::hash))
     }
 
-    /// Changes the chain to a single-owner chain
+    /// Changes the chain to a single regular owner.
     async fn change_owner(
         &self,
         #[graphql(desc = "The chain whose ownership changes")] chain_id: ChainId,
         #[graphql(desc = "The new single owner of the chain")] new_owner: AccountOwner,
     ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::ChangeOwnership {
-            super_owners: vec![new_owner],
-            owners: Vec::new(),
-            first_leader: None,
-            multi_leader_rounds: 2,
-            open_multi_leader_rounds: false,
-            timeout_config: TimeoutConfig::default(),
-        };
-        self.execute_system_operation(operation, chain_id).await
+        let certificate = self
+            .apply_client_command(&chain_id, move |client| async move {
+                let result = client.change_owner(new_owner).await.map_err(Error::from);
+                (result, client)
+            })
+            .await?;
+        Ok(certificate.hash())
     }
 
-    /// Changes the ownership of the chain
+    /// Changes the chain to a single super owner. The caller must be a current super owner.
+    async fn change_super_owner(
+        &self,
+        #[graphql(desc = "The chain whose super ownership changes")] chain_id: ChainId,
+        #[graphql(desc = "The new single super owner of the chain")] new_super_owner: AccountOwner,
+    ) -> Result<CryptoHash, Error> {
+        let certificate = self
+            .apply_client_command(&chain_id, move |client| async move {
+                let result = client
+                    .transfer_super_ownership(new_super_owner)
+                    .await
+                    .map_err(Error::from);
+                (result, client)
+            })
+            .await?;
+        Ok(certificate.hash())
+    }
+
+    /// Changes the regular owners of the chain
     #[expect(clippy::too_many_arguments)]
     async fn change_multiple_owners(
         &self,
@@ -565,8 +593,6 @@ where
         #[graphql(desc = "The leader of the first single-leader round. \
                           If not set, this is random like other rounds.")]
         first_leader: Option<AccountOwner>,
-        #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
-        fast_round_ms: Option<u64>,
         #[graphql(
             desc = "The duration of the first single-leader and all multi-leader rounds",
             default = 10_000
@@ -585,18 +611,14 @@ where
         )]
         fallback_duration_ms: u64,
     ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::ChangeOwnership {
-            super_owners: Vec::new(),
+        let operation = SystemOperation::ChangeOwners {
             owners: new_owners.into_iter().zip(new_weights).collect(),
             first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
-            timeout_config: TimeoutConfig {
-                fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
-                base_timeout: TimeDelta::from_millis(base_timeout_ms),
-                timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
-                fallback_duration: TimeDelta::from_millis(fallback_duration_ms),
-            },
+            base_timeout: TimeDelta::from_millis(base_timeout_ms),
+            timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
+            fallback_duration: TimeDelta::from_millis(fallback_duration_ms),
         };
         self.execute_system_operation(operation, chain_id).await
     }

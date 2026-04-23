@@ -73,7 +73,7 @@ async fn single_transaction() {
     let owner_a = AccountOwner::from(user_chain_a.public_key());
     let mut user_chain_b = validator.new_chain().await;
     let owner_b = AccountOwner::from(user_chain_b.public_key());
-    let mut matching_chain = validator.new_chain().await;
+    let mut matching_chain = validator.new_super_owner_chain().await;
     let admin_account = AccountOwner::from(matching_chain.public_key());
 
     let fungible_module_id = user_chain_a

@@ -998,6 +998,26 @@ impl ClientWrapper {
         balance: Amount,
         base_timeout_ms: u64,
     ) -> Result<ChainId> {
+        self.open_multi_owner_chain_with_manage_chain(
+            from,
+            owners,
+            multi_leader_rounds,
+            balance,
+            base_timeout_ms,
+            vec![],
+        )
+        .await
+    }
+
+    pub async fn open_multi_owner_chain_with_manage_chain(
+        &self,
+        from: ChainId,
+        owners: BTreeMap<AccountOwner, u64>,
+        multi_leader_rounds: u32,
+        balance: Amount,
+        base_timeout_ms: u64,
+        manage_chain: Vec<ApplicationId>,
+    ) -> Result<ChainId> {
         let mut command = self.command().await?;
         command
             .arg("open-multi-owner-chain")
@@ -1008,6 +1028,11 @@ impl ClientWrapper {
         command
             .args(["--multi-leader-rounds", &multi_leader_rounds.to_string()])
             .args(["--initial-balance", &balance.to_string()]);
+        if !manage_chain.is_empty() {
+            command
+                .arg("--manage-chain")
+                .arg(serde_json::to_string(&manage_chain)?);
+        }
 
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut split = stdout.split('\n');
@@ -1019,22 +1044,34 @@ impl ClientWrapper {
     pub async fn change_ownership(
         &self,
         chain_id: ChainId,
-        super_owners: Vec<AccountOwner>,
         owners: Vec<AccountOwner>,
     ) -> Result<()> {
         let mut command = self.command().await?;
         command
             .arg("change-ownership")
             .args(["--chain-id", &chain_id.to_string()]);
-        command
-            .arg("--super-owners")
-            .arg(serde_json::to_string(&super_owners)?);
         command.arg("--owners").arg(serde_json::to_string(
             &owners
                 .into_iter()
                 .zip(std::iter::repeat(100u64))
                 .collect::<BTreeMap<_, _>>(),
         )?);
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
+    pub async fn change_super_ownership(
+        &self,
+        chain_id: ChainId,
+        super_owners: Vec<AccountOwner>,
+    ) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .arg("change-super-ownership")
+            .args(["--chain-id", &chain_id.to_string()]);
+        command
+            .arg("--super-owners")
+            .arg(serde_json::to_string(&super_owners)?);
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }

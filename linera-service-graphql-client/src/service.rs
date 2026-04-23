@@ -155,7 +155,7 @@ mod from {
     use linera_base::{
         data_types::{ApplicationPermissions, Event, TimeDelta},
         identifiers::{Account, ApplicationId as RealApplicationId, ModuleId, StreamId},
-        ownership::{ChainOwnership, TimeoutConfig},
+        ownership::ChainOwnership,
     };
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
@@ -226,69 +226,15 @@ mod from {
                 }))
             }
             "CloseChain" => Ok(SystemOperation::CloseChain),
-            "ChangeOwnership" => {
-                let change_ownership = system_op.change_ownership.ok_or_else(|| {
+            "ChangeOwners" => {
+                let change_owners = system_op.change_owners.ok_or_else(|| {
                     ConversionError::UnexpectedCertificateType(
-                        "Missing change_ownership metadata for ChangeOwnership operation"
-                            .to_string(),
+                        "Missing change_owners metadata for ChangeOwners operation".to_string(),
                     )
                 })?;
 
-                let timeout_config = TimeoutConfig {
-                    fast_round_duration: change_ownership
-                        .timeout_config
-                        .fast_round_ms
-                        .as_ref()
-                        .map(|s| {
-                            s.parse::<u64>().map_err(|_| {
-                                ConversionError::UnexpectedCertificateType(
-                                    "Invalid fast_round_ms value".to_string(),
-                                )
-                            })
-                        })
-                        .transpose()?
-                        .map(|ms| TimeDelta::from_micros(ms * 1000)),
-                    base_timeout: TimeDelta::from_micros(
-                        change_ownership
-                            .timeout_config
-                            .base_timeout_ms
-                            .parse::<u64>()
-                            .map_err(|_| {
-                                ConversionError::UnexpectedCertificateType(
-                                    "Invalid base_timeout_ms value".to_string(),
-                                )
-                            })?
-                            * 1000,
-                    ),
-                    timeout_increment: TimeDelta::from_micros(
-                        change_ownership
-                            .timeout_config
-                            .timeout_increment_ms
-                            .parse::<u64>()
-                            .map_err(|_| {
-                                ConversionError::UnexpectedCertificateType(
-                                    "Invalid timeout_increment_ms value".to_string(),
-                                )
-                            })?
-                            * 1000,
-                    ),
-                    fallback_duration: TimeDelta::from_micros(
-                        change_ownership
-                            .timeout_config
-                            .fallback_duration_ms
-                            .parse::<u64>()
-                            .map_err(|_| {
-                                ConversionError::UnexpectedCertificateType(
-                                    "Invalid fallback_duration_ms value".to_string(),
-                                )
-                            })?
-                            * 1000,
-                    ),
-                };
-
-                Ok(SystemOperation::ChangeOwnership {
-                    super_owners: change_ownership.super_owners,
-                    owners: change_ownership
+                Ok(SystemOperation::ChangeOwners {
+                    owners: change_owners
                         .owners
                         .into_iter()
                         .map(|ow| {
@@ -300,10 +246,62 @@ mod from {
                             Ok((ow.owner, weight))
                         })
                         .collect::<Result<Vec<_>, ConversionError>>()?,
-                    first_leader: change_ownership.first_leader,
-                    multi_leader_rounds: change_ownership.multi_leader_rounds as u32,
-                    open_multi_leader_rounds: change_ownership.open_multi_leader_rounds,
-                    timeout_config,
+                    first_leader: change_owners.first_leader,
+                    multi_leader_rounds: change_owners.multi_leader_rounds as u32,
+                    open_multi_leader_rounds: change_owners.open_multi_leader_rounds,
+                    base_timeout: TimeDelta::from_micros(
+                        change_owners.base_timeout_ms.parse::<u64>().map_err(|_| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Invalid base_timeout_ms value".to_string(),
+                            )
+                        })? * 1000,
+                    ),
+                    timeout_increment: TimeDelta::from_micros(
+                        change_owners
+                            .timeout_increment_ms
+                            .parse::<u64>()
+                            .map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid timeout_increment_ms value".to_string(),
+                                )
+                            })?
+                            * 1000,
+                    ),
+                    fallback_duration: TimeDelta::from_micros(
+                        change_owners
+                            .fallback_duration_ms
+                            .parse::<u64>()
+                            .map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid fallback_duration_ms value".to_string(),
+                                )
+                            })?
+                            * 1000,
+                    ),
+                })
+            }
+            "ChangeSuperOwners" => {
+                let change_super_owners = system_op.change_super_owners.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing change_super_owners metadata for ChangeSuperOwners operation"
+                            .to_string(),
+                    )
+                })?;
+
+                Ok(SystemOperation::ChangeSuperOwners {
+                    super_owners: change_super_owners.super_owners,
+                    fast_round_duration: change_super_owners
+                        .fast_round_ms
+                        .as_ref()
+                        .map(|s| {
+                            s.parse::<u64>().map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid fast_round_ms value".to_string(),
+                                )
+                            })
+                        })
+                        .transpose()?
+                        .map(|ms| TimeDelta::from_micros(ms * 1000)),
                 })
             }
             "ChangeApplicationPermissions" => {

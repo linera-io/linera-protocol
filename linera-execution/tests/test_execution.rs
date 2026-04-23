@@ -1266,7 +1266,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
 /// Tests the system API call `close_chain`.
 #[tokio::test]
 async fn test_close_chain() -> anyhow::Result<()> {
-    let ownership = ChainOwnership::single(AccountPublicKey::test_key(1).into());
+    let ownership = ChainOwnership::single_super(AccountPublicKey::test_key(1).into());
     let description = dummy_chain_description_with_ownership_and_balance(
         0,
         ownership.clone(),
@@ -1302,11 +1302,16 @@ async fn test_close_chain() -> anyhow::Result<()> {
     assert!(!view.system.closed.get());
 
     // Now we authorize the application and it can close the chain.
+    // ChangeApplicationPermissions requires super-owner authentication.
+    let super_owner_context = OperationContext {
+        authenticated_owner: Some(AccountPublicKey::test_key(1).into()),
+        ..context
+    };
     let permissions = ApplicationPermissions::new_single(application_id);
     let operation = SystemOperation::ChangeApplicationPermissions(permissions);
     let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
     ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(context, operation.into())
+        .execute_operation(super_owner_context, operation.into())
         .await?;
 
     application.expect_call(ExpectedCall::execute_operation(

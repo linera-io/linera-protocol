@@ -450,7 +450,7 @@ where
                 }
             }
 
-            ChangeOwnership {
+            ChangeOwners {
                 application_id,
                 ownership,
                 callback,
@@ -459,7 +459,18 @@ where
                 if !app_permissions.can_manage_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
-                    self.state.system.ownership.set(ownership);
+                    // Applications can change regular owners but not super owners.
+                    let mut current = self.state.system.ownership.get().await?.clone();
+                    current.owners = ownership.owners;
+                    current.first_leader = ownership.first_leader;
+                    current.multi_leader_rounds = ownership.multi_leader_rounds;
+                    current.open_multi_leader_rounds = ownership.open_multi_leader_rounds;
+                    current.timeout_config.base_timeout = ownership.timeout_config.base_timeout;
+                    current.timeout_config.timeout_increment =
+                        ownership.timeout_config.timeout_increment;
+                    current.timeout_config.fallback_duration =
+                        ownership.timeout_config.fallback_duration;
+                    self.state.system.ownership.set(current);
                     callback.respond(Ok(()));
                 }
             }
@@ -1419,7 +1430,7 @@ pub enum ExecutionRequest {
         callback: Sender<Result<(), ExecutionError>>,
     },
 
-    ChangeOwnership {
+    ChangeOwners {
         application_id: ApplicationId,
         ownership: ChainOwnership,
         #[debug(skip)]

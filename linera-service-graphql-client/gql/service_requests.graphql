@@ -405,8 +405,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
                   permissionsJson
                 }
               }
-              changeOwnership {
-                superOwners
+              changeOwners {
                 owners {
                   owner
                   weight
@@ -414,12 +413,13 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
                 firstLeader
                 multiLeaderRounds
                 openMultiLeaderRounds
-                timeoutConfig {
-                  fastRoundMs
-                  baseTimeoutMs
-                  timeoutIncrementMs
-                  fallbackDurationMs
-                }
+                baseTimeoutMs
+                timeoutIncrementMs
+                fallbackDurationMs
+              }
+              changeSuperOwners {
+                superOwners
+                fastRoundMs
               }
               changeApplicationPermissions {
                 permissions {
@@ -583,8 +583,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
                   permissionsJson
                 }
               }
-              changeOwnership {
-                superOwners
+              changeOwners {
                 owners {
                   owner
                   weight
@@ -592,12 +591,13 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
                 firstLeader
                 multiLeaderRounds
                 openMultiLeaderRounds
-                timeoutConfig {
-                  fastRoundMs
-                  baseTimeoutMs
-                  timeoutIncrementMs
-                  fallbackDurationMs
-                }
+                baseTimeoutMs
+                timeoutIncrementMs
+                fallbackDurationMs
+              }
+              changeSuperOwners {
+                superOwners
+                fastRoundMs
               }
               changeApplicationPermissions {
                 permissions {
