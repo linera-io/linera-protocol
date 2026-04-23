@@ -27,31 +27,25 @@ ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/x86_64-linux-gnu"
 # ── Stage 0: chef base (rust + cargo-chef + system deps) ──
 FROM rust:1.86-slim-bookworm AS chef
 
-# `RUSTUP_TOOLCHAIN` makes rustup IGNORE `rust-toolchain.toml`. Without this,
-# every cargo invocation re-reads that file and re-validates / reinstalls
-# components, even when the layer we inherited already has them. Set this
-# BEFORE any cargo/rustup layer so it's part of the cache key once.
-ENV RUSTUP_TOOLCHAIN=1.86.0
-
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y \
+    apt-get update && apt-get install --no-install-recommends -y \
     pkg-config \
     protobuf-compiler \
     clang \
     make \
     libunwind-dev
 
-# Preinstall toolchain 1.86.0 with exactly the components/targets requested by
-# rust-toolchain.toml so `cargo` in /app doesn't trigger any rustup downloads.
-RUN rustup toolchain install 1.86.0 --profile minimal \
-    --component clippy --component rustfmt --component rust-src \
-    --target wasm32-unknown-unknown
+WORKDIR /app
+
+# Pre-install the toolchain matching rust-toolchain.toml so planner/builder
+# stages don't trigger rustup downloads. The layer caches on the file's hash.
+COPY rust-toolchain.toml rust-toolchain.toml
+RUN rustup show
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     cargo install cargo-chef --version 0.1.71 --locked
-WORKDIR /app
 
 # ── Stage 1: planner — generate dependency recipe from full source ──
 
