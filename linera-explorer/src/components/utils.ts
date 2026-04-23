@@ -57,6 +57,24 @@ export function formatTimestamp(ts: any): string {
   return new Date(n / 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
 }
 
+// Copy text to clipboard with visual feedback on the clicked element.
+export function copyToClipboard(text: string, event?: MouseEvent) {
+  navigator.clipboard.writeText(text).then(() => {
+    if (event) {
+      const el = event.currentTarget as HTMLElement
+      const icon = el.querySelector('.bi-clipboard')
+      if (icon) {
+        icon.classList.remove('bi-clipboard')
+        icon.classList.add('bi-check2')
+        setTimeout(() => {
+          icon.classList.remove('bi-check2')
+          icon.classList.add('bi-clipboard')
+        }, 1500)
+      }
+    }
+  })
+}
+
 // Extract operations from transaction metadata
 export function getOperations(transactionMetadata: TransactionMetadata[]): Operation[] {
   return transactionMetadata

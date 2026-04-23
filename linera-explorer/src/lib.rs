@@ -187,7 +187,7 @@ async fn get_chain(node: &str, chain_id: ChainId) -> Result<Box<Chain>> {
     let chain = request::<gql_service::Chain, _>(&client, node, variables)
         .await?
         .chain;
-    log_str(&serde_json::to_string_pretty(&chain).unwrap());
+    // log_str(&serde_json::to_string_pretty(&chain).unwrap());
     Ok(Box::new(chain))
 }
 

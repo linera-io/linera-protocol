@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ConfirmedBlock } from '../../gql/service'
-import { getOperations, getIncomingBundles, formatTimestamp, displayValue } from './utils'
+import { getOperations, getIncomingBundles, formatTimestamp, displayValue, copyToClipboard } from './utils'
 import Json from './Json.vue'
 // Op is now imported by Transaction.vue
 import Transaction from './Transaction.vue'
@@ -39,7 +39,7 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
       <ul class="list-group">
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Hash</strong></span>
-          {{ block.hash }}
+          <span class="font-monospace text-break">{{ block.hash }} <a role="button" class="ms-1" @click="copyToClipboard(block.hash, $event)" title="Copy hash"><i class="bi bi-clipboard"></i></a></span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Epoch</strong></span>
@@ -55,7 +55,7 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Signer</strong></span>
-          <span>{{ block.block.header.authenticatedOwner }}</span>
+          <span class="font-monospace text-break">{{ block.block.header.authenticatedOwner }} <a v-if="block.block.header.authenticatedOwner" role="button" class="ms-1" @click="copyToClipboard(block.block.header.authenticatedOwner, $event)" title="Copy signer"><i class="bi bi-clipboard"></i></a></span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Previous Block</strong></span>
@@ -64,7 +64,7 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>State Hash</strong></span>
-          <span>{{ block.block.header.stateHash }}</span>
+          <span class="font-monospace text-break">{{ block.block.header.stateHash }} <a role="button" class="ms-1" @click="copyToClipboard(block.block.header.stateHash, $event)" title="Copy state hash"><i class="bi bi-clipboard"></i></a></span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Status</strong></span>

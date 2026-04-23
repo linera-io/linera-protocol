@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ChainStateExtendedView } from '../../gql/service'
-import { formatTimestamp, displayValue } from './utils'
+import { formatTimestamp, displayValue, copyToClipboard } from './utils'
 import Json from './Json.vue'
 
 const props = defineProps<{title: string, chain: ChainStateExtendedView}>()
@@ -35,7 +35,7 @@ function pendingBundleCount(): number {
       <ul class="list-group">
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>ID</strong></span>
-          <span class="font-monospace text-break">{{ chain.chainId }}</span>
+          <span class="font-monospace text-break">{{ chain.chainId }} <a role="button" class="ms-1" @click="copyToClipboard(chain.chainId, $event)" title="Copy chain ID"><i class="bi bi-clipboard"></i></a></span>
         </li>
 
         <!-- System state -->

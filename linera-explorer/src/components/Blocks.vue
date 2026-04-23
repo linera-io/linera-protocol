@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ConfirmedBlock } from '../../gql/service'
-import { getOperations, getIncomingBundles, formatTimestamp } from './utils'
+import { getOperations, getIncomingBundles, formatTimestamp, copyToClipboard } from './utils'
 
 defineProps<{blocks: ConfirmedBlock[]}>()
 </script>
@@ -29,6 +29,7 @@ defineProps<{blocks: ConfirmedBlock[]}>()
           <td>{{ b.block.header.height }}</td>
           <td :title="b.hash">
             <a @click="$root.route('block', [['block', b.hash]])" class="btn btn-link">{{ short_hash(b.hash) }}</a>
+            <a role="button" @click="copyToClipboard(b.hash, $event)" title="Copy hash"><i class="bi bi-clipboard"></i></a>
           </td>
           <td>{{ formatTimestamp(b.block.header.timestamp) }}</td>
           <td>
