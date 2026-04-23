@@ -66,7 +66,7 @@ mod metrics {
             "server_request_latency",
             "Server request latency",
             &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-            linear_bucket_interval(1.0, 25.0, 2000.0),
+            linear_bucket_interval(1.0, 50.0, 5000.0),
         )
     });
 
