@@ -41,6 +41,15 @@ export function set_test_config() : Promise<void> {
   })
 }
 
+// BigInt-safe display: converts BigInts to strings for display and JSON.stringify.
+export function displayValue(v: any): string {
+  if (typeof v === 'bigint') return v.toString()
+  if (typeof v === 'object' && v !== null) {
+    return JSON.stringify(v, (_k, val) => typeof val === 'bigint' ? val.toString() : val)
+  }
+  return String(v)
+}
+
 // Format a Linera timestamp (microseconds since epoch) as a UTC string.
 export function formatTimestamp(ts: any): string {
   const n = Number(typeof ts === 'bigint' ? ts.toString() : ts)

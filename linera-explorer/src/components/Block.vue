@@ -1,21 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ConfirmedBlock } from '../../gql/service'
-import { getOperations, getIncomingBundles, formatTimestamp } from './utils'
+import { getOperations, getIncomingBundles, formatTimestamp, displayValue } from './utils'
 import Json from './Json.vue'
 // Op is now imported by Transaction.vue
 import Transaction from './Transaction.vue'
 import OutgoingMessages from './OutgoingMessages.vue'
 
 const props = defineProps<{block: ConfirmedBlock, title: string}>()
-
-function displayValue(v: any): string {
-  if (typeof v === 'bigint') return v.toString()
-  if (typeof v === 'object' && v !== null) {
-    return JSON.stringify(v, (_k, val) => typeof val === 'bigint' ? val.toString() : val)
-  }
-  return String(v)
-}
 
 const operations = computed(() => getOperations(props.block.block.body.transactionMetadata))
 const incomingBundles = computed(() => getIncomingBundles(props.block.block.body.transactionMetadata))

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Json from './Json.vue'
+import { displayValue } from './utils'
 
 defineProps<{
   messages: any[] // Vec<OutgoingMessage>
@@ -110,14 +111,14 @@ function getMessageMetadata(msg: any) {
                 Subscribers:
                 <span v-for="(sub, si) in msg.destination.Subscribers" :key="si">
                   <a v-if="typeof sub === 'string'" @click="$root.route(undefined, [['chain', sub]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(sub) }}</a>
-                  <span v-else>{{ JSON.stringify(sub) }}</span>
+                  <span v-else>{{ displayValue(sub) }}</span>
                   <span v-if="si < msg.destination.Subscribers.length - 1">, </span>
                 </span>
               </span>
               <span v-else-if="msg.destination.Direct">
                 <a @click="$root.route(undefined, [['chain', msg.destination.Direct]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(msg.destination.Direct) }}</a>
               </span>
-              <span v-else class="font-monospace small">{{ JSON.stringify(msg.destination) }}</span>
+              <span v-else class="font-monospace small">{{ displayValue(msg.destination) }}</span>
             </template>
             <span v-else>{{ msg.destination }}</span>
           </div>
