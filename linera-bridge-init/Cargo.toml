@@ -1,0 +1,27 @@
+[package]
+name = "linera-bridge-init"
+description = "One-shot CLI that provisions a Linera wallet + chain for linera-bridge serve."
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive", "env"] }
+linera-base.workspace = true
+linera-faucet-client.workspace = true
+linera-wallet-json.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+
+[[bin]]
+name = "linera-bridge-init"
+path = "src/main.rs"

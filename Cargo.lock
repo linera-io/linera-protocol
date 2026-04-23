@@ -5463,6 +5463,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-bridge-init"
+version = "0.15.15"
+dependencies = [
+ "anyhow",
+ "clap",
+ "linera-base",
+ "linera-faucet-client",
+ "linera-wallet-json",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "linera-cache"
 version = "0.15.15"
 dependencies = [
