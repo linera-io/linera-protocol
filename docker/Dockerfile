@@ -32,6 +32,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
     pkg-config \
     protobuf-compiler \
+    libprotobuf-dev \
     clang \
     make \
     libunwind-dev
