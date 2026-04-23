@@ -25,7 +25,9 @@ defineProps<{op: any, id: string, index?: number}>()
             </div>
             <div class="col-md-4">
               <strong>To:</strong>
-              <div class="font-monospace text-break">{{ op.systemOperation.transfer.recipient.owner }}@{{ short_hash(op.systemOperation.transfer.recipient.chainId) }}</div>
+              <div class="font-monospace text-break">
+                {{ op.systemOperation.transfer.recipient.owner }}@<a @click="$root.route(undefined, [['chain', op.systemOperation.transfer.recipient.chainId]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(op.systemOperation.transfer.recipient.chainId) }}</a>
+              </div>
             </div>
             <div class="col-md-4">
               <strong>Amount:</strong>
@@ -44,11 +46,15 @@ defineProps<{op: any, id: string, index?: number}>()
             </div>
             <div class="col-md-3">
               <strong>Target Chain:</strong>
-              <div class="font-monospace text-break">{{ short_hash(op.systemOperation.claim.targetId) }}</div>
+              <div class="font-monospace text-break">
+                <a @click="$root.route(undefined, [['chain', op.systemOperation.claim.targetId]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(op.systemOperation.claim.targetId) }}</a>
+              </div>
             </div>
             <div class="col-md-3">
               <strong>Recipient:</strong>
-              <div class="font-monospace text-break">{{ op.systemOperation.claim.recipient.owner }}@{{ short_hash(op.systemOperation.claim.recipient.chainId) }}</div>
+              <div class="font-monospace text-break">
+                {{ op.systemOperation.claim.recipient.owner }}@<a @click="$root.route(undefined, [['chain', op.systemOperation.claim.recipient.chainId]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(op.systemOperation.claim.recipient.chainId) }}</a>
+              </div>
             </div>
             <div class="col-md-3">
               <strong>Amount:</strong>
@@ -121,7 +127,7 @@ defineProps<{op: any, id: string, index?: number}>()
           <div class="row">
             <div class="col-md-6">
               <strong>Module ID:</strong>
-              <div class="font-monospace text-break small">{{ op.systemOperation.createApplication.moduleId }}</div>
+              <div class="font-monospace text-break small" style="cursor:pointer" :title="'Click to copy: ' + op.systemOperation.createApplication.moduleId" @click="navigator.clipboard.writeText(op.systemOperation.createApplication.moduleId)">{{ op.systemOperation.createApplication.moduleId }} <i class="bi bi-clipboard"></i></div>
             </div>
             <div class="col-md-6">
               <strong>Required Apps:</strong> {{ op.systemOperation.createApplication.requiredApplicationIds.length }}
@@ -225,7 +231,7 @@ defineProps<{op: any, id: string, index?: number}>()
       <div class="card-body">
         <div v-if="op.applicationId" class="mb-2">
           <strong>Application ID:</strong>
-          <span class="font-monospace">{{ op.applicationId }}</span>
+          <span class="font-monospace text-break" style="cursor:pointer" :title="'Click to copy'" @click="navigator.clipboard.writeText(op.applicationId)">{{ op.applicationId }} <i class="bi bi-clipboard"></i></span>
         </div>
         <div v-if="op.userBytesHex" class="mb-3">
           <strong>Operation Data (hex):</strong>
