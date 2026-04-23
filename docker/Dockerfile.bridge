@@ -82,22 +82,21 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
     cargo chef cook ${build_flag:+"$build_flag"} \
     --recipe-path recipe.json \
-    --bin linera-bridge \
-    -p linera-bridge \
-    --features relay
+    --bin linera-bridge -p linera-bridge --features relay \
+    --bin linera-bridge-init -p linera-bridge-init
 
 # Copy full source and build (only changed crates recompile).
 COPY . .
-# target/ is a cache mount — build + copy binary OUT in same RUN so it persists
+# target/ is a cache mount — build + copy binaries OUT in same RUN so they persist
 # in the image layer (cache mounts don't survive across RUNs).
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
     cargo build ${build_flag:+"$build_flag"} \
-        --bin linera-bridge \
-        -p linera-bridge \
-        --features relay \
-    && cp target/"$build_folder"/linera-bridge /usr/local/bin/linera-bridge
+        --bin linera-bridge -p linera-bridge --features relay \
+        --bin linera-bridge-init -p linera-bridge-init \
+    && cp target/"$build_folder"/linera-bridge /usr/local/bin/linera-bridge \
+    && cp target/"$build_folder"/linera-bridge-init /usr/local/bin/linera-bridge-init
 
 # ── Stage 3: runtime ──
 
@@ -116,6 +115,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/bin/linera-bridge /usr/local/bin/linera-bridge
+COPY --from=builder /usr/local/bin/linera-bridge-init /usr/local/bin/linera-bridge-init
 COPY docker/bridge-entrypoint.sh /usr/local/bin/bridge-entrypoint.sh
 RUN chmod +x /usr/local/bin/bridge-entrypoint.sh
 
