@@ -2706,7 +2706,7 @@ impl<Env: Environment> ChainClient<Env> {
             .as_ref()
             .is_some_and(|mode| mode.is_relevant(&notification.reason));
         if !relevant {
-            debug!(
+            tracing::trace!(
                 chain_id = %notification.chain_id,
                 reason = ?notification.reason,
                 ?listening_mode,
