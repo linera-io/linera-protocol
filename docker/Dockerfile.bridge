@@ -11,18 +11,25 @@ ARG rustflags="-C force-frame-pointers=yes"
 
 # ── Stage 0: chef base (rust + cargo-chef + system deps) ──
 
-FROM rust:1.88-slim-bookworm AS chef
+FROM rust:1.86-slim-bookworm AS chef
 
-RUN apt-get update && apt-get install -y \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install --no-install-recommends -y \
     pkg-config \
     protobuf-compiler \
-    clang \
-    && rm -rf /var/lib/apt/lists/*
+    clang
+
+WORKDIR /app
+
+# Pre-install the toolchain matching rust-toolchain.toml so planner/builder
+# stages don't trigger rustup downloads. The layer caches on the file's hash.
+COPY rust-toolchain.toml rust-toolchain.toml
+RUN rustup show
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
-    cargo install cargo-chef --locked
-WORKDIR /app
+    cargo install cargo-chef --version 0.1.71 --locked
 
 # ── Stage 1: planner — generate dependency recipe from full source ──
 
