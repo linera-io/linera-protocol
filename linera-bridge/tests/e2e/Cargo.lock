@@ -3850,7 +3850,7 @@ dependencies = [
 
 [[package]]
 name = "linera-base"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "allocative",
  "alloy-primitives",
@@ -3900,7 +3900,7 @@ dependencies = [
 
 [[package]]
 name = "linera-bridge"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "alloy",
  "alloy-primitives",
@@ -3974,18 +3974,20 @@ dependencies = [
 
 [[package]]
 name = "linera-cache"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "cfg_aliases",
  "linera-base",
  "lru 0.15.0",
+ "papaya",
  "prometheus",
  "quick_cache",
+ "tokio",
 ]
 
 [[package]]
 name = "linera-chain"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "allocative",
  "async-graphql",
@@ -4009,7 +4011,7 @@ dependencies = [
 
 [[package]]
 name = "linera-client"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4047,7 +4049,7 @@ dependencies = [
 
 [[package]]
 name = "linera-core"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -4068,6 +4070,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "strum 0.26.3",
  "sync_wrapper 1.0.2",
  "thiserror 1.0.69",
  "tokio",
@@ -4082,7 +4085,7 @@ dependencies = [
 
 [[package]]
 name = "linera-execution"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "allocative",
  "anyhow",
@@ -4122,7 +4125,7 @@ dependencies = [
 
 [[package]]
 name = "linera-faucet-client"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "linera-base",
  "linera-client",
@@ -4143,7 +4146,7 @@ checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
 
 [[package]]
 name = "linera-persistent"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "cfg-if",
  "cfg_aliases",
@@ -4160,7 +4163,7 @@ dependencies = [
 
 [[package]]
 name = "linera-rpc"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4199,7 +4202,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -4227,7 +4230,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk-derive"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
@@ -4236,7 +4239,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "async-trait",
  "bcs",
@@ -4258,7 +4261,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage-runtime"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4276,7 +4279,7 @@ dependencies = [
 
 [[package]]
 name = "linera-version"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -4296,7 +4299,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "allocative",
  "anyhow",
@@ -4305,6 +4308,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "convert_case 0.6.0",
+ "custom_debug_derive",
  "derive_more 1.0.0",
  "futures",
  "generic-array",
@@ -4332,7 +4336,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views-derive"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "cfg_aliases",
  "deluxe",
@@ -4343,7 +4347,7 @@ dependencies = [
 
 [[package]]
 name = "linera-wallet-json"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "anyhow",
  "dirs",
@@ -4495,7 +4499,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "anyhow",
  "cfg_aliases",
@@ -4509,7 +4513,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-macros"
-version = "0.15.15"
+version = "0.15.16"
 dependencies = [
  "cfg_aliases",
  "heck 0.4.1",
