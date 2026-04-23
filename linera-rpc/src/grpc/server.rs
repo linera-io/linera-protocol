@@ -94,6 +94,14 @@ mod metrics {
         )
     });
 
+    pub static SERVER_REQUEST_CANCELLED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "server_request_cancelled",
+            "Server requests whose handler future was dropped before completion (e.g. client-side timeout / disconnect)",
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+        )
+    });
+
     pub static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "cross_chain_message_channel_full",
@@ -283,6 +291,24 @@ impl GrpcServerHandle {
     }
 }
 
+#[cfg(with_metrics)]
+struct ServerRequestCancellationGuard {
+    method_name: String,
+    traffic_type: &'static str,
+    completed: bool,
+}
+
+#[cfg(with_metrics)]
+impl Drop for ServerRequestCancellationGuard {
+    fn drop(&mut self) {
+        if !self.completed {
+            metrics::SERVER_REQUEST_CANCELLED
+                .with_label_values(&[&self.method_name, self.traffic_type])
+                .inc();
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct GrpcPrometheusMetricsMiddlewareLayer;
 
@@ -330,14 +356,21 @@ where
 
         let future = self.service.call(request);
         async move {
+            #[cfg(with_metrics)]
+            let mut cancellation_guard = ServerRequestCancellationGuard {
+                method_name,
+                traffic_type,
+                completed: false,
+            };
             let response = future.await?;
             #[cfg(with_metrics)]
             {
+                cancellation_guard.completed = true;
                 metrics::SERVER_REQUEST_LATENCY
-                    .with_label_values(&[&method_name, traffic_type])
+                    .with_label_values(&[&cancellation_guard.method_name, traffic_type])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
                 metrics::SERVER_REQUEST_COUNT
-                    .with_label_values(&[&method_name, traffic_type])
+                    .with_label_values(&[&cancellation_guard.method_name, traffic_type])
                     .inc();
             }
             Ok(response)
