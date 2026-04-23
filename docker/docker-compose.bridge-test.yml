@@ -195,12 +195,11 @@ services:
   #     Writes bridge-chain-id and relay-owner to /shared/ so the setup script
   #     and the relay can use them.
   bridge-chain-init:
-    image: "${LINERA_BRIDGE_IMAGE:-linera-bridge}"
+    image: "${LINERA_BRIDGE_INIT_IMAGE:-linera-bridge-init}"
     pull_policy: if_not_present
     network_mode: "service:linera-network"
+    entrypoint: ["sh", "-c"]
     command:
-      - sh
-      - -c
       - |
         set -e
         FAUCET=http://localhost:${FAUCET_PORT:-8080}
