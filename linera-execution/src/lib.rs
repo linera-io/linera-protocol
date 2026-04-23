@@ -12,7 +12,7 @@ pub mod execution_state_actor;
 mod graphql;
 mod policy;
 mod resources;
-mod runtime;
+pub mod runtime;
 pub mod system;
 #[cfg(with_testing)]
 pub mod test_utils;
