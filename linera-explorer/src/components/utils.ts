@@ -41,6 +41,13 @@ export function set_test_config() : Promise<void> {
   })
 }
 
+// Format a Linera timestamp (microseconds since epoch) as a UTC string.
+export function formatTimestamp(ts: any): string {
+  const n = Number(typeof ts === 'bigint' ? ts.toString() : ts)
+  if (isNaN(n)) return String(ts)
+  return new Date(n / 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
+}
+
 // Extract operations from transaction metadata
 export function getOperations(transactionMetadata: TransactionMetadata[]): Operation[] {
   return transactionMetadata

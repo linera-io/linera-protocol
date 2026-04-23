@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ChainStateExtendedView } from '../../gql/service'
+import { formatTimestamp } from './utils'
 import Json from './Json.vue'
 
 const props = defineProps<{title: string, chain: ChainStateExtendedView}>()
@@ -22,12 +23,6 @@ function displayValue(v: any): string {
     return JSON.stringify(v, (_k, val) => typeof val === 'bigint' ? val.toString() : val)
   }
   return String(v)
-}
-
-function formatTimestamp(ts: any): string {
-  const n = Number(ts)
-  if (isNaN(n)) return String(ts)
-  return new Date(n / 1000).toLocaleString()
 }
 
 function pendingBundleCount(): number {

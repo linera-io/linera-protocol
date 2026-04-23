@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ConfirmedBlock } from '../../gql/service'
-import { getOperations, getIncomingBundles } from './utils'
+import { getOperations, getIncomingBundles, formatTimestamp } from './utils'
 import Json from './Json.vue'
 // Op is now imported by Transaction.vue
 import Transaction from './Transaction.vue'
@@ -59,7 +59,7 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Timestamp</strong></span>
-          <span>{{ (new Date(Number(block.block.header.timestamp)/1000)).toLocaleString() }}</span>
+          <span>{{ formatTimestamp(block.block.header.timestamp) }}</span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Signer</strong></span>
