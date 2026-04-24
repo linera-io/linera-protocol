@@ -27,7 +27,7 @@ use linera_chain::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
         OriginalProposal, ProposalContent, ProposedBlock,
     },
-    manager,
+    manager::{self, ManagerSafetySnapshot},
     types::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
@@ -41,7 +41,9 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
+    batch::Batch,
     context::{Context, InactiveContext},
+    store::WritableKeyValueStore as _,
     views::{ReplaceContext as _, RootView as _, View as _},
 };
 use tokio::sync::oneshot;
@@ -926,32 +928,12 @@ where
                 .await?;
             // We should always agree on the messages and state hash.
             if outcome != verified {
-                if let Some(min_duration) = self.config.reset_on_incorrect_outcome {
-                    let block_zero_time = *self.chain.block_zero_executed_at.get();
-                    let elapsed = local_time.duration_since(block_zero_time);
-                    if elapsed >= min_duration {
-                        warn!(
-                            "IncorrectOutcome for block {height}; \
-                            resetting chain state and re-executing"
-                        );
-                        return self
-                            .reset_and_reexecute_chain(
-                                block_hash,
-                                height,
-                                notify_when_messages_are_delivered,
-                            )
-                            .await;
-                    }
-                    warn!(
-                        "IncorrectOutcome for block {height}; \
-                        not resetting because only {elapsed:?} elapsed since last \
-                        block 0 execution (minimum: {min_duration:?})"
-                    );
-                }
-                return Err(WorkerError::IncorrectOutcome {
-                    submitted: Box::new(outcome),
-                    computed: Box::new(verified),
-                });
+                return Err(ChainError::CorruptedChainState(format!(
+                    "computed block outcome differs from the certificate.\n\
+                    Computed: {verified:#?}\n\
+                    Submitted: {outcome:#?}"
+                ))
+                .into());
             }
             ConfirmedBlock::new(Block::new(proposed_block, verified))
         };
@@ -1042,7 +1024,7 @@ where
         if let Some(prev) = sender_previous_height {
             if prev >= next_height_to_receive {
                 let chain_id = self.chain_id();
-                if self.config.allow_revert_confirm {
+                if self.config.allow_revert_confirm && self.config.recovery_allowed_for(&chain_id) {
                     warn!(
                         %chain_id,
                         "Inbox gap detected from {origin}: \
@@ -1242,17 +1224,43 @@ where
         Ok(actions)
     }
 
+    /// If the config enables corruption recovery and the min-duration guard is
+    /// satisfied, resets the chain state and re-executes all confirmed blocks.
+    /// Returns `RevertConfirm` requests to dispatch, or `None` if no reset happened.
+    pub(crate) async fn maybe_reset_corrupted_chain_state(
+        &mut self,
+    ) -> Result<Option<Vec<CrossChainRequest>>, WorkerError> {
+        let Some(min_duration) = self.config.reset_on_corrupted_chain_state else {
+            return Ok(None);
+        };
+        let chain_id = self.chain_id();
+        if !self.config.recovery_allowed_for(&chain_id) {
+            return Ok(None);
+        }
+        let local_time = self.storage.clock().current_time();
+        let block_zero_time = *self.chain.block_zero_executed_at.get();
+        let elapsed = local_time.duration_since(block_zero_time);
+        if elapsed < min_duration {
+            warn!(
+                %chain_id, ?elapsed, ?min_duration,
+                "Not resetting corrupted chain state; not enough time elapsed \
+                since last block 0 execution"
+            );
+            return Ok(None);
+        }
+        warn!(%chain_id, "Corrupted chain state detected; resetting and re-executing");
+        Ok(Some(self.reset_and_reexecute_chain().await?))
+    }
+
     /// Resets the chain state completely and re-executes all confirmed blocks from storage.
-    /// Sends `RevertConfirm` to all known senders so they resend cross-chain messages.
+    /// Returns a `RevertConfirm` request for every known sender so they resend cross-chain
+    /// messages that may have been lost during the reset.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
     ))]
-    async fn reset_and_reexecute_chain(
+    pub(crate) async fn reset_and_reexecute_chain(
         &mut self,
-        failed_block_hash: CryptoHash,
-        failed_height: BlockHeight,
-        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+    ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         let chain_id = self.chain_id();
         let tip_height = self.chain.tip_state.get().next_block_height;
 
@@ -1261,17 +1269,27 @@ where
         let hashes = self.chain.confirmed_log.read(..).await?;
         let preprocessed = self.chain.preprocessed_blocks.index_values().await?;
 
-        // 2. Clear the chain state entirely and save.
-        self.chain.clear();
+        // 2. Snapshot safety-critical manager state so that we cannot be tricked
+        //    into double-signing if the reset wipes votes we already cast.
+        let manager_snapshot = ManagerSafetySnapshot::capture(&self.chain.manager).await?;
+
+        // 3. Wipe every key under this chain's storage root and reload a fresh
+        //    `ChainStateView`. `ChainStateView::clear` + `save` would only reset
+        //    the in-memory view; `HistoricallyHashableView` deliberately keeps
+        //    its `stored_hash` across clears, so the historical hash would carry
+        //    over from the pre-reset state and the replayed block outcomes would
+        //    never match the original certificates' `state_hash`. Deleting the
+        //    storage prefix and reloading is equivalent to creating the chain
+        //    from scratch, which is what replay expects.
+        self.wipe_and_reload_chain().await?;
         self.knows_chain_is_active = false;
-        self.save().await?;
         warn!(
             %chain_id,
             "Cleared chain state up to height {tip_height}; \
             re-executing all blocks"
         );
 
-        // 3. Re-load certificates one at a time by hash and re-process them.
+        // 4. Re-load certificates one at a time by hash and re-process them.
         for (index, hash) in hashes.into_iter().enumerate() {
             let height = BlockHeight(index as u64);
             let cert = self
@@ -1292,46 +1310,42 @@ where
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
 
-        // 4. Now process the original certificate that triggered the error.
-        let failed_certificate = self
-            .storage
-            .read_certificate(failed_block_hash)
-            .await?
-            .map(Arc::unwrap_or_clone)
-            .ok_or_else(|| WorkerError::LocalBlockNotFound {
-                height: failed_height,
-                chain_id,
-            })?;
-        let result = Box::pin(
-            self.process_confirmed_block(failed_certificate, notify_when_messages_are_delivered),
-        )
-        .await?;
-
-        // 5. Send RevertConfirm to all senders so they resend messages we may
-        //    have lost during the reset.
-        let (info, mut actions, outcome) = result;
-        for sender_id in sender_ids {
-            actions
-                .cross_chain_requests
-                .push(CrossChainRequest::RevertConfirm {
-                    sender: sender_id,
-                    recipient: chain_id,
-                    retransmit_from: BlockHeight::ZERO,
-                });
+        // 5. Restore any previously cast votes and locking block so we cannot be
+        //    asked to sign a conflicting statement at the same height/round. Votes
+        //    in the manager always belong to the pending height (one past the tip),
+        //    so restoring is only meaningful if re-execution landed at the same
+        //    tip. Otherwise the restored state would refer to a stale pending
+        //    height and could only break the manager's invariants without any
+        //    safety benefit — so we drop the snapshot in that case.
+        let new_tip_height = self.chain.tip_state.get().next_block_height;
+        if new_tip_height == tip_height {
+            manager_snapshot.restore(&mut self.chain.manager)?;
+            self.save().await?;
+        } else {
+            warn!(
+                %tip_height, %new_tip_height,
+                "Dropping manager snapshot: pre-reset tip differs from post-reset tip"
+            );
         }
 
+        // 6. Build RevertConfirm requests so each sender resends messages we may
+        //    have lost during the reset.
+        let revert_requests = sender_ids
+            .into_iter()
+            .map(|sender| CrossChainRequest::RevertConfirm {
+                sender,
+                recipient: chain_id,
+                retransmit_from: BlockHeight::ZERO,
+            })
+            .collect::<Vec<_>>();
+
         warn!(
-            "Chain reset and re-executed up to height {}; \
-            sent RevertConfirm to {} senders",
-            self.chain.tip_state.get().next_block_height,
-            actions
-                .cross_chain_requests
-                .iter()
-                .filter(|r| matches!(r, CrossChainRequest::RevertConfirm { .. }))
-                .count(),
+            tip_height = %self.chain.tip_state.get().next_block_height,
+            num_revert_confirms = revert_requests.len(),
+            "Chain reset and re-executed; sending RevertConfirm to senders"
         );
 
-        Ok((info, actions, outcome))
+        Ok(revert_requests)
     }
 
     #[instrument(skip_all, fields(
@@ -2122,6 +2136,43 @@ where
             return Err(WorkerError::PoisonedWorker);
         }
         Ok(())
+    }
+
+    /// Deletes every key under this chain's storage root and replaces `self.chain`
+    /// with a freshly loaded (empty) view. If either the write or the reload fails,
+    /// the worker is marked as poisoned: the partial deletion may have left
+    /// storage inconsistent with the in-memory view, so it cannot be reused.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
+    async fn wipe_and_reload_chain(&mut self) -> Result<(), WorkerError> {
+        let context = self.chain.context().clone();
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(Vec::new());
+        if let Err(error) = context.store().write_batch(batch).await {
+            tracing::error!(
+                ?error,
+                chain_id = %self.chain_id(),
+                "Wiping chain storage failed; marking worker as poisoned"
+            );
+            self.poisoned = true;
+            return Err(WorkerError::PoisonedWorker);
+        }
+        match ChainStateView::load(context).await {
+            Ok(chain) => {
+                self.chain = chain;
+                Ok(())
+            }
+            Err(error) => {
+                tracing::error!(
+                    ?error,
+                    chain_id = %self.chain_id(),
+                    "Reloading chain after wipe failed; marking worker as poisoned"
+                );
+                self.poisoned = true;
+                Err(WorkerError::PoisonedWorker)
+            }
+        }
     }
 }
 

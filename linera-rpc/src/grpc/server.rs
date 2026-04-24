@@ -403,6 +403,20 @@ where
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
 
+        // Give the worker a shard-routing sender for cross-chain requests generated
+        // outside the normal `NetworkActions` return path (specifically, the
+        // `RevertConfirm`s emitted after resetting a corrupted chain).
+        let state = {
+            let routing_network = internal_network.clone();
+            let routing_sender = cross_chain_sender.clone();
+            state.with_outbound_cross_chain_sender(std::sync::Arc::new(move |request| {
+                let shard_id = routing_network.get_shard_id(request.target_chain_id());
+                if let Err(error) = routing_sender.clone().try_send((request, shard_id)) {
+                    error!(%error, "dropping cross-chain request");
+                }
+            }))
+        };
+
         let (notification_sender, _) =
             tokio::sync::broadcast::channel(notification_config.notification_queue_size);
 

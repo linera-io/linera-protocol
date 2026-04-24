@@ -149,6 +149,8 @@ pub enum ChainError {
     },
     #[error("Internal error {0}")]
     InternalError(String),
+    #[error("Corrupted chain state: {0}")]
+    CorruptedChainState(String),
     #[error("Block proposal has size {0} which is too large")]
     BlockProposalTooLarge(usize),
     #[error(transparent)]
@@ -209,6 +211,7 @@ impl ChainError {
             | ChainError::UnexpectedMessage { .. }
             | ChainError::InboxGapDetected { .. }
             | ChainError::InternalError(_)
+            | ChainError::CorruptedChainState(_)
             | ChainError::BcsError(_) => true,
             ChainError::ExecutionError(execution_error, _) => execution_error.is_local(),
         }

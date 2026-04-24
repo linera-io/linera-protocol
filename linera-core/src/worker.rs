@@ -26,9 +26,7 @@ use linera_cache::{UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock,
-    },
+    data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
@@ -368,15 +366,6 @@ pub enum WorkerError {
     #[error("The block does not contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
     #[error(
-        "The given outcome is not what we computed after executing the block.\n\
-        Computed: {computed:#?}\n\
-        Submitted: {submitted:#?}"
-    )]
-    IncorrectOutcome {
-        computed: Box<BlockExecutionOutcome>,
-        submitted: Box<BlockExecutionOutcome>,
-    },
-    #[error(
         "Block timestamp ({block_timestamp}) is further in the future from local time \
         ({local_time}) than block time grace period ({block_time_grace_period:?})"
     )]
@@ -462,7 +451,6 @@ impl WorkerError {
             | WorkerError::MissingNetworkDescription
             | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_)
-            | WorkerError::IncorrectOutcome { .. }
             | WorkerError::PoisonedWorker => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
@@ -493,6 +481,17 @@ impl WorkerError {
                     must_reload_view: true,
                     ..
                 })
+        )
+    }
+
+    /// Returns `true` if this error indicates that the chain's persisted state is
+    /// internally inconsistent, so the worker should consider resetting and
+    /// re-executing it from storage.
+    fn indicates_corrupted_chain_state(&self) -> bool {
+        matches!(
+            self,
+            WorkerError::ChainError(chain_error)
+                if matches!(chain_error.as_ref(), ChainError::CorruptedChainState(_))
         )
     }
 }
@@ -598,7 +597,17 @@ pub struct WorkerState<StorageClient: Storage> {
     /// manages its own lifetime via a keep-alive task. A background sweep
     /// periodically removes dead entries.
     chain_workers: ChainWorkerMap<StorageClient>,
+    /// Shard-routing dispatcher for outbound cross-chain requests. Used when we need
+    /// to send cross-chain requests outside of the normal `NetworkActions` return
+    /// path — in particular, the `RevertConfirm`s emitted after resetting a
+    /// corrupted chain. The RPC server layer installs this; without it, we fall
+    /// back to dispatching locally through `handle_cross_chain_request`.
+    outbound_cross_chain_sender: Option<OutboundCrossChainSender>,
 }
+
+/// Dispatcher for outbound cross-chain requests that handles the source-shard-to-
+/// target-shard routing that the worker itself is not aware of.
+pub type OutboundCrossChainSender = Arc<dyn Fn(CrossChainRequest) + Send + Sync>;
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
 where
@@ -613,6 +622,7 @@ where
             chain_modes: self.chain_modes.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_workers: self.chain_workers.clone(),
+            outbound_cross_chain_sender: self.outbound_cross_chain_sender.clone(),
         }
     }
 }
@@ -775,7 +785,17 @@ where
             chain_modes,
             delivery_notifiers: Arc::default(),
             chain_workers,
+            outbound_cross_chain_sender: None,
         }
+    }
+
+    /// Installs a shard-routing dispatcher used for outbound cross-chain requests
+    /// generated outside the normal response path (specifically, after resetting a
+    /// corrupted chain). Without it, such requests are dispatched locally in a
+    /// loop via `handle_cross_chain_request`.
+    pub fn with_outbound_cross_chain_sender(mut self, sender: OutboundCrossChainSender) -> Self {
+        self.outbound_cross_chain_sender = Some(sender);
+        self
     }
 
     #[instrument(level = "trace", skip(self, certificate, notifier))]
@@ -857,9 +877,71 @@ where
         if let Err(error) = &result {
             if error.must_reload_view() {
                 self.evict_poisoned_worker(chain_id, &state);
+            } else if error.indicates_corrupted_chain_state() {
+                self.spawn_reset_corrupted_chain_state(chain_id, state);
             }
         }
         result
+    }
+
+    /// Spawns a detached task that re-acquires the write lock and recovers the
+    /// chain from a detected state corruption. Running the recovery in a separate
+    /// task ensures it survives cancellation of the originating request: if the
+    /// caller's future is dropped mid-way through re-execution, the chain would
+    /// otherwise be left at a partial tip and our safety snapshot would be lost.
+    /// Generated `RevertConfirm` requests are dispatched via the installed
+    /// shard-routing sender when present (sharded validators), or locally
+    /// through `handle_cross_chain_request` otherwise (client nodes and tests).
+    /// Errors are logged; the caller already has the original error to
+    /// propagate.
+    fn spawn_reset_corrupted_chain_state(
+        &self,
+        chain_id: ChainId,
+        state: ChainWorkerArc<StorageClient>,
+    ) where
+        StorageClient: Clone,
+    {
+        let this = self.clone();
+        linera_base::Task::spawn(async move {
+            let requests = {
+                let mut guard = handle::write_lock(&state).await;
+                match guard.maybe_reset_corrupted_chain_state().await {
+                    Ok(Some(requests)) => requests,
+                    Ok(None) => return,
+                    Err(error) => {
+                        tracing::error!(
+                            %chain_id, %error, "Failed to reset corrupted chain state"
+                        );
+                        return;
+                    }
+                }
+            };
+            if let Some(sender) = &this.outbound_cross_chain_sender {
+                // Sharded validator path: let the RPC layer route each request to
+                // the shard that owns the target chain.
+                for request in requests {
+                    sender(request);
+                }
+            } else {
+                // No routing dispatcher is installed (client node or test), so all
+                // involved chains are co-located on this worker. Dispatch locally
+                // in a loop, following any cascading cross-chain requests.
+                let mut queue = VecDeque::from(requests);
+                while let Some(request) = queue.pop_front() {
+                    match this.handle_cross_chain_request(request).await {
+                        Ok(actions) => queue.extend(actions.cross_chain_requests),
+                        Err(error) => {
+                            warn!(
+                                %chain_id, %error,
+                                "Failed to dispatch cross-chain request after \
+                                resetting corrupted chain state"
+                            );
+                        }
+                    }
+                }
+            }
+        })
+        .forget();
     }
 
     /// Evicts a poisoned chain worker from the cache, but only if the entry still

@@ -401,7 +401,7 @@ where
                 .get_mut()
                 .get_mut(&update)
                 .ok_or_else(|| {
-                    ChainError::InternalError("message counter should be present".into())
+                    ChainError::CorruptedChainState("message counter should be present".into())
                 })?;
             *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
             if *counter == 0 {
@@ -538,7 +538,7 @@ where
             .await
             .map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
-                error => ChainError::InternalError(format!(
+                error => ChainError::CorruptedChainState(format!(
                     "while processing messages in certified block: {error}"
                 )),
             })?;
@@ -663,7 +663,7 @@ where
     ) -> Result<Vec<ReadGuardedView<OutboxStateView<C>>>, ChainError> {
         let vec_of_options = self.outboxes.try_load_entries(targets).await?;
         let optional_vec = vec_of_options.into_iter().collect::<Option<Vec<_>>>();
-        optional_vec.ok_or_else(|| ChainError::InternalError("Missing outboxes".into()))
+        optional_vec.ok_or_else(|| ChainError::CorruptedChainState("Missing outboxes".into()))
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
@@ -873,7 +873,7 @@ where
         let mut previous_message_blocks = BTreeMap::new();
         for (hash, (recipient, height)) in hashes.into_iter().zip(recipient_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::InternalError("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
             })?;
             previous_message_blocks.insert(recipient, (hash, height));
         }
@@ -893,7 +893,7 @@ where
         let mut previous_event_blocks = BTreeMap::new();
         for (hash, (stream, height)) in hashes.into_iter().zip(stream_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::InternalError("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
             })?;
             previous_event_blocks.insert(stream, (hash, height));
         }
@@ -1218,13 +1218,17 @@ where
                         let index =
                             usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                         Some(self.confirmed_log.get(index).await?.ok_or_else(|| {
-                            ChainError::InternalError("missing entry in confirmed_log".into())
+                            ChainError::CorruptedChainState("missing entry in confirmed_log".into())
                         })?)
                     }
                     // The block with last added message has not been executed yet. If we have it,
                     // it's in preprocessed_blocks.
                     Some(height) => Some(self.preprocessed_blocks.get(&height).await?.ok_or_else(
-                        || ChainError::InternalError("missing entry in preprocessed_blocks".into()),
+                        || {
+                            ChainError::CorruptedChainState(
+                                "missing entry in preprocessed_blocks".into(),
+                            )
+                        },
                     )?),
                     None => None, // No message to that sender was added yet.
                 };
@@ -1240,7 +1244,7 @@ where
                     (Some(_), None) => {
                         // Outbox indicates there was a previous message block, but
                         // previous_message_blocks has no idea about it - possible bug
-                        return Err(ChainError::InternalError(
+                        return Err(ChainError::CorruptedChainState(
                             "block indicates no previous message block,\
                             but we have one in the outbox"
                                 .into(),
