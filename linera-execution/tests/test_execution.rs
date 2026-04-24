@@ -1250,7 +1250,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     assert_eq!(*child_view.system.balance.get(), Amount::ONE);
     assert_eq!(*child_view.system.ownership.get().await?, child_ownership);
     assert_eq!(
-        *child_view.system.committees.get().await?,
+        *child_view.system.committees.get(),
         [(Epoch::ZERO, committee)]
             .into_iter()
             .collect::<BTreeMap<_, _>>()

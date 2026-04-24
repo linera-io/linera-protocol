@@ -2,13 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, collections::BTreeMap, str::FromStr, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 use allocative::Allocative;
-use linera_base::{
-    crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey},
-    data_types::Epoch,
-};
+use linera_base::crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey};
 use serde::{Deserialize, Serialize};
 
 use crate::policy::ResourceControlPolicy;
@@ -312,77 +309,5 @@ impl Committee {
     /// Returns a mutable reference to this committee's [`ResourceControlPolicy`].
     pub fn policy_mut(&mut self) -> &mut ResourceControlPolicy {
         &mut self.policy
-    }
-}
-
-/// Process-global, append-only cache of committees by epoch.
-///
-/// Committees are network-global state (created by the admin chain, agreed on
-/// by every validator), so caching them once per process avoids holding a
-/// separate copy in every chain's execution state. The map is populated
-/// lazily by `get_or_load`-style lookups in [`crate::ExecutionRuntimeContext`]
-/// and in the storage layer.
-#[derive(Clone, Debug, Default)]
-pub struct SharedCommittees {
-    map: Arc<papaya::HashMap<Epoch, Arc<Committee>>>,
-}
-
-impl SharedCommittees {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Returns the cached committee for `epoch`, if any.
-    pub fn get(&self, epoch: Epoch) -> Option<Arc<Committee>> {
-        self.map.pin().get(&epoch).cloned()
-    }
-
-    /// Inserts `committee` for `epoch`. If an entry was already present, the
-    /// existing value wins and is returned (avoiding spurious clones when two
-    /// callers race to populate the same epoch).
-    pub fn insert(&self, epoch: Epoch, committee: Arc<Committee>) -> Arc<Committee> {
-        let pinned = self.map.pin();
-        match pinned.try_insert(epoch, committee) {
-            Ok(inserted) => inserted.clone(),
-            Err(e) => e.current.clone(),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn shared_committees_insert_and_get() {
-        let shared = SharedCommittees::new();
-        assert!(shared.get(Epoch(0)).is_none());
-        let committee = Arc::new(Committee::default());
-        let inserted = shared.insert(Epoch(0), committee.clone());
-        assert!(Arc::ptr_eq(&inserted, &committee));
-        let fetched = shared.get(Epoch(0)).unwrap();
-        assert!(Arc::ptr_eq(&fetched, &committee));
-    }
-
-    #[test]
-    fn shared_committees_insert_is_first_writer_wins() {
-        let shared = SharedCommittees::new();
-        let first = Arc::new(Committee::default());
-        let second = Arc::new(Committee::default());
-        let winner = shared.insert(Epoch(5), first.clone());
-        assert!(Arc::ptr_eq(&winner, &first));
-        let loser = shared.insert(Epoch(5), second.clone());
-        assert!(Arc::ptr_eq(&loser, &first));
-        assert!(!Arc::ptr_eq(&loser, &second));
-    }
-
-    #[test]
-    fn shared_committees_clones_share_storage() {
-        let a = SharedCommittees::new();
-        let b = a.clone();
-        let committee = Arc::new(Committee::default());
-        a.insert(Epoch(1), committee.clone());
-        let fetched = b.get(Epoch(1)).unwrap();
-        assert!(Arc::ptr_eq(&fetched, &committee));
     }
 }

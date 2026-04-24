@@ -13,10 +13,10 @@ use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode, Epoch,
+        ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode,
         NetworkDescription, TimeDelta, Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
 pub use linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS;
@@ -24,15 +24,14 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
-use linera_execution::{
-    committee::Committee, system::EPOCH_STREAM_NAME, BlobState, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, SharedCommittees, TransactionTracker,
-    UserContractCode, UserServiceCode, WasmRuntime,
-};
 #[cfg(with_revm)]
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
     EvmRuntime,
+};
+use linera_execution::{
+    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, TransactionTracker,
+    UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
@@ -226,47 +225,6 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         information: &NetworkDescription,
     ) -> Result<(), ViewError>;
-
-    /// Returns the process-global cache of committees by epoch.
-    fn shared_committees(&self) -> &SharedCommittees;
-
-    /// Returns the committee for `epoch`, consulting the shared cache first
-    /// and, on a miss, loading it from the `NewCommittee` event on the admin
-    /// chain (or from the genesis committee blob for epoch 0) plus the
-    /// committee blob. Returns `Ok(None)` if the network description, event,
-    /// or blob is not yet available locally.
-    async fn get_or_load_committee(
-        &self,
-        epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ViewError> {
-        if let Some(committee) = self.shared_committees().get(epoch) {
-            return Ok(Some(committee));
-        }
-        let Some(net_description) = self.read_network_description().await? else {
-            return Ok(None);
-        };
-        let blob_hash = if epoch.0 == 0 {
-            net_description.genesis_committee_blob_hash
-        } else {
-            let event_id = EventId {
-                chain_id: net_description.admin_chain_id,
-                stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                index: epoch.0,
-            };
-            match self.read_event(event_id).await? {
-                Some(bytes) => bcs::from_bytes(&bytes)?,
-                None => return Ok(None),
-            }
-        };
-        let blob_id = BlobId::new(blob_hash, BlobType::Committee);
-        let Some(blob) = self.read_blob(blob_id).await? else {
-            return Ok(None);
-        };
-        let committee: Committee = bcs::from_bytes(blob.bytes())?;
-        Ok(Some(
-            self.shared_committees().insert(epoch, Arc::new(committee)),
-        ))
-    }
 
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
     ///
@@ -530,13 +488,6 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         self.storage.read_network_description().await
-    }
-
-    async fn get_or_load_committee(
-        &self,
-        epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ViewError> {
-        self.storage.get_or_load_committee(epoch).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

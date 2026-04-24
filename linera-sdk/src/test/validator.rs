@@ -330,13 +330,7 @@ impl TestValidator {
             .chain_state_view(admin_chain_id)
             .await
             .expect("Failed to read admin chain state");
-        let committees = chain_state
-            .execution_state
-            .system
-            .committees
-            .get()
-            .await
-            .expect("Failed to read committees");
+        let committees = chain_state.execution_state.system.committees.get();
         let epoch = *chain_state.execution_state.system.epoch.get();
         let min_active_epoch = committees.keys().min().copied().unwrap_or(Epoch::ZERO);
         let max_active_epoch = committees.keys().max().copied().unwrap_or(Epoch::ZERO);

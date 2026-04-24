@@ -211,12 +211,6 @@ where
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
-
-    /// Drops the in-memory cache of the stored value. Subsequent `get()` calls
-    /// reload from storage. Pending unsaved updates are not affected.
-    pub fn evict(&mut self) {
-        self.stored_value = OnceLock::new();
-    }
 }
 
 impl<C, T> LazyRegisterView<C, T>
@@ -273,18 +267,6 @@ where
 /// Type wrapping `LazyRegisterView` while memoizing the hash.
 pub type HashedLazyRegisterView<C, T> =
     WrappedHashableContainerView<C, LazyRegisterView<C, T>, HasherOutput>;
-
-impl<C, T> WrappedHashableContainerView<C, LazyRegisterView<C, T>, HasherOutput>
-where
-    C: Context,
-    T: Default + Send + Sync + Serialize + DeserializeOwned,
-{
-    /// Drops the in-memory cache of the wrapped value without invalidating
-    /// the memoized hash (the logical content is unchanged).
-    pub fn evict(&mut self) {
-        self.inner_mut_preserve_hash().evict();
-    }
-}
 
 #[cfg(with_graphql)]
 mod graphql {

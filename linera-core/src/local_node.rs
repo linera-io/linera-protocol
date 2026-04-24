@@ -10,14 +10,14 @@ use std::{
 use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, Blob, BlockHeight},
+    data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
     identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
     types::{Block, GenericCertificate},
 };
-use linera_execution::{BlobState, Query, QueryOutcome, ResourceTracker};
+use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::ViewError;
 use thiserror::Error;
@@ -453,5 +453,40 @@ where
     /// Gets the chain manager's seed for leader election.
     pub async fn get_manager_seed(&self, chain_id: ChainId) -> Result<u64, LocalNodeError> {
         Ok(self.node.state.get_manager_seed(chain_id).await?)
+    }
+}
+
+/// Extension trait for [`ChainInfo`]s from our local node. These should always be valid and
+/// contain the requested information.
+pub trait LocalChainInfoExt {
+    /// Returns the requested map of committees.
+    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError>;
+
+    /// Returns the current committee.
+    fn into_current_committee(self) -> Result<Committee, LocalNodeError>;
+
+    /// Returns a reference to the current committee.
+    fn current_committee(&self) -> Result<&Committee, LocalNodeError>;
+}
+
+impl LocalChainInfoExt for ChainInfo {
+    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {
+        self.requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)
+    }
+
+    fn into_current_committee(self) -> Result<Committee, LocalNodeError> {
+        self.requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
+            .remove(&self.epoch)
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
+    }
+
+    fn current_committee(&self) -> Result<&Committee, LocalNodeError> {
+        self.requested_committees
+            .as_ref()
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
+            .get(&self.epoch)
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 }

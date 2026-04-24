@@ -215,15 +215,6 @@ impl<C, W, O> DerefMut for WrappedHashableContainerView<C, W, O> {
     }
 }
 
-impl<C, W, O> WrappedHashableContainerView<C, W, O> {
-    /// Returns a mutable reference to the wrapped view without invalidating
-    /// the memoized hash. Only safe to use for operations that do not alter
-    /// the logical content (e.g. dropping an in-memory cache).
-    pub(crate) fn inner_mut_preserve_hash(&mut self) -> &mut W {
-        &mut self.inner
-    }
-}
-
 #[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;

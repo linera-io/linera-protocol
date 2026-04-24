@@ -37,7 +37,7 @@ use linera_base::{
         Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
         Timestamp,
     },
-    doc_scalar, hex_debug, http,
+    doc_scalar, ensure, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, DataBlobHash, EventId,
         GenericApplicationId, ModuleId, StreamId, StreamName,
@@ -65,7 +65,7 @@ pub use crate::wasm::{
     ServiceRuntimeApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    committee::{Committee, SharedCommittees},
+    committee::Committee,
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::{ExecutionRequest, ExecutionStateActor},
     policy::ResourceControlPolicy,
@@ -555,58 +555,81 @@ pub trait ExecutionRuntimeContext {
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
-    /// Returns the committees for the epochs in the given range. Delegates per-epoch
-    /// look-ups to [`Self::get_or_load_committee`] so the process-global cache is hit,
-    /// and surfaces any missing epochs as a single [`ExecutionError::EventsNotFound`].
+    /// Returns the committees for the epochs in the given range.
     async fn get_committees(
         &self,
         epoch_range: RangeInclusive<Epoch>,
     ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
-        let mut committees = BTreeMap::new();
-        let mut missing = Vec::new();
-        for index in epoch_range.start().0..=epoch_range.end().0 {
-            let epoch = Epoch(index);
-            match self.get_or_load_committee(epoch).await? {
-                Some(committee) => {
-                    committees.insert(epoch, (*committee).clone());
+        let net_description = self
+            .get_network_description()
+            .await?
+            .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
+        let committee_hashes = futures::future::join_all(
+            (epoch_range.start().0..=epoch_range.end().0).map(|epoch| async move {
+                if epoch == 0 {
+                    // Genesis epoch is stored in NetworkDescription.
+                    Ok((epoch, net_description.genesis_committee_blob_hash))
+                } else {
+                    let event_id = EventId {
+                        chain_id: net_description.admin_chain_id,
+                        stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                        index: epoch,
+                    };
+                    let event = self
+                        .get_event(event_id.clone())
+                        .await?
+                        .ok_or_else(|| ExecutionError::EventsNotFound(vec![event_id]))?;
+                    Ok((epoch, bcs::from_bytes(&event)?))
                 }
-                None => missing.push(epoch),
-            }
-        }
-        if !missing.is_empty() {
-            let net_description = self
-                .get_network_description()
-                .await?
-                .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
-            let event_ids = missing
-                .into_iter()
-                .map(|epoch| EventId {
-                    chain_id: net_description.admin_chain_id,
-                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                    index: epoch.0,
-                })
-                .collect();
-            return Err(ExecutionError::EventsNotFound(event_ids));
-        }
-        Ok(committees)
+            }),
+        )
+        .await;
+        let missing_events = committee_hashes
+            .iter()
+            .filter_map(|result| {
+                if let Err(ExecutionError::EventsNotFound(event_ids)) = result {
+                    return Some(event_ids);
+                }
+                None
+            })
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+        ensure!(
+            missing_events.is_empty(),
+            ExecutionError::EventsNotFound(missing_events)
+        );
+        let committee_hashes = committee_hashes
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+        let committees = futures::future::join_all(committee_hashes.into_iter().map(
+            |(epoch, committee_hash)| async move {
+                let blob_id = BlobId::new(committee_hash, BlobType::Committee);
+                let committee_blob = self
+                    .get_blob(blob_id)
+                    .await?
+                    .ok_or_else(|| ExecutionError::BlobsNotFound(vec![blob_id]))?;
+                Ok((Epoch(epoch), bcs::from_bytes(committee_blob.bytes())?))
+            },
+        ))
+        .await;
+        let missing_blobs = committees
+            .iter()
+            .filter_map(|result| {
+                if let Err(ExecutionError::BlobsNotFound(blob_ids)) = result {
+                    return Some(blob_ids);
+                }
+                None
+            })
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+        ensure!(
+            missing_blobs.is_empty(),
+            ExecutionError::BlobsNotFound(missing_blobs)
+        );
+        committees.into_iter().collect()
     }
-
-    /// Returns the committee for `epoch`, consulting the shared cache first. On a miss,
-    /// loads the `NewCommittee` event and the committee blob from storage and memoizes
-    /// the result. Returns `Ok(None)` if the network description, the event, or the
-    /// blob is not available locally.
-    ///
-    /// Determinism during block execution: call sites inside the runtime must only ask
-    /// for epochs up to and including the chain's current epoch (`self.epoch.get()`).
-    /// The chain-state invariant guarantees that every such committee is knowable (either
-    /// in the shared cache, in storage, or — for the chain's current epoch during a block
-    /// that just created it — in the pending update on the chain's own `committees`
-    /// view). Queries for strictly greater epochs read from a mutable process-wide cache
-    /// and are not deterministic.
-    async fn get_or_load_committee(
-        &self,
-        epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -1344,37 +1367,6 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             genesis_committee_blob_hash,
             name: "dummy network description".to_string(),
         }))
-    }
-
-    async fn get_or_load_committee(
-        &self,
-        epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ViewError> {
-        // No caching here — tests rarely load the same committee twice, and they don't
-        // benefit from the process-wide deduplication that `SharedCommittees` provides
-        // in production.
-        let Some(net_description) = self.get_network_description().await? else {
-            return Ok(None);
-        };
-        let blob_hash = if epoch.0 == 0 {
-            net_description.genesis_committee_blob_hash
-        } else {
-            let event_id = EventId {
-                chain_id: net_description.admin_chain_id,
-                stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                index: epoch.0,
-            };
-            match self.get_event(event_id).await? {
-                Some(bytes) => bcs::from_bytes(&bytes)?,
-                None => return Ok(None),
-            }
-        };
-        let blob_id = BlobId::new(blob_hash, BlobType::Committee);
-        let Some(blob) = self.get_blob(blob_id).await? else {
-            return Ok(None);
-        };
-        let committee: Committee = bcs::from_bytes(blob.bytes())?;
-        Ok(Some(Arc::new(committee)))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

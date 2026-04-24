@@ -2870,16 +2870,7 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        assert_eq!(
-            user_chain
-                .execution_state
-                .system
-                .committees
-                .get()
-                .await?
-                .len(),
-            1
-        );
+        assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
     }
     // Make the child receive the pending messages.
     let certificate3 = env.make_certificate(ConfirmedBlock::new(
@@ -2946,16 +2937,7 @@ where
             *user_chain.execution_state.system.admin_chain_id.get(),
             Some(admin_chain_id)
         );
-        assert_eq!(
-            user_chain
-                .execution_state
-                .system
-                .committees
-                .get()
-                .await?
-                .len(),
-            2
-        );
+        assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
         assert_no_removed_bundles(&user_chain).await;
         Ok(())
     }
@@ -3197,15 +3179,13 @@ where
         );
         assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
-        // .. and the message now lands in the admin chain's inbox. On this testnet
-        // branch the gating for cross-chain messages no longer rejects bundles at
-        // revoked epochs: every epoch the process knows about is considered valid.
+        // .. but the message hasn't gone through.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
-        assert_eq!(admin_chain.inboxes.indices().await?, vec![user_id]);
+        assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
 
-    // Have the admin chain consume the message normally.
+    // Force the admin chain to receive the money nonetheless by anticipation.
     let certificate2 = env.make_certificate(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
@@ -3248,7 +3228,28 @@ where
         .await?;
 
     {
-        // After consumption, the admin chain has no pending bundles.
+        // The admin chain has an anticipated message.
+        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
+        assert!(admin_chain.is_active().await?);
+        assert!(admin_chain
+            .inboxes
+            .try_load_entry(&user_id)
+            .await?
+            .unwrap()
+            .removed_bundles
+            .front()
+            .await?
+            .is_some());
+    }
+
+    // Try again to execute the transfer from the user chain to the admin chain.
+    // This time, the epoch verification should be overruled.
+    env.worker()
+        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
+        .await?;
+
+    {
+        // The admin chain has no more anticipated messages.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
         assert_no_removed_bundles(&admin_chain).await;
@@ -3315,6 +3316,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     )
     .await?;
     let env = TestEnvironment::new(store, true, false).await;
+    let committees = BTreeMap::from([(Epoch::from(1), env.committee().clone())]);
 
     let chain_0 = env.admin_description.clone();
     let chain_1 = dummy_chain_description(1);
@@ -3401,143 +3403,76 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             .collect()
     }
 
-    let storage = env.worker().storage_client();
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: true,
         current_epoch: Epoch::from(1),
+        committees: &committees,
     };
     // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &id0,
-                id1,
-                BlockHeight::ZERO,
-                None,
-                bundles01.clone(),
-                storage
-            )
-            .await?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
         without_epochs(&bundles01)
     );
     // Received heights is removing prefixes.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &id0,
-                id1,
-                BlockHeight::from(1),
-                None,
-                bundles01.clone(),
-                storage
-            )
-            .await?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles01.clone())?,
         without_epochs(&bundles1)
     );
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &id0,
-                id1,
-                BlockHeight::from(2),
-                None,
-                bundles01.clone(),
-                storage
-            )
-            .await?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::from(2), None, bundles01.clone())?,
         vec![]
     );
     // Order of certificates is checked.
     assert_matches!(
-        helper
-            .select_message_bundles(
-                &id0,
-                id1,
-                BlockHeight::ZERO,
-                None,
-                Vec::from_iter(bundles1.iter().cloned().chain(bundles0.iter().cloned())),
-                storage
-            )
-            .await,
+        helper.select_message_bundles(
+            &id0,
+            id1,
+            BlockHeight::ZERO,
+            None,
+            Vec::from_iter(bundles1.iter().cloned().chain(bundles0.iter().cloned()))
+        ),
         Err(WorkerError::InvalidCrossChainRequest)
     );
 
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: false,
         current_epoch: Epoch::from(1),
+        committees: &committees,
     };
-    // With the genesis committee (epoch 0) present in storage, and no event for any
-    // newer epoch, epochs known to the process are 0. current_epoch is 1, so epoch
-    // 1 passes via `*epoch >= current_epoch`. bundles3 is at epoch 0 (known) so it
-    // is also accepted — unlike the old per-chain-map gate, which would have rejected
-    // it because the chain had "forgotten" epoch 0.
-    // bundles01 is all epoch 0 → both accepted.
+    // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &id0,
-                id1,
-                BlockHeight::ZERO,
-                None,
-                bundles01.clone(),
-                storage
-            )
-            .await?,
-        without_epochs(&bundles01)
+        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
+        vec![]
     );
-    // All four bundles are at known-or-recent epochs, so all are accepted.
+    // A certificate with a recent epoch certifies all the previous blocks.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &id0,
-                id1,
-                BlockHeight::ZERO,
-                None,
-                bundles0123.clone(),
-                storage
-            )
-            .await?,
-        without_epochs(&bundles0123)
+        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles0123.clone())?,
+        without_epochs(&bundles012)
     );
     // Received heights is still removing prefixes.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &id0,
-                id1,
-                BlockHeight::from(1),
-                None,
-                bundles012.clone(),
-                storage
-            )
-            .await?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles012.clone())?,
         without_epochs(bundles1.iter().chain(&bundles2))
     );
     // Anticipated messages re-certify blocks up to the given height.
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &id0,
-                id1,
-                BlockHeight::from(1),
-                Some(BlockHeight::from(1)),
-                bundles01.clone(),
-                storage
-            )
-            .await?,
+        helper.select_message_bundles(
+            &id0,
+            id1,
+            BlockHeight::from(1),
+            Some(BlockHeight::from(1)),
+            bundles01.clone()
+        )?,
         without_epochs(&bundles1)
     );
     assert_eq!(
-        helper
-            .select_message_bundles(
-                &id0,
-                id1,
-                BlockHeight::ZERO,
-                Some(BlockHeight::from(1)),
-                bundles01.clone(),
-                storage
-            )
-            .await?,
+        helper.select_message_bundles(
+            &id0,
+            id1,
+            BlockHeight::ZERO,
+            Some(BlockHeight::from(1)),
+            bundles01.clone()
+        )?,
         without_epochs(&bundles01)
     );
     Ok(())

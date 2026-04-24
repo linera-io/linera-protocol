@@ -60,7 +60,6 @@ where
         if self
             .system
             .current_committee()
-            .await?
             .is_some_and(|(_epoch, committee)| {
                 committee
                     .policy()

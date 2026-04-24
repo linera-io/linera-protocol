@@ -81,8 +81,8 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     }
 
     #[graphql(derived(name = "committees"))]
-    async fn _committees(&self) -> Result<&BTreeMap<Epoch, Committee>, async_graphql::Error> {
-        Ok(self.committees.get().await?)
+    async fn _committees(&self) -> &BTreeMap<Epoch, Committee> {
+        self.committees.get()
     }
 
     #[graphql(derived(name = "ownership"))]
