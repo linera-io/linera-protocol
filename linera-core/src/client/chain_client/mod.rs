@@ -642,6 +642,17 @@ impl<Env: Environment> ChainClient<Env> {
                 self.synchronize_chain_state(self.chain_id).await?;
                 self.chain_info_with_committees().await?
             }
+            Err(LocalNodeError::EventsNotFound(event_ids))
+                if event_ids
+                    .iter()
+                    .all(|event_id| event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)) =>
+            {
+                // `initialize_and_save_if_needed` couldn't start the chain because
+                // the admin chain's epoch events aren't synced yet.
+                self.synchronize_chain_state(self.client.admin_chain_id)
+                    .await?;
+                self.chain_info_with_committees().await?
+            }
             Err(err) => return Err(err.into()),
         };
         let hash = info

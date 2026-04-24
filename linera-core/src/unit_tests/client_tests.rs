@@ -3094,6 +3094,73 @@ where
     Ok(())
 }
 
+/// Regression test: a client whose local node has the chain's description blob but
+/// hasn't yet synced the admin chain's `NewCommittee` event for the chain's active
+/// epoch must still be able to fetch its own committee — `local_committee` syncs the
+/// admin chain on its own rather than failing with `EventsNotFound` or `InactiveChain`.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_local_committee_syncs_admin_chain<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let new_public_key = signer.generate_new();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+
+    let admin_client = builder.add_root_chain(0, Amount::from_tokens(1000)).await?;
+    let parent = builder.add_root_chain(1, Amount::from_tokens(1000)).await?;
+
+    // Create a new epoch on the admin chain.
+    admin_client
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap();
+
+    // Migrate `parent` to the new epoch and open a child chain at that epoch.
+    parent.synchronize_from_validators().await.unwrap();
+    parent.process_inbox().await.unwrap();
+    let (child_desc, certificate) = Box::pin(parent.open_chain(
+        ChainOwnership::single(new_public_key.into()),
+        ApplicationPermissions::default(),
+        Amount::from_tokens(10),
+    ))
+    .await
+    .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // A fresh client with genesis-only storage: no admin-chain events past epoch 0.
+    let mut child_client = builder
+        .make_client(child_desc.id(), None, BlockHeight::ZERO)
+        .await?;
+    child_client.set_preferred_owner(new_public_key.into());
+    // Pre-seed the child's description blob so that the first `chain_info()` call
+    // makes it past the blob-lookup and triggers initialization, which needs the
+    // admin chain's epoch events to load the committee for epoch 1. This is the
+    // exact state a web client ends up in after receiving the chain description
+    // but before syncing the admin chain.
+    child_client
+        .storage_client()
+        .write_blob(&Blob::new_chain_description(&child_desc))
+        .await?;
+
+    // Before the fix, this returned `EventsNotFound` because
+    // `initialize_and_save_if_needed` couldn't find the admin chain's
+    // `NewCommittee` event for epoch 1. `local_committee` must sync
+    // the admin chain on its own and succeed.
+    let committee = child_client.local_committee().await?;
+    assert_eq!(
+        committee.validators.len(),
+        builder.initial_committee.validators.len()
+    );
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
