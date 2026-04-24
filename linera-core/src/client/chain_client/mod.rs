@@ -660,21 +660,40 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
     pub async fn local_committee(&self) -> Result<Committee, Error> {
-        let info = match self.chain_info().await {
-            Ok(info) => info,
-            Err(LocalNodeError::BlobsNotFound(_)) => {
-                self.synchronize_chain_state(self.chain_id).await?;
-                self.chain_info().await?
+        let mut synced = false;
+        loop {
+            let info = match self.chain_info().await {
+                Ok(info) => info,
+                Err(LocalNodeError::BlobsNotFound(_)) => {
+                    self.synchronize_chain_state(self.chain_id).await?;
+                    self.chain_info().await?
+                }
+                Err(LocalNodeError::EventsNotFound(_)) if !synced => {
+                    // `initialize_and_save_if_needed` couldn't start the chain because
+                    // the admin chain's epoch events aren't synced yet.
+                    self.synchronize_chain_state(self.client.admin_chain_id)
+                        .await?;
+                    synced = true;
+                    continue;
+                }
+                Err(err) => return Err(err.into()),
+            };
+            match self
+                .client
+                .storage_client()
+                .get_or_load_committee(info.epoch)
+                .await?
+            {
+                Some(committee) => return Ok((*committee).clone()),
+                None if !synced => {
+                    // The event announcing `info.epoch` hasn't reached us yet.
+                    self.synchronize_chain_state(self.client.admin_chain_id)
+                        .await?;
+                    synced = true;
+                }
+                None => return Err(LocalNodeError::InactiveChain(self.chain_id).into()),
             }
-            Err(err) => return Err(err.into()),
-        };
-        let committee = self
-            .client
-            .storage_client()
-            .get_or_load_committee(info.epoch)
-            .await?
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-        Ok((*committee).clone())
+        }
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
@@ -1247,14 +1266,9 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn request_leader_timeout(&self) -> Result<TimeoutCertificate, Error> {
         let chain_id = self.chain_id;
+        let committee = self.local_committee().await?;
         let info = self.chain_info().await?;
-        let committee = self
-            .client
-            .storage_client()
-            .get_or_load_committee(info.epoch)
-            .await?
-            .ok_or(LocalNodeError::InactiveChain(chain_id))?;
-        let committee = &*committee;
+        let committee = &committee;
         let height = info.next_block_height;
         let round = info.manager.current_round;
         let action = CommunicateAction::RequestTimeout {
@@ -2151,12 +2165,8 @@ impl<Env: Environment> ChainClient<Env> {
             ));
         };
         let current_committee = self
-            .client
-            .storage_client()
-            .get_or_load_committee(info.epoch)
+            .local_committee()
             .await?
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-        let current_committee = current_committee
             .validators
             .values()
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
