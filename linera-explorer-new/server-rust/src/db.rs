@@ -16,7 +16,7 @@ pub async fn get_blocks(
     sqlx::query_as::<_, BlockSummary>(
         r#"
         SELECT hash, chain_id, height, timestamp, epoch, state_hash,
-               previous_block_hash, authenticated_signer,
+               previous_block_hash, authenticated_owner,
                operation_count, incoming_bundle_count, message_count,
                event_count, blob_count, LENGTH(data)::BIGINT as size
         FROM blocks
@@ -34,7 +34,7 @@ pub async fn get_block_by_hash(pool: &PgPool, hash: &str) -> Result<Option<Block
     sqlx::query_as::<_, Block>(
         r#"
         SELECT hash, chain_id, height, timestamp, epoch, state_hash,
-               previous_block_hash, authenticated_signer,
+               previous_block_hash, authenticated_owner,
                operation_count, incoming_bundle_count, message_count,
                event_count, blob_count, ENCODE(data, 'base64') as data, created_at
         FROM blocks
@@ -55,7 +55,7 @@ pub async fn get_blocks_by_chain(
     sqlx::query_as::<_, BlockSummary>(
         r#"
         SELECT hash, chain_id, height, timestamp, epoch, state_hash,
-               previous_block_hash, authenticated_signer,
+               previous_block_hash, authenticated_owner,
                operation_count, incoming_bundle_count, message_count,
                event_count, blob_count, LENGTH(data)::BIGINT as size
         FROM blocks
@@ -96,7 +96,7 @@ pub async fn get_posted_messages(
 ) -> Result<Vec<PostedMessage>, sqlx::Error> {
     sqlx::query_as::<_, PostedMessage>(
         r#"
-        SELECT id, bundle_id, message_index, authenticated_signer, grant_amount,
+        SELECT id, bundle_id, message_index, authenticated_owner, grant_amount,
                refund_grant_to, message_kind, message_type, application_id,
                system_message_type, system_target, system_amount, system_source,
                system_owner, system_recipient, ENCODE(message_data, 'base64') as message_data, created_at
@@ -129,7 +129,7 @@ pub async fn get_block_with_bundles_and_messages(
             pm.id as message_id,
             pm.bundle_id as pm_bundle_id,
             pm.message_index,
-            pm.authenticated_signer,
+            pm.authenticated_owner,
             pm.grant_amount,
             pm.refund_grant_to,
             pm.message_kind,
@@ -181,7 +181,7 @@ pub async fn get_block_with_bundles_and_messages(
                 id: msg_id,
                 bundle_id: row.get("pm_bundle_id"),
                 message_index: row.get("message_index"),
-                authenticated_signer: row.get("authenticated_signer"),
+                authenticated_owner: row.get("authenticated_owner"),
                 grant_amount: row.get("grant_amount"),
                 refund_grant_to: row.get("refund_grant_to"),
                 message_kind: row.get("message_kind"),
@@ -300,7 +300,7 @@ pub async fn get_operations(
     sqlx::query_as::<_, Operation>(
         r#"
         SELECT id, block_hash, operation_index, operation_type,
-               application_id, system_operation_type, authenticated_signer,
+               application_id, system_operation_type, authenticated_owner,
                ENCODE(data, 'base64') as data, created_at
         FROM operations
         WHERE block_hash = $1
@@ -319,7 +319,7 @@ pub async fn get_messages(
     sqlx::query_as::<_, OutgoingMessage>(
         r#"
         SELECT id, block_hash, transaction_index, message_index, destination_chain_id,
-               authenticated_signer, grant_amount, message_kind,
+               authenticated_owner, grant_amount, message_kind,
                message_type, application_id, system_message_type, system_target,
                system_amount, system_source, system_owner, system_recipient,
                ENCODE(data, 'base64') as data, created_at

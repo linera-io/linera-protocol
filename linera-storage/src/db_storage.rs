@@ -21,7 +21,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode, WasmRuntime,
+    BlobState, ExecutionRuntimeConfig, SharedCommittees, UserContractCode, UserServiceCode,
+    WasmRuntime,
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
@@ -428,6 +429,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    shared_committees: SharedCommittees,
     caches: StorageCaches,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
@@ -660,6 +662,10 @@ where
 
     fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
         &self.thread_pool
+    }
+
+    fn shared_committees(&self) -> &SharedCommittees {
+        &self.shared_committees
     }
 
     #[instrument(level = "trace", skip_all, fields(chain_id = %chain_id))]
@@ -1475,6 +1481,7 @@ impl<Database, C> DbStorage<Database, C> {
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
+            shared_committees: SharedCommittees::new(),
             caches: StorageCaches::new(cache_sizes),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }

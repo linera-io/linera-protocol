@@ -460,13 +460,20 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let maybe_committee = self
+            .execution_state
+            .system
+            .current_committee()
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?;
         // Last, reset the consensus state based on the current ownership.
         self.manager.reset(
             self.execution_state.system.ownership.get().await?.clone(),
             BlockHeight(0),
             local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
+            maybe_committee
+                .iter()
+                .flat_map(|(_, committee)| committee.account_keys_and_weights()),
         )?;
         Ok(())
     }
@@ -566,11 +573,14 @@ where
         }
     }
 
-    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+    pub async fn current_committee(&self) -> Result<(Epoch, Arc<Committee>), ChainError> {
+        let chain_id = self.chain_id();
         self.execution_state
             .system
             .current_committee()
-            .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?
+            .ok_or(ChainError::InactiveChain(chain_id))
     }
 
     pub async fn ownership(&self) -> Result<&ChainOwnership, ChainError> {
@@ -688,6 +698,8 @@ where
         let committee_policy = chain
             .system
             .current_committee()
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
             .1
             .policy()
@@ -1153,10 +1165,16 @@ where
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let maybe_committee = self
+            .execution_state
+            .system
+            .current_committee()
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?;
         let ownership = self.execution_state.system.ownership.get().await?.clone();
-        let fallback_owners =
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
+        let fallback_owners = maybe_committee
+            .iter()
+            .flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
         self.manager

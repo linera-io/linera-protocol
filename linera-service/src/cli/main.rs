@@ -556,7 +556,7 @@ impl Runnable for Job {
                         let command = command.clone();
                         async move {
                             // Update resource control policy
-                            let mut committee = chain_client.local_committee().await.unwrap();
+                            let committee = chain_client.local_committee().await.unwrap();
                             let mut policy = committee.policy().clone();
                             let validators = committee.validators().clone();
                             match command {
@@ -685,9 +685,9 @@ impl Runnable for Job {
                                 }
                                 _ => unreachable!(),
                             }
-                            committee = Committee::new(validators, policy)?;
+                            let new_committee = Committee::new(validators, policy)?;
                             chain_client
-                                .stage_new_committee(committee)
+                                .stage_new_committee(new_committee)
                                 .await
                                 .map(|outcome| outcome.map(Some))
                         }
@@ -1798,7 +1798,7 @@ impl Runnable for Job {
                     .make_chain_client(network_description.admin_chain_id)
                     .await?;
                 chain_client
-                    .synchronize_chain_state_from_committee(committee)
+                    .synchronize_chain_state_from_committee(Arc::new(committee))
                     .await?;
                 context.update_wallet_from_client(&chain_client).await?;
             }

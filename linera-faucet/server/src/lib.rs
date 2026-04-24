@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 //! The server component of the Linera faucet.
 
@@ -316,7 +316,7 @@ where
 
     /// Returns the current committee, including weights and resource policy.
     async fn current_committee(&self) -> Result<Committee, Error> {
-        Ok(self.client.local_committee().await?)
+        Ok((*self.client.local_committee().await?).clone())
     }
 
     /// Returns the current epoch of the faucet's chain.

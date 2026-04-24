@@ -2,11 +2,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, collections::BTreeMap};
+use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{AccountPublicKey, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};
@@ -255,5 +255,79 @@ impl Committee {
     /// Returns a mutable reference to this committee's [`ResourceControlPolicy`].
     pub fn policy_mut(&mut self) -> &mut ResourceControlPolicy {
         &mut self.policy
+    }
+}
+
+/// Process-global, append-only cache of committees keyed by their blob hash.
+///
+/// Committees are network-global state (created by the admin chain, agreed
+/// on by every validator), so caching them once per process avoids holding a
+/// separate copy in every chain's execution state. The map is populated
+/// lazily by `get_or_load_committee_by_hash` in the storage layer.
+#[derive(Clone, Debug, Default)]
+pub struct SharedCommittees {
+    map: Arc<papaya::HashMap<CryptoHash, Arc<Committee>>>,
+}
+
+impl SharedCommittees {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the cached committee for `hash`, if any.
+    pub fn get(&self, hash: CryptoHash) -> Option<Arc<Committee>> {
+        self.map.pin().get(&hash).cloned()
+    }
+
+    /// Inserts `committee` under `hash`. If an entry was already present, the
+    /// existing value wins and is returned (avoiding spurious clones when two
+    /// callers race to populate the same hash).
+    pub fn insert(&self, hash: CryptoHash, committee: Arc<Committee>) -> Arc<Committee> {
+        let pinned = self.map.pin();
+        match pinned.try_insert(hash, committee) {
+            Ok(inserted) => inserted.clone(),
+            Err(e) => e.current.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_committees_insert_and_get() {
+        let shared = SharedCommittees::new();
+        let hash = CryptoHash::test_hash("c0");
+        assert!(shared.get(hash).is_none());
+        let committee = Arc::new(Committee::default());
+        let inserted = shared.insert(hash, committee.clone());
+        assert!(Arc::ptr_eq(&inserted, &committee));
+        let fetched = shared.get(hash).unwrap();
+        assert!(Arc::ptr_eq(&fetched, &committee));
+    }
+
+    #[test]
+    fn shared_committees_insert_is_first_writer_wins() {
+        let shared = SharedCommittees::new();
+        let hash = CryptoHash::test_hash("c1");
+        let first = Arc::new(Committee::default());
+        let second = Arc::new(Committee::default());
+        let winner = shared.insert(hash, first.clone());
+        assert!(Arc::ptr_eq(&winner, &first));
+        let loser = shared.insert(hash, second.clone());
+        assert!(Arc::ptr_eq(&loser, &first));
+        assert!(!Arc::ptr_eq(&loser, &second));
+    }
+
+    #[test]
+    fn shared_committees_clones_share_storage() {
+        let a = SharedCommittees::new();
+        let b = a.clone();
+        let hash = CryptoHash::test_hash("c2");
+        let committee = Arc::new(Committee::default());
+        a.insert(hash, committee.clone());
+        let fetched = b.get(hash).unwrap();
+        assert!(Arc::ptr_eq(&fetched, &committee));
     }
 }

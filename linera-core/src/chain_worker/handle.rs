@@ -159,8 +159,9 @@ pub(crate) async fn read_lock<S: Storage + Clone + 'static>(
 /// Acquires a read lock, initializing the chain if needed.
 ///
 /// First acquires a read lock and checks if the chain is already known to be active.
-/// If not, drops the read lock, acquires a write lock to initialize the chain,
-/// then re-acquires the read lock.
+/// If not, drops the read lock, runs the initializing write phase on a detached task
+/// (so caller cancellation cannot tear the save halfway), then re-acquires the read
+/// lock.
 pub(crate) async fn read_lock_initialized<S: Storage + Clone + 'static>(
     state: &Arc<RwLock<ChainWorkerState<S>>>,
 ) -> Result<OwnedRwLockReadGuard<ChainWorkerState<S>>, crate::worker::WorkerError> {
@@ -170,10 +171,12 @@ pub(crate) async fn read_lock_initialized<S: Storage + Clone + 'static>(
             return Ok(guard);
         }
     }
-    {
-        let mut guard = write_lock(state).await;
-        guard.initialize_and_save_if_needed().await?;
-    }
+    let state_for_task = state.clone();
+    linera_base::task::run_detached(async move {
+        let mut guard = write_lock(&state_for_task).await;
+        guard.initialize_and_save_if_needed().await
+    })
+    .await?;
     Ok(read_lock(state).await)
 }
 

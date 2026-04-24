@@ -10,14 +10,15 @@ use std::{
 use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
+    data_types::{ArithmeticError, Blob, BlockHeight},
     identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
     types::{Block, GenericCertificate},
+    ChainError, ChainExecutionContext,
 };
-use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome, ResourceTracker};
+use linera_execution::{BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::ViewError;
 use thiserror::Error;
@@ -69,6 +70,20 @@ pub enum LocalNodeError {
 
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
+}
+
+impl From<ExecutionError> for LocalNodeError {
+    fn from(error: ExecutionError) -> Self {
+        match error {
+            ExecutionError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
+            ExecutionError::EventsNotFound(event_ids) => LocalNodeError::EventsNotFound(event_ids),
+            ExecutionError::ViewError(view_error) => LocalNodeError::ViewError(view_error),
+            error => LocalNodeError::WorkerError(WorkerError::from(ChainError::ExecutionError(
+                Box::new(error),
+                ChainExecutionContext::Block,
+            ))),
+        }
+    }
 }
 
 impl From<WorkerError> for LocalNodeError {
@@ -448,40 +463,5 @@ where
             .state
             .get_next_height_to_preprocess(chain_id)
             .await?)
-    }
-}
-
-/// Extension trait for [`ChainInfo`]s from our local node. These should always be valid and
-/// contain the requested information.
-pub trait LocalChainInfoExt {
-    /// Returns the requested map of committees.
-    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError>;
-
-    /// Returns the current committee.
-    fn into_current_committee(self) -> Result<Committee, LocalNodeError>;
-
-    /// Returns a reference to the current committee.
-    fn current_committee(&self) -> Result<&Committee, LocalNodeError>;
-}
-
-impl LocalChainInfoExt for ChainInfo {
-    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {
-        self.requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)
-    }
-
-    fn into_current_committee(self) -> Result<Committee, LocalNodeError> {
-        self.requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .remove(&self.epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
-    }
-
-    fn current_committee(&self) -> Result<&Committee, LocalNodeError> {
-        self.requested_committees
-            .as_ref()
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .get(&self.epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 }
