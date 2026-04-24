@@ -499,14 +499,7 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        // Last, reset the consensus state based on the current ownership.
-        self.manager.reset(
-            self.execution_state.system.ownership.get().await?.clone(),
-            BlockHeight(0),
-            local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
-        )?;
+        self.reset_chain_manager(BlockHeight(0), local_time).await?;
         Ok(())
     }
 
@@ -607,10 +600,11 @@ where
         }
     }
 
-    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+    pub async fn current_committee(&self) -> Result<(Epoch, Arc<Committee>), ChainError> {
         self.execution_state
             .system
             .current_committee()
+            .await?
             .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
     }
 
@@ -733,6 +727,7 @@ where
         let committee_policy = chain
             .system
             .current_committee()
+            .await?
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
             .1
             .policy()
@@ -1025,15 +1020,12 @@ where
         }
 
         let mandatory_apps_need_accepted_message = self
-            .execution_state
-            .system
             .current_committee()
-            .is_some_and(|(_epoch, committee)| {
-                committee
-                    .policy()
-                    .http_request_allow_list
-                    .contains(FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE)
-            });
+            .await?
+            .1
+            .policy()
+            .http_request_allow_list
+            .contains(FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE);
         Self::check_app_permissions(
             self.execution_state
                 .system
@@ -1271,10 +1263,11 @@ where
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let maybe_committee = self.execution_state.system.current_committee().await?;
         let ownership = self.execution_state.system.ownership.get().await?.clone();
-        let fallback_owners =
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
+        let fallback_owners = maybe_committee
+            .iter()
+            .flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
         self.manager
