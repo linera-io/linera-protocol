@@ -6,7 +6,7 @@
 
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static ALLOC: linera_jemallocator::Jemalloc = linera_jemallocator::Jemalloc;
 
 /// Configure jemalloc profiling infrastructure at startup with sampling disabled.
 /// Profiling is activated at runtime only when `--enable-memory-profiling` is passed.
