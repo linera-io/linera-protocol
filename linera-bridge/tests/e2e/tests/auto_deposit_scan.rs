@@ -95,6 +95,8 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     tracing::info!("Creating programmatic Linera client...");
     let faucet = Faucet::new("http://localhost:8080".to_string());
     let genesis_config = faucet.genesis_config().await?;
+    // Snapshot for later — relay::run now requires a pre-existing wallet on disk.
+    let relay_genesis_config = genesis_config.clone();
 
     let config = MemoryStoreConfig {
         max_stream_queries: 10,
@@ -334,6 +336,10 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         ks.persist().await?;
     }
 
+    // Pre-bootstrap the relay's wallet — `linera_bridge::relay::run` no longer
+    // auto-creates one from a faucet; it expects an existing wallet on disk.
+    linera_wallet_json::PersistentWallet::create(&wallet_path, relay_genesis_config)?;
+
     let relay_port = 3002u16;
     let bridge_addr_str = format!("{bridge_addr}");
     let bridge_app_str = format!("{bridge_app_id}");
@@ -342,12 +348,11 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let relay_handle = tokio::spawn(async move {
         Box::pin(linera_bridge::relay::run(
             "http://localhost:8545",
-            Some("http://localhost:8080"),
             Some(wallet_path.as_path()),
             Some(keystore_path.as_path()),
             Some(&storage_config),
-            Some(chain_a),
-            Some(owner_a),
+            chain_a,
+            owner_a,
             &bridge_addr_str,
             &bridge_app_str,
             &fungible_app_str,
