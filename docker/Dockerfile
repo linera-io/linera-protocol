@@ -17,7 +17,7 @@ ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
 ARG build_features=scylladb,metrics,jemalloc
-ARG rustflags="-C force-frame-pointers=yes"
+ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/x86_64-linux-gnu"
 
 FROM rust:1.86-slim-bookworm AS builder
 ARG git_commit
@@ -30,7 +30,8 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     protobuf-compiler \
     clang \
-    make
+    make \
+    libunwind-dev
 
 COPY . .
 
@@ -71,7 +72,8 @@ LABEL build_date=$build_date
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    openssl
+    openssl \
+    libunwind8
 RUN update-ca-certificates
 
 COPY --from=binaries \
