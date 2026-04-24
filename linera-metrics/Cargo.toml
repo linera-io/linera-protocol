@@ -15,16 +15,16 @@ version.workspace = true
 workspace = true
 
 [features]
-jemalloc = ["jemalloc_pprof"]
+jemalloc = ["linera-jemalloc-ctl", "mappings", "pprof_util", "tempfile"]
 
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
-jemalloc_pprof = { workspace = true, features = [
-    "symbolize",
-    "flamegraph",
-], optional = true }
+linera-jemalloc-ctl = { workspace = true, optional = true }
+mappings = { workspace = true, optional = true }
+pprof_util = { workspace = true, optional = true }
 prometheus.workspace = true
+tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
