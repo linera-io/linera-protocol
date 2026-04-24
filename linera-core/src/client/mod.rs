@@ -821,7 +821,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
-    pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
+    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
         let query = ChainInfoQuery::new(self.admin_chain_id);
         let info = self.local_node.handle_chain_info_query(query).await?.info;
         let committee = self
@@ -829,7 +829,7 @@ impl<Env: Environment> Client<Env> {
             .get_or_load_committee(info.epoch)
             .await?
             .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
-        Ok((info.epoch, (*committee).clone()))
+        Ok((info.epoch, committee))
     }
 
     /// Obtains the validators for the latest epoch.
@@ -1602,7 +1602,7 @@ impl<Env: Environment> Client<Env> {
     pub async fn synchronize_chain_state_from_committee(
         &self,
         chain_id: ChainId,
-        committee: Committee,
+        committee: Arc<Committee>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         #[cfg(with_metrics)]
         let _latency = if !self.is_chain_follow_only(chain_id).await {

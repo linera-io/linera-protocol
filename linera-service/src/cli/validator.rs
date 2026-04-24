@@ -290,7 +290,7 @@ impl Add {
                 let chain_client = chain_client.clone();
                 async move {
                     // Create the new committee.
-                    let mut committee = chain_client.local_committee().await?;
+                    let committee = chain_client.local_committee().await?;
                     let policy = committee.policy().clone();
                     let mut validators = committee.validators().clone();
 
@@ -303,9 +303,9 @@ impl Add {
                         },
                     );
 
-                    committee = Committee::new(validators, policy);
+                    let new_committee = Committee::new(validators, policy);
                     chain_client
-                        .stage_new_committee(committee)
+                        .stage_new_committee(new_committee)
                         .await
                         .map(|outcome| outcome.map(Some))
                 }
@@ -535,7 +535,7 @@ impl Update {
                 let batch = batch_clone.clone();
                 async move {
                     // Get current committee
-                    let mut committee = chain_client.local_committee().await?;
+                    let committee = chain_client.local_committee().await?;
                     let policy = committee.policy().clone();
                     let mut validators = committee.validators().clone();
 
@@ -586,9 +586,9 @@ impl Update {
                     }
 
                     // Create new committee
-                    committee = Committee::new(validators, policy);
+                    let new_committee = Committee::new(validators, policy);
                     chain_client
-                        .stage_new_committee(committee)
+                        .stage_new_committee(new_committee)
                         .await
                         .map(|outcome| outcome.map(Some))
                 }
@@ -761,7 +761,7 @@ impl Remove {
                 let chain_client = chain_client.clone();
                 async move {
                     // Create the new committee.
-                    let mut committee = chain_client.local_committee().await?;
+                    let committee = chain_client.local_committee().await?;
                     let policy = committee.policy().clone();
                     let mut validators = committee.validators().clone();
 
@@ -770,9 +770,9 @@ impl Remove {
                         return Ok(ClientOutcome::Committed(None));
                     }
 
-                    committee = Committee::new(validators, policy);
+                    let new_committee = Committee::new(validators, policy);
                     chain_client
-                        .stage_new_committee(committee)
+                        .stage_new_committee(new_committee)
                         .await
                         .map(|outcome| outcome.map(Some))
                 }

@@ -659,46 +659,38 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
-    pub async fn local_committee(&self) -> Result<Committee, Error> {
-        let mut synced = false;
-        loop {
-            let info = match self.chain_info().await {
-                Ok(info) => info,
-                Err(LocalNodeError::BlobsNotFound(_)) => {
-                    self.synchronize_chain_state(self.chain_id).await?;
-                    self.chain_info().await?
-                }
-                Err(LocalNodeError::EventsNotFound(_)) if !synced => {
-                    // `initialize_and_save_if_needed` couldn't start the chain because
-                    // the admin chain's epoch events aren't synced yet.
-                    self.synchronize_chain_state(self.client.admin_chain_id)
-                        .await?;
-                    synced = true;
-                    continue;
-                }
-                Err(err) => return Err(err.into()),
-            };
-            match self
-                .client
-                .storage_client()
-                .get_or_load_committee(info.epoch)
-                .await?
-            {
-                Some(committee) => return Ok((*committee).clone()),
-                None if !synced => {
-                    // The event announcing `info.epoch` hasn't reached us yet.
-                    self.synchronize_chain_state(self.client.admin_chain_id)
-                        .await?;
-                    synced = true;
-                }
-                None => return Err(LocalNodeError::InactiveChain(self.chain_id).into()),
+    pub async fn local_committee(&self) -> Result<Arc<Committee>, Error> {
+        let info = match self.chain_info().await {
+            Ok(info) => info,
+            Err(LocalNodeError::BlobsNotFound(_)) => {
+                self.synchronize_chain_state(self.chain_id).await?;
+                self.chain_info().await?
             }
-        }
+            Err(LocalNodeError::EventsNotFound(event_ids))
+                if event_ids
+                    .iter()
+                    .all(|event_id| event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)) =>
+            {
+                // `initialize_and_save_if_needed` couldn't start the chain because
+                // the admin chain's epoch events aren't synced yet.
+                self.synchronize_chain_state(self.client.admin_chain_id)
+                    .await?;
+                self.chain_info().await?
+            }
+            Err(err) => return Err(err.into()),
+        };
+        let committee = self
+            .client
+            .storage_client()
+            .get_or_load_committee(info.epoch)
+            .await?
+            .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?;
+        Ok(committee)
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
     #[instrument(level = "trace")]
-    pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
+    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
         self.client.admin_committee().await
     }
 
@@ -850,7 +842,7 @@ impl<Env: Environment> ChainClient<Env> {
             );
         };
         if let Ok(new_committee) = self.local_committee().await {
-            if Some(&new_committee) != old_committee {
+            if Some(&*new_committee) != old_committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
                 let new_committee_start = linera_base::time::Instant::now();
@@ -1310,7 +1302,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", skip_all)]
     pub async fn synchronize_chain_state_from_committee(
         &self,
-        committee: Committee,
+        committee: Arc<Committee>,
     ) -> Result<Box<ChainInfo>, Error> {
         Box::pin(
             self.client
