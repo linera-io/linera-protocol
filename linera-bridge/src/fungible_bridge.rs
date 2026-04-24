@@ -9,9 +9,7 @@ mod tests {
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
         data_types::{Amount, BlockHeight},
-        identifiers::AccountOwner,
     };
-    use linera_chain::data_types::Transaction;
     use revm::{
         database::{CacheDB, EmptyDB},
         primitives::Address,
@@ -95,8 +93,8 @@ mod tests {
 
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-            let bridge =
-                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, 1, app_id, token);
+            let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token);
+            register_fungible_application_id(&mut db, deployer, bridge, app_id);
 
             // Fund the bridge with the full token supply
             call_contract(
@@ -122,29 +120,29 @@ mod tests {
             }
         }
 
-        /// Submits a block containing a single burn operation, returns logs and gas used.
+        /// Submits a block containing a BurnEvent, returns logs and gas used.
         fn submit_burn(
             &mut self,
-            owner: AccountOwner,
+            target: [u8; 20],
             amount: Amount,
         ) -> (Vec<revm::primitives::Log>, u64) {
-            let txn = fungible_burn_transaction(self.app_id, owner, amount);
-            self.submit_block(vec![txn])
+            let evt = burn_event(self.app_id, target, amount, 0);
+            self.submit_block_with_events(vec![vec![evt]])
         }
 
-        /// Submits a block with the given transactions at the next sequential height.
-        fn submit_block(
+        /// Submits a block with the given events.
+        fn submit_block_with_events(
             &mut self,
-            transactions: Vec<Transaction>,
+            events: Vec<Vec<linera_base::data_types::Event>>,
         ) -> (Vec<revm::primitives::Log>, u64) {
             let height = BlockHeight(self.next_height);
             self.next_height += 1;
-            let cert = create_certificate_with_transactions(
+            let cert = create_certificate_with_events(
                 &self.secret,
                 &self.public,
                 self.chain_id,
                 height,
-                transactions,
+                events,
             );
             let (_, logs, gas) = call_contract(
                 &mut self.db,
@@ -169,14 +167,7 @@ mod tests {
         }
     }
 
-    /// Creates a certificate containing a specific set of transactions.
-    use crate::test_helpers::create_certificate_with_transactions;
-
     const TEST_TARGET: [u8; 20] = [0xAB; 20];
-
-    fn test_target() -> AccountOwner {
-        AccountOwner::Address20(TEST_TARGET)
-    }
 
     fn test_target_evm_address() -> Address {
         Address::from_slice(&TEST_TARGET)
@@ -194,7 +185,7 @@ mod tests {
 
         let transfer_amount = 100_000_000_000_000_000_000u128;
 
-        t.submit_burn(test_target(), Amount::from_attos(transfer_amount));
+        t.submit_burn(TEST_TARGET, Amount::from_attos(transfer_amount));
 
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
@@ -206,11 +197,10 @@ mod tests {
     #[test]
     fn test_fungible_bridge_accumulates_burns() {
         let mut t = TestBridge::new();
-        let target = test_target();
 
         let transfer_amount = 100_000_000_000_000_000_000u128;
 
-        t.submit_burn(target, Amount::from_attos(transfer_amount));
+        t.submit_burn(TEST_TARGET, Amount::from_attos(transfer_amount));
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
             alloy_primitives::U256::from(transfer_amount),
@@ -219,7 +209,7 @@ mod tests {
 
         let second_transfer = 50_000_000_000_000_000_000u128;
 
-        t.submit_burn(target, Amount::from_attos(second_transfer));
+        t.submit_burn(TEST_TARGET, Amount::from_attos(second_transfer));
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
             alloy_primitives::U256::from(transfer_amount + second_transfer),
@@ -235,27 +225,12 @@ mod tests {
     }
 
     #[test]
-    fn test_fungible_bridge_skips_non_evm_targets() {
-        let mut t = TestBridge::new();
-        let target = AccountOwner::Address32(CryptoHash::new(&TestString::new("target_owner")));
-
-        t.submit_burn(target, Amount::from_tokens(100));
-
-        // Bridge balance should be unchanged
-        assert_eq!(
-            t.query_token_balance(t.bridge),
-            alloy_primitives::U256::from(INITIAL_SUPPLY),
-            "bridge balance should be unchanged for non-EVM targets"
-        );
-    }
-
-    #[test]
     fn test_fungible_bridge_ignores_other_applications() {
         let mut t = TestBridge::new();
         let other_app_id = CryptoHash::new(&TestString::new("other_app"));
 
-        let txn = fungible_burn_transaction(other_app_id, test_target(), Amount::from_tokens(50));
-        t.submit_block(vec![txn]);
+        let evt = burn_event(other_app_id, TEST_TARGET, Amount::from_tokens(50), 0);
+        t.submit_block_with_events(vec![vec![evt]]);
 
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
@@ -268,9 +243,9 @@ mod tests {
     fn test_fungible_bridge_gas_measurement() {
         let mut t = TestBridge::new();
 
-        let (_, gas_used) = t.submit_burn(test_target(), Amount::from_tokens(100));
+        let (_, gas_used) = t.submit_burn(TEST_TARGET, Amount::from_tokens(100));
 
-        println!("Gas used for fungible bridge addBlock with Burn operation: {gas_used}");
+        println!("Gas used for fungible bridge addBlock with BurnEvent: {gas_used}");
     }
 
     // --- EVM→Linera deposit tests ---
@@ -310,8 +285,8 @@ mod tests {
 
         let chain_id = CryptoHash::new(&TestString::new("test_chain"));
         let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-        let bridge =
-            deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, 1, app_id, token);
+        let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token);
+        register_fungible_application_id(&mut db, deployer, bridge, app_id);
 
         // Give depositor tokens (instead of funding the bridge)
         call_contract(

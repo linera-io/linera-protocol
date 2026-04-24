@@ -15,6 +15,16 @@ use {
 
 #[cfg(feature = "ethereum")]
 #[tokio::test]
+async fn test_get_chain_id() -> anyhow::Result<()> {
+    let anvil_test = get_anvil().await?;
+    let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint);
+    let chain_id = ethereum_client_simp.get_chain_id().await?;
+    assert_eq!(chain_id, 31337, "Anvil default chain ID should be 31337");
+    Ok(())
+}
+
+#[cfg(feature = "ethereum")]
+#[tokio::test]
 async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
     let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint);

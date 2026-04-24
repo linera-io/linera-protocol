@@ -15,7 +15,8 @@ hex.workspace = true
 linera-bridge = { path = "../../linera-bridge", default-features = false, features = [
     "chain",
 ] }
-linera-sdk.workspace = true
+linera-sdk = { workspace = true, features = ["ethereum"] }
+log.workspace = true
 serde.workspace = true
 wrapped-fungible.workspace = true
 
@@ -27,7 +28,9 @@ linera-bridge = { path = "../../linera-bridge", default-features = false, featur
     "chain",
     "testing",
 ] }
+linera-ethereum.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+serde.workspace = true
 tokio.workspace = true
 wrapped-fungible.workspace = true
 

@@ -7,7 +7,7 @@ use alloy::rpc::types::eth::{
     request::{TransactionInput, TransactionRequest},
     BlockId, BlockNumberOrTag, Filter, Log,
 };
-use alloy_primitives::{Address, Bytes, U256, U64};
+use alloy_primitives::{Address, Bytes, B256, U256, U64};
 use async_trait::async_trait;
 use linera_base::ensure;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -121,6 +121,16 @@ pub trait EthereumQueries {
         from: &str,
         block: u64,
     ) -> Result<Bytes, Self::Error>;
+
+    /// Returns the chain ID reported by the connected EVM node.
+    async fn get_chain_id(&self) -> Result<u64, Self::Error>;
+
+    /// Checks whether a block hash is finalized on the EVM chain.
+    ///
+    /// Queries the node for the block (proving it exists), then compares its number
+    /// against the latest finalized block number.
+    /// Returns `Err(BlockNotFound)` if the hash does not exist on chain.
+    async fn is_block_hash_finalized(&self, block_hash: B256) -> Result<bool, Self::Error>;
 }
 
 pub(crate) fn get_block_id(block_number: u64) -> BlockId {
@@ -146,6 +156,11 @@ where
 
     async fn get_block_number(&self) -> Result<u64, Self::Error> {
         let result = self.request::<_, U64>("eth_blockNumber", ()).await?;
+        Ok(result.to::<u64>())
+    }
+
+    async fn get_chain_id(&self) -> Result<u64, Self::Error> {
+        let result = self.request::<_, U64>("eth_chainId", ()).await?;
         Ok(result.to::<u64>())
     }
 
@@ -195,4 +210,25 @@ where
         let tag = get_block_id(block);
         Ok(self.request::<_, Bytes>("eth_call", (tx, tag)).await?)
     }
+
+    async fn is_block_hash_finalized(&self, block_hash: B256) -> Result<bool, Self::Error> {
+        let block: Option<EthBlockNumber> = self
+            .request("eth_getBlockByHash", (block_hash, false))
+            .await?;
+        let block = block.ok_or(EthereumServiceError::BlockNotFound)?;
+        let block_number = block.number.to::<u64>();
+
+        let finalized: EthBlockNumber = self
+            .request("eth_getBlockByNumber", ("finalized", false))
+            .await?;
+        let finalized_number = finalized.number.to::<u64>();
+
+        Ok(block_number <= finalized_number)
+    }
+}
+
+/// Minimal block response for extracting just the block number.
+#[derive(Deserialize)]
+struct EthBlockNumber {
+    number: U64,
 }

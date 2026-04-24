@@ -74,13 +74,12 @@ jobs:
       - name: Configure Docker for GCP
         run: gcloud auth configure-docker us-docker.pkg.dev
 
-      - name: Pull linera & exporter images
+      - name: Pull linera image
         id: pull-images
         continue-on-error: true
         run: |
           BRANCH="${{ github.base_ref || github.ref_name }}"
           docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
-          docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
           docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
 
       - name: Build linera image
@@ -90,18 +89,6 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           tags: linera-test
-          load: true
-          build-args: |
-            build_flag=
-            build_folder=debug
-
-      - name: Build exporter image
-        if: steps.pull-images.outcome == 'failure'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./docker/Dockerfile.exporter
-          tags: linera-exporter
           load: true
           build-args: |
             build_flag=
@@ -141,6 +128,9 @@ jobs:
       - name: Build example Wasm for bridge tests
         run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible -p evm-bridge
         working-directory: examples
+
+      - name: Build linera-bridge binary for local relay tests
+        run: cargo build -p linera-bridge --features linera-bridge/relay
 
       - name: Run bridge E2E test
         working-directory: linera-bridge/tests/e2e

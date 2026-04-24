@@ -14,6 +14,10 @@ pub mod proof;
 #[cfg(feature = "offchain")]
 pub mod evm;
 
+/// Bridge monitoring: tracks in-flight EVM↔Linera bridging requests.
+#[cfg(feature = "relay")]
+pub mod monitor;
+
 /// Relay server: HTTP proof endpoint + Linera chain inbox processing + EVM block forwarding.
 #[cfg(feature = "relay")]
 pub mod relay;

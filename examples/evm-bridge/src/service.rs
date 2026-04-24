@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Request, Response, Schema};
-use evm_bridge::{BridgeParameters, DepositKey, EvmBridgeAbi};
+use evm_bridge::{BridgeParameters, EvmBridgeAbi};
 use linera_sdk::{
     linera_base_types::WithServiceAbi,
     views::{linera_views, RootView, SetView, View, ViewStorageContext},
@@ -17,7 +17,7 @@ use linera_sdk::{
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
-    pub processed_deposits: SetView<DepositKey>,
+    pub processed_deposits: SetView<[u8; 32]>,
 }
 
 #[derive(Clone)]
@@ -70,5 +70,21 @@ impl EvmBridgeService {
     async fn token_address(&self) -> String {
         let params: BridgeParameters = self.runtime.application_parameters();
         format!("0x{}", hex::encode(params.token_address))
+    }
+
+    /// Whether a deposit with the given hash has been processed.
+    ///
+    /// The hash is the hex-encoded keccak-256 of the deposit key
+    /// (see [`evm_bridge::DepositKey::hash`]).
+    async fn is_deposit_processed(&self, hash: String) -> bool {
+        let bytes: [u8; 32] = hex::decode(hash.strip_prefix("0x").unwrap_or(&hash))
+            .expect("invalid hex")
+            .try_into()
+            .expect("hash must be 32 bytes");
+        self.state
+            .processed_deposits
+            .contains(&bytes)
+            .await
+            .expect("failed to check processed deposits")
     }
 }

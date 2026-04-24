@@ -39,6 +39,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera keygen`↴](#linera-keygen)
 * [`linera assign`↴](#linera-assign)
 * [`linera retry-pending-block`↴](#linera-retry-pending-block)
+* [`linera execute-operation`↴](#linera-execute-operation)
 * [`linera wallet`↴](#linera-wallet)
 * [`linera wallet show`↴](#linera-wallet-show)
 * [`linera wallet set-default`↴](#linera-wallet-set-default)
@@ -118,6 +119,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `keygen` — Create an unassigned key pair
 * `assign` — Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
+* `execute-operation` — Execute a raw user operation on an application
 * `wallet` — Show the contents of the wallet
 * `chain` — Show the information about a chain
 * `project` — Manage Linera projects
@@ -990,6 +992,22 @@ As long as a block is pending most other commands will fail, since it is unsafe 
 
 
 
+## `linera execute-operation`
+
+Execute a raw user operation on an application.
+
+The operation bytes are provided as a hex string (BCS-encoded).
+
+**Usage:** `linera execute-operation [OPTIONS] --application-id <APPLICATION_ID> --operation <OPERATION>`
+
+###### **Options:**
+
+* `--application-id <APPLICATION_ID>` — The application to send the operation to
+* `--operation <OPERATION>` — BCS-encoded operation bytes as a hex string
+* `--chain-id <CHAIN_ID>` — Chain ID to submit the operation on. Defaults to the wallet's default chain
+
+
+
 ## `linera wallet`
 
 Show the contents of the wallet
@@ -1321,6 +1339,7 @@ Start a Local Linera Network
 * `--exporter-port <EXPORTER_PORT>` — The port on which to run the block exporter
 
   Default value: `8081`
+* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
 
 
 

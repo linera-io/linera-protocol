@@ -59,7 +59,7 @@ use linera_core::{
     worker::Reason,
     JoinSetExt as _, LocalNodeError,
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, Operation};
 use linera_faucet_server::{FaucetConfig, FaucetService};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -1614,6 +1614,33 @@ impl Runnable for Job {
                 );
             }
 
+            ExecuteOperation {
+                application_id,
+                operation,
+                chain_id,
+            } => {
+                let bytes = linera_base::hex::decode(&operation)
+                    .context("invalid hex for operation bytes")?;
+                let user_operation = Operation::User {
+                    application_id,
+                    bytes,
+                };
+                let mut context = options
+                    .create_client_context(storage, wallet, keystore)
+                    .await?;
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let chain_client = context.make_chain_client(chain_id).await?;
+                let certificate = context
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        let user_operation = user_operation.clone();
+                        async move { chain_client.execute_operation(user_operation).await }
+                    })
+                    .await
+                    .context("Failed to execute operation")?;
+                debug!("{:?}", certificate);
+            }
+
             Project(project_command) => match project_command {
                 ProjectCommand::PublishAndCreate {
                     path,
@@ -2238,8 +2265,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             });
             let mut genesis_config = persistent::File::new(
                 genesis_config_path,
-                GenesisConfig::new(
-                    committee_config,
+                committee_config.into_genesis(
                     timestamp,
                     policy,
                     network_name,
@@ -2405,6 +2431,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 with_block_exporter,
                 exporter_address: block_exporter_address,
                 exporter_port: block_exporter_port,
+                http_request_allow_list,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -2425,6 +2452,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     *with_faucet,
                     *faucet_port,
                     *faucet_amount,
+                    http_request_allow_list.clone(),
                 )
                 .boxed()
                 .await?;
