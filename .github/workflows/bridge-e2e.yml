@@ -148,10 +148,10 @@ jobs:
           load: true
           tags: |
             linera-bridge:latest
-            ${{ env.GCP_REGISTRY }}/linera-bridge:${{ github.base_ref || github.ref_name }}
+            ${{ github.event_name != 'workflow_dispatch' && format('{0}/linera-bridge:{1}', env.GCP_REGISTRY, github.base_ref || github.ref_name) || '' }}
 
       - name: Push bridge image to registry
-        if: steps.build-bridge.outcome == 'success'
+        if: steps.build-bridge.outcome == 'success' && github.event_name != 'workflow_dispatch'
         run: |
           BRANCH="${{ github.base_ref || github.ref_name }}"
           docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
