@@ -35,7 +35,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    system::EventSubscriptions, Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query,
+    system::EventSubscriptions, ExecutionRuntimeContext as _, ExecutionStateView, Query,
     QueryContext, QueryOutcome, ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, Storage};
@@ -586,8 +586,8 @@ where
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.initialize_and_save_if_needed().await?;
-        let (chain_epoch, committee) = self.chain.current_committee()?;
-        certificate.check(committee)?;
+        let (chain_epoch, committee) = self.chain.current_committee().await?;
+        certificate.check(&committee)?;
         if self
             .chain
             .tip_state
@@ -688,9 +688,9 @@ where
                 found_block_height: header.height,
             }
         );
-        let (epoch, committee) = self.chain.current_committee()?;
+        let (epoch, committee) = self.chain.current_committee().await?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
-        certificate.check(committee)?;
+        certificate.check(&committee)?;
         let already_committed_block = self.chain.tip_state.get().already_validated_block(height)?;
         let should_skip_validated_block = || {
             self.chain
@@ -801,37 +801,25 @@ where
             ));
         }
 
-        // We haven't processed the block - verify the certificate first
+        // We haven't processed the block - verify the certificate first. A miss produces
+        // `ExecutionError::EventsNotFound`, which the client-side retry path watches for
+        // to trigger an admin-chain sync.
         let epoch = block.header.epoch;
-        // Get the committee for the block's epoch from storage.
-        if let Some(committee) = self
+        let committee = self
             .chain
             .execution_state
-            .system
-            .committees
-            .get()
-            .get(&epoch)
-        {
-            certificate.check(committee)?;
-        } else {
-            let committee = self
-                .chain
-                .execution_state
-                .context()
-                .extra()
-                .get_committees(epoch..=epoch)
-                .await
-                .map_err(|error| {
-                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-                })?
-                .remove(&epoch)
-                .ok_or_else(|| {
-                    ChainError::InternalError(format!(
-                        "missing committee for epoch {epoch}; this is a bug"
-                    ))
-                })?;
-            certificate.check(&committee)?;
-        }
+            .context()
+            .extra()
+            .get_committees(epoch..=epoch)
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?
+            .remove(&epoch)
+            .ok_or_else(|| {
+                ChainError::InternalError(format!(
+                    "missing committee for epoch {epoch}; this is a bug"
+                ))
+            })?;
+        certificate.check(&committee)?;
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
         // we can take note of it, so that if any are missing, we will accept them when the client
@@ -909,7 +897,7 @@ where
         // properly chained. Verify that the chain is active and that the epoch we used for
         // verifying the certificate is actually the active one on the chain.
         self.initialize_and_save_if_needed().await?;
-        let (epoch, _) = self.chain.current_committee()?;
+        let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
         let published_blobs = block
@@ -1091,13 +1079,16 @@ where
 
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
-        let bundles = helper.select_message_bundles(
-            &origin,
-            recipient,
-            next_height_to_receive,
-            last_anticipated_block_height,
-            bundles,
-        )?;
+        let bundles = helper
+            .select_message_bundles(
+                &origin,
+                recipient,
+                next_height_to_receive,
+                last_anticipated_block_height,
+                bundles,
+                &self.storage,
+            )
+            .await?;
         let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
             return Ok(CrossChainUpdateResult::NothingToDo);
         };
@@ -1656,7 +1647,7 @@ where
             .await?
         {
             if !pending_blobs.validated.get() {
-                let (_, committee) = self.chain.current_committee()?;
+                let (_, committee) = self.chain.current_committee().await?;
                 let policy = committee.policy();
                 policy
                     .check_blob_size(blob.content())
@@ -1798,7 +1789,7 @@ where
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let signer = block.authenticated_signer;
-        let (_, committee) = self.chain.current_committee()?;
+        let (_, committee) = self.chain.current_committee().await?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
         self.chain
@@ -1849,7 +1840,7 @@ where
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;
         // Check the epoch.
-        let (epoch, committee) = chain.current_committee()?;
+        let (epoch, committee) = chain.current_committee().await?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
@@ -1868,7 +1859,7 @@ where
             }
             Some(OriginalProposal::Regular { certificate }) => {
                 // Verify that this block has been validated by a quorum before.
-                certificate.check(committee)?;
+                certificate.check(&committee)?;
             }
             Some(OriginalProposal::Fast(signature)) => {
                 let original_proposal = BlockProposal {
@@ -1997,8 +1988,21 @@ where
         self.initialize_and_save_if_needed().await?;
         let mut info = ChainInfo::from_chain_view(&self.chain).await?;
         if query.request_committees {
-            info.requested_committees =
-                Some(self.chain.execution_state.system.committees.get().clone());
+            // Must reflect the chain's *own* view of which epochs it trusts:
+            // `collect_epoch_changes` in the chain client uses `min(committees.keys())`
+            // to decide where to start emitting `ProcessRemovedEpoch` ops. With a
+            // process-wide snapshot we would re-process the admin chain's own
+            // revocations. The load is transient — `committees` is evicted on the
+            // next save.
+            info.requested_committees = Some(
+                self.chain
+                    .execution_state
+                    .system
+                    .committees
+                    .get()
+                    .await?
+                    .clone(),
+            );
         }
         if query.request_owner_balance == AccountOwner::CHAIN {
             info.requested_owner_balance = Some(*self.chain.execution_state.system.balance.get());
@@ -2171,6 +2175,9 @@ where
             self.poisoned = true;
             return Err(WorkerError::PoisonedWorker);
         }
+        // Committee lookups go through the process-global SharedCommittees cache, so the
+        // chain-local `committees` map doesn't need to sit in memory across worker calls.
+        self.chain.execution_state.system.committees.evict();
         Ok(())
     }
 }
@@ -2217,22 +2224,20 @@ fn check_block_epoch(
 }
 
 /// Helper type for handling cross-chain updates.
-pub(crate) struct CrossChainUpdateHelper<'a> {
+pub(crate) struct CrossChainUpdateHelper {
     pub(crate) allow_messages_from_deprecated_epochs: bool,
     pub(crate) current_epoch: Epoch,
-    pub(crate) committees: &'a BTreeMap<Epoch, Committee>,
 }
 
-impl<'a> CrossChainUpdateHelper<'a> {
+impl CrossChainUpdateHelper {
     /// Creates a new [`CrossChainUpdateHelper`].
-    fn new<C>(config: &ChainWorkerConfig, chain: &'a ChainStateView<C>) -> Self
+    fn new<C>(config: &ChainWorkerConfig, chain: &ChainStateView<C>) -> Self
     where
         C: Context + Clone + 'static,
     {
         CrossChainUpdateHelper {
             allow_messages_from_deprecated_epochs: config.allow_messages_from_deprecated_epochs,
             current_epoch: *chain.execution_state.system.epoch.get(),
-            committees: chain.execution_state.system.committees.get(),
         }
     }
 
@@ -2240,18 +2245,19 @@ impl<'a> CrossChainUpdateHelper<'a> {
     /// * Returns a range of message bundles that are both new to us and not relying on
     ///   an untrusted set of validators.
     /// * In the case of validators, if the epoch(s) of the highest bundles are not
-    ///   trusted, we only accept bundles that contain messages that were already
-    ///   executed by anticipation (i.e. received in certified blocks).
+    ///   known to the process, we only accept bundles that contain messages that were
+    ///   already executed by anticipation (i.e. received in certified blocks).
     /// * Basic invariants are checked for good measure. We still crucially trust
     ///   the worker of the sending chain to have verified and executed the blocks
     ///   correctly.
-    pub(crate) fn select_message_bundles(
+    pub(crate) async fn select_message_bundles<S: Storage>(
         &self,
-        origin: &'a ChainId,
+        origin: &ChainId,
         recipient: ChainId,
         next_height_to_receive: BlockHeight,
         last_anticipated_block_height: Option<BlockHeight>,
         mut bundles: Vec<(Epoch, MessageBundle)>,
+        storage: &S,
     ) -> Result<Vec<MessageBundle>, WorkerError> {
         let mut latest_height = None;
         let mut skipped_len = 0;
@@ -2267,12 +2273,14 @@ impl<'a> CrossChainUpdateHelper<'a> {
             if bundle.height < next_height_to_receive {
                 skipped_len = i + 1;
             }
-            // Check if the height is trusted or the epoch is trusted.
-            if self.allow_messages_from_deprecated_epochs
+            // Check if the height is trusted or the epoch is known to the process.
+            // "Known" means we have the `NewCommittee` event (and therefore the committee
+            // blob) locally — either in the shared cache or in storage.
+            let epoch_is_known = self.allow_messages_from_deprecated_epochs
                 || Some(bundle.height) <= last_anticipated_block_height
                 || *epoch >= self.current_epoch
-                || self.committees.contains_key(epoch)
-            {
+                || storage.get_or_load_committee(*epoch).await?.is_some();
+            if epoch_is_known {
                 trusted_len = i + 1;
             }
         }
@@ -2287,7 +2295,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
             let (sample_epoch, sample_bundle) = &bundles[trusted_len];
             warn!(
                 "Refusing messages to {recipient:.8} from {origin:} at height {} \
-                 because the epoch {} is not trusted any more",
+                 because the epoch {} is not known locally",
                 sample_bundle.height, sample_epoch,
             );
         }

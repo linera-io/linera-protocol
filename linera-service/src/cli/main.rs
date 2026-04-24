@@ -516,7 +516,7 @@ impl Runnable for Job {
                         let command = command.clone();
                         async move {
                             // Update resource control policy
-                            let mut committee = chain_client.local_committee().await.unwrap();
+                            let committee = chain_client.local_committee().await.unwrap();
                             let mut policy = committee.policy().clone();
                             let validators = committee.validators().clone();
                             match command {
@@ -651,9 +651,9 @@ impl Runnable for Job {
                                 }
                                 _ => unreachable!(),
                             }
-                            committee = Committee::new(validators, policy);
+                            let new_committee = Committee::new(validators, policy);
                             chain_client
-                                .stage_new_committee(committee)
+                                .stage_new_committee(new_committee)
                                 .await
                                 .map(|outcome| outcome.map(Some))
                         }
@@ -1728,7 +1728,7 @@ impl Runnable for Job {
                     .create_client_context(storage, wallet, keystore)
                     .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
-                let committee = faucet.current_committee().await?;
+                let committee = Arc::new(faucet.current_committee().await?);
                 let chain_client = context
                     .make_chain_client(network_description.admin_chain_id)
                     .await?;

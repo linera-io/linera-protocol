@@ -49,6 +49,11 @@ pub enum GrpcProtoConversionError {
     InconsistentChainId,
     #[error("Unrecognized certificate type")]
     InvalidCertificateType,
+    #[error(
+        "Chain info queries asking for committees are reserved for local clients; \
+         validators serve committees via the event stream and the committee blob store"
+    )]
+    UnsupportedRequestCommittees,
 }
 
 impl From<ed25519_dalek::SignatureError> for GrpcProtoConversionError {
@@ -617,6 +622,14 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
     type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_query: api::ChainInfoQuery) -> Result<Self, Self::Error> {
+        // Defense in depth: every in-process caller has been moved off of
+        // `request_committees`, so a gRPC query that still asks for them is either a
+        // stale client or an attempt to force the validator to load the chain-local
+        // committees view. Reject before we hand the query to the worker.
+        ensure!(
+            !chain_info_query.request_committees,
+            GrpcProtoConversionError::UnsupportedRequestCommittees
+        );
         let request_sent_certificate_hashes_by_heights = chain_info_query
             .request_sent_certificate_hashes_by_heights
             .map(|heights| bincode::deserialize(&heights))
@@ -1295,6 +1308,21 @@ pub mod tests {
             create_network_actions: true,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
+    }
+
+    #[test]
+    pub fn reject_chain_info_query_with_request_committees() {
+        let proto = api::ChainInfoQuery {
+            chain_id: Some(dummy_chain_id(0).into()),
+            request_committees: true,
+            request_owner_balance: Some(AccountOwner::CHAIN.try_into().unwrap()),
+            ..api::ChainInfoQuery::default()
+        };
+        let error = ChainInfoQuery::try_from(proto).unwrap_err();
+        assert!(matches!(
+            error,
+            GrpcProtoConversionError::UnsupportedRequestCommittees
+        ));
     }
 
     #[test]
