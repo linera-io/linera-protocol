@@ -3921,7 +3921,6 @@ dependencies = [
  "linera-client",
  "linera-core",
  "linera-execution",
- "linera-faucet-client",
  "linera-storage",
  "linera-storage-runtime",
  "linera-views",
@@ -3959,6 +3958,7 @@ dependencies = [
  "linera-storage",
  "linera-storage-runtime",
  "linera-views",
+ "linera-wallet-json",
  "rand 0.8.5",
  "reqwest 0.12.28",
  "rustls 0.23.37",
@@ -3979,8 +3979,10 @@ dependencies = [
  "cfg_aliases",
  "linera-base",
  "lru 0.15.0",
+ "papaya",
  "prometheus",
  "quick_cache",
+ "tokio",
 ]
 
 [[package]]
@@ -4068,6 +4070,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "strum 0.26.3",
  "sync_wrapper 1.0.2",
  "thiserror 1.0.69",
  "tokio",
@@ -4305,6 +4308,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "convert_case 0.6.0",
+ "custom_debug_derive",
  "derive_more 1.0.0",
  "futures",
  "generic-array",

@@ -76,15 +76,19 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
     let storage_config = format!("rocksdb:{}", relay_dir.path().join("client.db").display());
     let relay_port = 3003u16;
 
+    // Pre-bootstrap the relay's wallet — `linera_bridge::relay::run` no longer
+    // auto-creates one from a faucet; it expects an existing wallet on disk.
+    let relay_genesis_config = faucet.genesis_config().await?;
+    linera_wallet_json::PersistentWallet::create(&wallet_path, relay_genesis_config)?;
+
     let relay_handle = tokio::spawn(async move {
         Box::pin(linera_bridge::relay::run(
             "http://localhost:8545",
-            Some("http://localhost:8080"),
             Some(wallet_path.as_path()),
             Some(keystore_path.as_path()),
             Some(&storage_config),
-            Some(relay_chain_id),
-            Some(relay_owner),
+            relay_chain_id,
+            relay_owner,
             // Dummy values — committee relay only needs the LightClient, not the bridge apps.
             "0x0000000000000000000000000000000000000000",
             "0000000000000000000000000000000000000000000000000000000000000000",
