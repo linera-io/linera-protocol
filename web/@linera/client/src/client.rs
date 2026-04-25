@@ -22,6 +22,7 @@ use crate::{
 /// to this API can be trusted to have originated from the user's
 /// request.
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct Client {
     // This use of `futures::lock::Mutex` is safe because we only
     // expose concurrency to the browser, which must always run all
@@ -30,8 +31,8 @@ pub struct Client {
     // hard-coded by `ChainListener`.
     pub(crate) context: ClientContext,
     listener: Arc<AsyncMutex<Option<Listener>>>,
-    chain_listener_config: linera_client::chain_listener::ChainListenerConfig,
-    storage: Storage,
+    pub(crate) chain_listener_config: linera_client::chain_listener::ChainListenerConfig,
+    pub(crate) storage: Storage,
 }
 
 #[derive(Default, serde::Deserialize, tsify::Tsify)]
@@ -103,14 +104,7 @@ impl Client {
     pub async fn start(&self) -> Result<()> {
         let mut guard = self.listener.lock().await;
         if guard.is_none() {
-            *guard = Some(
-                Listener::start(
-                    self.context.clone(),
-                    self.chain_listener_config.clone(),
-                    self.storage.clone(),
-                )
-                .await?,
-            );
+            *guard = Some(Listener::start(self.clone()).await?);
         }
         Ok(())
     }
@@ -145,7 +139,7 @@ impl Client {
 
         Ok(Chain {
             chain_client,
-            client_context: self.context.clone(),
+            client: self.clone(),
         })
     }
 
