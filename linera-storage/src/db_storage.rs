@@ -866,11 +866,12 @@ where
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            blobs.push(self.read_blob(*blob_id).await?);
-        }
-        Ok(blobs)
+        // Each blob lives under its own root_key (partition), so cross-partition
+        // reads can't be coalesced into a single IN query. The ScyllaDB best
+        // practice is parallel queries via the shard-aware driver, which routes
+        // each query to the right shard on the right node. RocksDB benefits too:
+        // concurrent point lookups let the scheduler overlap cache/SST reads.
+        futures::future::try_join_all(blob_ids.iter().map(|blob_id| self.read_blob(*blob_id))).await
     }
 
     #[instrument(skip_all, fields(%blob_id))]
@@ -893,11 +894,12 @@ where
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let mut blob_states = Vec::new();
-        for blob_id in blob_ids {
-            blob_states.push(self.read_blob_state(*blob_id).await?);
-        }
-        Ok(blob_states)
+        futures::future::try_join_all(
+            blob_ids
+                .iter()
+                .map(|blob_id| self.read_blob_state(*blob_id)),
+        )
+        .await
     }
 
     #[instrument(skip_all, fields(blob_id = %blob.id()))]

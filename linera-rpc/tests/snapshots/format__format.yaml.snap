@@ -1043,137 +1043,142 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobId
     8:
+      DownloadBlobs:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BlobId
+    9:
       DownloadPendingBlob:
         NEWTYPE:
           TUPLE:
             - TYPENAME: ChainId
             - TYPENAME: BlobId
-    9:
+    10:
       HandlePendingBlob:
         NEWTYPE:
           TUPLE:
             - TYPENAME: ChainId
             - TYPENAME: BlobContent
-    10:
+    11:
       DownloadConfirmedBlock:
         NEWTYPE:
           TYPENAME: CryptoHash
-    11:
+    12:
       DownloadCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    12:
+    13:
       DownloadCertificatesByHeights:
         TUPLE:
           - TYPENAME: ChainId
           - SEQ:
               TYPENAME: BlockHeight
-    13:
+    14:
       BlobLastUsedBy:
         NEWTYPE:
           TYPENAME: BlobId
-    14:
+    15:
       MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    15:
+    16:
       EventBlockHeights:
         NEWTYPE:
           SEQ:
             TYPENAME: EventId
-    16:
-      VersionInfoQuery: UNIT
     17:
-      NetworkDescriptionQuery: UNIT
+      VersionInfoQuery: UNIT
     18:
+      NetworkDescriptionQuery: UNIT
+    19:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    19:
+    20:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    20:
+    21:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    21:
+    22:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    22:
+    23:
       NetworkDescriptionResponse:
         NEWTYPE:
           TYPENAME: NetworkDescription
-    23:
+    24:
       UploadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobId
-    24:
+    25:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    25:
+    26:
       DownloadPendingBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    26:
+    27:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: Block
-    27:
+    28:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    28:
+    29:
       DownloadCertificatesByHeightsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    29:
+    30:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    30:
+    31:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    31:
+    32:
       EventBlockHeightsResponse:
         NEWTYPE:
           SEQ:
             OPTION:
               TYPENAME: BlockHeight
-    32:
+    33:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
-    33:
+    34:
       BlobLastUsedByCertificate:
         NEWTYPE:
           TYPENAME: BlobId
-    34:
+    35:
       BlobLastUsedByCertificateResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlockCertificate
-    35:
+    36:
       ShardInfoQuery:
         NEWTYPE:
           TYPENAME: ChainId
-    36:
+    37:
       ShardInfoResponse:
         NEWTYPE:
           TYPENAME: ShardInfo
-    37:
+    38:
       SubscribeNotifications:
         NEWTYPE:
           SEQ:
             TYPENAME: ChainId
-    38:
+    39:
       Notification:
         NEWTYPE:
           TYPENAME: Notification

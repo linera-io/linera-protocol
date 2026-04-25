@@ -390,6 +390,7 @@ where
             | RpcMessage::ShardInfoQuery(_)
             | RpcMessage::ShardInfoResponse(_)
             | RpcMessage::DownloadBlob(_)
+            | RpcMessage::DownloadBlobs(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadPendingBlobResponse(_)
             | RpcMessage::DownloadConfirmedBlock(_)
