@@ -1985,13 +1985,13 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
             self.client
-                .submit_block_proposal(&committee, proposal, hashed_value)
+                .submit_block_proposal(committee.clone(), proposal, hashed_value)
                 .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
                 .client
-                .submit_block_proposal(&committee, proposal, hashed_value.clone())
+                .submit_block_proposal(committee.clone(), proposal, hashed_value.clone())
                 .await?;
             self.client.finalize_block(&committee, certificate).await?
         };

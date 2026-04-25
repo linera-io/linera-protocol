@@ -969,7 +969,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     async fn submit_block_proposal<T: ProcessableCertificate>(
         self: &Arc<Self>,
-        committee: &Committee,
+        committee: Arc<Committee>,
         proposal: Box<BlockProposal>,
         value: T,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
@@ -1026,7 +1026,7 @@ impl<Env: Environment> Client<Env> {
         });
 
         let certificate = self
-            .communicate_chain_action(committee, submit_action, value)
+            .communicate_chain_action(&committee, submit_action, value)
             .await?;
 
         clock_skew_check_handle.await;
