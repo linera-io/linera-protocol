@@ -651,10 +651,8 @@ async fn page(
             let amount = find_arg(args, "amount");
             match (recipient_chain, amount) {
                 (Some(recipient_chain), Some(amount)) => {
-                    let owner = find_arg(args, "owner")
-                        .context("missing owner")?;
-                    let recipient_owner = recipient_owner
-                        .unwrap_or_else(|| owner.clone());
+                    let owner = find_arg(args, "owner").context("missing owner")?;
+                    let recipient_owner = recipient_owner.unwrap_or_else(|| owner.clone());
                     let variables = transfer::Variables {
                         chain_id,
                         owner: serde_json::from_value(Value::String(owner))
@@ -669,11 +667,7 @@ async fn page(
                             .context("invalid amount")?,
                     };
                     let client = reqwest_client();
-                    let node_url = url(
-                        &Config::load(),
-                        &Protocol::Http,
-                        &AddressKind::Node,
-                    );
+                    let node_url = url(&Config::load(), &Protocol::Http, &AddressKind::Node);
                     request::<gql_service::Transfer, _>(&client, &node_url, variables).await?;
                     Ok((
                         Page::Transfer {
