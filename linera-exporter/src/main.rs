@@ -365,7 +365,6 @@ impl Runnable for DestinationsContext {
                         DestinationKind::Validator => "validator",
                         DestinationKind::Indexer => "indexer",
                         DestinationKind::Logging => "logging",
-                        DestinationKind::EvmChain => "evm_chain",
                     };
                     println!("{:<50} {:<12} {:>10}", id.address(), kind, index);
                 }
@@ -387,7 +386,6 @@ impl Runnable for DestinationsContext {
                             DestinationKind::Validator => "validator",
                             DestinationKind::Indexer => "indexer",
                             DestinationKind::Logging => "logging",
-                            DestinationKind::EvmChain => "evm_chain",
                         };
                         println!("Address: {}", id.address());
                         println!("Kind:    {}", kind);
@@ -419,7 +417,6 @@ impl Runnable for DestinationsContext {
                             DestinationKind::Validator => "validator",
                             DestinationKind::Indexer => "indexer",
                             DestinationKind::Logging => "logging",
-                            DestinationKind::EvmChain => "evm_chain",
                         };
 
                         // Update in-memory and save
