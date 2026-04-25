@@ -2065,7 +2065,47 @@ fn init_tracing(options: &Options) {
     linera_base::tracing::init(&options.command.log_file_name());
 }
 
+/// Resolve the desired color override based on the `NO_COLOR`, `CLICOLOR`, and
+/// `CLICOLOR_FORCE` environment variables, as specified by <https://no-color.org>.
+///
+/// Returns `Some(false)` when colors must be disabled, `Some(true)` when they must be
+/// forced on, or `None` to leave auto-detection alone.
+fn color_override_from_env(
+    no_color: Option<&std::ffi::OsStr>,
+    clicolor: Option<&str>,
+    clicolor_force: Option<&str>,
+) -> Option<bool> {
+    let no_color_set = no_color.is_some_and(|value| !value.is_empty());
+    let clicolor_zero = clicolor == Some("0");
+    if no_color_set || clicolor_zero {
+        Some(false)
+    } else if clicolor_force == Some("1") {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+/// Configure color output according to the `NO_COLOR` / `CLICOLOR` / `CLICOLOR_FORCE`
+/// environment variables, as specified by <https://no-color.org>.
+///
+/// This only affects styling applied via the `colored` crate, which is used for
+/// `tracing` messages written to stderr. Stdout is always plain text.
+fn configure_colors() {
+    let no_color = std::env::var_os("NO_COLOR");
+    let clicolor = std::env::var("CLICOLOR").ok();
+    let clicolor_force = std::env::var("CLICOLOR_FORCE").ok();
+    if let Some(enabled) = color_override_from_env(
+        no_color.as_deref(),
+        clicolor.as_deref(),
+        clicolor_force.as_deref(),
+    ) {
+        colored::control::set_override(enabled);
+    }
+}
+
 fn main() -> anyhow::Result<process::ExitCode> {
+    configure_colors();
     let options = Options::init();
     let mut runtime = if options.common.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -2618,5 +2658,53 @@ Make sure to use a Linera client compatible with this network.
             options.run_with_storage(Job(options.clone())).await??;
             Ok(0)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsStr;
+
+    use super::color_override_from_env;
+
+    #[test]
+    fn no_color_disables_colors() {
+        assert_eq!(
+            color_override_from_env(Some(OsStr::new("1")), None, None),
+            Some(false),
+        );
+        assert_eq!(
+            color_override_from_env(Some(OsStr::new("anything")), None, Some("1")),
+            Some(false),
+            "NO_COLOR must win over CLICOLOR_FORCE",
+        );
+    }
+
+    #[test]
+    fn empty_no_color_is_ignored() {
+        assert_eq!(
+            color_override_from_env(Some(OsStr::new("")), None, None),
+            None,
+        );
+    }
+
+    #[test]
+    fn clicolor_zero_disables_colors() {
+        assert_eq!(color_override_from_env(None, Some("0"), None), Some(false),);
+    }
+
+    #[test]
+    fn clicolor_force_one_forces_colors() {
+        assert_eq!(color_override_from_env(None, None, Some("1")), Some(true),);
+    }
+
+    #[test]
+    fn no_env_leaves_defaults() {
+        assert_eq!(color_override_from_env(None, None, None), None);
+        assert_eq!(
+            color_override_from_env(None, Some("1"), None),
+            None,
+            "CLICOLOR=1 should not force or disable",
+        );
     }
 }
