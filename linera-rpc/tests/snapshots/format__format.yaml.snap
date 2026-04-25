@@ -1171,6 +1171,11 @@ RpcMessage:
               TUPLE:
                 - TYPENAME: BlockHeight
                 - TYPENAME: CryptoHash
+    35:
+      DownloadBlobs:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BlobId
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

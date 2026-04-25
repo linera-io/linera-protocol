@@ -401,6 +401,7 @@ where
             | RpcMessage::NetworkDescriptionQuery
             | RpcMessage::NetworkDescriptionResponse(_)
             | RpcMessage::DownloadBlob(_)
+            | RpcMessage::DownloadBlobs(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadPendingBlobResponse(_)
             | RpcMessage::DownloadConfirmedBlock(_)

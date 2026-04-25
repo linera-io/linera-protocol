@@ -72,6 +72,9 @@ service ValidatorNode {
   // Download a blob.
   rpc DownloadBlob(BlobId) returns (BlobContent);
 
+  // Download a batch of blobs as a stream.
+  rpc DownloadBlobs(BlobIds) returns (stream BlobContent);
+
   // Download a blob that belongs to a pending block on the given chain.
   rpc DownloadPendingBlob(PendingBlobRequest) returns (PendingBlobResult);
 

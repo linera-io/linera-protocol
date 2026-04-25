@@ -538,6 +538,8 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     type SubscribeStream = UnboundedReceiverStream<Result<Notification, Status>>;
+    type DownloadBlobsStream =
+        std::pin::Pin<Box<dyn futures::Stream<Item = Result<BlobContent, Status>> + Send>>;
 
     #[instrument(skip_all, err(Display), fields(method = "handle_block_proposal"))]
     async fn handle_block_proposal(
@@ -686,6 +688,30 @@ where
             .map(Arc::unwrap_or_clone)
             .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob.into_content().try_into()?))
+    }
+
+    #[instrument(skip_all, err(Display), fields(method = "download_blobs"))]
+    async fn download_blobs(
+        &self,
+        request: Request<BlobIds>,
+    ) -> Result<Response<Self::DownloadBlobsStream>, Status> {
+        let blob_ids = Vec::<linera_base::identifiers::BlobId>::try_from(request.into_inner())?;
+        let blobs = self
+            .0
+            .storage
+            .read_blobs(&blob_ids)
+            .await
+            .map_err(Self::view_error_to_status)?;
+        let stream = futures::stream::iter(blob_ids.into_iter().zip(blobs).map(
+            |(blob_id, maybe_blob)| {
+                let blob = maybe_blob
+                    .map(Arc::unwrap_or_clone)
+                    .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+                BlobContent::try_from(blob.into_content())
+                    .map_err(|err| Status::internal(err.to_string()))
+            },
+        ));
+        Ok(Response::new(Box::pin(stream)))
     }
 
     #[instrument(skip_all, err(Display), fields(method = "download_pending_blob"))]
