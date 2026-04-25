@@ -102,14 +102,6 @@ pub enum Destination {
         /// The log file path.
         file_name: String,
     },
-    EvmChain {
-        /// The EVM JSON-RPC endpoint URL.
-        endpoint: String,
-        /// The deployed LightClient contract address (hex).
-        light_client_address: String,
-        /// Hex-encoded private key for signing EVM transactions.
-        private_key: String,
-    },
 }
 
 /// The description for the gRPC based destination.
@@ -122,8 +114,6 @@ pub enum DestinationKind {
     Validator,
     /// The logging target.
     Logging,
-    /// The EVM chain target.
-    EvmChain,
 }
 
 impl Serialize for Destination {
@@ -159,18 +149,6 @@ impl Serialize for Destination {
                 map.serialize_entry("file_name", file_name)?;
                 map.end()
             }
-            Destination::EvmChain {
-                endpoint,
-                light_client_address,
-                private_key,
-            } => {
-                let mut map = serializer.serialize_map(Some(4))?;
-                map.serialize_entry("kind", "EvmChain")?;
-                map.serialize_entry("endpoint", endpoint)?;
-                map.serialize_entry("light_client_address", light_client_address)?;
-                map.serialize_entry("private_key", private_key)?;
-                map.end()
-            }
         }
     }
 }
@@ -193,8 +171,6 @@ impl<'de> Visitor<'de> for DestinationVisitor {
         let mut endpoint: Option<String> = None;
         let mut port: Option<u16> = None;
         let mut file_name: Option<String> = None;
-        let mut light_client_address: Option<String> = None;
-        let mut private_key: Option<String> = None;
 
         while let Some(key) = map.next_key::<String>()? {
             match key.as_str() {
@@ -228,18 +204,6 @@ impl<'de> Visitor<'de> for DestinationVisitor {
                     }
                     file_name = Some(map.next_value()?);
                 }
-                "light_client_address" => {
-                    if light_client_address.is_some() {
-                        return Err(V::Error::duplicate_field("light_client_address"));
-                    }
-                    light_client_address = Some(map.next_value()?);
-                }
-                "private_key" => {
-                    if private_key.is_some() {
-                        return Err(V::Error::duplicate_field("private_key"));
-                    }
-                    private_key = Some(map.next_value()?);
-                }
                 _ => {
                     // Ignore unknown fields
                     let _: serde::de::IgnoredAny = map.next_value()?;
@@ -269,21 +233,9 @@ impl<'de> Visitor<'de> for DestinationVisitor {
                 let file_name = file_name.ok_or_else(|| V::Error::missing_field("file_name"))?;
                 Ok(Destination::Logging { file_name })
             }
-            "EvmChain" => {
-                let endpoint = endpoint.ok_or_else(|| V::Error::missing_field("endpoint"))?;
-                let light_client_address = light_client_address
-                    .ok_or_else(|| V::Error::missing_field("light_client_address"))?;
-                let private_key =
-                    private_key.ok_or_else(|| V::Error::missing_field("private_key"))?;
-                Ok(Destination::EvmChain {
-                    endpoint,
-                    light_client_address,
-                    private_key,
-                })
-            }
             _ => Err(V::Error::unknown_variant(
                 &kind,
-                &["Indexer", "Validator", "Logging", "EvmChain"],
+                &["Indexer", "Validator", "Logging"],
             )),
         }
     }
@@ -354,12 +306,6 @@ impl Destination {
             }
 
             Destination::Logging { file_name } => file_name.to_string(),
-
-            Destination::EvmChain {
-                endpoint,
-                light_client_address,
-                ..
-            } => format!("evm://{}@{}", light_client_address, endpoint),
         }
     }
 
@@ -368,7 +314,6 @@ impl Destination {
             Destination::Indexer { .. } => DestinationKind::Indexer,
             Destination::Validator { .. } => DestinationKind::Validator,
             Destination::Logging { .. } => DestinationKind::Logging,
-            Destination::EvmChain { .. } => DestinationKind::EvmChain,
         };
         DestinationId {
             address: self.address(),
@@ -426,24 +371,6 @@ mod tests {
             destination,
             Destination::Logging {
                 file_name: "export.log".to_owned(),
-            }
-        );
-
-        let input = r#"
-                        endpoint = "http://localhost:8545"
-                        light_client_address = "0x1234567890abcdef1234567890abcdef12345678"
-                        private_key = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                        kind = "EvmChain"
-        "#
-        .to_string();
-        let destination: Destination = toml::from_str(&input).unwrap();
-        assert_eq!(
-            destination,
-            Destination::EvmChain {
-                endpoint: "http://localhost:8545".to_owned(),
-                light_client_address: "0x1234567890abcdef1234567890abcdef12345678".to_owned(),
-                private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                    .to_owned(),
             }
         );
     }

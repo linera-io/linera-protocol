@@ -24,7 +24,6 @@ use crate::{
 };
 
 mod block_processor;
-mod evm_chain_exporter;
 mod indexer;
 mod logging_exporter;
 mod task_manager;
@@ -394,9 +393,6 @@ mod test {
             },
             DestinationKind::Logging => {
                 unreachable!("Logging destination is not supported in tests")
-            }
-            DestinationKind::EvmChain => {
-                unreachable!("EvmChain destination is not supported in tests")
             }
         };
 

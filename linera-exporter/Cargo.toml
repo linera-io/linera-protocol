@@ -37,7 +37,6 @@ custom_debug_derive.workspace = true
 fs-err.workspace = true
 futures.workspace = true
 linera-base.workspace = true
-linera-bridge.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
