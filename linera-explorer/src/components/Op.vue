@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Json from './Json.vue'
+import { copyToClipboard } from './utils'
 
 defineProps<{op: any, id: string, index?: number}>()
 </script>
@@ -127,7 +128,7 @@ defineProps<{op: any, id: string, index?: number}>()
           <div class="row">
             <div class="col-md-6">
               <strong>Module ID:</strong>
-              <div class="font-monospace text-break small" style="cursor:pointer" :title="'Click to copy: ' + op.systemOperation.createApplication.moduleId" @click="navigator.clipboard.writeText(op.systemOperation.createApplication.moduleId)">{{ op.systemOperation.createApplication.moduleId }} <i class="bi bi-clipboard"></i></div>
+              <div class="font-monospace text-break small" style="cursor:pointer" :title="'Click to copy: ' + op.systemOperation.createApplication.moduleId" @click="copyToClipboard(op.systemOperation.createApplication.moduleId, $event)">{{ op.systemOperation.createApplication.moduleId }} <i class="bi bi-clipboard"></i></div>
             </div>
             <div class="col-md-6">
               <strong>Required Apps:</strong> {{ op.systemOperation.createApplication.requiredApplicationIds.length }}
@@ -231,7 +232,7 @@ defineProps<{op: any, id: string, index?: number}>()
       <div class="card-body">
         <div v-if="op.applicationId" class="mb-2">
           <strong>Application ID:</strong>
-          <span class="font-monospace text-break" style="cursor:pointer" :title="'Click to copy'" @click="navigator.clipboard.writeText(op.applicationId)">{{ op.applicationId }} <i class="bi bi-clipboard"></i></span>
+          <span class="font-monospace text-break" style="cursor:pointer" :title="'Click to copy'" @click="copyToClipboard(op.applicationId, $event)">{{ op.applicationId }} <i class="bi bi-clipboard"></i></span>
         </div>
         <div v-if="op.userBytesHex" class="mb-3">
           <strong>Operation Data (hex):</strong>

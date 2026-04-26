@@ -126,7 +126,7 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
           <ul class="list-group">
             <li v-for="(hash, id) in block.block.body.previousMessageBlocks" class="list-group-item p-0" key="block.hash+'-previousmessageblock-'+id">
               <div class="card">
-                <div class="card-header">Previous message from chain <a @click="$root.route(undefined, [['chain', id]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(String(id)) }}</a> was sent at block</div>
+                <div class="card-header">Previous message from chain <a @click="$root.route(undefined, [['chain', String(id)]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(String(id)) }}</a> was sent at block</div>
                 <div class="card-body">
                   <a @click="$root.route('block', [['block', displayValue(hash)]])" class="btn btn-link">{{ displayValue(hash) }}</a>
                 </div>
