@@ -73,7 +73,7 @@ impl Contract for MetaCounterContract {
             // Make a service query: The result will be logged in the block.
             let counter_id = self.counter_id();
             self.runtime
-                .query_service(counter_id, &"query { value }".into());
+                .query_service(counter_id, "query { value }".into());
         }
         message.send_to(recipient_id);
     }

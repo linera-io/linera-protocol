@@ -372,11 +372,8 @@ where
     /// Schedules an operation to be included in the block being built.
     ///
     /// The operation is specified as an opaque blob of bytes.
-    pub fn schedule_raw_operation(&self, operation: &[u8]) {
-        self.scheduled_operations
-            .lock()
-            .unwrap()
-            .push(operation.to_vec());
+    pub fn schedule_raw_operation(&self, operation: Vec<u8>) {
+        self.scheduled_operations.lock().unwrap().push(operation);
     }
 
     /// Schedules an operation to be included in the block being built.
@@ -386,7 +383,7 @@ where
         let bytes = <Application::Abi as ContractAbi>::serialize_operation(operation)
             .expect("Failed to serialize application operation");
 
-        self.schedule_raw_operation(&bytes);
+        self.schedule_raw_operation(bytes);
     }
 
     /// Returns the list of operations scheduled since the most recent of:
