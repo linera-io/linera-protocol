@@ -146,6 +146,7 @@ impl BlockBuilder {
     ///
     /// The operation is serialized using [`bcs`] and added to the block, marked to be executed by
     /// `application`.
+    #[expect(clippy::needless_pass_by_value)]
     pub fn with_operation<Abi>(
         &mut self,
         application_id: ApplicationId<Abi>,
