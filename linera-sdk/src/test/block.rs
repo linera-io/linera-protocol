@@ -151,12 +151,12 @@ impl BlockBuilder {
     pub fn with_operation<Abi>(
         &mut self,
         application_id: ApplicationId<Abi>,
-        operation: &Abi::Operation,
+        operation: Abi::Operation,
     ) -> &mut Self
     where
         Abi: ContractAbi,
     {
-        let operation = <Abi as ContractAbi>::serialize_operation(operation)
+        let operation = <Abi as ContractAbi>::serialize_operation(&operation)
             .expect("Failed to serialize `Operation` in BlockBuilder");
         self.with_raw_operation(application_id.forget_abi(), operation)
     }

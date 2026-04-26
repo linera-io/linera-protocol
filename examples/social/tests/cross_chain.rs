@@ -28,7 +28,7 @@ async fn test_cross_chain_posting() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                &Operation::Subscribe {
+                Operation::Subscribe {
                     chain_id: chain2.id(),
                 },
             );
@@ -40,7 +40,7 @@ async fn test_cross_chain_posting() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                &Operation::Post {
+                Operation::Post {
                     text: "Linera is the new Mastodon".to_string(),
                     image_url: None,
                 },
