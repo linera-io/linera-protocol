@@ -841,7 +841,7 @@ where
     ///
     /// This is called by the metering instrumentation, but the fuel consumed argument is
     /// ignored.
-    #[allow(unused_variables)]
+    #[expect(unused_variables)]
     fn check_execution_time(caller: &mut Caller, fuel_consumed: u64) -> Result<(), RuntimeError> {
         caller
             .user_data_mut()

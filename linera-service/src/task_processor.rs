@@ -335,6 +335,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
     // Keeping `&mut self` avoids borrowing `TaskProcessor` through `&self` across `.await`,
     // which would make the spawned future require `TaskProcessor: Sync`.
+    #[expect(clippy::needless_pass_by_ref_mut)]
     async fn query_actions(
         &mut self,
         application_id: ApplicationId,

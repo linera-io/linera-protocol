@@ -358,6 +358,7 @@ where
 
     // Keeping `&mut self` avoids borrowing `Controller` through `&self` across `.await`,
     // which would make `controller.run()` fail the `Send` bound required by `tokio::spawn`.
+    #[expect(clippy::needless_pass_by_ref_mut)]
     async fn register_worker(&mut self) {
         let capabilities = self.operators.keys().cloned().collect();
         let command = WorkerCommand::RegisterWorker { capabilities };
