@@ -319,7 +319,6 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    #[allow(clippy::needless_pass_by_value)]
     pub fn query_service<A: ServiceAbi + Send>(
         &mut self,
         application_id: ApplicationId<A>,
@@ -402,7 +401,6 @@ where
     }
 
     /// Creates a new data blob and returns its hash.
-    #[allow(clippy::needless_pass_by_value)]
     pub fn create_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
         let hash = contract_wit::create_data_blob(&bytes);
         hash.into()

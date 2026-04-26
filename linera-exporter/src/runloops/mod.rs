@@ -96,7 +96,6 @@ impl NewBlockQueue {
 
 #[tokio::main(flavor = "current_thread")]
 #[expect(clippy::too_many_arguments)]
-#[allow(clippy::needless_pass_by_value)]
 async fn start_block_processor<S, F>(
     storage: S,
     shutdown_signal: F,

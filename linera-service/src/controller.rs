@@ -216,7 +216,6 @@ where
         }
     }
 
-    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn register_worker(&mut self) {
         let capabilities = self.operators.keys().cloned().collect();
         let command = WorkerCommand::RegisterWorker { capabilities };
@@ -305,7 +304,6 @@ where
         Ok(())
     }
 
-    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn query_controller_state(&mut self) -> Result<LocalWorkerState, anyhow::Error> {
         let query = "query { localWorkerState }";
         let bytes = serde_json::to_vec(&json!({"query": query}))?;

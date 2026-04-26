@@ -333,7 +333,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         Ok(outcome)
     }
 
-    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn query_actions(
         &mut self,
         application_id: ApplicationId,

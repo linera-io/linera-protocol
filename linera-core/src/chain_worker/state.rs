@@ -1627,7 +1627,6 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
-    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         Err(WorkerError::NoFallbackMode)
     }
