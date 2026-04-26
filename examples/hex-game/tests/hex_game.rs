@@ -110,9 +110,7 @@ async fn hex_game_clock() {
                 fee_budget: Amount::ZERO,
                 timeouts: None,
             };
-            block
-                .with_operation(app_id, operation)
-                .with_timestamp(time);
+            block.with_operation(app_id, operation).with_timestamp(time);
         })
         .await;
 
