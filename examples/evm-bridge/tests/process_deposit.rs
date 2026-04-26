@@ -106,7 +106,7 @@ impl TestBridge {
             .add_block(|block| {
                 block.with_operation(
                     bridge_app_id,
-                    &BridgeOperation::RegisterFungibleApp {
+                    BridgeOperation::RegisterFungibleApp {
                         app_id: fungible_app_id.forget_abi(),
                     },
                 );
@@ -690,7 +690,7 @@ async fn setup_bridge_with_anvil(
         .add_block(|block| {
             block.with_operation(
                 bridge_app_id,
-                &BridgeOperation::RegisterFungibleApp {
+                BridgeOperation::RegisterFungibleApp {
                     app_id: fungible_app_id.forget_abi(),
                 },
             );
@@ -718,7 +718,7 @@ async fn test_verify_block_hash_anvil() {
         .add_block(|block| {
             block.with_operation(
                 bridge_app_id,
-                &BridgeOperation::VerifyBlockHash {
+                BridgeOperation::VerifyBlockHash {
                     block_hash: block_hash.0,
                 },
             );
@@ -743,7 +743,7 @@ async fn test_verify_block_hash_not_found() {
         .try_add_block(|block| {
             block.with_operation(
                 bridge_app_id,
-                &BridgeOperation::VerifyBlockHash {
+                BridgeOperation::VerifyBlockHash {
                     block_hash: fake_hash,
                 },
             );
@@ -770,7 +770,7 @@ async fn test_register_fungible_app_cannot_be_called_twice() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::RegisterFungibleApp {
+                BridgeOperation::RegisterFungibleApp {
                     app_id: dummy_app_id,
                 },
             );

@@ -317,7 +317,7 @@ async fn test_credit_to_address20_on_non_bridge_chain_does_not_burn() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                &WrappedFungibleOperation::Transfer {
+                WrappedFungibleOperation::Transfer {
                     owner: minter_account,
                     amount: mint_amount,
                     target_account: Account {
@@ -373,7 +373,7 @@ async fn test_credit_to_address20_on_bridge_chain_auto_burns() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                &WrappedFungibleOperation::Transfer {
+                WrappedFungibleOperation::Transfer {
                     owner: sender_account,
                     amount: Amount::from_tokens(500),
                     target_account: Account {
@@ -434,7 +434,7 @@ async fn test_credit_to_non_address20_on_bridge_chain_credits_normally() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                &WrappedFungibleOperation::Transfer {
+                WrappedFungibleOperation::Transfer {
                     owner: sender_account,
                     amount: Amount::from_tokens(500),
                     target_account: Account {
@@ -521,7 +521,7 @@ async fn test_direct_mint_without_bridge_is_rejected() {
         .try_add_block(|block| {
             block.with_operation(
                 application_id,
-                &WrappedFungibleOperation::Mint {
+                WrappedFungibleOperation::Mint {
                     target_account: Account {
                         chain_id: minter_chain.id(),
                         owner: minter_account,
