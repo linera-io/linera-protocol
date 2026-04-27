@@ -256,7 +256,7 @@ fn get_block_keys() -> Vec<Vec<u8>> {
 }
 
 #[derive(Default)]
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 struct MultiPartitionBatch {
     keys_value_bytes: BTreeMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
 }
@@ -510,14 +510,10 @@ impl Clock for WallClock {
         Timestamp::now()
     }
 
-    async fn sleep(&self, delta: TimeDelta) {
-        linera_base::time::timer::sleep(delta.as_duration()).await
-    }
-
     async fn sleep_until(&self, timestamp: Timestamp) {
         let delta = timestamp.delta_since(Timestamp::now());
         if delta > TimeDelta::ZERO {
-            self.sleep(delta).await
+            linera_base::time::timer::sleep(delta.as_duration()).await
         }
     }
 }
@@ -541,11 +537,6 @@ impl TestClockInner {
             // Receiver may have been dropped if the sleep was cancelled.
             sender.send(()).ok();
         }
-    }
-
-    fn add_sleep(&mut self, delta: TimeDelta) -> Receiver<()> {
-        let target_time = self.time.saturating_add(delta);
-        self.add_sleep_until(target_time)
     }
 
     fn add_sleep_until(&mut self, time: Timestamp) -> Receiver<()> {
@@ -581,15 +572,6 @@ pub struct TestClock(Arc<std::sync::Mutex<TestClockInner>>);
 impl Clock for TestClock {
     fn current_time(&self) -> Timestamp {
         self.lock().time
-    }
-
-    async fn sleep(&self, delta: TimeDelta) {
-        if delta == TimeDelta::ZERO {
-            return;
-        }
-        let receiver = self.lock().add_sleep(delta);
-        // Sender may have been dropped if the clock was dropped; just stop waiting.
-        receiver.await.ok();
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {

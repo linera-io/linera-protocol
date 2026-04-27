@@ -2,20 +2,28 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::large_futures)]
+#![expect(clippy::large_futures)]
 
-macro_rules! outcome_matches {
-    ($block:expr, $messages:expr, $previous_message_blocks:expr, $previous_event_blocks:expr, $oracle_responses:expr, $events:expr, $blobs:expr, $operation_results:expr $(,)?) => {
-        $block.outcome_matches(
-            $messages,
-            $previous_message_blocks,
-            $previous_event_blocks,
-            $oracle_responses,
-            $events,
-            $blobs,
-            $operation_results,
-        )
-    };
+macro_rules! assert_outcome_matches {
+    ($block:expr, $messages:expr, $previous_message_blocks:expr, $previous_event_blocks:expr, $oracle_responses:expr, $events:expr, $blobs:expr, $operation_results:expr $(,)?) => {{
+        let ::linera_chain::block::BlockBody {
+            transactions: _,
+            messages,
+            previous_message_blocks,
+            previous_event_blocks,
+            oracle_responses,
+            events,
+            blobs,
+            operation_results,
+        } = &$block.body;
+        assert_eq!(messages, $messages);
+        assert_eq!(previous_message_blocks, $previous_message_blocks);
+        assert_eq!(previous_event_blocks, $previous_event_blocks);
+        assert_eq!(oracle_responses, $oracle_responses);
+        assert_eq!(events, $events);
+        assert_eq!(blobs, $blobs);
+        assert_eq!(operation_results, $operation_results);
+    }};
 }
 
 #[path = "./wasm_worker_tests.rs"]
@@ -56,7 +64,7 @@ use linera_execution::{
     committee::Committee,
     system::{
         AdminOperation, EpochEventData, OpenChainConfig, SystemMessage, SystemOperation,
-        EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
+        EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
         dummy_chain_description, ExpectedCall, MockApplication, RegisterMockApplication,
@@ -826,7 +834,7 @@ where
     };
 
     assert!(certificate.value().matches_proposed_block(&block));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate.block(),
         &[vec![direct_credit_message(chain_2, small_transfer)]],
         &BTreeMap::new(),
@@ -835,7 +843,7 @@ where
         &[vec![]],
         &[vec![]],
         &[OperationResult::default()],
-    ));
+    );
 
     env.worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
@@ -1327,7 +1335,7 @@ where
     let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
 
     assert!(certificate0.value().matches_proposed_block(&proposal0));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate0.block(),
         &[
             vec![direct_credit_message(chain_2, Amount::ONE)],
@@ -1339,7 +1347,7 @@ where
         &[vec![], vec![]],
         &[vec![], vec![]],
         &[OperationResult::default(), OperationResult::default()],
-    ));
+    );
 
     let proposal1 = make_child_block(&certificate0.clone().into_value())
         .with_simple_transfer(chain_2, Amount::from_tokens(3))
@@ -1347,7 +1355,7 @@ where
     let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
 
     assert!(certificate1.value().matches_proposed_block(&proposal1));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate1.block(),
         &[vec![direct_credit_message(chain_2, Amount::from_tokens(3))]],
         &BTreeMap::from([(chain_2, (certificate0.hash(), BlockHeight(0)),)]),
@@ -1356,7 +1364,7 @@ where
         &[vec![]],
         &[vec![]],
         &[OperationResult::default()],
-    ));
+    );
 
     // Missing earlier blocks, but the certificate will be preprocessed.
     assert_matches!(
@@ -1585,7 +1593,7 @@ where
             .await?;
 
         assert!(certificate.value().matches_proposed_block(&proposed_block));
-        assert!(outcome_matches!(
+        assert_outcome_matches!(
             certificate.block(),
             &[vec![], vec![direct_credit_message(chain_3, Amount::ONE)],],
             &BTreeMap::new(),
@@ -1594,7 +1602,7 @@ where
             &[vec![], vec![]],
             &[vec![], vec![]],
             &[OperationResult::default()],
-        ));
+        );
 
         env.worker()
             .handle_confirmed_certificate(certificate.clone(), None)
@@ -2749,7 +2757,7 @@ where
     let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
 
     assert!(certificate0.value().matches_proposed_block(&proposal0));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate0.block(),
         &[vec![]],
         &BTreeMap::new(),
@@ -2758,7 +2766,7 @@ where
         &[Vec::new()],
         &[vec![Blob::new_chain_description(&user_description)]],
         &[OperationResult::default()],
-    ));
+    );
 
     env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
@@ -2795,12 +2803,12 @@ where
 
     let event_id = EventId {
         chain_id: admin_chain_id,
-        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+        stream_id: StreamId::system(EPOCH_STREAM_NAME),
         index: 1,
     };
 
     assert!(certificate1.value().matches_proposed_block(&proposal1));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate1.block(),
         &[
             vec![],
@@ -2823,7 +2831,7 @@ where
         ],
         &[vec![], vec![]],
         &[OperationResult::default(), OperationResult::default()],
-    ));
+    );
 
     env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
@@ -2875,7 +2883,7 @@ where
     let certificate3 = env.execute_proposal(proposal3.clone(), vec![]).await?;
 
     assert!(certificate3.value().matches_proposed_block(&proposal3));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate3.block(),
         &[vec![], vec![]],
         &BTreeMap::new(),
@@ -2886,7 +2894,7 @@ where
                 OracleResponse::Event(
                     EventId {
                         chain_id: admin_chain_id,
-                        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                        stream_id: StreamId::system(EPOCH_STREAM_NAME),
                         index: 1,
                     },
                     bcs::to_bytes(&EpochEventData {
@@ -2901,7 +2909,7 @@ where
         &[vec![], vec![]],
         &[vec![], vec![]],
         &[OperationResult::default()],
-    ));
+    );
 
     env.worker()
         .fully_handle_certificate_with_notifications(certificate3, &())
@@ -2948,7 +2956,7 @@ where
     let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
 
     assert!(certificate0.value().matches_proposed_block(&proposal0));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate0.block(),
         &[vec![direct_credit_message(admin_chain_id, Amount::ONE)]],
         &BTreeMap::new(),
@@ -2957,7 +2965,7 @@ where
         &[vec![]],
         &[vec![]],
         &[OperationResult::default()],
-    ));
+    );
 
     // Have the admin chain create a new epoch without retiring the old one.
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
@@ -2973,14 +2981,14 @@ where
     let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
 
     assert!(certificate1.value().matches_proposed_block(&proposal1));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate1.block(),
         &[vec![]],
         &BTreeMap::new(),
         &BTreeMap::new(),
         &[vec![OracleResponse::Blob(committee_blob.id())]],
         &[vec![Event {
-            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+            stream_id: StreamId::system(EPOCH_STREAM_NAME),
             index: 1,
             value: bcs::to_bytes(&EpochEventData {
                 blob_hash: committee_blob.id().hash,
@@ -2990,7 +2998,7 @@ where
         }]],
         &[vec![]],
         &[OperationResult::default()],
-    ));
+    );
 
     env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
@@ -3061,7 +3069,7 @@ where
     let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
 
     assert!(certificate0.value().matches_proposed_block(&proposal0));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate0.block(),
         &[vec![direct_credit_message(admin_chain_id, Amount::ONE)]],
         &BTreeMap::new(),
@@ -3070,7 +3078,7 @@ where
         &[Vec::new()],
         &[Vec::new()],
         &[OperationResult::default()]
-    ));
+    );
 
     // Have the admin chain create a new epoch and retire the old one immediately.
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
@@ -3090,7 +3098,7 @@ where
     let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
 
     assert!(certificate1.value().matches_proposed_block(&proposal1));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate1.block(),
         &[vec![], vec![]],
         &BTreeMap::new(),
@@ -3098,7 +3106,7 @@ where
         &[vec![OracleResponse::Blob(committee_blob.id())], vec![]],
         &[
             vec![Event {
-                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
                 index: 1,
                 value: bcs::to_bytes(&EpochEventData {
                     blob_hash: committee_blob.id().hash,
@@ -3114,7 +3122,7 @@ where
         ],
         &[vec![], vec![]],
         &[OperationResult::default(), OperationResult::default()],
-    ));
+    );
 
     env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
@@ -3164,7 +3172,7 @@ where
     let certificate2 = env.execute_proposal(proposal2.clone(), vec![]).await?;
 
     assert!(certificate2.value().matches_proposed_block(&proposal2));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate2.block(),
         &[vec![]],
         &BTreeMap::new(),
@@ -3173,7 +3181,7 @@ where
         &[vec![]],
         &[vec![]],
         &[],
-    ));
+    );
 
     env.worker()
         .fully_handle_certificate_with_notifications(certificate2.clone(), &())
@@ -3218,17 +3226,17 @@ where
     let certificate3 = env.execute_proposal(proposal3.clone(), vec![]).await?;
 
     assert!(certificate3.value().matches_proposed_block(&proposal3));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate3.block(),
         &[vec![]],
         &BTreeMap::new(),
         &BTreeMap::from([(
-            StreamId::system(NEW_EPOCH_STREAM_NAME),
+            StreamId::system(EPOCH_STREAM_NAME),
             (certificate1.hash(), BlockHeight(0)),
         )]),
         &[vec![]],
         &[vec![Event {
-            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+            stream_id: StreamId::system(EPOCH_STREAM_NAME),
             index: 2,
             value: bcs::to_bytes(&EpochEventData {
                 blob_hash: committee_blob.id().hash,
@@ -3238,14 +3246,14 @@ where
         }]],
         &[vec![]],
         &[OperationResult::default()],
-    ));
+    );
 
     env.worker()
         .fully_handle_certificate_with_notifications(certificate3.clone(), &())
         .await?;
 
     // Query the admin chain for previous_event_blocks.
-    let stream_id = StreamId::system(NEW_EPOCH_STREAM_NAME);
+    let stream_id = StreamId::system(EPOCH_STREAM_NAME);
     let query =
         ChainInfoQuery::new(admin_chain_id).with_previous_event_blocks(vec![stream_id.clone()]);
     let response = env
@@ -4347,7 +4355,7 @@ where
     let certificate = env.execute_proposal(block.clone(), vec![]).await?;
 
     assert!(certificate.value().matches_proposed_block(&block));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate.block(),
         &[vec![direct_credit_message(chain_2, small_transfer)]],
         &BTreeMap::new(),
@@ -4356,7 +4364,7 @@ where
         &[vec![]],
         &[vec![]],
         &[OperationResult::default()],
-    ));
+    );
 
     for _ in query_contexts_after_new_block.clone() {
         application.expect_call(ExpectedCall::handle_query(move |_runtime, query| {
@@ -4483,7 +4491,7 @@ where
     assert!(certificate_chain_2
         .value()
         .matches_proposed_block(&block_proposal));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         certificate_chain_2.block(),
         &[vec![]],
         &BTreeMap::new(),
@@ -4492,7 +4500,7 @@ where
         &[vec![]],
         &[vec![]],
         &[],
-    ));
+    );
 
     // Now try to stage a block with the earlier message (transaction_index: 0).
     // This should fail with IncorrectMessageOrder because next_cursor_to_remove
