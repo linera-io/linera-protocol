@@ -449,7 +449,6 @@ where
 
     // Keeping `&mut self` avoids borrowing `Controller` through `&self` across `.await`,
     // which would make `controller.run()` fail the `Send` bound required by `tokio::spawn`.
-    #[expect(clippy::needless_pass_by_ref_mut)]
     async fn query_controller_state(&mut self) -> Result<LocalWorkerState, anyhow::Error> {
         let query = "query { localWorkerState }";
         let bytes = serde_json::to_vec(&json!({"query": query}))?;

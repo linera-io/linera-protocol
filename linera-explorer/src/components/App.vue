@@ -8,6 +8,7 @@ import Application from './Application.vue'
 import Operations from './Operations.vue'
 import Operation from './Operation.vue'
 import Plugin from './Plugin.vue'
+import Transfer from './Transfer.vue'
 
 export default {
   data() { return data() },
@@ -23,7 +24,8 @@ export default {
     Application,
     Operations,
     Operation,
-    Plugin
+    Plugin,
+    Transfer
   },
 }
 </script>
@@ -43,6 +45,9 @@ export default {
             </li>
             <li class="nav-item">
               <a class="nav-link" :class="page.applications ? 'active' : ''" @click="route('applications')" role="button">Applications</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" :class="page.transfer ? 'active' : ''" @click="route('transfer')" role="button">Transfer</a>
             </li>
             <li class="nav-item" v-if="plugins.includes('operations')">
               <a class="nav-link" :class="page.operations ? 'active' : ''" @click="route('operations')" role="button">Operations</a>
@@ -112,9 +117,28 @@ export default {
 
       <div v-else-if="page.blocks">
         <div class="card">
-          <div class="card-header">Blocks</div>
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Blocks</span>
+            <form class="d-flex align-items-center gap-2" @submit.prevent="route('blocks', [
+              ['limit', ($refs.blocksLimit as HTMLSelectElement).value],
+              ...( ($refs.blocksFrom as HTMLInputElement).value ? [['from', ($refs.blocksFrom as HTMLInputElement).value] as [string, string]] : [])
+            ])">
+              <label class="form-label mb-0 small text-nowrap">Show</label>
+              <select ref="blocksLimit" class="form-select form-select-sm" style="width:80px">
+                <option v-for="n in [10, 20, 50, 100]" :key="n" :value="n" :selected="n == page.blocks.limit">{{ n }}</option>
+              </select>
+              <label class="form-label mb-0 small text-nowrap">from hash</label>
+              <input ref="blocksFrom" type="text" class="form-control form-control-sm font-monospace" placeholder="block hash..." style="width:200px">
+              <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">Load</button>
+            </form>
+          </div>
           <div class="card-body">
-            <Blocks :blocks="page.blocks"/>
+            <Blocks :blocks="page.blocks.blocks"/>
+            <div v-if="page.blocks.blocks.length > 0 && page.blocks.blocks[page.blocks.blocks.length - 1].block.header.height != 0" class="mt-2 text-center">
+              <button class="btn btn-sm btn-outline-secondary" @click="route('blocks', [['from', page.blocks.blocks[page.blocks.blocks.length - 1].hash], ['limit', String(page.blocks.limit)]])">
+                Load older blocks
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -137,6 +161,10 @@ export default {
 
       <div v-else-if="page.operation">
         <Operation :op="page.operation" :id="operation_id(page.operation.key)" :index="page.operation.index"/>
+      </div>
+
+      <div v-else-if="page.transfer">
+        <Transfer :transfer="page.transfer"/>
       </div>
 
       <div v-else-if="page.plugin">
