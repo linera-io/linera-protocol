@@ -13,8 +13,6 @@ use std::{
 use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_storage::Storage;
 
-#[cfg(feature = "evm-exporter")]
-use crate::runloops::evm_chain_exporter::EvmChainExporter;
 use crate::{
     config::{Destination, DestinationId, DestinationKind},
     runloops::logging_exporter::LoggingExporter,
@@ -150,8 +148,6 @@ pub(super) struct ExporterBuilder<F> {
     work_queue_size: usize,
     node_provider: Arc<GrpcNodeProvider>,
     shutdown_signal: F,
-    #[cfg(feature = "evm-exporter")]
-    destination_configs: HashMap<DestinationId, Destination>,
     health: Arc<AtomicBool>,
 }
 
@@ -164,7 +160,7 @@ where
         options: NodeOptions,
         work_queue_size: usize,
         shutdown_signal: F,
-        #[cfg_attr(not(feature = "evm-exporter"), allow(unused))] destinations: &[Destination],
+        _destinations: &[Destination],
         health: Arc<AtomicBool>,
     ) -> Self {
         let node_provider = GrpcNodeProvider::new(options);
@@ -175,8 +171,6 @@ where
             shutdown_signal,
             work_queue_size,
             node_provider: arced_node_provider,
-            #[cfg(feature = "evm-exporter")]
-            destination_configs: destinations.iter().map(|d| (d.id(), d.clone())).collect(),
             health,
         }
     }
@@ -241,31 +235,6 @@ where
                     }
                     result
                 })
-            }
-
-            #[cfg(feature = "evm-exporter")]
-            DestinationKind::EvmChain => {
-                let destination = self
-                    .destination_configs
-                    .get(&id)
-                    .expect("EvmChain destination config not found")
-                    .clone();
-                let exporter_task = EvmChainExporter::new(id.clone(), destination);
-
-                tokio::task::spawn(async move {
-                    let result = exporter_task
-                        .run_with_shutdown(shutdown_signal, storage)
-                        .await;
-                    if result.is_err() {
-                        health.store(false, Ordering::Release);
-                    }
-                    result
-                })
-            }
-
-            #[cfg(not(feature = "evm-exporter"))]
-            DestinationKind::EvmChain => {
-                unimplemented!("EvmChain exporter requires the evm-exporter feature")
             }
         }
     }
