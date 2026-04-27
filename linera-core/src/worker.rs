@@ -182,6 +182,14 @@ mod metrics {
         )
     });
 
+    pub static CROSS_CHAIN_BATCH_SIZE: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "cross_chain_batch_size",
+            "Number of cross-chain requests coalesced into a single per-chain batch",
+            exponential_bucket_interval(1.0, 1000.0),
+        )
+    });
+
     /// Holds metrics data extracted from a confirmed block certificate.
     pub struct MetricsData {
         certificate_log_str: &'static str,
@@ -603,6 +611,8 @@ impl DriverState {
                 while let Ok(req) = receiver.try_recv() {
                     requests.push(req);
                 }
+                #[cfg(with_metrics)]
+                metrics::CROSS_CHAIN_BATCH_SIZE.observe(requests.len() as f64);
                 match handle::write_lock(&state).await {
                     Ok(mut guard) => guard.process_batch(requests).await,
                     Err(error) => {
