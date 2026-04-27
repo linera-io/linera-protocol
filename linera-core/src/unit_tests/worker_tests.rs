@@ -56,7 +56,7 @@ use linera_execution::{
     committee::Committee,
     system::{
         AdminOperation, EpochEventData, OpenChainConfig, SystemMessage, SystemOperation,
-        EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
+        EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
         dummy_chain_description, ExpectedCall, MockApplication, RegisterMockApplication,
@@ -2795,7 +2795,7 @@ where
 
     let event_id = EventId {
         chain_id: admin_chain_id,
-        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+        stream_id: StreamId::system(EPOCH_STREAM_NAME),
         index: 1,
     };
 
@@ -2886,7 +2886,7 @@ where
                 OracleResponse::Event(
                     EventId {
                         chain_id: admin_chain_id,
-                        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                        stream_id: StreamId::system(EPOCH_STREAM_NAME),
                         index: 1,
                     },
                     bcs::to_bytes(&EpochEventData {
@@ -2980,7 +2980,7 @@ where
         &BTreeMap::new(),
         &[vec![OracleResponse::Blob(committee_blob.id())]],
         &[vec![Event {
-            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+            stream_id: StreamId::system(EPOCH_STREAM_NAME),
             index: 1,
             value: bcs::to_bytes(&EpochEventData {
                 blob_hash: committee_blob.id().hash,
@@ -3098,7 +3098,7 @@ where
         &[vec![OracleResponse::Blob(committee_blob.id())], vec![]],
         &[
             vec![Event {
-                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
                 index: 1,
                 value: bcs::to_bytes(&EpochEventData {
                     blob_hash: committee_blob.id().hash,
@@ -3223,12 +3223,12 @@ where
         &[vec![]],
         &BTreeMap::new(),
         &BTreeMap::from([(
-            StreamId::system(NEW_EPOCH_STREAM_NAME),
+            StreamId::system(EPOCH_STREAM_NAME),
             (certificate1.hash(), BlockHeight(0)),
         )]),
         &[vec![]],
         &[vec![Event {
-            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+            stream_id: StreamId::system(EPOCH_STREAM_NAME),
             index: 2,
             value: bcs::to_bytes(&EpochEventData {
                 blob_hash: committee_blob.id().hash,
@@ -3245,7 +3245,7 @@ where
         .await?;
 
     // Query the admin chain for previous_event_blocks.
-    let stream_id = StreamId::system(NEW_EPOCH_STREAM_NAME);
+    let stream_id = StreamId::system(EPOCH_STREAM_NAME);
     let query =
         ChainInfoQuery::new(admin_chain_id).with_previous_event_blocks(vec![stream_id.clone()]);
     let response = env
