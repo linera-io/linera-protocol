@@ -136,7 +136,7 @@ where
     assert!(publish_certificate
         .value()
         .matches_proposed_block(&publish_block));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         publish_certificate.block(),
         &[vec![]],
         &BTreeMap::new(),
@@ -145,7 +145,7 @@ where
         &[vec![]],
         &[vec![]],
         &[OperationResult::default()]
-    ));
+    );
 
     assert_matches!(
         env.worker()
@@ -196,7 +196,7 @@ where
     assert!(create_certificate
         .value()
         .matches_proposed_block(&create_block));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         create_certificate.block(),
         &[vec![]],
         &BTreeMap::new(),
@@ -208,7 +208,7 @@ where
         &[vec![]],
         &[vec![application_description_blob.clone()]],
         &[OperationResult::default()],
-    ));
+    );
 
     env.write_blobs(std::slice::from_ref(&application_description_blob))
         .await?;
@@ -238,7 +238,7 @@ where
     let run_certificate = env.execute_proposal(run_block.clone(), vec![]).await?;
 
     assert!(run_certificate.value().matches_proposed_block(&run_block));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         run_certificate.block(),
         &[vec![]],
         &BTreeMap::new(),
@@ -247,7 +247,7 @@ where
         &[vec![]],
         &[vec![]],
         &[OperationResult(bcs::to_bytes(&15u64)?)],
-    ));
+    );
 
     let info = env
         .worker()
