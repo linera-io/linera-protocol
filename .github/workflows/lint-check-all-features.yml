@@ -27,8 +27,31 @@ permissions:
   contents: read
 
 jobs:
+  changed-files:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.files-changed.outputs.paths }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Filter paths
+        uses: dorny/paths-filter@v3
+        id: files-changed
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            paths:
+              - '!docker/**'
+              - '!configuration/**'
+              - '!kubernetes/**'
+              - '!docs/**'
+              - '!mdbook/**'
+              - '!CONTRIBUTING.md'
+              - '!INSTALL.md'
+              - '!README.md'
+
   check-all-features-partition:
-    if: github.event_name != 'pull_request'
+    needs: changed-files
+    if: github.event_name != 'pull_request' && needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
