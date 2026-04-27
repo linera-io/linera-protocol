@@ -48,13 +48,20 @@ jobs:
       # run: echo 1048576 > /proc/sys/fs/aio-max-nr
       - name: Build client binary
         run: |
-          cargo install --path linera-service --bin linera --bin linera-server --debug --locked
+          cargo install --path linera-service \
+            --bin linera --bin linera-proxy --bin linera-server \
+            --features scylladb,metrics,jemalloc --locked
+          mkdir -p docker/binaries
+          cp target/release/linera target/release/linera-proxy target/release/linera-server docker/binaries/
       # TODO(#2709): Remove this step once this workflow runs in a custom runner
       - name: Patch Docker compose file to run ScyllaDB in developer mode
         run: |
           sed -i -e '/SCYLLA_AUTO_CONF/{N;s/command:/  SCYLLA_ENABLE_EXPERIMENTAL: 1/p;N;N;N;N;d}' \
             docker/docker-compose.yml
       - name: Run Compose
+        env:
+          DOCKER_BUILDKIT: 1
+          LINERA_BINARIES: docker/binaries
         run: |
           cd docker
           ./ci-compose.sh
