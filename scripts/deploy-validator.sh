@@ -12,7 +12,6 @@
 #
 # Options:
 #   --local-build       - Build Docker image locally instead of using registry image
-#   --remote-image      - Explicitly use remote Docker image from registry (deprecated, now default)
 #   --skip-genesis      - Skip downloading genesis configuration
 #   --force-genesis     - Force re-download of genesis configuration
 #   --custom-tag TAG    - Use custom image tag (for testing, no _release suffix)
@@ -122,7 +121,6 @@ ARGUMENTS:
 
 OPTIONS:
     --local-build       Build Docker image locally instead of using registry image
-    --remote-image      Explicitly use remote Docker image from registry (deprecated, now default)
     --skip-genesis      Skip downloading genesis configuration
     --force-genesis     Force re-download of genesis configuration even if it exists
     --custom-tag TAG    Use custom image tag (for testing, no _release suffix)
@@ -258,25 +256,36 @@ verify_dependencies() {
 	log DEBUG "All required dependencies verified successfully"
 }
 
-# Get Git branch information
+# Get Git branch information (sets GIT_BRANCH, GIT_BRANCH_FORMATTED, GIT_COMMIT)
 get_git_info() {
-	local branch_name
-	local git_commit
-
-	if ! branch_name=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null); then
+	if ! GIT_BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null); then
 		log WARNING "Unable to detect Git branch, using 'unknown'"
-		branch_name="unknown"
+		GIT_BRANCH="unknown"
 	fi
 
-	if ! git_commit=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null); then
+	# Handle detached HEAD — try to resolve the remote branch name
+	if [[ "${GIT_BRANCH}" == "HEAD" ]]; then
+		log WARNING "Git is in detached HEAD state, attempting to resolve remote branch..."
+		local resolved_branch
+		# Try exact match first (e.g. "origin/testnet_conway")
+		if resolved_branch=$(git -C "$REPO_ROOT" describe --all --exact-match HEAD 2>/dev/null); then
+			resolved_branch="${resolved_branch#remotes/origin/}"
+			resolved_branch="${resolved_branch#heads/}"
+			GIT_BRANCH="${resolved_branch}"
+			log INFO "Resolved detached HEAD to branch: ${GIT_BRANCH}"
+		else
+			log WARNING "Could not resolve detached HEAD to a branch name"
+			log WARNING "Set GENESIS_PATH_PREFIX to specify the genesis path manually"
+		fi
+	fi
+
+	if ! GIT_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null); then
 		log WARNING "Unable to detect Git commit, using 'unknown'"
-		git_commit="unknown"
+		GIT_COMMIT="unknown"
 	fi
 
 	# Replace underscores with dashes in branch name (for URL compatibility)
-	local formatted_branch="${branch_name//_/-}"
-
-	echo "$branch_name|$formatted_branch|$git_commit"
+	GIT_BRANCH_FORMATTED="${GIT_BRANCH//_/-}"
 }
 
 # Build Docker image locally
@@ -496,12 +505,31 @@ download_genesis_config() {
 	return 0
 }
 
-# Generate validator keys
+# Generate validator keys (idempotent — skips if server.json already exists)
 generate_validator_keys() {
 	local image="$1"
 	local config_file="validator-config.toml"
+	local server_json="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/server.json"
 
-	# Log to stderr so it doesn't get captured in the output
+	if [ -f "${server_json}" ]; then
+		log INFO "Validator keys already exist (${server_json}), skipping generation" >&2
+		log INFO "To regenerate, remove ${server_json} and re-run" >&2
+		# Extract public key from existing server.json
+		local public_key
+		public_key=$(docker run --rm \
+			-v "${REPO_ROOT}/${DOCKER_COMPOSE_DIR}:/config" \
+			-w /config \
+			"${image}" \
+			/linera-server generate --validators "${config_file}" 2>/dev/null) || true
+		if [ -z "${public_key}" ]; then
+			log WARNING "Could not extract public key from existing config" >&2
+			echo "EXISTING_KEY_SEE_SERVER_JSON"
+		else
+			echo "${public_key}"
+		fi
+		return 0
+	fi
+
 	log INFO "Generating validator keys..." >&2
 
 	if [[ "${DRY_RUN:-0}" == "1" ]]; then
@@ -547,29 +575,6 @@ start_services() {
 
 	log INFO "Docker Compose services started successfully"
 	return 0
-}
-
-# Stop Docker Compose services
-stop_services() {
-	local compose_dir="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}"
-
-	log INFO "Stopping Docker Compose services..."
-
-	cd "${compose_dir}"
-	docker compose down || true
-}
-
-# Cleanup function
-cleanup() {
-	local exit_code=$?
-
-	if [ ${exit_code} -ne 0 ]; then
-		log WARNING "Script exited with error code: ${exit_code}"
-		log WARNING "You may need to clean up partial deployments"
-		log WARNING "To stop services: cd ${DOCKER_COMPOSE_DIR} && docker compose down"
-	fi
-
-	exit ${exit_code}
 }
 
 # Validate host format
@@ -671,15 +676,13 @@ validate_xfs_partition() {
 	fi
 
 	# Check write permissions
-	local test_file="${xfs_path}/.scylla_write_test_$$"
-	if ! touch "${test_file}" 2>/dev/null; then
+	if [ ! -w "${xfs_path}" ]; then
 		log WARNING "Cannot write to ${xfs_path}"
 		log INFO "Docker may need write permissions to this path"
-		log INFO "You may need to run: sudo chown -R $(id -u):$(id -g) ${xfs_path}"
+		log INFO "You may need to run: sudo chown -R 999:999 ${xfs_path}"
 		log INFO "Continuing with standard Docker volumes instead"
 		return 0
 	fi
-	rm -f "${test_file}"
 
 	log INFO "Path configuration summary:"
 	log INFO "  Path: ${xfs_path}"
@@ -727,13 +730,6 @@ services:
     volumes:
       # Override default volume with XFS bind mount
       - ${scylla_data_dir}:/var/lib/scylla
-    # Additional ScyllaDB optimizations for XFS
-    environment:
-      SCYLLA_AUTO_CONF: 1
-      # Enable direct I/O on XFS
-      SCYLLA_DIRECT_IO_MODE: "true"
-      # Set appropriate cache size (adjust based on available RAM)
-      SCYLLA_CACHE_SIZE: "${cache_size}"
 EOF
 
 	log INFO "Docker Compose override generated at: ${compose_override}"
@@ -751,7 +747,6 @@ main() {
 	local host=""
 	local email=""
 	local use_local_build=0
-	local use_remote_image=0
 	local skip_genesis=0
 	local force_genesis=0
 	local dry_run=0
@@ -768,11 +763,6 @@ main() {
 			;;
 		--local-build)
 			use_local_build=1
-			shift
-			;;
-		--remote-image)
-			# Deprecated option, remote is now default
-			use_remote_image=1
 			shift
 			;;
 		--skip-genesis)
@@ -877,9 +867,6 @@ main() {
 		exit 1
 	fi
 
-	# Set up error handling
-	trap cleanup EXIT
-
 	# Change to repository root
 	cd "${REPO_ROOT}"
 
@@ -919,8 +906,11 @@ main() {
 		log INFO "For maximum I/O performance in production, consider using XFS (optional)"
 	fi
 
-	# Get Git information
-	IFS='|' read -r branch_name formatted_branch git_commit <<<"$(get_git_info)"
+	# Get Git information (sets GIT_BRANCH, GIT_BRANCH_FORMATTED, GIT_COMMIT)
+	get_git_info
+	local branch_name="${GIT_BRANCH}"
+	local formatted_branch="${GIT_BRANCH_FORMATTED}"
+	local git_commit="${GIT_COMMIT}"
 
 	log INFO "Git branch: ${branch_name} (formatted: ${formatted_branch})"
 	log INFO "Git commit: ${git_commit}"
@@ -989,6 +979,25 @@ main() {
 	log INFO "  - Path prefix: ${genesis_path_prefix}"
 	log INFO "  - Full URL: ${genesis_url}"
 
+	# Download genesis configuration (non-destructive, graceful fallback to existing file)
+	if ! download_genesis_config "${genesis_url}" "${skip_genesis}" "${force_genesis}"; then
+		local config_path="${REPO_ROOT}/${GENESIS_CONFIG_PATH}"
+		if [ -f "${config_path}" ] && [ -s "${config_path}" ]; then
+			log WARNING "Failed to download genesis configuration from: ${genesis_url}"
+			log WARNING "Using existing genesis file at: ${config_path}"
+		else
+			log ERROR "Failed to download genesis configuration from: ${genesis_url}"
+			log ERROR "No existing genesis file found to fall back on"
+			if [[ "${skip_genesis}" != "1" ]]; then
+				log ERROR "Options:"
+				log ERROR "  1. Set GENESIS_URL to the correct URL"
+				log ERROR "  2. Set GENESIS_PATH_PREFIX to the correct path (current: ${genesis_path_prefix})"
+				log ERROR "  3. Place genesis.json manually and use --skip-genesis"
+			fi
+			exit 1
+		fi
+	fi
+
 	# Generate validator configuration
 	if ! generate_validator_config "${host}" "${port}" "${metrics_port}" "${num_shards}"; then
 		log ERROR "Failed to generate validator configuration"
@@ -1003,16 +1012,7 @@ main() {
 		fi
 	fi
 
-	# Download genesis configuration
-	if ! download_genesis_config "${genesis_url}" "${skip_genesis}" "${force_genesis}"; then
-		log ERROR "Failed to handle genesis configuration"
-		if [[ "${skip_genesis}" != "1" ]]; then
-			log ERROR "You can retry with --skip-genesis to continue without genesis"
-		fi
-		exit 1
-	fi
-
-	# Generate validator keys
+	# Generate validator keys (idempotent — skips if server.json exists)
 	local public_key
 	if ! public_key=$(generate_validator_keys "${LINERA_IMAGE}"); then
 		log ERROR "Failed to generate validator keys" >&2
@@ -1021,7 +1021,50 @@ main() {
 
 	log INFO "Validator setup completed successfully"
 
-	# Start services
+	# Create .env from the production template, then set deployment-specific values
+	# NOTE: This MUST happen before start_services so docker compose picks up the values
+	local env_file="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/.env"
+	local template_file="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/.env.production.template"
+
+	if [[ ! -f "${template_file}" ]]; then
+		log ERROR "Template not found: ${template_file}"
+		exit 1
+	fi
+
+	cp "${template_file}" "${env_file}"
+
+	# Set deployment-specific values (uncomment and replace template placeholders)
+	sed -i \
+		-e "s|^DOMAIN=.*|DOMAIN=${host}|" \
+		-e "s|^ACME_EMAIL=.*|ACME_EMAIL=${ACME_EMAIL}|" \
+		-e "s|^GENESIS_URL=.*|GENESIS_URL=${genesis_url}|" \
+		-e "s|^GENESIS_BUCKET=.*|GENESIS_BUCKET=${genesis_bucket}|" \
+		-e "s|^GENESIS_PATH_PREFIX=.*|GENESIS_PATH_PREFIX=${genesis_path_prefix}|" \
+		-e "s|^VALIDATOR_KEY=.*|VALIDATOR_KEY=${public_key}|" \
+		-e "s|^VALIDATOR_NAME=.*|VALIDATOR_NAME=${host}|" \
+		-e "s|^HOSTNAME=.*|HOSTNAME=${host}|" \
+		-e "s|^#LINERA_IMAGE=.*|LINERA_IMAGE=${LINERA_IMAGE}|" \
+		"${env_file}"
+
+	# Append deployment metadata (not in template — tracking info only)
+	cat >>"${env_file}" <<EOF
+
+# Deployment metadata (generated by deploy-validator.sh)
+DEPLOYMENT_HOST=${host}
+DEPLOYMENT_EMAIL=${ACME_EMAIL}
+DEPLOYMENT_PUBLIC_KEY=${public_key}
+DEPLOYMENT_BRANCH=${branch_name}
+DEPLOYMENT_COMMIT=${git_commit}
+DEPLOYMENT_CUSTOM_TAG=${custom_tag:-N/A}
+DEPLOYMENT_DATE=$(date -Iseconds)
+NUM_SHARDS=${num_shards}
+${xfs_path:+XFS_PATH=${xfs_path}}
+${xfs_path:+CACHE_SIZE=${cache_size}}
+EOF
+
+	log INFO "Environment variables saved to ${env_file} (from template + deploy values)"
+
+	# Start services (after .env is populated so docker compose picks up all values)
 	if ! start_services; then
 		log ERROR "Failed to start services"
 		exit 1
@@ -1056,49 +1099,6 @@ main() {
 	log INFO ""
 	log INFO "  Restart services:"
 	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose restart"
-
-	# Create .env file for Docker Compose (this is the source of truth)
-	local env_file="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/.env"
-	cat >"${env_file}" <<EOF
-# Validator Deployment Configuration
-# Generated: $(date -Iseconds)
-# This file is the source of truth for Docker Compose configuration
-# It persists all settings across container restarts
-
-# Deployment metadata
-DEPLOYMENT_HOST=${host}
-DEPLOYMENT_EMAIL=${ACME_EMAIL}
-DEPLOYMENT_PUBLIC_KEY=${public_key}
-DEPLOYMENT_BRANCH=${branch_name}
-DEPLOYMENT_COMMIT=${git_commit}
-DEPLOYMENT_CUSTOM_TAG=${custom_tag:-N/A}
-DEPLOYMENT_DATE=$(date -Iseconds)
-
-# Domain and SSL configuration (used by docker-compose.yml)
-DOMAIN=${host}
-ACME_EMAIL=${ACME_EMAIL}
-
-# Genesis configuration (critical for validator operation)
-GENESIS_URL=${genesis_url}
-GENESIS_BUCKET=${genesis_bucket}
-GENESIS_PATH_PREFIX=${genesis_path_prefix}
-
-# Validator configuration
-VALIDATOR_PUBLIC_KEY=${public_key}
-
-# Docker image
-LINERA_IMAGE=${LINERA_IMAGE}
-
-# ScyllaDB configuration
-NUM_SHARDS=${num_shards}
-${xfs_path:+XFS_PATH=${xfs_path}}
-${xfs_path:+CACHE_SIZE=${cache_size}}
-
-# Network configuration
-FAUCET_PORT=8080
-LINERA_STORAGE_SERVICE_PORT=1235
-EOF
-	log INFO "Environment variables saved to ${env_file} for persistence across restarts"
 }
 
 # Run main function with all arguments

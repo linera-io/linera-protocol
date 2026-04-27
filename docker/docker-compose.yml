@@ -1,18 +1,29 @@
 services:
   web:
-    image: caddy:2.10.2-alpine
+    image: ${CADDY_IMAGE:-caddy:2.10.2-alpine}
     container_name: web
+    restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_WEB:-1.00}"
+          memory: ${LIMIT_MEM_WEB:-3G}
 
   scylla-setup:
     image: ubuntu:24.04
@@ -27,38 +38,54 @@ services:
     restart: "no"
 
   scylla:
-    image: scylladb/scylla:6.2.3
+    image: ${SCYLLA_IMAGE:-scylladb/scylla:6.2.3}
     container_name: scylla
+    restart: unless-stopped
     volumes:
       - linera-scylla-data:/var/lib/scylla
     environment:
       SCYLLA_AUTO_CONF: 1
     command:
       - "--developer-mode"
-      - "0"
+      - "${SCYLLA_DEVELOPER_MODE:-0}"
       - "--overprovisioned"
-      - "1"
+      - "${SCYLLA_OVERPROVISIONED:-1}"
+      # NOTE: Uncomment --smp for optimal performance on fresh deployments.
+      # Uses the same value as LIMIT_CPUS_SCYLLA so shard count matches CPU limit.
+      # NOT safe on existing data — ScyllaDB tablets don't support reducing shards.
+      # - "--smp"
+      # - "${LIMIT_CPUS_SCYLLA:-2}"
     healthcheck:
       test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 20
-      start_period: 60s
+      interval: ${SCYLLA_HEALTHCHECK_INTERVAL:-10s}
+      timeout: ${SCYLLA_HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${SCYLLA_HEALTHCHECK_RETRIES:-20}
+      start_period: ${SCYLLA_HEALTHCHECK_START_PERIOD:-60s}
     depends_on:
       scylla-setup:
         condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SCYLLA:-4.00}"
+          memory: ${LIMIT_MEM_SCYLLA:-30G}
 
   proxy:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: proxy
+    restart: unless-stopped
     ports:
-      - "19100:19100"
+      - "${PROXY_PORT:-19100}:19100"
     command:
       - ./linera-proxy
       - --storage
-      - scylladb:tcp:scylla:9042
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
       - --storage-replication-factor
-      - "1"
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
       - /config/server.json
     volumes:
       - .:/config
@@ -75,24 +102,39 @@ services:
         condition: service_completed_successfully
       scylla:
         condition: service_healthy
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_PROXY:-1.50}"
+          memory: ${LIMIT_MEM_PROXY:-4G}
 
   # Each shard must run with a unique --shard number matching the server.json configuration.
   # Docker Compose replicas don't support per-replica arguments, so we define separate services.
+  # Per-shard resource limits: LIMIT_CPUS_SHARD_N / LIMIT_MEM_SHARD_N (N=0..3).
   shard-0:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-1
     hostname: docker-shard-1
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
       - --storage
-      - scylladb:tcp:scylla:9042
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
       - --server
       - /config/server.json
       - --shard
       - "0"
       - --storage-replication-factor
-      - "1"
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
     volumes:
       - .:/config
     labels:
@@ -100,22 +142,36 @@ services:
     depends_on:
       shard-init:
         condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_0:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_0:-6G}
 
   shard-1:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-2
     hostname: docker-shard-2
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
       - --storage
-      - scylladb:tcp:scylla:9042
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
       - --server
       - /config/server.json
       - --shard
       - "1"
       - --storage-replication-factor
-      - "1"
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
     volumes:
       - .:/config
     labels:
@@ -123,22 +179,36 @@ services:
     depends_on:
       shard-init:
         condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_1:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_1:-6G}
 
   shard-2:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-3
     hostname: docker-shard-3
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
       - --storage
-      - scylladb:tcp:scylla:9042
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
       - --server
       - /config/server.json
       - --shard
       - "2"
       - --storage-replication-factor
-      - "1"
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
     volumes:
       - .:/config
     labels:
@@ -146,22 +216,36 @@ services:
     depends_on:
       shard-init:
         condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_2:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_2:-6G}
 
   shard-3:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: docker-shard-4
     hostname: docker-shard-4
+    restart: unless-stopped
     command:
       - ./linera-server
       - run
       - --storage
-      - scylladb:tcp:scylla:9042
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
       - --server
       - /config/server.json
       - --shard
       - "3"
       - --storage-replication-factor
-      - "1"
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
     volumes:
       - .:/config
     labels:
@@ -169,23 +253,34 @@ services:
     depends_on:
       shard-init:
         condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_3:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_3:-6G}
 
   shard-init:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
     container_name: shard-init
+    environment:
+      - SCYLLA_PORT=${SCYLLA_PORT:-9042}
     command:
       - sh
       - -c
       - |
         while true; do
-          ./linera storage check-existence --storage scylladb:tcp:scylla:9042
+          ./linera storage check-existence --storage scylladb:tcp:scylla:$${SCYLLA_PORT}
           status=$$?
           if [ $$status -eq 0 ]; then
             echo "Database already exists, no need to initialize."
             exit 0
           elif [ $$status -eq 1 ]; then
             echo "Database does not exist, attempting to initialize..."
-            if ./linera storage initialize --storage scylladb:tcp:scylla:9042 --genesis /config/genesis.json; then
+            if ./linera storage initialize --storage scylladb:tcp:scylla:$${SCYLLA_PORT} --genesis /config/genesis.json; then
               echo "Initialization successful."
               exit 0
             else
@@ -205,37 +300,22 @@ services:
       scylla:
         condition: service_started
 
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-storage:/var/lib/grafana
-      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./dashboards:/var/lib/grafana/dashboards
-
   watchtower:
-    image: containrrr/watchtower:latest
+    image: ${WATCHTOWER_IMAGE:-nickfedor/watchtower:1.15.0}
     container_name: watchtower
+    restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: ["--interval", "30"]
+    command: ["--interval", "${WATCHTOWER_INTERVAL:-30}"]
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_WATCHTOWER:-0.25}"
+          memory: ${LIMIT_MEM_WATCHTOWER:-256M}
 
 volumes:
   linera-scylla-data:
     driver: local
-  grafana-storage:
   caddy_data:
     driver: local
   caddy_config:
