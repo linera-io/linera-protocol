@@ -52,8 +52,11 @@ jobs:
               - '!docker/**'
               - '!configuration/**'
               - '!kubernetes/**'
+              - '!docs/**'
+              - '!mdbook/**'
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
+              - '!README.md'
   changed-files-kubernetes:
     runs-on: ubuntu-latest
     outputs:
@@ -68,8 +71,11 @@ jobs:
           filters: |
             paths:
               - '!configuration/**'
+              - '!docs/**'
+              - '!mdbook/**'
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
+              - '!README.md'
   execution-wasmtime-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
