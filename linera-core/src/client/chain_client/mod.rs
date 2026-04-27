@@ -321,6 +321,12 @@ pub enum Error {
          The committed certificate hash is {0}"
     )]
     Conflict(CryptoHash),
+
+    #[error(
+        "Execution outcome mismatch: AutoRetry and committed execution produced \
+         different outcomes for the same block"
+    )]
+    ExecutionOutcomeMismatch,
 }
 
 impl From<Infallible> for Error {
@@ -1490,10 +1496,11 @@ impl<Env: Environment> ChainClient<Env> {
                 self.options.bundle_execution_policy(),
             )
             .await?;
-        let (proposed_block, _) = block.clone().into_proposal();
+        let (proposed_block, auto_retry_outcome) = block.clone().into_proposal();
         *proposal_guard = Some(PendingProposal {
             block: proposed_block,
             blobs,
+            auto_retry_outcome: Some(auto_retry_outcome),
         });
         Ok(block)
     }
@@ -1913,6 +1920,7 @@ impl<Env: Environment> ChainClient<Env> {
             // Otherwise we are free to propose our own pending block.
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();
+            let auto_retry_outcome = pending.auto_retry_outcome.clone();
             let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _) = self
                 .client
@@ -1923,6 +1931,16 @@ impl<Env: Environment> ChainClient<Env> {
                     BundleExecutionPolicy::committed(),
                 )
                 .await?;
+            // Sanity check: the committed execution should produce the same outcome
+            // as the initial AutoRetry execution. A mismatch indicates a fuel
+            // accounting divergence between the two execution paths.
+            if let Some(auto_retry_outcome) = auto_retry_outcome {
+                let (_, committed_outcome) = block.clone().into_proposal();
+                ensure!(
+                    auto_retry_outcome == committed_outcome,
+                    Error::ExecutionOutcomeMismatch
+                );
+            }
             debug!("Proposing the local pending block.");
             (block, blobs)
         } else {
