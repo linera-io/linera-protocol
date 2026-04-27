@@ -103,6 +103,22 @@ pub fn event_name_from_expanded(event_name_expanded: &str) -> String {
     event_name_expanded.replace(" indexed", "").to_string()
 }
 
+fn parse_uint<T>(
+    entry: B256,
+    parser: impl FnOnce(&BigUint) -> Option<T>,
+) -> Result<T, EthereumServiceError> {
+    let entry = BigUint::from_bytes_be(&entry.0);
+    parser(&entry).ok_or(EthereumServiceError::EthereumParsingError)
+}
+
+fn parse_int<T>(
+    entry: B256,
+    parser: impl FnOnce(&BigInt) -> Option<T>,
+) -> Result<T, EthereumServiceError> {
+    let entry = BigInt::from_signed_bytes_be(&entry.0);
+    parser(&entry).ok_or(EthereumServiceError::EthereumParsingError)
+}
+
 fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, EthereumServiceError> {
     if ethereum_type == "address" {
         let address = Address::from_word(entry);
@@ -114,48 +130,39 @@ fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, Eth
         return Ok(EthereumDataType::Uint256(entry));
     }
     if ethereum_type == "uint64" {
-        let entry = BigUint::from_bytes_be(&entry.0);
-        let entry = entry.to_u64().unwrap();
+        let entry = parse_uint(entry, BigUint::to_u64)?;
         return Ok(EthereumDataType::Uint64(entry));
     }
     if ethereum_type == "int64" {
-        let entry = BigInt::from_signed_bytes_be(&entry.0);
-        let entry = entry.to_i64().unwrap();
+        let entry = parse_int(entry, BigInt::to_i64)?;
         return Ok(EthereumDataType::Int64(entry));
     }
     if ethereum_type == "uint32" {
-        let entry = BigUint::from_bytes_be(&entry.0);
-        let entry = entry.to_u32().unwrap();
+        let entry = parse_uint(entry, BigUint::to_u32)?;
         return Ok(EthereumDataType::Uint32(entry));
     }
     if ethereum_type == "int32" {
-        let entry = BigInt::from_signed_bytes_be(&entry.0);
-        let entry = entry.to_i32().unwrap();
+        let entry = parse_int(entry, BigInt::to_i32)?;
         return Ok(EthereumDataType::Int32(entry));
     }
     if ethereum_type == "uint16" {
-        let entry = BigUint::from_bytes_be(&entry.0);
-        let entry = entry.to_u16().unwrap();
+        let entry = parse_uint(entry, BigUint::to_u16)?;
         return Ok(EthereumDataType::Uint16(entry));
     }
     if ethereum_type == "int16" {
-        let entry = BigInt::from_signed_bytes_be(&entry.0);
-        let entry = entry.to_i16().unwrap();
+        let entry = parse_int(entry, BigInt::to_i16)?;
         return Ok(EthereumDataType::Int16(entry));
     }
     if ethereum_type == "uint8" {
-        let entry = BigUint::from_bytes_be(&entry.0);
-        let entry = entry.to_u8().unwrap();
+        let entry = parse_uint(entry, BigUint::to_u8)?;
         return Ok(EthereumDataType::Uint8(entry));
     }
     if ethereum_type == "int8" {
-        let entry = BigInt::from_signed_bytes_be(&entry.0);
-        let entry = entry.to_i8().unwrap();
+        let entry = parse_int(entry, BigInt::to_i8)?;
         return Ok(EthereumDataType::Int8(entry));
     }
     if ethereum_type == "bool" {
-        let entry = BigUint::from_bytes_be(&entry.0);
-        let entry = entry.to_u8().unwrap();
+        let entry = parse_uint(entry, BigUint::to_u8)?;
         let entry = match entry {
             1 => true,
             0 => false,
@@ -191,10 +198,14 @@ pub fn parse_log(
     log: &Log,
 ) -> Result<EthereumEvent, EthereumServiceError> {
     let inner_types = get_inner_event_type(event_name_expanded)?;
-    let ethereum_types = inner_types
-        .split(',')
-        .map(str::to_string)
-        .collect::<Vec<_>>();
+    let ethereum_types = if inner_types.is_empty() {
+        Vec::new()
+    } else {
+        inner_types
+            .split(',')
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
     let mut values = Vec::new();
     let mut topic_index = 0;
     let mut data_index = 0;
@@ -204,8 +215,14 @@ pub fn parse_log(
     for ethereum_type in ethereum_types {
         values.push(match ethereum_type.strip_suffix(" indexed") {
             None => {
+                let start = data_index * 32;
+                let end = start + 32;
+                let chunk = log_data
+                    .data
+                    .get(start..end)
+                    .ok_or(EthereumServiceError::EthereumParsingError)?;
                 for (i, val) in vec.iter_mut().enumerate() {
-                    *val = log_data.data[data_index * 32 + i];
+                    *val = chunk[i];
                 }
                 data_index += 1;
                 let entry = vec.into();
@@ -213,13 +230,75 @@ pub fn parse_log(
             }
             Some(ethereum_type) => {
                 topic_index += 1;
-                parse_entry(topics[topic_index], ethereum_type)?
+                let topic = topics
+                    .get(topic_index)
+                    .copied()
+                    .ok_or(EthereumServiceError::EthereumParsingError)?;
+                parse_entry(topic, ethereum_type)?
             }
         });
     }
-    let block_number = log.block_number.unwrap();
+    let block_number = log
+        .block_number
+        .ok_or(EthereumServiceError::EthereumParsingError)?;
     Ok(EthereumEvent {
         values,
         block_number,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::rpc::types::eth::Log;
+    use alloy_primitives::{hex, Address, Bytes, LogData};
+
+    use super::{parse_log, EthereumServiceError};
+
+    fn make_log(data: Vec<u8>, block_number: Option<u64>) -> Log {
+        Log {
+            inner: alloy_primitives::Log {
+                address: Address::ZERO,
+                data: LogData::new_unchecked(vec![], Bytes::from(data)),
+            },
+            block_hash: None,
+            block_number,
+            block_timestamp: None,
+            transaction_hash: None,
+            transaction_index: None,
+            log_index: None,
+            removed: false,
+        }
+    }
+
+    #[test]
+    fn parse_log_rejects_out_of_range_integer() {
+        let log = make_log(
+            hex::decode(format!("01{}", "00".repeat(31))).expect("test data should decode"),
+            Some(1),
+        );
+        let error = parse_log("Value(uint8)", &log).unwrap_err();
+        assert!(matches!(error, EthereumServiceError::EthereumParsingError));
+    }
+
+    #[test]
+    fn parse_log_rejects_truncated_data() {
+        let log = make_log(vec![1], Some(1));
+        let error = parse_log("Value(uint256)", &log).unwrap_err();
+        assert!(matches!(error, EthereumServiceError::EthereumParsingError));
+    }
+
+    #[test]
+    fn parse_log_rejects_missing_block_number() {
+        let log = make_log(vec![0; 32], None);
+        let error = parse_log("Value(uint256)", &log).unwrap_err();
+        assert!(matches!(error, EthereumServiceError::EthereumParsingError));
+    }
+
+    #[test]
+    fn parse_log_accepts_empty_event_arguments() {
+        let log = make_log(vec![], Some(7));
+        let event = parse_log("Value()", &log).expect("empty event arguments should parse");
+        assert!(event.values.is_empty());
+        assert_eq!(event.block_number, 7);
+    }
 }
