@@ -9,6 +9,7 @@ interface base-runtime-api {
     application-parameters: func() -> list<u8>;
     get-chain-ownership: func() -> chain-ownership;
     get-application-permissions: func() -> application-permissions;
+    random-number: func() -> u64;
     read-system-timestamp: func() -> timestamp;
     read-chain-balance: func() -> amount;
     read-owner-balance: func(owner: account-owner) -> amount;

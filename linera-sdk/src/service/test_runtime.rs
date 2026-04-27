@@ -37,6 +37,7 @@ where
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
     scheduled_operations: Mutex<Vec<Vec<u8>>>,
     key_value_store: KeyValueStore,
+    random_number_counter: Mutex<u64>,
 }
 
 impl<Application> Default for MockServiceRuntime<Application>
@@ -69,6 +70,7 @@ where
             blobs: Mutex::new(None),
             scheduled_operations: Mutex::new(vec![]),
             key_value_store: KeyValueStore::mock(),
+            random_number_counter: Mutex::new(0),
         }
     }
 
@@ -235,6 +237,16 @@ where
             "Next block height has not been mocked, \
             please call `MockServiceRuntime::set_next_block_height` first",
         )
+    }
+
+    /// Returns a deterministic pseudo-random u64 value.
+    ///
+    /// In the mock runtime, this returns incrementing counter values.
+    pub fn random_number(&self) -> u64 {
+        let mut counter = self.random_number_counter.lock().unwrap();
+        let value = *counter;
+        *counter += 1;
+        value
     }
 
     /// Configures the system time to return during the test.
