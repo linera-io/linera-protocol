@@ -642,6 +642,17 @@ impl<Env: Environment> ChainClient<Env> {
                 self.synchronize_chain_state(self.chain_id).await?;
                 self.chain_info_with_committees().await?
             }
+            Err(LocalNodeError::EventsNotFound(event_ids))
+                if event_ids
+                    .iter()
+                    .all(|event_id| event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)) =>
+            {
+                // `initialize_and_save_if_needed` couldn't start the chain because
+                // the admin chain's epoch events aren't synced yet.
+                self.synchronize_chain_state(self.client.admin_chain_id)
+                    .await?;
+                self.chain_info_with_committees().await?
+            }
             Err(err) => return Err(err.into()),
         };
         let hash = info
@@ -1974,13 +1985,13 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
             self.client
-                .submit_block_proposal(&committee, proposal, hashed_value)
+                .submit_block_proposal(committee.clone(), proposal, hashed_value)
                 .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
                 .client
-                .submit_block_proposal(&committee, proposal, hashed_value.clone())
+                .submit_block_proposal(committee.clone(), proposal, hashed_value.clone())
                 .await?;
             self.client.finalize_block(&committee, certificate).await?
         };
