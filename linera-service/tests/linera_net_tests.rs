@@ -488,7 +488,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let query = EvmQuery::Query(query);
     let result = application.run_json_query(query.clone()).await?;
 
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = incrementCall { input: increment };
@@ -497,7 +497,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     application.run_json_query(mutation).await?;
 
     let result = application.run_json_query(query).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.ensure_is_running()?;
@@ -809,7 +809,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     let query = query.abi_encode();
     let query = EvmQuery::Query(query);
     let result = nest_application.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = nest_incrementCall { input: increment };
@@ -818,7 +818,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     nest_application.run_json_query(mutation).await?;
 
     let result = nest_application.run_json_query(query).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.ensure_is_running()?;
@@ -904,7 +904,7 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let nest_application = node_service.make_application(&chain, &nest_application_id)?;
 
     let result = nest_application.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = nest_incrementCall { input: increment };
@@ -913,7 +913,7 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     nest_application.run_json_query(mutation).await?;
 
     let result = nest_application.run_json_query(query).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.ensure_is_running()?;
@@ -1001,11 +1001,11 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     // First: checking the initial value of the contracts.
 
     let result = application1.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, original_value);
 
     let result = application2.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, 0);
 
     // Second: executing the movement of assets
@@ -1027,11 +1027,11 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     // Third: Checking the values after the move
 
     let result = application1.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, original_value - moved_value);
 
     let result = application2.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, moved_value);
 
     node_service1.ensure_is_running()?;
@@ -1104,10 +1104,10 @@ async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> 
 
     // Checking the initial value of the contracts.
     let result = application1.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, 42);
     let result = application2.run_json_query(query).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, 37);
 
     node_service1.ensure_is_running()?;
@@ -1197,7 +1197,7 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
     let mut notifications2 = node_service2.notifications(chain1).await?;
 
     let result = application2.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, 0);
 
     // First: subscribing to the application
@@ -1211,7 +1211,7 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
     application2.run_json_query(mutation).await?;
 
     let result = application2.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, 0);
 
     // Second: increment the values
@@ -1229,7 +1229,7 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
     // Fourth: getting the value
 
     let result = application2.run_json_query(query.clone()).await?;
-    let counter_value = read_evm_u64_entry(result);
+    let counter_value = read_evm_u64_entry(&result);
     assert_eq!(counter_value, increment);
 
     // Fifth: winding down
@@ -1781,7 +1781,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let query = total_supply.abi_encode();
     let query = EvmQuery::Query(query);
     let result = application1.run_json_query(query).await?;
-    assert_eq!(read_evm_u256_entry(result), the_supply);
+    assert_eq!(read_evm_u256_entry(&result), the_supply);
 
     // Transferring to another user and checking the balances.
 
@@ -1795,12 +1795,12 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let query = balanceOfCall { account: address1 };
     let query = EvmQuery::Query(query.abi_encode());
     let result = application1.run_json_query(query).await?;
-    assert_eq!(read_evm_u256_entry(result), the_supply - transfer1);
+    assert_eq!(read_evm_u256_entry(&result), the_supply - transfer1);
 
     let query = balanceOfCall { account: address2 };
     let query = EvmQuery::Query(query.abi_encode());
     let result = application1.run_json_query(query).await?;
-    assert_eq!(read_evm_u256_entry(result), transfer1);
+    assert_eq!(read_evm_u256_entry(&result), transfer1);
 
     // Transferring to another chain and checking the balances.
 
@@ -1824,14 +1824,14 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let query = EvmQuery::Query(query.abi_encode());
     let result = application1.run_json_query(query.clone()).await?;
     assert_eq!(
-        read_evm_u256_entry(result),
+        read_evm_u256_entry(&result),
         the_supply - transfer1 - transfer2
     );
 
     let query = balanceOfCall { account: address2 };
     let query = EvmQuery::Query(query.abi_encode());
     let result = application2.run_json_query(query).await?;
-    assert_eq!(read_evm_u256_entry(result), transfer2);
+    assert_eq!(read_evm_u256_entry(&result), transfer2);
 
     // Winding down
 

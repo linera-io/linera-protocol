@@ -206,7 +206,7 @@ where
 
         let receiver = manager
             .subscribe(
-                key,
+                &key,
                 Arc::clone(&self.context),
                 self.cancellation_token.clone(),
             )

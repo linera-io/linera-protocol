@@ -347,7 +347,7 @@ where
 
         let chain_id = self.faucet_storage.get_chain_id(&owner).await?;
 
-        chain_id.ok_or(Error::new("This user has no chain yet"))
+        chain_id.ok_or_else(|| Error::new("This user has no chain yet"))
     }
 
     /// Returns the initial claim for the given owner, if any.
@@ -1003,7 +1003,7 @@ where
             .collect();
 
         #[cfg(with_metrics)]
-        let _store_chains_start = std::time::Instant::now();
+        let store_chains_start = std::time::Instant::now();
 
         let store_initial = async {
             if initial_chains.is_empty() {
@@ -1029,7 +1029,7 @@ where
         }
         #[cfg(with_metrics)]
         {
-            let elapsed_ms = _store_chains_start.elapsed().as_secs_f64() * 1000.0;
+            let elapsed_ms = store_chains_start.elapsed().as_secs_f64() * 1000.0;
             metrics::STORE_CHAIN_LATENCY
                 .with_label_values(&[])
                 .observe(elapsed_ms);

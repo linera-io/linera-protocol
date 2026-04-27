@@ -64,7 +64,7 @@ where
             options,
             block_exporter_id,
             new_block_queue,
-            destination_config,
+            &destination_config,
             health,
         )
     });
@@ -103,7 +103,7 @@ async fn start_block_processor<S, F>(
     options: NodeOptions,
     block_exporter_id: u32,
     new_block_queue: NewBlockQueue,
-    destination_config: DestinationConfig,
+    destination_config: &DestinationConfig,
     health: Arc<AtomicBool>,
 ) -> Result<(), ExporterError>
 where
@@ -116,7 +116,7 @@ where
         .iter()
         .map(|destination| destination.id())
         .collect::<Vec<_>>();
-    let (mut block_processor_storage, mut exporter_storage) = BlockProcessorStorage::load(
+    let (mut block_processor_storage, exporter_storage) = BlockProcessorStorage::load(
         storage.clone(),
         block_exporter_id,
         startup_destinations.clone(),
@@ -131,7 +131,7 @@ where
             match load_persisted_committee_destinations(
                 &storage,
                 &block_processor_storage,
-                &mut exporter_storage,
+                &exporter_storage,
             )
             .await
             {
@@ -163,7 +163,7 @@ where
         options,
         limits.work_queue_size.into(),
         shutdown_signal.clone(),
-        exporter_storage.clone()?,
+        exporter_storage.clone(),
         destination_config.destinations.clone(),
         startup_committee_destinations,
         health,
@@ -195,7 +195,7 @@ where
 async fn load_persisted_committee_destinations<S>(
     storage: &S,
     block_processor_storage: &BlockProcessorStorage<S>,
-    exporter_storage: &mut crate::storage::ExporterStorage<S>,
+    exporter_storage: &crate::storage::ExporterStorage<S>,
 ) -> Option<(Vec<DestinationId>, Option<BlobId>)>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -262,7 +262,7 @@ where
 /// Returns the destinations and the blob ID that should be persisted for future startups.
 async fn scan_canonical_blocks_for_committee<S>(
     storage: &S,
-    exporter_storage: &mut crate::storage::ExporterStorage<S>,
+    exporter_storage: &crate::storage::ExporterStorage<S>,
 ) -> Option<(Vec<DestinationId>, Option<BlobId>)>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -962,7 +962,7 @@ mod test {
 
         // === SECOND SESSION: Reload and test fallback scan ===
         // This simulates a restart with the new code
-        let (mut block_processor_storage, mut exporter_storage) =
+        let (mut block_processor_storage, exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
 
@@ -979,7 +979,7 @@ mod test {
         let result = load_persisted_committee_destinations(
             &storage,
             &block_processor_storage,
-            &mut exporter_storage,
+            &exporter_storage,
         )
         .await;
 

@@ -224,7 +224,7 @@ impl ClientWrapper {
         self.command_with_envs_and_arguments(
             &[(
                 "RUST_LOG",
-                &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+                &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
             )],
             arguments,
         )
@@ -234,7 +234,7 @@ impl ClientWrapper {
     async fn command(&self) -> Result<Command> {
         self.command_with_envs(&[(
             "RUST_LOG",
-            &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+            &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
         )])
         .await
     }
@@ -785,8 +785,8 @@ impl ClientWrapper {
         Ok(())
     }
 
-    fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
-        let mut formatted_args = to_args(&args)?;
+    fn benchmark_command_internal(command: &mut Command, args: &BenchmarkCommand) -> Result<()> {
+        let mut formatted_args = to_args(args)?;
         let subcommand = formatted_args.remove(0);
         // The subcommand is followed by the flattened options, which are preceded by "options".
         // So remove that as well.
@@ -821,7 +821,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_envs_and_arguments(envs, self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 
@@ -829,7 +829,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_arguments(self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 

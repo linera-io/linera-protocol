@@ -278,7 +278,7 @@ impl RocksDbStoreExecutor {
 #[derive(Clone)]
 pub struct RocksDbStoreInternal {
     executor: RocksDbStoreExecutor,
-    _path_with_guard: PathWithGuard,
+    path_with_guard: PathWithGuard,
     max_stream_queries: usize,
     spawn_mode: RocksDbSpawnMode,
     root_key_written: Arc<AtomicBool>,
@@ -288,7 +288,7 @@ pub struct RocksDbStoreInternal {
 #[derive(Clone)]
 pub struct RocksDbDatabaseInternal {
     executor: RocksDbStoreExecutor,
-    _path_with_guard: PathWithGuard,
+    path_with_guard: PathWithGuard,
     max_stream_queries: usize,
     spawn_mode: RocksDbSpawnMode,
 }
@@ -328,7 +328,7 @@ impl RocksDbDatabaseInternal {
         let temp_store = RocksDbStoreInternal::build(config, namespace, start_key)?;
         Ok(RocksDbDatabaseInternal {
             executor: temp_store.executor,
-            _path_with_guard: temp_store._path_with_guard,
+            path_with_guard: temp_store.path_with_guard,
             max_stream_queries: temp_store.max_stream_queries,
             spawn_mode: temp_store.spawn_mode,
         })
@@ -430,7 +430,7 @@ impl RocksDbStoreInternal {
         };
         Ok(RocksDbStoreInternal {
             executor,
-            _path_with_guard: path_with_guard,
+            path_with_guard,
             max_stream_queries,
             spawn_mode,
             root_key_written: Arc::new(AtomicBool::new(false)),
@@ -579,7 +579,7 @@ impl KeyValueDatabase for RocksDbDatabaseInternal {
         executor.start_key = start_key;
         Ok(RocksDbStoreInternal {
             executor,
-            _path_with_guard: self._path_with_guard.clone(),
+            path_with_guard: self.path_with_guard.clone(),
             max_stream_queries: self.max_stream_queries,
             spawn_mode: self.spawn_mode,
             root_key_written: Arc::new(AtomicBool::new(false)),
@@ -741,8 +741,11 @@ impl PathWithGuard {
     fn new_testing() -> PathWithGuard {
         let dir = TempDir::new().unwrap();
         let path_buf = dir.path().to_path_buf();
-        let _dir = Some(Arc::new(dir));
-        PathWithGuard { path_buf, _dir }
+        let dir_guard = Some(Arc::new(dir));
+        PathWithGuard {
+            path_buf,
+            _dir: dir_guard,
+        }
     }
 }
 

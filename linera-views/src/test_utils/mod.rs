@@ -73,7 +73,7 @@ pub fn get_random_kset<R: Rng>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
 /// We return n such `(key, value)` pairs which are all distinct.
 pub fn get_random_key_values_prefix<R: Rng>(
     rng: &mut R,
-    key_prefix: Vec<u8>,
+    key_prefix: &[u8],
     len_key: usize,
     len_value: usize,
     num_entries: usize,
@@ -85,7 +85,7 @@ pub fn get_random_key_values_prefix<R: Rng>(
         let key = loop {
             let key = get_random_byte_vector_with_byte_upper_limit(
                 rng,
-                &key_prefix,
+                key_prefix,
                 len_key,
                 key_byte_upper_limit,
             );
@@ -104,7 +104,7 @@ pub fn get_random_key_values_prefix<R: Rng>(
 /// Takes a random number generator `rng`, a number n and returns n random `(key, value)`
 /// which are all distinct with key and value being of length 8.
 pub fn get_random_key_values<R: Rng>(rng: &mut R, num_entries: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-    get_random_key_values_prefix(rng, Vec::new(), 8, 8, num_entries, u8::MAX)
+    get_random_key_values_prefix(rng, &[], 8, 8, num_entries, u8::MAX)
 }
 
 type VectorPutDelete = (Vec<(Vec<u8>, Vec<u8>)>, usize);
@@ -122,7 +122,7 @@ pub fn get_random_key_value_operations<R: Rng>(
 /// For something like `MapView` it should get us the same result whatever way we are calling.
 pub fn span_random_reordering_put_delete<R: Rng>(
     rng: &mut R,
-    info_op: VectorPutDelete,
+    info_op: &VectorPutDelete,
 ) -> Vec<WriteOperation> {
     let n = info_op.0.len();
     let k = info_op.1;
@@ -253,7 +253,7 @@ pub fn get_random_key_values_with_sizes(
     let mut rng = make_deterministic_rng();
     get_random_key_values_prefix(
         &mut rng,
-        key_prefix,
+        &key_prefix,
         len_key,
         len_value,
         num_entries,
@@ -270,7 +270,7 @@ fn get_random_key_values_with_small_keys(
     let mut rng = make_deterministic_rng();
     get_random_key_values_prefix(
         &mut rng,
-        key_prefix,
+        &key_prefix,
         len_key,
         len_value,
         num_entries,

@@ -47,14 +47,14 @@ fn get_extended_entry(e: Type) -> TokenStream2 {
     quote! { #ident :: #arguments }
 }
 
-fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
+fn generate_view_code(input: &ItemStruct, root: bool) -> TokenStream2 {
     let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = Constraints::get(&input);
+    } = Constraints::get(input);
 
-    let attrs: StructAttrs = deluxe::parse_attributes(&input).unwrap();
+    let attrs: StructAttrs = deluxe::parse_attributes(input).unwrap();
     let context = attrs.context.unwrap_or_else(|| {
         let ident = &input
             .generics
@@ -195,12 +195,12 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     }
 }
 
-fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
+fn generate_root_view_code(input: &ItemStruct) -> TokenStream2 {
     let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = Constraints::get(&input);
+    } = Constraints::get(input);
     let struct_name = &input.ident;
 
     let metrics_code = if cfg!(feature = "metrics") {
@@ -267,12 +267,12 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
+fn generate_hash_view_code(input: &ItemStruct) -> TokenStream2 {
     let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = Constraints::get(&input);
+    } = Constraints::get(input);
     let struct_name = &input.ident;
 
     let field_types = input.fields.iter().map(|field| &field.ty);
@@ -312,12 +312,12 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
+fn generate_crypto_hash_code(input: &ItemStruct) -> TokenStream2 {
     let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = Constraints::get(&input);
+    } = Constraints::get(input);
     let field_types = input.fields.iter().map(|field| &field.ty);
     let struct_name = &input.ident;
     let hash_type = syn::Ident::new(&format!("{struct_name}Hash"), Span::call_site());
@@ -364,12 +364,12 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
+fn generate_clonable_view_code(input: &ItemStruct) -> TokenStream2 {
     let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = Constraints::get(&input);
+    } = Constraints::get(input);
     let struct_name = &input.ident;
 
     let mut clone_constraints = vec![];
@@ -401,41 +401,41 @@ fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
 #[proc_macro_derive(View, attributes(view))]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    generate_view_code(input, false).into()
+    generate_view_code(&input, false).into()
 }
 
 #[proc_macro_derive(HashableView, attributes(view))]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone(), false);
-    stream.extend(generate_hash_view_code(input));
+    let mut stream = generate_view_code(&input, false);
+    stream.extend(generate_hash_view_code(&input));
     stream.into()
 }
 
 #[proc_macro_derive(RootView, attributes(view))]
 pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone(), true);
-    stream.extend(generate_root_view_code(input));
+    let mut stream = generate_view_code(&input, true);
+    stream.extend(generate_root_view_code(&input));
     stream.into()
 }
 
 #[proc_macro_derive(CryptoHashView, attributes(view))]
 pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone(), false);
-    stream.extend(generate_hash_view_code(input.clone()));
-    stream.extend(generate_crypto_hash_code(input));
+    let mut stream = generate_view_code(&input, false);
+    stream.extend(generate_hash_view_code(&input));
+    stream.extend(generate_crypto_hash_code(&input));
     stream.into()
 }
 
 #[proc_macro_derive(CryptoHashRootView, attributes(view))]
 pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone(), true);
-    stream.extend(generate_root_view_code(input.clone()));
-    stream.extend(generate_hash_view_code(input.clone()));
-    stream.extend(generate_crypto_hash_code(input));
+    let mut stream = generate_view_code(&input, true);
+    stream.extend(generate_root_view_code(&input));
+    stream.extend(generate_hash_view_code(&input));
+    stream.extend(generate_crypto_hash_code(&input));
     stream.into()
 }
 
@@ -443,16 +443,16 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
 #[cfg(test)]
 pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone(), true);
-    stream.extend(generate_root_view_code(input.clone()));
-    stream.extend(generate_hash_view_code(input));
+    let mut stream = generate_view_code(&input, true);
+    stream.extend(generate_root_view_code(&input));
+    stream.extend(generate_hash_view_code(&input));
     stream.into()
 }
 
 #[proc_macro_derive(ClonableView, attributes(view))]
 pub fn derive_clonable_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    generate_clonable_view_code(input).into()
+    generate_clonable_view_code(&input).into()
 }
 
 #[cfg(test)]
@@ -483,7 +483,7 @@ pub mod tests {
                     },
                     context.name,
                 ),
-                pretty(generate_view_code(input, true))
+                pretty(generate_view_code(&input, true))
             );
         }
     }
@@ -494,7 +494,7 @@ pub mod tests {
             let input = context.test_view_input();
             insta::assert_snapshot!(
                 format!("test_generate_hash_view_code_{}", context.name),
-                pretty(generate_hash_view_code(input))
+                pretty(generate_hash_view_code(&input))
             );
         }
     }
@@ -513,7 +513,7 @@ pub mod tests {
                     },
                     context.name,
                 ),
-                pretty(generate_root_view_code(input))
+                pretty(generate_root_view_code(&input))
             );
         }
     }
@@ -522,7 +522,7 @@ pub mod tests {
     fn test_generate_crypto_hash_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_snapshot!(pretty(generate_crypto_hash_code(input)));
+            insta::assert_snapshot!(pretty(generate_crypto_hash_code(&input)));
         }
     }
 
@@ -530,7 +530,7 @@ pub mod tests {
     fn test_generate_clonable_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_snapshot!(pretty(generate_clonable_view_code(input)));
+            insta::assert_snapshot!(pretty(generate_clonable_view_code(&input)));
         }
     }
 

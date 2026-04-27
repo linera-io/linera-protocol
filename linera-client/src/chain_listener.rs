@@ -105,7 +105,7 @@ pub trait ClientContext {
                 chain_id,
                 chain.block_hash,
                 chain.next_block_height,
-                chain.pending_proposal,
+                &chain.pending_proposal,
                 chain.owner,
                 self.timing_sender(),
             ))

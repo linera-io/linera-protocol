@@ -295,10 +295,11 @@ where
         ),
         err,
     )]
+    #[cfg_attr(not(with_metrics), allow(unused_variables))]
     pub async fn run(
         self,
         shutdown_signal: CancellationToken,
-        _enable_memory_profiling: bool,
+        enable_memory_profiling: bool,
     ) -> Result<()> {
         info!("Starting proxy");
         let mut join_set = JoinSet::new();
@@ -307,7 +308,7 @@ where
         monitoring_server::start_metrics_with_profiling(
             self.metrics_address(),
             shutdown_signal.clone(),
-            _enable_memory_profiling,
+            enable_memory_profiling,
         )
         .await;
 
@@ -732,7 +733,7 @@ where
                 .read_certificate(hash)
                 .await
                 .map_err(Self::view_error_to_status)?
-                .ok_or(Status::not_found(hash.to_string()))?,
+                .ok_or_else(|| Status::not_found(hash.to_string()))?,
         )
         .into();
         Ok(Response::new(certificate.try_into()?))

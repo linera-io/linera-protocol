@@ -216,6 +216,7 @@ where
         }
     }
 
+    #[expect(clippy::needless_pass_by_ref_mut)]
     async fn register_worker(&mut self) {
         let capabilities = self.operators.keys().cloned().collect();
         let command = WorkerCommand::RegisterWorker { capabilities };

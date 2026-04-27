@@ -1040,7 +1040,7 @@ where
     }
 
     async fn check_bytecode_blobs(
-        &mut self,
+        &self,
         module_id: &ModuleId,
         txn_tracker: &TransactionTracker,
     ) -> Result<Vec<BlobId>, ExecutionError> {

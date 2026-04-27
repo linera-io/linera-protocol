@@ -32,7 +32,7 @@ fn hlist_without_padding() {
     );
     test_flattening_roundtrip(
         &input,
-        hlist![
+        &hlist![
             0x1819_1a1b_1c1d_1e1f_i64,
             0x1011_1213_1415_1617_i64,
             0x2021_2223_2425_2627_i64,
@@ -60,7 +60,7 @@ fn hlist_with_padding_at_the_end_for_size_alignment() {
     );
     test_flattening_roundtrip(
         &input,
-        hlist![0x8081_8283_8485_8687_u64 as i64, 0x0000_0001_i32],
+        &hlist![0x8081_8283_8485_8687_u64 as i64, 0x0000_0001_i32],
         &[],
     );
 }
@@ -86,7 +86,7 @@ fn hlist_with_padding() {
     );
     test_flattening_roundtrip(
         &input,
-        hlist![
+        &hlist![
             0x0000_0001_i32,
             0x0000_1011_i32,
             0x0000_2021_i32,
@@ -103,7 +103,7 @@ fn none() {
     let input = None::<i8>;
 
     test_memory_roundtrip(&input, &[0x00, 0], &[]);
-    test_flattening_roundtrip(&input, hlist![0_i32, 0_i32], &[]);
+    test_flattening_roundtrip(&input, &hlist![0_i32, 0_i32], &[]);
 }
 
 /// Test roundtrip of `Some::<i8>`.
@@ -112,7 +112,7 @@ fn some_byte() {
     let input = Some(-100_i8);
 
     test_memory_roundtrip(&input, &[0x01, 0x9c], &[]);
-    test_flattening_roundtrip(&input, hlist![1_i32, -100_i32], &[]);
+    test_flattening_roundtrip(&input, &hlist![1_i32, -100_i32], &[]);
 }
 
 /// Test roundtrip of `Ok::<i16, u128>`.
@@ -131,7 +131,7 @@ fn ok_two_bytes_but_large_err() {
         ],
         &[],
     );
-    test_flattening_roundtrip(&input, hlist![0_i32, 0x0000_1234_i64, 0_i64], &[]);
+    test_flattening_roundtrip(&input, &hlist![0_i32, 0x0000_1234_i64, 0_i64], &[]);
 }
 
 /// Test roundtrip of `Err::<i16, u128>`.
@@ -149,7 +149,7 @@ fn large_err() {
     );
     test_flattening_roundtrip(
         &input,
-        hlist![1_i32, 0x0809_0a0b_0c0d_0e0f_i64, 0x0001_0203_0405_0607_i64],
+        &hlist![1_i32, 0x0809_0a0b_0c0d_0e0f_i64, 0x0001_0203_0405_0607_i64],
         &[],
     );
 }
@@ -172,7 +172,7 @@ fn duration() {
         ],
         &[],
     );
-    test_flattening_roundtrip(&input, hlist![seconds as i64, nanos as i32], &[]);
+    test_flattening_roundtrip(&input, &hlist![seconds as i64, nanos as i32], &[]);
 }
 
 /// Test roundtrip of `BTreeMap<u8, i32>`.
@@ -195,7 +195,7 @@ fn btree_map() {
     );
     test_flattening_roundtrip(
         &input,
-        hlist![0_i32, 2_i32],
+        &hlist![0_i32, 2_i32],
         &[
             0xaa, 0, 0, 0, 0x44, 0x33, 0x22, 0x11, 0xbb, 0, 0, 0, 0xaa, 0x99, 0x88, 0x77,
         ],
@@ -209,7 +209,7 @@ fn log_level() {
     use log::Level::*;
     for (index, level) in [Error, Warn, Info, Debug, Trace].into_iter().enumerate() {
         test_memory_roundtrip(&level, &[index as u8], &[]);
-        test_flattening_roundtrip(&level, hlist![index as i32], &[]);
+        test_flattening_roundtrip(&level, &hlist![index as i32], &[]);
     }
 }
 
@@ -247,7 +247,7 @@ where
 /// `flat_layout`, and check that the instance can be lifted from that flat layout.
 fn test_flattening_roundtrip<T>(
     input: &T,
-    flat_layout: <T::Layout as Layout>::Flat,
+    flat_layout: &<T::Layout as Layout>::Flat,
     heap_data: &[u8],
 ) where
     T: Debug + Eq + WitLoad + WitStore,
@@ -261,7 +261,7 @@ fn test_flattening_roundtrip<T>(
 
     let lowered_layout = input.lower(&mut memory).unwrap();
 
-    assert_eq!(lowered_layout, flat_layout);
+    assert_eq!(lowered_layout, *flat_layout);
     assert_eq!(memory.read(heap_address, heap_length).unwrap(), heap_data);
     assert_eq!(&T::lift_from(lowered_layout, &memory).unwrap(), input);
 }
