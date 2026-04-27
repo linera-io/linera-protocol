@@ -145,6 +145,7 @@ pub(crate) fn set_relayer_linera_balance(balance_atto: f64) {
 pub(crate) fn build_router() -> Router {
     Router::new()
         .route("/metrics", get(serve_metrics))
+        .route("/health", get(|| async { StatusCode::OK }))
         .layer(CorsLayer::permissive())
 }
 
@@ -157,5 +158,27 @@ async fn serve_metrics() -> impl IntoResponse {
             format!("Failed to encode metrics: {e}"),
         )
             .into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{body::Body, http::Request};
+    use tower::ServiceExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn health_endpoint_returns_200() {
+        let response = build_router()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
