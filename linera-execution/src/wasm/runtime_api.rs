@@ -280,7 +280,7 @@ where
     }
 
     /// Logs a `message` with the provided information `level`.
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     fn log(caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         let allowed = caller
             .user_data_mut()

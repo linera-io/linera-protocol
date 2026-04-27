@@ -857,7 +857,7 @@ where
 
     /// Opens a new chain, configuring it with the provided `chain_ownership`,
     /// `application_permissions` and initial `balance` (debited from the current chain).
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     pub fn open_chain(
         &mut self,
         ownership: ChainOwnership,
@@ -925,7 +925,7 @@ where
     }
 
     /// Creates a new module-id on-chain application, based on the supplied bytecode and parameters.
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     pub fn publish_module(
         &mut self,
         contract: Bytecode,
@@ -948,7 +948,7 @@ where
     }
 
     /// Creates a new on-chain application, based on the supplied module and parameters.
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     pub fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
         module_id: ModuleId,
@@ -1158,7 +1158,7 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     pub fn http_request(&mut self, request: http::Request) -> http::Response {
         let maybe_request = self.expected_http_requests.pop_front();
         let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");

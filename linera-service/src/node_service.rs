@@ -1119,7 +1119,6 @@ impl QueryResponseCache {
 
     /// Looks up a cached response. Returns `Some(bytes)` on hit, `None` on miss
     /// (including when the chain has no cache entry yet).
-    #[allow(clippy::question_mark)]
     fn get(&self, chain_id: ChainId, app_id: &ApplicationId, request: &[u8]) -> Option<Vec<u8>> {
         let pinned = self.chains.pin();
         let Some(mutex) = pinned.get(&chain_id) else {
@@ -1284,7 +1283,7 @@ where
     /// `query_cache_size` controls the per-chain LRU cache capacity for application query
     /// responses. Pass `None` to disable the cache (the default). Enable with
     /// `--query-cache-size <N>`. Incompatible with `--long-lived-services`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,

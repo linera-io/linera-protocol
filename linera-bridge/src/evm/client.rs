@@ -24,7 +24,7 @@ use url::Url;
 use super::light_client::addCommitteeCall;
 
 /// Client for interacting with a deployed LightClient contract on an EVM chain.
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub struct EvmLightClient {
     provider: FillProvider<
         JoinFill<

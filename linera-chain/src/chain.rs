@@ -667,7 +667,7 @@ where
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(
         chain_id = %block.chain_id,
         block_height = %block.height

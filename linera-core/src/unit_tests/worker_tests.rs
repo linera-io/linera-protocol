@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::large_futures)]
+#![expect(clippy::large_futures)]
 
 macro_rules! assert_outcome_matches {
     ($block:expr, $messages:expr, $previous_message_blocks:expr, $previous_event_blocks:expr, $oracle_responses:expr, $events:expr, $blobs:expr, $operation_results:expr $(,)?) => {{
